@@ -1,0 +1,7 @@
+read:
+  - README.md
+  - docs/AI_RULES.md
+  - docs/CONVENTIONS.md
+  - docs/ARCHITECTURE_INVENTORY.md
+  - composer.lock
+  - package-lock.json
