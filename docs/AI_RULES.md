@@ -8,99 +8,113 @@ These rules govern all AI-assisted development on this repository.
 
 - Always work on a branch per task.
 - Before editing anything, ensure that you have presented a plan that has been approved, whether or not a plan was explicitly asked for.
-- AI must be 95% certain of requirements before a plan may be proposed.
-- Always run `./ci.sh` before proposing completion.
+- AI must be >95% certain of requirements before a plan may be proposed.
+- Always run `./ci.sh` before proposing completion (unless explicitly told not to).
 
 ---
 
 ## Change Discipline
 
-- Prefer smallest change; never refactor unless asked.
-- No global JS state unless requested.
+- Prefer the smallest possible change.
+- Never refactor unless explicitly requested.
+- No global JavaScript state unless explicitly approved.
 
 ---
 
 ## Standards
 
-- PSR-12 + PHPDoc rules.
+- PHP code must follow PSR-12.
+- PHPDoc is required per project conventions.
+- Existing architectural patterns must be respected.
 
 ---
 
 ## Certainty & Communication
 
-- Never do anything without being > 95% certain of what's required.
-- Ask questions, one at a time, to increase certainty.
-- Always display certainty level before asking a question.
+- Never act without >95% certainty of requirements.
+- Ask clarifying questions **one at a time** to increase certainty.
+- Always state current certainty level before asking a question.
+- Do not infer intent from partial context.
 
 ---
 
 ## Scope
 
-These rules apply to all AI-assisted contributions to this repository, including code, configuration, documentation, tests, scripts, and build or CI-related changes, regardless of tool or model used.
+These rules apply to **all** AI-assisted contributions to this repository, including:
+
+- Code
+- Configuration
+- Documentation
+- Tests
+- Scripts
+- CI / build tooling
+
+They apply regardless of AI tool, model, or interface used.
 
 ---
 
 ## Prohibited Actions
 
-The following actions are not permitted unless explicitly requested or approved:
+The following actions are **not permitted** unless explicitly requested or approved:
 
 - Making changes directly on the default branch
 - Auto-committing or auto-merging changes
-- Refactoring or restructuring code beyond the requested scope
-- Introducing global state or side effects without approval
-- Modifying architectural patterns, dependencies, or conventions without consent
+- Refactoring beyond the requested scope
+- Introducing global state or hidden side effects
+- Modifying architecture, dependencies, or conventions without approval
 - Skipping tests or bypassing `./ci.sh`
-- Making assumptions when requirements are unclear
+- Proceeding with unclear or assumed requirements
 
 ---
 
 ## Review Responsibility
 
-All AI-generated changes are subject to human review and approval.
+All AI-generated output is subject to human review.
 
-- The AI is responsible for proposing changes that are minimal, well-scoped, and aligned with existing conventions.
-- The human reviewer is responsible for validating correctness, intent, and impact before merging.
-- No AI-generated change is considered complete until it has been reviewed, approved, and verified through `./ci.sh`.
-- Any uncertainty or ambiguity must be surfaced before review, not after.
+- AI is responsible for proposing minimal, well-scoped, convention-aligned changes.
+- The human reviewer is responsible for validating correctness and intent.
+- No AI-generated change is complete until verified via `./ci.sh` (unless explicitly waived).
 
 ---
 
-## Escalation / Uncertainty Handling
+## Escalation & Uncertainty Handling
 
-When requirements, intent, or constraints are unclear, work must pause.
+If requirements, constraints, or intent are unclear:
 
-- Uncertainty must be explicitly stated along with the current certainty level.
+- Work must pause immediately.
+- Current certainty level must be stated.
 - Clarifying questions must be asked one at a time.
 - No assumptions may be made to “move forward.”
-- If clarity cannot be achieved, the task must be escalated back to the human owner before any changes are made.
+- If clarity cannot be reached, the task must be escalated back to the human owner.
 
 ---
 
 ## Test-Driven Pull Requests
 
-All pull requests are test-driven by default.
+All pull requests are **test-driven by default**.
 
-- For any change that affects behavior, logic, data, validation, authentication, authorization, or APIs, tests **must be written first**.
-- Bug fixes require a failing test that reproduces the issue before any implementation work begins.
-- Tests should clearly express intent and failure conditions relevant to the PR scope.
+- Any change affecting behavior, logic, data, validation, auth, or APIs requires tests written first.
+- Bug fixes require a failing test that reproduces the issue.
+- Tests must express intent, not implementation details.
 
 ### UI and Content Changes
 
-- Pure copy, markup, or layout changes **do not require new tests** if no behavior is affected.
-- If the change impacts legally, financially, or operationally sensitive content (e.g. pricing, guarantees, checkout, compliance text), add a lightweight feature test asserting presence.
-- If existing UI or feature tests already cover the area, update them to reflect the change.
+- Pure copy/layout changes do not require tests if no behavior is affected.
+- Changes affecting legal, financial, or operational content require a lightweight feature test.
+- Existing tests must be updated if they cover the modified behavior.
 
-No implementation work may begin until the proposed tests have been reviewed and approved as part of the PR plan.
+No implementation may begin until proposed tests are reviewed and approved.
 
 ---
 
 ## Creating New Abstractions
 
-- Default to using existing components and patterns.
-- If a new reusable abstraction seems beneficial, the AI must:
+- Default to existing components and patterns.
+- If a new abstraction is proposed, AI must:
     - State the problem it solves
-    - Explain why existing inventory items are insufficient
+    - Explain why existing inventory is insufficient
     - Propose the minimal public API
-    - Describe expected reuse (at least 2 concrete future uses)
-- No new abstraction may be created until the proposal is reviewed and explicitly approved.
-- If approved, the new abstraction must be added to `docs/ARCHITECTURE_INVENTORY.md` in the same PR.
+    - Describe at least two concrete future reuse cases
+
+- No new abstraction may be created without explicit approval.
+- Approved abstractions must be added to `docs/ARCHITECTURE_INVENTORY.md` in the same PR.

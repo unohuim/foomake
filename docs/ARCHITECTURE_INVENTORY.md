@@ -1,57 +1,70 @@
 # Architecture Inventory
 
-This document tracks reusable abstractions, components, and patterns used throughout the project.
+This document tracks **reusable abstractions, components, and architectural patterns**
+used throughout the project.
 
-Its purpose is to prevent duplication, improve discoverability, and provide a shared mental model for both human and AI contributors.
+Its purpose is to:
+
+- Prevent duplicate abstractions
+- Make intent explicit for future contributors (human or AI)
+- Serve as the architectural source of truth
+
+This is an **index**, not a tutorial.
 
 ---
 
 ## How to Use This Document
 
-- Before creating a new abstraction, review this inventory to determine whether an existing solution already exists.
-- When introducing a new reusable component, add an entry here as part of the same PR.
-- Entries should be concise, factual, and descriptive—this is an index, not a tutorial.
+- **Before creating a new abstraction**, review this inventory.
+- **When introducing a reusable abstraction**, add an entry in the same PR.
+- Entries must be factual, minimal, and descriptive.
 
 ---
 
 ## Entry Requirements
 
-Each inventory entry must include:
+Each entry must include:
 
 - **Name**
-- **Type** (e.g. Service, Action, DTO, Helper, Blade Component, JS Module)
-- **Location** (file path)
+- **Type** (Model, Trait, Scope, Provider, Pattern, etc.)
+- **Location**
 - **Purpose**
 - **When to Use**
 - **When Not to Use**
-- **Public API / Interface**
+- **Public Interface**
 - **Example Usage**
 
 ---
 
 ## Inventory
 
+---
+
 ### Tenant Scope Trait
 
 **Name:** Tenant Scope Trait  
-**Type:** Trait + Global Scope  
-**Location:** `app/Models/Concerns/HasTenantScope.php`, `app/Models/Scopes/TenantScope.php`
+**Type:** Trait + Global Eloquent Scope  
+**Location:**
+
+- `app/Models/Concerns/HasTenantScope.php`
+- `app/Models/Scopes/TenantScope.php`
 
 **Purpose:**  
-Apply tenant scoping to tenant-owned models based on the authenticated user’s tenant.
+Automatically scope tenant-owned models by `tenant_id` based on the authenticated user.
 
 **When to Use:**
 
-- Any tenant-owned model that must be scoped by `tenant_id`
+- Any model that represents tenant-owned data
 - Enforcing tenant isolation by default
 
 **When Not to Use:**
 
-- Global models that intentionally bypass tenant scoping
+- Global/system models (e.g. roles, permissions)
+- Explicit cross-tenant queries
 
 **Public Interface:**
 
-- `use HasTenantScope` on models
+- `use HasTenantScope`
 
 **Example Usage:**
 
@@ -62,6 +75,8 @@ class User extends Authenticatable
 }
 ```
 
+---
+
 ### Tenant Model
 
 **Name:** Tenant  
@@ -69,27 +84,30 @@ class User extends Authenticatable
 **Location:** `app/Models/Tenant.php`
 
 **Purpose:**  
-Represent a tenant entity for single-database multi-tenancy.
+Represent a business tenant in a single-database, multi-tenant architecture.
 
 **When to Use:**
 
-- Establishing tenant ownership on tenant-scoped records
-- Resolving tenant information for users
+- Establishing tenant ownership
+- Associating users with a tenant
+- Scoping tenant-owned records
 
 **When Not to Use:**
 
-- Global configuration not tied to a tenant
+- Global/system configuration unrelated to a business
 
 **Public Interface:**
 
-- `users()` relationship
+- `users()`
 
 **Example Usage:**
 
 ```php
-$tenant = Tenant::first();
+$tenant = Tenant::create();
 $users = $tenant->users;
 ```
+
+---
 
 ### Role Model
 
@@ -98,27 +116,29 @@ $users = $tenant->users;
 **Location:** `app/Models/Role.php`
 
 **Purpose:**  
-Represent global roles and link them to permissions and users.
+Represent global roles that define business responsibilities.
 
 **When to Use:**
 
-- Assigning one or more roles to users
-- Defining permission sets
+- Assigning capabilities to users
+- Grouping permissions by responsibility
 
 **When Not to Use:**
 
-- Per-tenant role management (not supported)
+- Per-tenant role definitions (not supported)
 
 **Public Interface:**
 
-- `users()` relationship  
-- `permissions()` relationship
+- `users()`
+- `permissions()`
 
 **Example Usage:**
 
 ```php
-$role->permissions()->sync($permissionIds);
+$user->roles()->attach($roleId);
 ```
+
+---
 
 ### Permission Model
 
@@ -127,20 +147,20 @@ $role->permissions()->sync($permissionIds);
 **Location:** `app/Models/Permission.php`
 
 **Purpose:**  
-Store canonical permission slugs used by gates and role mappings.
+Store canonical permission slugs enforced via Laravel Gates.
 
 **When to Use:**
 
-- Authorization checks via gates
-- Role-permission mappings
+- Authorization checks
+- Mapping permissions to roles
 
 **When Not to Use:**
 
-- UI-only visibility without backend enforcement
+- UI-only visibility logic without backend enforcement
 
 **Public Interface:**
 
-- `roles()` relationship
+- `roles()`
 
 **Example Usage:**
 
@@ -152,29 +172,59 @@ $permission->roles()->attach($roleId);
 
 ## Authorization Layer
 
-**Name:** Global Role + Domain Authorization Layer  
-**Type:** Authorization Pattern (Gates / Policies)  
-**Location:** `app/Providers/AuthServiceProvider.php`, `app/Policies/*`
+### Domain Authorization Layer
+
+**Name:** Domain Authorization Layer  
+**Type:** Authorization Pattern (Laravel Gates)  
+**Location:** `app/Providers/AuthServiceProvider.php`
 
 **Purpose:**  
-Provide a centralized, testable authorization mechanism based on global roles and business domains.
+Provide a centralized, domain-driven authorization system using:
+
+- Global roles
+- Permission slugs
+- Laravel Gates
+
+**Key Rules:**
+
+- Authorization is enforced at the domain level
+- UI visibility must never be the source of truth
+- `super-admin` bypasses all checks via `Gate::before`
 
 **When to Use:**
 
 - Any access control decision
-- Any domain-level permission check
+- Any read/write permission enforcement
 
 **When Not to Use:**
 
-- UI-only visibility decisions without backend enforcement
+- Purely cosmetic UI decisions
 
 **Public Interface:**
 
-- Gate abilities (e.g. `view-inventory`, `manage-sales`)
-- Policy methods where appropriate
+- Gate slugs (e.g. `sales-customers-view`)
+- `Gate::allows()`
+- `Gate::authorize()`
 
 **Example Usage:**
 
 ```php
-Gate::authorize('manage-inventory');
+Gate::authorize('sales-customers-view');
 ```
+
+---
+
+## Multi-Tenancy Architecture
+
+### Single Database, Tenant ID Scoping
+
+**Type:** Architectural Pattern
+
+**Rules:**
+
+- All tenant-owned tables must include `tenant_id`
+- Tenant scoping is enforced by default via model scope
+- Cross-tenant access must be explicit and justified
+- The first user created for a tenant is auto-assigned the `admin` role
+
+This pattern is **foundational** and may not be bypassed without approval.

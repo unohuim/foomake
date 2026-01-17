@@ -5,3 +5,5 @@ read:
   - docs/ARCHITECTURE_INVENTORY.md
   - composer.lock
   - package-lock.json
+  - docs/PERMISSIONS_MATRIX.md
+  - docs/PERMISSIONS.md
