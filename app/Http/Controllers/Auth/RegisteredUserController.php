@@ -38,7 +38,7 @@ class RegisteredUserController extends Controller
         ]);
 
         $tenant = Tenant::create([
-            'tenant_name' => null,
+            'tenant_name' => $request->name . "'s Organization",
         ]);
 
         $user = User::create([

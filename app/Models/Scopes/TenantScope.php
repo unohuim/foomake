@@ -2,36 +2,36 @@
 
 namespace App\Models\Scopes;
 
-use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Scope;
 use Illuminate\Support\Facades\Auth;
 
-/**
- * Class TenantScope
- */
 class TenantScope implements Scope
 {
-    /**
-     * Apply the scope to the given query builder.
-     */
     public function apply(Builder $builder, Model $model): void
     {
-        if (!Auth::check()) {
+        // 1. No auth → no constraint (login, sessions, tests)
+        if (! Auth::check()) {
             return;
         }
 
         $user = Auth::user();
 
-        if (!$user instanceof User) {
+        // 2. Super-admin → no constraint
+        if ($user?->hasRole('super-admin')) {
             return;
         }
 
-        if ($user->hasRole('super-admin')) {
+        // 3. No tenant → fail open (never hard-fail auth)
+        if (! $user?->tenant_id) {
             return;
         }
 
-        $builder->where($model->qualifyColumn('tenant_id'), $user->tenant_id);
+        // 4. Apply tenant isolation
+        $builder->where(
+            $model->qualifyColumn('tenant_id'),
+            $user->tenant_id
+        );
     }
 }
