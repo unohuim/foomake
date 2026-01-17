@@ -31,13 +31,126 @@ Each inventory entry must include:
 
 ## Inventory
 
-> _No reusable abstractions have been formally registered yet._
+### Tenant Scope Trait
 
-New entries will appear here as the project evolves.
+**Name:** Tenant Scope Trait  
+**Type:** Trait + Global Scope  
+**Location:** `app/Models/Concerns/HasTenantScope.php`, `app/Models/Scopes/TenantScope.php`
+
+**Purpose:**  
+Apply tenant scoping to tenant-owned models based on the authenticated user’s tenant.
+
+**When to Use:**
+
+- Any tenant-owned model that must be scoped by `tenant_id`
+- Enforcing tenant isolation by default
+
+**When Not to Use:**
+
+- Global models that intentionally bypass tenant scoping
+
+**Public Interface:**
+
+- `use HasTenantScope` on models
+
+**Example Usage:**
+
+```php
+class User extends Authenticatable
+{
+    use HasTenantScope;
+}
+```
+
+### Tenant Model
+
+**Name:** Tenant  
+**Type:** Eloquent Model  
+**Location:** `app/Models/Tenant.php`
+
+**Purpose:**  
+Represent a tenant entity for single-database multi-tenancy.
+
+**When to Use:**
+
+- Establishing tenant ownership on tenant-scoped records
+- Resolving tenant information for users
+
+**When Not to Use:**
+
+- Global configuration not tied to a tenant
+
+**Public Interface:**
+
+- `users()` relationship
+
+**Example Usage:**
+
+```php
+$tenant = Tenant::first();
+$users = $tenant->users;
+```
+
+### Role Model
+
+**Name:** Role  
+**Type:** Eloquent Model  
+**Location:** `app/Models/Role.php`
+
+**Purpose:**  
+Represent global roles and link them to permissions and users.
+
+**When to Use:**
+
+- Assigning one or more roles to users
+- Defining permission sets
+
+**When Not to Use:**
+
+- Per-tenant role management (not supported)
+
+**Public Interface:**
+
+- `users()` relationship  
+- `permissions()` relationship
+
+**Example Usage:**
+
+```php
+$role->permissions()->sync($permissionIds);
+```
+
+### Permission Model
+
+**Name:** Permission  
+**Type:** Eloquent Model  
+**Location:** `app/Models/Permission.php`
+
+**Purpose:**  
+Store canonical permission slugs used by gates and role mappings.
+
+**When to Use:**
+
+- Authorization checks via gates
+- Role-permission mappings
+
+**When Not to Use:**
+
+- UI-only visibility without backend enforcement
+
+**Public Interface:**
+
+- `roles()` relationship
+
+**Example Usage:**
+
+```php
+$permission->roles()->attach($roleId);
+```
 
 ---
 
-## Authorization Layer (Planned)
+## Authorization Layer
 
 **Name:** Global Role + Domain Authorization Layer  
 **Type:** Authorization Pattern (Gates / Policies)  
