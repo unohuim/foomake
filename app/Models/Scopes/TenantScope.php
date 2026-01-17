@@ -18,11 +18,13 @@ class TenantScope implements Scope
      */
     public function apply(Builder $builder, Model $model): void
     {
+        if (!Auth::check()) {
+            return;
+        }
+
         $user = Auth::user();
 
         if (!$user instanceof User) {
-            $builder->whereRaw('1 = 0');
-
             return;
         }
 

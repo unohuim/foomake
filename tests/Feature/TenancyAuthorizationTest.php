@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\Gate;
 
 uses(RefreshDatabase::class);
 
-it('returns no tenant scoped records when unauthenticated', function () {
+it('returns unscoped records when unauthenticated', function () {
     $tenant = Tenant::create([
         'tenant_name' => 'FooMake',
     ]);
@@ -22,8 +22,7 @@ it('returns no tenant scoped records when unauthenticated', function () {
         'tenant_id' => $tenant->id,
     ]);
 
-    expect(User::withoutGlobalScopes()->count())->toBe(2);
-    expect(User::count())->toBe(0);
+    expect(User::count())->toBe(2);
 });
 
 it('scopes users to the authenticated tenant', function () {
