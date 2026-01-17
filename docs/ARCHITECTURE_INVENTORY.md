@@ -34,3 +34,34 @@ Each inventory entry must include:
 > _No reusable abstractions have been formally registered yet._
 
 New entries will appear here as the project evolves.
+
+---
+
+## Authorization Layer (Planned)
+
+**Name:** Global Role + Domain Authorization Layer  
+**Type:** Authorization Pattern (Gates / Policies)  
+**Location:** `app/Providers/AuthServiceProvider.php`, `app/Policies/*`
+
+**Purpose:**  
+Provide a centralized, testable authorization mechanism based on global roles and business domains.
+
+**When to Use:**
+
+- Any access control decision
+- Any domain-level permission check
+
+**When Not to Use:**
+
+- UI-only visibility decisions without backend enforcement
+
+**Public Interface:**
+
+- Gate abilities (e.g. `view-inventory`, `manage-sales`)
+- Policy methods where appropriate
+
+**Example Usage:**
+
+```php
+Gate::authorize('manage-inventory');
+```
