@@ -13,6 +13,10 @@ class TenantScope implements Scope
 {
     public function apply(Builder $builder, Model $model): void
     {
+        if ($model instanceof User) {
+            return;
+        }
+
         // Only apply scoping after authentication has resolved a user.
         if (! Auth::hasUser()) {
             return;
