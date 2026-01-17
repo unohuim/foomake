@@ -13,14 +13,13 @@ class TenantScope implements Scope
 {
     public function apply(Builder $builder, Model $model): void
     {
-        // 1. No auth → no constraint (login, sessions, tests)
-        if (! Auth::check()) {
+        // Only apply scoping after authentication has resolved a user.
+        if (! Auth::hasUser()) {
             return;
         }
 
         $user = Auth::user();
 
-        // 2. No tenant → fail open (never hard-fail auth)
         if (! $user?->tenant_id) {
             return;
         }
