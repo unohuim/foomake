@@ -13,7 +13,7 @@ return new class extends Migration
     {
         Schema::create('tenants', function (Blueprint $table) {
             $table->id();
-            $table->string('tenant_name');
+            $table->string('tenant_name')->nullable();
             $table->timestamps();
         });
     }

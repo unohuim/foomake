@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
+use App\Models\Role;
+use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Http\RedirectResponse;
@@ -35,11 +37,22 @@ class RegisteredUserController extends Controller
             'password' => ['required', 'confirmed', Rules\Password::defaults()],
         ]);
 
+        $tenant = Tenant::create([
+            'tenant_name' => null,
+        ]);
+
         $user = User::create([
+            'tenant_id' => $tenant->id,
             'name' => $request->name,
             'email' => $request->email,
             'password' => Hash::make($request->password),
         ]);
+
+        $adminRole = Role::firstOrCreate([
+            'name' => 'admin',
+        ]);
+
+        $user->roles()->syncWithoutDetaching([$adminRole->id]);
 
         event(new Registered($user));
 
