@@ -17,7 +17,7 @@ return new class extends Migration
             $table->foreignId('item_id')->constrained()->cascadeOnDelete();
             $table->foreignId('uom_id')->constrained('uoms')->cascadeOnDelete();
             $table->decimal('quantity', 18, 6);
-            $table->enum('type', ['receipt', 'issue', 'adjustment']);
+            $table->enum('type', ['receipt', 'issue', 'adjustment', 'inventory_count_adjustment']);
             $table->nullableMorphs('source');
             $table->timestamp('created_at')->useCurrent();
         });
