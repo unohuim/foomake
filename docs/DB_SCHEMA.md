@@ -7,7 +7,7 @@ It is intended for bootstrapping context for humans and AI.
 
 - Migrations are the source of truth for DDL.
 - Enum values are defined in `docs/ENUMS.md` (this document only references their existence).
-- Tenant scoping is reported per table based on the presence of a `tenant_id` column.
+- Tenant scoping is reported per table based on the presence of a `tenant_id` column, with exceptions noted explicitly (e.g., auth-safe tables).
 
 ---
 
@@ -190,7 +190,7 @@ It is intended for bootstrapping context for humans and AI.
 | Column | Type | Nullable | Default | Notes |
 | --- | --- | --- | --- | --- |
 | id | bigint unsigned | No | — | Primary key |
-| tenant_id | bigint unsigned | No | — | FK → tenants.id (onDelete: cascade); implicit index (Laravel default) |
+| tenant_id | bigint unsigned | No | — | FK → tenants.id (onDelete: cascade) |
 | item_id | bigint unsigned | No | — | FK → items.id (onDelete: cascade); implicit index (Laravel default) |
 | supplier_id | bigint unsigned | Yes | — | No foreign key constraint |
 | supplier_sku | string | Yes | — | — |
@@ -214,7 +214,6 @@ It is intended for bootstrapping context for humans and AI.
 - Index: tenant_id
 - Index: (tenant_id, item_id)
 - Index: (tenant_id, supplier_sku)
-- Implicit index (Laravel default): tenant_id
 - Implicit index (Laravel default): item_id
 - Implicit index (Laravel default): pack_uom_id
 
@@ -660,8 +659,8 @@ It is intended for bootstrapping context for humans and AI.
 | uom_id | bigint unsigned | No | — | FK → uoms.id (onDelete: cascade); implicit index (Laravel default) |
 | quantity | decimal(18,6) | No | — | — |
 | type | enum | No | — | Enum values in docs/ENUMS.md |
-| source_type | string | Yes | — | Part of polymorphic relation; implicit composite index (Laravel default) |
-| source_id | bigint unsigned | Yes | — | Part of polymorphic relation; implicit composite index (Laravel default) |
+| source_type | string | Yes | — | Part of polymorphic relation; indexed (created by nullableMorphs) |
+| source_id | bigint unsigned | Yes | — | Part of polymorphic relation; indexed (created by nullableMorphs) |
 | created_at | timestamp | No | CURRENT_TIMESTAMP | — |
 
 **Primary Key**
@@ -676,10 +675,10 @@ It is intended for bootstrapping context for humans and AI.
 
 **Indexes & Unique Constraints**
 
+- Index: (source_type, source_id)
 - Implicit index (Laravel default): tenant_id
 - Implicit index (Laravel default): item_id
 - Implicit index (Laravel default): uom_id
-- Implicit index (Laravel default): (source_type, source_id)
 
 **Checks / Enums**
 
@@ -822,7 +821,7 @@ It is intended for bootstrapping context for humans and AI.
 
 ## users
 
-**Tenant-scoped:** Yes
+**Tenant-scoped:** No (auth-safe; not scoped by HasTenantScope)
 
 **Columns**
 
@@ -836,7 +835,7 @@ It is intended for bootstrapping context for humans and AI.
 | remember_token | string(100) | Yes | — | — |
 | created_at | timestamp | Yes | — | — |
 | updated_at | timestamp | Yes | — | — |
-| tenant_id | bigint unsigned | No | — | FK → tenants.id (onDelete: cascade); implicit index (Laravel default); explicit index |
+| tenant_id | bigint unsigned | No | — | FK → tenants.id (onDelete: cascade); explicit index |
 
 **Primary Key**
 
@@ -850,7 +849,6 @@ It is intended for bootstrapping context for humans and AI.
 
 - Unique: email
 - Index: tenant_id
-- Implicit index (Laravel default): tenant_id
 
 **Checks / Enums**
 
