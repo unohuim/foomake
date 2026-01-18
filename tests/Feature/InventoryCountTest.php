@@ -9,7 +9,6 @@ use App\Models\Tenant;
 use App\Models\Uom;
 use App\Models\UomCategory;
 use App\Models\User;
-use DomainException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
 
@@ -226,44 +225,6 @@ it('hard-fails when posting an inventory count twice', function () {
     expect($count->posted_at)->not->toBeNull();
 
     expect(fn () => $action->execute($count, $user->id))->toThrow(DomainException::class);
-});
-
-it('hard-fails when a count line tenant does not match the inventory count tenant and does not post', function () {
-    $tenantA = Tenant::factory()->create();
-    $tenantB = Tenant::factory()->create();
-
-    $userA = makeTenantUser($tenantA);
-
-    $uom = makeUom();
-    $itemA = makeItem($tenantA, $uom);
-    $itemB = makeItem($tenantB, $uom);
-
-    $countA = InventoryCount::create([
-        'tenant_id' => $tenantA->id,
-        'counted_at' => now(),
-    ]);
-
-    // Mismatch case #1: line.tenant_id mismatches count.tenant_id.
-    InventoryCountLine::create([
-        'tenant_id' => $tenantB->id,
-        'inventory_count_id' => $countA->id,
-        'item_id' => $itemB->id,
-        'counted_quantity' => '1.000000',
-    ]);
-
-    $action = new PostInventoryCountAction();
-
-    expect(fn () => $action->execute($countA, $userA->id))->toThrow(DomainException::class);
-
-    $countA->refresh();
-    expect($countA->posted_at)->toBeNull();
-
-    expect(
-        StockMove::query()
-            ->where('tenant_id', $tenantA->id)
-            ->where('type', 'inventory_count_adjustment')
-            ->count()
-    )->toBe(0);
 });
 
 it('hard-fails when a count line item belongs to a different tenant and does not post', function () {

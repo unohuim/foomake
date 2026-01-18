@@ -64,7 +64,7 @@ class PostInventoryCountAction
                     'tenant_id' => $lockedCount->tenant_id,
                     'item_id' => $item->id,
                     'uom_id' => $item->base_uom_id,
-                    'quantity' => $variance->toPlainString(),
+                    'quantity' => $variance->toScale(6)->__toString(),
                     'type' => 'inventory_count_adjustment',
                     'source_type' => InventoryCount::class,
                     'source_id' => $lockedCount->id,
