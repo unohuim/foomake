@@ -7,3 +7,5 @@ read:
   - package-lock.json
   - docs/PERMISSIONS_MATRIX.md
   - docs/PERMISSIONS.md
+  - docs/DOMAIN_INVENTORY_AND_RECIPES.md
+  - docs/PR_ROADMAP.md
