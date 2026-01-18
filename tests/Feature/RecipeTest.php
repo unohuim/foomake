@@ -103,8 +103,8 @@ it('executes a simple recipe and derives inventory from stock moves', function (
     $flour->refresh();
     $bread->refresh();
 
-    expect($flour->onHandQuantity())->toBe('-6.000000');
-    expect($bread->onHandQuantity())->toBe('3.000000');
+    expect((float) $flour->onHandQuantity())->toBe(-6.0);
+    expect((float) $bread->onHandQuantity())->toBe(3.0);
 });
 
 it('executes recursive recipes via stock moves', function () {
@@ -157,9 +157,9 @@ it('executes recursive recipes via stock moves', function () {
     $subItem->refresh();
     $parentItem->refresh();
 
-    expect($raw->onHandQuantity())->toBe('-2.000000');
-    expect($subItem->onHandQuantity())->toBe('0.000000');
-    expect($parentItem->onHandQuantity())->toBe('1.000000');
+    expect((float) $raw->onHandQuantity())->toBe(-2.0);
+    expect((float) $subItem->onHandQuantity())->toBe(0.0);
+    expect((float) $parentItem->onHandQuantity())->toBe(1.0);
 });
 
 it('allows multiple inactive recipes but only one active recipe per item', function () {

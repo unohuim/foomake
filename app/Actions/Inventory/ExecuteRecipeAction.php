@@ -23,6 +23,14 @@ class ExecuteRecipeAction
      */
     public function execute(Recipe $recipe, string $outputQuantity): array
     {
+        if (auth()->check()) {
+            $userTenantId = auth()->user()->tenant_id;
+
+            if ($userTenantId !== $recipe->tenant_id) {
+                throw new InvalidArgumentException('Recipe tenant does not match authenticated user tenant.');
+            }
+        }
+
         if (!$recipe->is_active) {
             throw new InvalidArgumentException('Recipe must be active to execute.');
         }
