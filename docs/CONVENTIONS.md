@@ -61,6 +61,26 @@ These rules are contractual.
 - Tests must assert **intent**, not implementation details
 - Avoid brittle tests that rely on ordering, timing, or side effects
 
+- Every permission must have explicit allow/deny tests
+- Tests must assert both positive and negative cases
+
+### Test File Safety Rules
+
+To avoid cross-test contamination and CI-only failures:
+
+- **Do not declare global functions in test files.**  
+  Pest loads all test files into a shared PHP runtime; global helper functions
+  (`function foo() {}`) will collide across files.
+    - Use `beforeEach()` closures (`$this->makeX = fn () => ...`) instead.
+    - Alternatively, define helpers as local closures inside the test.
+
+- **When asserting or throwing PHP built-in exceptions, use fully-qualified names**  
+  (e.g. `\DomainException::class`) or a proper `use` import.
+    - Avoid bare `DomainException::class` without qualification, which can lead to
+      warnings like “use statement has no effect” or inconsistent behavior.
+
+These rules are mandatory for all new tests.
+
 ---
 
 ## Frontend Conventions
@@ -199,11 +219,6 @@ Examples:
 - `inventory-products-manage`
 - `purchasing-purchase-orders-create`
 
-### Testing
-
-- Every permission must have explicit allow/deny tests
-- Tests must assert both positive and negative cases
-
 ---
 
 ## Tenancy Requirements
@@ -214,4 +229,24 @@ Examples:
 - Global tables must be explicitly documented as global
 - The first user created for a tenant is automatically assigned `admin`
 
-This rule is foundational and non-negotiable.
+## This rule is foundational and non-negotiable.
+
+## Decimal Quantity Math (Inventory & Purchasing)
+
+To avoid floating-point rounding errors, all quantity math in inventory and purchasing
+domains must follow these rules:
+
+- **All quantities are represented as strings**, never floats.
+- **All arithmetic must use BCMath** (`bcadd`, `bcmul`, `bcdiv`, etc.).
+- A **single canonical scale** must be used everywhere, matching
+  `stock_moves.quantity` (e.g. scale = 6).
+- **No implicit casting** to float at any point.
+- **No alternative math libraries** (e.g. BigDecimal, Brick\Math) may be introduced
+  without explicit approval.
+
+These rules apply to:
+
+- Stock moves
+- Receiving logic
+- Unit conversions
+- Any inventory-affecting calculations

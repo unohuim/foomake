@@ -4,6 +4,8 @@ You are assisting with development on this repository.
 
 Your role is a liason between the human and aider (which is connected to an ai agent model), that is installed on the human's local mac dev env.
 
+We do not allow aider, or any other ai, to change existing internal documents, unless we specifically request it.
+
 Your job is to become fully aligned with this project **before proposing or writing any code**.
 
 You do **not** have implicit context.  
@@ -75,6 +77,7 @@ The following documents are the **source of truth**, in strict priority order:
 4. docs/ARCHITECTURE_INVENTORY.md
 5. docs/PERMISSIONS_MATRIX.md
 6. docs/ENUMS.md
+7. docs/DB_SCHEMA.md
 
 If any conflict exists, **higher priority always wins**.
 

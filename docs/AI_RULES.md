@@ -137,3 +137,10 @@ No implementation may begin until proposed tests are reviewed and approved.
 
 - No new abstraction may be created without explicit approval.
 - Approved abstractions must be added to `docs/ARCHITECTURE_INVENTORY.md` in the same PR.
+
+---
+
+## DB Schema
+
+LLMs must treat DB_SCHEMA.md as the authoritative database shape unless explicitly told otherwise.
+Migrations define truth; this file defines context.

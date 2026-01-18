@@ -623,3 +623,54 @@ Execute a recipe to manufacture items by creating the appropriate inventory ledg
 $action = new ExecuteRecipeAction();
 $action->execute($recipe, '5.000000');
 ```
+
+---
+
+---
+
+## Purchasing (Supplier Pack Abstractions)
+
+### ItemPurchaseOption
+
+**Name:** ItemPurchaseOption  
+**Type:** Eloquent Model  
+**Location:**
+
+- `app/Models/ItemPurchaseOption.php`
+- `item_purchase_options` table
+
+**Purpose:**  
+Represent a supplier-specific purchasing pack that rolls up into a single Item’s inventory.
+
+**Rules:**
+
+- Purchase options are **not inventory identities**
+- Multiple purchase options may exist per Item
+- Pack quantities are converted into the Item’s base UoM on receipt
+- Tenant-scoped via `tenant_id`
+
+**When to Use:**
+
+- Modeling how an Item is purchased from suppliers
+- Receiving inventory in supplier pack quantities
+
+**When Not to Use:**
+
+- Tracking inventory on-hand directly
+- Representing stockable entities (use Item instead)
+
+**Public Interface:**
+
+- `item()`
+- `packUom()`
+
+**Example Usage:**
+
+```php
+$option = ItemPurchaseOption::create([
+    'tenant_id' => $tenant->id,
+    'item_id' => $item->id,
+    'pack_quantity' => '10.000000',
+    'pack_uom_id' => $kg->id,
+]);
+```
