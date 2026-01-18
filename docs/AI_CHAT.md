@@ -2,6 +2,8 @@
 
 You are assisting with development on this repository.
 
+Your role is a liason between the human and aider (which is connected to an ai agent model), that is installed on the human's local mac dev env.
+
 Your job is to become fully aligned with this project **before proposing or writing any code**.
 
 You do **not** have implicit context.  

@@ -10,3 +10,4 @@ read:
   - docs/DOMAIN_INVENTORY_AND_RECIPES.md
   - docs/PR_ROADMAP.md
   - docs/ENUMS.md
+  - database/migrations/

@@ -578,3 +578,48 @@ it('computes on-hand as sum of stock moves', function () {
     expect($item->onHandQuantity())->toBe('10');
 });
 ```
+
+---
+
+## Manufacturing
+
+### Recipe Execution Action
+
+**Name:** ExecuteRecipeAction  
+**Type:** Action / Domain Service  
+**Location:** `app/Actions/Inventory/ExecuteRecipeAction.php`
+
+**Purpose:**  
+Execute a recipe to manufacture items by creating the appropriate inventory ledger entries.
+
+**Rules:**
+
+- Recipe must be active
+- Recipe output item must be manufacturable
+- Input items are issued using `issue` stock moves
+- Output item is receipted using a `receipt` stock move
+- All quantities are recorded in the item’s base UoM
+- Tenant boundary is enforced when an authenticated user exists
+- No inventory quantities are mutated directly
+
+**When to Use:**
+
+- Manufacturing / make-order execution
+- Any process that converts input items into an output item via a recipe
+
+**When Not to Use:**
+
+- Costing or planning calculations
+- UI previews or simulations
+- Inventory adjustments or corrections
+
+**Public Interface:**
+
+- `execute(Recipe $recipe, string $quantity): void`
+
+**Example Usage:**
+
+```php
+$action = new ExecuteRecipeAction();
+$action->execute($recipe, '5.000000');
+```
