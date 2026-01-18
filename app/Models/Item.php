@@ -6,6 +6,7 @@ use App\Models\Concerns\HasTenantScope;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 /**
  * Class Item
@@ -20,6 +21,15 @@ class Item extends Model
         'tenant_id',
         'name',
         'base_uom_id',
+        'is_purchasable',
+        'is_sellable',
+        'is_manufacturable',
+    ];
+
+    protected $casts = [
+        'is_purchasable' => 'boolean',
+        'is_sellable' => 'boolean',
+        'is_manufacturable' => 'boolean',
     ];
 
     /**
@@ -52,6 +62,22 @@ class Item extends Model
     public function stockMoves(): HasMany
     {
         return $this->hasMany(StockMove::class);
+    }
+
+    /**
+     * @return HasMany
+     */
+    public function recipes(): HasMany
+    {
+        return $this->hasMany(Recipe::class);
+    }
+
+    /**
+     * @return HasOne
+     */
+    public function activeRecipe(): HasOne
+    {
+        return $this->hasOne(Recipe::class)->where('is_active', true);
     }
 
     /**
