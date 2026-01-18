@@ -18,6 +18,7 @@ This is an **index**, not a tutorial.
 - **Before creating a new abstraction**, review this inventory.
 - **When introducing a reusable abstraction**, add an entry in the same PR.
 - Entries must be factual, minimal, and descriptive.
+- Absence from this file implies the abstraction **does not exist**.
 
 ---
 
@@ -40,6 +41,48 @@ Each entry must include:
 
 ---
 
+## Multi-Tenancy Architecture
+
+### Single Database, Tenant ID Scoping
+
+**Name:** Single Database Tenant Scoping  
+**Type:** Architectural Pattern  
+**Location:** Across all tenant-owned models + migrations (enforced via tenant scope)
+
+**Purpose:**  
+Ensure tenant isolation in a single database by requiring `tenant_id` on tenant-owned tables and scoping queries to the authenticated user's tenant.
+
+**Rules:**
+
+- All tenant-owned tables must include `tenant_id`
+- Tenant scoping is enforced by default via the tenant global scope on tenant-owned models
+- Cross-tenant access must be explicit and justified
+- Auth flows must not break when unauthenticated
+
+**When to Use:**
+
+- Any tenant-owned domain table/model
+
+**When Not to Use:**
+
+- Global/system tables (roles, permissions, etc.)
+- Authentication identity resolution
+
+**Public Interface:**
+
+- `use HasTenantScope`
+
+**Example Usage:**
+
+```php
+class Item extends Model
+{
+    use HasTenantScope;
+}
+```
+
+---
+
 ### Tenant Scope Trait
 
 **Name:** Tenant Scope Trait  
@@ -50,17 +93,22 @@ Each entry must include:
 - `app/Models/Scopes/TenantScope.php`
 
 **Purpose:**  
-Automatically scope tenant-owned models by `tenant_id` based on the authenticated user.
+Enforce tenant isolation by automatically scoping tenant-owned models via `tenant_id`
+resolved from authenticated user context.
+
+**Rules:**
+
+- This is the **only permitted tenant resolution mechanism** for domain models
+- Scope is a no-op when no authenticated user exists
 
 **When to Use:**
 
-- Any model that represents tenant-owned data
-- Enforcing tenant isolation by default
+- Any tenant-owned Eloquent model
 
 **When Not to Use:**
 
-- Global/system models (e.g. roles, permissions)
-- Explicit cross-tenant queries
+- Global/system models
+- Auth identity resolution models (e.g., `User`)
 
 **Public Interface:**
 
@@ -69,10 +117,46 @@ Automatically scope tenant-owned models by `tenant_id` based on the authenticate
 **Example Usage:**
 
 ```php
-class User extends Authenticatable
+class StockMove extends Model
 {
     use HasTenantScope;
 }
+```
+
+---
+
+### User Model (Auth Identity Safety)
+
+**Name:** User Auth Identity Safety  
+**Type:** Architectural Rule / Pattern  
+**Location:** `app/Models/User.php`
+
+**Purpose:**  
+Ensure authentication and identity resolution are never affected by tenant scoping.
+
+**Rules:**
+
+- `User` must NOT use `HasTenantScope`
+- Users remain globally queryable even when authenticated
+- Tenant isolation is enforced at domain boundaries, not identity resolution
+
+**When to Use:**
+
+- Authentication, authorization, and identity lookup
+
+**When Not to Use:**
+
+- Tenant-owned domain data queries
+
+**Public Interface:**
+
+- N/A (rule enforced by convention + tests)
+
+**Example Usage:**
+
+```php
+// Safe: user identity lookup must not be tenant-scoped
+$user = User::where('email', $email)->first();
 ```
 
 ---
@@ -90,7 +174,6 @@ Represent a business tenant in a single-database, multi-tenant architecture.
 
 - Establishing tenant ownership
 - Associating users with a tenant
-- Scoping tenant-owned records
 
 **When Not to Use:**
 
@@ -103,8 +186,48 @@ Represent a business tenant in a single-database, multi-tenant architecture.
 **Example Usage:**
 
 ```php
-$tenant = Tenant::create();
+$tenant = Tenant::create(['tenant_name' => 'FooMake']);
 $users = $tenant->users;
+```
+
+---
+
+## Authorization Layer
+
+### Domain Authorization Layer
+
+**Name:** Domain Authorization Layer  
+**Type:** Authorization Pattern (Laravel Gates)  
+**Location:** `app/Providers/AuthServiceProvider.php`
+
+**Purpose:**  
+Centralize authorization using global roles, permission slugs, and Gates.
+
+**Rules:**
+
+- UI visibility is never the source of truth
+- Permission slugs are canonical
+- `super-admin` bypasses all checks via `Gate::before`
+
+**When to Use:**
+
+- Any access control decision
+- Any read/write permission enforcement
+
+**When Not to Use:**
+
+- UI-only visibility logic without backend enforcement
+
+**Public Interface:**
+
+- Gate slugs (e.g. `inventory-products-manage`)
+- `Gate::allows()`
+- `Gate::authorize()`
+
+**Example Usage:**
+
+```php
+Gate::authorize('sales-customers-view');
 ```
 
 ---
@@ -116,12 +239,12 @@ $users = $tenant->users;
 **Location:** `app/Models/Role.php`
 
 **Purpose:**  
-Represent global roles that define business responsibilities.
+Represent global roles that describe business responsibilities.
 
 **When to Use:**
 
-- Assigning capabilities to users
-- Grouping permissions by responsibility
+- Assigning responsibilities to users
+- Grouping permissions
 
 **When Not to Use:**
 
@@ -147,7 +270,7 @@ $user->roles()->attach($roleId);
 **Location:** `app/Models/Permission.php`
 
 **Purpose:**  
-Store canonical permission slugs enforced via Laravel Gates.
+Store canonical permission slugs enforced via Gates.
 
 **When to Use:**
 
@@ -170,51 +293,71 @@ $permission->roles()->attach($roleId);
 
 ---
 
-## Authorization Layer
+## Inventory & Units of Measure
 
-### Domain Authorization Layer
+### UoM Category
 
-**Name:** Domain Authorization Layer  
-**Type:** Authorization Pattern (Laravel Gates)  
-**Location:** `app/Providers/AuthServiceProvider.php`
+**Name:** UomCategory  
+**Type:** Eloquent Model  
+**Location:** `app/Models/UomCategory.php` (and `uom_categories` table)
 
 **Purpose:**  
-Provide a centralized, domain-driven authorization system using:
-
-- Global roles
-- Permission slugs
-- Laravel Gates
-
-**Key Rules:**
-
-- Authorization is enforced at the domain level
-- UI visibility must never be the source of truth
-- `super-admin` bypasses all checks via `Gate::before`
+Group units of measure into categories that define safe conversion boundaries.
 
 **When to Use:**
 
-- Any access control decision
-- Any read/write permission enforcement
+- Defining conversion-safe groupings (mass, volume, count, etc.)
 
 **When Not to Use:**
 
-- Purely cosmetic UI decisions
+- Cross-category conversion logic (handled item-specifically)
 
 **Public Interface:**
 
-- Gate slugs (e.g. `sales-customers-view`)
-- `Gate::allows()`
-- `Gate::authorize()`
+- `uoms()`
 
 **Example Usage:**
 
 ```php
-Gate::authorize('sales-customers-view');
+$category = UomCategory::create(['name' => 'Mass']);
+$uoms = $category->uoms;
 ```
 
 ---
 
-## Inventory & Units of Measure
+### UoM
+
+**Name:** Uom  
+**Type:** Eloquent Model  
+**Location:** `app/Models/Uom.php` (and `uoms` table)
+
+**Purpose:**  
+Represent a unit of measure, belonging to a single UoM category.
+
+**When to Use:**
+
+- Assigning units to items
+- Recording quantities with explicit units
+
+**When Not to Use:**
+
+- Implicit unit assumptions
+
+**Public Interface:**
+
+- `uomCategory()`
+
+**Example Usage:**
+
+```php
+$grams = Uom::create([
+    'uom_category_id' => $category->id,
+    'name' => 'Gram',
+    'symbol' => 'g',
+]);
+```
+
+---
 
 ### Global UoM Conversions
 
@@ -248,6 +391,16 @@ Provide safe, reusable unit conversions that are **category-bound**.
 
 - `UomConversion::create()`
 
+**Example Usage:**
+
+```php
+UomConversion::create([
+    'from_uom_id' => $kg->id,
+    'to_uom_id' => $grams->id,
+    'conversion_factor' => '1000',
+]);
+```
+
 ---
 
 ### Item-Specific UoM Conversions
@@ -278,26 +431,149 @@ Allow **cross-category unit conversions** that are true **only for a specific It
 
 - Global conversions
 - Conversion chaining or inference
-- Inventory math (handled later)
 
 **Public Interface:**
 
 - `Item::itemUomConversions()`
-- Lookup-only helpers on `Item`
+- Item lookup helpers (project-specific)
+
+**Example Usage:**
+
+```php
+$item->itemUomConversions()->create([
+    'from_uom_id' => $count->id,
+    'to_uom_id' => $grams->id,
+    'conversion_factor' => '50.0',
+]);
+```
 
 ---
 
-## Multi-Tenancy Architecture
+## Inventory Ledger
 
-### Single Database, Tenant ID Scoping
+### Stock Move (Append-Only Inventory Ledger)
 
-**Type:** Architectural Pattern
+**Name:** StockMove  
+**Type:** Eloquent Model + Domain Rule  
+**Location:**
+
+- `app/Models/StockMove.php`
+- `stock_moves` table
+
+**Purpose:**  
+Represent immutable inventory movements.  
+On-hand quantity is derived strictly as the sum of related stock moves.
 
 **Rules:**
 
-- All tenant-owned tables must include `tenant_id`
-- Tenant scoping is enforced by default via model scope
-- Cross-tenant access must be explicit and justified
-- The first user created for a tenant is auto-assigned the `admin` role
+- Append-only: updates and deletes are forbidden
+- Quantity is signed (`+` receipt, `-` issue/adjustment)
+- Inventory is derived, never stored
+- `uom_id` must match `items.base_uom_id`
 
-This pattern is **foundational** and may not be bypassed without approval.
+**Append-only enforcement (required to be explicit):**
+
+- **Model-level**: override `save()` to disallow updates, and override `delete()` to always throw  
+  (or equivalent explicit model mechanism documented here)
+- **Database-level**: no `updated_at` column; `updated_at` disabled in the model
+
+**When to Use:**
+
+- Any inventory-affecting operation (receiving, selling, consuming, adjusting)
+
+**When Not to Use:**
+
+- Storing or mutating on-hand totals directly
+- Caching or snapshotting inventory state
+
+**Public Interface:**
+
+- `Item::stockMoves()`
+- `Item::onHandQuantity(): string`
+
+**Example Usage:**
+
+```php
+StockMove::create([
+    'tenant_id' => $tenant->id,
+    'item_id' => $item->id,
+    'uom_id' => $item->base_uom_id,
+    'quantity' => '10.0',
+    'type' => 'receipt',
+]);
+```
+
+---
+
+### Item Model (Inventory-Derived On-Hand)
+
+**Name:** Item  
+**Type:** Eloquent Model + Domain Rule  
+**Location:** `app/Models/Item.php`
+
+**Purpose:**  
+Represent a stock-tracked material or product. Inventory is derived from the ledger.
+
+**Rules:**
+
+- Each Item has exactly one base UoM (`base_uom_id`)
+- No on-hand quantity column exists on `items`
+- On-hand is computed as the sum of `stock_moves.quantity` for the item
+
+**When to Use:**
+
+- Representing tenant-owned stock tracked entities
+
+**When Not to Use:**
+
+- Tracking inventory via denormalized columns
+
+**Public Interface:**
+
+- `stockMoves()`
+- `onHandQuantity(): string`
+- `itemUomConversions()`
+
+**Example Usage:**
+
+```php
+$onHand = $item->onHandQuantity();
+```
+
+---
+
+## Testing Infrastructure
+
+### Pest Test Framework
+
+**Name:** Pest  
+**Type:** Testing Infrastructure  
+**Location:** `tests/`
+
+**Purpose:**  
+Canonical test framework for all automated tests.
+
+**Rules:**
+
+- All new automated tests MUST be written in Pest
+- PHPUnit tests are legacy-only and must not be introduced for new tests
+
+**When to Use:**
+
+- Any new automated test
+
+**When Not to Use:**
+
+- New PHPUnit test classes
+
+**Public Interface:**
+
+- `it(...)`, `expect(...)`, `uses(...)` (Pest API)
+
+**Example Usage:**
+
+```php
+it('computes on-hand as sum of stock moves', function () {
+    expect($item->onHandQuantity())->toBe('10');
+});
+```

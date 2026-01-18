@@ -56,7 +56,7 @@ If unsure, **stop immediately and ask**.
 - **Single database**, multi-tenant architecture
 - `tenants.id` is the foreign key for all tenant-owned data
 - Tenant context is resolved from the **authenticated user**
-- A user belongs to **exactly one tenant**
+- A user belongs to **exactly one tenant**, but the User model is **not globally tenant-scoped** to preserve authentication safety
 - Users may have **multiple global roles**
 - Roles represent **business responsibility**, not UI access
 - Permissions are **explicit, slug-based**, and assigned to roles
@@ -96,6 +96,7 @@ If unsure, **stop immediately and ask**.
 
 - Failing tests define the next required change
 - Passing tests define acceptable behavior
+- All new tests must follow the project’s testing conventions (**Pest**, not PHPUnit)
 - If existing auth or tenancy tests fail, **stop and correct course**
 
 ---

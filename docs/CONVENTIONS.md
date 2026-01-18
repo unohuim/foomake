@@ -51,6 +51,11 @@ These rules are contractual.
 
 ## Testing Conventions
 
+- All new automated tests MUST be written using **Pest**.
+- PHPUnit-style test classes MUST NOT be introduced for new tests.
+- Existing PHPUnit tests may remain untouched unless explicitly refactored.
+- If test framework usage is unclear, AI must stop and ask before proceeding.
+
 - Tests are written **before or alongside** behavior changes
 - Feature tests are preferred for user- or domain-facing behavior
 - Tests must assert **intent**, not implementation details

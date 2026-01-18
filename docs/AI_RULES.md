@@ -13,6 +13,25 @@ These rules govern all AI-assisted development on this repository.
 
 ---
 
+## Completion Gate (Non-Negotiable)
+
+AI may NOT declare a task, PR, or change set “complete”, “finished”, or “ready”
+until the human explicitly approves completion in this chat.
+
+- Implementing code ≠ PR complete
+- Writing tests ≠ PR complete
+- Passing local reasoning ≠ PR complete
+
+AI output must end in one of the following states:
+
+- “Awaiting human review”
+- “Awaiting approval to proceed”
+- “Awaiting requested changes”
+
+AI must never self-certify completion.
+
+---
+
 ## Change Discipline
 
 - Prefer the smallest possible change.
