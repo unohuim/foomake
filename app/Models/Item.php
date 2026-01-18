@@ -47,6 +47,14 @@ class Item extends Model
     }
 
     /**
+     * @return HasMany
+     */
+    public function stockMoves(): HasMany
+    {
+        return $this->hasMany(StockMove::class);
+    }
+
+    /**
      * Look up an item-specific conversion factor between two UoMs.
      *
      * @param int $fromUomId
@@ -59,5 +67,19 @@ class Item extends Model
             ->where('from_uom_id', $fromUomId)
             ->where('to_uom_id', $toUomId)
             ->value('conversion_factor');
+    }
+
+    /**
+     * Get the on-hand quantity derived from the stock move ledger.
+     *
+     * @return string
+     */
+    public function onHandQuantity(): string
+    {
+        $total = $this->stockMoves()
+            ->selectRaw('COALESCE(SUM(quantity), 0) as total')
+            ->value('total');
+
+        return (string) $total;
     }
 }
