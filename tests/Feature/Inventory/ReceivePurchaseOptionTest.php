@@ -81,7 +81,7 @@ it('receives one 10kg pack into base grams', function () {
     expect($move->type)->toBe('receipt');
     expect(asSixDecimals($move->quantity))->toBe('10000.000000');
     expect($move->uom_id)->toBe($grams->id);
-    expect($item->fresh()->onHandQuantity())->toBe('10000.000000');
+    expect(asSixDecimals($item->fresh()->onHandQuantity()))->toBe('10000.000000');
 });
 
 it('receives two 20kg packs and aggregates correctly', function () {
@@ -103,7 +103,7 @@ it('receives two 20kg packs and aggregates correctly', function () {
     $move = $action->execute($option, '2');
 
     expect(asSixDecimals($move->quantity))->toBe('40000.000000');
-    expect($item->fresh()->onHandQuantity())->toBe('40000.000000');
+    expect(asSixDecimals($item->fresh()->onHandQuantity()))->toBe('40000.000000');
 });
 
 it('requires item-specific conversion for cross-category receiving', function () {
@@ -129,7 +129,7 @@ it('requires item-specific conversion for cross-category receiving', function ()
     $move = $action->execute($option, '1');
 
     expect(asSixDecimals($move->quantity))->toBe('4520.000000');
-    expect($item->fresh()->onHandQuantity())->toBe('4520.000000');
+    expect(asSixDecimals($item->fresh()->onHandQuantity()))->toBe('4520.000000');
 });
 
 it('throws when cross-category conversion is missing', function () {
