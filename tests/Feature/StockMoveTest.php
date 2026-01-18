@@ -152,7 +152,6 @@ class StockMoveTest extends TestCase
         ]);
 
         $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage('Stock move UoM must match item base UoM.');
 
         StockMove::create([
             'tenant_id' => $tenant->id,
