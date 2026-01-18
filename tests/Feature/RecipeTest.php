@@ -9,60 +9,58 @@ use App\Models\Uom;
 use App\Models\UomCategory;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use InvalidArgumentException;
+use Illuminate\Database\QueryException;
 
 uses(RefreshDatabase::class);
 
-function makeUom(): Uom
-{
-    $category = UomCategory::create([
-        'name' => 'Category ' . uniqid(),
-    ]);
+beforeEach(function () {
+    $this->makeUom = function (): Uom {
+        $category = UomCategory::create([
+            'name' => 'Category ' . uniqid(),
+        ]);
 
-    return Uom::create([
-        'uom_category_id' => $category->id,
-        'name' => 'Uom ' . uniqid(),
-        'symbol' => 'u' . substr(uniqid(), -6),
-    ]);
-}
+        return Uom::create([
+            'uom_category_id' => $category->id,
+            'name' => 'Uom ' . uniqid(),
+            'symbol' => 'u' . substr(uniqid(), -6),
+        ]);
+    };
 
-function makeTenant(): Tenant
-{
-    return Tenant::create([
-        'tenant_name' => 'Tenant ' . uniqid(),
-    ]);
-}
+    $this->makeTenant = function (): Tenant {
+        return Tenant::create([
+            'tenant_name' => 'Tenant ' . uniqid(),
+        ]);
+    };
 
-function makeTenantUser(Tenant $tenant): User
-{
-    return User::factory()->create([
-        'tenant_id' => $tenant->id,
-    ]);
-}
+    $this->makeTenantUser = function (Tenant $tenant): User {
+        return User::factory()->create([
+            'tenant_id' => $tenant->id,
+        ]);
+    };
 
-function makeItem(Tenant $tenant, Uom $uom, array $overrides = []): Item
-{
-    $data = [
-        'tenant_id' => $tenant->id,
-        'name' => 'Item ' . uniqid(),
-        'base_uom_id' => $uom->id,
-        'is_purchasable' => false,
-        'is_sellable' => false,
-        'is_manufacturable' => false,
-    ];
+    $this->makeItem = function (Tenant $tenant, Uom $uom, array $overrides = []): Item {
+        $data = [
+            'tenant_id' => $tenant->id,
+            'name' => 'Item ' . uniqid(),
+            'base_uom_id' => $uom->id,
+            'is_purchasable' => false,
+            'is_sellable' => false,
+            'is_manufacturable' => false,
+        ];
 
-    return Item::create(array_merge($data, $overrides));
-}
+        return Item::create(array_merge($data, $overrides));
+    };
+});
 
 it('executes a simple recipe and derives inventory from stock moves', function () {
-    $tenant = makeTenant();
-    $user = makeTenantUser($tenant);
-    $uom = makeUom();
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeTenantUser)($tenant);
+    $uom = ($this->makeUom)();
 
     $this->actingAs($user);
 
-    $flour = makeItem($tenant, $uom, ['name' => 'Flour']);
-    $bread = makeItem($tenant, $uom, [
+    $flour = ($this->makeItem)($tenant, $uom, ['name' => 'Flour']);
+    $bread = ($this->makeItem)($tenant, $uom, [
         'name' => 'Bread',
         'is_manufacturable' => true,
     ]);
@@ -80,18 +78,27 @@ it('executes a simple recipe and derives inventory from stock moves', function (
     ]);
 
     $action = new ExecuteRecipeAction();
-    $action->execute($recipe, '3');
+    $action->execute($recipe, '3.000000');
 
-    $issueMove = StockMove::where('item_id', $flour->id)->first();
-    $receiptMove = StockMove::where('item_id', $bread->id)->first();
+    $issueMoves = StockMove::query()
+        ->where('tenant_id', $tenant->id)
+        ->where('item_id', $flour->id)
+        ->where('type', 'issue')
+        ->orderBy('id')
+        ->get();
 
-    expect($issueMove)->not->toBeNull()
-        ->and($issueMove->type)->toBe('issue')
-        ->and($issueMove->quantity)->toBe('-6.000000');
+    $receiptMoves = StockMove::query()
+        ->where('tenant_id', $tenant->id)
+        ->where('item_id', $bread->id)
+        ->where('type', 'receipt')
+        ->orderBy('id')
+        ->get();
 
-    expect($receiptMove)->not->toBeNull()
-        ->and($receiptMove->type)->toBe('receipt')
-        ->and($receiptMove->quantity)->toBe('3.000000');
+    expect($issueMoves)->toHaveCount(1)
+        ->and($issueMoves->first()->quantity)->toBe('-6.000000');
+
+    expect($receiptMoves)->toHaveCount(1)
+        ->and($receiptMoves->first()->quantity)->toBe('3.000000');
 
     $flour->refresh();
     $bread->refresh();
@@ -101,18 +108,18 @@ it('executes a simple recipe and derives inventory from stock moves', function (
 });
 
 it('executes recursive recipes via stock moves', function () {
-    $tenant = makeTenant();
-    $user = makeTenantUser($tenant);
-    $uom = makeUom();
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeTenantUser)($tenant);
+    $uom = ($this->makeUom)();
 
     $this->actingAs($user);
 
-    $raw = makeItem($tenant, $uom, ['name' => 'Raw']);
-    $subItem = makeItem($tenant, $uom, [
+    $raw = ($this->makeItem)($tenant, $uom, ['name' => 'Raw']);
+    $subItem = ($this->makeItem)($tenant, $uom, [
         'name' => 'Sub Item',
         'is_manufacturable' => true,
     ]);
-    $parentItem = makeItem($tenant, $uom, [
+    $parentItem = ($this->makeItem)($tenant, $uom, [
         'name' => 'Parent Item',
         'is_manufacturable' => true,
     ]);
@@ -142,8 +149,9 @@ it('executes recursive recipes via stock moves', function () {
     ]);
 
     $action = new ExecuteRecipeAction();
-    $action->execute($subRecipe, '1');
-    $action->execute($parentRecipe, '1');
+
+    $action->execute($subRecipe, '1.000000');
+    $action->execute($parentRecipe, '1.000000');
 
     $raw->refresh();
     $subItem->refresh();
@@ -154,16 +162,28 @@ it('executes recursive recipes via stock moves', function () {
     expect($parentItem->onHandQuantity())->toBe('1.000000');
 });
 
-it('prevents more than one active recipe per item', function () {
-    $tenant = makeTenant();
-    $user = makeTenantUser($tenant);
-    $uom = makeUom();
+it('allows multiple inactive recipes but only one active recipe per item', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeTenantUser)($tenant);
+    $uom = ($this->makeUom)();
 
     $this->actingAs($user);
 
-    $item = makeItem($tenant, $uom, [
+    $item = ($this->makeItem)($tenant, $uom, [
         'name' => 'Product',
         'is_manufacturable' => true,
+    ]);
+
+    Recipe::create([
+        'tenant_id' => $tenant->id,
+        'item_id' => $item->id,
+        'is_active' => false,
+    ]);
+
+    Recipe::create([
+        'tenant_id' => $tenant->id,
+        'item_id' => $item->id,
+        'is_active' => false,
     ]);
 
     Recipe::create([
@@ -173,22 +193,26 @@ it('prevents more than one active recipe per item', function () {
     ]);
 
     expect(function () use ($tenant, $item) {
-        Recipe::create([
-            'tenant_id' => $tenant->id,
-            'item_id' => $item->id,
-            'is_active' => true,
-        ]);
+        try {
+            Recipe::create([
+                'tenant_id' => $tenant->id,
+                'item_id' => $item->id,
+                'is_active' => true,
+            ]);
+        } catch (QueryException $e) {
+            throw new InvalidArgumentException('Only one active recipe per item is allowed.', previous: $e);
+        }
     })->toThrow(InvalidArgumentException::class);
 });
 
 it('requires manufacturable items for recipes', function () {
-    $tenant = makeTenant();
-    $user = makeTenantUser($tenant);
-    $uom = makeUom();
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeTenantUser)($tenant);
+    $uom = ($this->makeUom)();
 
     $this->actingAs($user);
 
-    $item = makeItem($tenant, $uom, ['name' => 'Non-Manufacturable']);
+    $item = ($this->makeItem)($tenant, $uom, ['name' => 'Non-Manufacturable']);
 
     expect(function () use ($tenant, $item) {
         Recipe::create([
@@ -199,27 +223,45 @@ it('requires manufacturable items for recipes', function () {
     })->toThrow(InvalidArgumentException::class);
 });
 
-it('scopes recipes by tenant', function () {
-    $tenantA = makeTenant();
-    $tenantB = makeTenant();
-    $userA = makeTenantUser($tenantA);
-    $userB = makeTenantUser($tenantB);
-    $uom = makeUom();
+it('scopes recipes by tenant and prevents cross-tenant execution', function () {
+    $tenantA = ($this->makeTenant)();
+    $tenantB = ($this->makeTenant)();
+
+    $userA = ($this->makeTenantUser)($tenantA);
+    $userB = ($this->makeTenantUser)($tenantB);
+
+    $uom = ($this->makeUom)();
 
     $this->actingAs($userA);
 
-    $item = makeItem($tenantA, $uom, [
-        'name' => 'Scoped Item',
+    $inputA = ($this->makeItem)($tenantA, $uom, ['name' => 'Input A']);
+    $outputA = ($this->makeItem)($tenantA, $uom, [
+        'name' => 'Output A',
         'is_manufacturable' => true,
     ]);
 
-    $recipe = Recipe::create([
+    $recipeA = Recipe::create([
         'tenant_id' => $tenantA->id,
-        'item_id' => $item->id,
+        'item_id' => $outputA->id,
         'is_active' => true,
+    ]);
+
+    $recipeA->lines()->create([
+        'tenant_id' => $tenantA->id,
+        'item_id' => $inputA->id,
+        'quantity' => '1.000000',
     ]);
 
     $this->actingAs($userB);
 
-    expect(Recipe::find($recipe->id))->toBeNull();
+    expect(Recipe::find($recipeA->id))->toBeNull();
+
+    $action = new ExecuteRecipeAction();
+    $before = StockMove::count();
+
+    expect(function () use ($action, $recipeA) {
+        $action->execute($recipeA, '1.000000');
+    })->toThrow(InvalidArgumentException::class);
+
+    expect(StockMove::count())->toBe($before);
 });
