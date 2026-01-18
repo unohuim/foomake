@@ -13,6 +13,14 @@ This is an **index**, not a tutorial.
 
 ---
 
+## Authority & References
+
+- **Enum-like values** (database enums, CHECK constraints, and domain-level enum semantics)
+  are defined canonically in **docs/ENUMS.md**.
+- This document must not duplicate enum values; it may only reference their existence and usage.
+
+---
+
 ## How to Use This Document
 
 - **Before creating a new abstraction**, review this inventory.
@@ -155,7 +163,6 @@ Ensure authentication and identity resolution are never affected by tenant scopi
 **Example Usage:**
 
 ```php
-// Safe: user identity lookup must not be tenant-scoped
 $user = User::where('email', $email)->first();
 ```
 
@@ -435,7 +442,6 @@ Allow **cross-category unit conversions** that are true **only for a specific It
 **Public Interface:**
 
 - `Item::itemUomConversions()`
-- Item lookup helpers (project-specific)
 
 **Example Usage:**
 
@@ -466,16 +472,11 @@ On-hand quantity is derived strictly as the sum of related stock moves.
 
 **Rules:**
 
-- Append-only: updates and deletes are forbidden
+- Append-only: updates and deletes are forbidden (enforced by model guards + tests)
 - Quantity is signed (`+` receipt, `-` issue/adjustment)
 - Inventory is derived, never stored
 - `uom_id` must match `items.base_uom_id`
-
-**Append-only enforcement (required to be explicit):**
-
-- **Model-level**: override `save()` to disallow updates, and override `delete()` to always throw  
-  (or equivalent explicit model mechanism documented here)
-- **Database-level**: no `updated_at` column; `updated_at` disabled in the model
+- Valid values for `stock_moves.type` are defined in **docs/ENUMS.md**
 
 **When to Use:**
 

@@ -224,7 +224,8 @@ it('hard-fails when posting an inventory count twice', function () {
     $count->refresh();
     expect($count->posted_at)->not->toBeNull();
 
-    expect(fn () => $action->execute($count, $user->id))->toThrow(DomainException::class);
+    expect(fn () => $action->execute($count, $user->id))->toThrow(\DomainException::class);
+
 });
 
 it('hard-fails when a count line item belongs to a different tenant and does not post', function () {

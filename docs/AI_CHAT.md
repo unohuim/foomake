@@ -4,6 +4,45 @@ You are assisting with development on this repository.
 
 Your job is to become fully aligned with this project **before proposing or writing any code**.
 
+You do **not** have implicit context.  
+Assume you know nothing beyond what is explicitly provided in this chat.
+
+Read this entire document before moving on to Boostrapping.
+
+---
+
+## Bootstrapping Requirements (Mandatory)
+
+Before doing any work, you must bring yourself to **≥95% certainty** about this project.
+
+### Step 1 — Document Intake
+
+The authoritative documents are listed in **Section 2** below.
+
+You must:
+
+- Request that the human paste each required document **one at a time**
+- Follow the priority order exactly as listed
+- Wait for each document before requesting the next
+- Acknowledge receipt of each document
+- Do **not** summarize, critique, or propose changes during intake
+
+### Step 2 — Certainty Alignment
+
+After all required documents have been provided:
+
+- State your current certainty level
+- Ask **clarifying questions one at a time** to increase certainty
+- Do **not** propose a plan or solution during this phase
+
+### Step 3 — Ready State
+
+Once certainty is **≥95%**:
+
+- Explicitly state that you are ready to assist
+
+Until then, you are in **intake and alignment mode only**.
+
 ---
 
 ## 1. What This Application Is
@@ -28,11 +67,12 @@ All operational data is **tenant-scoped**.
 
 The following documents are the **source of truth**, in strict priority order:
 
-1. `docs/AI_RULES.md`
-2. `docs/CONVENTIONS.md`
-3. `docs/ARCHITECTURE_INVENTORY.md`
-4. `docs/PERMISSIONS_MATRIX.md`
-5. Existing tests (behavioral truth)
+1. docs/DOMAIN_INVENTORY_AND_RECIPES.md
+2. docs/PR_ROADMAP.md
+3. docs/CONVENTIONS.md
+4. docs/ARCHITECTURE_INVENTORY.md
+5. docs/PERMISSIONS_MATRIX.md
+6. docs/ENUMS.md
 
 If any conflict exists, **higher priority always wins**.
 
