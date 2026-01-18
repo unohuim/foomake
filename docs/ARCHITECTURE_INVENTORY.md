@@ -214,6 +214,79 @@ Gate::authorize('sales-customers-view');
 
 ---
 
+## Inventory & Units of Measure
+
+### Global UoM Conversions
+
+**Name:** Global UoM Conversions  
+**Type:** Domain Rule / Model Constraint  
+**Location:**
+
+- `app/Models/UomConversion.php`
+- `uom_conversions` table
+
+**Purpose:**  
+Provide safe, reusable unit conversions that are **category-bound**.
+
+**Rules:**
+
+- Conversions are allowed **only within the same UoM category**
+- Cross-category conversions are **explicitly forbidden** at the global level
+
+**When to Use:**
+
+- Mass ↔ mass (e.g. kg ↔ g)
+- Volume ↔ volume
+- Any universally true conversion
+
+**When Not to Use:**
+
+- Count ↔ weight
+- Item-specific assumptions (e.g. patties, apples)
+
+**Public Interface:**
+
+- `UomConversion::create()`
+
+---
+
+### Item-Specific UoM Conversions
+
+**Name:** Item-Specific UoM Conversions  
+**Type:** Eloquent Model + Domain Rule  
+**Location:**
+
+- `app/Models/ItemUomConversion.php`
+- `item_uom_conversions` table
+
+**Purpose:**  
+Allow **cross-category unit conversions** that are true **only for a specific Item**.
+
+**Rules:**
+
+- Cross-category conversions are **never global**
+- All conversions are **item-scoped and tenant-scoped**
+- Conversion factors must be **strictly greater than zero**
+- No global fallback or conversion engine exists
+
+**When to Use:**
+
+- Count ↔ weight conversions tied to a physical item
+- Any non-universal unit relationship
+
+**When Not to Use:**
+
+- Global conversions
+- Conversion chaining or inference
+- Inventory math (handled later)
+
+**Public Interface:**
+
+- `Item::itemUomConversions()`
+- Lookup-only helpers on `Item`
+
+---
+
 ## Multi-Tenancy Architecture
 
 ### Single Database, Tenant ID Scoping
