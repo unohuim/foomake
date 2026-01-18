@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\MaterialController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\UomCategoryController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -14,6 +15,14 @@ Route::get('/dashboard', function () {
 
 Route::middleware('auth')->group(function () {
     Route::get('/materials', [MaterialController::class, 'index'])->name('materials.index');
+    Route::get('/materials/uom-categories', [UomCategoryController::class, 'index'])
+        ->name('materials.uom-categories.index');
+    Route::post('/materials/uom-categories', [UomCategoryController::class, 'store'])
+        ->name('materials.uom-categories.store');
+    Route::patch('/materials/uom-categories/{uomCategory}', [UomCategoryController::class, 'update'])
+        ->name('materials.uom-categories.update');
+    Route::delete('/materials/uom-categories/{uomCategory}', [UomCategoryController::class, 'destroy'])
+        ->name('materials.uom-categories.destroy');
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
