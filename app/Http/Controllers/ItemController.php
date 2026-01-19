@@ -46,17 +46,11 @@ class ItemController extends Controller
             'is_manufacturable' => $request->boolean('is_manufacturable'),
         ]);
 
-        $item->load('baseUom');
-
         return response()->json([
             'data' => [
                 'id' => $item->id,
                 'name' => $item->name,
-                'base_uom' => [
-                    'id' => $item->baseUom->id,
-                    'name' => $item->baseUom->name,
-                    'symbol' => $item->baseUom->symbol,
-                ],
+                'base_uom_id' => $item->base_uom_id,
                 'is_purchasable' => $item->is_purchasable,
                 'is_sellable' => $item->is_sellable,
                 'is_manufacturable' => $item->is_manufacturable,

@@ -8,6 +8,13 @@
     @php
         $uomsExist = \App\Models\Uom::query()->exists();
         $uoms = \App\Models\Uom::query()->orderBy('name')->get();
+        $uomsPayload = $uoms->map(function ($uom) {
+            return [
+                'id' => $uom->id,
+                'name' => $uom->name,
+                'symbol' => $uom->symbol,
+            ];
+        });
         $itemsPayload = $items->map(function ($item) {
             return [
                 'id' => $item->id,
@@ -25,6 +32,7 @@
         class="py-12"
         x-data="{
             items: [],
+            uomsById: {},
             uomsExist: {{ $uomsExist ? 'true' : 'false' }},
             isCreateOpen: false,
             isSubmitting: false,
@@ -39,6 +47,11 @@
             },
             init() {
                 this.items = JSON.parse(this.$refs.itemsData.textContent);
+                this.uomsById = JSON.parse(this.$refs.uomsData.textContent)
+                    .reduce((map, uom) => {
+                        map[uom.id] = uom;
+                        return map;
+                    }, {});
             },
             openCreate() {
                 if (!this.uomsExist) {
@@ -102,12 +115,13 @@
                 }
 
                 const data = await response.json();
+                const uom = this.uomsById[data.data.base_uom_id] || { name: '', symbol: '' };
 
                 this.items.unshift({
                     id: data.data.id,
                     name: data.data.name,
-                    base_uom_name: data.data.base_uom.name,
-                    base_uom_symbol: data.data.base_uom.symbol,
+                    base_uom_name: uom.name,
+                    base_uom_symbol: uom.symbol,
                     is_purchasable: data.data.is_purchasable,
                     is_sellable: data.data.is_sellable,
                     is_manufacturable: data.data.is_manufacturable
@@ -120,6 +134,9 @@
     >
         <script type="application/json" x-ref="itemsData">
             @json($itemsPayload)
+        </script>
+        <script type="application/json" x-ref="uomsData">
+            @json($uomsPayload)
         </script>
 
         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">

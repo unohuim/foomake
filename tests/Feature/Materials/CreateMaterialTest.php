@@ -55,7 +55,7 @@ test('user with permission can create a material', function () {
 
     $response->assertCreated()
         ->assertJsonPath('data.name', 'Flour')
-        ->assertJsonPath('data.base_uom.id', $uom->id);
+        ->assertJsonPath('data.base_uom_id', $uom->id);
 
     $item = Item::withoutGlobalScopes()->where('name', 'Flour')->firstOrFail();
 
