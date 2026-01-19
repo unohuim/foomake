@@ -18,6 +18,7 @@ Route::get('/dashboard', function () {
 Route::middleware('auth')->group(function () {
     Route::get('/materials', [MaterialController::class, 'index'])->name('materials.index');
     Route::post('/materials', [ItemController::class, 'store'])->name('materials.store');
+    Route::patch('/materials/{item}', [ItemController::class, 'update'])->name('materials.update');
     Route::get('/materials/uom-categories', [UomCategoryController::class, 'index'])
         ->name('materials.uom-categories.index');
     Route::post('/materials/uom-categories', [UomCategoryController::class, 'store'])

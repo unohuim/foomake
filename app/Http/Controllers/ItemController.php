@@ -57,4 +57,63 @@ class ItemController extends Controller
             ],
         ], 201);
     }
+
+    /**
+     * Update an existing material (item).
+     *
+     * @param Request $request
+     * @param Item $item
+     * @return JsonResponse
+     */
+    public function update(Request $request, Item $item): JsonResponse
+    {
+        Gate::authorize('inventory-materials-manage');
+
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'base_uom_id' => ['required', 'integer', 'exists:uoms,id'],
+            'is_purchasable' => ['nullable', 'boolean'],
+            'is_sellable' => ['nullable', 'boolean'],
+            'is_manufacturable' => ['nullable', 'boolean'],
+        ]);
+
+        $hasStockMoves = $item->stockMoves()->exists();
+        $baseUomId = (int) $validated['base_uom_id'];
+
+        if ($hasStockMoves && $baseUomId !== $item->base_uom_id) {
+            return response()->json([
+                'message' => 'Base unit of measure is locked.',
+                'errors' => [
+                    'base_uom_id' => ['Base unit of measure cannot be changed once stock moves exist.'],
+                ],
+            ], 422);
+        }
+
+        $updateData = [
+            'name' => $validated['name'],
+            'base_uom_id' => $baseUomId,
+        ];
+
+        $flagFields = ['is_purchasable', 'is_sellable', 'is_manufacturable'];
+
+        foreach ($flagFields as $field) {
+            if ($request->has($field)) {
+                $updateData[$field] = $request->boolean($field);
+            }
+        }
+
+        $item->update($updateData);
+
+        return response()->json([
+            'data' => [
+                'id' => $item->id,
+                'name' => $item->name,
+                'base_uom_id' => $item->base_uom_id,
+                'is_purchasable' => $item->is_purchasable,
+                'is_sellable' => $item->is_sellable,
+                'is_manufacturable' => $item->is_manufacturable,
+                'has_stock_moves' => $hasStockMoves,
+            ],
+        ]);
+    }
 }

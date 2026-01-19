@@ -19,11 +19,13 @@
             return [
                 'id' => $item->id,
                 'name' => $item->name,
+                'base_uom_id' => $item->base_uom_id,
                 'base_uom_name' => $item->baseUom->name,
                 'base_uom_symbol' => $item->baseUom->symbol,
                 'is_purchasable' => $item->is_purchasable,
                 'is_sellable' => $item->is_sellable,
                 'is_manufacturable' => $item->is_manufacturable,
+                'has_stock_moves' => $item->stockMoves()->exists(),
             ];
         });
     @endphp
@@ -34,11 +36,31 @@
             items: [],
             uomsById: {},
             uomsExist: {{ $uomsExist ? 'true' : 'false' }},
+            updateUrlBase: '{{ url('/materials') }}',
             isCreateOpen: false,
             isSubmitting: false,
             errors: {},
             generalError: '',
+            isEditOpen: false,
+            isEditSubmitting: false,
+            editErrors: {},
+            editGeneralError: '',
+            editItemId: null,
+            editBaseUomLocked: false,
+            toast: {
+                visible: false,
+                message: '',
+                type: 'success',
+                timeoutId: null
+            },
             form: {
+                name: '',
+                base_uom_id: '',
+                is_purchasable: false,
+                is_sellable: false,
+                is_manufacturable: false
+            },
+            editForm: {
                 name: '',
                 base_uom_id: '',
                 is_purchasable: false,
@@ -52,6 +74,19 @@
                         map[uom.id] = uom;
                         return map;
                     }, {});
+            },
+            showToast(type, message) {
+                this.toast.type = type;
+                this.toast.message = message;
+                this.toast.visible = true;
+
+                if (this.toast.timeoutId) {
+                    clearTimeout(this.toast.timeoutId);
+                }
+
+                this.toast.timeoutId = setTimeout(() => {
+                    this.toast.visible = false;
+                }, 2500);
             },
             openCreate() {
                 if (!this.uomsExist) {
@@ -71,6 +106,38 @@
             },
             resetForm() {
                 this.form = {
+                    name: '',
+                    base_uom_id: '',
+                    is_purchasable: false,
+                    is_sellable: false,
+                    is_manufacturable: false
+                };
+            },
+            openEdit(item) {
+                this.editItemId = item.id;
+                this.editForm = {
+                    name: item.name,
+                    base_uom_id: item.base_uom_id,
+                    is_purchasable: item.is_purchasable,
+                    is_sellable: item.is_sellable,
+                    is_manufacturable: item.is_manufacturable
+                };
+                this.editBaseUomLocked = item.has_stock_moves;
+                this.isEditOpen = true;
+                this.editErrors = {};
+                this.editGeneralError = '';
+            },
+            closeEdit() {
+                this.isEditOpen = false;
+                this.isEditSubmitting = false;
+                this.editErrors = {};
+                this.editGeneralError = '';
+                this.editItemId = null;
+                this.editBaseUomLocked = false;
+                this.resetEditForm();
+            },
+            resetEditForm() {
+                this.editForm = {
                     name: '',
                     base_uom_id: '',
                     is_purchasable: false,
@@ -120,14 +187,75 @@
                 this.items.unshift({
                     id: data.data.id,
                     name: data.data.name,
+                    base_uom_id: data.data.base_uom_id,
                     base_uom_name: uom.name,
                     base_uom_symbol: uom.symbol,
                     is_purchasable: data.data.is_purchasable,
                     is_sellable: data.data.is_sellable,
-                    is_manufacturable: data.data.is_manufacturable
+                    is_manufacturable: data.data.is_manufacturable,
+                    has_stock_moves: false
                 });
 
                 this.closeCreate();
+            },
+            async submitEdit() {
+                this.isEditSubmitting = true;
+                this.editGeneralError = '';
+                this.editErrors = {};
+
+                const payload = {
+                    name: this.editForm.name,
+                    base_uom_id: this.editForm.base_uom_id,
+                    is_purchasable: this.editForm.is_purchasable,
+                    is_sellable: this.editForm.is_sellable,
+                    is_manufacturable: this.editForm.is_manufacturable
+                };
+
+                const response = await fetch(this.updateUrlBase + '/' + this.editItemId, {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                if (response.status === 422) {
+                    const data = await response.json();
+                    this.editErrors = data.errors || {};
+                    this.isEditSubmitting = false;
+                    return;
+                }
+
+                if (!response.ok) {
+                    this.editGeneralError = 'Something went wrong. Please try again.';
+                    this.showToast('error', 'Unable to update material.');
+                    this.isEditSubmitting = false;
+                    return;
+                }
+
+                const data = await response.json();
+                const uom = this.uomsById[data.data.base_uom_id] || { name: '', symbol: '' };
+                const itemIndex = this.items.findIndex((item) => item.id === data.data.id);
+
+                if (itemIndex !== -1) {
+                    this.items[itemIndex] = {
+                        ...this.items[itemIndex],
+                        id: data.data.id,
+                        name: data.data.name,
+                        base_uom_id: data.data.base_uom_id,
+                        base_uom_name: uom.name,
+                        base_uom_symbol: uom.symbol,
+                        is_purchasable: data.data.is_purchasable,
+                        is_sellable: data.data.is_sellable,
+                        is_manufacturable: data.data.is_manufacturable,
+                        has_stock_moves: data.data.has_stock_moves ?? this.items[itemIndex].has_stock_moves
+                    };
+                }
+
+                this.showToast('success', 'Material updated.');
+                this.closeEdit();
             }
         }"
         x-init="init()"
@@ -138,6 +266,14 @@
         <script type="application/json" x-ref="uomsData">
             @json($uomsPayload)
         </script>
+
+        <div class="fixed top-6 right-6 z-50" x-show="toast.visible">
+            <div
+                class="rounded-md px-4 py-3 text-sm shadow-md"
+                :class="toast.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'"
+                x-text="toast.message"
+            ></div>
+        </div>
 
         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
             <div class="flex items-center justify-between mb-6" x-show="items.length > 0">
@@ -196,6 +332,9 @@
                                         <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                             Flags
                                         </th>
+                                        <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            Actions
+                                        </th>
                                     </tr>
                                 </thead>
                                 <tbody class="divide-y divide-gray-100">
@@ -220,6 +359,15 @@
                                                     <span class="text-gray-400" x-show="!item.is_purchasable && !item.is_sellable && !item.is_manufacturable">—</span>
                                                 </div>
                                             </td>
+                                            <td class="px-4 py-4 text-right text-sm">
+                                                <button
+                                                    type="button"
+                                                    class="text-blue-600 hover:text-blue-500"
+                                                    x-on:click="openEdit(item)"
+                                                >
+                                                    Edit
+                                                </button>
+                                            </td>
                                         </tr>
                                     </template>
                                 </tbody>
@@ -230,6 +378,7 @@
             </div>
 
             @include('materials.partials.create-material-slide-over', ['uoms' => $uoms])
+            @include('materials.partials.edit-material-slide-over', ['uoms' => $uoms])
         </div>
     </div>
 </x-app-layout>
