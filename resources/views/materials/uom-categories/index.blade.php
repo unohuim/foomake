@@ -5,23 +5,23 @@
         </h2>
     </x-slot>
 
-    <div class="py-8" x-data="{
-        categories: @json($categories),
-        storeUrl: '{{ route('materials.uom-categories.store') }}',
-        updateUrlTemplate: '{{ route('materials.uom-categories.update', ['uomCategory' => '__ID__']) }}',
-        deleteUrlTemplate: '{{ route('materials.uom-categories.destroy', ['uomCategory' => '__ID__']) }}',
-        csrfToken: '{{ csrf_token() }}',
+    <div class="py-8" x-data='{
+        categories: @js($categories),
+        storeUrl: @js(route("materials.uom-categories.store")),
+        updateUrlTemplate: @js(route("materials.uom-categories.update", ["uomCategory" => "__ID__"])),
+        deleteUrlTemplate: @js(route("materials.uom-categories.destroy", ["uomCategory" => "__ID__"])),
+        csrfToken: @js(csrf_token()),
         formOpen: false,
         deleteOpen: false,
         isEditing: false,
         isSubmitting: false,
-        form: { id: null, name: '' },
+        form: { id: null, name: "" },
         errors: {},
-        errorMessage: '',
+        errorMessage: "",
         deleteTarget: null,
         openCreate() {
             this.resetErrors();
-            this.form = { id: null, name: '' };
+            this.form = { id: null, name: "" };
             this.isEditing = false;
             this.formOpen = true;
         },
@@ -45,7 +45,7 @@
         },
         resetErrors() {
             this.errors = {};
-            this.errorMessage = '';
+            this.errorMessage = "";
         },
         updateCategory(updated) {
             const index = this.categories.findIndex((category) => category.id === updated.id);
@@ -67,17 +67,17 @@
             this.isSubmitting = true;
 
             const url = this.isEditing
-                ? this.updateUrlTemplate.replace('__ID__', this.form.id)
+                ? this.updateUrlTemplate.replace("__ID__", this.form.id)
                 : this.storeUrl;
 
-            const method = this.isEditing ? 'PATCH' : 'POST';
+            const method = this.isEditing ? "PATCH" : "POST";
 
             const response = await fetch(url, {
                 method,
                 headers: {
-                    'Accept': 'application/json',
-                    'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': this.csrfToken,
+                    "Accept": "application/json",
+                    "Content-Type": "application/json",
+                    "X-CSRF-TOKEN": this.csrfToken,
                 },
                 body: JSON.stringify({ name: this.form.name }),
             });
@@ -91,7 +91,7 @@
             }
 
             if (!response.ok) {
-                this.errorMessage = 'Something went wrong. Please try again.';
+                this.errorMessage = "Something went wrong. Please try again.";
                 return;
             }
 
@@ -105,25 +105,25 @@
             }
 
             this.isSubmitting = true;
-            const response = await fetch(this.deleteUrlTemplate.replace('__ID__', this.deleteTarget.id), {
-                method: 'DELETE',
+            const response = await fetch(this.deleteUrlTemplate.replace("__ID__", this.deleteTarget.id), {
+                method: "DELETE",
                 headers: {
-                    'Accept': 'application/json',
-                    'X-CSRF-TOKEN': this.csrfToken,
+                    "Accept": "application/json",
+                    "X-CSRF-TOKEN": this.csrfToken,
                 },
             });
 
             this.isSubmitting = false;
 
             if (!response.ok) {
-                this.errorMessage = 'Unable to delete the category.';
+                this.errorMessage = "Unable to delete the category.";
                 return;
             }
 
             this.removeCategory(this.deleteTarget.id);
             this.closeDelete();
         },
-    }">
+    }'>
         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
             <div class="bg-white shadow-sm sm:rounded-lg">
                 <div class="p-6 text-gray-900 space-y-6">
@@ -132,7 +132,7 @@
                             <h3 class="text-lg font-medium text-gray-900">{{ __('UoM Categories') }}</h3>
                             <p class="text-sm text-gray-500">{{ __('Define categories that group related units of measure.') }}</p>
                         </div>
-                        <button type="button" class="inline-flex items-center px-4 py-2 bg-blue-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition" @click="openCreate">
+                        <button type="button" class="inline-flex items-center px-4 py-2 bg-blue-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition" @click="openCreate" x-show="categories.length > 0" x-cloak>
                             {{ __('Create Category') }}
                         </button>
                     </div>
