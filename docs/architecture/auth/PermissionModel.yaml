@@ -10,7 +10,6 @@ when_not_to_use:
   - UI-only access decisions without backend enforcement
 rules:
   - Permission slugs must match docs/PERMISSIONS_MATRIX.md.
-  - Authorization checks must use gates or policies.
 public_interface:
   - roles()
 example_usage: |

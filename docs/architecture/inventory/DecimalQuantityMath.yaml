@@ -2,16 +2,15 @@ name: Decimal Quantity Math
 type: Domain Rule
 location:
   - docs/CONVENTIONS.md
-purpose: Prevent floating-point errors in inventory and purchasing by requiring string quantities and BCMath.
+purpose: Reference the canonical decimal quantity math requirements for inventory and purchasing.
 when_to_use:
   - Any inventory-affecting calculations
   - Unit conversions and purchasing quantity math
 when_not_to_use:
   - Calculations that do not involve quantity fields
 rules:
-  - Quantities are represented as strings and never floats.
-  - All arithmetic uses BCMath functions.
-  - All quantity math uses BCMath with canonical scale matching stock_moves.quantity (scale = 6).
+  - The canonical requirements are defined in docs/CONVENTIONS.md.
+  - Apply the canonical requirements wherever quantities are stored or calculated.
 public_interface:
   - BCMath functions such as bcadd, bcmul, and bcdiv
 example_usage: |

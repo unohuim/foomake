@@ -2,7 +2,7 @@ name: Materials Top Nav Dropdown Pattern
 type: UI Pattern
 location:
   - resources/views/layouts/navigation.blade.php
-purpose: Group Materials and its supporting entities under a single top navigation dropdown.
+purpose: Group Materials and supporting entities under a single top navigation dropdown.
 when_to_use:
   - A top-level domain owns mandatory supporting subdomains
 when_not_to_use:
