@@ -775,3 +775,61 @@ $option = ItemPurchaseOption::create([
 - **Example Usage:** Materials list row actions
 
 ---
+
+## UI & Interaction Patterns
+
+### Top Navigation Dropdown (Materials)
+
+**Name:** Top Navigation Dropdown (Materials)  
+**Type:** UI Pattern  
+**Location:** `resources/views/layouts/navigation.blade.php`
+
+**Purpose:**  
+Provide hierarchical top navigation for a domain that owns required support entities.
+
+**When to Use:**  
+When a top-level domain requires mandatory sub-domains to be accessible together
+(e.g. Materials → UoM Categories, Units of Measure).
+
+**When Not to Use:**  
+For unrelated or optional domains, or when a flat navigation is sufficient.
+
+**Public Interface:**  
+Blade markup + Alpine hover interaction.
+
+**Example Usage:**  
+Materials → UoM Categories
+
+---
+
+### AJAX CRUD Controller Pattern
+
+**Name:** AJAX CRUD Controller Pattern  
+**Type:** Architectural Pattern  
+**Location:** `app/Http/Controllers/` (e.g. `UomCategoryController`)
+
+**Purpose:**  
+Enable UI-driven CRUD operations using AJAX while keeping the backend as the source of truth.
+
+**When to Use:**
+
+- Simple single-entity CRUD
+- Create/Edit/Delete without full page reloads
+- Slide-over or modal-based forms
+
+**When Not to Use:**
+
+- Multi-step workflows
+- Complex transactional processes
+- Cross-entity orchestration
+
+**Public Interface:**
+
+- JSON responses
+- HTTP status codes
+- Fetch-based requests from Blade/Alpine
+
+**Example Usage:**  
+Create / Edit / Delete UoM Categories via `UomCategoryController`
+
+---

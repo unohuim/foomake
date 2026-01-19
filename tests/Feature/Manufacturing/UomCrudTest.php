@@ -147,3 +147,34 @@ it('deletes a uom via ajax', function () {
 
     $this->assertDatabaseMissing('uoms', ['id' => $uom->id]);
 });
+
+
+it('denies create/update/delete for users without manage permission', function () {
+    $category = UomCategory::create(['name' => 'Mass']);
+
+    $uom = Uom::create([
+        'uom_category_id' => $category->id,
+        'name' => 'xGram',
+        'symbol' => 'xg',
+    ]);
+
+    $this->actingAs($this->viewUser)
+        ->postJson(route('manufacturing.uoms.store'), [
+            'uom_category_id' => $category->id,
+            'name' => 'xLiter',
+            'symbol' => 'xL',
+        ])
+        ->assertForbidden();
+
+    $this->actingAs($this->viewUser)
+        ->patchJson(route('manufacturing.uoms.update', $uom), [
+            'uom_category_id' => $category->id,
+            'name' => 'xKilogram',
+            'symbol' => 'xkg',
+        ])
+        ->assertForbidden();
+
+    $this->actingAs($this->viewUser)
+        ->deleteJson(route('manufacturing.uoms.destroy', $uom))
+        ->assertForbidden();
+});
