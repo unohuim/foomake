@@ -404,7 +404,7 @@ Provide safe, reusable unit conversions that are **category-bound**.
 UomConversion::create([
     'from_uom_id' => $kg->id,
     'to_uom_id' => $grams->id,
-    'conversion_factor' => '1000',
+    'multiplier' => '1000',
 ]);
 ```
 
