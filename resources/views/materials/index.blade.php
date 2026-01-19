@@ -47,6 +47,11 @@
             editGeneralError: '',
             editItemId: null,
             editBaseUomLocked: false,
+            isDeleteOpen: false,
+            isDeleteSubmitting: false,
+            deleteError: '',
+            deleteItemId: null,
+            deleteItemName: '',
             toast: {
                 visible: false,
                 message: '',
@@ -144,6 +149,19 @@
                     is_sellable: false,
                     is_manufacturable: false
                 };
+            },
+            openDelete(item) {
+                this.deleteItemId = item.id;
+                this.deleteItemName = item.name;
+                this.deleteError = '';
+                this.isDeleteOpen = true;
+            },
+            closeDelete() {
+                this.isDeleteOpen = false;
+                this.isDeleteSubmitting = false;
+                this.deleteError = '';
+                this.deleteItemId = null;
+                this.deleteItemName = '';
             },
             async submitCreate() {
                 this.isSubmitting = true;
@@ -256,6 +274,37 @@
 
                 this.showToast('success', 'Material updated.');
                 this.closeEdit();
+            },
+            async submitDelete() {
+                this.isDeleteSubmitting = true;
+                this.deleteError = '';
+
+                const response = await fetch(this.updateUrlBase + '/' + this.deleteItemId, {
+                    method: 'DELETE',
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                    }
+                });
+
+                if (response.status === 422) {
+                    const data = await response.json();
+                    this.deleteError = data.message || 'Unable to delete material.';
+                    this.showToast('error', this.deleteError);
+                    this.isDeleteSubmitting = false;
+                    return;
+                }
+
+                if (!response.ok) {
+                    this.deleteError = 'Something went wrong. Please try again.';
+                    this.showToast('error', 'Unable to delete material.');
+                    this.isDeleteSubmitting = false;
+                    return;
+                }
+
+                this.items = this.items.filter((item) => item.id !== this.deleteItemId);
+                this.showToast('success', 'Material deleted.');
+                this.closeDelete();
             }
         }"
         x-init="init()"
@@ -360,18 +409,73 @@
                                                 </div>
                                             </td>
                                             <td class="px-4 py-4 text-right text-sm">
-                                                <button
-                                                    type="button"
-                                                    class="text-blue-600 hover:text-blue-500"
-                                                    x-on:click="openEdit(item)"
-                                                >
-                                                    Edit
-                                                </button>
+                                                <x-dropdown>
+                                                    <x-slot name="trigger">
+                                                        <button
+                                                            type="button"
+                                                            class="inline-flex items-center justify-center w-8 h-8 text-gray-500 hover:text-gray-700"
+                                                            aria-label="Material actions"
+                                                        >
+                                                            ⋮
+                                                        </button>
+                                                    </x-slot>
+                                                    <x-slot name="content">
+                                                        <button
+                                                            type="button"
+                                                            class="block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100"
+                                                            x-on:click="openEdit(item)"
+                                                        >
+                                                            Edit
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            class="block w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50"
+                                                            x-on:click="openDelete(item)"
+                                                        >
+                                                            Delete
+                                                        </button>
+                                                    </x-slot>
+                                                </x-dropdown>
                                             </td>
                                         </tr>
                                     </template>
                                 </tbody>
                             </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div
+                class="fixed inset-0 z-40 flex items-center justify-center"
+                x-show="isDeleteOpen"
+                x-on:keydown.escape.window="closeDelete()"
+            >
+                <div class="fixed inset-0 bg-gray-900/30" x-on:click="closeDelete()"></div>
+                <div class="relative z-50 w-full max-w-md mx-4 bg-white rounded-lg shadow-xl">
+                    <div class="p-6">
+                        <h3 class="text-lg font-medium text-gray-900">Delete material?</h3>
+                        <p class="mt-2 text-sm text-gray-600">
+                            This will permanently remove <span class="font-medium" x-text="deleteItemName"></span>.
+                        </p>
+                        <p class="mt-3 text-sm text-red-600" x-show="deleteError" x-text="deleteError"></p>
+                        <div class="mt-6 flex justify-end gap-3">
+                            <button
+                                type="button"
+                                class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md text-xs font-semibold text-gray-700 uppercase tracking-widest hover:bg-gray-50"
+                                x-on:click="closeDelete()"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                class="inline-flex items-center px-4 py-2 bg-red-600 border border-transparent rounded-md text-xs font-semibold text-white uppercase tracking-widest hover:bg-red-500"
+                                x-on:click="submitDelete()"
+                                :disabled="isDeleteSubmitting"
+                                :class="isDeleteSubmitting ? 'opacity-50 cursor-not-allowed' : ''"
+                            >
+                                Delete
+                            </button>
                         </div>
                     </div>
                 </div>

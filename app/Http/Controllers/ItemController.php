@@ -116,4 +116,27 @@ class ItemController extends Controller
             ],
         ]);
     }
+
+    /**
+     * Delete a material (item).
+     *
+     * @param Item $item
+     * @return JsonResponse
+     */
+    public function destroy(Item $item): JsonResponse
+    {
+        Gate::authorize('inventory-materials-manage');
+
+        if ($item->stockMoves()->exists()) {
+            return response()->json([
+                'message' => 'Material cannot be deleted because stock moves exist.',
+            ], 422);
+        }
+
+        $item->delete();
+
+        return response()->json([
+            'message' => 'Deleted.',
+        ]);
+    }
 }
