@@ -1,4 +1,5 @@
 <?php
+// tests/Feature/Materials/UomCategoryCrudTest.php
 
 use App\Models\Permission;
 use App\Models\Role;
@@ -16,11 +17,16 @@ beforeEach(function () {
         ->for($this->tenant)
         ->create();
 
-    $permission = Permission::create(['slug' => 'inventory-materials-manage']);
-    $role = Role::create(['name' => 'materials-manager']);
-    $role->permissions()->attach($permission);
+    $permission = Permission::firstOrCreate([
+        'slug' => 'inventory-materials-manage',
+    ]);
 
-    $this->authorizedUser->roles()->attach($role);
+    $role = Role::firstOrCreate([
+        'name' => 'materials-manager',
+    ]);
+
+    $role->permissions()->syncWithoutDetaching([$permission->id]);
+    $this->authorizedUser->roles()->syncWithoutDetaching([$role->id]);
 });
 
 it('creates a uom category via ajax', function () {
@@ -46,7 +52,10 @@ it('updates a uom category via ajax', function () {
             'name' => 'Weight',
         ]);
 
-    $this->assertDatabaseHas('uom_categories', ['id' => $category->id, 'name' => 'Weight']);
+    $this->assertDatabaseHas('uom_categories', [
+        'id' => $category->id,
+        'name' => 'Weight',
+    ]);
 });
 
 it('deletes a uom category via ajax', function () {

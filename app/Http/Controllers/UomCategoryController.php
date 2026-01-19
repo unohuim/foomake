@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\UomCategory;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Response;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
@@ -78,7 +79,7 @@ class UomCategoryController extends Controller
     /**
      * Remove the specified UoM Category.
      */
-    public function destroy(UomCategory $uomCategory): JsonResponse
+    public function destroy(UomCategory $uomCategory): Response
     {
         Gate::authorize('inventory-materials-manage');
 

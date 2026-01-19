@@ -6,11 +6,8 @@ read:
   - composer.lock
   - package-lock.json
   - docs/PERMISSIONS_MATRIX.md
-  - docs/PERMISSIONS.md
-  - docs/DOMAIN_INVENTORY_AND_RECIPES.md
-  - docs/PR_ROADMAP.md
+  - docs/PR2_ROADMAP.md
   - docs/ENUMS.md
-  - docs/DOMAIN_PURCHASING_RECEIVING.md
-  - docs/EXAMPLES_PURCHASE_OPTIONS.md
   - docs/DB_SCHEMA.md
   - database/migrations/
+  - docs/UI_DESIGN.md

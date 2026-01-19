@@ -71,13 +71,13 @@ All operational data is **tenant-scoped**.
 
 The following documents are the **source of truth**, in strict priority order:
 
-1. docs/DOMAIN_INVENTORY_AND_RECIPES.md
-2. docs/PR_ROADMAP.md
+2. docs/PR2_ROADMAP.md
 3. docs/CONVENTIONS.md
 4. docs/ARCHITECTURE_INVENTORY.md
 5. docs/PERMISSIONS_MATRIX.md
 6. docs/ENUMS.md
 7. docs/DB_SCHEMA.md
+8. docs/UI_DESIGN.md
 
 If any conflict exists, **higher priority always wins**.
 
@@ -161,3 +161,36 @@ If no clarification is required, explicitly say so and request approval to propo
 
 You are a collaborator, not an autopilot.  
 **Precision > speed.**
+
+---
+
+## 9. Aider Prompt Contract (Mandatory)
+
+All aider prompts **must** follow this structure to avoid scope creep and incorrect changes.
+
+### Required in Every Aider Prompt
+
+- Explicitly name the **PR** being worked on  
+  (e.g. `PR2-MAT-001`)
+- Reference **docs/PR2_ROADMAP.md** as the governing plan
+- Clearly state:
+    - **IN SCOPE**
+    - **OUT OF SCOPE**
+- Explicitly list **all files** that may be created or edited
+- Explicitly restate:
+    - _“Do not modify internal docs unless explicitly requested.”_
+- State **test intent first**, before any implementation steps
+
+### Prohibited in Aider Prompts
+
+- Implicit scope assumptions
+- “While we’re here” improvements
+- Refactors not tied to a failing test
+- Doc changes unless explicitly authorized
+
+### Enforcement Rule
+
+If an aider prompt violates this contract, **stop immediately** and ask for clarification
+before making any changes.
+
+This contract is non-negotiable.

@@ -1,4 +1,5 @@
 <?php
+// tests/Feature/Materials/UomCategoryAuthorizationTest.php
 
 use App\Models\Permission;
 use App\Models\Role;
@@ -20,11 +21,16 @@ beforeEach(function () {
         ->for($this->tenant)
         ->create();
 
-    $permission = Permission::create(['slug' => 'inventory-materials-manage']);
-    $role = Role::create(['name' => 'materials-manager']);
-    $role->permissions()->attach($permission);
+    $permission = Permission::firstOrCreate([
+        'slug' => 'inventory-materials-manage',
+    ]);
 
-    $this->authorizedUser->roles()->attach($role);
+    $role = Role::firstOrCreate([
+        'name' => 'materials-manager',
+    ]);
+
+    $role->permissions()->syncWithoutDetaching([$permission->id]);
+    $this->authorizedUser->roles()->syncWithoutDetaching([$role->id]);
 });
 
 it('allows users with permission to access the uom categories index', function () {

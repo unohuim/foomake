@@ -674,3 +674,104 @@ $option = ItemPurchaseOption::create([
     'pack_uom_id' => $kg->id,
 ]);
 ```
+
+---
+
+## MUST ADD (When Implemented)
+
+### 1. Top Navigation Dropdown (Materials)
+
+**Why**
+
+- Introduces hierarchical top navigation behavior
+- Establishes a parent → support-domain relationship (Materials → UoMs)
+- Likely reusable for future domains
+
+**Add when**
+
+- The Materials hover dropdown actually exists
+
+**Entry**
+
+- **Name:** Top Navigation Dropdown (Materials)
+- **Type:** UI Pattern
+- **Location:** `resources/views/layouts/navigation.blade.php`
+- **Purpose:** Group Materials and its required support subdomains
+- **When to Use:** When a domain owns mandatory supporting entities
+- **When Not to Use:** For unrelated or optional domains
+- **Public Interface:** Blade partial + hover interaction
+- **Example Usage:** Materials → UoM Categories / Units of Measure
+
+---
+
+### 2. AJAX CRUD Controller Pattern
+
+**Why**
+
+- Establishes UI-driven CRUD with backend-enforced rules
+- Will be reused across Materials, UoMs, Recipes, Suppliers
+
+**Add when**
+
+- First AJAX-based CRUD controller ships (PR2-MAT-002)
+
+**Entry**
+
+- **Name:** AJAX CRUD Controller Pattern
+- **Type:** Architectural Pattern
+- **Location:** `app/Http/Controllers/`
+- **Purpose:** Handle UI-initiated CRUD without full page reloads
+- **When to Use:** Simple CRUD with single-entity persistence
+- **When Not to Use:** Multi-step workflows or transactional processes
+- **Public Interface:** JSON responses + HTTP status codes
+- **Example Usage:** Material create/edit/delete endpoints
+
+---
+
+### 3. Slide-Over Form Component
+
+**Why**
+
+- First reusable UI component
+- Will be used across multiple domains
+
+**Add when**
+
+- The slide-over form is extracted into a shared component
+
+**Entry**
+
+- **Name:** Slide-Over Form
+- **Type:** UI Component
+- **Location:** `resources/views/components/`
+- **Purpose:** Create/edit entities without navigation
+- **When to Use:** CRUD forms with multiple fields
+- **When Not to Use:** Confirmations or single-field actions
+- **Public Interface:** Blade component + Alpine state
+- **Example Usage:** Create Material, Create UoM
+
+---
+
+### 4. Row Actions Dropdown (⋮)
+
+**Why**
+
+- Reusable interaction pattern
+- Centralizes contextual actions
+
+**Add when**
+
+- The first shared actions dropdown component exists (PR2-MAT-004)
+
+**Entry**
+
+- **Name:** Row Actions Dropdown
+- **Type:** UI Component
+- **Location:** `resources/views/components/`
+- **Purpose:** Contextual row-level actions
+- **When to Use:** Tables or lists with Edit/Delete actions
+- **When Not to Use:** Primary or global actions
+- **Public Interface:** Slot-based Blade component
+- **Example Usage:** Materials list row actions
+
+---
