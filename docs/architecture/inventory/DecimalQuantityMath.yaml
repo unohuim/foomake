@@ -12,6 +12,6 @@ rules:
   - The canonical requirements are defined in docs/CONVENTIONS.md.
   - Apply the canonical requirements wherever quantities are stored or calculated.
 public_interface:
-  - BCMath functions such as bcadd, bcmul, and bcdiv
+  - docs/CONVENTIONS.md
 example_usage: |
-  $total = bcadd('1.500000', '2.250000', 6);
+  See docs/CONVENTIONS.md.

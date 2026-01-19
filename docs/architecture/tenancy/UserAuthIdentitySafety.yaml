@@ -9,7 +9,7 @@ when_to_use:
 when_not_to_use:
   - Tenant-owned domain data queries
 rules:
-  - Identity lookup uses direct User queries.
+  - Authentication flows use direct User queries.
 public_interface:
   - User query methods
 example_usage: |
