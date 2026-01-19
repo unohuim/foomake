@@ -5,9 +5,9 @@ read:
   - docs/ARCHITECTURE_INVENTORY.md
   - composer.lock
   - package-lock.json
-  - docs/PERMISSIONS_MATRIX.md
   - docs/PR2_ROADMAP.md
   - docs/ENUMS.md
   - docs/DB_SCHEMA.md
   - database/migrations/
   - docs/UI_DESIGN.md
+  - docs/architecture/README.yaml

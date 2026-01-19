@@ -1,0 +1,90 @@
+name: Architecture Documentation System
+type: Architectural Documentation Standard
+location:
+  - docs/architecture/
+purpose: Define a strict, reviewable, and machine-readable system for documenting architectural invariants and reusable patterns.
+when_to_use:
+  - Documenting any architectural concept, invariant, or reusable pattern
+  - Replacing or extending the former ARCHITECTURE_INVENTORY.md
+when_not_to_use:
+  - Documenting implementation details
+  - Explaining step-by-step workflows or tutorials
+rules:
+  - Architecture documentation is authoritative and describes invariants, not implementations.
+  - Each architectural concept must be documented in exactly one YAML file.
+  - Files must be grouped by domain directory.
+  - Enum values remain canonical in docs/ENUMS.md and must not be duplicated.
+  - UI constraints remain canonical in docs/UI_DESIGN.md.
+  - Conflicts resolve in order: CONVENTIONS.md, ENUMS.md, architecture YAML, then code.
+  - All architecture YAML files must follow the canonical schema and key order.
+  - All schema keys are mandatory; empty sections are forbidden.
+  - Key order is fixed and must not be changed.
+  - Lists must be explicit YAML lists.
+  - No prose or commentary is allowed outside the schema.
+  - PRs violating schema or invariants must be rejected.
+public_interface:
+  - docs/architecture/**.yaml
+  - docs/architecture/README.md
+example_usage: |
+  docs/architecture/
+  ├── tenancy/
+  │   └── TenantScopeTrait.yaml
+  ├── inventory/
+  │   └── StockMove.yaml
+  ├── ui/
+  │   └── SlideOverFormPattern.yaml
+  └── README.md
+
+schema:
+  required_keys:
+    - name
+    - type
+    - location
+    - purpose
+    - when_to_use
+    - when_not_to_use
+    - rules
+    - public_interface
+    - example_usage
+  key_order:
+    - name
+    - type
+    - location
+    - purpose
+    - when_to_use
+    - when_not_to_use
+    - rules
+    - public_interface
+    - example_usage
+
+implicit_invariants:
+  inventory_uom_purchasing:
+    - Quantities are strings, never floats.
+    - All quantity math uses BCMath.
+    - Canonical scale is 6.
+    - Tenant boundary enforced when authenticated.
+  tenancy:
+    - Single database architecture.
+    - tenant_id is authoritative.
+    - No tenant scoping on auth identity models.
+    - Tenant scope is a no-op when unauthenticated.
+  authorization:
+    - Authorization enforced via Laravel Gates.
+    - Permission slugs are canonical.
+    - UI visibility is not a source of truth.
+  ui:
+    - Blade and Alpine only.
+    - No global JavaScript state.
+    - AJAX-first CRUD.
+    - Breeze-aligned layout.
+
+writing_guidelines:
+  good_entries:
+    - Short and precise.
+    - Enforces invariants.
+    - Easy to diff and review.
+    - Avoids duplication of implicit invariants.
+  bad_entries:
+    - Restates global or implicit rules.
+    - Includes implementation trivia.
+    - Contains prose outside the schema.
