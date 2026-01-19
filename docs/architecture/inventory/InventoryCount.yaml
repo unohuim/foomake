@@ -11,7 +11,10 @@ when_not_to_use:
 rules:
   - Status is computed from posted_at and not stored in the database.
   - Posting must set posted_at and posted_by_user_id.
-  - Inventory counts are tenant-scoped via tenant_id.
+  - Enum-like values must use values defined in docs/ENUMS.md.
+  - Tenant boundary is enforced when an authenticated user exists.
+  - All quantity math uses BCMath with canonical scale matching stock_moves.quantity (scale = 6).
+  - Quantities are represented as strings; never floats.
 public_interface:
   - lines()
   - stockMoves()

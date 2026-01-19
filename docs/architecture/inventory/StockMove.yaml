@@ -1,5 +1,5 @@
 name: StockMove
-type: Eloquent Model and Domain Rule
+type: Eloquent Model / Domain Rule
 location:
   - app/Models/StockMove.php
 purpose: Represent append-only inventory movements that form the inventory ledger.
@@ -10,7 +10,10 @@ when_not_to_use:
 rules:
   - Stock moves are append-only and must not be updated or deleted.
   - Quantity is signed and recorded in the item base UoM.
-  - Stock move type values must match docs/ENUMS.md.
+  - Enum-like values must use values defined in docs/ENUMS.md.
+  - Tenant boundary is enforced when an authenticated user exists.
+  - All quantity math uses BCMath with canonical scale matching stock_moves.quantity (scale = 6).
+  - Quantities are represented as strings; never floats.
 public_interface:
   - Item::stockMoves()
   - Item::onHandQuantity()

@@ -1,5 +1,5 @@
 name: UomConversion
-type: Eloquent Model and Domain Rule
+type: Eloquent Model / Domain Rule
 location:
   - app/Models/UomConversion.php
 purpose: Provide safe global conversions within the same UoM category.
@@ -10,6 +10,8 @@ when_not_to_use:
 rules:
   - Conversions must remain within a single category.
   - Cross-category conversions are forbidden and must use item-specific conversions.
+  - All quantity math uses BCMath with canonical scale matching stock_moves.quantity (scale = 6).
+  - Quantities are represented as strings; never floats.
 public_interface:
   - fromUom()
   - toUom()

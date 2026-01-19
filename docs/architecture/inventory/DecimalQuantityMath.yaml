@@ -11,7 +11,7 @@ when_not_to_use:
 rules:
   - Quantities are represented as strings and never floats.
   - All arithmetic uses BCMath functions.
-  - A single canonical scale is used across inventory and purchasing.
+  - All quantity math uses BCMath with canonical scale matching stock_moves.quantity (scale = 6).
 public_interface:
   - BCMath functions such as bcadd, bcmul, and bcdiv
 example_usage: |
