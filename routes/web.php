@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\ItemController;
 use App\Http\Controllers\MaterialController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\UomCategoryController;
@@ -16,6 +17,7 @@ Route::get('/dashboard', function () {
 
 Route::middleware('auth')->group(function () {
     Route::get('/materials', [MaterialController::class, 'index'])->name('materials.index');
+    Route::post('/materials', [ItemController::class, 'store'])->name('materials.store');
     Route::get('/materials/uom-categories', [UomCategoryController::class, 'index'])
         ->name('materials.uom-categories.index');
     Route::post('/materials/uom-categories', [UomCategoryController::class, 'store'])
