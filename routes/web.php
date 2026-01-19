@@ -3,6 +3,7 @@
 use App\Http\Controllers\MaterialController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\UomCategoryController;
+use App\Http\Controllers\UomController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -23,6 +24,16 @@ Route::middleware('auth')->group(function () {
         ->name('materials.uom-categories.update');
     Route::delete('/materials/uom-categories/{uomCategory}', [UomCategoryController::class, 'destroy'])
         ->name('materials.uom-categories.destroy');
+
+    Route::get('/manufacturing/uoms', [UomController::class, 'index'])
+        ->name('manufacturing.uoms.index');
+    Route::post('/manufacturing/uoms', [UomController::class, 'store'])
+        ->name('manufacturing.uoms.store');
+    Route::patch('/manufacturing/uoms/{uom}', [UomController::class, 'update'])
+        ->name('manufacturing.uoms.update');
+    Route::delete('/manufacturing/uoms/{uom}', [UomController::class, 'destroy'])
+        ->name('manufacturing.uoms.destroy');
+
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
