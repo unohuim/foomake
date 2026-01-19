@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use App\Models\Item;
 use App\Models\Permission;
 use App\Models\Role;
@@ -13,7 +15,7 @@ use Illuminate\Support\Str;
 
 uses(RefreshDatabase::class);
 
-beforeEach(function () {
+beforeEach(function (): void {
     $this->tenant = Tenant::factory()->create();
     $this->user = User::factory()->create([
         'tenant_id' => $this->tenant->id,
@@ -60,7 +62,7 @@ beforeEach(function () {
     };
 });
 
-test('denies updates for users without inventory-materials-manage permission', function () {
+test('denies updates for users without inventory-materials-manage permission', function (): void {
     $uom = ($this->makeUom)();
     $item = ($this->makeItem)($uom);
 
@@ -72,8 +74,9 @@ test('denies updates for users without inventory-materials-manage permission', f
     $response->assertForbidden();
 });
 
-test('updates a material for users with inventory-materials-manage permission', function () {
+test('updates a material for users with inventory-materials-manage permission', function (): void {
     ($this->grantPermission)($this->user, 'inventory-materials-manage');
+
     $uom = ($this->makeUom)();
     $newUom = ($this->makeUom)();
     $item = ($this->makeItem)($uom);
@@ -88,7 +91,8 @@ test('updates a material for users with inventory-materials-manage permission', 
 
     $response->assertOk()
         ->assertJsonPath('data.name', 'Updated Flour')
-        ->assertJsonPath('data.base_uom_id', $newUom->id);
+        ->assertJsonPath('data.base_uom_id', $newUom->id)
+        ->assertJsonPath('data.is_purchasable', true);
 
     $updated = Item::withoutGlobalScopes()->findOrFail($item->id);
 
@@ -99,13 +103,12 @@ test('updates a material for users with inventory-materials-manage permission', 
         ->and($updated->is_manufacturable)->toBeFalse();
 });
 
-test('returns not found when attempting to update another tenant item', function () {
+test('returns not found when attempting to update another tenant item', function (): void {
     ($this->grantPermission)($this->user, 'inventory-materials-manage');
+
     $uom = ($this->makeUom)();
+
     $otherTenant = Tenant::factory()->create();
-    $otherUser = User::factory()->create([
-        'tenant_id' => $otherTenant->id,
-    ]);
 
     $otherItem = Item::query()->create([
         'tenant_id' => $otherTenant->id,
@@ -124,8 +127,9 @@ test('returns not found when attempting to update another tenant item', function
     $response->assertNotFound();
 });
 
-test('returns validation errors for missing required fields', function () {
+test('returns validation errors for missing required fields', function (): void {
     ($this->grantPermission)($this->user, 'inventory-materials-manage');
+
     $uom = ($this->makeUom)();
     $item = ($this->makeItem)($uom);
 
@@ -135,37 +139,14 @@ test('returns validation errors for missing required fields', function () {
         ->assertJsonValidationErrors(['name', 'base_uom_id']);
 });
 
-test('returns validation error when name is missing', function () {
+test('locks base_uom_id when stock moves exist and does not partially update', function (): void {
     ($this->grantPermission)($this->user, 'inventory-materials-manage');
-    $uom = ($this->makeUom)();
-    $item = ($this->makeItem)($uom);
 
-    $response = ($this->patchUpdate)($this->user, $item, [
-        'base_uom_id' => $uom->id,
-    ]);
-
-    $response->assertUnprocessable()
-        ->assertJsonValidationErrors(['name']);
-});
-
-test('returns validation error when base_uom_id is missing', function () {
-    ($this->grantPermission)($this->user, 'inventory-materials-manage');
-    $uom = ($this->makeUom)();
-    $item = ($this->makeItem)($uom);
-
-    $response = ($this->patchUpdate)($this->user, $item, [
-        'name' => 'Updated',
-    ]);
-
-    $response->assertUnprocessable()
-        ->assertJsonValidationErrors(['base_uom_id']);
-});
-
-test('locks base_uom_id when stock moves exist', function () {
-    ($this->grantPermission)($this->user, 'inventory-materials-manage');
     $uom = ($this->makeUom)();
     $newUom = ($this->makeUom)();
-    $item = ($this->makeItem)($uom);
+    $item = ($this->makeItem)($uom, [
+        'name' => 'Original Flour',
+    ]);
 
     StockMove::query()->create([
         'tenant_id' => $this->tenant->id,
@@ -176,20 +157,55 @@ test('locks base_uom_id when stock moves exist', function () {
     ]);
 
     $response = ($this->patchUpdate)($this->user, $item, [
-        'name' => 'Locked Flour',
+        'name' => 'Should Not Apply',
         'base_uom_id' => $newUom->id,
     ]);
 
     $response->assertUnprocessable()
         ->assertJsonValidationErrors(['base_uom_id']);
 
-    $updated = Item::withoutGlobalScopes()->findOrFail($item->id);
+    $reloaded = Item::withoutGlobalScopes()->findOrFail($item->id);
 
-    expect($updated->base_uom_id)->toBe($uom->id);
+    expect($reloaded->base_uom_id)->toBe($uom->id)
+        ->and($reloaded->name)->toBe('Original Flour');
 });
 
-test('allows base_uom_id updates when no stock moves exist', function () {
+test('allows updates when stock moves exist but base_uom_id is unchanged', function (): void {
     ($this->grantPermission)($this->user, 'inventory-materials-manage');
+
+    $uom = ($this->makeUom)();
+    $item = ($this->makeItem)($uom, [
+        'name' => 'Original Flour',
+    ]);
+
+    StockMove::query()->create([
+        'tenant_id' => $this->tenant->id,
+        'item_id' => $item->id,
+        'uom_id' => $item->base_uom_id,
+        'quantity' => '1.000000',
+        'type' => 'receipt',
+    ]);
+
+    $response = ($this->patchUpdate)($this->user, $item, [
+        'name' => 'Updated Flour',
+        'base_uom_id' => $uom->id,
+        'is_purchasable' => true,
+    ]);
+
+    $response->assertOk()
+        ->assertJsonPath('data.name', 'Updated Flour')
+        ->assertJsonPath('data.base_uom_id', $uom->id);
+
+    $reloaded = Item::withoutGlobalScopes()->findOrFail($item->id);
+
+    expect($reloaded->name)->toBe('Updated Flour')
+        ->and($reloaded->base_uom_id)->toBe($uom->id)
+        ->and($reloaded->is_purchasable)->toBeTrue();
+});
+
+test('allows base_uom_id updates when no stock moves exist', function (): void {
+    ($this->grantPermission)($this->user, 'inventory-materials-manage');
+
     $uom = ($this->makeUom)();
     $newUom = ($this->makeUom)();
     $item = ($this->makeItem)($uom);
@@ -202,7 +218,7 @@ test('allows base_uom_id updates when no stock moves exist', function () {
     $response->assertOk()
         ->assertJsonPath('data.base_uom_id', $newUom->id);
 
-    $updated = Item::withoutGlobalScopes()->findOrFail($item->id);
+    $reloaded = Item::withoutGlobalScopes()->findOrFail($item->id);
 
-    expect($updated->base_uom_id)->toBe($newUom->id);
+    expect($reloaded->base_uom_id)->toBe($newUom->id);
 });
