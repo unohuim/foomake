@@ -1,0 +1,20 @@
+name: InventoryCount
+type: Eloquent Model
+location:
+  - app/Models/InventoryCount.php
+purpose: Represent an inventory count session with status derived from posted_at.
+when_to_use:
+  - Recording inventory count sessions
+  - Posting inventory count adjustments to the ledger
+when_not_to_use:
+  - Storing inventory adjustments without an inventory count context
+rules:
+  - Status is computed from posted_at and not stored in the database.
+  - Posting must set posted_at and posted_by_user_id.
+  - Inventory counts are tenant-scoped via tenant_id.
+public_interface:
+  - lines()
+  - stockMoves()
+  - getStatusAttribute()
+example_usage: |
+  $status = $inventoryCount->status;

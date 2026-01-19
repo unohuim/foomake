@@ -1,0 +1,21 @@
+name: Tenant Scope Trait
+type: Trait and Global Eloquent Scope
+location:
+  - app/Models/Concerns/HasTenantScope.php
+  - app/Models/Scopes/TenantScope.php
+purpose: Enforce tenant isolation by applying a global scope that filters tenant-owned models by tenant_id.
+when_to_use:
+  - Any tenant-owned Eloquent model
+when_not_to_use:
+  - Global or system models
+  - Authentication identity resolution models such as User
+rules:
+  - TenantScope is the only permitted tenant resolution mechanism for domain models.
+  - The scope is a no-op when no authenticated user exists.
+public_interface:
+  - use HasTenantScope
+example_usage: |
+  class StockMove extends Model
+  {
+      use HasTenantScope;
+  }

@@ -1,0 +1,20 @@
+name: Item
+type: Eloquent Model
+location:
+  - app/Models/Item.php
+purpose: Represent a tenant-owned stock-tracked entity with inventory derived from stock moves.
+when_to_use:
+  - Modeling tenant-owned materials or products
+  - Computing on-hand inventory from the ledger
+when_not_to_use:
+  - Storing denormalized on-hand quantities
+rules:
+  - Each item has exactly one base UoM referenced by base_uom_id.
+  - On-hand quantity is computed from stock_moves.
+  - Inventory is derived and not stored on the items table.
+public_interface:
+  - stockMoves()
+  - onHandQuantity()
+  - itemUomConversions()
+example_usage: |
+  $onHand = $item->onHandQuantity();

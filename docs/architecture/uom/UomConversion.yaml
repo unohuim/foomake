@@ -1,0 +1,21 @@
+name: UomConversion
+type: Eloquent Model and Domain Rule
+location:
+  - app/Models/UomConversion.php
+purpose: Provide safe global conversions within the same UoM category.
+when_to_use:
+  - Universal conversions within a category
+when_not_to_use:
+  - Cross-category conversions or item-specific conversions
+rules:
+  - Conversions must remain within a single category.
+  - Cross-category conversions are forbidden and must use item-specific conversions.
+public_interface:
+  - fromUom()
+  - toUom()
+example_usage: |
+  UomConversion::create([
+      'from_uom_id' => $kg->id,
+      'to_uom_id' => $grams->id,
+      'multiplier' => '1000.00000000',
+  ]);

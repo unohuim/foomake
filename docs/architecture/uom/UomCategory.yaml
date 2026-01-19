@@ -1,0 +1,16 @@
+name: UomCategory
+type: Eloquent Model
+location:
+  - app/Models/UomCategory.php
+purpose: Group units of measure into categories that define safe conversion boundaries.
+when_to_use:
+  - Defining conversion-safe groupings such as mass or volume
+when_not_to_use:
+  - Cross-category conversion logic
+rules:
+  - Each UoM belongs to a single category.
+  - Global conversions are valid only within a category.
+public_interface:
+  - uoms()
+example_usage: |
+  $category = UomCategory::create(['name' => 'Mass']);

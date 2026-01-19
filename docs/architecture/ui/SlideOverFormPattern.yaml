@@ -1,0 +1,20 @@
+name: Slide-Over Form Pattern
+type: UI Pattern
+location:
+  - resources/views/materials/partials/create-material-slide-over.blade.php
+purpose: Create or edit entities without leaving the current page.
+when_to_use:
+  - CRUD forms with multiple fields
+  - Actions that should not navigate away from list pages
+when_not_to_use:
+  - Confirmations or single-field actions
+rules:
+  - Forms submit via AJAX and show inline validation errors.
+  - Alpine directives use single-quoted JavaScript strings.
+  - HTML attributes use double quotes.
+public_interface:
+  - Blade partial with Alpine state and form markup
+example_usage: |
+  <form x-on:submit.prevent="submitCreate()">
+      <input type="text" x-model="form.name" />
+  </form>

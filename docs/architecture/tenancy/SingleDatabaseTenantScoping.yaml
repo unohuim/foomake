@@ -1,0 +1,24 @@
+name: Single Database Tenant Scoping
+type: Architectural Pattern
+location:
+  - app/Models/Concerns/HasTenantScope.php
+  - app/Models/Scopes/TenantScope.php
+  - database/migrations/
+purpose: Ensure tenant isolation by requiring tenant_id on tenant-owned data and scoping queries to the authenticated tenant.
+when_to_use:
+  - Tenant-owned domain tables and models
+when_not_to_use:
+  - Global or system tables without tenant_id
+  - Authentication identity resolution
+rules:
+  - Tenant-owned tables must include tenant_id.
+  - Tenant-owned models must use HasTenantScope.
+  - Cross-tenant access must be explicit and justified.
+  - Auth flows must not break when unauthenticated.
+public_interface:
+  - use HasTenantScope
+example_usage: |
+  class Item extends Model
+  {
+      use HasTenantScope;
+  }

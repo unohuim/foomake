@@ -1,0 +1,16 @@
+name: Page Scoped Toast Pattern
+type: UI Pattern
+location:
+  - resources/js/app.js
+purpose: Provide non-blocking toast feedback scoped to the current page.
+when_to_use:
+  - Non-blocking success or error feedback after AJAX actions
+when_not_to_use:
+  - Blocking alerts or full-page loaders
+rules:
+  - No shared toast helper is implemented yet.
+  - Any toast implementation must remain page-scoped.
+public_interface:
+  - None defined yet
+example_usage: |
+  window.dispatchEvent(new CustomEvent('toast', { detail: 'Saved.' }));

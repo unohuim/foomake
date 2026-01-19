@@ -1,0 +1,18 @@
+name: Decimal Quantity Math
+type: Domain Rule
+location:
+  - docs/CONVENTIONS.md
+purpose: Prevent floating-point errors in inventory and purchasing by requiring string quantities and BCMath.
+when_to_use:
+  - Any inventory-affecting calculations
+  - Unit conversions and purchasing quantity math
+when_not_to_use:
+  - Calculations that do not involve quantity fields
+rules:
+  - Quantities are represented as strings and never floats.
+  - All arithmetic uses BCMath functions.
+  - A single canonical scale is used across inventory and purchasing.
+public_interface:
+  - BCMath functions such as bcadd, bcmul, and bcdiv
+example_usage: |
+  $total = bcadd('1.500000', '2.250000', 6);

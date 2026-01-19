@@ -1,0 +1,21 @@
+name: Uom
+type: Eloquent Model
+location:
+  - app/Models/Uom.php
+purpose: Represent a unit of measure belonging to a single category.
+when_to_use:
+  - Assigning units to items
+  - Recording quantities with explicit units
+when_not_to_use:
+  - Implicit unit assumptions
+rules:
+  - Each UoM belongs to exactly one UoM category.
+  - UoM names and symbols are unique.
+public_interface:
+  - category()
+example_usage: |
+  $uom = Uom::create([
+      'uom_category_id' => $category->id,
+      'name' => 'Gram',
+      'symbol' => 'g',
+  ]);

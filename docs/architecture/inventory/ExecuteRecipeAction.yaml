@@ -1,0 +1,20 @@
+name: ExecuteRecipeAction
+type: Action and Domain Service
+location:
+  - app/Actions/Inventory/ExecuteRecipeAction.php
+purpose: Execute a recipe to issue inputs and receipt outputs as stock moves.
+when_to_use:
+  - Manufacturing or make-order execution
+  - Converting input items into an output item via a recipe
+when_not_to_use:
+  - Inventory adjustments or corrections
+  - Costing or planning calculations
+rules:
+  - Recipe must be active and output item manufacturable.
+  - Inputs are issued and outputs are receipted as stock moves.
+  - Quantities are recorded in each item base UoM.
+public_interface:
+  - execute(Recipe $recipe, string $outputQuantity)
+example_usage: |
+  $action = new ExecuteRecipeAction();
+  $action->execute($recipe, '5.000000');

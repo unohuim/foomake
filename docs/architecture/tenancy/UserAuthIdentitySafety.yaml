@@ -1,0 +1,18 @@
+name: User Auth Identity Safety
+type: Architectural Rule
+location:
+  - app/Models/User.php
+purpose: Keep authentication and identity resolution independent from tenant scoping.
+when_to_use:
+  - Authentication and identity lookup
+  - Authorization checks that require global user access
+when_not_to_use:
+  - Tenant-owned domain data queries
+rules:
+  - User must not use HasTenantScope.
+  - Users remain globally queryable even when authenticated.
+  - Tenant isolation is enforced at domain boundaries, not identity resolution.
+public_interface:
+  - User query methods
+example_usage: |
+  $user = User::where('email', $email)->first();

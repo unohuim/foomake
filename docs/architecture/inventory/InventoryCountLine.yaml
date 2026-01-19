@@ -1,0 +1,21 @@
+name: InventoryCountLine
+type: Eloquent Model
+location:
+  - app/Models/InventoryCountLine.php
+purpose: Represent line items for an inventory count session.
+when_to_use:
+  - Recording counted quantities for items in an inventory count
+when_not_to_use:
+  - Recording inventory adjustments outside a count session
+rules:
+  - Lines belong to a tenant-scoped inventory count.
+  - Each line references a single item and counted quantity.
+public_interface:
+  - inventoryCount()
+  - item()
+example_usage: |
+  $line = $inventoryCount->lines()->create([
+      'tenant_id' => $tenant->id,
+      'item_id' => $item->id,
+      'counted_quantity' => '5.000000',
+  ]);

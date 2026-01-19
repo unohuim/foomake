@@ -1,0 +1,24 @@
+name: AJAX CRUD Controller Pattern
+type: Architectural Pattern
+location:
+  - app/Http/Controllers/UomCategoryController.php
+  - app/Http/Controllers/UomController.php
+  - app/Http/Controllers/ItemController.php
+purpose: Handle UI-driven CRUD using JSON responses without full page reloads.
+when_to_use:
+  - Single-entity CRUD with fetch-based requests
+  - Slide-over or modal forms that submit via AJAX
+when_not_to_use:
+  - Multi-step workflows or transactional orchestration
+rules:
+  - Controllers return JSON responses with appropriate HTTP status codes.
+  - Backend validation is authoritative for all CRUD operations.
+public_interface:
+  - store()
+  - update()
+  - destroy()
+example_usage: |
+  $response = $this->postJson('/materials', [
+      'name' => 'Flour',
+      'base_uom_id' => 1,
+  ]);

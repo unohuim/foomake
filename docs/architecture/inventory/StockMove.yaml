@@ -1,0 +1,24 @@
+name: StockMove
+type: Eloquent Model and Domain Rule
+location:
+  - app/Models/StockMove.php
+purpose: Represent append-only inventory movements that form the inventory ledger.
+when_to_use:
+  - Any inventory-affecting operation such as receipts, issues, or adjustments
+when_not_to_use:
+  - Storing or mutating on-hand totals directly
+rules:
+  - Stock moves are append-only and must not be updated or deleted.
+  - Quantity is signed and recorded in the item base UoM.
+  - Stock move type values must match docs/ENUMS.md.
+public_interface:
+  - Item::stockMoves()
+  - Item::onHandQuantity()
+example_usage: |
+  StockMove::create([
+      'tenant_id' => $tenant->id,
+      'item_id' => $item->id,
+      'uom_id' => $item->base_uom_id,
+      'quantity' => '10.000000',
+      'type' => 'receipt',
+  ]);

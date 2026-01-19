@@ -1,0 +1,20 @@
+name: Domain Authorization Layer
+type: Authorization Pattern
+location:
+  - app/Providers/AuthServiceProvider.php
+purpose: Centralize authorization using global roles, permission slugs, and Laravel Gates.
+when_to_use:
+  - Any access control decision
+  - Any read or write permission enforcement
+when_not_to_use:
+  - UI-only visibility decisions without backend enforcement
+rules:
+  - Permission slugs are canonical.
+  - Authorization checks must use gates.
+  - super-admin bypasses checks via Gate::before.
+public_interface:
+  - Gate::allows
+  - Gate::authorize
+  - Permission slugs defined in docs/PERMISSIONS_MATRIX.md
+example_usage: |
+  Gate::authorize('inventory-materials-manage');

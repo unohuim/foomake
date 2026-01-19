@@ -1,0 +1,24 @@
+name: ItemUomConversion
+type: Eloquent Model and Domain Rule
+location:
+  - app/Models/ItemUomConversion.php
+purpose: Allow item-specific unit conversions, including cross-category conversions.
+when_to_use:
+  - Item-specific conversions such as count to weight
+when_not_to_use:
+  - Global conversions that should be shared across items
+rules:
+  - Conversions are item-scoped and tenant-scoped.
+  - Conversion factors must be greater than zero.
+  - Cross-category conversions are allowed only at the item level.
+public_interface:
+  - item()
+  - fromUom()
+  - toUom()
+example_usage: |
+  $item->itemUomConversions()->create([
+      'tenant_id' => $tenant->id,
+      'from_uom_id' => $count->id,
+      'to_uom_id' => $grams->id,
+      'conversion_factor' => '50.000000',
+  ]);

@@ -1,0 +1,25 @@
+name: ItemPurchaseOption
+type: Eloquent Model
+location:
+  - app/Models/ItemPurchaseOption.php
+purpose: Represent supplier-specific purchasing packs that map into item inventory.
+when_to_use:
+  - Modeling how an item is purchased from suppliers
+  - Receiving inventory in supplier pack quantities
+when_not_to_use:
+  - Tracking inventory on-hand directly
+  - Representing stockable entities
+rules:
+  - Purchase options are not inventory identities.
+  - Pack quantities convert into the item base UoM on receipt.
+  - Options are tenant-scoped via tenant_id.
+public_interface:
+  - item()
+  - packUom()
+example_usage: |
+  $option = ItemPurchaseOption::create([
+      'tenant_id' => $tenant->id,
+      'item_id' => $item->id,
+      'pack_quantity' => '10.000000',
+      'pack_uom_id' => $kg->id,
+  ]);

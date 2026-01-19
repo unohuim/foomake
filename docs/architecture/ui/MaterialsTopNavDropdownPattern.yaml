@@ -1,0 +1,21 @@
+name: Materials Top Nav Dropdown Pattern
+type: UI Pattern
+location:
+  - resources/views/layouts/navigation.blade.php
+purpose: Group Materials and its supporting entities under a single top navigation dropdown.
+when_to_use:
+  - A top-level domain owns mandatory supporting subdomains
+when_not_to_use:
+  - Unrelated or optional domains
+rules:
+  - The dropdown appears in the top horizontal navigation.
+  - Active state is subtle and consistent with the navigation style.
+public_interface:
+  - Blade markup and Alpine interaction in the navigation layout
+example_usage: |
+  <x-dropdown>
+      <x-slot name="trigger">Materials</x-slot>
+      <x-slot name="content">
+          <x-dropdown-link href="/materials">Materials</x-dropdown-link>
+      </x-slot>
+  </x-dropdown>

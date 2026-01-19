@@ -1,0 +1,19 @@
+name: Row Actions Dropdown Pattern
+type: UI Pattern
+location:
+  - resources/views/components/dropdown.blade.php
+purpose: Provide contextual row-level actions such as edit and delete.
+when_to_use:
+  - Tables or lists with multiple row actions
+when_not_to_use:
+  - Primary or global actions
+rules:
+  - Actions are explicit and do not rely on row click.
+  - Destructive actions require confirmation before submission.
+public_interface:
+  - Dropdown Blade component with trigger and content slots
+example_usage: |
+  <x-dropdown>
+      <x-slot name="trigger">...</x-slot>
+      <x-slot name="content">...</x-slot>
+  </x-dropdown>
