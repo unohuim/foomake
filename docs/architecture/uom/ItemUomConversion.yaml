@@ -8,12 +8,9 @@ when_to_use:
 when_not_to_use:
   - Global conversions that should be shared across items
 rules:
-  - Conversions are item-scoped and tenant-scoped.
+  - Conversions are item-scoped.
   - Conversion factors must be greater than zero.
   - Cross-category conversions are allowed only at the item level.
-  - Tenant boundary is enforced when an authenticated user exists.
-  - All quantity math uses BCMath with canonical scale matching stock_moves.quantity (scale = 6).
-  - Quantities are represented as strings; never floats.
 public_interface:
   - item()
   - fromUom()

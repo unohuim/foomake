@@ -12,9 +12,6 @@ when_not_to_use:
 rules:
   - Purchase options are not inventory identities.
   - Pack quantities convert into the item base UoM on receipt.
-  - Tenant boundary is enforced when an authenticated user exists.
-  - All quantity math uses BCMath with canonical scale matching stock_moves.quantity (scale = 6).
-  - Quantities are represented as strings; never floats.
 public_interface:
   - item()
   - packUom()

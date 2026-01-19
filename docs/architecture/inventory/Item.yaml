@@ -12,9 +12,6 @@ rules:
   - Each item has exactly one base UoM referenced by base_uom_id.
   - On-hand quantity is computed from stock_moves.
   - Inventory is derived and not stored on the items table.
-  - Tenant boundary is enforced when an authenticated user exists.
-  - All quantity math uses BCMath with canonical scale matching stock_moves.quantity (scale = 6).
-  - Quantities are represented as strings; never floats.
 public_interface:
   - stockMoves()
   - onHandQuantity()

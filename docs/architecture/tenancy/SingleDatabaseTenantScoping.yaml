@@ -14,8 +14,6 @@ rules:
   - Tenant-owned tables must include tenant_id.
   - Tenant-owned models must use HasTenantScope.
   - Cross-tenant access must be explicit and justified.
-  - Tenant boundary is enforced when an authenticated user exists.
-  - Auth flows must not break when unauthenticated.
 public_interface:
   - use HasTenantScope
 example_usage: |

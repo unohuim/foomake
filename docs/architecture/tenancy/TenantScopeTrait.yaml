@@ -11,8 +11,6 @@ when_not_to_use:
   - Authentication identity resolution models such as User
 rules:
   - TenantScope is the only permitted tenant resolution mechanism for domain models.
-  - Tenant boundary is enforced when an authenticated user exists.
-  - The scope is a no-op when no authenticated user exists.
 public_interface:
   - use HasTenantScope
 example_usage: |

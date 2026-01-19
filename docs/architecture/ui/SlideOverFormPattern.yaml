@@ -9,7 +9,6 @@ when_to_use:
 when_not_to_use:
   - Confirmations or single-field actions
 rules:
-  - Forms submit via AJAX and show inline validation errors.
   - Alpine directives use single-quoted JavaScript strings.
   - HTML attributes use double quotes.
 public_interface:

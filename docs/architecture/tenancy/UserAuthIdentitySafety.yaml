@@ -9,9 +9,7 @@ when_to_use:
 when_not_to_use:
   - Tenant-owned domain data queries
 rules:
-  - User must not use HasTenantScope.
-  - Users remain globally queryable even when authenticated.
-  - Tenant isolation is enforced at domain boundaries, not identity resolution.
+  - Identity lookup uses direct User queries.
 public_interface:
   - User query methods
 example_usage: |

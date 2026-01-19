@@ -9,8 +9,6 @@ when_to_use:
 when_not_to_use:
   - UI-only visibility decisions without backend enforcement
 rules:
-  - Permission slugs are canonical.
-  - Authorization checks must use gates.
   - super-admin bypasses checks via Gate::before.
 public_interface:
   - Gate::allows

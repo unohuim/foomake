@@ -14,9 +14,6 @@ rules:
   - Inputs are issued and outputs are receipted as stock moves.
   - Quantities are recorded in each item base UoM.
   - Enum-like values must use values defined in docs/ENUMS.md.
-  - Tenant boundary is enforced when an authenticated user exists.
-  - All quantity math uses BCMath with canonical scale matching stock_moves.quantity (scale = 6).
-  - Quantities are represented as strings; never floats.
 public_interface:
   - execute(Recipe $recipe, string $outputQuantity)
 example_usage: |

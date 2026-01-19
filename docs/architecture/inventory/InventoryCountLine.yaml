@@ -8,11 +8,8 @@ when_to_use:
 when_not_to_use:
   - Recording inventory adjustments outside a count session
 rules:
-  - Lines belong to a tenant-scoped inventory count.
+  - Lines belong to a single inventory count.
   - Each line references a single item and counted quantity.
-  - Tenant boundary is enforced when an authenticated user exists.
-  - All quantity math uses BCMath with canonical scale matching stock_moves.quantity (scale = 6).
-  - Quantities are represented as strings; never floats.
 public_interface:
   - inventoryCount()
   - item()
