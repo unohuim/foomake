@@ -221,7 +221,7 @@ Provide a stable anchor for future expansions.
 
 ---
 
-## DOMAIN 2 — Inventory Visibility & Counts
+## DOMAIN 2 - PR2-INV-001 — Inventory Visibility & Counts
 
 _(Unchanged)_
 
