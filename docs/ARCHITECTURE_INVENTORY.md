@@ -21,21 +21,12 @@ This is an **index**, not a tutorial.
 
 ---
 
-## How to Use This Document
-
-- **Before creating a new abstraction**, review this inventory.
-- **When introducing a reusable abstraction**, add an entry in the same PR.
-- Entries must be factual, minimal, and descriptive.
-- Absence from this file implies the abstraction **does not exist**.
-
----
-
 ## Entry Requirements
 
-Each entry must include:
+Each entry includes:
 
 - **Name**
-- **Type** (Model, Trait, Scope, Provider, Pattern, etc.)
+- **Type**
 - **Location**
 - **Purpose**
 - **When to Use**
@@ -45,43 +36,30 @@ Each entry must include:
 
 ---
 
-## Inventory
+## Multi-Tenancy
 
----
-
-## Multi-Tenancy Architecture
-
-### Single Database, Tenant ID Scoping
+### Single Database Tenant Scoping
 
 **Name:** Single Database Tenant Scoping  
 **Type:** Architectural Pattern  
-**Location:** Across all tenant-owned models + migrations (enforced via tenant scope)
+**Location:**  
+- `app/Models/Concerns/HasTenantScope.php`  
+- `app/Models/Scopes/TenantScope.php`  
+- `database/migrations/`
 
 **Purpose:**  
-Ensure tenant isolation in a single database by requiring `tenant_id` on tenant-owned tables and scoping queries to the authenticated user's tenant.
+Ensure tenant isolation by enforcing `tenant_id` on tenant-owned data and scoping queries by authenticated tenant.
 
-**Rules:**
+**When to Use:**  
+Any tenant-owned model or table.
 
-- All tenant-owned tables must include `tenant_id`
-- Tenant scoping is enforced by default via the tenant global scope on tenant-owned models
-- Cross-tenant access must be explicit and justified
-- Auth flows must not break when unauthenticated
+**When Not to Use:**  
+Global/system tables or authentication identity resolution.
 
-**When to Use:**
-
-- Any tenant-owned domain table/model
-
-**When Not to Use:**
-
-- Global/system tables (roles, permissions, etc.)
-- Authentication identity resolution
-
-**Public Interface:**
-
+**Public Interface:**  
 - `use HasTenantScope`
 
-**Example Usage:**
-
+**Example Usage:**  
 ```php
 class Item extends Model
 {
@@ -94,36 +72,24 @@ class Item extends Model
 ### Tenant Scope Trait
 
 **Name:** Tenant Scope Trait  
-**Type:** Trait + Global Eloquent Scope  
-**Location:**
-
-- `app/Models/Concerns/HasTenantScope.php`
+**Type:** Trait / Global Eloquent Scope  
+**Location:**  
+- `app/Models/Concerns/HasTenantScope.php`  
 - `app/Models/Scopes/TenantScope.php`
 
 **Purpose:**  
-Enforce tenant isolation by automatically scoping tenant-owned models via `tenant_id`
-resolved from authenticated user context.
+Apply a global scope that filters tenant-owned models by `tenant_id`.
 
-**Rules:**
+**When to Use:**  
+Any tenant-owned Eloquent model.
 
-- This is the **only permitted tenant resolution mechanism** for domain models
-- Scope is a no-op when no authenticated user exists
+**When Not to Use:**  
+Global/system models or auth identity models like `User`.
 
-**When to Use:**
-
-- Any tenant-owned Eloquent model
-
-**When Not to Use:**
-
-- Global/system models
-- Auth identity resolution models (e.g., `User`)
-
-**Public Interface:**
-
+**Public Interface:**  
 - `use HasTenantScope`
 
-**Example Usage:**
-
+**Example Usage:**  
 ```php
 class StockMove extends Model
 {
@@ -133,73 +99,58 @@ class StockMove extends Model
 
 ---
 
-### User Model (Auth Identity Safety)
+### User Auth Identity Safety
 
 **Name:** User Auth Identity Safety  
-**Type:** Architectural Rule / Pattern  
+**Type:** Architectural Rule  
 **Location:** `app/Models/User.php`
 
 **Purpose:**  
-Ensure authentication and identity resolution are never affected by tenant scoping.
+Keep authentication and identity resolution independent from tenant scoping.
 
-**Rules:**
+**When to Use:**  
+Authentication and identity lookup.
 
-- `User` must NOT use `HasTenantScope`
-- Users remain globally queryable even when authenticated
-- Tenant isolation is enforced at domain boundaries, not identity resolution
+**When Not to Use:**  
+Tenant-owned domain data queries.
 
-**When to Use:**
+**Public Interface:**  
+- `User::query()`
 
-- Authentication, authorization, and identity lookup
-
-**When Not to Use:**
-
-- Tenant-owned domain data queries
-
-**Public Interface:**
-
-- N/A (rule enforced by convention + tests)
-
-**Example Usage:**
-
+**Example Usage:**  
 ```php
 $user = User::where('email', $email)->first();
 ```
 
 ---
 
-### Tenant Model
+### Tenant
 
 **Name:** Tenant  
 **Type:** Eloquent Model  
 **Location:** `app/Models/Tenant.php`
 
 **Purpose:**  
-Represent a business tenant in a single-database, multi-tenant architecture.
+Represent a tenant in a single-database, multi-tenant architecture.
 
-**When to Use:**
+**When to Use:**  
+Associating users and data with a tenant.
 
-- Establishing tenant ownership
-- Associating users with a tenant
+**When Not to Use:**  
+Global/system configuration unrelated to a tenant.
 
-**When Not to Use:**
-
-- Global/system configuration unrelated to a business
-
-**Public Interface:**
-
+**Public Interface:**  
 - `users()`
 
-**Example Usage:**
-
+**Example Usage:**  
 ```php
-$tenant = Tenant::create(['tenant_name' => 'FooMake']);
+$tenant = Tenant::create(['tenant_name' => 'Acme Foods']);
 $users = $tenant->users;
 ```
 
 ---
 
-## Authorization Layer
+## Authorization
 
 ### Domain Authorization Layer
 
@@ -208,69 +159,52 @@ $users = $tenant->users;
 **Location:** `app/Providers/AuthServiceProvider.php`
 
 **Purpose:**  
-Centralize authorization using global roles, permission slugs, and Gates.
+Centralize authorization using permission slugs and Laravel Gates.
 
-**Rules:**
+**When to Use:**  
+Any access control decision.
 
-- UI visibility is never the source of truth
-- Permission slugs are canonical
-- `super-admin` bypasses all checks via `Gate::before`
+**When Not to Use:**  
+UI-only visibility decisions without backend enforcement.
 
-**When to Use:**
-
-- Any access control decision
-- Any read/write permission enforcement
-
-**When Not to Use:**
-
-- UI-only visibility logic without backend enforcement
-
-**Public Interface:**
-
-- Gate slugs (e.g. `inventory-products-manage`)
-- `Gate::allows()`
+**Public Interface:**  
+- `Gate::allows()`  
 - `Gate::authorize()`
 
-**Example Usage:**
-
+**Example Usage:**  
 ```php
-Gate::authorize('sales-customers-view');
+Gate::authorize('inventory-materials-manage');
 ```
 
 ---
 
-### Role Model
+### Role
 
 **Name:** Role  
 **Type:** Eloquent Model  
 **Location:** `app/Models/Role.php`
 
 **Purpose:**  
-Represent global roles that describe business responsibilities.
+Represent global roles that group permissions.
 
-**When to Use:**
+**When to Use:**  
+Assigning responsibilities and permissions to users.
 
-- Assigning responsibilities to users
-- Grouping permissions
+**When Not to Use:**  
+Per-tenant role definitions.
 
-**When Not to Use:**
-
-- Per-tenant role definitions (not supported)
-
-**Public Interface:**
-
-- `users()`
+**Public Interface:**  
+- `users()`  
 - `permissions()`
 
-**Example Usage:**
-
+**Example Usage:**  
 ```php
 $user->roles()->attach($roleId);
 ```
 
 ---
 
-### Permission Model
+### Permission
 
 **Name:** Permission  
 **Type:** Eloquent Model  
@@ -279,85 +213,393 @@ $user->roles()->attach($roleId);
 **Purpose:**  
 Store canonical permission slugs enforced via Gates.
 
-**When to Use:**
+**When to Use:**  
+Authorization checks and role-permission mappings.
 
-- Authorization checks
-- Mapping permissions to roles
+**When Not to Use:**  
+UI-only access decisions without backend enforcement.
 
-**When Not to Use:**
-
-- UI-only visibility logic without backend enforcement
-
-**Public Interface:**
-
+**Public Interface:**  
 - `roles()`
 
-**Example Usage:**
-
+**Example Usage:**  
 ```php
 $permission->roles()->attach($roleId);
 ```
 
 ---
 
-## Inventory & Units of Measure
+### User
 
-### UoM Category
-
-**Name:** UomCategory  
+**Name:** User  
 **Type:** Eloquent Model  
-**Location:** `app/Models/UomCategory.php` (and `uom_categories` table)
+**Location:** `app/Models/User.php`
 
 **Purpose:**  
-Group units of measure into categories that define safe conversion boundaries.
+Represent authentication identities and role/permission checks.
 
-**When to Use:**
+**When to Use:**  
+Authentication and authorization checks.
 
-- Defining conversion-safe groupings (mass, volume, count, etc.)
+**When Not to Use:**  
+Tenant-scoped domain queries.
 
-**When Not to Use:**
+**Public Interface:**  
+- `tenant()`  
+- `roles()`  
+- `hasRole()`  
+- `hasPermission()`
 
-- Cross-category conversion logic (handled item-specifically)
-
-**Public Interface:**
-
-- `uoms()`
-
-**Example Usage:**
-
+**Example Usage:**  
 ```php
-$category = UomCategory::create(['name' => 'Mass']);
-$uoms = $category->uoms;
+if ($user->hasPermission('inventory-materials-manage')) {
+    // ...
+}
 ```
 
 ---
 
-### UoM
+## Inventory Ledger
+
+### StockMove
+
+**Name:** StockMove  
+**Type:** Eloquent Model / Domain Rule  
+**Location:** `app/Models/StockMove.php`
+
+**Purpose:**  
+Represent append-only inventory movements that form the ledger.
+
+**When to Use:**  
+Any inventory-affecting operation such as receipts, issues, or adjustments.
+
+**When Not to Use:**  
+Storing or mutating on-hand totals directly.
+
+**Public Interface:**  
+- `tenant()`  
+- `item()`  
+- `uom()`  
+- `source()`
+
+**Example Usage:**  
+```php
+StockMove::create([
+    'tenant_id' => $tenant->id,
+    'item_id' => $item->id,
+    'uom_id' => $item->base_uom_id,
+    'quantity' => '10.000000',
+    'type' => 'receipt',
+]);
+```
+
+---
+
+### Stock-Move Guarded Delete
+
+**Name:** Stock-Move Guarded Delete  
+**Type:** Architectural Pattern  
+**Location:** `app/Http/Controllers/ItemController.php`
+
+**Purpose:**  
+Prevent deleting materials that have stock move history.
+
+**When to Use:**  
+Deleting tenant-owned items tracked in the inventory ledger.
+
+**When Not to Use:**  
+Entities without inventory history.
+
+**Public Interface:**  
+- `ItemController::destroy()`  
+- `Item::stockMoves()`
+
+**Example Usage:**  
+```http
+DELETE /materials/{item}
+-> 422 { "message": "Material cannot be deleted because stock moves exist." }
+```
+
+---
+
+### Decimal Quantity Math
+
+**Name:** Decimal Quantity Math  
+**Type:** Domain Rule  
+**Location:** `docs/CONVENTIONS.md`
+
+**Purpose:**  
+Define canonical rules for quantity math to avoid floating-point errors.
+
+**When to Use:**  
+Any inventory-affecting calculations or unit conversions.
+
+**When Not to Use:**  
+Non-quantity calculations.
+
+**Public Interface:**  
+- BCMath functions  
+- Canonical scale rules in `docs/CONVENTIONS.md`
+
+**Example Usage:**  
+```php
+$total = bcadd($a, $b, 6);
+```
+
+---
+
+### Item
+
+**Name:** Item  
+**Type:** Eloquent Model  
+**Location:** `app/Models/Item.php`
+
+**Purpose:**  
+Represent tenant-owned stock-tracked entities with inventory derived from stock moves.
+
+**When to Use:**  
+Modeling materials or products and computing on-hand quantities.
+
+**When Not to Use:**  
+Storing denormalized on-hand quantities.
+
+**Public Interface:**  
+- `baseUom()`  
+- `stockMoves()`  
+- `onHandQuantity()`  
+- `itemUomConversions()`  
+- `recipes()`  
+- `activeRecipe()`
+
+**Example Usage:**  
+```php
+$onHand = $item->onHandQuantity();
+```
+
+---
+
+### InventoryCount
+
+**Name:** InventoryCount  
+**Type:** Eloquent Model  
+**Location:** `app/Models/InventoryCount.php`
+
+**Purpose:**  
+Represent inventory count sessions with status derived from `posted_at`.
+
+**When to Use:**  
+Recording inventory count sessions and posting adjustments.
+
+**When Not to Use:**  
+Inventory adjustments outside a count context.
+
+**Public Interface:**  
+- `tenant()`  
+- `lines()`  
+- `postedByUser()`  
+- `stockMoves()`  
+- `getStatusAttribute()`
+
+**Example Usage:**  
+```php
+$status = $inventoryCount->status;
+```
+
+---
+
+### InventoryCountLine
+
+**Name:** InventoryCountLine  
+**Type:** Eloquent Model  
+**Location:** `app/Models/InventoryCountLine.php`
+
+**Purpose:**  
+Represent line items for an inventory count session.
+
+**When to Use:**  
+Recording counted quantities for items.
+
+**When Not to Use:**  
+Recording inventory adjustments outside a count.
+
+**Public Interface:**  
+- `inventoryCount()`  
+- `item()`
+
+**Example Usage:**  
+```php
+$line = $count->lines()->create([
+    'tenant_id' => $tenant->id,
+    'item_id' => $item->id,
+    'counted_quantity' => '5.000000',
+]);
+```
+
+---
+
+### PostInventoryCountAction
+
+**Name:** PostInventoryCountAction  
+**Type:** Action / Domain Service  
+**Location:** `app/Actions/Inventory/PostInventoryCountAction.php`
+
+**Purpose:**  
+Post an inventory count and create ledger adjustments.
+
+**When to Use:**  
+Posting inventory count results to the ledger.
+
+**When Not to Use:**  
+Generic inventory adjustments.
+
+**Public Interface:**  
+- `execute(InventoryCount $inventoryCount, int $postedByUserId): InventoryCount`
+
+**Example Usage:**  
+```php
+$action = new PostInventoryCountAction();
+$action->execute($inventoryCount, $userId);
+```
+
+---
+
+## Manufacturing
+
+### Recipe
+
+**Name:** Recipe  
+**Type:** Eloquent Model  
+**Location:** `app/Models/Recipe.php`
+
+**Purpose:**  
+Represent manufacturing recipes for items.
+
+**When to Use:**  
+Defining recipes and their line items.
+
+**When Not to Use:**  
+Non-manufacturing inventory relationships.
+
+**Public Interface:**  
+- `tenant()`  
+- `item()`  
+- `lines()`  
+- `stockMoves()`
+
+**Example Usage:**  
+```php
+$recipe = $item->recipe;
+```
+
+---
+
+### RecipeLine
+
+**Name:** RecipeLine  
+**Type:** Eloquent Model  
+**Location:** `app/Models/RecipeLine.php`
+
+**Purpose:**  
+Represent line items for a recipe.
+
+**When to Use:**  
+Capturing input items and quantities for recipes.
+
+**When Not to Use:**  
+Inventory movements or adjustments.
+
+**Public Interface:**  
+- `tenant()`  
+- `recipe()`  
+- `item()`
+
+**Example Usage:**  
+```php
+$recipe->lines()->create([
+    'tenant_id' => $tenant->id,
+    'item_id' => $inputItem->id,
+    'quantity' => '2.000000',
+]);
+```
+
+---
+
+### ExecuteRecipeAction
+
+**Name:** ExecuteRecipeAction  
+**Type:** Action / Domain Service  
+**Location:** `app/Actions/Inventory/ExecuteRecipeAction.php`
+
+**Purpose:**  
+Execute a recipe to issue inputs and receipt outputs as stock moves.
+
+**When to Use:**  
+Manufacturing or make-order execution.
+
+**When Not to Use:**  
+Inventory adjustments or corrections.
+
+**Public Interface:**  
+- `execute(Recipe $recipe, string $outputQuantity): array`
+
+**Example Usage:**  
+```php
+$action = new ExecuteRecipeAction();
+$action->execute($recipe, '5.000000');
+```
+
+---
+
+## Units of Measure
+
+### UomCategory
+
+**Name:** UomCategory  
+**Type:** Eloquent Model  
+**Location:** `app/Models/UomCategory.php`
+
+**Purpose:**  
+Group units of measure into categories that define safe conversion boundaries.
+
+**When to Use:**  
+Defining conversion-safe groupings such as mass or volume.
+
+**When Not to Use:**  
+Cross-category conversion logic.
+
+**Public Interface:**  
+- `uoms()`
+
+**Example Usage:**  
+```php
+$category = UomCategory::create(['name' => 'Mass']);
+```
+
+---
+
+### Uom
 
 **Name:** Uom  
 **Type:** Eloquent Model  
-**Location:** `app/Models/Uom.php` (and `uoms` table)
+**Location:** `app/Models/Uom.php`
 
 **Purpose:**  
-Represent a unit of measure, belonging to a single UoM category.
+Represent a unit of measure belonging to a single category.
 
-**When to Use:**
+**When to Use:**  
+Assigning units to items and recording quantities.
 
-- Assigning units to items
-- Recording quantities with explicit units
+**When Not to Use:**  
+Implicit unit assumptions.
 
-**When Not to Use:**
+**Public Interface:**  
+- `category()`  
+- `conversionsFrom()`  
+- `conversionsTo()`
 
-- Implicit unit assumptions
-
-**Public Interface:**
-
-- `uomCategory()`
-
-**Example Usage:**
-
+**Example Usage:**  
 ```php
-$grams = Uom::create([
+$uom = Uom::create([
     'uom_category_id' => $category->id,
     'name' => 'Gram',
     'symbol' => 'g',
@@ -366,306 +608,91 @@ $grams = Uom::create([
 
 ---
 
-### Global UoM Conversions
+### UomConversion
 
-**Name:** Global UoM Conversions  
-**Type:** Domain Rule / Model Constraint  
-**Location:**
-
-- `app/Models/UomConversion.php`
-- `uom_conversions` table
+**Name:** UomConversion  
+**Type:** Eloquent Model / Domain Rule  
+**Location:** `app/Models/UomConversion.php`
 
 **Purpose:**  
-Provide safe, reusable unit conversions that are **category-bound**.
+Provide safe global conversions within a single UoM category.
 
-**Rules:**
+**When to Use:**  
+Universal conversions within a category.
 
-- Conversions are allowed **only within the same UoM category**
-- Cross-category conversions are **explicitly forbidden** at the global level
+**When Not to Use:**  
+Cross-category conversions or item-specific conversions.
 
-**When to Use:**
+**Public Interface:**  
+- `fromUom()`  
+- `toUom()`
 
-- Mass ↔ mass (e.g. kg ↔ g)
-- Volume ↔ volume
-- Any universally true conversion
-
-**When Not to Use:**
-
-- Count ↔ weight
-- Item-specific assumptions (e.g. patties, apples)
-
-**Public Interface:**
-
-- `UomConversion::create()`
-
-**Example Usage:**
-
+**Example Usage:**  
 ```php
 UomConversion::create([
     'from_uom_id' => $kg->id,
     'to_uom_id' => $grams->id,
-    'multiplier' => '1000',
+    'multiplier' => '1000.00000000',
 ]);
 ```
 
 ---
 
-### Item-Specific UoM Conversions
+### ItemUomConversion
 
-**Name:** Item-Specific UoM Conversions  
-**Type:** Eloquent Model + Domain Rule  
-**Location:**
-
-- `app/Models/ItemUomConversion.php`
-- `item_uom_conversions` table
+**Name:** ItemUomConversion  
+**Type:** Eloquent Model / Domain Rule  
+**Location:** `app/Models/ItemUomConversion.php`
 
 **Purpose:**  
-Allow **cross-category unit conversions** that are true **only for a specific Item**.
+Allow item-specific conversions, including cross-category conversions.
 
-**Rules:**
+**When to Use:**  
+Conversions that are true only for a specific item.
 
-- Cross-category conversions are **never global**
-- All conversions are **item-scoped and tenant-scoped**
-- Conversion factors must be **strictly greater than zero**
-- No global fallback or conversion engine exists
+**When Not to Use:**  
+Global conversions shared across items.
 
-**When to Use:**
+**Public Interface:**  
+- `item()`  
+- `fromUom()`  
+- `toUom()`
 
-- Count ↔ weight conversions tied to a physical item
-- Any non-universal unit relationship
-
-**When Not to Use:**
-
-- Global conversions
-- Conversion chaining or inference
-
-**Public Interface:**
-
-- `Item::itemUomConversions()`
-
-**Example Usage:**
-
+**Example Usage:**  
 ```php
 $item->itemUomConversions()->create([
+    'tenant_id' => $tenant->id,
     'from_uom_id' => $count->id,
     'to_uom_id' => $grams->id,
-    'conversion_factor' => '50.0',
+    'conversion_factor' => '50.000000',
 ]);
 ```
 
 ---
 
-## Inventory Ledger
-
-### Stock Move (Append-Only Inventory Ledger)
-
-**Name:** StockMove  
-**Type:** Eloquent Model + Domain Rule  
-**Location:**
-
-- `app/Models/StockMove.php`
-- `stock_moves` table
-
-**Purpose:**  
-Represent immutable inventory movements.  
-On-hand quantity is derived strictly as the sum of related stock moves.
-
-**Rules:**
-
-- Append-only: updates and deletes are forbidden (enforced by model guards + tests)
-- Quantity is signed (`+` receipt, `-` issue/adjustment)
-- Inventory is derived, never stored
-- `uom_id` must match `items.base_uom_id`
-- Valid values for `stock_moves.type` are defined in **docs/ENUMS.md**
-
-**When to Use:**
-
-- Any inventory-affecting operation (receiving, selling, consuming, adjusting)
-
-**When Not to Use:**
-
-- Storing or mutating on-hand totals directly
-- Caching or snapshotting inventory state
-
-**Public Interface:**
-
-- `Item::stockMoves()`
-- `Item::onHandQuantity(): string`
-
-**Example Usage:**
-
-```php
-StockMove::create([
-    'tenant_id' => $tenant->id,
-    'item_id' => $item->id,
-    'uom_id' => $item->base_uom_id,
-    'quantity' => '10.0',
-    'type' => 'receipt',
-]);
-```
-
----
-
-### Item Model (Inventory-Derived On-Hand)
-
-**Name:** Item  
-**Type:** Eloquent Model + Domain Rule  
-**Location:** `app/Models/Item.php`
-
-**Purpose:**  
-Represent a stock-tracked material or product. Inventory is derived from the ledger.
-
-**Rules:**
-
-- Each Item has exactly one base UoM (`base_uom_id`)
-- No on-hand quantity column exists on `items`
-- On-hand is computed as the sum of `stock_moves.quantity` for the item
-
-**When to Use:**
-
-- Representing tenant-owned stock tracked entities
-
-**When Not to Use:**
-
-- Tracking inventory via denormalized columns
-
-**Public Interface:**
-
-- `stockMoves()`
-- `onHandQuantity(): string`
-- `itemUomConversions()`
-
-**Example Usage:**
-
-```php
-$onHand = $item->onHandQuantity();
-```
-
----
-
-## Testing Infrastructure
-
-### Pest Test Framework
-
-**Name:** Pest  
-**Type:** Testing Infrastructure  
-**Location:** `tests/`
-
-**Purpose:**  
-Canonical test framework for all automated tests.
-
-**Rules:**
-
-- All new automated tests MUST be written in Pest
-- PHPUnit tests are legacy-only and must not be introduced for new tests
-
-**When to Use:**
-
-- Any new automated test
-
-**When Not to Use:**
-
-- New PHPUnit test classes
-
-**Public Interface:**
-
-- `it(...)`, `expect(...)`, `uses(...)` (Pest API)
-
-**Example Usage:**
-
-```php
-it('computes on-hand as sum of stock moves', function () {
-    expect($item->onHandQuantity())->toBe('10');
-});
-```
-
----
-
-## Manufacturing
-
-### Recipe Execution Action
-
-**Name:** ExecuteRecipeAction  
-**Type:** Action / Domain Service  
-**Location:** `app/Actions/Inventory/ExecuteRecipeAction.php`
-
-**Purpose:**  
-Execute a recipe to manufacture items by creating the appropriate inventory ledger entries.
-
-**Rules:**
-
-- Recipe must be active
-- Recipe output item must be manufacturable
-- Input items are issued using `issue` stock moves
-- Output item is receipted using a `receipt` stock move
-- All quantities are recorded in the item’s base UoM
-- Tenant boundary is enforced when an authenticated user exists
-- No inventory quantities are mutated directly
-
-**When to Use:**
-
-- Manufacturing / make-order execution
-- Any process that converts input items into an output item via a recipe
-
-**When Not to Use:**
-
-- Costing or planning calculations
-- UI previews or simulations
-- Inventory adjustments or corrections
-
-**Public Interface:**
-
-- `execute(Recipe $recipe, string $quantity): void`
-
-**Example Usage:**
-
-```php
-$action = new ExecuteRecipeAction();
-$action->execute($recipe, '5.000000');
-```
-
----
-
----
-
-## Purchasing (Supplier Pack Abstractions)
+## Purchasing
 
 ### ItemPurchaseOption
 
 **Name:** ItemPurchaseOption  
 **Type:** Eloquent Model  
-**Location:**
-
-- `app/Models/ItemPurchaseOption.php`
-- `item_purchase_options` table
+**Location:** `app/Models/ItemPurchaseOption.php`
 
 **Purpose:**  
-Represent a supplier-specific purchasing pack that rolls up into a single Item’s inventory.
+Represent supplier-specific purchasing packs that map into item inventory.
 
-**Rules:**
+**When to Use:**  
+Receiving inventory in supplier pack quantities.
 
-- Purchase options are **not inventory identities**
-- Multiple purchase options may exist per Item
-- Pack quantities are converted into the Item’s base UoM on receipt
-- Tenant-scoped via `tenant_id`
+**When Not to Use:**  
+Tracking inventory on-hand directly.
 
-**When to Use:**
-
-- Modeling how an Item is purchased from suppliers
-- Receiving inventory in supplier pack quantities
-
-**When Not to Use:**
-
-- Tracking inventory on-hand directly
-- Representing stockable entities (use Item instead)
-
-**Public Interface:**
-
-- `item()`
+**Public Interface:**  
+- `tenant()`  
+- `item()`  
 - `packUom()`
 
-**Example Usage:**
-
+**Example Usage:**  
 ```php
 $option = ItemPurchaseOption::create([
     'tenant_id' => $tenant->id,
@@ -677,159 +704,465 @@ $option = ItemPurchaseOption::create([
 
 ---
 
-## MUST ADD (When Implemented)
+### ReceivePurchaseOptionAction
 
-### 1. Top Navigation Dropdown (Materials)
-
-**Why**
-
-- Introduces hierarchical top navigation behavior
-- Establishes a parent → support-domain relationship (Materials → UoMs)
-- Likely reusable for future domains
-
-**Add when**
-
-- The Materials hover dropdown actually exists
-
-**Entry**
-
-- **Name:** Top Navigation Dropdown (Materials)
-- **Type:** UI Pattern
-- **Location:** `resources/views/layouts/navigation.blade.php`
-- **Purpose:** Group Materials and its required support subdomains
-- **When to Use:** When a domain owns mandatory supporting entities
-- **When Not to Use:** For unrelated or optional domains
-- **Public Interface:** Blade partial + hover interaction
-- **Example Usage:** Materials → UoM Categories / Units of Measure
-
----
-
-### 2. AJAX CRUD Controller Pattern
-
-**Why**
-
-- Establishes UI-driven CRUD with backend-enforced rules
-- Will be reused across Materials, UoMs, Recipes, Suppliers
-
-**Add when**
-
-- First AJAX-based CRUD controller ships (PR2-MAT-002)
-
-**Entry**
-
-- **Name:** AJAX CRUD Controller Pattern
-- **Type:** Architectural Pattern
-- **Location:** `app/Http/Controllers/`
-- **Purpose:** Handle UI-initiated CRUD without full page reloads
-- **When to Use:** Simple CRUD with single-entity persistence
-- **When Not to Use:** Multi-step workflows or transactional processes
-- **Public Interface:** JSON responses + HTTP status codes
-- **Example Usage:** Material create/edit/delete endpoints
-
----
-
-### 3. Slide-Over Form Component
-
-**Why**
-
-- First reusable UI component
-- Will be used across multiple domains
-
-**Add when**
-
-- The slide-over form is extracted into a shared component
-
-**Entry**
-
-- **Name:** Slide-Over Form
-- **Type:** UI Component
-- **Location:** `resources/views/components/`
-- **Purpose:** Create/edit entities without navigation
-- **When to Use:** CRUD forms with multiple fields
-- **When Not to Use:** Confirmations or single-field actions
-- **Public Interface:** Blade component + Alpine state
-- **Example Usage:** Create Material, Create UoM
-
----
-
-### 4. Row Actions Dropdown (⋮)
-
-**Why**
-
-- Reusable interaction pattern
-- Centralizes contextual actions
-
-**Add when**
-
-- The first shared actions dropdown component exists (PR2-MAT-004)
-
-**Entry**
-
-- **Name:** Row Actions Dropdown
-- **Type:** UI Component
-- **Location:** `resources/views/components/`
-- **Purpose:** Contextual row-level actions
-- **When to Use:** Tables or lists with Edit/Delete actions
-- **When Not to Use:** Primary or global actions
-- **Public Interface:** Slot-based Blade component
-- **Example Usage:** Materials list row actions
-
----
-
-## UI & Interaction Patterns
-
-### Top Navigation Dropdown (Materials)
-
-**Name:** Top Navigation Dropdown (Materials)  
-**Type:** UI Pattern  
-**Location:** `resources/views/layouts/navigation.blade.php`
+**Name:** ReceivePurchaseOptionAction  
+**Type:** Action / Domain Service  
+**Location:** `app/Actions/Inventory/ReceivePurchaseOptionAction.php`
 
 **Purpose:**  
-Provide hierarchical top navigation for a domain that owns required support entities.
+Receive inventory from a purchase option and create a stock move.
 
 **When to Use:**  
-When a top-level domain requires mandatory sub-domains to be accessible together
-(e.g. Materials → UoM Categories, Units of Measure).
+Receiving inventory from supplier pack quantities.
 
 **When Not to Use:**  
-For unrelated or optional domains, or when a flat navigation is sufficient.
+Generic inventory adjustments.
 
 **Public Interface:**  
-Blade markup + Alpine hover interaction.
+- `execute(ItemPurchaseOption $option, string $packCount): StockMove`
 
 **Example Usage:**  
-Materials → UoM Categories
+```php
+$action = new ReceivePurchaseOptionAction();
+$action->execute($option, '2.000000');
+```
 
 ---
+
+## Controllers & UI Patterns
 
 ### AJAX CRUD Controller Pattern
 
 **Name:** AJAX CRUD Controller Pattern  
 **Type:** Architectural Pattern  
-**Location:** `app/Http/Controllers/` (e.g. `UomCategoryController`)
+**Location:**  
+- `app/Http/Controllers/UomCategoryController.php`  
+- `app/Http/Controllers/UomController.php`  
+- `app/Http/Controllers/ItemController.php`
 
 **Purpose:**  
-Enable UI-driven CRUD operations using AJAX while keeping the backend as the source of truth.
+Handle UI-driven CRUD using JSON responses without full page reloads.
 
-**When to Use:**
+**When to Use:**  
+Single-entity CRUD with fetch-based requests.
 
-- Simple single-entity CRUD
-- Create/Edit/Delete without full page reloads
-- Slide-over or modal-based forms
+**When Not to Use:**  
+Multi-step workflows or transactional orchestration.
 
-**When Not to Use:**
-
-- Multi-step workflows
-- Complex transactional processes
-- Cross-entity orchestration
-
-**Public Interface:**
-
-- JSON responses
-- HTTP status codes
-- Fetch-based requests from Blade/Alpine
+**Public Interface:**  
+- `store()`  
+- `update()`  
+- `destroy()`
 
 **Example Usage:**  
-Create / Edit / Delete UoM Categories via `UomCategoryController`
+```php
+$response = $this->postJson('/materials', [
+    'name' => 'Flour',
+    'base_uom_id' => 1,
+]);
+```
+
+---
+
+### Top Navigation Dropdown
+
+**Name:** Top Navigation Dropdown  
+**Type:** UI Pattern  
+**Location:** `resources/views/layouts/navigation.blade.php`
+
+**Purpose:**  
+Group navigation links under a top-level dropdown.
+
+**When to Use:**  
+A top-level domain owns mandatory supporting subdomains.
+
+**When Not to Use:**  
+Unrelated or optional domains.
+
+**Public Interface:**  
+- Blade markup using `x-dropdown` and `x-dropdown-link`
+
+**Example Usage:**  
+```blade
+<x-dropdown align="left">
+    <x-slot name="trigger">
+        <button>Manufacturing</button>
+    </x-slot>
+    <x-slot name="content">
+        <x-dropdown-link :href="route('materials.index')">Inventory</x-dropdown-link>
+    </x-slot>
+</x-dropdown>
+```
+
+---
+
+### Slide-Over Form Pattern
+
+**Name:** Slide-Over Form Pattern  
+**Type:** UI Pattern  
+**Location:** `resources/views/materials/partials/create-material-slide-over.blade.php`
+
+**Purpose:**  
+Create or edit entities without leaving the current page.
+
+**When to Use:**  
+CRUD forms with multiple fields.
+
+**When Not to Use:**  
+Confirmations or single-field actions.
+
+**Public Interface:**  
+- Blade partial with Alpine state and form markup
+
+**Example Usage:**  
+```blade
+<form x-on:submit.prevent="submitCreate()">
+    <input type="text" x-model="form.name" />
+</form>
+```
+
+---
+
+### Row Actions Dropdown Pattern
+
+**Name:** Row Actions Dropdown Pattern  
+**Type:** UI Pattern  
+**Location:** `resources/views/materials/index.blade.php`
+
+**Purpose:**  
+Provide contextual row-level actions such as edit and delete.
+
+**When to Use:**  
+Tables or lists with multiple row actions.
+
+**When Not to Use:**  
+Primary or global actions.
+
+**Public Interface:**  
+- Dropdown trigger + content for row actions
+
+**Example Usage:**  
+```blade
+<button type="button">⋮</button>
+```
+
+---
+
+### Page-Scoped Toast Pattern
+
+**Name:** Page-Scoped Toast Pattern  
+**Type:** UI Pattern  
+**Location:** `resources/views/materials/index.blade.php`
+
+**Purpose:**  
+Provide non-blocking toast feedback scoped to the current page.
+
+**When to Use:**  
+Non-blocking success or error feedback after AJAX actions.
+
+**When Not to Use:**  
+Blocking alerts or full-page loaders.
+
+**Public Interface:**  
+- Page-level `showToast(type, message)` handler
+
+**Example Usage:**  
+```js
+showToast('success', 'Material deleted.');
+```
+
+---
+
+## UI Components
+
+### Dropdown
+
+**Name:** Dropdown  
+**Type:** Blade Component  
+**Location:** `resources/views/components/dropdown.blade.php`
+
+**Purpose:**  
+Render a dropdown container with trigger and content slots.
+
+**When to Use:**  
+Inline dropdown menus for actions or navigation.
+
+**When Not to Use:**  
+Primary actions that should remain visible.
+
+**Public Interface:**  
+- `trigger` slot  
+- `content` slot
+
+**Example Usage:**  
+```blade
+<x-dropdown>
+    <x-slot name="trigger">⋮</x-slot>
+    <x-slot name="content">...</x-slot>
+</x-dropdown>
+```
+
+---
+
+### Dropdown Link
+
+**Name:** Dropdown Link  
+**Type:** Blade Component  
+**Location:** `resources/views/components/dropdown-link.blade.php`
+
+**Purpose:**  
+Provide a styled link within dropdown content.
+
+**When to Use:**  
+Dropdown menus linking to routes.
+
+**When Not to Use:**  
+Standalone buttons outside dropdown menus.
+
+**Public Interface:**  
+- Standard Blade component props
+
+**Example Usage:**  
+```blade
+<x-dropdown-link href="/materials">Materials</x-dropdown-link>
+```
+
+---
+
+### Modal
+
+**Name:** Modal  
+**Type:** Blade Component  
+**Location:** `resources/views/components/modal.blade.php`
+
+**Purpose:**  
+Provide a reusable modal container.
+
+**When to Use:**  
+Confirmation dialogs or short forms.
+
+**When Not to Use:**  
+Long multi-step flows.
+
+**Public Interface:**  
+- `name` prop  
+- `show` prop
+
+**Example Usage:**  
+```blade
+<x-modal name="confirm-delete" :show="true">...</x-modal>
+```
+
+---
+
+### Nav Link
+
+**Name:** Nav Link  
+**Type:** Blade Component  
+**Location:** `resources/views/components/nav-link.blade.php`
+
+**Purpose:**  
+Render a navigation link with active state styling.
+
+**When to Use:**  
+Top navigation links.
+
+**When Not to Use:**  
+Inline links within content.
+
+**Public Interface:**  
+- `href` prop  
+- `active` prop
+
+**Example Usage:**  
+```blade
+<x-nav-link href="/materials" :active="request()->routeIs('materials.index')">Materials</x-nav-link>
+```
+
+---
+
+### Input Label
+
+**Name:** Input Label  
+**Type:** Blade Component  
+**Location:** `resources/views/components/input-label.blade.php`
+
+**Purpose:**  
+Render a label for form inputs.
+
+**When to Use:**  
+Form fields requiring labels.
+
+**When Not to Use:**  
+Decorative text without input association.
+
+**Public Interface:**  
+- `for` prop  
+- Slot content
+
+**Example Usage:**  
+```blade
+<x-input-label for="name" value="Name" />
+```
+
+---
+
+### Text Input
+
+**Name:** Text Input  
+**Type:** Blade Component  
+**Location:** `resources/views/components/text-input.blade.php`
+
+**Purpose:**  
+Render a styled text input.
+
+**When to Use:**  
+Form inputs using standard text fields.
+
+**When Not to Use:**  
+Non-textual inputs like selects or checkboxes.
+
+**Public Interface:**  
+- Standard input props
+
+**Example Usage:**  
+```blade
+<x-text-input id="name" type="text" name="name" />
+```
+
+---
+
+### Input Error
+
+**Name:** Input Error  
+**Type:** Blade Component  
+**Location:** `resources/views/components/input-error.blade.php`
+
+**Purpose:**  
+Display validation errors for a field.
+
+**When to Use:**  
+Form validation error display.
+
+**When Not to Use:**  
+Non-form error messaging.
+
+**Public Interface:**  
+- `messages` prop
+
+**Example Usage:**  
+```blade
+<x-input-error :messages="$errors->get('name')" />
+```
+
+---
+
+### Secondary Button
+
+**Name:** Secondary Button  
+**Type:** Blade Component  
+**Location:** `resources/views/components/secondary-button.blade.php`
+
+**Purpose:**  
+Render a secondary action button.
+
+**When to Use:**  
+Non-primary actions in forms or dialogs.
+
+**When Not to Use:**  
+Primary actions that require emphasis.
+
+**Public Interface:**  
+- Slot content
+
+**Example Usage:**  
+```blade
+<x-secondary-button>Cancel</x-secondary-button>
+```
+
+---
+
+### Auth Session Status
+
+**Name:** Auth Session Status  
+**Type:** Blade Component  
+**Location:** `resources/views/components/auth-session-status.blade.php`
+
+**Purpose:**  
+Render session status messages on auth screens.
+
+**When to Use:**  
+Login and password reset screens.
+
+**When Not to Use:**  
+General-purpose alerts outside auth flows.
+
+**Public Interface:**  
+- `status` prop
+
+**Example Usage:**  
+```blade
+<x-auth-session-status :status="session('status')" />
+```
+
+---
+
+## UI Constraints
+
+### Alpine + Blade Quoting Rules
+
+**Name:** Alpine + Blade Quoting Rules  
+**Type:** UI Constraint  
+**Location:** `docs/UI_DESIGN.md`
+
+**Purpose:**  
+Prevent Alpine parsing failures caused by mixed quoting.
+
+**When to Use:**  
+Any Blade template with Alpine directives.
+
+**When Not to Use:**  
+Templates without Alpine usage.
+
+**Public Interface:**  
+- HTML attributes use double quotes  
+- Alpine JS string literals use single quotes
+
+**Example Usage:**  
+```blade
+<div x-data="{ open: false }"></div>
+```
+
+---
+
+## Testing
+
+### Pest Testing Framework
+
+**Name:** Pest Testing Framework  
+**Type:** Testing Infrastructure  
+**Location:** `tests/Pest.php`
+
+**Purpose:**  
+Define Pest as the canonical testing framework.
+
+**When to Use:**  
+All new automated tests.
+
+**When Not to Use:**  
+New PHPUnit test classes.
+
+**Public Interface:**  
+- `uses()`  
+- `it()`  
+- `expect()`
+
+**Example Usage:**  
+```php
+it('creates a material', function () {
+    expect(true)->toBeTrue();
+});
+```
 
 ---
