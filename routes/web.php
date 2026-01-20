@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\InventoryController;
+use App\Http\Controllers\InventoryCountController;
 use App\Http\Controllers\ItemController;
 use App\Http\Controllers\MaterialController;
 use App\Http\Controllers\ProfileController;
@@ -18,6 +19,26 @@ Route::get('/dashboard', function () {
 
 Route::middleware('auth')->group(function () {
     Route::get('/inventory', [InventoryController::class, 'index'])->name('inventory.index');
+
+    Route::get('/inventory/counts', [InventoryCountController::class, 'index'])
+        ->name('inventory.counts.index');
+    Route::post('/inventory/counts', [InventoryCountController::class, 'store'])
+        ->name('inventory.counts.store');
+    Route::get('/inventory/counts/{inventoryCount}', [InventoryCountController::class, 'show'])
+        ->name('inventory.counts.show');
+    Route::patch('/inventory/counts/{inventoryCount}', [InventoryCountController::class, 'update'])
+        ->name('inventory.counts.update');
+    Route::delete('/inventory/counts/{inventoryCount}', [InventoryCountController::class, 'destroy'])
+        ->name('inventory.counts.destroy');
+    Route::post('/inventory/counts/{inventoryCount}/post', [InventoryCountController::class, 'post'])
+        ->name('inventory.counts.post');
+
+    Route::post('/inventory/counts/{inventoryCount}/lines', [InventoryCountController::class, 'storeLine'])
+        ->name('inventory.counts.lines.store');
+    Route::patch('/inventory/counts/{inventoryCount}/lines/{line}', [InventoryCountController::class, 'updateLine'])
+        ->name('inventory.counts.lines.update');
+    Route::delete('/inventory/counts/{inventoryCount}/lines/{line}', [InventoryCountController::class, 'destroyLine'])
+        ->name('inventory.counts.lines.destroy');
 
     Route::get('/materials', [MaterialController::class, 'index'])->name('materials.index');
     Route::post('/materials', [ItemController::class, 'store'])->name('materials.store');

@@ -13,7 +13,8 @@
                 @php
                     $manufacturingActive = request()->routeIs('materials.*')
                         || request()->routeIs('manufacturing.*')
-                        || request()->routeIs('inventory.*');
+                        || request()->routeIs('inventory.*')
+                        || request()->routeIs('inventory.counts.*');
                 @endphp
 
                 <!-- Navigation Links -->
@@ -35,6 +36,9 @@
                         <x-slot name="content">
                             <x-dropdown-link :href="route('inventory.index')">
                                 {{ __('Inventory') }}
+                            </x-dropdown-link>
+                            <x-dropdown-link :href="route('inventory.counts.index')">
+                                {{ __('Inventory Counts') }}
                             </x-dropdown-link>
                             <x-dropdown-link :href="route('materials.index')">
                                 {{ __('Materials') }}
@@ -104,6 +108,9 @@
             </x-responsive-nav-link>
             <x-responsive-nav-link :href="route('inventory.index')" :active="request()->routeIs('inventory.*')">
                 {{ __('Inventory') }}
+            </x-responsive-nav-link>
+            <x-responsive-nav-link :href="route('inventory.counts.index')" :active="request()->routeIs('inventory.counts.*')">
+                {{ __('Inventory Counts') }}
             </x-responsive-nav-link>
             <x-responsive-nav-link :href="route('materials.index')" :active="request()->routeIs('materials.index')">
                 {{ __('Materials') }}
