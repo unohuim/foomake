@@ -7,9 +7,27 @@ use App\Models\Uom;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\View\View;
 
 class ItemController extends Controller
 {
+    /**
+     * Display a material (item) detail page.
+     *
+     * @param Item $item
+     * @return View
+     */
+    public function show(Item $item): View
+    {
+        Gate::authorize('inventory-materials-view');
+
+        $item->load('baseUom');
+
+        return view('materials.show', [
+            'item' => $item,
+        ]);
+    }
+
     /**
      * Store a newly created material (item).
      *

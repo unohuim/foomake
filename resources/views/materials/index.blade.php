@@ -37,6 +37,7 @@
             uomsById: {},
             uomsExist: {{ $uomsExist ? 'true' : 'false' }},
             updateUrlBase: '{{ url('/materials') }}',
+            showUrlBase: '{{ url('/materials') }}',
             isCreateOpen: false,
             isSubmitting: false,
             errors: {},
@@ -389,7 +390,13 @@
                                 <tbody class="divide-y divide-gray-100">
                                     <template x-for="item in items" :key="item.id">
                                         <tr>
-                                            <td class="px-4 py-4 text-sm text-gray-900" x-text="item.name"></td>
+                                            <td class="px-4 py-4 text-sm text-gray-900">
+                                                <a
+                                                    class="text-gray-900 hover:text-blue-600"
+                                                    x-bind:href="showUrlBase + '/' + item.id"
+                                                    x-text="item.name"
+                                                ></a>
+                                            </td>
                                             <td class="px-4 py-4 text-sm text-gray-700">
                                                 <span x-text="item.base_uom_name"></span>
                                                 (<span x-text="item.base_uom_symbol"></span>)

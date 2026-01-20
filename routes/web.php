@@ -28,6 +28,8 @@ Route::middleware('auth')->group(function () {
         ->name('materials.uom-categories.update');
     Route::delete('/materials/uom-categories/{uomCategory}', [UomCategoryController::class, 'destroy'])
         ->name('materials.uom-categories.destroy');
+    Route::get('/materials/{item}', [ItemController::class, 'show'])
+        ->name('materials.show');
 
     Route::get('/manufacturing/uoms', [UomController::class, 'index'])
         ->name('manufacturing.uoms.index');
