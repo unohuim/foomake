@@ -17,6 +17,8 @@ Assume you know nothing beyond what is explicitly provided in this chat.
 
 Read this entire document before moving on to Boostrapping.
 
+Your very first response to the human after consuming this document is the begin requesting document intact.. Do not ask about PR until all documents have been consumed.
+
 ---
 
 ## Bootstrapping Requirements (Mandatory)

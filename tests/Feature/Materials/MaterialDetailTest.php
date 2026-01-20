@@ -15,7 +15,7 @@ uses(RefreshDatabase::class);
 
 beforeEach(function () {
     $this->makeUom = function (): Uom {
-        $suffix = Str::random(8);
+        $suffix = Str::random(12);
 
         $category = UomCategory::query()->forceCreate([
             'name' => 'Category ' . $suffix,
@@ -33,7 +33,7 @@ beforeEach(function () {
 
         $item = Item::query()->forceCreate(array_merge([
             'tenant_id' => $tenant->id,
-            'name' => 'Material ' . Str::random(6),
+            'name' => 'Material ' . Str::random(10),
             'base_uom_id' => $uom->id,
             'is_purchasable' => true,
             'is_sellable' => false,
@@ -43,13 +43,14 @@ beforeEach(function () {
         return [$item, $uom];
     };
 
-    $this->grantViewPermission = function (User $user): void {
-        $permission = Permission::firstOrCreate([
+    $this->grantMaterialsViewPermission = function (User $user): void {
+        // This MUST match the canonical permission slug enforced by Gates.
+        $permission = Permission::query()->firstOrCreate([
             'slug' => 'inventory-materials-view',
         ]);
 
-        $role = Role::firstOrCreate([
-            'name' => 'materials-viewer',
+        $role = Role::query()->forceCreate([
+            'name' => 'materials-viewer-' . Str::random(12),
         ]);
 
         $role->permissions()->syncWithoutDetaching([$permission->id]);
@@ -57,7 +58,7 @@ beforeEach(function () {
     };
 });
 
-it('denies guests from the material detail page', function () {
+it('redirects guests to login for the material detail page', function () {
     $tenant = Tenant::factory()->create();
     [$item] = ($this->makeItem)($tenant);
 
@@ -65,7 +66,7 @@ it('denies guests from the material detail page', function () {
         ->assertRedirect(route('login'));
 });
 
-it('forbids users without permission from the material detail page', function () {
+it('forbids authenticated users without inventory-materials-view permission', function () {
     $tenant = Tenant::factory()->create();
     $user = User::factory()->for($tenant)->create();
     [$item] = ($this->makeItem)($tenant);
@@ -75,10 +76,10 @@ it('forbids users without permission from the material detail page', function ()
         ->assertForbidden();
 });
 
-it('allows users with permission to view the material detail page', function () {
+it('allows users with inventory-materials-view permission to view the material detail page', function () {
     $tenant = Tenant::factory()->create();
     $user = User::factory()->for($tenant)->create();
-    ($this->grantViewPermission)($user);
+    ($this->grantMaterialsViewPermission)($user);
 
     [$item, $uom] = ($this->makeItem)($tenant);
 
@@ -90,15 +91,16 @@ it('allows users with permission to view the material detail page', function () 
         ->assertSee('Flags')
         ->assertSee('Purchasable')
         ->assertSee('Sellable')
-        ->assertSee('Manufacturable');
+        ->assertSee('Manufacturable')
+        ->assertSee('Back to Materials');
 });
 
-it('does not allow cross-tenant material access', function () {
+it('returns 404 for cross-tenant material access (tenant scope hides other-tenant items)', function () {
     $tenant = Tenant::factory()->create();
     $otherTenant = Tenant::factory()->create();
 
     $user = User::factory()->for($tenant)->create();
-    ($this->grantViewPermission)($user);
+    ($this->grantMaterialsViewPermission)($user);
 
     [$item] = ($this->makeItem)($otherTenant);
 

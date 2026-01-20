@@ -10,4 +10,4 @@ read:
   - database/migrations/
   - docs/UI_DESIGN.md
   - docs/architecture/README.yaml
-  - docs/architecture/
+  - docs/ARCHITECTURE_INVENTORY.md
