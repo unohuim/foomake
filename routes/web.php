@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\InventoryController;
 use App\Http\Controllers\ItemController;
 use App\Http\Controllers\MaterialController;
 use App\Http\Controllers\ProfileController;
@@ -16,6 +17,8 @@ Route::get('/dashboard', function () {
 })->middleware(['auth', 'verified'])->name('dashboard');
 
 Route::middleware('auth')->group(function () {
+    Route::get('/inventory', [InventoryController::class, 'index'])->name('inventory.index');
+
     Route::get('/materials', [MaterialController::class, 'index'])->name('materials.index');
     Route::post('/materials', [ItemController::class, 'store'])->name('materials.store');
     Route::patch('/materials/{item}', [ItemController::class, 'update'])->name('materials.update');

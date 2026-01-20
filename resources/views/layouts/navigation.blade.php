@@ -11,7 +11,9 @@
                 </div>
 
                 @php
-                    $manufacturingActive = request()->routeIs('materials.*') || request()->routeIs('manufacturing.*');
+                    $manufacturingActive = request()->routeIs('materials.*')
+                        || request()->routeIs('manufacturing.*')
+                        || request()->routeIs('inventory.*');
                 @endphp
 
                 <!-- Navigation Links -->
@@ -31,8 +33,11 @@
                         </x-slot>
 
                         <x-slot name="content">
-                            <x-dropdown-link :href="route('materials.index')">
+                            <x-dropdown-link :href="route('inventory.index')">
                                 {{ __('Inventory') }}
+                            </x-dropdown-link>
+                            <x-dropdown-link :href="route('materials.index')">
+                                {{ __('Materials') }}
                             </x-dropdown-link>
                             <x-dropdown-link :href="route('manufacturing.uoms.index')">
                                 {{ __('Units of Measure') }}
@@ -96,6 +101,9 @@
         <div class="pt-2 pb-3 space-y-1">
             <x-responsive-nav-link :href="route('dashboard')" :active="request()->routeIs('dashboard')">
                 {{ __('Dashboard') }}
+            </x-responsive-nav-link>
+            <x-responsive-nav-link :href="route('inventory.index')" :active="request()->routeIs('inventory.*')">
+                {{ __('Inventory') }}
             </x-responsive-nav-link>
             <x-responsive-nav-link :href="route('materials.index')" :active="request()->routeIs('materials.index')">
                 {{ __('Materials') }}
