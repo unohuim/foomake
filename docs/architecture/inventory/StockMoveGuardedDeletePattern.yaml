@@ -1,0 +1,23 @@
+name: Stock-Move Guarded Delete
+type: Architectural Pattern
+location:
+  - app/Http/Controllers/ItemController.php
+  - app/Models/Item.php
+purpose: Prevent deleting inventory-tracked materials that have stock move history.
+when_to_use:
+  - Deleting tenant-owned items that are tracked in the inventory ledger
+  - Any delete action that must be blocked when ledger history exists
+when_not_to_use:
+  - Non-inventory entities without stock move history
+  - Soft-delete workflows that preserve ledger history
+rules:
+  - Authorization uses inventory-materials-manage.
+  - Deletion is blocked when stockMoves()->exists() is true.
+  - Failure responses return HTTP 422 with a clear message.
+  - Successful deletes return a JSON success message.
+public_interface:
+  - ItemController::destroy()
+  - Item::stockMoves()
+example_usage: |
+  DELETE /materials/{item}
+  -> 422 { "message": "Material cannot be deleted because stock moves exist." }
