@@ -2,7 +2,6 @@ read:
   - README.md
   - docs/AI_RULES.md
   - docs/CONVENTIONS.md
-  - docs/ARCHITECTURE_INVENTORY.md
   - composer.lock
   - package-lock.json
   - docs/PR2_ROADMAP.md
@@ -11,3 +10,4 @@ read:
   - database/migrations/
   - docs/UI_DESIGN.md
   - docs/architecture/README.yaml
+  - docs/architecture/

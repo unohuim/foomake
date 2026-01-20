@@ -408,35 +408,60 @@
                                                     <span class="text-gray-400" x-show="!item.is_purchasable && !item.is_sellable && !item.is_manufacturable">—</span>
                                                 </div>
                                             </td>
+
                                             <td class="px-4 py-4 text-right text-sm">
-                                                <x-dropdown>
-                                                    <x-slot name="trigger">
-                                                        <button
-                                                            type="button"
-                                                            class="inline-flex items-center justify-center w-8 h-8 text-gray-500 hover:text-gray-700"
-                                                            aria-label="Material actions"
+                                                <div
+                                                    class="relative inline-block text-left"
+                                                    x-data="{ open: false, top: 0, left: 0, width: 0 }"
+                                                    x-on:keydown.escape.window="open = false"
+                                                >
+                                                    <button
+                                                        type="button"
+                                                        class="inline-flex items-center justify-center w-8 h-8 text-gray-500 hover:text-gray-700"
+                                                        aria-label="Material actions"
+                                                        x-ref="btn"
+                                                        x-on:click="
+                                                            open = !open;
+                                                            if (open) {
+                                                                const r = $refs.btn.getBoundingClientRect();
+                                                                top = r.bottom;
+                                                                left = r.right;
+                                                                width = r.width;
+                                                            }
+                                                        "
+                                                    >
+                                                        ⋮
+                                                    </button>
+
+                                                    <template x-teleport="body">
+                                                        <div
+                                                            x-show="open"
+                                                            x-on:click.outside="open = false"
+                                                            x-transition
+                                                            class="fixed z-50 mt-2 w-40 rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5"
+                                                            x-bind:style="'top:' + top + 'px; left:' + (left - 160) + 'px;'"
                                                         >
-                                                            ⋮
-                                                        </button>
-                                                    </x-slot>
-                                                    <x-slot name="content">
-                                                        <button
-                                                            type="button"
-                                                            class="block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100"
-                                                            x-on:click="openEdit(item)"
-                                                        >
-                                                            Edit
-                                                        </button>
-                                                        <button
-                                                            type="button"
-                                                            class="block w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50"
-                                                            x-on:click="openDelete(item)"
-                                                        >
-                                                            Delete
-                                                        </button>
-                                                    </x-slot>
-                                                </x-dropdown>
+                                                            <div class="py-1">
+                                                                <button
+                                                                    type="button"
+                                                                    class="block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100"
+                                                                    x-on:click="open = false; openEdit(item)"
+                                                                >
+                                                                    Edit
+                                                                </button>
+                                                                <button
+                                                                    type="button"
+                                                                    class="block w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50"
+                                                                    x-on:click="open = false; openDelete(item)"
+                                                                >
+                                                                    Delete
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    </template>
+                                                </div>
                                             </td>
+
                                         </tr>
                                     </template>
                                 </tbody>
