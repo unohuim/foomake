@@ -119,16 +119,16 @@ Migrations remain the **sole source of truth**.
 
 ### Columns
 
-| Name              | Type      | Nullable | Notes                         |
-| ----------------- | --------- | -------- | ----------------------------- |
-| id                | bigint    | No       | Primary key                   |
-| tenant_id         | bigint    | No       | FK → tenants.id (CASCADE)     |
-| counted_at        | timestamp | No       | —                             |
-| posted_at         | timestamp | Yes      | —                             |
-| posted_by_user_id | bigint    | Yes      | FK → users.id (SET NULL)      |
-| notes             | text      | Yes      | —                             |
-| created_at        | timestamp | Yes      | —                             |
-| updated_at        | timestamp | Yes      | —                             |
+| Name              | Type      | Nullable | Notes                     |
+| ----------------- | --------- | -------- | ------------------------- |
+| id                | bigint    | No       | Primary key               |
+| tenant_id         | bigint    | No       | FK → tenants.id (CASCADE) |
+| counted_at        | timestamp | No       | —                         |
+| posted_at         | timestamp | Yes      | —                         |
+| posted_by_user_id | bigint    | Yes      | FK → users.id (SET NULL)  |
+| notes             | text      | Yes      | —                         |
+| created_at        | timestamp | Yes      | —                         |
+| updated_at        | timestamp | Yes      | —                         |
 
 ### Keys & Indexes
 
@@ -146,16 +146,16 @@ Migrations remain the **sole source of truth**.
 
 ### Columns
 
-| Name               | Type          | Nullable | Notes                             |
-| ------------------ | ------------- | -------- | --------------------------------- |
-| id                 | bigint        | No       | Primary key                       |
-| tenant_id          | bigint        | No       | FK → tenants.id (CASCADE)         |
-| inventory_count_id | bigint        | No       | Part of composite FK              |
-| item_id            | bigint        | No       | FK → items.id (CASCADE)           |
-| counted_quantity   | decimal(18,6) | No       | —                                 |
-| notes              | text          | Yes      | —                                 |
-| created_at         | timestamp     | Yes      | —                                 |
-| updated_at         | timestamp     | Yes      | —                                 |
+| Name               | Type          | Nullable | Notes                     |
+| ------------------ | ------------- | -------- | ------------------------- |
+| id                 | bigint        | No       | Primary key               |
+| tenant_id          | bigint        | No       | FK → tenants.id (CASCADE) |
+| inventory_count_id | bigint        | No       | Part of composite FK      |
+| item_id            | bigint        | No       | FK → items.id (CASCADE)   |
+| counted_quantity   | decimal(18,6) | No       | —                         |
+| notes              | text          | Yes      | —                         |
+| created_at         | timestamp     | Yes      | —                         |
+| updated_at         | timestamp     | Yes      | —                         |
 
 ### Foreign Keys
 
@@ -260,18 +260,18 @@ Migrations remain the **sole source of truth**.
 
 ### Columns
 
-| Name          | Type       | Nullable | Notes       |
-| ------------- | ---------- | -------- | ----------- |
-| id            | string     | No       | Primary key |
-| name          | string     | No       | —           |
-| total_jobs    | integer    | No       | —           |
-| pending_jobs  | integer    | No       | —           |
-| failed_jobs   | integer    | No       | —           |
-| failed_job_ids| longText   | No       | —           |
-| options       | mediumText | Yes      | —           |
-| cancelled_at  | integer    | Yes      | —           |
-| created_at    | integer    | No       | —           |
-| finished_at   | integer    | Yes      | —           |
+| Name           | Type       | Nullable | Notes       |
+| -------------- | ---------- | -------- | ----------- |
+| id             | string     | No       | Primary key |
+| name           | string     | No       | —           |
+| total_jobs     | integer    | No       | —           |
+| pending_jobs   | integer    | No       | —           |
+| failed_jobs    | integer    | No       | —           |
+| failed_job_ids | longText   | No       | —           |
+| options        | mediumText | Yes      | —           |
+| cancelled_at   | integer    | Yes      | —           |
+| created_at     | integer    | No       | —           |
+| finished_at    | integer    | Yes      | —           |
 
 ### Keys & Indexes
 
@@ -286,15 +286,15 @@ Migrations remain the **sole source of truth**.
 
 ### Columns
 
-| Name         | Type              | Nullable | Notes |
-| ------------ | ----------------- | -------- | ----- |
-| id           | bigint            | No       | Primary key |
-| queue        | string            | No       | —     |
-| payload      | longText          | No       | —     |
-| attempts     | unsignedTinyInteger | No     | —     |
-| reserved_at  | unsignedInteger   | Yes      | —     |
-| available_at | unsignedInteger   | No       | —     |
-| created_at   | unsignedInteger   | No       | —     |
+| Name         | Type                | Nullable | Notes       |
+| ------------ | ------------------- | -------- | ----------- |
+| id           | bigint              | No       | Primary key |
+| queue        | string              | No       | —           |
+| payload      | longText            | No       | —           |
+| attempts     | unsignedTinyInteger | No       | —           |
+| reserved_at  | unsignedInteger     | Yes      | —           |
+| available_at | unsignedInteger     | No       | —           |
+| created_at   | unsignedInteger     | No       | —           |
 
 ### Keys & Indexes
 
@@ -329,12 +329,12 @@ Migrations remain the **sole source of truth**.
 
 ### Columns
 
-| Name       | Type      | Nullable | Notes   |
-| ---------- | --------- | -------- | ------- |
+| Name       | Type      | Nullable | Notes       |
+| ---------- | --------- | -------- | ----------- |
 | id         | bigint    | No       | Primary key |
-| slug       | string    | No       | Unique  |
-| created_at | timestamp | Yes      | —       |
-| updated_at | timestamp | Yes      | —       |
+| slug       | string    | No       | Unique      |
+| created_at | timestamp | Yes      | —           |
+| updated_at | timestamp | Yes      | —           |
 
 ### Keys & Indexes
 
@@ -350,13 +350,13 @@ Migrations remain the **sole source of truth**.
 
 ### Columns
 
-| Name          | Type      | Nullable | Notes                           |
-| ------------- | --------- | -------- | ------------------------------- |
-| id            | bigint    | No       | Primary key                     |
-| permission_id | bigint    | No       | FK → permissions.id (CASCADE)   |
-| role_id       | bigint    | No       | FK → roles.id (CASCADE)         |
-| created_at    | timestamp | Yes      | —                               |
-| updated_at    | timestamp | Yes      | —                               |
+| Name          | Type      | Nullable | Notes                         |
+| ------------- | --------- | -------- | ----------------------------- |
+| id            | bigint    | No       | Primary key                   |
+| permission_id | bigint    | No       | FK → permissions.id (CASCADE) |
+| role_id       | bigint    | No       | FK → roles.id (CASCADE)       |
+| created_at    | timestamp | Yes      | —                             |
+| updated_at    | timestamp | Yes      | —                             |
 
 ### Keys & Indexes
 
@@ -400,15 +400,15 @@ Migrations remain the **sole source of truth**.
 
 ### Columns
 
-| Name       | Type          | Nullable | Notes                             |
-| ---------- | ------------- | -------- | --------------------------------- |
-| id         | bigint        | No       | Primary key                       |
-| tenant_id  | bigint        | No       | FK → tenants.id (CASCADE)         |
-| recipe_id  | bigint        | No       | Part of composite FK              |
-| item_id    | bigint        | No       | FK → items.id (CASCADE)           |
-| quantity   | decimal(18,6) | No       | —                                 |
-| created_at | timestamp     | Yes      | —                                 |
-| updated_at | timestamp     | Yes      | —                                 |
+| Name       | Type          | Nullable | Notes                     |
+| ---------- | ------------- | -------- | ------------------------- |
+| id         | bigint        | No       | Primary key               |
+| tenant_id  | bigint        | No       | FK → tenants.id (CASCADE) |
+| recipe_id  | bigint        | No       | Part of composite FK      |
+| item_id    | bigint        | No       | FK → items.id (CASCADE)   |
+| quantity   | decimal(18,6) | No       | —                         |
+| created_at | timestamp     | Yes      | —                         |
+| updated_at | timestamp     | Yes      | —                         |
 
 ### Foreign Keys
 
@@ -431,12 +431,12 @@ Migrations remain the **sole source of truth**.
 
 ### Columns
 
-| Name       | Type      | Nullable | Notes   |
-| ---------- | --------- | -------- | ------- |
+| Name       | Type      | Nullable | Notes       |
+| ---------- | --------- | -------- | ----------- |
 | id         | bigint    | No       | Primary key |
-| name       | string    | No       | Unique  |
-| created_at | timestamp | Yes      | —       |
-| updated_at | timestamp | Yes      | —       |
+| name       | string    | No       | Unique      |
+| created_at | timestamp | Yes      | —           |
+| updated_at | timestamp | Yes      | —           |
 
 ### Keys & Indexes
 
@@ -452,13 +452,13 @@ Migrations remain the **sole source of truth**.
 
 ### Columns
 
-| Name       | Type      | Nullable | Notes                     |
-| ---------- | --------- | -------- | ------------------------- |
-| id         | bigint    | No       | Primary key               |
-| role_id    | bigint    | No       | FK → roles.id (CASCADE)   |
-| user_id    | bigint    | No       | FK → users.id (CASCADE)   |
-| created_at | timestamp | Yes      | —                         |
-| updated_at | timestamp | Yes      | —                         |
+| Name       | Type      | Nullable | Notes                   |
+| ---------- | --------- | -------- | ----------------------- |
+| id         | bigint    | No       | Primary key             |
+| role_id    | bigint    | No       | FK → roles.id (CASCADE) |
+| user_id    | bigint    | No       | FK → users.id (CASCADE) |
+| created_at | timestamp | Yes      | —                       |
+| updated_at | timestamp | Yes      | —                       |
 
 ### Keys & Indexes
 
@@ -476,14 +476,14 @@ Migrations remain the **sole source of truth**.
 
 ### Columns
 
-| Name          | Type    | Nullable | Notes       |
-| ------------- | ------- | -------- | ----------- |
-| id            | string  | No       | Primary key |
-| user_id       | bigint  | Yes      | —           |
-| ip_address    | string  | Yes      | —           |
-| user_agent    | text    | Yes      | —           |
-| payload       | longText| No       | —           |
-| last_activity | integer | No       | —           |
+| Name          | Type     | Nullable | Notes       |
+| ------------- | -------- | -------- | ----------- |
+| id            | string   | No       | Primary key |
+| user_id       | bigint   | Yes      | —           |
+| ip_address    | string   | Yes      | —           |
+| user_agent    | text     | Yes      | —           |
+| payload       | longText | No       | —           |
+| last_activity | integer  | No       | —           |
 
 ### Keys & Indexes
 
@@ -500,16 +500,16 @@ Migrations remain the **sole source of truth**.
 
 ### Columns
 
-| Name        | Type          | Nullable | Notes                     |
-| ----------- | ------------- | -------- | ------------------------- |
-| id          | bigint        | No       | Primary key               |
-| tenant_id   | bigint        | No       | FK → tenants.id (CASCADE) |
-| item_id     | bigint        | No       | FK → items.id (CASCADE)   |
-| uom_id      | bigint        | No       | FK → uoms.id (CASCADE)    |
-| quantity    | decimal(18,6) | No       | Signed                    |
-| type        | enum          | No       | See ENUMS.md              |
-| source_type | string        | Yes      | Polymorphic               |
-| source_id   | bigint        | Yes      | Polymorphic               |
+| Name        | Type          | Nullable | Notes                         |
+| ----------- | ------------- | -------- | ----------------------------- |
+| id          | bigint        | No       | Primary key                   |
+| tenant_id   | bigint        | No       | FK → tenants.id (CASCADE)     |
+| item_id     | bigint        | No       | FK → items.id (CASCADE)       |
+| uom_id      | bigint        | No       | FK → uoms.id (CASCADE)        |
+| quantity    | decimal(18,6) | No       | Signed                        |
+| type        | enum          | No       | See ENUMS.md                  |
+| source_type | string        | Yes      | Polymorphic                   |
+| source_id   | bigint        | Yes      | Polymorphic                   |
 | created_at  | timestamp     | No       | Defaults to CURRENT_TIMESTAMP |
 
 ### Keys & Indexes
@@ -547,12 +547,12 @@ Migrations remain the **sole source of truth**.
 
 ### Columns
 
-| Name       | Type      | Nullable | Notes   |
-| ---------- | --------- | -------- | ------- |
+| Name       | Type      | Nullable | Notes       |
+| ---------- | --------- | -------- | ----------- |
 | id         | bigint    | No       | Primary key |
-| name       | string    | No       | Unique  |
-| created_at | timestamp | Yes      | —       |
-| updated_at | timestamp | Yes      | —       |
+| name       | string    | No       | Unique      |
+| created_at | timestamp | Yes      | —           |
+| updated_at | timestamp | Yes      | —           |
 
 ### Keys & Indexes
 
@@ -568,14 +568,14 @@ Migrations remain the **sole source of truth**.
 
 ### Columns
 
-| Name       | Type          | Nullable | Notes                   |
-| ---------- | ------------- | -------- | ----------------------- |
-| id         | bigint        | No       | Primary key             |
-| from_uom_id| bigint        | No       | FK → uoms.id (CASCADE)  |
-| to_uom_id  | bigint        | No       | FK → uoms.id (CASCADE)  |
-| multiplier | decimal(18,8) | No       | —                       |
-| created_at | timestamp     | Yes      | —                       |
-| updated_at | timestamp     | Yes      | —                       |
+| Name        | Type          | Nullable | Notes                  |
+| ----------- | ------------- | -------- | ---------------------- |
+| id          | bigint        | No       | Primary key            |
+| from_uom_id | bigint        | No       | FK → uoms.id (CASCADE) |
+| to_uom_id   | bigint        | No       | FK → uoms.id (CASCADE) |
+| multiplier  | decimal(18,8) | No       | —                      |
+| created_at  | timestamp     | Yes      | —                      |
+| updated_at  | timestamp     | Yes      | —                      |
 
 ### Keys & Indexes
 
@@ -593,14 +593,14 @@ Migrations remain the **sole source of truth**.
 
 ### Columns
 
-| Name            | Type      | Nullable | Notes                         |
-| --------------- | --------- | -------- | ----------------------------- |
-| id              | bigint    | No       | Primary key                   |
+| Name            | Type      | Nullable | Notes                            |
+| --------------- | --------- | -------- | -------------------------------- |
+| id              | bigint    | No       | Primary key                      |
 | uom_category_id | bigint    | No       | FK → uom_categories.id (CASCADE) |
-| name            | string    | No       | Unique                        |
-| symbol          | string    | No       | Unique                        |
-| created_at      | timestamp | Yes      | —                             |
-| updated_at      | timestamp | Yes      | —                             |
+| name            | string    | No       | Unique                           |
+| symbol          | string    | No       | Unique                           |
+| created_at      | timestamp | Yes      | —                                |
+| updated_at      | timestamp | Yes      | —                                |
 
 ### Keys & Indexes
 
