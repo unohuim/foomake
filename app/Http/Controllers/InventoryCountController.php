@@ -6,6 +6,7 @@ use App\Actions\Inventory\PostInventoryCountAction;
 use App\Models\InventoryCount;
 use App\Models\InventoryCountLine;
 use App\Models\Item;
+use DomainException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -147,7 +148,13 @@ class InventoryCountController extends Controller
             return $response;
         }
 
-        $action->execute($count, $request->user()->id);
+        try {
+            $action->execute($count, (int) $request->user()->id);
+        } catch (DomainException $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+            ], 422);
+        }
 
         $count->refresh();
 
@@ -314,7 +321,7 @@ class InventoryCountController extends Controller
         return [
             'id' => $line->id,
             'item_id' => $line->item_id,
-            'item_display' => $line->item->name.' ('.$line->item->baseUom->symbol.')',
+            'item_display' => $line->item->name . ' (' . $line->item->baseUom->symbol . ')',
             'counted_quantity' => $line->counted_quantity,
             'notes' => $line->notes ?? '',
             'update_url' => route('inventory.counts.lines.update', [

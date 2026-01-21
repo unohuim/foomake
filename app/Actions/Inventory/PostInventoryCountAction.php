@@ -15,13 +15,17 @@ use Illuminate\Support\Facades\DB;
 class PostInventoryCountAction
 {
     /**
+     * Post the inventory count and create variance stock moves.
+     *
      * @param InventoryCount $inventoryCount
      * @param int $postedByUserId
      * @return InventoryCount
+     *
+     * @throws DomainException
      */
     public function execute(InventoryCount $inventoryCount, int $postedByUserId): InventoryCount
     {
-        return DB::transaction(function () use ($inventoryCount, $postedByUserId) {
+        return DB::transaction(function () use ($inventoryCount, $postedByUserId): InventoryCount {
             $lockedCount = InventoryCount::query()
                 ->whereKey($inventoryCount->id)
                 ->lockForUpdate()
@@ -32,6 +36,11 @@ class PostInventoryCountAction
             }
 
             $lines = $lockedCount->lines()->with('item')->get();
+
+            if ($lines->isEmpty()) {
+                throw new DomainException('Inventory count must have at least one line.');
+            }
+
             $countedByItem = [];
             $itemsById = [];
 
@@ -45,13 +54,16 @@ class PostInventoryCountAction
                 }
 
                 $itemsById[$line->item_id] = $line->item;
+
                 $countedByItem[$line->item_id] = ($countedByItem[$line->item_id] ?? BigDecimal::zero())
                     ->plus(BigDecimal::of($line->counted_quantity));
             }
 
             foreach ($countedByItem as $itemId => $countedQuantity) {
                 $item = $itemsById[$itemId];
+
                 $onHand = BigDecimal::of($item->onHandQuantity());
+
                 $variance = $countedQuantity
                     ->minus($onHand)
                     ->toScale(6, RoundingMode::HALF_UP);
@@ -64,7 +76,7 @@ class PostInventoryCountAction
                     'tenant_id' => $lockedCount->tenant_id,
                     'item_id' => $item->id,
                     'uom_id' => $item->base_uom_id,
-                    'quantity' => $variance->toScale(6)->__toString(),
+                    'quantity' => $variance->__toString(),
                     'type' => 'inventory_count_adjustment',
                     'source_type' => InventoryCount::class,
                     'source_id' => $lockedCount->id,
