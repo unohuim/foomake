@@ -1,542 +1,330 @@
 <?php
 
+namespace App\Http\Controllers;
+
+use App\Actions\Inventory\PostInventoryCountAction;
 use App\Models\InventoryCount;
 use App\Models\InventoryCountLine;
 use App\Models\Item;
-use App\Models\Permission;
-use App\Models\Role;
-use App\Models\StockMove;
-use App\Models\Tenant;
-use App\Models\Uom;
-use App\Models\UomCategory;
-use App\Models\User;
-use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Str;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\Rule;
+use Symfony\Component\HttpFoundation\Response;
 
-uses(RefreshDatabase::class);
+class InventoryCountController extends Controller
+{
+    /**
+     * Display a listing of inventory counts.
+     */
+    public function index(Request $request): Response
+    {
+        Gate::authorize('inventory-adjustments-view');
 
-beforeEach(function () {
-    $this->makeUom = function (): Uom {
-        $suffix = Str::random(12);
+        $counts = InventoryCount::query()
+            ->where('tenant_id', $request->user()->tenant_id)
+            ->withCount('lines')
+            ->orderByDesc('counted_at')
+            ->get();
 
-        $category = UomCategory::query()->forceCreate([
-            'name' => 'Category ' . $suffix,
+        return response()->view('inventory.counts.index', [
+            'counts' => $counts,
+        ]);
+    }
+
+    /**
+     * Show a specific inventory count.
+     */
+    public function show(Request $request, int $inventoryCount): Response
+    {
+        Gate::authorize('inventory-adjustments-view');
+
+        $count = $this->findInventoryCount($request, $inventoryCount);
+
+        $count->load(['lines.item.baseUom']);
+        $count->loadCount('lines');
+
+        $items = Item::query()
+            ->where('tenant_id', $request->user()->tenant_id)
+            ->with('baseUom')
+            ->orderBy('name')
+            ->get();
+
+        return response()->view('inventory.counts.show', [
+            'inventoryCount' => $count,
+            'items' => $items,
+        ]);
+    }
+
+    /**
+     * Store a new inventory count draft.
+     */
+    public function store(Request $request): JsonResponse
+    {
+        Gate::authorize('inventory-adjustments-execute');
+
+        $validated = $request->validate([
+            'counted_at' => ['required', 'date'],
+            'notes' => ['nullable', 'string'],
         ]);
 
-        return Uom::query()->forceCreate([
-            'uom_category_id' => $category->id,
-            'name' => 'Unit ' . $suffix,
-            'symbol' => 'u' . $suffix,
-        ]);
-    };
-
-    $this->makeItem = function (Tenant $tenant, Uom $uom, array $overrides = []): Item {
-        return Item::query()->forceCreate(array_merge([
-            'tenant_id' => $tenant->id,
-            'name' => 'Item ' . Str::random(12),
-            'base_uom_id' => $uom->id,
-            'is_purchasable' => false,
-            'is_sellable' => false,
-            'is_manufacturable' => false,
-        ], $overrides));
-    };
-
-    $this->makeUser = function (Tenant $tenant): User {
-        return User::factory()->create([
-            'tenant_id' => $tenant->id,
-        ]);
-    };
-
-    $this->grantPermission = function (User $user, string $slug): void {
-        $permission = Permission::query()->firstOrCreate([
-            'slug' => $slug,
+        $count = InventoryCount::query()->forceCreate([
+            'tenant_id' => $request->user()->tenant_id,
+            'counted_at' => Carbon::parse($validated['counted_at']),
+            'notes' => $validated['notes'] ?? null,
         ]);
 
-        $role = Role::query()->forceCreate([
-            'name' => 'role-' . $slug . '-' . Str::random(10),
+        $count->loadCount('lines');
+
+        return response()->json([
+            'count' => $this->countPayload($count),
+        ], 201);
+    }
+
+    /**
+     * Update an inventory count draft.
+     */
+    public function update(Request $request, int $inventoryCount): JsonResponse
+    {
+        Gate::authorize('inventory-adjustments-execute');
+
+        $count = $this->findInventoryCount($request, $inventoryCount);
+
+        if ($response = $this->ensureDraft($count)) {
+            return $response;
+        }
+
+        $validated = $request->validate([
+            'counted_at' => ['required', 'date'],
+            'notes' => ['nullable', 'string'],
         ]);
 
-        $role->permissions()->syncWithoutDetaching([$permission->id]);
-        $user->roles()->syncWithoutDetaching([$role->id]);
-    };
+        $count->counted_at = Carbon::parse($validated['counted_at']);
+        $count->notes = $validated['notes'] ?? null;
+        $count->save();
 
-    $this->countAdjustmentsFor = function (Tenant $tenant, InventoryCount $count): int {
-        return StockMove::query()
-            ->where('tenant_id', $tenant->id)
-            ->where('type', 'inventory_count_adjustment')
-            ->where('source_type', InventoryCount::class)
-            ->where('source_id', $count->id)
-            ->count();
-    };
+        $count->loadCount('lines');
 
-    $this->createDraftCountViaApi = function (User $user, array $payload = []): InventoryCount {
-        $payload = array_merge([
-            'counted_at' => now()->toISOString(),
-            'notes' => 'Draft ' . Str::random(10),
-        ], $payload);
+        return response()->json([
+            'count' => $this->countPayload($count),
+        ]);
+    }
 
-        $response = $this->actingAs($user)->postJson('/inventory/counts', $payload);
+    /**
+     * Delete an inventory count draft.
+     */
+    public function destroy(Request $request, int $inventoryCount): JsonResponse
+    {
+        Gate::authorize('inventory-adjustments-execute');
 
-        $response->assertCreated();
-        $response->assertJsonStructure([
-            'count' => [
-                'id',
-                'counted_at',
-                'counted_at_iso',
-                'notes',
-                'status',
-                'posted_at_display',
-                'posted_at_iso',
-                'lines_count',
-                'show_url',
-                'update_url',
-                'delete_url',
-                'post_url',
+        $count = $this->findInventoryCount($request, $inventoryCount);
+
+        if ($response = $this->ensureDraft($count)) {
+            return $response;
+        }
+
+        $count->delete();
+
+        return response()->json([
+            'deleted' => true,
+        ]);
+    }
+
+    /**
+     * Post an inventory count.
+     */
+    public function post(
+        Request $request,
+        int $inventoryCount,
+        PostInventoryCountAction $action
+    ): JsonResponse {
+        Gate::authorize('inventory-adjustments-execute');
+
+        $count = $this->findInventoryCount($request, $inventoryCount);
+
+        if ($response = $this->ensureDraft($count)) {
+            return $response;
+        }
+
+        $action->execute($count, $request->user()->id);
+
+        $count->refresh();
+
+        return response()->json([
+            'count' => $this->countPayload($count),
+        ]);
+    }
+
+    /**
+     * Store a new inventory count line.
+     */
+    public function storeLine(Request $request, int $inventoryCount): JsonResponse
+    {
+        Gate::authorize('inventory-adjustments-execute');
+
+        $count = $this->findInventoryCount($request, $inventoryCount);
+
+        if ($response = $this->ensureDraft($count)) {
+            return $response;
+        }
+
+        $validated = $request->validate([
+            'item_id' => [
+                'required',
+                'integer',
+                Rule::exists('items', 'id')->where('tenant_id', $request->user()->tenant_id),
             ],
+            'counted_quantity' => ['required', 'string', 'regex:/^\d+(\.\d{1,6})?$/'],
+            'notes' => ['nullable', 'string'],
         ]);
 
-        $id = (int) $response->json('count.id');
-        expect($id)->toBeGreaterThan(0);
+        $line = InventoryCountLine::query()->forceCreate([
+            'tenant_id' => $request->user()->tenant_id,
+            'inventory_count_id' => $count->id,
+            'item_id' => $validated['item_id'],
+            'counted_quantity' => $validated['counted_quantity'],
+            'notes' => $validated['notes'] ?? null,
+        ]);
 
-        return InventoryCount::query()->findOrFail($id);
-    };
+        $line->load('item.baseUom');
 
-    $this->createLineViaApi = function (User $user, InventoryCount $count, array $payload): InventoryCountLine {
-        $response = $this->actingAs($user)->postJson('/inventory/counts/' . $count->id . '/lines', $payload);
+        return response()->json([
+            'line' => $this->linePayload($line),
+        ], 201);
+    }
 
-        $response->assertCreated();
-        $response->assertJsonStructure([
-            'line' => [
-                'id',
-                'item_id',
-                'item_display',
-                'counted_quantity',
-                'notes',
-                'update_url',
-                'delete_url',
+    /**
+     * Update an inventory count line.
+     */
+    public function updateLine(Request $request, int $inventoryCount, int $line): JsonResponse
+    {
+        Gate::authorize('inventory-adjustments-execute');
+
+        $count = $this->findInventoryCount($request, $inventoryCount);
+
+        if ($response = $this->ensureDraft($count)) {
+            return $response;
+        }
+
+        $lineModel = $count->lines()
+            ->where('tenant_id', $request->user()->tenant_id)
+            ->whereKey($line)
+            ->firstOrFail();
+
+        $validated = $request->validate([
+            'item_id' => [
+                'required',
+                'integer',
+                Rule::exists('items', 'id')->where('tenant_id', $request->user()->tenant_id),
             ],
+            'counted_quantity' => ['required', 'string', 'regex:/^\d+(\.\d{1,6})?$/'],
+            'notes' => ['nullable', 'string'],
         ]);
 
-        $id = (int) $response->json('line.id');
-        expect($id)->toBeGreaterThan(0);
-
-        return InventoryCountLine::query()->findOrFail($id);
-    };
-
-    $this->postCount = function (User $user, InventoryCount $count) {
-        return $this->actingAs($user)->postJson('/inventory/counts/' . $count->id . '/post');
-    };
-});
-
-it('redirects/blocks guests for inventory count routes', function () {
-    $this->get('/inventory/counts')->assertRedirect(route('login'));
-    $this->get('/inventory/counts/1')->assertRedirect(route('login'));
-
-    $this->postJson('/inventory/counts', ['counted_at' => now()->toISOString()])->assertUnauthorized();
-    $this->patchJson('/inventory/counts/1', ['counted_at' => now()->toISOString(), 'notes' => 'x'])->assertUnauthorized();
-    $this->deleteJson('/inventory/counts/1')->assertUnauthorized();
-
-    $this->postJson('/inventory/counts/1/lines', ['item_id' => 1, 'counted_quantity' => '1.000000'])->assertUnauthorized();
-    $this->patchJson('/inventory/counts/1/lines/1', ['item_id' => 1, 'counted_quantity' => '2.000000'])->assertUnauthorized();
-    $this->deleteJson('/inventory/counts/1/lines/1')->assertUnauthorized();
-
-    $this->postJson('/inventory/counts/1/post')->assertUnauthorized();
-});
-
-it('enforces view permission for index/show and execute does not imply view', function () {
-    $tenant = Tenant::factory()->create();
-    $user = ($this->makeUser)($tenant);
-
-    $count = InventoryCount::query()->forceCreate([
-        'tenant_id' => $tenant->id,
-        'counted_at' => now(),
-    ]);
-
-    $this->actingAs($user)->get('/inventory/counts')->assertForbidden();
-    $this->actingAs($user)->get('/inventory/counts/' . $count->id)->assertForbidden();
-
-    ($this->grantPermission)($user, 'inventory-adjustments-execute');
-    $this->actingAs($user)->get('/inventory/counts')->assertForbidden();
-    $this->actingAs($user)->get('/inventory/counts/' . $count->id)->assertForbidden();
-
-    ($this->grantPermission)($user, 'inventory-adjustments-view');
-    $this->actingAs($user)->get('/inventory/counts')->assertOk();
-    $this->actingAs($user)->get('/inventory/counts/' . $count->id)->assertOk();
-});
-
-it('requires execute permission for all draft mutations (count CRUD, line CRUD, post)', function () {
-    $tenant = Tenant::factory()->create();
-    $user = ($this->makeUser)($tenant);
-    ($this->grantPermission)($user, 'inventory-adjustments-view');
-
-    $uom = ($this->makeUom)();
-    $item = ($this->makeItem)($tenant, $uom);
-
-    $count = InventoryCount::query()->forceCreate([
-        'tenant_id' => $tenant->id,
-        'counted_at' => now(),
-    ]);
-
-    $this->actingAs($user)->postJson('/inventory/counts', [
-        'counted_at' => now()->toISOString(),
-        'notes' => 'Nope',
-    ])->assertForbidden();
-
-    $this->actingAs($user)->patchJson('/inventory/counts/' . $count->id, [
-        'counted_at' => now()->toISOString(),
-        'notes' => 'Nope',
-    ])->assertForbidden();
-
-    $this->actingAs($user)->deleteJson('/inventory/counts/' . $count->id)->assertForbidden();
-
-    $this->actingAs($user)->postJson('/inventory/counts/' . $count->id . '/lines', [
-        'item_id' => $item->id,
-        'counted_quantity' => '1.000000',
-    ])->assertForbidden();
-
-    $this->actingAs($user)->patchJson('/inventory/counts/' . $count->id . '/lines/1', [
-        'item_id' => $item->id,
-        'counted_quantity' => '2.000000',
-    ])->assertForbidden();
-
-    $this->actingAs($user)->deleteJson('/inventory/counts/' . $count->id . '/lines/1')->assertForbidden();
-
-    $this->actingAs($user)->postJson('/inventory/counts/' . $count->id . '/post')->assertForbidden();
-});
-
-it('validates count create/update payloads', function () {
-    $tenant = Tenant::factory()->create();
-    $user = ($this->makeUser)($tenant);
-    ($this->grantPermission)($user, 'inventory-adjustments-execute');
-
-    $this->actingAs($user)->postJson('/inventory/counts', [
-        'notes' => 'Missing counted_at',
-    ])->assertStatus(422);
-
-    $this->actingAs($user)->postJson('/inventory/counts', [
-        'counted_at' => 'not-a-date',
-    ])->assertStatus(422);
-
-    $count = ($this->createDraftCountViaApi)($user);
-
-    $this->actingAs($user)->patchJson('/inventory/counts/' . $count->id, [
-        'notes' => 'Missing counted_at on update',
-    ])->assertStatus(422);
-
-    $this->actingAs($user)->patchJson('/inventory/counts/' . $count->id, [
-        'counted_at' => 'not-a-date',
-        'notes' => 'x',
-    ])->assertStatus(422);
-
-    $this->actingAs($user)->patchJson('/inventory/counts/' . $count->id, [
-        'counted_at' => now()->toISOString(),
-        'notes' => ['not', 'a', 'string'],
-    ])->assertStatus(422);
-});
-
-it('validates line create/update payloads (regex + exists scoped to tenant, required fields on update)', function () {
-    $tenant = Tenant::factory()->create();
-    $user = ($this->makeUser)($tenant);
-    ($this->grantPermission)($user, 'inventory-adjustments-execute');
-
-    $uom = ($this->makeUom)();
-    $item = ($this->makeItem)($tenant, $uom);
-
-    $count = InventoryCount::query()->forceCreate([
-        'tenant_id' => $tenant->id,
-        'counted_at' => now(),
-    ]);
-
-    $this->actingAs($user)->postJson('/inventory/counts/' . $count->id . '/lines', [])->assertStatus(422);
-
-    $this->actingAs($user)->postJson('/inventory/counts/' . $count->id . '/lines', [
-        'item_id' => 999999,
-        'counted_quantity' => '1.000000',
-    ])->assertStatus(422);
-
-    $this->actingAs($user)->postJson('/inventory/counts/' . $count->id . '/lines', [
-        'item_id' => $item->id,
-        'counted_quantity' => 'not-a-number',
-    ])->assertStatus(422);
-
-    $this->actingAs($user)->postJson('/inventory/counts/' . $count->id . '/lines', [
-        'item_id' => $item->id,
-        'counted_quantity' => '-1.000000',
-    ])->assertStatus(422);
-
-    $this->actingAs($user)->postJson('/inventory/counts/' . $count->id . '/lines', [
-        'item_id' => $item->id,
-        'counted_quantity' => '1.1234567',
-    ])->assertStatus(422);
-
-    $line = ($this->createLineViaApi)($user, $count, [
-        'item_id' => $item->id,
-        'counted_quantity' => '1.000000',
-        'notes' => 'Initial',
-    ]);
-
-    $this->actingAs($user)->patchJson('/inventory/counts/' . $count->id . '/lines/' . $line->id, [
-        'counted_quantity' => '2.000000',
-    ])->assertStatus(422);
-
-    $this->actingAs($user)->patchJson('/inventory/counts/' . $count->id . '/lines/' . $line->id, [
-        'item_id' => $item->id,
-        'counted_quantity' => 'nope',
-    ])->assertStatus(422);
-});
-
-it('creates/updates/deletes draft counts and lines with correct JSON shape + status codes', function () {
-    $tenant = Tenant::factory()->create();
-    $user = ($this->makeUser)($tenant);
-    ($this->grantPermission)($user, 'inventory-adjustments-view');
-    ($this->grantPermission)($user, 'inventory-adjustments-execute');
-
-    $count = ($this->createDraftCountViaApi)($user, [
-        'notes' => 'First',
-    ]);
-
-    $update = $this->actingAs($user)->patchJson('/inventory/counts/' . $count->id, [
-        'counted_at' => now()->toISOString(),
-        'notes' => 'Updated',
-    ]);
-
-    $update->assertOk();
-    $update->assertJsonStructure(['count' => ['id', 'update_url', 'delete_url', 'post_url']]);
-    expect((int) $update->json('count.id'))->toBe($count->id);
-
-    $uom = ($this->makeUom)();
-    $item = ($this->makeItem)($tenant, $uom);
-
-    $line = ($this->createLineViaApi)($user, $count, [
-        'item_id' => $item->id,
-        'counted_quantity' => '5.000000',
-        'notes' => 'Line',
-    ]);
-
-    $lineUpdate = $this->actingAs($user)->patchJson('/inventory/counts/' . $count->id . '/lines/' . $line->id, [
-        'item_id' => $item->id,
-        'counted_quantity' => '6.000000',
-        'notes' => 'Updated line',
-    ]);
-
-    $lineUpdate->assertOk();
-    $lineUpdate->assertJsonStructure(['line' => ['id', 'update_url', 'delete_url']]);
-    expect((int) $lineUpdate->json('line.id'))->toBe($line->id);
-
-    $this->actingAs($user)->deleteJson('/inventory/counts/' . $count->id . '/lines/' . $line->id)
-        ->assertOk()
-        ->assertJson(['deleted' => true]);
-
-    expect(InventoryCountLine::query()->whereKey($line->id)->exists())->toBeFalse();
-
-    $this->actingAs($user)->deleteJson('/inventory/counts/' . $count->id)
-        ->assertOk()
-        ->assertJson(['deleted' => true]);
-
-    expect(InventoryCount::query()->whereKey($count->id)->exists())->toBeFalse();
-});
-
-it('enforces tenant isolation: index/show scoped, other-tenant count is 404 for all actions', function () {
-    $tenantA = Tenant::factory()->create();
-    $tenantB = Tenant::factory()->create();
-
-    $userA = ($this->makeUser)($tenantA);
-    ($this->grantPermission)($userA, 'inventory-adjustments-view');
-    ($this->grantPermission)($userA, 'inventory-adjustments-execute');
-
-    $countA = InventoryCount::query()->forceCreate([
-        'tenant_id' => $tenantA->id,
-        'counted_at' => now(),
-    ]);
-
-    $countB = InventoryCount::query()->forceCreate([
-        'tenant_id' => $tenantB->id,
-        'counted_at' => now(),
-    ]);
-
-    $this->actingAs($userA)->get('/inventory/counts')
-        ->assertOk()
-        ->assertSee('/inventory/counts/' . $countA->id)
-        ->assertDontSee('/inventory/counts/' . $countB->id);
-
-    $this->actingAs($userA)->get('/inventory/counts/' . $countB->id)->assertNotFound();
-    $this->actingAs($userA)->patchJson('/inventory/counts/' . $countB->id, [
-        'counted_at' => now()->toISOString(),
-        'notes' => 'Nope',
-    ])->assertNotFound();
-    $this->actingAs($userA)->deleteJson('/inventory/counts/' . $countB->id)->assertNotFound();
-    $this->actingAs($userA)->postJson('/inventory/counts/' . $countB->id . '/post')->assertNotFound();
-});
-
-it('enforces line ownership: other-tenant count is 404; count/line mismatch is 404', function () {
-    $tenantA = Tenant::factory()->create();
-    $tenantB = Tenant::factory()->create();
-
-    $userA = ($this->makeUser)($tenantA);
-    ($this->grantPermission)($userA, 'inventory-adjustments-execute');
-
-    $uom = ($this->makeUom)();
-    $itemA = ($this->makeItem)($tenantA, $uom);
-    $itemB = ($this->makeItem)($tenantB, $uom);
-
-    $countB = InventoryCount::query()->forceCreate([
-        'tenant_id' => $tenantB->id,
-        'counted_at' => now(),
-    ]);
-
-    $lineB = InventoryCountLine::query()->forceCreate([
-        'tenant_id' => $tenantB->id,
-        'inventory_count_id' => $countB->id,
-        'item_id' => $itemB->id,
-        'counted_quantity' => '1.000000',
-    ]);
-
-    $this->actingAs($userA)->postJson('/inventory/counts/' . $countB->id . '/lines', [
-        'item_id' => $itemA->id,
-        'counted_quantity' => '2.000000',
-    ])->assertNotFound();
-
-    $this->actingAs($userA)->patchJson('/inventory/counts/' . $countB->id . '/lines/' . $lineB->id, [
-        'item_id' => $itemA->id,
-        'counted_quantity' => '2.000000',
-    ])->assertNotFound();
-
-    $this->actingAs($userA)->deleteJson('/inventory/counts/' . $countB->id . '/lines/' . $lineB->id)->assertNotFound();
-
-    $count1 = InventoryCount::query()->forceCreate([
-        'tenant_id' => $tenantA->id,
-        'counted_at' => now(),
-    ]);
-
-    $count2 = InventoryCount::query()->forceCreate([
-        'tenant_id' => $tenantA->id,
-        'counted_at' => now(),
-    ]);
-
-    $lineOn1 = InventoryCountLine::query()->forceCreate([
-        'tenant_id' => $tenantA->id,
-        'inventory_count_id' => $count1->id,
-        'item_id' => $itemA->id,
-        'counted_quantity' => '1.000000',
-    ]);
-
-    $this->actingAs($userA)->patchJson('/inventory/counts/' . $count2->id . '/lines/' . $lineOn1->id, [
-        'item_id' => $itemA->id,
-        'counted_quantity' => '2.000000',
-    ])->assertNotFound();
-
-    $this->actingAs($userA)->deleteJson('/inventory/counts/' . $count2->id . '/lines/' . $lineOn1->id)->assertNotFound();
-});
-
-it('posts: creates adjustment moves, locks the count, blocks all future mutations, and blocks double-post', function () {
-    $tenant = Tenant::factory()->create();
-    $user = ($this->makeUser)($tenant);
-
-    ($this->grantPermission)($user, 'inventory-adjustments-view');
-    ($this->grantPermission)($user, 'inventory-adjustments-execute');
-
-    $uom = ($this->makeUom)();
-    $item = ($this->makeItem)($tenant, $uom);
-
-    $item->stockMoves()->create([
-        'tenant_id' => $tenant->id,
-        'uom_id' => $item->base_uom_id,
-        'quantity' => '2.000000',
-        'type' => 'receipt',
-    ]);
-
-    $count = InventoryCount::query()->forceCreate([
-        'tenant_id' => $tenant->id,
-        'counted_at' => now(),
-    ]);
-
-    InventoryCountLine::query()->forceCreate([
-        'tenant_id' => $tenant->id,
-        'inventory_count_id' => $count->id,
-        'item_id' => $item->id,
-        'counted_quantity' => '5.000000',
-    ]);
-
-    $post = ($this->postCount)($user, $count);
-
-    $post->assertOk();
-    $post->assertJsonStructure(['count' => ['id', 'status', 'posted_at_display', 'posted_at_iso']]);
-
-    $count->refresh();
-    expect($count->posted_at)->not->toBeNull();
-    expect($count->posted_by_user_id)->toBe($user->id);
-
-    $move = StockMove::query()
-        ->where('tenant_id', $tenant->id)
-        ->where('type', 'inventory_count_adjustment')
-        ->where('source_type', InventoryCount::class)
-        ->where('source_id', $count->id)
-        ->where('item_id', $item->id)
-        ->first();
-
-    expect($move)->not->toBeNull();
-    expect($move->quantity)->toBe('3.000000');
-
-    // After posting, all mutations should 422 (ensureDraft).
-    $this->actingAs($user)->patchJson('/inventory/counts/' . $count->id, [
-        'counted_at' => now()->toISOString(),
-        'notes' => 'Should fail',
-    ])->assertStatus(422);
-
-    $this->actingAs($user)->deleteJson('/inventory/counts/' . $count->id)->assertStatus(422);
-
-    $this->actingAs($user)->postJson('/inventory/counts/' . $count->id . '/lines', [
-        'item_id' => $item->id,
-        'counted_quantity' => '9.000000',
-    ])->assertStatus(422);
-
-    $line = InventoryCountLine::query()->where('inventory_count_id', $count->id)->firstOrFail();
-
-    $this->actingAs($user)->patchJson('/inventory/counts/' . $count->id . '/lines/' . $line->id, [
-        'item_id' => $item->id,
-        'counted_quantity' => '9.000000',
-    ])->assertStatus(422);
-
-    $this->actingAs($user)->deleteJson('/inventory/counts/' . $count->id . '/lines/' . $line->id)->assertStatus(422);
-
-    $before = ($this->countAdjustmentsFor)($tenant, $count);
-
-    $this->actingAs($user)->postJson('/inventory/counts/' . $count->id . '/post')->assertStatus(422);
-
-    $after = ($this->countAdjustmentsFor)($tenant, $count);
-    expect($after)->toBe($before);
-});
-
-it('prevents cross-tenant item usage via validation (line create/update uses tenant-scoped exists)', function () {
-    $tenantA = Tenant::factory()->create();
-    $tenantB = Tenant::factory()->create();
-
-    $userA = ($this->makeUser)($tenantA);
-    ($this->grantPermission)($userA, 'inventory-adjustments-execute');
-
-    $uom = ($this->makeUom)();
-    $itemA = ($this->makeItem)($tenantA, $uom);
-    $itemB = ($this->makeItem)($tenantB, $uom);
-
-    $countA = InventoryCount::query()->forceCreate([
-        'tenant_id' => $tenantA->id,
-        'counted_at' => now(),
-    ]);
-
-    $this->actingAs($userA)->postJson('/inventory/counts/' . $countA->id . '/lines', [
-        'item_id' => $itemB->id,
-        'counted_quantity' => '1.000000',
-    ])->assertStatus(422);
-
-    $lineA = InventoryCountLine::query()->forceCreate([
-        'tenant_id' => $tenantA->id,
-        'inventory_count_id' => $countA->id,
-        'item_id' => $itemA->id,
-        'counted_quantity' => '1.000000',
-    ]);
-
-    $this->actingAs($userA)->patchJson('/inventory/counts/' . $countA->id . '/lines/' . $lineA->id, [
-        'item_id' => $itemB->id,
-        'counted_quantity' => '2.000000',
-    ])->assertStatus(422);
-});
+        $lineModel->item_id = $validated['item_id'];
+        $lineModel->counted_quantity = $validated['counted_quantity'];
+        $lineModel->notes = $validated['notes'] ?? null;
+        $lineModel->save();
+
+        $lineModel->load('item.baseUom');
+
+        return response()->json([
+            'line' => $this->linePayload($lineModel),
+        ]);
+    }
+
+    /**
+     * Delete an inventory count line.
+     */
+    public function destroyLine(Request $request, int $inventoryCount, int $line): JsonResponse
+    {
+        Gate::authorize('inventory-adjustments-execute');
+
+        $count = $this->findInventoryCount($request, $inventoryCount);
+
+        if ($response = $this->ensureDraft($count)) {
+            return $response;
+        }
+
+        $lineModel = $count->lines()
+            ->where('tenant_id', $request->user()->tenant_id)
+            ->whereKey($line)
+            ->firstOrFail();
+
+        $lineModel->delete();
+
+        return response()->json([
+            'deleted' => true,
+        ]);
+    }
+
+    /**
+     * Find a tenant-scoped inventory count or fail.
+     */
+    private function findInventoryCount(Request $request, int $inventoryCount): InventoryCount
+    {
+        return InventoryCount::query()
+            ->where('tenant_id', $request->user()->tenant_id)
+            ->findOrFail($inventoryCount);
+    }
+
+    /**
+     * Ensure the inventory count is still draft.
+     */
+    private function ensureDraft(InventoryCount $inventoryCount): ?JsonResponse
+    {
+        if ($inventoryCount->posted_at !== null) {
+            return response()->json([
+                'message' => 'Inventory count is posted and cannot be modified.',
+            ], 422);
+        }
+
+        return null;
+    }
+
+    /**
+     * Build JSON payload for inventory counts.
+     */
+    private function countPayload(InventoryCount $inventoryCount): array
+    {
+        $inventoryCount->loadCount('lines');
+
+        return [
+            'id' => $inventoryCount->id,
+            'counted_at' => $inventoryCount->counted_at->format('Y-m-d H:i'),
+            'counted_at_iso' => $inventoryCount->counted_at->format('Y-m-d\TH:i'),
+            'notes' => $inventoryCount->notes ?? '',
+            'status' => $inventoryCount->status,
+            'posted_at_display' => $inventoryCount->posted_at?->format('Y-m-d H:i'),
+            'posted_at_iso' => $inventoryCount->posted_at?->format('Y-m-d\TH:i'),
+            'lines_count' => $inventoryCount->lines_count,
+            'show_url' => route('inventory.counts.show', $inventoryCount),
+            'update_url' => route('inventory.counts.update', $inventoryCount),
+            'delete_url' => route('inventory.counts.destroy', $inventoryCount),
+            'post_url' => route('inventory.counts.post', $inventoryCount),
+        ];
+    }
+
+    /**
+     * Build JSON payload for inventory count lines.
+     */
+    private function linePayload(InventoryCountLine $line): array
+    {
+        return [
+            'id' => $line->id,
+            'item_id' => $line->item_id,
+            'item_display' => $line->item->name.' ('.$line->item->baseUom->symbol.')',
+            'counted_quantity' => $line->counted_quantity,
+            'notes' => $line->notes ?? '',
+            'update_url' => route('inventory.counts.lines.update', [
+                'inventoryCount' => $line->inventory_count_id,
+                'line' => $line->id,
+            ]),
+            'delete_url' => route('inventory.counts.lines.destroy', [
+                'inventoryCount' => $line->inventory_count_id,
+                'line' => $line->id,
+            ]),
+        ];
+    }
+}
