@@ -1,0 +1,27 @@
+name: Recipe Read Model
+type: Read Model / UI Contract
+location:
+  - app/Http/Controllers/RecipeController.php
+  - resources/views/manufacturing/recipes/index.blade.php
+  - resources/views/manufacturing/recipes/show.blade.php
+purpose: Define the read-only data presented for manufacturing recipes in index and detail views.
+when_to_use:
+  - Rendering manufacturing recipe index and show pages
+  - Adding fields to the recipe read-only UI
+when_not_to_use:
+  - Recipe creation, editing, or execution flows
+  - Inventory ledger or make-order execution screens
+rules:
+  - Each recipe read view must display the output item name.
+  - The output item base UoM may be displayed when available.
+  - The active flag is displayed as a read-only status.
+  - Recipe lines list input item, quantity, and UoM when available.
+  - Quantity display uses a two-decimal format (e.g., 2.00) for now and must be consistent across recipe views.
+  - Empty states are required when no recipes or lines exist.
+public_interface:
+  - manufacturing.recipes.index view contract
+  - manufacturing.recipes.show view contract
+example_usage: |
+  <th>{{ __('Input Item') }}</th>
+  <th>{{ __('Quantity') }}</th>
+  <th>{{ __('UoM') }}</th>

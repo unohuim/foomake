@@ -124,6 +124,36 @@ $user = User::where('email', $email)->first();
 
 ---
 
+### Manufacturing Recipes Tenant Isolation
+
+**Name:** Manufacturing Recipes Tenant Isolation  
+**Type:** Tenancy Rule  
+**Location:**  
+- `docs/architecture/tenancy/ManufacturingRecipesTenantIsolation.yaml`  
+- `app/Models/Recipe.php`  
+- `app/Models/RecipeLine.php`
+
+**Purpose:**  
+Ensure recipe queries are tenant-scoped and cross-tenant access results in 404s.
+
+**When to Use:**  
+Recipe index/show queries and route model binding.
+
+**When Not to Use:**  
+Auth identity resolution or global/system models.
+
+**Public Interface:**  
+- `use HasTenantScope`  
+- `Recipe::query()`  
+- `RecipeLine::query()`
+
+**Example Usage:**  
+```php
+$recipe = Recipe::query()->findOrFail($id);
+```
+
+---
+
 ### Tenant
 
 **Name:** Tenant  
@@ -174,6 +204,38 @@ UI-only visibility decisions without backend enforcement.
 **Example Usage:**  
 ```php
 Gate::authorize('inventory-materials-manage');
+```
+
+---
+
+### Manufacturing Recipes Read-Only Access
+
+**Name:** Manufacturing Recipes Read-Only Access  
+**Type:** Authorization Rule  
+**Location:**  
+- `docs/architecture/auth/ManufacturingRecipesReadOnlyAccess.yaml`  
+- `app/Providers/AuthServiceProvider.php`  
+- `app/Http/Controllers/RecipeController.php`  
+- `routes/web.php`  
+- `resources/views/layouts/navigation.blade.php`
+
+**Purpose:**  
+Enforce authenticated, gate-backed access to manufacturing recipe read-only pages.
+
+**When to Use:**  
+Restricting recipes index/show routes and navigation visibility.
+
+**When Not to Use:**  
+Recipe write or execution flows.
+
+**Public Interface:**  
+- `Gate::authorize('inventory-recipes-view')`  
+- `@can('inventory-recipes-view')`  
+- `manufacturing.recipes.*`
+
+**Example Usage:**  
+```php
+Gate::authorize('inventory-recipes-view');
 ```
 
 ---
@@ -546,6 +608,38 @@ Inventory adjustments or corrections.
 ```php
 $action = new ExecuteRecipeAction();
 $action->execute($recipe, '5.000000');
+```
+
+---
+
+### Recipe Read Model
+
+**Name:** Recipe Read Model  
+**Type:** Read Model / UI Contract  
+**Location:**  
+- `docs/architecture/manufacturing/RecipeReadModel.yaml`  
+- `app/Http/Controllers/RecipeController.php`  
+- `resources/views/manufacturing/recipes/index.blade.php`  
+- `resources/views/manufacturing/recipes/show.blade.php`
+
+**Purpose:**  
+Define the read-only data and display expectations for recipe index and detail pages.
+
+**When to Use:**  
+Rendering manufacturing recipe read-only views.
+
+**When Not to Use:**  
+Recipe creation, editing, or execution flows.
+
+**Public Interface:**  
+- `manufacturing.recipes.index`  
+- `manufacturing.recipes.show`
+
+**Example Usage:**  
+```blade
+<th>{{ __('Input Item') }}</th>
+<th>{{ __('Quantity') }}</th>
+<th>{{ __('UoM') }}</th>
 ```
 
 ---

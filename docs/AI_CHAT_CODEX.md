@@ -97,6 +97,50 @@ Violation of this rule requires immediate stop and correction.
 
 ---
 
+## 3B. Post-CI Documentation Update Stage (Conditional, Required When Applicable)
+
+After CI passes and the human considers the PR implementation complete, the next step is:
+
+1. **Ask whether documentation updates are required for this PR.**
+2. If the human says **no**, stop (PR is done).
+3. If the human says **yes**, proceed with the Documentation Update Workflow below.
+
+Codex may only modify documentation when the human explicitly instructs it to do so.
+
+### Documentation Update Workflow (When Required)
+
+When documentation updates are required, Codex must:
+
+- Update any impacted authoritative docs (see “Authority Order” below) **only as needed**
+- Ensure documentation reflects architectural **invariants** and canonical rules
+- Keep changes minimal, precise, and easy to diff
+
+This stage is triggered **only when required** (not every PR).
+
+### Architecture Documentation Requirements (When Required)
+
+If the PR introduces or changes an architectural concept, invariant, or reusable pattern:
+
+- Codex must create or update one or more **architecture YAML files** under:
+    - `docs/architecture/**.yaml`
+- The YAML files must follow the canonical architecture documentation system rules
+  defined in:
+    - `docs/architecture/README.md` (schema, key order, and constraints)
+
+Important:
+
+- `docs/ARCHITECTURE_INVENTORY.md` is **not legacy**.
+- When architecture YAML is created/updated, Codex must also update
+  `docs/ARCHITECTURE_INVENTORY.md` so it remains useful for LLM bootstrapping.
+
+`docs/ARCHITECTURE_INVENTORY.md` is bootstrap-facing and must stay aligned with:
+
+- `docs/CONVENTIONS.md`
+- `docs/ENUMS.md`
+- `docs/architecture/**.yaml`
+
+---
+
 ## 1. What This Application Is
 
 This application is a **multi-tenant MRP (Manufacturing Resource Planning) system**
@@ -111,7 +155,7 @@ It supports:
 - Inventory & production (make orders)
 - Sales orders, invoicing, and reporting
 
-Each tenant represents **one business**.  
+Each tenant represents **one business**.
 All operational data is **tenant-scoped**.
 
 ---
@@ -122,13 +166,17 @@ The following documents are the **source of truth**, in strict priority order:
 
 1. docs/PR2_ROADMAP.md
 2. docs/CONVENTIONS.md
-3. docs/ARCHITECTURE_INVENTORY.md (derived, bootstrap-only)
+3. docs/ARCHITECTURE_INVENTORY.md (bootstrap-facing, required)
 4. docs/PERMISSIONS_MATRIX.md
 5. docs/ENUMS.md
 6. docs/DB_SCHEMA.md
 7. docs/UI_DESIGN.md
+8. docs/architecture/README.yaml
 
 If any conflict exists, **higher priority always wins**.
+For architecture invariants specifically, follow:
+
+- `docs/CONVENTIONS.md`, then `docs/ENUMS.md`, then `docs/architecture/**.yaml`, then code.
 
 ---
 

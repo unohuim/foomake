@@ -1,0 +1,32 @@
+name: Manufacturing Recipes Read-Only Access
+type: Authorization Rule
+location:
+  - app/Providers/AuthServiceProvider.php
+  - app/Http/Controllers/RecipeController.php
+  - routes/web.php
+  - resources/views/layouts/navigation.blade.php
+purpose: Enforce authenticated, gate-backed access to the manufacturing recipes read-only surfaces.
+when_to_use:
+  - Rendering or routing to recipes index or show pages
+  - Evaluating access to manufacturing recipes navigation links
+when_not_to_use:
+  - Recipe creation, editing, or execution flows
+  - UI-only visibility without backend authorization checks
+rules:
+  - Recipes index and show require authentication and Gate authorization.
+  - The permission slug for read-only recipes access is inventory-recipes-view.
+  - Navigation visibility may be gated with @can but is not an authorization source of truth.
+  - super-admin bypasses permission gates via Gate::before.
+public_interface:
+  - Gate::authorize('inventory-recipes-view')
+  - Gate::allows('inventory-recipes-view')
+  - @can('inventory-recipes-view')
+  - routes named manufacturing.recipes.*
+example_usage: |
+  Gate::authorize('inventory-recipes-view');
+
+  @can('inventory-recipes-view')
+      <x-dropdown-link :href="route('manufacturing.recipes.index')">
+          {{ __('Recipes') }}
+      </x-dropdown-link>
+  @endcan

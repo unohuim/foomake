@@ -1,0 +1,25 @@
+name: Manufacturing Recipes Tenant Isolation
+type: Tenancy Rule
+location:
+  - app/Models/Recipe.php
+  - app/Models/RecipeLine.php
+  - app/Models/Concerns/HasTenantScope.php
+  - tests/Feature/Manufacturing/RecipesReadOnlyTest.php
+purpose: Ensure recipes and recipe lines are tenant-scoped and inaccessible across tenant boundaries.
+when_to_use:
+  - Querying recipes or recipe lines for manufacturing read-only views
+  - Route model binding for recipes in authenticated requests
+when_not_to_use:
+  - Auth identity resolution or global/system models
+  - Cross-tenant reporting without explicit, approved overrides
+rules:
+  - Recipe and RecipeLine must use HasTenantScope for tenant filtering.
+  - Cross-tenant recipe access must return 404 because tenant scope hides records.
+  - Tenant boundaries are enforced only for authenticated domain data, not for auth identity models.
+public_interface:
+  - use HasTenantScope
+  - Recipe::query()
+  - RecipeLine::query()
+example_usage: |
+  $recipe = Recipe::query()->findOrFail($id);
+  // If the recipe belongs to another tenant, tenant scope will cause a 404.
