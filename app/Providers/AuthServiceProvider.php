@@ -38,6 +38,7 @@ class AuthServiceProvider extends ServiceProvider
             'inventory-materials-manage',
             'inventory-products-view',
             'inventory-products-manage',
+            'inventory-recipes-view',
             'inventory-adjustments-execute',
             'inventory-adjustments-view',
             'inventory-make-orders-view',

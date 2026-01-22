@@ -43,6 +43,11 @@
                             <x-dropdown-link :href="route('materials.index')">
                                 {{ __('Materials') }}
                             </x-dropdown-link>
+                            @can('inventory-recipes-view')
+                                <x-dropdown-link :href="route('manufacturing.recipes.index')">
+                                    {{ __('Recipes') }}
+                                </x-dropdown-link>
+                            @endcan
                             <x-dropdown-link :href="route('manufacturing.uoms.index')">
                                 {{ __('Units of Measure') }}
                             </x-dropdown-link>
@@ -115,6 +120,11 @@
             <x-responsive-nav-link :href="route('materials.index')" :active="request()->routeIs('materials.index')">
                 {{ __('Materials') }}
             </x-responsive-nav-link>
+            @can('inventory-recipes-view')
+                <x-responsive-nav-link :href="route('manufacturing.recipes.index')" :active="request()->routeIs('manufacturing.recipes.*')">
+                    {{ __('Recipes') }}
+                </x-responsive-nav-link>
+            @endcan
             <x-responsive-nav-link :href="route('manufacturing.uoms.index')" :active="request()->routeIs('manufacturing.uoms.*')">
                 {{ __('Units of Measure') }}
             </x-responsive-nav-link>

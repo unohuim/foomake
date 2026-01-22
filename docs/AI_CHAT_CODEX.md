@@ -18,6 +18,7 @@ before _any_ planning or implementation occurs.
 - Assume you know **nothing** beyond what is explicitly provided in this chat.
 - You must become fully aligned with this project **before proposing or writing any code**.
 - Codex is **not an autopilot**. It acts only after explicit approval.
+- **The human owns execution** (running tests, committing code, CI).
 
 Read this entire document before beginning bootstrapping.
 
@@ -70,6 +71,29 @@ Once certainty is **≥95%**:
 - Request approval to propose a plan
 
 No implementation may begin before this point.
+
+---
+
+## 3A. Test-First & Execution Authority (Critical)
+
+This repository follows a **human-in-the-loop test workflow**.
+
+- Codex may **write or modify test files** when explicitly approved.
+- **Codex must never run tests unless explicitly instructed.**
+- **The human always runs tests manually**, after reviewing and possibly refining
+  any AI-generated test drafts.
+- When instructed to write tests first:
+    - Codex must **stop after drafting tests**
+    - Codex must **wait for human review and approval**
+    - No application code may be written until tests are approved
+
+This rule exists to:
+
+- Preserve human judgment over correctness and intent
+- Avoid AI masking test failures
+- Allow collaborative improvement of test quality before execution
+
+Violation of this rule requires immediate stop and correction.
 
 ---
 

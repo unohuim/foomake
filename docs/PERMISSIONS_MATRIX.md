@@ -48,6 +48,7 @@ This document is the source-of-truth for **authorization intent** in this reposi
 - `inventory-materials-manage`
 - `inventory-products-view`
 - `inventory-products-manage`
+- `inventory-recipes-view`
 - `inventory-adjustments-view`
 - `inventory-adjustments-execute`
 - `inventory-make-orders-view`
@@ -129,6 +130,7 @@ Stock and production-focused role.
 - `inventory-materials-manage`
 - `inventory-products-view`
 - `inventory-products-manage`
+- `inventory-recipes-view`
 - `inventory-adjustments-view`
 - `inventory-adjustments-execute`
 - `inventory-make-orders-view`

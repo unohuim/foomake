@@ -53,6 +53,7 @@ class TenancyRolesPermissionsSeeder extends Seeder
             'inventory-materials-manage',
             'inventory-products-view',
             'inventory-products-manage',
+            'inventory-recipes-view',
             'inventory-adjustments-view',
             'inventory-adjustments-execute',
             'inventory-make-orders-view',

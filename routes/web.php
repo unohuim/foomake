@@ -5,6 +5,7 @@ use App\Http\Controllers\InventoryCountController;
 use App\Http\Controllers\ItemController;
 use App\Http\Controllers\MaterialController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\RecipeController;
 use App\Http\Controllers\UomCategoryController;
 use App\Http\Controllers\UomController;
 use Illuminate\Support\Facades\Route;
@@ -63,6 +64,11 @@ Route::middleware('auth')->group(function () {
         ->name('manufacturing.uoms.update');
     Route::delete('/manufacturing/uoms/{uom}', [UomController::class, 'destroy'])
         ->name('manufacturing.uoms.destroy');
+
+    Route::get('/manufacturing/recipes', [RecipeController::class, 'index'])
+        ->name('manufacturing.recipes.index');
+    Route::get('/manufacturing/recipes/{recipe}', [RecipeController::class, 'show'])
+        ->name('manufacturing.recipes.show');
 
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');

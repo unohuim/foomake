@@ -46,8 +46,6 @@ This establishes Materials as the _parent domain_ for its required support entit
 
 > Materials are the **first UI domain** because all downstream domains depend on Items.
 
----
-
 ### PR2-MAT-001 — Materials Navigation + Index ✅ (Completed)
 
 **Goal**  
@@ -76,8 +74,6 @@ Expose Materials as a first-class domain with read-only visibility.
 ## DOMAIN 1A — Units of Measure (Materials Support)
 
 > These PRs unblock **Material creation** and must precede PR2-MAT-004.
-
----
 
 ### PR2-UOM-001 — UoM Categories CRUD (AJAX)
 
@@ -124,8 +120,6 @@ Allow managing Units of Measure within categories.
 ---
 
 ## DOMAIN 1B — Materials CRUD (Now Unblocked)
-
----
 
 ### PR2-MAT-002 — Create Material (AJAX) _(Renumbered)_
 
@@ -221,7 +215,7 @@ Provide a stable anchor for future expansions.
 
 ---
 
-## DOMAIN 2 - PR2-INV-001 — Inventory Visibility & Counts
+## DOMAIN 2 — PR2-INV-001 — Inventory Visibility & Counts
 
 _(Unchanged)_
 
@@ -233,11 +227,86 @@ _(Unchanged)_
 
 ## DOMAIN 3 — Recipes & Manufacturing
 
-_(Unchanged)_
+### PR3-REC-001 — Recipes Index + Detail (Read-Only)
 
-- Recipes CRUD
-- Recipe Lines
-- Make Orders (Execute Recipe)
+**Goal**  
+Expose recipes as a visible domain with a stable read-only anchor for later CRUD and execution.
+
+**Includes**
+
+- Navigation entry under **Manufacturing**
+- Routes:
+    - `/manufacturing/recipes`
+    - `/manufacturing/recipes/{recipe}`
+- Gate enforcement: existing inventory view permission
+- Index list of recipes (Output Item, Active, Updated)
+- Read-only detail sections:
+    - Output Item
+    - Active flag
+    - Lines (read-only)
+
+**Out of Scope**
+
+- Create / Edit / Delete
+- Line editing
+- Make order execution
+
+---
+
+### PR3-REC-002 — Recipes CRUD + Recipe Lines CRUD (AJAX)
+
+**Goal**  
+Enable full recipe authoring with minimal, calm AJAX-first UX.
+
+**Includes**
+
+- Create/edit recipe via slide-over
+- AJAX create/update/delete for recipes
+- Recipe line management (AJAX):
+    - Add line (input item + quantity)
+    - Edit line
+    - Delete line
+- Inline validation + error handling
+- Success toasts
+
+**Rules**
+
+- Exactly one output item per recipe
+- Lines cannot reference the output item
+- Canonical decimal quantity math
+
+**Permissions**
+
+- `inventory-make-orders-manage`
+
+---
+
+### PR3-MO-001 — Make Orders (Execute Recipe)
+
+**Goal**  
+Allow executing a recipe to create ledger movements.
+
+**Includes**
+
+- Navigation: **Manufacturing → Orders (Make Orders)**
+- Route: `/manufacturing/make-orders`
+- Execution UI:
+    - Select recipe
+    - Enter output quantity
+    - Submit (AJAX)
+- Calls `ExecuteRecipeAction`
+- Success toast + lightweight summary
+
+**Rules**
+
+- Ledger-first execution (issues + receipt)
+- BCMath with canonical scale
+- No persisted make-order record unless approved
+
+**Permissions**
+
+- View: `inventory-make-orders-view`
+- Execute: `inventory-make-orders-execute`
 
 ---
 
@@ -285,68 +354,47 @@ After PR2 completion:
 ### PR2-UOM-TEN-001 — Tenant-Scoped Units of Measure (Schema + Refactor)
 
 **Problem Statement**  
-UoM Categories and Units are currently **global**, but CRUD access implies tenant ownership, creating a domain inconsistency.
+UoM Categories and Units are currently **global**, but CRUD access implies tenant ownership.
 
 **Decision**  
-Defer tenancy alignment to a **dedicated PR** to avoid scope creep in PR2-UOM-001 / PR2-UOM-002.
+Defer tenancy alignment to a **dedicated PR**.
 
 **Includes (Planned)**
 
 - Add `tenant_id` to:
     - `uom_categories`
     - `uoms`
-- Backfill strategy for existing records
-- Apply `HasTenantScope` to UoM models
-- Update authorization + tenant isolation tests
-- Update `docs/ARCHITECTURE_INVENTORY.md`
-- Update `docs/DB_SCHEMA.md`
+- Backfill strategy
+- Apply `HasTenantScope`
+- Update tests
+- Update `ARCHITECTURE_INVENTORY.md`
+- Update `DB_SCHEMA.md`
 
-**Explicitly Out of Scope (for now)**
+**Out of Scope (for now)**
 
-- Any tenancy changes to UoMs or categories in PR2-UOM-001 / PR2-UOM-002
-
-**Rationale**
-
-- Preserves small, reviewable PRs
-- Avoids schema churn mid-domain
-- Makes tenancy change explicit, test-driven, and auditable
+- Any tenancy changes in PR2-UOM-001 / PR2-UOM-002
 
 ---
 
 ## DOMAIN 5 — UI Component Refactor (Post-PR2 Cleanup)
 
-### PR2-UI-001 — Remove Breeze UI Components (Refactor)
+### PR2-UI-001 — Remove Breeze UI Components
 
 **Goal**  
-Replace Breeze Blade UI components with project-owned Tailwind-only markup, without changing domain behavior.
-
-**Motivation**  
-Breeze components (`x-nav-link`, `x-dropdown`, `x-dropdown-link`, etc.) are scaffolding conveniences. This project should own its UI primitives directly using Tailwind patterns.
+Replace Breeze Blade UI components with Tailwind-only markup.
 
 **Includes**
 
-- Replace Breeze navigation components with explicit Tailwind markup:
-    - Top nav links
-    - Dropdown triggers + dropdown links
-    - Responsive nav behavior
-- Replace any other Breeze UI components introduced during PR2 (only if present)
-- Preserve existing routes, permissions, and page behavior
-- No visual redesign beyond matching current UI closely
+- Replace Breeze nav + dropdown components
+- Preserve routes, permissions, and behavior
+- No visual redesign
 
 **Out of Scope**
 
-- Any domain logic changes
-- Any new features or UX redesign
-- Rewriting already-stable screens unless they depend on Breeze components
+- Domain logic changes
+- New features
 
 **Testing**
 
-- No new domain tests required
-- Add minimal UI smoke coverage only if existing patterns allow (optional)
-
-**Notes**
-
-- Keep changes tightly scoped: only replace components currently in use.
-- Prefer incremental replacements as files are touched, but this PR is the dedicated cleanup.
-
----
+- No new domain tests
+- Optional UI smoke checks
