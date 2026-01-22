@@ -4,11 +4,12 @@
             <h2 class="font-semibold text-xl text-gray-800 leading-tight">
                 {{ __('Inventory Counts') }}
             </h2>
+
             @can('inventory-adjustments-execute')
                 <button
                     type="button"
                     class="inline-flex items-center px-4 py-2 bg-blue-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition"
-                    @click="openCreate()"
+                    onclick="location.hash = '#create-count'"
                 >
                     {{ __('Create Count') }}
                 </button>
@@ -25,6 +26,7 @@
             errors: {},
             toast: { show: false, type: 'success', message: '' },
             form: { id: null, counted_at: '', notes: '', action: '', method: 'POST' },
+
             openCreate() {
                 this.isEditing = false;
                 this.errors = {};
@@ -37,11 +39,13 @@
                 };
                 this.showCountForm = true;
             },
+
             openEdit(event) {
                 const row = event.target.closest('tr');
                 if (!row) {
                     return;
                 }
+
                 this.isEditing = true;
                 this.errors = {};
                 this.form = {
@@ -53,15 +57,18 @@
                 };
                 this.showCountForm = true;
             },
+
             closeCountForm() {
                 this.showCountForm = false;
             },
+
             async submitCountForm() {
                 this.errors = {};
+
                 const response = await fetch(this.form.action, {
                     method: this.form.method,
                     headers: {
-                        'Accept': 'application/json',
+                        Accept: 'application/json',
                         'Content-Type': 'application/json',
                         'X-CSRF-TOKEN': this.csrf
                     },
@@ -92,6 +99,7 @@
                 this.showToast('success', 'Inventory count saved.');
                 this.closeCountForm();
             },
+
             async deleteCount(event) {
                 const row = event.target.closest('tr');
                 if (!row) {
@@ -105,7 +113,7 @@
                 const response = await fetch(row.dataset.deleteUrl, {
                     method: 'DELETE',
                     headers: {
-                        'Accept': 'application/json',
+                        Accept: 'application/json',
                         'X-CSRF-TOKEN': this.csrf
                     }
                 });
@@ -120,7 +128,28 @@
                 row.remove();
                 this.showToast('success', 'Inventory count deleted.');
             },
+
+            ensureCountsTable() {
+                if (this.$refs.countsTableBody) {
+                    return;
+                }
+
+                if (!this.$refs.countsTableContainer || !this.$refs.emptyStateContainer) {
+                    return;
+                }
+
+                this.$refs.emptyStateContainer.classList.add('hidden');
+                this.$refs.countsTableContainer.classList.remove('hidden');
+            },
+
             insertRow(count) {
+                this.ensureCountsTable();
+
+                if (!this.$refs.countsTableBody) {
+                    this.showToast('error', 'Unable to render new row.');
+                    return;
+                }
+
                 const template = this.$refs.countRowTemplate.content.cloneNode(true);
                 const row = template.querySelector('tr');
 
@@ -129,14 +158,22 @@
                 this.$refs.countsTableBody.prepend(row);
                 window.Alpine.initTree(row);
             },
+
             updateRow(count) {
-                const row = this.$refs.countsTableBody.querySelector('[data-count-id=\"' + count.id + '\"]');
+                if (!this.$refs.countsTableBody) {
+                    return;
+                }
+
+                const selector = '[data-count-id=\'' + count.id + '\']';
+                const row = this.$refs.countsTableBody.querySelector(selector);
+
                 if (!row) {
                     return;
                 }
 
                 this.applyRowData(row, count);
             },
+
             applyRowData(row, count) {
                 row.dataset.countId = count.id;
                 row.dataset.countedAt = count.counted_at;
@@ -150,22 +187,27 @@
                 row.dataset.updateUrl = count.update_url;
                 row.dataset.deleteUrl = count.delete_url;
 
-                row.querySelector('[data-role=\"counted-at\"]').textContent = count.counted_at;
-                row.querySelector('[data-role=\"status\"]').textContent = this.formatStatus(count.status);
-                row.querySelector('[data-role=\"lines-count\"]').textContent = count.lines_count;
-                row.querySelector('[data-role=\"posted-at\"]').textContent = count.posted_at_display || '—';
-                row.querySelector('[data-role=\"show-link\"]').setAttribute('href', count.show_url);
+                row.querySelector('[data-role=\'counted-at\']').textContent = count.counted_at;
+                row.querySelector('[data-role=\'status\']').textContent = this.formatStatus(count.status);
+                row.querySelector('[data-role=\'lines-count\']').textContent = count.lines_count;
+                row.querySelector('[data-role=\'posted-at\']').textContent = count.posted_at_display || '—';
+                row.querySelector('[data-role=\'show-link\']').setAttribute('href', count.show_url);
             },
+
             formatStatus(status) {
                 return status === 'posted' ? 'Posted' : 'Draft';
             },
+
             showToast(type, message) {
                 this.toast = { show: true, type: type, message: message };
+
                 setTimeout(() => {
                     this.toast.show = false;
                 }, 2500);
             }
         }"
+        x-init="if (window.location.hash === '#create-count') { openCreate(); history.replaceState(null, '', window.location.pathname + window.location.search); }"
+        @open-create-inventory-count.window="openCreate()"
     >
         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
             <div class="bg-white shadow-sm sm:rounded-lg">
@@ -183,9 +225,10 @@
                         </div>
                     </div>
 
-                    @if ($counts->isEmpty())
+                    <div x-ref="emptyStateContainer" class="{{ $counts->isEmpty() ? '' : 'hidden' }}">
                         <div class="text-sm text-gray-600 space-y-4">
                             <p>{{ __('No inventory counts yet.') }}</p>
+
                             @can('inventory-adjustments-execute')
                                 <button
                                     type="button"
@@ -196,7 +239,9 @@
                                 </button>
                             @endcan
                         </div>
-                    @else
+                    </div>
+
+                    <div x-ref="countsTableContainer" class="{{ $counts->isEmpty() ? 'hidden' : '' }}">
                         <div class="overflow-x-auto">
                             <table class="min-w-full text-sm">
                                 <thead class="text-left text-gray-500">
@@ -243,6 +288,7 @@
                                                 >
                                                     {{ __('View') }}
                                                 </a>
+
                                                 @can('inventory-adjustments-execute')
                                                     @if ($count->status === 'draft')
                                                         <button
@@ -267,7 +313,7 @@
                                 </tbody>
                             </table>
                         </div>
-                    @endif
+                    </div>
                 </div>
             </div>
         </div>

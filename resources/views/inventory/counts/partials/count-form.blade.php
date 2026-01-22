@@ -6,6 +6,7 @@
     role="dialog"
 >
     <div class="absolute inset-0 bg-gray-500/50" @click="closeCountForm()"></div>
+
     <div class="absolute inset-y-0 right-0 w-full max-w-md bg-white shadow-xl">
         <form class="h-full flex flex-col" x-on:submit.prevent="submitCountForm()">
             <div class="flex-1 overflow-y-auto p-6 space-y-6">
@@ -26,7 +27,7 @@
                         id="counted_at"
                         type="datetime-local"
                         class="w-full rounded-md border-gray-300 focus:border-blue-500 focus:ring-blue-500"
-                        x-model="countForm.counted_at"
+                        x-model="form.counted_at"
                     />
                     <p class="text-sm text-red-600" x-show="errors.counted_at" x-text="errors.counted_at?.[0]"></p>
                 </div>
@@ -39,7 +40,7 @@
                         id="notes"
                         rows="3"
                         class="w-full rounded-md border-gray-300 focus:border-blue-500 focus:ring-blue-500"
-                        x-model="countForm.notes"
+                        x-model="form.notes"
                     ></textarea>
                     <p class="text-sm text-red-600" x-show="errors.notes" x-text="errors.notes?.[0]"></p>
                 </div>
