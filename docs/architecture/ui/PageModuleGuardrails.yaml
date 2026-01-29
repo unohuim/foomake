@@ -1,0 +1,24 @@
+name: Page Module Guardrails
+type: UI Constraint
+location:
+  - scripts/ci/blade-guardrails.sh
+  - scripts/ci/js-syntax-guardrails.sh
+  - ci.sh
+purpose: Enforce page-module and Blade safety rules through CI guardrails.
+when_to_use:
+  - Adding or editing interactive Blade views
+  - Adding or editing page modules under resources/js/pages
+when_not_to_use:
+  - Vendor or generated views excluded from repository checks
+  - Breeze/shared layouts and components pending migration
+  - Backend-only changes with no UI impact
+rules:
+  - Blade views must not include executable script tags; only application/json payload scripts are allowed.
+  - Inline JavaScript event handlers in Blade are forbidden.
+  - Optional-chaining assignment on the left-hand side is forbidden in JavaScript sources.
+public_interface:
+  - scripts/ci/blade-guardrails.sh
+  - scripts/ci/js-syntax-guardrails.sh
+  - ci.sh
+example_usage: |
+  ./ci.sh

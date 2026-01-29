@@ -24,7 +24,7 @@ rules:
   - PRs violating schema or invariants must be rejected.
 public_interface:
   - docs/architecture/**.yaml
-  - docs/architecture/README.md
+  - docs/architecture/README.yaml
 example_usage: |
   docs/architecture/
   ├── tenancy/

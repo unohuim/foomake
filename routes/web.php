@@ -20,26 +20,36 @@ Route::get('/dashboard', function () {
 
 Route::middleware('auth')->group(function () {
     Route::get('/inventory', [InventoryController::class, 'index'])->name('inventory.index');
+    Route::get('/manufacturing/inventory', [InventoryController::class, 'index']);
 
     Route::get('/inventory/counts', [InventoryCountController::class, 'index'])
         ->name('inventory.counts.index');
+    Route::get('/manufacturing/inventory-counts', [InventoryCountController::class, 'index']);
     Route::post('/inventory/counts', [InventoryCountController::class, 'store'])
         ->name('inventory.counts.store');
+    Route::post('/manufacturing/inventory-counts', [InventoryCountController::class, 'store']);
     Route::get('/inventory/counts/{inventoryCount}', [InventoryCountController::class, 'show'])
         ->name('inventory.counts.show');
+    Route::get('/manufacturing/inventory-counts/{inventoryCount}', [InventoryCountController::class, 'show']);
     Route::patch('/inventory/counts/{inventoryCount}', [InventoryCountController::class, 'update'])
         ->name('inventory.counts.update');
+    Route::patch('/manufacturing/inventory-counts/{inventoryCount}', [InventoryCountController::class, 'update']);
     Route::delete('/inventory/counts/{inventoryCount}', [InventoryCountController::class, 'destroy'])
         ->name('inventory.counts.destroy');
+    Route::delete('/manufacturing/inventory-counts/{inventoryCount}', [InventoryCountController::class, 'destroy']);
     Route::post('/inventory/counts/{inventoryCount}/post', [InventoryCountController::class, 'post'])
         ->name('inventory.counts.post');
+    Route::post('/manufacturing/inventory-counts/{inventoryCount}/post', [InventoryCountController::class, 'post']);
 
     Route::post('/inventory/counts/{inventoryCount}/lines', [InventoryCountController::class, 'storeLine'])
         ->name('inventory.counts.lines.store');
+    Route::post('/manufacturing/inventory-counts/{inventoryCount}/lines', [InventoryCountController::class, 'storeLine']);
     Route::patch('/inventory/counts/{inventoryCount}/lines/{line}', [InventoryCountController::class, 'updateLine'])
         ->name('inventory.counts.lines.update');
+    Route::patch('/manufacturing/inventory-counts/{inventoryCount}/lines/{line}', [InventoryCountController::class, 'updateLine']);
     Route::delete('/inventory/counts/{inventoryCount}/lines/{line}', [InventoryCountController::class, 'destroyLine'])
         ->name('inventory.counts.lines.destroy');
+    Route::delete('/manufacturing/inventory-counts/{inventoryCount}/lines/{line}', [InventoryCountController::class, 'destroyLine']);
 
     Route::get('/materials', [MaterialController::class, 'index'])->name('materials.index');
     Route::post('/materials', [ItemController::class, 'store'])->name('materials.store');
@@ -47,12 +57,16 @@ Route::middleware('auth')->group(function () {
     Route::delete('/materials/{item}', [ItemController::class, 'destroy'])->name('materials.destroy');
     Route::get('/materials/uom-categories', [UomCategoryController::class, 'index'])
         ->name('materials.uom-categories.index');
+    Route::get('/manufacturing/uom-categories', [UomCategoryController::class, 'index']);
     Route::post('/materials/uom-categories', [UomCategoryController::class, 'store'])
         ->name('materials.uom-categories.store');
+    Route::post('/manufacturing/uom-categories', [UomCategoryController::class, 'store']);
     Route::patch('/materials/uom-categories/{uomCategory}', [UomCategoryController::class, 'update'])
         ->name('materials.uom-categories.update');
+    Route::patch('/manufacturing/uom-categories/{uomCategory}', [UomCategoryController::class, 'update']);
     Route::delete('/materials/uom-categories/{uomCategory}', [UomCategoryController::class, 'destroy'])
         ->name('materials.uom-categories.destroy');
+    Route::delete('/manufacturing/uom-categories/{uomCategory}', [UomCategoryController::class, 'destroy']);
     Route::get('/materials/{item}', [ItemController::class, 'show'])
         ->name('materials.show');
 

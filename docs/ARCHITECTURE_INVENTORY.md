@@ -1230,6 +1230,67 @@ Templates without Alpine usage.
 
 ---
 
+### Page Module Contract
+
+**Name:** Page Module Contract  
+**Type:** UI Architecture Invariant  
+**Location:**  
+- `docs/architecture/ui/PageModuleContract.yaml`
+
+**Purpose:**  
+Define the page-scoped UI module contract for interactive Blade pages.
+
+**When to Use:**  
+Any interactive Blade page using Alpine state or fetch-based CRUD.
+
+**When Not to Use:**  
+Static Blade pages with no interactivity.
+
+**Public Interface:**  
+- `docs/architecture/ui/PageModuleContract.yaml`  
+- `docs/UI_DESIGN.md`  
+- `resources/js/app.js`  
+- `resources/js/pages/**`
+
+**Example Usage:**  
+```blade
+<script type="application/json" id="materials-index-payload">@json($payload)</script>
+<div data-page="materials-index" data-payload="materials-index-payload" x-data="materialsIndex"></div>
+```
+
+---
+
+### Page Module Guardrails
+
+**Name:** Page Module Guardrails  
+**Type:** UI Constraint  
+**Location:**  
+- `docs/architecture/ui/PageModuleGuardrails.yaml`  
+- `scripts/ci/blade-guardrails.sh`  
+- `scripts/ci/js-syntax-guardrails.sh`  
+- `ci.sh`
+
+**Purpose:**  
+Fail CI when Blade templates include executable scripts or inline handlers, or when JS uses invalid optional-chaining assignments.
+
+**When to Use:**  
+Any interactive Blade view or page module change.
+
+**When Not to Use:**  
+Vendor or generated views excluded from repository checks, plus Breeze/shared layouts and components pending migration.
+
+**Public Interface:**  
+- `scripts/ci/blade-guardrails.sh`  
+- `scripts/ci/js-syntax-guardrails.sh`  
+- `./ci.sh`
+
+**Example Usage:**  
+```bash
+./ci.sh
+```
+
+---
+
 ## Testing
 
 ### Pest Testing Framework

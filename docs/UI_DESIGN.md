@@ -95,6 +95,11 @@ The UI should feel:
 - CSS files or inline styles
 - UI libraries (Flowbite, Headless UI, etc.)
 
+### Page Module Contract (Enforced)
+
+- Blade templates must not include executable `<script>` tags (JSON payloads only).
+- Inline JavaScript handlers in Blade are forbidden; use page modules instead.
+
 ---
 
 ## Interaction Patterns
@@ -343,3 +348,179 @@ Sales and Purchasing consume these primitives but do not define them.
 - This structure scales cleanly as domains expand without menu sprawl.
 
 ---
+
+## UI Execution & Page Module Rules (Mandatory)
+
+Every interactive page **must** follow this contract.
+
+---
+
+### Page Contract (Non-Negotiable)
+
+Each interactive page **must** have:
+
+- A **single root element** with:
+    - `data-page="page-slug"`
+    - `data-payload="payload-script-id"`
+- A **single** `<script type="application/json">` payload block
+- **No executable JavaScript** in Blade templates
+
+All UI logic **must** live in:
+resources/js/pages/\*\*
+
+---
+
+### Page Module Contract
+
+Each page module **must**:
+
+- Export a `mount(rootEl, payload)` function
+- Register its Alpine component **inside `mount`**
+- Never assume Alpine has already started
+
+---
+
+### Alpine Boot Order (Critical)
+
+Alpine **must not start** until **after** all page modules are registered.
+
+Required guarantees:
+
+- Page module is resolved
+- `Alpine.data(...)` is registered
+- `Alpine.start()` runs **exactly once**, afterward
+
+Violations cause:
+
+- `x-data` expressions failing silently
+- Production-only hydration bugs
+- Inconsistent behavior between dev and build
+
+---
+
+### Production-Safe Module Loading
+
+Dynamic string imports are **forbidden**.
+
+The page loader **must** use:
+
+```js
+import.meta.glob("./pages/**/*.js");
+```
+
+This ensures:
+
+Vite production builds include all page modules
+
+No missing-module failures after build
+
+Static discoverability of UI logic
+
+---
+
+Alpine Safety Rules (Mandatory)
+
+1. Optional-Chaining Assignment Is Forbidden
+
+This is invalid JavaScript and will break builds:
+
+el?.textContent = value ❌
+
+Required pattern:
+
+const el = ...
+if (el) {
+el.textContent = value
+}
+
+2. Stable Error Object Shapes
+
+Any error object referenced in Blade like:
+
+x-text="errors.name[0]"
+
+must always exist as an array, even when empty.
+
+Forbidden:
+
+errors = {}
+
+Required:
+
+errors = { name: [], base_uom_id: [] }
+
+422 responses must be normalized into this shape.
+
+3. Alpine Expressions Must Be Defensive
+
+Alpine expressions must be safe during:
+
+Initial render
+
+Empty payloads
+
+Validation failures
+
+Post-submit updates
+
+If an expression can throw, it is invalid.
+
+Page-Local Reactivity Rules
+
+UI must update immediately after create/edit/delete
+
+Page refreshes to reflect state are forbidden
+
+Server is source of truth; UI reconciles response data
+
+Arrays must be mutated via:
+
+push
+
+splice
+
+filtered reassignment
+
+Needing a refresh indicates a broken implementation.
+
+Global JavaScript State
+
+No global JS state allowed
+
+window.Alpine permitted only as a compatibility bridge
+
+No page logic may depend on globals
+
+All state must be page-scoped.
+
+Enforcement
+
+Violations of this section are hard blockers.
+
+PRs must be rejected if they introduce:
+
+Inline executable JS in Blade
+
+Incorrect Alpine boot order
+
+Unstable error bindings
+
+Optional-chaining assignments
+
+Page reloads for UI updates
+
+Design Intent
+
+These rules ensure the UI remains:
+
+Predictable
+
+Debuggable
+
+Production-safe
+
+Framework-agnostic
+
+They are mandatory, not stylistic.
+
+::contentReference[oaicite:0]{index=0}

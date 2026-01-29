@@ -1,3 +1,14 @@
+@props([
+    'formVar' => 'form',
+    'errorsVar' => 'errors',
+    'errorsPrefix' => '',
+])
+
+@php
+    $errorsPrefix = $errorsPrefix !== '' ? rtrim($errorsPrefix, '.') : '';
+    $errorsPath = $errorsPrefix !== '' ? $errorsVar . '.' . $errorsPrefix : $errorsVar;
+@endphp
+
 <div
     x-cloak
     x-show="showCountForm"
@@ -27,9 +38,9 @@
                         id="counted_at"
                         type="datetime-local"
                         class="w-full rounded-md border-gray-300 focus:border-blue-500 focus:ring-blue-500"
-                        x-model="form.counted_at"
+                        x-model="{{ $formVar }}.counted_at"
                     />
-                    <p class="text-sm text-red-600" x-show="errors.counted_at" x-text="errors.counted_at?.[0]"></p>
+                    <p class="text-sm text-red-600" x-show="{{ $errorsPath }}?.counted_at" x-text="{{ $errorsPath }}?.counted_at?.[0]"></p>
                 </div>
 
                 <div class="space-y-2">
@@ -40,12 +51,12 @@
                         id="notes"
                         rows="3"
                         class="w-full rounded-md border-gray-300 focus:border-blue-500 focus:ring-blue-500"
-                        x-model="form.notes"
+                        x-model="{{ $formVar }}.notes"
                     ></textarea>
-                    <p class="text-sm text-red-600" x-show="errors.notes" x-text="errors.notes?.[0]"></p>
+                    <p class="text-sm text-red-600" x-show="{{ $errorsPath }}?.notes" x-text="{{ $errorsPath }}?.notes?.[0]"></p>
                 </div>
 
-                <p class="text-sm text-red-600" x-show="errors.general" x-text="errors.general?.[0]"></p>
+                <p class="text-sm text-red-600" x-show="{{ $errorsPath }}?.general" x-text="{{ $errorsPath }}?.general?.[0]"></p>
             </div>
 
             <div class="p-6 border-t border-gray-100 flex justify-end space-x-3">

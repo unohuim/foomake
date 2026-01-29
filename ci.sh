@@ -1,6 +1,21 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+require_cmd() {
+  local cmd="$1"
+  if ! command -v "${cmd}" >/dev/null 2>&1; then
+    echo "ERROR: Required command not found on PATH: ${cmd}"
+    exit 1
+  fi
+}
+
+# --- Tooling prerequisites ---
+require_cmd php
+require_cmd composer
+require_cmd node
+require_cmd npm
+require_cmd rg
+
 # --- Ensure we have a CI env file ---
 if [ ! -f .env.ci ]; then
   cp .env.example .env.ci
@@ -15,6 +30,10 @@ php artisan key:generate --env=ci --force
 # --- Permissions (safe no-op if not needed) ---
 chmod -R 777 storage bootstrap/cache 2>/dev/null || true
 
+# --- Guardrails (fail fast) ---
+bash scripts/ci/blade-guardrails.sh
+bash scripts/ci/js-syntax-guardrails.sh
+
 # --- Frontend build ---
 if [ -f package-lock.json ]; then
   npm ci
@@ -23,10 +42,9 @@ else
 fi
 npm run build
 
-# --- OPTIONAL: DB migrate if CI DB is configured (Postgres) ---
-# Only runs if DB_CONNECTION is present in .env.ci or your shell env.
-if grep -qE '^\s*DB_CONNECTION=' .env.ci || [ -n "${DB_CONNECTION:-}" ]; then
-  php artisan migrate --env=ci --force || true
+# --- DB migrate only if CI env declares a DB connection ---
+if grep -qE '^\s*DB_CONNECTION=' .env.ci; then
+  php artisan migrate --env=ci --force
 fi
 
 # --- Run tests ---

@@ -5,184 +5,25 @@
         </h2>
     </x-slot>
 
+    @php
+        $payload = [
+            'categories' => $categories,
+            'storeUrl' => route('manufacturing.uoms.store'),
+            'updateUrlTemplate' => route('manufacturing.uoms.update', ['uom' => '__ID__']),
+            'deleteUrlTemplate' => route('manufacturing.uoms.destroy', ['uom' => '__ID__']),
+            'csrfToken' => csrf_token(),
+        ];
+    @endphp
+
+    <script type="application/json" id="manufacturing-uoms-index-payload">@json($payload)</script>
+
     <div
         class="py-8"
-        x-data="{
-            categories: [],
-            storeUrl: '',
-            updateUrlTemplate: '',
-            deleteUrlTemplate: '',
-            csrfToken: '',
-            formOpen: false,
-            deleteOpen: false,
-            isEditing: false,
-            isSubmitting: false,
-            form: { id: null, name: '', symbol: '', uom_category_id: '' },
-            errors: {},
-            errorMessage: '',
-            toastMessage: '',
-            toastVisible: false,
-            deleteTarget: null,
-
-            init() {
-                this.categories = JSON.parse(this.$refs.categoriesData.textContent);
-                this.storeUrl = this.$el.dataset.storeUrl;
-                this.updateUrlTemplate = this.$el.dataset.updateUrlTemplate;
-                this.deleteUrlTemplate = this.$el.dataset.deleteUrlTemplate;
-                this.csrfToken = this.$el.dataset.csrfToken;
-            },
-
-            hasUoms() {
-                return this.categories.some((category) => category.uoms.length > 0);
-            },
-
-            openCreate() {
-                this.resetErrors();
-                this.form = { id: null, name: '', symbol: '', uom_category_id: '' };
-                this.isEditing = false;
-                this.formOpen = true;
-            },
-
-            openEdit(uom) {
-                this.resetErrors();
-                this.form = {
-                    id: uom.id,
-                    name: uom.name,
-                    symbol: uom.symbol,
-                    uom_category_id: uom.uom_category_id,
-                };
-                this.isEditing = true;
-                this.formOpen = true;
-            },
-
-            closeForm() {
-                this.formOpen = false;
-            },
-
-            openDelete(uom) {
-                this.resetErrors();
-                this.deleteTarget = uom;
-                this.deleteOpen = true;
-            },
-
-            closeDelete() {
-                this.deleteOpen = false;
-                this.deleteTarget = null;
-            },
-
-            resetErrors() {
-                this.errors = {};
-                this.errorMessage = '';
-            },
-
-            showToast(message) {
-                this.toastMessage = message;
-                this.toastVisible = true;
-
-                setTimeout(() => {
-                    this.toastVisible = false;
-                }, 2000);
-            },
-
-            updateUom(updated) {
-                this.removeUom(updated.id);
-
-                const category = this.categories.find((item) => item.id === updated.uom_category_id);
-                if (category) {
-                    category.uoms.push(updated);
-                    category.uoms = category.uoms.sort((a, b) => a.name.localeCompare(b.name));
-                }
-            },
-
-            removeUom(id) {
-                this.categories.forEach((category) => {
-                    category.uoms = category.uoms.filter((uom) => uom.id !== id);
-                });
-            },
-
-            async submitForm() {
-                this.resetErrors();
-                this.isSubmitting = true;
-
-                const url = this.isEditing
-                    ? this.updateUrlTemplate.replace('__ID__', this.form.id)
-                    : this.storeUrl;
-
-                const method = this.isEditing ? 'PATCH' : 'POST';
-
-                const response = await fetch(url, {
-                    method,
-                    headers: {
-                        Accept: 'application/json',
-                        'Content-Type': 'application/json',
-                        'X-CSRF-TOKEN': this.csrfToken,
-                    },
-                    body: JSON.stringify({
-                        name: this.form.name,
-                        symbol: this.form.symbol,
-                        uom_category_id: this.form.uom_category_id,
-                    }),
-                });
-
-                this.isSubmitting = false;
-
-                if (response.status === 422) {
-                    const data = await response.json();
-                    this.errors = data.errors || {};
-                    return;
-                }
-
-                if (!response.ok) {
-                    this.errorMessage = 'Something went wrong. Please try again.';
-                    return;
-                }
-
-                const data = await response.json();
-                this.updateUom(data);
-                this.closeForm();
-                this.showToast(this.isEditing ? 'Unit updated.' : 'Unit created.');
-            },
-
-            async confirmDelete() {
-                if (!this.deleteTarget) {
-                    return;
-                }
-
-                this.isSubmitting = true;
-
-                const response = await fetch(
-                    this.deleteUrlTemplate.replace('__ID__', this.deleteTarget.id),
-                    {
-                        method: 'DELETE',
-                        headers: {
-                            Accept: 'application/json',
-                            'X-CSRF-TOKEN': this.csrfToken,
-                        },
-                    }
-                );
-
-                this.isSubmitting = false;
-
-                if (!response.ok) {
-                    this.errorMessage = 'Unable to delete the unit.';
-                    return;
-                }
-
-                this.removeUom(this.deleteTarget.id);
-                this.closeDelete();
-                this.showToast('Unit deleted.');
-            },
-        }"
+        data-page="manufacturing-uoms-index"
+        data-payload="manufacturing-uoms-index-payload"
+        x-data="manufacturingUomsIndex"
         x-init="init()"
-        data-store-url="{{ route('manufacturing.uoms.store') }}"
-        data-update-url-template="{{ route('manufacturing.uoms.update', ['uom' => '__ID__']) }}"
-        data-delete-url-template="{{ route('manufacturing.uoms.destroy', ['uom' => '__ID__']) }}"
-        data-csrf-token="{{ csrf_token() }}"
     >
-        <script type="application/json" x-ref="categoriesData">
-            @json($categories)
-        </script>
-
         <div class="fixed top-6 right-6 z-50" x-show="toastVisible" x-cloak>
             <div class="rounded-md bg-green-50 border border-green-200 px-4 py-3 shadow-sm">
                 <p class="text-sm text-green-700" x-text="toastMessage"></p>

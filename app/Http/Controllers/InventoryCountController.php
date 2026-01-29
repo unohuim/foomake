@@ -31,6 +31,10 @@ class InventoryCountController extends Controller
 
         return response()->view('inventory.counts.index', [
             'counts' => $counts,
+            'payload' => [
+                'storeUrl' => route('inventory.counts.store'),
+                'csrfToken' => $request->session()->token(),
+            ],
         ]);
     }
 

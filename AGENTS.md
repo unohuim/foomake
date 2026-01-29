@@ -17,6 +17,7 @@ Before proposing a plan or writing any files, Codex MUST read and treat the foll
 - docs/PR2_ROADMAP.md
 - docs/ENUMS.md
 - docs/UI_DESIGN.md
+- docs/architecture/README.yaml
 
 ### Architecture (Primary Source of Truth)
 

@@ -1,0 +1,46 @@
+name: Page Module Contract
+type: UI Architecture Invariant
+location:
+  - resources/js/app.js
+  - resources/js/pages/**
+  - resources/views/**
+purpose: Define the framework-agnostic, page-scoped UI module contract that eliminates executable Blade JavaScript and guarantees deterministic Alpine initialization.
+when_to_use:
+  - Building or migrating any interactive Blade page to the page-module pattern
+  - Adding new UI behavior that depends on Alpine state or fetch-based CRUD
+  - Reviewing PRs that touch interactive Blade + JavaScript integration
+when_not_to_use:
+  - Static Blade pages with no interactivity
+  - Purely presentational Blade partials that emit events only
+  - Backend-only changes with no UI behavior impact
+rules:
+  - Every interactive page must have exactly one page root element with data-page and data-payload attributes.
+  - Every interactive page must include exactly one payload script tag with type application/json and an id matching data-payload.
+  - Blade templates must contain no executable JavaScript.
+  - The only allowed script tag in Blade is a payload block: <script type="application/json">.
+  - All page UI logic must live in resources/js/pages/**.
+  - Each page module must export a mount(rootEl, payload) function.
+  - Page modules must register Alpine components inside mount using Alpine.data('ComponentName', ...).
+  - Alpine.start() must run exactly once and only after the page module has mounted when data-page is present.
+  - Page module loading must be build-safe and not rely on unbounded dynamic imports; the loader must resolve known modules (e.g., via import.meta.glob).
+  - No global JavaScript state may be introduced to implement this pattern.
+  - Payload parsing must be safe (JSON parse with fallback to an empty object).
+  - Page modules must avoid build-invalid syntax such as optional chaining on assignment LHS.
+public_interface:
+  - docs/architecture/ui/PageModuleContract.yaml
+  - docs/UI_DESIGN.md
+  - resources/js/app.js
+  - resources/js/pages/**
+example_usage: |
+  Blade:
+    <script type="application/json" id="materials-index-payload">@json($payload)</script>
+    <div data-page="materials-index" data-payload="materials-index-payload" x-data="materialsIndex"></div>
+
+  Page module:
+    // resources/js/pages/materials-index.js
+    export function mount(rootEl, payload) {
+      Alpine.data('materialsIndex', () => ({ /* state + methods */ }));
+    }
+
+  App loader:
+    // resources/js/app.js loads ./pages/${slug}.js, calls mount(rootEl, payload), then Alpine.start() once.

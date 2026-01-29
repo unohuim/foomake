@@ -5,7 +5,12 @@
         </h2>
     </x-slot>
 
-    <div class="py-12">
+    <div
+        class="py-12"
+        data-page="profile-edit"
+        data-payload="profile-edit-payload"
+        x-data="profileEdit"
+    >
         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 space-y-6">
             <div class="p-4 sm:p-8 bg-white shadow sm:rounded-lg">
                 <div class="max-w-xl">
@@ -26,4 +31,8 @@
             </div>
         </div>
     </div>
+
+    <script type="application/json" id="profile-edit-payload">
+        @json((object) [])
+    </script>
 </x-app-layout>

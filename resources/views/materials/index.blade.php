@@ -28,295 +28,26 @@
                 'has_stock_moves' => $item->stockMoves()->exists(),
             ];
         });
+        $payload = [
+            'items' => $itemsPayload,
+            'uoms' => $uomsPayload,
+            'uomsExist' => $uomsExist,
+            'updateUrlBase' => url('/materials'),
+            'showUrlBase' => url('/materials'),
+            'storeUrl' => route('materials.store'),
+            'csrfToken' => csrf_token(),
+        ];
     @endphp
+
+    <script type="application/json" id="materials-index-payload">@json($payload)</script>
 
     <div
         class="py-12"
-        x-data="{
-            items: [],
-            uomsById: {},
-            uomsExist: {{ $uomsExist ? 'true' : 'false' }},
-            updateUrlBase: '{{ url('/materials') }}',
-            showUrlBase: '{{ url('/materials') }}',
-            isCreateOpen: false,
-            isSubmitting: false,
-            errors: {},
-            generalError: '',
-            isEditOpen: false,
-            isEditSubmitting: false,
-            editErrors: {},
-            editGeneralError: '',
-            editItemId: null,
-            editBaseUomLocked: false,
-            isDeleteOpen: false,
-            isDeleteSubmitting: false,
-            deleteError: '',
-            deleteItemId: null,
-            deleteItemName: '',
-            toast: {
-                visible: false,
-                message: '',
-                type: 'success',
-                timeoutId: null
-            },
-            form: {
-                name: '',
-                base_uom_id: '',
-                is_purchasable: false,
-                is_sellable: false,
-                is_manufacturable: false
-            },
-            editForm: {
-                name: '',
-                base_uom_id: '',
-                is_purchasable: false,
-                is_sellable: false,
-                is_manufacturable: false
-            },
-            init() {
-                this.items = JSON.parse(this.$refs.itemsData.textContent);
-                this.uomsById = JSON.parse(this.$refs.uomsData.textContent)
-                    .reduce((map, uom) => {
-                        map[uom.id] = uom;
-                        return map;
-                    }, {});
-            },
-            showToast(type, message) {
-                this.toast.type = type;
-                this.toast.message = message;
-                this.toast.visible = true;
-
-                if (this.toast.timeoutId) {
-                    clearTimeout(this.toast.timeoutId);
-                }
-
-                this.toast.timeoutId = setTimeout(() => {
-                    this.toast.visible = false;
-                }, 2500);
-            },
-            openCreate() {
-                if (!this.uomsExist) {
-                    return;
-                }
-
-                this.isCreateOpen = true;
-                this.generalError = '';
-                this.errors = {};
-            },
-            closeCreate() {
-                this.isCreateOpen = false;
-                this.isSubmitting = false;
-                this.generalError = '';
-                this.errors = {};
-                this.resetForm();
-            },
-            resetForm() {
-                this.form = {
-                    name: '',
-                    base_uom_id: '',
-                    is_purchasable: false,
-                    is_sellable: false,
-                    is_manufacturable: false
-                };
-            },
-            openEdit(item) {
-                this.editItemId = item.id;
-                this.editForm = {
-                    name: item.name,
-                    base_uom_id: item.base_uom_id,
-                    is_purchasable: item.is_purchasable,
-                    is_sellable: item.is_sellable,
-                    is_manufacturable: item.is_manufacturable
-                };
-                this.editBaseUomLocked = item.has_stock_moves;
-                this.isEditOpen = true;
-                this.editErrors = {};
-                this.editGeneralError = '';
-            },
-            closeEdit() {
-                this.isEditOpen = false;
-                this.isEditSubmitting = false;
-                this.editErrors = {};
-                this.editGeneralError = '';
-                this.editItemId = null;
-                this.editBaseUomLocked = false;
-                this.resetEditForm();
-            },
-            resetEditForm() {
-                this.editForm = {
-                    name: '',
-                    base_uom_id: '',
-                    is_purchasable: false,
-                    is_sellable: false,
-                    is_manufacturable: false
-                };
-            },
-            openDelete(item) {
-                this.deleteItemId = item.id;
-                this.deleteItemName = item.name;
-                this.deleteError = '';
-                this.isDeleteOpen = true;
-            },
-            closeDelete() {
-                this.isDeleteOpen = false;
-                this.isDeleteSubmitting = false;
-                this.deleteError = '';
-                this.deleteItemId = null;
-                this.deleteItemName = '';
-            },
-            async submitCreate() {
-                this.isSubmitting = true;
-                this.generalError = '';
-                this.errors = {};
-
-                const payload = {
-                    name: this.form.name,
-                    base_uom_id: this.form.base_uom_id,
-                    is_purchasable: this.form.is_purchasable,
-                    is_sellable: this.form.is_sellable,
-                    is_manufacturable: this.form.is_manufacturable
-                };
-
-                const response = await fetch('{{ route('materials.store') }}', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Accept': 'application/json',
-                        'X-CSRF-TOKEN': '{{ csrf_token() }}'
-                    },
-                    body: JSON.stringify(payload)
-                });
-
-                if (response.status === 422) {
-                    const data = await response.json();
-                    this.errors = data.errors || {};
-                    this.isSubmitting = false;
-                    return;
-                }
-
-                if (!response.ok) {
-                    this.generalError = 'Something went wrong. Please try again.';
-                    this.isSubmitting = false;
-                    return;
-                }
-
-                const data = await response.json();
-                const uom = this.uomsById[data.data.base_uom_id] || { name: '', symbol: '' };
-
-                this.items.unshift({
-                    id: data.data.id,
-                    name: data.data.name,
-                    base_uom_id: data.data.base_uom_id,
-                    base_uom_name: uom.name,
-                    base_uom_symbol: uom.symbol,
-                    is_purchasable: data.data.is_purchasable,
-                    is_sellable: data.data.is_sellable,
-                    is_manufacturable: data.data.is_manufacturable,
-                    has_stock_moves: false
-                });
-
-                this.closeCreate();
-            },
-            async submitEdit() {
-                this.isEditSubmitting = true;
-                this.editGeneralError = '';
-                this.editErrors = {};
-
-                const payload = {
-                    name: this.editForm.name,
-                    base_uom_id: this.editForm.base_uom_id,
-                    is_purchasable: this.editForm.is_purchasable,
-                    is_sellable: this.editForm.is_sellable,
-                    is_manufacturable: this.editForm.is_manufacturable
-                };
-
-                const response = await fetch(this.updateUrlBase + '/' + this.editItemId, {
-                    method: 'PATCH',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Accept': 'application/json',
-                        'X-CSRF-TOKEN': '{{ csrf_token() }}'
-                    },
-                    body: JSON.stringify(payload)
-                });
-
-                if (response.status === 422) {
-                    const data = await response.json();
-                    this.editErrors = data.errors || {};
-                    this.isEditSubmitting = false;
-                    return;
-                }
-
-                if (!response.ok) {
-                    this.editGeneralError = 'Something went wrong. Please try again.';
-                    this.showToast('error', 'Unable to update material.');
-                    this.isEditSubmitting = false;
-                    return;
-                }
-
-                const data = await response.json();
-                const uom = this.uomsById[data.data.base_uom_id] || { name: '', symbol: '' };
-                const itemIndex = this.items.findIndex((item) => item.id === data.data.id);
-
-                if (itemIndex !== -1) {
-                    this.items[itemIndex] = {
-                        ...this.items[itemIndex],
-                        id: data.data.id,
-                        name: data.data.name,
-                        base_uom_id: data.data.base_uom_id,
-                        base_uom_name: uom.name,
-                        base_uom_symbol: uom.symbol,
-                        is_purchasable: data.data.is_purchasable,
-                        is_sellable: data.data.is_sellable,
-                        is_manufacturable: data.data.is_manufacturable,
-                        has_stock_moves: data.data.has_stock_moves ?? this.items[itemIndex].has_stock_moves
-                    };
-                }
-
-                this.showToast('success', 'Material updated.');
-                this.closeEdit();
-            },
-            async submitDelete() {
-                this.isDeleteSubmitting = true;
-                this.deleteError = '';
-
-                const response = await fetch(this.updateUrlBase + '/' + this.deleteItemId, {
-                    method: 'DELETE',
-                    headers: {
-                        'Accept': 'application/json',
-                        'X-CSRF-TOKEN': '{{ csrf_token() }}'
-                    }
-                });
-
-                if (response.status === 422) {
-                    const data = await response.json();
-                    this.deleteError = data.message || 'Unable to delete material.';
-                    this.showToast('error', this.deleteError);
-                    this.isDeleteSubmitting = false;
-                    return;
-                }
-
-                if (!response.ok) {
-                    this.deleteError = 'Something went wrong. Please try again.';
-                    this.showToast('error', 'Unable to delete material.');
-                    this.isDeleteSubmitting = false;
-                    return;
-                }
-
-                this.items = this.items.filter((item) => item.id !== this.deleteItemId);
-                this.showToast('success', 'Material deleted.');
-                this.closeDelete();
-            }
-        }"
+        data-page="materials-index"
+        data-payload="materials-index-payload"
+        x-data="materialsIndex"
         x-init="init()"
     >
-        <script type="application/json" x-ref="itemsData">
-            @json($itemsPayload)
-        </script>
-        <script type="application/json" x-ref="uomsData">
-            @json($uomsPayload)
-        </script>
-
         <div class="fixed top-6 right-6 z-50" x-show="toast.visible">
             <div
                 class="rounded-md px-4 py-3 text-sm shadow-md"
@@ -419,47 +150,37 @@
                                             <td class="px-4 py-4 text-right text-sm">
                                                 <div
                                                     class="relative inline-block text-left"
-                                                    x-data="{ open: false, top: 0, left: 0, width: 0 }"
-                                                    x-on:keydown.escape.window="open = false"
+                                                    x-on:keydown.escape.window="closeActionMenu()"
                                                 >
                                                     <button
                                                         type="button"
                                                         class="inline-flex items-center justify-center w-8 h-8 text-gray-500 hover:text-gray-700"
                                                         aria-label="Material actions"
-                                                        x-ref="btn"
-                                                        x-on:click="
-                                                            open = !open;
-                                                            if (open) {
-                                                                const r = $refs.btn.getBoundingClientRect();
-                                                                top = r.bottom;
-                                                                left = r.right;
-                                                                width = r.width;
-                                                            }
-                                                        "
+                                                        x-on:click="toggleActionMenu($event, item.id)"
                                                     >
                                                         ⋮
                                                     </button>
 
                                                     <template x-teleport="body">
                                                         <div
-                                                            x-show="open"
-                                                            x-on:click.outside="open = false"
+                                                            x-show="isActionMenuOpenFor(item.id)"
+                                                            x-on:click.outside="closeActionMenu()"
                                                             x-transition
                                                             class="fixed z-50 mt-2 w-40 rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5"
-                                                            x-bind:style="'top:' + top + 'px; left:' + (left - 160) + 'px;'"
+                                                            x-bind:style="'top:' + actionMenuTop + 'px; left:' + (actionMenuLeft - 160) + 'px;'"
                                                         >
                                                             <div class="py-1">
                                                                 <button
                                                                     type="button"
                                                                     class="block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100"
-                                                                    x-on:click="open = false; openEdit(item)"
+                                                                    x-on:click="closeActionMenu(); openEdit(item)"
                                                                 >
                                                                     Edit
                                                                 </button>
                                                                 <button
                                                                     type="button"
                                                                     class="block w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50"
-                                                                    x-on:click="open = false; openDelete(item)"
+                                                                    x-on:click="closeActionMenu(); openDelete(item)"
                                                                 >
                                                                     Delete
                                                                 </button>

@@ -164,7 +164,7 @@ All operational data is **tenant-scoped**.
 
 The following documents are the **source of truth**, in strict priority order:
 
-1. docs/PR2_ROADMAP.md
+1. docs/JS_UI_ROADMAP.md
 2. docs/CONVENTIONS.md
 3. docs/ARCHITECTURE_INVENTORY.md (bootstrap-facing, required)
 4. docs/PERMISSIONS_MATRIX.md
@@ -172,6 +172,8 @@ The following documents are the **source of truth**, in strict priority order:
 6. docs/DB_SCHEMA.md
 7. docs/UI_DESIGN.md
 8. docs/architecture/README.yaml
+9. routes/web.php
+10. docs/architecture/ui/PageModuleContract.yaml
 
 If any conflict exists, **higher priority always wins**.
 For architecture invariants specifically, follow:
