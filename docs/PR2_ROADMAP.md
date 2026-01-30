@@ -274,6 +274,18 @@ Enable full recipe authoring with minimal, calm AJAX-first UX.
 - Exactly one output item per recipe
 - Lines cannot reference the output item
 - Canonical decimal quantity math
+- Many active recipes per output item are allowed
+- Only one default recipe per (tenant, output item) is allowed
+- `is_active` and `is_default` are independent flags
+- Setting `is_default=true` unsets the prior default for the same (tenant, output item)
+- Defaults are tenant-scoped and item-scoped only
+- Deleting a default recipe leaves no default (no auto-promotion)
+- Default enforcement exists at both the application layer (transactional) and database layer (unique constraint/partial index)
+- No implicit activation or defaulting occurs
+
+**Clarifications Added**
+
+- Active vs default semantics are now explicit to reflect the introduction of `is_default` and the corrected allowance of multiple active recipes per output item.
 
 **Permissions**
 

@@ -126,7 +126,8 @@ Enable manufacturing via recursive recipes.
 
 **Key Invariants**
 
-- One active recipe per manufacturable Item
+- Many active recipes per manufacturable Item are allowed
+- One default recipe per (tenant, output Item) is allowed
 - Recipes consume Items and produce one Item
 - Sub-recipes are allowed
 

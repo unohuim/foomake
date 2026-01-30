@@ -122,11 +122,15 @@ Rules:
 
 ## Recipes (Bill of Materials)
 
-- Each manufacturable Item requires one active Recipe
 - A Recipe:
     - Produces exactly one output Item
     - Consumes one or more input Items
 - Inputs may be raw materials or other manufactured Items
+- Manufacturable Items may have **many active** Recipes
+- Only **one default** Recipe is allowed per (tenant, output Item)
+- Setting a Recipe as default unsets any prior default for the same (tenant, output Item)
+- Default selection must not affect other tenants or other output Items
+- Deleting the default Recipe leaves **no default** (no auto-promotion)
 
 No labor, time, or costing included at this stage.
 

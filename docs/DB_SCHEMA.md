@@ -380,6 +380,7 @@ Migrations remain the **sole source of truth**.
 | tenant_id  | bigint    | No       | FK → tenants.id (CASCADE) |
 | item_id    | bigint    | No       | FK → items.id (CASCADE)   |
 | is_active  | boolean   | No       | Default true              |
+| is_default | boolean   | No       | Default false             |
 | created_at | timestamp | Yes      | —                         |
 | updated_at | timestamp | Yes      | —                         |
 
@@ -387,6 +388,7 @@ Migrations remain the **sole source of truth**.
 
 - PK: `id`
 - Unique: `(id, tenant_id)`
+- Unique: `(tenant_id, item_id)` where `is_default = 1` (partial/filtered; driver-specific)
 - Index: `(tenant_id, item_id)`
 - Implicit (FK index): `tenant_id`
 - Implicit (FK index): `item_id`
