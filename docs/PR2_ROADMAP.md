@@ -322,6 +322,42 @@ Allow executing a recipe to create ledger movements.
 
 ---
 
+### PR3b — Make Orders Lifecycle (Persisted)
+
+**Goal**  
+Implement persisted Make Orders with full lifecycle (Draft → Scheduled → Made/Executed), replacing direct execution. Index list at /manufacturing/make-orders.
+
+**Includes**
+
+- Index UI: table of Make Orders (Recipe/Output, Qty, Status, Due Date, Actions)
+- Create draft: slide-over (select active recipe + output qty) → saves as DRAFT
+- Schedule: set due date on draft → status SCHEDULED
+- Make/Execute: on scheduled order → calls ExecuteRecipeAction → status MADE + stock moves
+- Tenant isolation, permission gates, AJAX actions, toasts/errors
+- Idempotent "make" (error if already made)
+
+**Rules**
+
+- Ledger-first on "make": issues inputs + receipts output via ExecuteRecipeAction
+- BCMath canonical scale=6
+- Status: DRAFT, SCHEDULED, MADE
+- Active recipe required
+- Due date required for schedule
+- No actions after MADE
+
+**Permissions**
+
+- View: inventory-make-orders-view
+- Manage/Execute: inventory-make-orders-execute
+
+**Out of Scope**
+
+- Partial execution
+- Post-MADE reversal
+- Reporting
+
+---
+
 ## DOMAIN 4 — Suppliers & Purchasing
 
 _(Unchanged)_

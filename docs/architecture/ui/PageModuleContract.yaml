@@ -36,11 +36,19 @@ example_usage: |
     <script type="application/json" id="materials-index-payload">@json($payload)</script>
     <div data-page="materials-index" data-payload="materials-index-payload" x-data="materialsIndex"></div>
 
+  Make Orders (persisted):
+    <script type="application/json" id="manufacturing-make-orders-payload">@json($payload)</script>
+    <div data-page="manufacturing-make-orders" data-payload="manufacturing-make-orders-payload" x-data="manufacturingMakeOrders"></div>
+
   Page module:
     // resources/js/pages/materials-index.js
     export function mount(rootEl, payload) {
       Alpine.data('materialsIndex', () => ({ /* state + methods */ }));
     }
+
+    // resources/js/pages/manufacturing-make-orders.js
+    // Payload includes: make_orders[], recipes[], can_execute, store_url, schedule_url_base, make_url_base.
+    // Actions: create (store), schedule, make with JSON responses and toasts on success/error.
 
   App loader:
     // resources/js/app.js loads ./pages/${slug}.js, calls mount(rootEl, payload), then Alpine.start() once.

@@ -52,7 +52,7 @@ This document is the source-of-truth for **authorization intent** in this reposi
 - `inventory-adjustments-view`
 - `inventory-adjustments-execute`
 - `inventory-make-orders-view`
-- `inventory-make-orders-execute`
+- `inventory-make-orders-execute` (does not imply view)
 - `inventory-make-orders-manage`
 
 ### Reports
@@ -151,6 +151,7 @@ Execution-only role.
 ## Enforcement Notes
 
 - **All permission checks** must use gates: `Gate::allows('<permission-slug>')` or `@can('<permission-slug>')`.
+- Make Orders execute permission does not imply view; both gates must be evaluated where required.
 - Do not hardcode role names in controllers/services (except `super-admin` bypass in `Gate::before`).
 - Any new domain area must introduce permission slugs and update this matrix in the same PR.
 

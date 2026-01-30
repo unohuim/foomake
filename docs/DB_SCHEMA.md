@@ -33,6 +33,7 @@ Migrations remain the **sole source of truth**.
 - items
 - job_batches
 - jobs
+- make_orders
 - password_reset_tokens
 - permissions
 - permission_role
@@ -300,6 +301,44 @@ Migrations remain the **sole source of truth**.
 
 - PK: `id`
 - Index: `queue`
+
+---
+
+## make_orders
+
+**Tenant-owned:** Yes  
+**Purpose:** Persisted make orders with lifecycle
+
+### Columns
+
+| Name               | Type          | Nullable | Notes                                 |
+| ------------------ | ------------- | -------- | ------------------------------------- |
+| id                 | bigint        | No       | Primary key                           |
+| tenant_id          | bigint        | No       | FK → tenants.id (CASCADE)             |
+| recipe_id          | bigint        | No       | FK → recipes.id (CASCADE)             |
+| output_item_id     | bigint        | No       | FK → items.id (CASCADE)               |
+| output_quantity    | decimal(18,6) | No       | Canonical scale                       |
+| status             | string        | No       | DRAFT, SCHEDULED, MADE                |
+| due_date           | date          | Yes      | Set on schedule                       |
+| scheduled_at       | timestamp     | Yes      | Set on schedule                       |
+| made_at            | timestamp     | Yes      | Set on make                           |
+| created_by_user_id | bigint        | Yes      | FK → users.id (SET NULL)              |
+| made_by_user_id    | bigint        | Yes      | FK → users.id (SET NULL)              |
+| created_at         | timestamp     | Yes      | —                                     |
+| updated_at         | timestamp     | Yes      | —                                     |
+
+### Keys & Indexes
+
+- PK: `id`
+- Index: `(tenant_id, status)`
+- Index: `(tenant_id, due_date)`
+- Index: `(tenant_id, recipe_id)`
+- Index: `(tenant_id, output_item_id)`
+- Implicit (FK index): `tenant_id`
+- Implicit (FK index): `recipe_id`
+- Implicit (FK index): `output_item_id`
+- Implicit (FK index): `created_by_user_id`
+- Implicit (FK index): `made_by_user_id`
 
 ---
 

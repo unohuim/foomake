@@ -42,6 +42,31 @@ Do not introduce new enum values without updating this document.
 
 ---
 
+## Manufacturing
+
+### Make Order Status
+
+**Name:** MakeOrder status  
+**Storage location(s):** `make_orders.status` (string column)  
+**Allowed values:**
+
+- `DRAFT`
+- `SCHEDULED`
+- `MADE`
+
+**Semantic meaning:**
+
+- `DRAFT`: Planned make order with no scheduled date.
+- `SCHEDULED`: Due date set; still no stock moves.
+- `MADE`: Executed; stock moves have been posted.
+
+**Notes:**
+
+- Status transitions are DRAFT → SCHEDULED → MADE.
+- MADE is terminal.
+
+---
+
 ## Stock / Inventory Ledger
 
 ### Stock Move Type

@@ -50,11 +50,13 @@ Until then, you are in **intake and alignment mode only**.
 
 ## Step 1 — Document Intake (Strict)
 
-The authoritative documents are listed in **Section 2**. The contents of those documents have been included in this document.
+The authoritative documents are listed in **Section 2**.
 
 You must:
 
-- Read everything in this document, including those documents that are consolidated into this one.
+- Request that the human paste each required document **one at a time**
+- Follow the priority order **exactly**
+- Wait for each document before requesting the next
 - Explicitly acknowledge receipt of each document
 - **Do not** summarize, critique, or propose changes during intake
 
@@ -89,8 +91,8 @@ This repository follows a **human-in-the-loop test workflow**.
 - **Codex must never run tests unless explicitly instructed.**
 - **The human always runs tests manually**, after reviewing and possibly refining
   any AI-generated test drafts.
-- When instructed to write tests:
-    - Codex must write tests so that they are condsidered Complete and Sufficient, with at min 20 tests per file.
+- When instructed to write tests first:
+    - Codex must **stop after drafting tests**
     - Codex must **wait for human review and approval**
     - No application code may be written until tests are approved
 
