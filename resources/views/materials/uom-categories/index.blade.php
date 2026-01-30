@@ -37,11 +37,11 @@
                         </button>
                     </div>
 
-                    <div x-show="errorMessage" class="rounded-md bg-red-50 p-4">
+                    <div x-cloak x-show="errorMessage" class="rounded-md bg-red-50 p-4">
                         <p class="text-sm text-red-700" x-text="errorMessage"></p>
                     </div>
 
-                    <div x-show="categories.length === 0" class="rounded-md border border-dashed border-gray-200 p-8 text-center">
+                    <div x-cloak x-show="categories.length === 0" class="rounded-md border border-dashed border-gray-200 p-8 text-center">
                         <h4 class="text-sm font-medium text-gray-900">{{ __('No UoM categories yet') }}</h4>
                         <p class="mt-1 text-sm text-gray-500">{{ __('Create your first unit of measure category to organize units.') }}</p>
                         <div class="mt-4">
@@ -51,7 +51,7 @@
                         </div>
                     </div>
 
-                    <div x-show="categories.length > 0" class="overflow-hidden border border-gray-100 rounded-lg">
+                    <div x-cloak x-show="categories.length > 0" class="overflow-hidden border border-gray-100 rounded-lg">
                         <table class="min-w-full divide-y divide-gray-100">
                             <thead class="bg-gray-50">
                                 <tr>
@@ -81,7 +81,7 @@
                         </table>
                     </div>
 
-                    <div x-show="formOpen" class="fixed inset-0 z-50 flex items-center justify-center">
+                    <div x-cloak x-show="formOpen" class="fixed inset-0 z-50 flex items-center justify-center">
                         <div class="fixed inset-0 bg-gray-900/50" @click="closeForm"></div>
                         <div class="relative bg-white rounded-lg shadow-xl w-full max-w-md mx-4 p-6">
                             <h4 class="text-lg font-medium text-gray-900" x-text="isEditing ? '{{ __('Edit UoM Category') }}' : '{{ __('Create UoM Category') }}'"></h4>
@@ -104,7 +104,7 @@
                         </div>
                     </div>
 
-                    <div x-show="deleteOpen" class="fixed inset-0 z-50 flex items-center justify-center">
+                    <div x-cloak x-show="deleteOpen" class="fixed inset-0 z-50 flex items-center justify-center">
                         <div class="fixed inset-0 bg-gray-900/50" @click="closeDelete"></div>
                         <div class="relative bg-white rounded-lg shadow-xl w-full max-w-md mx-4 p-6">
                             <h4 class="text-lg font-medium text-gray-900">{{ __('Delete UoM Category') }}</h4>

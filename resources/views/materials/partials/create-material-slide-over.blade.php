@@ -1,12 +1,13 @@
 <div
     class="fixed inset-0 z-50 overflow-hidden"
     x-show="isCreateOpen"
+    x-cloak
     role="dialog"
     aria-modal="true"
 >
     <div class="absolute inset-0 overflow-hidden">
         <div
-            class="absolute inset-0 bg-gray-500 bg-opacity-25 transition-opacity"
+            class="absolute inset-0 bg-gray-500 bg-opacity-25 transition-opacity hidden"
             x-show="isCreateOpen"
             x-on:click="closeCreate()"
         ></div>

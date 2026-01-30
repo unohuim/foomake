@@ -113,6 +113,7 @@ export function mount(rootEl, payload) {
             };
         },
         openEdit(item) {
+            this.closeActionMenu();
             this.editItemId = item.id;
             this.editForm = {
                 name: item.name,
@@ -145,6 +146,7 @@ export function mount(rootEl, payload) {
             };
         },
         openDelete(item) {
+            this.closeActionMenu();
             this.deleteItemId = item.id;
             this.deleteItemName = item.name;
             this.deleteError = '';
@@ -178,9 +180,34 @@ export function mount(rootEl, payload) {
         closeActionMenu() {
             this.actionMenuOpen = false;
             this.actionMenuItemId = null;
+            this.actionMenuTop = 0;
+            this.actionMenuLeft = 0;
         },
         isActionMenuOpenFor(itemId) {
             return this.actionMenuOpen && this.actionMenuItemId === itemId;
+        },
+        getActionMenuItem() {
+            return this.items.find((item) => item.id === this.actionMenuItemId) || null;
+        },
+        openEditFromActionMenu() {
+            const item = this.getActionMenuItem();
+            this.closeActionMenu();
+
+            if (!item) {
+                return;
+            }
+
+            this.openEdit(item);
+        },
+        openDeleteFromActionMenu() {
+            const item = this.getActionMenuItem();
+            this.closeActionMenu();
+
+            if (!item) {
+                return;
+            }
+
+            this.openDelete(item);
         },
         async submitCreate() {
             this.isSubmitting = true;

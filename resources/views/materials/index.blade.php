@@ -70,7 +70,7 @@
                 </button>
             </div>
 
-            <div x-show="items.length === 0">
+            <div x-cloak x-show="items.length === 0">
                 <div class="bg-white border border-gray-100 shadow-sm sm:rounded-lg">
                     <div class="p-6">
                         <h3 class="text-lg font-medium text-gray-900">No materials yet</h3>
@@ -160,33 +160,6 @@
                                                     >
                                                         ⋮
                                                     </button>
-
-                                                    <template x-teleport="body">
-                                                        <div
-                                                            x-show="isActionMenuOpenFor(item.id)"
-                                                            x-on:click.outside="closeActionMenu()"
-                                                            x-transition
-                                                            class="fixed z-50 mt-2 w-40 rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5"
-                                                            x-bind:style="'top:' + actionMenuTop + 'px; left:' + (actionMenuLeft - 160) + 'px;'"
-                                                        >
-                                                            <div class="py-1">
-                                                                <button
-                                                                    type="button"
-                                                                    class="block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100"
-                                                                    x-on:click="closeActionMenu(); openEdit(item)"
-                                                                >
-                                                                    Edit
-                                                                </button>
-                                                                <button
-                                                                    type="button"
-                                                                    class="block w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50"
-                                                                    x-on:click="closeActionMenu(); openDelete(item)"
-                                                                >
-                                                                    Delete
-                                                                </button>
-                                                            </div>
-                                                        </div>
-                                                    </template>
                                                 </div>
                                             </td>
 
@@ -200,8 +173,9 @@
             </div>
 
             <div
-                class="fixed inset-0 z-40 flex items-center justify-center"
-                x-show="isDeleteOpen"
+                class="fixed inset-0 z-40 items-center justify-center hidden"
+                x-bind:class="isDeleteOpen ? 'flex' : 'hidden'"
+                x-cloak
                 x-on:keydown.escape.window="closeDelete()"
             >
                 <div class="fixed inset-0 bg-gray-900/30" x-on:click="closeDelete()"></div>
@@ -237,5 +211,33 @@
             @include('materials.partials.create-material-slide-over', ['uoms' => $uoms])
             @include('materials.partials.edit-material-slide-over', ['uoms' => $uoms])
         </div>
+
+        <template x-teleport="body">
+            <div
+                x-show="actionMenuOpen"
+                x-cloak
+                x-on:click.outside="closeActionMenu()"
+                x-transition
+                class="fixed z-50 mt-2 w-40 rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5"
+                x-bind:style="'top:' + actionMenuTop + 'px; left:' + (actionMenuLeft - 160) + 'px;'"
+            >
+                <div class="py-1">
+                    <button
+                        type="button"
+                        class="block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100"
+                        x-on:click="openEditFromActionMenu()"
+                    >
+                        Edit
+                    </button>
+                    <button
+                        type="button"
+                        class="block w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50"
+                        x-on:click="openDeleteFromActionMenu()"
+                    >
+                        Delete
+                    </button>
+                </div>
+            </div>
+        </template>
     </div>
 </x-app-layout>

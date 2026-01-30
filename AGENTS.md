@@ -18,6 +18,7 @@ Before proposing a plan or writing any files, Codex MUST read and treat the foll
 - docs/ENUMS.md
 - docs/UI_DESIGN.md
 - docs/architecture/README.yaml
+- docs/ARCHITECTURE_INVENTORY.md
 
 ### Architecture (Primary Source of Truth)
 

@@ -125,7 +125,7 @@ If the PR introduces or changes an architectural concept, invariant, or reusable
     - `docs/architecture/**.yaml`
 - The YAML files must follow the canonical architecture documentation system rules
   defined in:
-    - `docs/architecture/README.md` (schema, key order, and constraints)
+    - `docs/architecture/README.yaml` (schema, key order, and constraints)
 
 Important:
 
@@ -164,7 +164,7 @@ All operational data is **tenant-scoped**.
 
 The following documents are the **source of truth**, in strict priority order:
 
-1. docs/JS_UI_ROADMAP.md
+1. docs/PR2_ROADMAP.md
 2. docs/CONVENTIONS.md
 3. docs/ARCHITECTURE_INVENTORY.md (bootstrap-facing, required)
 4. docs/PERMISSIONS_MATRIX.md

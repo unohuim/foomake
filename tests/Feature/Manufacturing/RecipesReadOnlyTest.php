@@ -1,5 +1,3 @@
-// tests/Feature/Manufacturing/RecipesReadOnlyTest.php
-
 <?php
 
 use App\Models\Item;
@@ -78,6 +76,19 @@ beforeEach(function () {
         $role->permissions()->syncWithoutDetaching([$permission->id]);
         $user->roles()->syncWithoutDetaching([$role->id]);
     };
+
+    $this->grantMakeOrdersManage = function (User $user): void {
+        $permission = Permission::query()->firstOrCreate([
+            'slug' => 'inventory-make-orders-manage',
+        ]);
+
+        $role = Role::query()->firstOrCreate([
+            'name' => 'Inventory',
+        ]);
+
+        $role->permissions()->syncWithoutDetaching([$permission->id]);
+        $user->roles()->syncWithoutDetaching([$role->id]);
+    };
 });
 
 test('guests are redirected to login for recipes index and detail', function () {
@@ -96,6 +107,24 @@ test('guests are redirected to login for recipes index and detail', function () 
 test('forbids users without inventory-recipes-view permission', function () {
     $tenant = ($this->makeTenant)('Tenant A');
     $user = User::factory()->for($tenant)->create();
+
+    $uom = ($this->makeUom)();
+    $output = ($this->makeItem)($tenant, $uom, 'Output A', true);
+    $recipe = ($this->makeRecipe)($tenant, $output, true);
+
+    $this->actingAs($user)
+        ->get(route('manufacturing.recipes.index'))
+        ->assertForbidden();
+
+    $this->actingAs($user)
+        ->get(route('manufacturing.recipes.show', $recipe))
+        ->assertForbidden();
+});
+
+test('forbids users with manage but without view permission', function () {
+    $tenant = ($this->makeTenant)('Tenant A');
+    $user = User::factory()->for($tenant)->create();
+    ($this->grantMakeOrdersManage)($user);
 
     $uom = ($this->makeUom)();
     $output = ($this->makeItem)($tenant, $uom, 'Output A', true);
@@ -142,16 +171,90 @@ test('allows users with inventory-recipes-view permission to view recipes and re
         ->assertSee($output->name)
         ->assertSee($input->name);
 
-    /**
-     * Quantity assertion:
-     * - We only require 2 decimals for now.
-     * - We also require the quantity to appear "with" the input item (same local HTML context),
-     *   so we don't get a false positive from some unrelated "2.00" elsewhere.
-     */
     $html = $showResponse->getContent();
 
     expect($html)->toMatch(
         '/Input Flour[\s\S]{0,800}2\.00|2\.00[\s\S]{0,800}Input Flour/'
+    );
+});
+
+test('view permission shows pages but not manage controls and can_manage payload is false', function () {
+    $tenant = ($this->makeTenant)('Tenant A');
+    $user = User::factory()->for($tenant)->create();
+    ($this->grantInventoryRecipesView)($user);
+
+    $uom = ($this->makeUom)();
+    $output = ($this->makeItem)($tenant, $uom, 'Output A', true);
+    $recipe = ($this->makeRecipe)($tenant, $output, true);
+
+    $indexResponse = $this->actingAs($user)
+        ->get(route('manufacturing.recipes.index'))
+        ->assertOk();
+
+    $indexResponse
+        ->assertSee('data-page="manufacturing-recipes-index"', false)
+        ->assertSee('data-payload="manufacturing-recipes-index-payload"', false)
+        ->assertSee('<script type="application/json"', false)
+        ->assertSee('"can_manage":false', false);
+
+    $showResponse = $this->actingAs($user)
+        ->get(route('manufacturing.recipes.show', $recipe))
+        ->assertOk();
+
+    $showResponse
+        ->assertSee('data-page="manufacturing-recipes-show"', false)
+        ->assertSee('data-payload="manufacturing-recipes-show-payload"', false)
+        ->assertSee('<script type="application/json"', false)
+        ->assertSee('"can_manage":false', false);
+});
+
+test('view and manage permissions include can_manage true in payload', function () {
+    $tenant = ($this->makeTenant)('Tenant A');
+    $user = User::factory()->for($tenant)->create();
+    ($this->grantInventoryRecipesView)($user);
+    ($this->grantMakeOrdersManage)($user);
+
+    $uom = ($this->makeUom)();
+    $output = ($this->makeItem)($tenant, $uom, 'Output A', true);
+    $recipe = ($this->makeRecipe)($tenant, $output, true);
+
+    $this->actingAs($user)
+        ->get(route('manufacturing.recipes.index'))
+        ->assertOk()
+        ->assertSee('"can_manage":true', false);
+
+    $this->actingAs($user)
+        ->get(route('manufacturing.recipes.show', $recipe))
+        ->assertOk()
+        ->assertSee('"can_manage":true', false);
+});
+
+test('show page renders multiple line quantities in 2dp format near item names', function () {
+    $tenant = ($this->makeTenant)('Tenant A');
+    $user = User::factory()->for($tenant)->create();
+    ($this->grantInventoryRecipesView)($user);
+
+    $uom = ($this->makeUom)();
+    $output = ($this->makeItem)($tenant, $uom, 'Output A', true);
+    $inputA = ($this->makeItem)($tenant, $uom, 'Input One', false);
+    $inputB = ($this->makeItem)($tenant, $uom, 'Input Two', false);
+
+    $recipe = ($this->makeRecipe)($tenant, $output, true);
+    ($this->addRecipeLine)($tenant, $recipe, $inputA, '2.000000');
+    ($this->addRecipeLine)($tenant, $recipe, $inputB, '1.250000');
+
+    $showResponse = $this->actingAs($user)
+        ->get(route('manufacturing.recipes.show', $recipe))
+        ->assertOk();
+
+    $html = $showResponse->getContent();
+
+    expect($html)->toMatch(
+        '/Input One[\s\S]{0,800}2\.00|2\.00[\s\S]{0,800}Input One/'
+    );
+
+    expect($html)->toMatch(
+        '/Input Two[\s\S]{0,800}1\.25|1\.25[\s\S]{0,800}Input Two/'
     );
 });
 

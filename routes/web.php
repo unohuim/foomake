@@ -83,10 +83,22 @@ Route::middleware('auth')->group(function () {
         ->name('manufacturing.recipes.index');
     Route::get('/manufacturing/recipes/{recipe}', [RecipeController::class, 'show'])
         ->name('manufacturing.recipes.show');
+    Route::post('/manufacturing/recipes', [RecipeController::class, 'store'])
+        ->name('manufacturing.recipes.store');
+    Route::patch('/manufacturing/recipes/{recipe}', [RecipeController::class, 'update'])
+        ->name('manufacturing.recipes.update');
+    Route::delete('/manufacturing/recipes/{recipe}', [RecipeController::class, 'destroy'])
+        ->name('manufacturing.recipes.destroy');
+    Route::post('/manufacturing/recipes/{recipe}/lines', [RecipeController::class, 'storeLine'])
+        ->name('manufacturing.recipes.lines.store');
+    Route::patch('/manufacturing/recipes/{recipe}/lines/{line}', [RecipeController::class, 'updateLine'])
+        ->name('manufacturing.recipes.lines.update');
+    Route::delete('/manufacturing/recipes/{recipe}/lines/{line}', [RecipeController::class, 'destroyLine'])
+        ->name('manufacturing.recipes.lines.destroy');
 
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 });
 
-require __DIR__.'/auth.php';
+require __DIR__ . '/auth.php';

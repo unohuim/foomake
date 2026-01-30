@@ -1,6 +1,7 @@
 <div
     class="fixed inset-0 z-50 overflow-hidden"
     x-show="isEditOpen"
+    x-cloak
     role="dialog"
     aria-modal="true"
 >

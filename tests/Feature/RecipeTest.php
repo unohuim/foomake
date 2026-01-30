@@ -9,7 +9,6 @@ use App\Models\Uom;
 use App\Models\UomCategory;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Database\QueryException;
 
 uses(RefreshDatabase::class);
 
@@ -162,7 +161,7 @@ it('executes recursive recipes via stock moves', function () {
     expect((float) $parentItem->onHandQuantity())->toBe(1.0);
 });
 
-it('allows multiple inactive recipes but only one active recipe per item', function () {
+it('allows multiple active recipes per item', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeTenantUser)($tenant);
     $uom = ($this->makeUom)();
@@ -177,13 +176,7 @@ it('allows multiple inactive recipes but only one active recipe per item', funct
     Recipe::create([
         'tenant_id' => $tenant->id,
         'item_id' => $item->id,
-        'is_active' => false,
-    ]);
-
-    Recipe::create([
-        'tenant_id' => $tenant->id,
-        'item_id' => $item->id,
-        'is_active' => false,
+        'is_active' => true,
     ]);
 
     Recipe::create([
@@ -192,17 +185,18 @@ it('allows multiple inactive recipes but only one active recipe per item', funct
         'is_active' => true,
     ]);
 
-    expect(function () use ($tenant, $item) {
-        try {
-            Recipe::create([
-                'tenant_id' => $tenant->id,
-                'item_id' => $item->id,
-                'is_active' => true,
-            ]);
-        } catch (QueryException $e) {
-            throw new InvalidArgumentException('Only one active recipe per item is allowed.', previous: $e);
-        }
-    })->toThrow(InvalidArgumentException::class);
+    Recipe::create([
+        'tenant_id' => $tenant->id,
+        'item_id' => $item->id,
+        'is_active' => true,
+    ]);
+
+    expect(Recipe::query()
+        ->where('tenant_id', $tenant->id)
+        ->where('item_id', $item->id)
+        ->where('is_active', true)
+        ->count()
+    )->toBe(3);
 });
 
 it('requires manufacturable items for recipes', function () {

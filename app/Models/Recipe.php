@@ -22,10 +22,12 @@ class Recipe extends Model
         'tenant_id',
         'item_id',
         'is_active',
+        'is_default',
     ];
 
     protected $casts = [
         'is_active' => 'boolean',
+        'is_default' => 'boolean',
     ];
 
     /**
@@ -84,21 +86,6 @@ class Recipe extends Model
 
             if (!$item->is_manufacturable) {
                 throw new InvalidArgumentException('Recipe output item must be manufacturable.');
-            }
-
-            if ($recipe->is_active) {
-                $existing = static::withoutGlobalScopes()
-                    ->where('tenant_id', $recipe->tenant_id)
-                    ->where('item_id', $recipe->item_id)
-                    ->where('is_active', true);
-
-                if ($recipe->exists) {
-                    $existing->where('id', '!=', $recipe->id);
-                }
-
-                if ($existing->exists()) {
-                    throw new InvalidArgumentException('Only one active recipe is allowed per item.');
-                }
             }
         });
     }
