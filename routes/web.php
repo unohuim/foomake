@@ -7,6 +7,7 @@ use App\Http\Controllers\MakeOrderController;
 use App\Http\Controllers\MaterialController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\RecipeController;
+use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\UomCategoryController;
 use App\Http\Controllers\UomController;
 use Illuminate\Support\Facades\Route;
@@ -105,6 +106,11 @@ Route::middleware('auth')->group(function () {
         ->name('manufacturing.make-orders.schedule');
     Route::post('/manufacturing/make-orders/{makeOrder}/make', [MakeOrderController::class, 'make'])
         ->name('manufacturing.make-orders.make');
+
+    Route::get('/purchasing/suppliers', [SupplierController::class, 'index'])
+        ->name('purchasing.suppliers.index');
+    Route::post('/purchasing/suppliers', [SupplierController::class, 'store'])
+        ->name('purchasing.suppliers.store');
 
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');

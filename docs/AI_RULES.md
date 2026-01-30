@@ -6,10 +6,8 @@ These rules govern all AI-assisted development on this repository.
 
 ## Workflow
 
-- Always work on a branch per task.
 - Before editing anything, ensure that you have presented a plan that has been approved, whether or not a plan was explicitly asked for.
 - AI must be >95% certain of requirements before a plan may be proposed.
-- Always run `./ci.sh` before proposing completion (unless explicitly told not to).
 
 ---
 

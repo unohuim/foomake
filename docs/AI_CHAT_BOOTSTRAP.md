@@ -1,38 +1,24 @@
 # AI_CHAT_BOOTSTRAP.md — Core Project Context for LLM Sessions
 
-
-
 This file is the single source to paste at the beginning of new LLM chats for full project alignment.
 
-
-
 Paste the entire content (or as much as context allows) when starting a session.
-
-
 
 Authority Order (highest to lowest — conflicts resolved by this order):
 
 1. docs/AI_CHAT_CODEX.md
-
 2. docs/PR2_ROADMAP.md
-
 3. docs/CONVENTIONS.md
-
 4. docs/ARCHITECTURE_INVENTORY.md
-
 5. docs/PERMISSIONS_MATRIX.md
-
 6. docs/ENUMS.md
-
 7. docs/DB_SCHEMA.md
-
 8. docs/UI_DESIGN.md
-
-9. routes/web.php  (main web routes — included here for complete bootstrap context)
-
+9. routes/web.php (main web routes — included here for complete bootstrap context)
 
 
 ## docs/AI_CHAT_CODEX.md
+
 # AI Chat Bootstrap (READ FIRST)
 
 You are assisting with development on this repository.
@@ -265,6 +251,7 @@ If unsure, **stop immediately and ask**.
 
 
 ## docs/PR2_ROADMAP.md
+
 # PR2_ROADMAP — UI + Domain Completion (Post-PR-006)
 
 This roadmap defines the **second major phase** of work: completing **Items, Inventory, Suppliers, and Manufacturing**
@@ -625,13 +612,166 @@ Implement persisted Make Orders with full lifecycle (Draft → Scheduled → Mad
 
 ---
 
-## DOMAIN 4 — Suppliers & Purchasing
+## DOMAIN 4 — Suppliers & Purchasing (Revised)
 
-_(Unchanged)_
+This domain introduces **supplier management, supplier-specific material pricing, and purchasing primitives**, with clear separation between **planning prices**, **supplier prices**, and **order price snapshots**.
 
-- Suppliers CRUD
-- Item Purchase Options
-- Purchase Orders
+---
+
+### PR2-PUR-001 — Suppliers Index + Create (AJAX)
+
+**Goal**  
+Introduce tenant-owned Suppliers as a first-class Purchasing domain.
+
+**Includes**
+
+- Nav: **Purchasing → Suppliers**
+- Routes:
+    - `GET /purchasing/suppliers`
+    - `POST /purchasing/suppliers` (AJAX)
+- Supplier fields:
+    - `company_name` (required)
+    - `url` (nullable)
+    - `phone` (nullable)
+    - `email` (nullable)
+    - `currency_code` (nullable; defaults to tenant currency)
+- Empty state + slide-over create form
+- Gates:
+    - View: `purchasing-suppliers-view`
+    - Create: `purchasing-suppliers-manage`
+- Tenancy enforced (`tenant_id`, `HasTenantScope`)
+
+**Out of Scope**
+
+- Edit/Delete
+- Supplier detail page
+- Material linking
+
+---
+
+### PR2-MAT-004 — Material Planning Price (Schema + UI)
+
+**Goal**  
+Add a **planning-only placeholder price** to materials.
+
+**Includes**
+
+- Schema:
+    - `items.default_price_amount`
+    - `items.default_price_currency_code`
+- Defaults to tenant currency
+- Editable on material create/edit
+- Used for:
+    - Planning
+    - Forecasting
+    - Early recipe costing
+- Explicitly **not transactional**
+
+**Out of Scope**
+
+- Supplier-specific pricing
+- FX conversion logic
+
+---
+
+### PR2-PUR-002 — Supplier CRUD (Edit + Delete)
+
+**Goal**  
+Complete supplier lifecycle management.
+
+**Includes**
+
+- Edit supplier (AJAX slide-over)
+- Delete supplier
+- Delete blocked if supplier has linked materials (future-safe)
+- Gate: `purchasing-suppliers-manage`
+
+---
+
+### PR2-PUR-003 — Supplier ↔ Material Catalog + Pricing
+
+**Goal**  
+Define which materials are bought from which suppliers, including **supplier-specific pricing**.
+
+**Includes**
+
+- New tenant-owned table/model (recommended): `supplier_item_prices`
+- Fields:
+    - `tenant_id`
+    - `supplier_id`
+    - `item_id`
+    - `price_amount`
+    - `price_currency_code` (defaults to supplier → tenant currency)
+    - `converted_amount` (tenant currency)
+    - `fx_rate`
+    - `fx_rate_as_of`
+    - `effective_at` (or `is_current`)
+- Supplier detail page:
+    - `/purchasing/suppliers/{supplier}`
+    - Supplier info + index of materials they sell
+    - Add/remove materials + set price (AJAX)
+- Material detail enhancement:
+    - `/materials/{item}`
+    - Section listing possible suppliers + current prices
+- Gates:
+    - View: `purchasing-suppliers-view`
+    - Mutate: `purchasing-suppliers-manage`
+
+**Rules**
+
+- Many suppliers per material
+- Many materials per supplier
+- Prices represent **expected/current** pricing, not history
+
+---
+
+### PR2-PUR-004 — Purchase Orders (Draft + Pricing Snapshot)
+
+**Goal**  
+Create purchase orders with **immutable price snapshots**.
+
+**Includes**
+
+- Nav: **Purchasing → Orders**
+- PO index + create draft (AJAX)
+- PO lines sourced from supplier-material catalog
+- Each PO line stores:
+    - `unit_price_amount`
+    - `unit_price_currency_code`
+    - `converted_unit_price_amount` (tenant currency)
+    - `fx_rate`
+    - `fx_rate_as_of`
+- Gates:
+    - View: `purchasing-purchase-orders-view`
+    - Create: `purchasing-purchase-orders-create`
+
+**Rules**
+
+- PO prices never change after creation
+- Supplier price changes do **not** affect existing POs
+
+---
+
+### Currency & FX Rules (Domain-Wide)
+
+- Tenant has a **default currency**
+- Supplier defaults to tenant currency but may override
+- Prices may be entered in foreign currencies
+- FX handling:
+    - Store **original amount + currency**
+    - Store **converted tenant amount**
+    - Persist **FX rate + rate date**
+- No retroactive FX updates
+
+---
+
+### Pricing Layer Invariant
+
+| Layer          | Location                 | Purpose                  |
+| -------------- | ------------------------ | ------------------------ |
+| Planning       | `items.default_price_*`  | Forecasting only         |
+| Supplier       | `supplier_item_prices.*` | Expected buy price       |
+| Purchase Order | `purchase_order_lines.*` | Legal / accounting truth |
 
 ---
 
@@ -716,6 +856,7 @@ Replace Breeze Blade UI components with Tailwind-only markup.
 
 
 ## docs/CONVENTIONS.md
+
 # Conventions
 
 This document defines the **mandatory development conventions** for this repository.  
@@ -971,6 +1112,7 @@ These rules apply to:
 
 
 ## docs/ARCHITECTURE_INVENTORY.md
+
 # Architecture Inventory
 
 This document tracks **reusable abstractions, components, and architectural patterns**
@@ -2297,6 +2439,7 @@ it('creates a material', function () {
 
 
 ## docs/PERMISSIONS_MATRIX.md
+
 # Permissions Matrix
 
 This document is the source-of-truth for **authorization intent** in this repository.
@@ -2471,6 +2614,7 @@ return [
 
 
 ## docs/ENUMS.md
+
 # ENUMS — Canonical Enum Authority
 
 This document defines the canonical, normative enum-like values used throughout the system.
@@ -2575,6 +2719,7 @@ No conflicts or ambiguities were found at time of creation based on existing mig
 
 
 ## docs/DB_SCHEMA.md
+
 # Database Schema Inventory (DB_SCHEMA)
 
 This document inventories **all database tables and columns** as defined by migrations.
@@ -3260,6 +3405,7 @@ Migrations remain the **sole source of truth**.
 
 
 ## docs/UI_DESIGN.md
+
 # UI_DESIGN.md — Canonical UI Direction & Constraints
 
 This document defines the **authoritative UI design rules** for this repository.
@@ -3789,6 +3935,7 @@ They are mandatory, not stylistic.
 
 
 ## routes/web.php
+
 <?php
 
 use App\Http\Controllers\InventoryController;
@@ -3903,10 +4050,3 @@ Route::middleware('auth')->group(function () {
 });
 
 require __DIR__ . '/auth.php';
-
-
-## Usage Notes
-- Always follow the Authority Order for conflicts.
-- This file is regenerated only when core docs change significantly.
-- Current as of: January 30, 2026
-- For new PRs/features, refer to the latest PR2_ROADMAP.md section.

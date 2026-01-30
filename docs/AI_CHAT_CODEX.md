@@ -10,7 +10,7 @@ Codex (and any AI) may **not modify internal documentation** unless explicitly i
 This file exists to bootstrap **new LLM chat sessions** and enforce correct working mode
 before _any_ planning or implementation occurs.
 
-When writing prompts for codex, instruct it to write test files AND entire implementation for the PR, but never ask it to run tests or CI - that's my job. When prompting to write test files, have codex test for at a min of 20 tests per file. Instruct codex to write test files so that they are Complete and Sufficient. In your prompts for entire PRs, ensure that codex includes all required classes AND migration files in its plan.
+When writing prompts for codex, instruct it to write test files first AND entire implementation for the PR, but never ask it to run CI - that's my job. When prompting to write test files, have codex test for at a min of 20 tests per file. Instruct codex to write test files so that they are Complete and Sufficient. In your prompts for entire PRs, ensure that codex includes all required classes AND migration files in its plan.
 
 ---
 

@@ -15,6 +15,7 @@
                         || request()->routeIs('manufacturing.*')
                         || request()->routeIs('inventory.*')
                         || request()->routeIs('inventory.counts.*');
+                    $purchasingActive = request()->routeIs('purchasing.*');
                 @endphp
 
                 <!-- Navigation Links -->
@@ -22,6 +23,23 @@
                     <x-nav-link :href="route('dashboard')" :active="request()->routeIs('dashboard')">
                         {{ __('Dashboard') }}
                     </x-nav-link>
+
+                    <x-dropdown align="left" width="48" class="flex items-center">
+                        <x-slot name="trigger">
+                            <button class="{{ $purchasingActive ? 'inline-flex items-center px-1 pt-1 border-b-2 border-indigo-400 text-sm font-medium leading-5 text-gray-900 focus:outline-none focus:border-indigo-700 transition duration-150 ease-in-out' : 'inline-flex items-center px-1 pt-1 border-b-2 border-transparent text-sm font-medium leading-5 text-gray-500 hover:text-gray-700 hover:border-gray-300 focus:outline-none focus:text-gray-700 focus:border-gray-300 transition duration-150 ease-in-out' }}">
+                                <span>{{ __('Purchasing') }}</span>
+                                <svg class="ms-2 h-4 w-4 fill-current" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
+                                </svg>
+                            </button>
+                        </x-slot>
+
+                        <x-slot name="content">
+                            <x-dropdown-link :href="route('purchasing.suppliers.index')">
+                                {{ __('Suppliers') }}
+                            </x-dropdown-link>
+                        </x-slot>
+                    </x-dropdown>
 
                     <x-dropdown align="left" width="48" class="flex items-center">
                         <x-slot name="trigger">
@@ -115,6 +133,9 @@
         <div class="pt-2 pb-3 space-y-1">
             <x-responsive-nav-link :href="route('dashboard')" :active="request()->routeIs('dashboard')">
                 {{ __('Dashboard') }}
+            </x-responsive-nav-link>
+            <x-responsive-nav-link :href="route('purchasing.suppliers.index')" :active="request()->routeIs('purchasing.*')">
+                {{ __('Suppliers') }}
             </x-responsive-nav-link>
             <x-responsive-nav-link :href="route('inventory.index')" :active="request()->routeIs('inventory.*')">
                 {{ __('Inventory') }}
