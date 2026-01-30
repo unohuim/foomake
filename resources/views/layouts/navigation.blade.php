@@ -40,6 +40,11 @@
                             <x-dropdown-link :href="route('inventory.counts.index')">
                                 {{ __('Inventory Counts') }}
                             </x-dropdown-link>
+                            @can('inventory-make-orders-view')
+                                <x-dropdown-link :href="route('manufacturing.make-orders.index')">
+                                    {{ __('Orders (Make Orders)') }}
+                                </x-dropdown-link>
+                            @endcan
                             <x-dropdown-link :href="route('materials.index')">
                                 {{ __('Materials') }}
                             </x-dropdown-link>
@@ -117,6 +122,11 @@
             <x-responsive-nav-link :href="route('inventory.counts.index')" :active="request()->routeIs('inventory.counts.*')">
                 {{ __('Inventory Counts') }}
             </x-responsive-nav-link>
+            @can('inventory-make-orders-view')
+                <x-responsive-nav-link :href="route('manufacturing.make-orders.index')" :active="request()->routeIs('manufacturing.make-orders.*')">
+                    {{ __('Orders (Make Orders)') }}
+                </x-responsive-nav-link>
+            @endcan
             <x-responsive-nav-link :href="route('materials.index')" :active="request()->routeIs('materials.index')">
                 {{ __('Materials') }}
             </x-responsive-nav-link>

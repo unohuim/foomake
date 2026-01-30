@@ -3,6 +3,7 @@
 use App\Http\Controllers\InventoryController;
 use App\Http\Controllers\InventoryCountController;
 use App\Http\Controllers\ItemController;
+use App\Http\Controllers\MakeOrderController;
 use App\Http\Controllers\MaterialController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\RecipeController;
@@ -95,6 +96,11 @@ Route::middleware('auth')->group(function () {
         ->name('manufacturing.recipes.lines.update');
     Route::delete('/manufacturing/recipes/{recipe}/lines/{line}', [RecipeController::class, 'destroyLine'])
         ->name('manufacturing.recipes.lines.destroy');
+
+    Route::get('/manufacturing/make-orders', [MakeOrderController::class, 'index'])
+        ->name('manufacturing.make-orders.index');
+    Route::post('/manufacturing/make-orders/execute', [MakeOrderController::class, 'execute'])
+        ->name('manufacturing.make-orders.execute');
 
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
