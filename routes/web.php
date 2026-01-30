@@ -99,8 +99,12 @@ Route::middleware('auth')->group(function () {
 
     Route::get('/manufacturing/make-orders', [MakeOrderController::class, 'index'])
         ->name('manufacturing.make-orders.index');
-    Route::post('/manufacturing/make-orders/execute', [MakeOrderController::class, 'execute'])
-        ->name('manufacturing.make-orders.execute');
+    Route::post('/manufacturing/make-orders', [MakeOrderController::class, 'store'])
+        ->name('manufacturing.make-orders.store');
+    Route::post('/manufacturing/make-orders/{makeOrder}/schedule', [MakeOrderController::class, 'schedule'])
+        ->name('manufacturing.make-orders.schedule');
+    Route::post('/manufacturing/make-orders/{makeOrder}/make', [MakeOrderController::class, 'make'])
+        ->name('manufacturing.make-orders.make');
 
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
