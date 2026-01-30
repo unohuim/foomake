@@ -31,7 +31,7 @@ Codex (and any AI) may **not modify internal documentation** unless explicitly i
 This file exists to bootstrap **new LLM chat sessions** and enforce correct working mode
 before _any_ planning or implementation occurs.
 
-When writing prompts for codex, instruct it to write test files AND entire implementation for the PR, but never ask it to run tests or CI - that's my job. When prompting to write test files, have codex test for at a min of 20 tests per file. Instruct codex to write test files so that they are Complete and Sufficient. In your prompts for entire PRs, ensure that codex includes all required classes AND migration files in its plan.
+When writing prompts for codex, instruct it to write test files first AND entire implementation for the PR, but never ask it to run CI - that's my job. When prompting to write test files, have codex test for at a min of 20 tests per file. Instruct codex to write test files so that they are Complete and Sufficient. In your prompts for entire PRs, ensure that codex includes all required classes AND migration files in its plan.
 
 ---
 
@@ -1881,6 +1881,34 @@ $item->itemUomConversions()->create([
 
 ## Purchasing
 
+### Supplier
+
+**Name:** Supplier  
+**Type:** Eloquent Model  
+**Location:** `app/Models/Supplier.php`
+
+**Purpose:**  
+Represent tenant-owned suppliers for purchasing relationships.
+
+**When to Use:**  
+Managing suppliers for purchasing workflows.
+
+**When Not to Use:**  
+Materials or inventory entities.
+
+**Public Interface:**  
+- `tenant()`
+
+**Example Usage:**  
+```php
+$supplier = Supplier::create([
+    'tenant_id' => $tenant->id,
+    'company_name' => 'Acme Supplies',
+]);
+```
+
+---
+
 ### ItemPurchaseOption
 
 **Name:** ItemPurchaseOption  
@@ -2765,6 +2793,7 @@ Migrations remain the **sole source of truth**.
 - roles_users
 - sessions
 - stock_moves
+- suppliers
 - tenants
 - uom_categories
 - uom_conversions
@@ -3283,6 +3312,33 @@ Migrations remain the **sole source of truth**.
 
 ---
 
+## suppliers
+
+**Tenant-owned:** Yes  
+**Purpose:** Supplier registry
+
+### Columns
+
+| Name          | Type      | Nullable | Notes                     |
+| ------------- | --------- | -------- | ------------------------- |
+| id            | bigint    | No       | Primary key               |
+| tenant_id     | bigint    | No       | FK → tenants.id (CASCADE) |
+| company_name  | string    | No       | —                         |
+| url           | string    | Yes      | —                         |
+| phone         | string    | Yes      | —                         |
+| email         | string    | Yes      | —                         |
+| currency_code | string    | Yes      | —                         |
+| created_at    | timestamp | Yes      | —                         |
+| updated_at    | timestamp | Yes      | —                         |
+
+### Keys & Indexes
+
+- PK: `id`
+- Index: `(tenant_id, company_name)`
+- Implicit (FK index): tenant_id
+
+---
+
 ## tenants
 
 **Tenant-owned:** No  
@@ -3294,6 +3350,7 @@ Migrations remain the **sole source of truth**.
 | ----------- | --------- | -------- | ----------- |
 | id          | bigint    | No       | Primary key |
 | tenant_name | string    | Yes      | —           |
+| currency_code | string  | Yes      | Default config('app.currency_code', 'USD') |
 | created_at  | timestamp | Yes      | —           |
 | updated_at  | timestamp | Yes      | —           |
 
@@ -3945,6 +4002,7 @@ use App\Http\Controllers\MakeOrderController;
 use App\Http\Controllers\MaterialController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\RecipeController;
+use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\UomCategoryController;
 use App\Http\Controllers\UomController;
 use Illuminate\Support\Facades\Route;
@@ -4043,6 +4101,11 @@ Route::middleware('auth')->group(function () {
         ->name('manufacturing.make-orders.schedule');
     Route::post('/manufacturing/make-orders/{makeOrder}/make', [MakeOrderController::class, 'make'])
         ->name('manufacturing.make-orders.make');
+
+    Route::get('/purchasing/suppliers', [SupplierController::class, 'index'])
+        ->name('purchasing.suppliers.index');
+    Route::post('/purchasing/suppliers', [SupplierController::class, 'store'])
+        ->name('purchasing.suppliers.store');
 
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');

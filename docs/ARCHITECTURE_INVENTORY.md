@@ -766,6 +766,34 @@ $item->itemUomConversions()->create([
 
 ## Purchasing
 
+### Supplier
+
+**Name:** Supplier  
+**Type:** Eloquent Model  
+**Location:** `app/Models/Supplier.php`
+
+**Purpose:**  
+Represent tenant-owned suppliers for purchasing relationships.
+
+**When to Use:**  
+Managing suppliers for purchasing workflows.
+
+**When Not to Use:**  
+Materials or inventory entities.
+
+**Public Interface:**  
+- `tenant()`
+
+**Example Usage:**  
+```php
+$supplier = Supplier::create([
+    'tenant_id' => $tenant->id,
+    'company_name' => 'Acme Supplies',
+]);
+```
+
+---
+
 ### ItemPurchaseOption
 
 **Name:** ItemPurchaseOption  

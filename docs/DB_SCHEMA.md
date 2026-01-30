@@ -43,6 +43,7 @@ Migrations remain the **sole source of truth**.
 - roles_users
 - sessions
 - stock_moves
+- suppliers
 - tenants
 - uom_categories
 - uom_conversions
@@ -561,6 +562,33 @@ Migrations remain the **sole source of truth**.
 
 ---
 
+## suppliers
+
+**Tenant-owned:** Yes  
+**Purpose:** Supplier registry
+
+### Columns
+
+| Name          | Type      | Nullable | Notes                     |
+| ------------- | --------- | -------- | ------------------------- |
+| id            | bigint    | No       | Primary key               |
+| tenant_id     | bigint    | No       | FK → tenants.id (CASCADE) |
+| company_name  | string    | No       | —                         |
+| url           | string    | Yes      | —                         |
+| phone         | string    | Yes      | —                         |
+| email         | string    | Yes      | —                         |
+| currency_code | string    | Yes      | —                         |
+| created_at    | timestamp | Yes      | —                         |
+| updated_at    | timestamp | Yes      | —                         |
+
+### Keys & Indexes
+
+- PK: `id`
+- Index: `(tenant_id, company_name)`
+- Implicit (FK index): tenant_id
+
+---
+
 ## tenants
 
 **Tenant-owned:** No  
@@ -572,6 +600,7 @@ Migrations remain the **sole source of truth**.
 | ----------- | --------- | -------- | ----------- |
 | id          | bigint    | No       | Primary key |
 | tenant_name | string    | Yes      | —           |
+| currency_code | string  | Yes      | Default config('app.currency_code', 'USD') |
 | created_at  | timestamp | Yes      | —           |
 | updated_at  | timestamp | Yes      | —           |
 
