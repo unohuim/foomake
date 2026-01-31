@@ -68,6 +68,33 @@
                             </div>
 
                             <div>
+                                <p class="text-sm font-medium text-gray-700">Planning price</p>
+                                <div class="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                                    <div class="sm:col-span-2">
+                                        <label for="edit-material-default-price-amount" class="block text-xs font-medium text-gray-600">Amount</label>
+                                        <input
+                                            id="edit-material-default-price-amount"
+                                            type="text"
+                                            inputmode="decimal"
+                                            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                                            x-model="editForm.default_price_amount"
+                                        />
+                                        <p class="mt-1 text-sm text-red-600" x-show="editErrors.default_price_amount" x-text="editErrors.default_price_amount[0]"></p>
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs font-medium text-gray-600">Currency</label>
+                                        <input
+                                            type="text"
+                                            class="mt-1 block w-full rounded-md border-gray-200 bg-gray-50 text-gray-600 shadow-sm sm:text-sm"
+                                            x-bind:value="tenantCurrency"
+                                            disabled
+                                        />
+                                        <p class="mt-1 text-sm text-red-600" x-show="editErrors.default_price_currency_code" x-text="editErrors.default_price_currency_code[0]"></p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div>
                                 <p class="text-sm font-medium text-gray-700">Flags</p>
                                 <div class="mt-3 space-y-2">
                                     <label class="flex items-center gap-2 text-sm text-gray-700">

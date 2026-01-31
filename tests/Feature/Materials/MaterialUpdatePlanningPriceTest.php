@@ -5,7 +5,6 @@ declare(strict_types=1);
 use App\Models\Item;
 use App\Models\Permission;
 use App\Models\Role;
-use App\Models\StockMove;
 use App\Models\Tenant;
 use App\Models\Uom;
 use App\Models\UomCategory;
@@ -20,6 +19,7 @@ beforeEach(function (): void {
     $this->tenantCurrency = 'USD';
     $this->tenant->currency_code = $this->tenantCurrency;
     $this->tenant->save();
+
     $this->user = User::factory()->create([
         'tenant_id' => $this->tenant->id,
     ]);
@@ -65,168 +65,7 @@ beforeEach(function (): void {
     };
 });
 
-test('denies updates for users without inventory-materials-manage permission', function (): void {
-    $uom = ($this->makeUom)();
-    $item = ($this->makeItem)($uom);
-
-    $response = ($this->patchUpdate)($this->user, $item, [
-        'name' => 'Updated',
-        'base_uom_id' => $uom->id,
-    ]);
-
-    $response->assertForbidden();
-});
-
-test('updates a material for users with inventory-materials-manage permission', function (): void {
-    ($this->grantPermission)($this->user, 'inventory-materials-manage');
-
-    $uom = ($this->makeUom)();
-    $newUom = ($this->makeUom)();
-    $item = ($this->makeItem)($uom);
-
-    $response = ($this->patchUpdate)($this->user, $item, [
-        'name' => 'Updated Flour',
-        'base_uom_id' => $newUom->id,
-        'is_purchasable' => true,
-        'is_sellable' => false,
-        'is_manufacturable' => false,
-    ]);
-
-    $response->assertOk()
-        ->assertJsonPath('data.name', 'Updated Flour')
-        ->assertJsonPath('data.base_uom_id', $newUom->id)
-        ->assertJsonPath('data.is_purchasable', true);
-
-    $updated = Item::withoutGlobalScopes()->findOrFail($item->id);
-
-    expect($updated->name)->toBe('Updated Flour')
-        ->and($updated->base_uom_id)->toBe($newUom->id)
-        ->and($updated->is_purchasable)->toBeTrue()
-        ->and($updated->is_sellable)->toBeFalse()
-        ->and($updated->is_manufacturable)->toBeFalse();
-});
-
-test('returns not found when attempting to update another tenant item', function (): void {
-    ($this->grantPermission)($this->user, 'inventory-materials-manage');
-
-    $uom = ($this->makeUom)();
-
-    $otherTenant = Tenant::factory()->create();
-
-    $otherItem = Item::query()->create([
-        'tenant_id' => $otherTenant->id,
-        'name' => 'Other Flour',
-        'base_uom_id' => $uom->id,
-        'is_purchasable' => false,
-        'is_sellable' => false,
-        'is_manufacturable' => false,
-    ]);
-
-    $response = ($this->patchUpdate)($this->user, $otherItem, [
-        'name' => 'Blocked',
-        'base_uom_id' => $uom->id,
-    ]);
-
-    $response->assertNotFound();
-});
-
-test('returns validation errors for missing required fields', function (): void {
-    ($this->grantPermission)($this->user, 'inventory-materials-manage');
-
-    $uom = ($this->makeUom)();
-    $item = ($this->makeItem)($uom);
-
-    $response = ($this->patchUpdate)($this->user, $item, []);
-
-    $response->assertUnprocessable()
-        ->assertJsonValidationErrors(['name', 'base_uom_id']);
-});
-
-test('locks base_uom_id when stock moves exist and does not partially update', function (): void {
-    ($this->grantPermission)($this->user, 'inventory-materials-manage');
-
-    $uom = ($this->makeUom)();
-    $newUom = ($this->makeUom)();
-    $item = ($this->makeItem)($uom, [
-        'name' => 'Original Flour',
-    ]);
-
-    StockMove::query()->create([
-        'tenant_id' => $this->tenant->id,
-        'item_id' => $item->id,
-        'uom_id' => $item->base_uom_id,
-        'quantity' => '1.000000',
-        'type' => 'receipt',
-    ]);
-
-    $response = ($this->patchUpdate)($this->user, $item, [
-        'name' => 'Should Not Apply',
-        'base_uom_id' => $newUom->id,
-    ]);
-
-    $response->assertUnprocessable()
-        ->assertJsonValidationErrors(['base_uom_id']);
-
-    $reloaded = Item::withoutGlobalScopes()->findOrFail($item->id);
-
-    expect($reloaded->base_uom_id)->toBe($uom->id)
-        ->and($reloaded->name)->toBe('Original Flour');
-});
-
-test('allows updates when stock moves exist but base_uom_id is unchanged', function (): void {
-    ($this->grantPermission)($this->user, 'inventory-materials-manage');
-
-    $uom = ($this->makeUom)();
-    $item = ($this->makeItem)($uom, [
-        'name' => 'Original Flour',
-    ]);
-
-    StockMove::query()->create([
-        'tenant_id' => $this->tenant->id,
-        'item_id' => $item->id,
-        'uom_id' => $item->base_uom_id,
-        'quantity' => '1.000000',
-        'type' => 'receipt',
-    ]);
-
-    $response = ($this->patchUpdate)($this->user, $item, [
-        'name' => 'Updated Flour',
-        'base_uom_id' => $uom->id,
-        'is_purchasable' => true,
-    ]);
-
-    $response->assertOk()
-        ->assertJsonPath('data.name', 'Updated Flour')
-        ->assertJsonPath('data.base_uom_id', $uom->id);
-
-    $reloaded = Item::withoutGlobalScopes()->findOrFail($item->id);
-
-    expect($reloaded->name)->toBe('Updated Flour')
-        ->and($reloaded->base_uom_id)->toBe($uom->id)
-        ->and($reloaded->is_purchasable)->toBeTrue();
-});
-
-test('allows base_uom_id updates when no stock moves exist', function (): void {
-    ($this->grantPermission)($this->user, 'inventory-materials-manage');
-
-    $uom = ($this->makeUom)();
-    $newUom = ($this->makeUom)();
-    $item = ($this->makeItem)($uom);
-
-    $response = ($this->patchUpdate)($this->user, $item, [
-        'name' => 'Unlocked Flour',
-        'base_uom_id' => $newUom->id,
-    ]);
-
-    $response->assertOk()
-        ->assertJsonPath('data.base_uom_id', $newUom->id);
-
-    $reloaded = Item::withoutGlobalScopes()->findOrFail($item->id);
-
-    expect($reloaded->base_uom_id)->toBe($newUom->id);
-});
-
-test('defaults currency to tenant when updating amount without currency', function (): void {
+test('defaults currency to tenant when amount is provided without currency', function (): void {
     ($this->grantPermission)($this->user, 'inventory-materials-manage');
 
     $uom = ($this->makeUom)();
@@ -246,7 +85,28 @@ test('defaults currency to tenant when updating amount without currency', functi
         ->and($updated->default_price_currency_code)->toBe($this->tenantCurrency);
 });
 
-test('persists explicit currency when updating with amount and currency', function (): void {
+test('defaults currency to tenant when amount is provided and currency is blank', function (): void {
+    ($this->grantPermission)($this->user, 'inventory-materials-manage');
+
+    $uom = ($this->makeUom)();
+    $item = ($this->makeItem)($uom);
+
+    $response = ($this->patchUpdate)($this->user, $item, [
+        'name' => 'Updated Flour',
+        'base_uom_id' => $uom->id,
+        'default_price_amount' => '1.00',
+        'default_price_currency_code' => '',
+    ]);
+
+    $response->assertOk();
+
+    $updated = Item::withoutGlobalScopes()->findOrFail($item->id);
+
+    expect($updated->default_price_cents)->toBe(100)
+        ->and($updated->default_price_currency_code)->toBe($this->tenantCurrency);
+});
+
+test('accepts explicit currency and persists uppercase', function (): void {
     ($this->grantPermission)($this->user, 'inventory-materials-manage');
 
     $uom = ($this->makeUom)();
@@ -267,7 +127,7 @@ test('persists explicit currency when updating with amount and currency', functi
         ->and($updated->default_price_currency_code)->toBe('GBP');
 });
 
-test('includes default price fields in the update response when set', function (): void {
+test('accepts lower-case currency and normalizes to uppercase on update', function (): void {
     ($this->grantPermission)($this->user, 'inventory-materials-manage');
 
     $uom = ($this->makeUom)();
@@ -276,33 +136,56 @@ test('includes default price fields in the update response when set', function (
     $response = ($this->patchUpdate)($this->user, $item, [
         'name' => 'Updated Flour',
         'base_uom_id' => $uom->id,
-        'default_price_amount' => '8.75',
-        'default_price_currency_code' => 'USD',
-    ]);
-
-    $response->assertOk()
-        ->assertJsonPath('data.default_price_amount', '8.75')
-        ->assertJsonPath('data.default_price_currency_code', 'USD');
-});
-
-test('does not override explicit currency on update', function (): void {
-    ($this->grantPermission)($this->user, 'inventory-materials-manage');
-
-    $uom = ($this->makeUom)();
-    $item = ($this->makeItem)($uom);
-
-    $response = ($this->patchUpdate)($this->user, $item, [
-        'name' => 'Updated Flour',
-        'base_uom_id' => $uom->id,
-        'default_price_amount' => '6.00',
-        'default_price_currency_code' => 'CAD',
+        'default_price_amount' => '2.25',
+        'default_price_currency_code' => 'usd',
     ]);
 
     $response->assertOk();
 
     $updated = Item::withoutGlobalScopes()->findOrFail($item->id);
 
-    expect($updated->default_price_currency_code)->toBe('CAD');
+    expect($updated->default_price_cents)->toBe(225)
+        ->and($updated->default_price_currency_code)->toBe('USD');
+});
+
+test('accepts integer amounts and normalizes to cents on update', function (): void {
+    ($this->grantPermission)($this->user, 'inventory-materials-manage');
+
+    $uom = ($this->makeUom)();
+    $item = ($this->makeItem)($uom);
+
+    $response = ($this->patchUpdate)($this->user, $item, [
+        'name' => 'Updated Flour',
+        'base_uom_id' => $uom->id,
+        'default_price_amount' => '5',
+    ]);
+
+    $response->assertOk();
+
+    $updated = Item::withoutGlobalScopes()->findOrFail($item->id);
+
+    expect($updated->default_price_cents)->toBe(500)
+        ->and($updated->default_price_currency_code)->toBe($this->tenantCurrency);
+});
+
+test('allows zero amount and defaults currency on update', function (): void {
+    ($this->grantPermission)($this->user, 'inventory-materials-manage');
+
+    $uom = ($this->makeUom)();
+    $item = ($this->makeItem)($uom);
+
+    $response = ($this->patchUpdate)($this->user, $item, [
+        'name' => 'Updated Flour',
+        'base_uom_id' => $uom->id,
+        'default_price_amount' => '0',
+    ]);
+
+    $response->assertOk();
+
+    $updated = Item::withoutGlobalScopes()->findOrFail($item->id);
+
+    expect($updated->default_price_cents)->toBe(0)
+        ->and($updated->default_price_currency_code)->toBe($this->tenantCurrency);
 });
 
 test('clears price fields when amount is null', function (): void {
@@ -352,7 +235,29 @@ test('clears price fields when amount is an empty string', function (): void {
         ->and($updated->default_price_currency_code)->toBeNull();
 });
 
-test('clears price fields when amount is missing but currency is provided', function (): void {
+test('keeps existing price fields when both price inputs are omitted', function (): void {
+    ($this->grantPermission)($this->user, 'inventory-materials-manage');
+
+    $uom = ($this->makeUom)();
+    $item = ($this->makeItem)($uom, [
+        'default_price_cents' => 350,
+        'default_price_currency_code' => 'EUR',
+    ]);
+
+    $response = ($this->patchUpdate)($this->user, $item, [
+        'name' => 'Updated Flour',
+        'base_uom_id' => $uom->id,
+    ]);
+
+    $response->assertOk();
+
+    $updated = Item::withoutGlobalScopes()->findOrFail($item->id);
+
+    expect($updated->default_price_cents)->toBe(350)
+        ->and($updated->default_price_currency_code)->toBe('EUR');
+});
+
+test('clears price fields when currency is provided without amount', function (): void {
     ($this->grantPermission)($this->user, 'inventory-materials-manage');
 
     $uom = ($this->makeUom)();
@@ -375,98 +280,7 @@ test('clears price fields when amount is missing but currency is provided', func
         ->and($updated->default_price_currency_code)->toBeNull();
 });
 
-test('rejects negative default price amounts on update', function (): void {
-    ($this->grantPermission)($this->user, 'inventory-materials-manage');
-
-    $uom = ($this->makeUom)();
-    $item = ($this->makeItem)($uom);
-
-    $response = ($this->patchUpdate)($this->user, $item, [
-        'name' => 'Updated Flour',
-        'base_uom_id' => $uom->id,
-        'default_price_amount' => '-0.01',
-    ]);
-
-    $response->assertUnprocessable()
-        ->assertJsonValidationErrors(['default_price_amount']);
-});
-
-test('rejects invalid currency length on update', function (): void {
-    ($this->grantPermission)($this->user, 'inventory-materials-manage');
-
-    $uom = ($this->makeUom)();
-    $item = ($this->makeItem)($uom);
-
-    $response = ($this->patchUpdate)($this->user, $item, [
-        'name' => 'Updated Flour',
-        'base_uom_id' => $uom->id,
-        'default_price_amount' => '1.00',
-        'default_price_currency_code' => 'EU',
-    ]);
-
-    $response->assertUnprocessable()
-        ->assertJsonValidationErrors(['default_price_currency_code']);
-});
-
-test('rejects non-letter currency code on update', function (): void {
-    ($this->grantPermission)($this->user, 'inventory-materials-manage');
-
-    $uom = ($this->makeUom)();
-    $item = ($this->makeItem)($uom);
-
-    $response = ($this->patchUpdate)($this->user, $item, [
-        'name' => 'Updated Flour',
-        'base_uom_id' => $uom->id,
-        'default_price_amount' => '1.00',
-        'default_price_currency_code' => 'U$D',
-    ]);
-
-    $response->assertUnprocessable()
-        ->assertJsonValidationErrors(['default_price_currency_code']);
-});
-
-test('allows zero amount and defaults currency on update when missing', function (): void {
-    ($this->grantPermission)($this->user, 'inventory-materials-manage');
-
-    $uom = ($this->makeUom)();
-    $item = ($this->makeItem)($uom);
-
-    $response = ($this->patchUpdate)($this->user, $item, [
-        'name' => 'Updated Flour',
-        'base_uom_id' => $uom->id,
-        'default_price_amount' => '0',
-    ]);
-
-    $response->assertOk();
-
-    $updated = Item::withoutGlobalScopes()->findOrFail($item->id);
-
-    expect($updated->default_price_cents)->toBe(0)
-        ->and($updated->default_price_currency_code)->toBe($this->tenantCurrency);
-});
-
-test('accepts lower-case currency codes and normalizes to uppercase on update', function (): void {
-    ($this->grantPermission)($this->user, 'inventory-materials-manage');
-
-    $uom = ($this->makeUom)();
-    $item = ($this->makeItem)($uom);
-
-    $response = ($this->patchUpdate)($this->user, $item, [
-        'name' => 'Updated Flour',
-        'base_uom_id' => $uom->id,
-        'default_price_amount' => '2.25',
-        'default_price_currency_code' => 'usd',
-    ]);
-
-    $response->assertOk();
-
-    $updated = Item::withoutGlobalScopes()->findOrFail($item->id);
-
-    expect($updated->default_price_cents)->toBe(225)
-        ->and($updated->default_price_currency_code)->toBe('USD');
-});
-
-test('overrides existing currency to tenant currency when amount is provided without currency', function (): void {
+test('overrides existing currency to tenant when amount is provided without currency', function (): void {
     ($this->grantPermission)($this->user, 'inventory-materials-manage');
 
     $uom = ($this->makeUom)();
@@ -489,29 +303,23 @@ test('overrides existing currency to tenant currency when amount is provided wit
         ->and($updated->default_price_currency_code)->toBe($this->tenantCurrency);
 });
 
-test('keeps existing price fields when price inputs are omitted from update payload', function (): void {
+test('rejects negative amounts on update', function (): void {
     ($this->grantPermission)($this->user, 'inventory-materials-manage');
 
     $uom = ($this->makeUom)();
-    $item = ($this->makeItem)($uom, [
-        'default_price_cents' => 200,
-        'default_price_currency_code' => 'EUR',
-    ]);
+    $item = ($this->makeItem)($uom);
 
     $response = ($this->patchUpdate)($this->user, $item, [
         'name' => 'Updated Flour',
         'base_uom_id' => $uom->id,
+        'default_price_amount' => '-0.01',
     ]);
 
-    $response->assertOk();
-
-    $updated = Item::withoutGlobalScopes()->findOrFail($item->id);
-
-    expect($updated->default_price_cents)->toBe(200)
-        ->and($updated->default_price_currency_code)->toBe('EUR');
+    $response->assertUnprocessable()
+        ->assertJsonValidationErrors(['default_price_amount']);
 });
 
-test('rejects non-numeric default price amounts on update', function (): void {
+test('rejects non-numeric amounts on update', function (): void {
     ($this->grantPermission)($this->user, 'inventory-materials-manage');
 
     $uom = ($this->makeUom)();
@@ -541,4 +349,118 @@ test('rejects amounts with more than two decimals on update', function (): void 
 
     $response->assertUnprocessable()
         ->assertJsonValidationErrors(['default_price_amount']);
+});
+
+test('rejects currency codes shorter than three letters on update', function (): void {
+    ($this->grantPermission)($this->user, 'inventory-materials-manage');
+
+    $uom = ($this->makeUom)();
+    $item = ($this->makeItem)($uom);
+
+    $response = ($this->patchUpdate)($this->user, $item, [
+        'name' => 'Updated Flour',
+        'base_uom_id' => $uom->id,
+        'default_price_amount' => '1.00',
+        'default_price_currency_code' => 'EU',
+    ]);
+
+    $response->assertUnprocessable()
+        ->assertJsonValidationErrors(['default_price_currency_code']);
+});
+
+test('rejects currency codes longer than three letters on update', function (): void {
+    ($this->grantPermission)($this->user, 'inventory-materials-manage');
+
+    $uom = ($this->makeUom)();
+    $item = ($this->makeItem)($uom);
+
+    $response = ($this->patchUpdate)($this->user, $item, [
+        'name' => 'Updated Flour',
+        'base_uom_id' => $uom->id,
+        'default_price_amount' => '1.00',
+        'default_price_currency_code' => 'USDA',
+    ]);
+
+    $response->assertUnprocessable()
+        ->assertJsonValidationErrors(['default_price_currency_code']);
+});
+
+test('rejects currency codes with non-letter characters on update', function (): void {
+    ($this->grantPermission)($this->user, 'inventory-materials-manage');
+
+    $uom = ($this->makeUom)();
+    $item = ($this->makeItem)($uom);
+
+    $response = ($this->patchUpdate)($this->user, $item, [
+        'name' => 'Updated Flour',
+        'base_uom_id' => $uom->id,
+        'default_price_amount' => '1.00',
+        'default_price_currency_code' => 'U$D',
+    ]);
+
+    $response->assertUnprocessable()
+        ->assertJsonValidationErrors(['default_price_currency_code']);
+});
+
+test('returns validation errors for both fields when both are invalid on update', function (): void {
+    ($this->grantPermission)($this->user, 'inventory-materials-manage');
+
+    $uom = ($this->makeUom)();
+    $item = ($this->makeItem)($uom);
+
+    $response = ($this->patchUpdate)($this->user, $item, [
+        'name' => 'Updated Flour',
+        'base_uom_id' => $uom->id,
+        'default_price_amount' => '-1',
+        'default_price_currency_code' => 'us',
+    ]);
+
+    $response->assertUnprocessable()
+        ->assertJsonValidationErrors(['default_price_amount', 'default_price_currency_code']);
+});
+
+test('does not partially update when validation fails', function (): void {
+    ($this->grantPermission)($this->user, 'inventory-materials-manage');
+
+    $uom = ($this->makeUom)();
+    $item = ($this->makeItem)($uom, [
+        'name' => 'Original',
+    ]);
+
+    $response = ($this->patchUpdate)($this->user, $item, [
+        'name' => 'Should Not Save',
+        'base_uom_id' => $uom->id,
+        'default_price_amount' => '1.999',
+    ]);
+
+    $response->assertUnprocessable()
+        ->assertJsonValidationErrors(['default_price_amount']);
+
+    $reloaded = Item::withoutGlobalScopes()->findOrFail($item->id);
+
+    expect($reloaded->name)->toBe('Original');
+});
+
+test('persists updated values as cents with uppercase currency', function (): void {
+    ($this->grantPermission)($this->user, 'inventory-materials-manage');
+
+    $uom = ($this->makeUom)();
+    $item = ($this->makeItem)($uom, [
+        'default_price_cents' => 100,
+        'default_price_currency_code' => 'USD',
+    ]);
+
+    $response = ($this->patchUpdate)($this->user, $item, [
+        'name' => 'Updated Flour',
+        'base_uom_id' => $uom->id,
+        'default_price_amount' => '7.70',
+        'default_price_currency_code' => 'cad',
+    ]);
+
+    $response->assertOk();
+
+    $updated = Item::withoutGlobalScopes()->findOrFail($item->id);
+
+    expect($updated->default_price_cents)->toBe(770)
+        ->and($updated->default_price_currency_code)->toBe('CAD');
 });

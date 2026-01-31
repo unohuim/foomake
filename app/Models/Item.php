@@ -24,6 +24,8 @@ class Item extends Model
         'is_purchasable',
         'is_sellable',
         'is_manufacturable',
+        'default_price_cents',
+        'default_price_currency_code',
     ];
 
     protected $casts = [

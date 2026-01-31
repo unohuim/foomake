@@ -6,6 +6,8 @@ export function mount(rootEl, payload) {
     const emptyErrors = () => ({
         name: [],
         base_uom_id: [],
+        default_price_amount: [],
+        default_price_currency_code: [],
     });
 
     Alpine.data('materialsIndex', () => ({
@@ -17,6 +19,7 @@ export function mount(rootEl, payload) {
         showUrlBase: safePayload.showUrlBase || '',
         storeUrl: safePayload.storeUrl || '',
         csrfToken: safePayload.csrfToken || '',
+        tenantCurrency: safePayload.tenantCurrency || '',
         isCreateOpen: false,
         isSubmitting: false,
         errors: emptyErrors(),
@@ -48,6 +51,7 @@ export function mount(rootEl, payload) {
             is_purchasable: false,
             is_sellable: false,
             is_manufacturable: false,
+            default_price_amount: '',
         },
         editForm: {
             name: '',
@@ -55,6 +59,7 @@ export function mount(rootEl, payload) {
             is_purchasable: false,
             is_sellable: false,
             is_manufacturable: false,
+            default_price_amount: '',
         },
         init() {
             this.uomsById = this.uoms.reduce((map, uom) => {
@@ -72,6 +77,10 @@ export function mount(rootEl, payload) {
                 ...errors,
                 name: Array.isArray(errors.name) ? errors.name : [],
                 base_uom_id: Array.isArray(errors.base_uom_id) ? errors.base_uom_id : [],
+                default_price_amount: Array.isArray(errors.default_price_amount) ? errors.default_price_amount : [],
+                default_price_currency_code: Array.isArray(errors.default_price_currency_code)
+                    ? errors.default_price_currency_code
+                    : [],
             };
         },
         showToast(type, message) {
@@ -110,6 +119,7 @@ export function mount(rootEl, payload) {
                 is_purchasable: false,
                 is_sellable: false,
                 is_manufacturable: false,
+                default_price_amount: '',
             };
         },
         openEdit(item) {
@@ -121,6 +131,7 @@ export function mount(rootEl, payload) {
                 is_purchasable: item.is_purchasable,
                 is_sellable: item.is_sellable,
                 is_manufacturable: item.is_manufacturable,
+                default_price_amount: item.default_price_amount || '',
             };
             this.editBaseUomLocked = item.has_stock_moves;
             this.isEditOpen = true;
@@ -143,6 +154,7 @@ export function mount(rootEl, payload) {
                 is_purchasable: false,
                 is_sellable: false,
                 is_manufacturable: false,
+                default_price_amount: '',
             };
         },
         openDelete(item) {
@@ -220,6 +232,7 @@ export function mount(rootEl, payload) {
                 is_purchasable: this.form.is_purchasable,
                 is_sellable: this.form.is_sellable,
                 is_manufacturable: this.form.is_manufacturable,
+                default_price_amount: this.form.default_price_amount,
             };
 
             const response = await fetch(this.storeUrl, {
@@ -248,17 +261,19 @@ export function mount(rootEl, payload) {
             const data = await response.json();
             const uom = this.uomsById[data.data.base_uom_id] || { name: '', symbol: '' };
 
-            this.items.unshift({
-                id: data.data.id,
-                name: data.data.name,
-                base_uom_id: data.data.base_uom_id,
-                base_uom_name: uom.name,
-                base_uom_symbol: uom.symbol,
-                is_purchasable: data.data.is_purchasable,
-                is_sellable: data.data.is_sellable,
-                is_manufacturable: data.data.is_manufacturable,
-                has_stock_moves: false,
-            });
+                this.items.unshift({
+                    id: data.data.id,
+                    name: data.data.name,
+                    base_uom_id: data.data.base_uom_id,
+                    base_uom_name: uom.name,
+                    base_uom_symbol: uom.symbol,
+                    is_purchasable: data.data.is_purchasable,
+                    is_sellable: data.data.is_sellable,
+                    is_manufacturable: data.data.is_manufacturable,
+                    default_price_amount: data.data.default_price_amount,
+                    default_price_currency_code: data.data.default_price_currency_code,
+                    has_stock_moves: false,
+                });
 
             this.closeCreate();
         },
@@ -273,6 +288,7 @@ export function mount(rootEl, payload) {
                 is_purchasable: this.editForm.is_purchasable,
                 is_sellable: this.editForm.is_sellable,
                 is_manufacturable: this.editForm.is_manufacturable,
+                default_price_amount: this.editForm.default_price_amount,
             };
 
             const response = await fetch(this.updateUrlBase + '/' + this.editItemId, {
@@ -314,6 +330,8 @@ export function mount(rootEl, payload) {
                     is_purchasable: data.data.is_purchasable,
                     is_sellable: data.data.is_sellable,
                     is_manufacturable: data.data.is_manufacturable,
+                    default_price_amount: data.data.default_price_amount,
+                    default_price_currency_code: data.data.default_price_currency_code,
                     has_stock_moves: data.data.has_stock_moves ?? this.items[itemIndex].has_stock_moves,
                 };
             }

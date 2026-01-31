@@ -8,6 +8,17 @@
     @php
         $uomsExist = \App\Models\Uom::query()->exists();
         $uoms = \App\Models\Uom::query()->orderBy('name')->get();
+        $tenantCurrency = auth()->user()?->tenant?->currency_code ?: (string) config('app.currency_code', 'USD');
+        $formatCentsToAmount = function (?int $cents): ?string {
+            if ($cents === null) {
+                return null;
+            }
+
+            $whole = intdiv($cents, 100);
+            $decimal = $cents % 100;
+
+            return sprintf('%d.%02d', $whole, $decimal);
+        };
         $uomsPayload = $uoms->map(function ($uom) {
             return [
                 'id' => $uom->id,
@@ -15,7 +26,7 @@
                 'symbol' => $uom->symbol,
             ];
         });
-        $itemsPayload = $items->map(function ($item) {
+        $itemsPayload = $items->map(function ($item) use ($formatCentsToAmount) {
             return [
                 'id' => $item->id,
                 'name' => $item->name,
@@ -25,6 +36,8 @@
                 'is_purchasable' => $item->is_purchasable,
                 'is_sellable' => $item->is_sellable,
                 'is_manufacturable' => $item->is_manufacturable,
+                'default_price_amount' => $formatCentsToAmount($item->default_price_cents),
+                'default_price_currency_code' => $item->default_price_currency_code,
                 'has_stock_moves' => $item->stockMoves()->exists(),
             ];
         });
@@ -36,6 +49,7 @@
             'showUrlBase' => url('/materials'),
             'storeUrl' => route('materials.store'),
             'csrfToken' => csrf_token(),
+            'tenantCurrency' => $tenantCurrency,
         ];
     @endphp
 
