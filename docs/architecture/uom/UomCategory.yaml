@@ -10,7 +10,12 @@ when_not_to_use:
 rules:
   - Each UoM belongs to a single category.
   - Global conversions are valid only within a category.
+  - Tenant-owned categories require tenant_id; system defaults use tenant_id = null.
+  - Category names are unique per tenant.
 public_interface:
   - uoms()
 example_usage: |
-  $category = UomCategory::create(['name' => 'Mass']);
+  $category = UomCategory::create([
+      'tenant_id' => $tenant->id,
+      'name' => 'Mass',
+  ]);

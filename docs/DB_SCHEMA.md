@@ -614,22 +614,24 @@ Migrations remain the **sole source of truth**.
 
 ## uom_categories
 
-**Tenant-owned:** No  
+**Tenant-owned:** Yes (system defaults use `tenant_id = NULL`)  
 **Purpose:** Unit-of-measure categories
 
 ### Columns
 
-| Name       | Type      | Nullable | Notes       |
-| ---------- | --------- | -------- | ----------- |
-| id         | bigint    | No       | Primary key |
-| name       | string    | No       | Unique      |
-| created_at | timestamp | Yes      | —           |
-| updated_at | timestamp | Yes      | —           |
+| Name       | Type      | Nullable | Notes                      |
+| ---------- | --------- | -------- | -------------------------- |
+| id         | bigint    | No       | Primary key                |
+| tenant_id  | bigint    | Yes      | FK → tenants.id (CASCADE)  |
+| name       | string    | No       | Unique per tenant          |
+| created_at | timestamp | Yes      | —                          |
+| updated_at | timestamp | Yes      | —                          |
 
 ### Keys & Indexes
 
 - PK: `id`
-- Unique: `name`
+- Unique: `(tenant_id, name)`
+- Implicit (FK index): `tenant_id`
 
 ---
 
@@ -660,7 +662,7 @@ Migrations remain the **sole source of truth**.
 
 ## uoms
 
-**Tenant-owned:** No  
+**Tenant-owned:** Yes (system defaults use `tenant_id = NULL`)  
 **Purpose:** Units of measure
 
 ### Columns
@@ -668,17 +670,18 @@ Migrations remain the **sole source of truth**.
 | Name            | Type      | Nullable | Notes                            |
 | --------------- | --------- | -------- | -------------------------------- |
 | id              | bigint    | No       | Primary key                      |
+| tenant_id       | bigint    | Yes      | FK → tenants.id (CASCADE)        |
 | uom_category_id | bigint    | No       | FK → uom_categories.id (CASCADE) |
-| name            | string    | No       | Unique                           |
-| symbol          | string    | No       | Unique                           |
+| name            | string    | No       | Not unique                       |
+| symbol          | string    | No       | Unique per tenant                |
 | created_at      | timestamp | Yes      | —                                |
 | updated_at      | timestamp | Yes      | —                                |
 
 ### Keys & Indexes
 
 - PK: `id`
-- Unique: `name`
-- Unique: `symbol`
+- Unique: `(tenant_id, symbol)`
+- Implicit (FK index): `tenant_id`
 - Implicit (FK index): `uom_category_id`
 
 ---

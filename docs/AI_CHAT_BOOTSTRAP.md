@@ -15,8 +15,8 @@ Authority Order (highest to lowest — conflicts resolved by this order):
 7. docs/DB_SCHEMA.md
 8. docs/UI_DESIGN.md
 9. routes/web.php (main web routes — included here for complete bootstrap context)
-## docs/AI_CHAT_CODEX.md
 
+## docs/AI_CHAT_CODEX.md
 # AI Chat Bootstrap (READ FIRST)
 
 You are assisting with development on this repository.
@@ -248,7 +248,6 @@ If unsure, **stop immediately and ask**.
 - The **smallest possible change per PR**
 
 ## docs/PR2_ROADMAP.md
-
 # PR2_ROADMAP — UI + Domain Completion (Post-PR-006)
 
 This roadmap defines the **second major phase** of work: completing **Items, Inventory, Suppliers, and Manufacturing**
@@ -852,7 +851,6 @@ Replace Breeze Blade UI components with Tailwind-only markup.
 - Optional UI smoke checks
 
 ## docs/CONVENTIONS.md
-
 # Conventions
 
 This document defines the **mandatory development conventions** for this repository.  
@@ -1107,7 +1105,6 @@ These rules apply to:
 - Any inventory-affecting calculations
 
 ## docs/ARCHITECTURE_INVENTORY.md
-
 # Architecture Inventory
 
 This document tracks **reusable abstractions, components, and architectural patterns**
@@ -1765,6 +1762,10 @@ Recipe creation, editing, or execution flows.
 **Purpose:**  
 Group units of measure into categories that define safe conversion boundaries.
 
+**Notes:**  
+- Tenant-owned. System defaults use `tenant_id = null`.
+- Names are unique per tenant.
+
 **When to Use:**  
 Defining conversion-safe groupings such as mass or volume.
 
@@ -1776,7 +1777,10 @@ Cross-category conversion logic.
 
 **Example Usage:**  
 ```php
-$category = UomCategory::create(['name' => 'Mass']);
+$category = UomCategory::create([
+    'tenant_id' => $tenant->id,
+    'name' => 'Mass',
+]);
 ```
 
 ---
@@ -1789,6 +1793,10 @@ $category = UomCategory::create(['name' => 'Mass']);
 
 **Purpose:**  
 Represent a unit of measure belonging to a single category.
+
+**Notes:**  
+- Tenant-owned. System defaults use `tenant_id = null`.
+- `symbol` is unique per tenant; `name` is not unique.
 
 **When to Use:**  
 Assigning units to items and recording quantities.
@@ -1804,6 +1812,7 @@ Implicit unit assumptions.
 **Example Usage:**  
 ```php
 $uom = Uom::create([
+    'tenant_id' => $tenant->id,
     'uom_category_id' => $category->id,
     'name' => 'Gram',
     'symbol' => 'g',
@@ -2461,7 +2470,6 @@ it('creates a material', function () {
 ---
 
 ## docs/PERMISSIONS_MATRIX.md
-
 # Permissions Matrix
 
 This document is the source-of-truth for **authorization intent** in this repository.
@@ -2635,7 +2643,6 @@ return [
 ```
 
 ## docs/ENUMS.md
-
 # ENUMS — Canonical Enum Authority
 
 This document defines the canonical, normative enum-like values used throughout the system.
@@ -2739,7 +2746,6 @@ Do not introduce new enum values without updating this document.
 No conflicts or ambiguities were found at time of creation based on existing migrations, models, actions, and tests.
 
 ## docs/DB_SCHEMA.md
-
 # Database Schema Inventory (DB_SCHEMA)
 
 This document inventories **all database tables and columns** as defined by migrations.
@@ -3356,22 +3362,24 @@ Migrations remain the **sole source of truth**.
 
 ## uom_categories
 
-**Tenant-owned:** No  
+**Tenant-owned:** Yes (system defaults use `tenant_id = NULL`)  
 **Purpose:** Unit-of-measure categories
 
 ### Columns
 
-| Name       | Type      | Nullable | Notes       |
-| ---------- | --------- | -------- | ----------- |
-| id         | bigint    | No       | Primary key |
-| name       | string    | No       | Unique      |
-| created_at | timestamp | Yes      | —           |
-| updated_at | timestamp | Yes      | —           |
+| Name       | Type      | Nullable | Notes                      |
+| ---------- | --------- | -------- | -------------------------- |
+| id         | bigint    | No       | Primary key                |
+| tenant_id  | bigint    | Yes      | FK → tenants.id (CASCADE)  |
+| name       | string    | No       | Unique per tenant          |
+| created_at | timestamp | Yes      | —                          |
+| updated_at | timestamp | Yes      | —                          |
 
 ### Keys & Indexes
 
 - PK: `id`
-- Unique: `name`
+- Unique: `(tenant_id, name)`
+- Implicit (FK index): `tenant_id`
 
 ---
 
@@ -3402,7 +3410,7 @@ Migrations remain the **sole source of truth**.
 
 ## uoms
 
-**Tenant-owned:** No  
+**Tenant-owned:** Yes (system defaults use `tenant_id = NULL`)  
 **Purpose:** Units of measure
 
 ### Columns
@@ -3410,17 +3418,18 @@ Migrations remain the **sole source of truth**.
 | Name            | Type      | Nullable | Notes                            |
 | --------------- | --------- | -------- | -------------------------------- |
 | id              | bigint    | No       | Primary key                      |
+| tenant_id       | bigint    | Yes      | FK → tenants.id (CASCADE)        |
 | uom_category_id | bigint    | No       | FK → uom_categories.id (CASCADE) |
-| name            | string    | No       | Unique                           |
-| symbol          | string    | No       | Unique                           |
+| name            | string    | No       | Not unique                       |
+| symbol          | string    | No       | Unique per tenant                |
 | created_at      | timestamp | Yes      | —                                |
 | updated_at      | timestamp | Yes      | —                                |
 
 ### Keys & Indexes
 
 - PK: `id`
-- Unique: `name`
-- Unique: `symbol`
+- Unique: `(tenant_id, symbol)`
+- Implicit (FK index): `tenant_id`
 - Implicit (FK index): `uom_category_id`
 
 ---
@@ -3455,7 +3464,6 @@ Migrations remain the **sole source of truth**.
 **End of DB_SCHEMA**
 
 ## docs/UI_DESIGN.md
-
 # UI_DESIGN.md — Canonical UI Direction & Constraints
 
 This document defines the **authoritative UI design rules** for this repository.
@@ -3984,7 +3992,6 @@ They are mandatory, not stylistic.
 ::contentReference[oaicite:0]{index=0}
 
 ## routes/web.php
-
 <?php
 
 use App\Http\Controllers\InventoryController;
@@ -4105,4 +4112,3 @@ Route::middleware('auth')->group(function () {
 });
 
 require __DIR__ . '/auth.php';
-

@@ -10,11 +10,14 @@ when_not_to_use:
   - Implicit unit assumptions
 rules:
   - Each UoM belongs to exactly one UoM category.
-  - UoM names and symbols are unique.
+  - Tenant-owned UoMs require tenant_id; system defaults use tenant_id = null.
+  - UoM symbol is unique per tenant.
+  - UoM name is not unique.
 public_interface:
   - category()
 example_usage: |
   $uom = Uom::create([
+      'tenant_id' => $tenant->id,
       'uom_category_id' => $category->id,
       'name' => 'Gram',
       'symbol' => 'g',

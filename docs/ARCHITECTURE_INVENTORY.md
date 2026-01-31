@@ -655,6 +655,10 @@ Recipe creation, editing, or execution flows.
 **Purpose:**  
 Group units of measure into categories that define safe conversion boundaries.
 
+**Notes:**  
+- Tenant-owned. System defaults use `tenant_id = null`.
+- Names are unique per tenant.
+
 **When to Use:**  
 Defining conversion-safe groupings such as mass or volume.
 
@@ -666,7 +670,10 @@ Cross-category conversion logic.
 
 **Example Usage:**  
 ```php
-$category = UomCategory::create(['name' => 'Mass']);
+$category = UomCategory::create([
+    'tenant_id' => $tenant->id,
+    'name' => 'Mass',
+]);
 ```
 
 ---
@@ -679,6 +686,10 @@ $category = UomCategory::create(['name' => 'Mass']);
 
 **Purpose:**  
 Represent a unit of measure belonging to a single category.
+
+**Notes:**  
+- Tenant-owned. System defaults use `tenant_id = null`.
+- `symbol` is unique per tenant; `name` is not unique.
 
 **When to Use:**  
 Assigning units to items and recording quantities.
@@ -694,6 +705,7 @@ Implicit unit assumptions.
 **Example Usage:**  
 ```php
 $uom = Uom::create([
+    'tenant_id' => $tenant->id,
     'uom_category_id' => $category->id,
     'name' => 'Gram',
     'symbol' => 'g',
