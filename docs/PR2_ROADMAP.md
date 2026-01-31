@@ -403,7 +403,7 @@ Add a **planning-only placeholder price** to materials.
 **Includes**
 
 - Schema:
-    - `items.default_price_amount`
+    - `items.default_price_cents`
     - `items.default_price_currency_code`
 - Defaults to tenant currency
 - Editable on material create/edit
@@ -515,7 +515,7 @@ Create purchase orders with **immutable price snapshots**.
 
 | Layer          | Location                 | Purpose                  |
 | -------------- | ------------------------ | ------------------------ |
-| Planning       | `items.default_price_*`  | Forecasting only         |
+| Planning       | `items.default_price_cents` + `items.default_price_currency_code` | Forecasting only |
 | Supplier       | `supplier_item_prices.*` | Expected buy price       |
 | Purchase Order | `purchase_order_lines.*` | Legal / accounting truth |
 

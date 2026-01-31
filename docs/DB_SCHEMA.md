@@ -244,6 +244,8 @@ Migrations remain the **sole source of truth**.
 | is_sellable       | boolean   | No       | Default false             |
 | is_manufacturable | boolean   | No       | Default false             |
 | base_uom_id       | bigint    | No       | FK → uoms.id              |
+| default_price_cents | integer | Yes      | Unsigned                  |
+| default_price_currency_code | char(3) | Yes | —                        |
 | created_at        | timestamp | Yes      | —                         |
 | updated_at        | timestamp | Yes      | —                         |
 

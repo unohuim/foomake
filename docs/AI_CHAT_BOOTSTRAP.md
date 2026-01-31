@@ -15,8 +15,6 @@ Authority Order (highest to lowest — conflicts resolved by this order):
 7. docs/DB_SCHEMA.md
 8. docs/UI_DESIGN.md
 9. routes/web.php (main web routes — included here for complete bootstrap context)
-
-
 ## docs/AI_CHAT_CODEX.md
 
 # AI Chat Bootstrap (READ FIRST)
@@ -248,7 +246,6 @@ If unsure, **stop immediately and ask**.
 - “Unauthenticated = no access” enforced via routes/gates,
   **not global model scopes**
 - The **smallest possible change per PR**
-
 
 ## docs/PR2_ROADMAP.md
 
@@ -657,7 +654,7 @@ Add a **planning-only placeholder price** to materials.
 **Includes**
 
 - Schema:
-    - `items.default_price_amount`
+    - `items.default_price_cents`
     - `items.default_price_currency_code`
 - Defaults to tenant currency
 - Editable on material create/edit
@@ -769,7 +766,7 @@ Create purchase orders with **immutable price snapshots**.
 
 | Layer          | Location                 | Purpose                  |
 | -------------- | ------------------------ | ------------------------ |
-| Planning       | `items.default_price_*`  | Forecasting only         |
+| Planning       | `items.default_price_cents` + `items.default_price_currency_code` | Forecasting only |
 | Supplier       | `supplier_item_prices.*` | Expected buy price       |
 | Purchase Order | `purchase_order_lines.*` | Legal / accounting truth |
 
@@ -853,7 +850,6 @@ Replace Breeze Blade UI components with Tailwind-only markup.
 
 - No new domain tests
 - Optional UI smoke checks
-
 
 ## docs/CONVENTIONS.md
 
@@ -1109,7 +1105,6 @@ These rules apply to:
 - Receiving logic
 - Unit conversions
 - Any inventory-affecting calculations
-
 
 ## docs/ARCHITECTURE_INVENTORY.md
 
@@ -2465,7 +2460,6 @@ it('creates a material', function () {
 
 ---
 
-
 ## docs/PERMISSIONS_MATRIX.md
 
 # Permissions Matrix
@@ -2640,7 +2634,6 @@ return [
 ];
 ```
 
-
 ## docs/ENUMS.md
 
 # ENUMS — Canonical Enum Authority
@@ -2744,7 +2737,6 @@ Do not introduce new enum values without updating this document.
 ## Conflicts / Ambiguities Report
 
 No conflicts or ambiguities were found at time of creation based on existing migrations, models, actions, and tests.
-
 
 ## docs/DB_SCHEMA.md
 
@@ -2994,6 +2986,8 @@ Migrations remain the **sole source of truth**.
 | is_sellable       | boolean   | No       | Default false             |
 | is_manufacturable | boolean   | No       | Default false             |
 | base_uom_id       | bigint    | No       | FK → uoms.id              |
+| default_price_cents | integer | Yes      | Unsigned                  |
+| default_price_currency_code | char(3) | Yes | —                        |
 | created_at        | timestamp | Yes      | —                         |
 | updated_at        | timestamp | Yes      | —                         |
 
@@ -3459,7 +3453,6 @@ Migrations remain the **sole source of truth**.
 ---
 
 **End of DB_SCHEMA**
-
 
 ## docs/UI_DESIGN.md
 
@@ -3990,7 +3983,6 @@ They are mandatory, not stylistic.
 
 ::contentReference[oaicite:0]{index=0}
 
-
 ## routes/web.php
 
 <?php
@@ -4113,3 +4105,4 @@ Route::middleware('auth')->group(function () {
 });
 
 require __DIR__ . '/auth.php';
+

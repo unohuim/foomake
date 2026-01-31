@@ -12,9 +12,12 @@ rules:
   - Each item has exactly one base UoM referenced by base_uom_id.
   - On-hand quantity is computed from stock_moves.
   - Inventory is derived and not stored on the items table.
+  - Planning price is stored as integer cents in default_price_cents with an uppercase 3-letter default_price_currency_code.
 public_interface:
   - stockMoves()
   - onHandQuantity()
   - itemUomConversions()
+  - default_price_cents (attribute)
+  - default_price_currency_code (attribute)
 example_usage: |
   $onHand = $item->onHandQuantity();
