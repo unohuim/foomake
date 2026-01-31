@@ -20,10 +20,12 @@ beforeEach(function () {
     ]);
 
     $this->uomCategory = UomCategory::query()->forceCreate([
+        'tenant_id' => $this->tenant->id,
         'name' => 'Mass ' . $this->tenant->id,
     ]);
 
     $this->uom = Uom::query()->forceCreate([
+        'tenant_id' => $this->tenant->id,
         'uom_category_id' => $this->uomCategory->id,
         'name' => 'Gram ' . $this->tenant->id,
         'symbol' => 'g' . $this->tenant->id,
@@ -117,10 +119,12 @@ test('inventory overview is tenant scoped', function () {
 
     // Use other tenant's own UoM to avoid any assumptions about global UoMs.
     $otherCategory = UomCategory::query()->forceCreate([
+        'tenant_id' => $otherTenant->id,
         'name' => 'Mass ' . $otherTenant->id,
     ]);
 
     $otherUom = Uom::query()->forceCreate([
+        'tenant_id' => $otherTenant->id,
         'uom_category_id' => $otherCategory->id,
         'name' => 'Gram ' . $otherTenant->id,
         'symbol' => 'g' . $otherTenant->id,

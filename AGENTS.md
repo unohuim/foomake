@@ -161,3 +161,19 @@ Codex must never self-certify completion.
 
 When changing core logic, Codex should prefer rewriting entire files
 rather than partial snippets, unless explicitly approved.
+
+---
+
+## Ignore Paths
+
+The agent must NEVER read, index, modify, or reason about files matching these patterns:
+
+- storage/\*\*
+- vendor/\*\*
+- node_modules/\*\*
+- public/build/\*\*
+- \*.log
+- .env
+- bootstrap/cache/\*\*
+- docs/AI_CHAT_BOOTSTRAP.md
+- dosc/AI_CHAT_CODEX.md

@@ -23,14 +23,16 @@ beforeEach(function () {
         ]);
     };
 
-    $this->makeUom = function (): Uom {
+    $this->makeUom = function (Tenant $tenant): Uom {
         $suffix = (string) Str::uuid();
 
         $category = UomCategory::query()->forceCreate([
+            'tenant_id' => $tenant->id,
             'name' => 'Category ' . $suffix,
         ]);
 
         return Uom::query()->forceCreate([
+            'tenant_id' => $tenant->id,
             'uom_category_id' => $category->id,
             'name' => 'Uom ' . $suffix,
             'symbol' => 'u' . str_replace('-', '', $suffix),
@@ -142,7 +144,7 @@ test('execute permission allows create and schedule but not view access', functi
     $user = ($this->makeUser)($tenant);
     ($this->grantPermission)($user, 'inventory-make-orders-execute');
 
-    $uom = ($this->makeUom)();
+    $uom = ($this->makeUom)($tenant);
     $output = ($this->makeItem)($tenant, $uom, 'Bread', true);
     $recipe = ($this->makeRecipe)($tenant, $output, true);
 
@@ -171,7 +173,7 @@ test('view permission can access make orders index and payload lists tenant scop
     $user = ($this->makeUser)($tenant);
     ($this->grantPermission)($user, 'inventory-make-orders-view');
 
-    $uom = ($this->makeUom)();
+    $uom = ($this->makeUom)($tenant);
     $output = ($this->makeItem)($tenant, $uom, 'Output A', true);
     $recipe = ($this->makeRecipe)($tenant, $output, true);
 
@@ -209,8 +211,8 @@ test('make orders index is tenant scoped and empty state returns empty payload l
     $userA = ($this->makeUser)($tenantA);
     ($this->grantPermission)($userA, 'inventory-make-orders-view');
 
-    $uomA = ($this->makeUom)();
-    $uomB = ($this->makeUom)();
+    $uomA = ($this->makeUom)($tenantA);
+    $uomB = ($this->makeUom)($tenantB);
 
     $outputA = ($this->makeItem)($tenantA, $uomA, 'Tenant A Output', true);
     $outputB = ($this->makeItem)($tenantB, $uomB, 'Tenant B Output', true);
@@ -257,7 +259,7 @@ test('create draft make order validates payload and does not create stock moves'
         ->assertStatus(422)
         ->assertJsonValidationErrors(['recipe_id', 'output_quantity']);
 
-    $uom = ($this->makeUom)();
+    $uom = ($this->makeUom)($tenant);
     $output = ($this->makeItem)($tenant, $uom, 'Bread', true);
     $recipe = ($this->makeRecipe)($tenant, $output, true);
 
@@ -319,7 +321,7 @@ test('create rejects inactive recipe', function () {
     $user = ($this->makeUser)($tenant);
     ($this->grantPermission)($user, 'inventory-make-orders-execute');
 
-    $uom = ($this->makeUom)();
+    $uom = ($this->makeUom)($tenant);
     $output = ($this->makeItem)($tenant, $uom, 'Bread', true);
     $recipe = ($this->makeRecipe)($tenant, $output, false);
 
@@ -337,7 +339,7 @@ test('schedule sets due date and status without creating stock moves', function 
     $user = ($this->makeUser)($tenant);
     ($this->grantPermission)($user, 'inventory-make-orders-execute');
 
-    $uom = ($this->makeUom)();
+    $uom = ($this->makeUom)($tenant);
     $output = ($this->makeItem)($tenant, $uom, 'Bread', true);
     $recipe = ($this->makeRecipe)($tenant, $output, true);
 
@@ -368,7 +370,7 @@ test('schedule rejects inactive recipe and invalid due date', function () {
     $user = ($this->makeUser)($tenant);
     ($this->grantPermission)($user, 'inventory-make-orders-execute');
 
-    $uom = ($this->makeUom)();
+    $uom = ($this->makeUom)($tenant);
     $output = ($this->makeItem)($tenant, $uom, 'Bread', true);
     $recipe = ($this->makeRecipe)($tenant, $output, false);
 
@@ -401,7 +403,7 @@ test('make creates stock moves once and sets made fields', function () {
     $user = ($this->makeUser)($tenant);
     ($this->grantPermission)($user, 'inventory-make-orders-execute');
 
-    $uom = ($this->makeUom)();
+    $uom = ($this->makeUom)($tenant);
     $inputA = ($this->makeItem)($tenant, $uom, 'Flour', false);
     $inputB = ($this->makeItem)($tenant, $uom, 'Water', false);
     $output = ($this->makeItem)($tenant, $uom, 'Bread', true);
@@ -460,7 +462,7 @@ test('make is blocked when already made and creates no additional stock moves', 
     $user = ($this->makeUser)($tenant);
     ($this->grantPermission)($user, 'inventory-make-orders-execute');
 
-    $uom = ($this->makeUom)();
+    $uom = ($this->makeUom)($tenant);
     $input = ($this->makeItem)($tenant, $uom, 'Flour', false);
     $output = ($this->makeItem)($tenant, $uom, 'Bread', true);
 
@@ -495,7 +497,7 @@ test('make rejects inactive recipe', function () {
     $user = ($this->makeUser)($tenant);
     ($this->grantPermission)($user, 'inventory-make-orders-execute');
 
-    $uom = ($this->makeUom)();
+    $uom = ($this->makeUom)($tenant);
     $input = ($this->makeItem)($tenant, $uom, 'Flour', false);
     $output = ($this->makeItem)($tenant, $uom, 'Bread', true);
 
@@ -526,7 +528,7 @@ test('tenant isolation is enforced for store, schedule, and make', function () {
     $userA = ($this->makeUser)($tenantA);
     ($this->grantPermission)($userA, 'inventory-make-orders-execute');
 
-    $uomB = ($this->makeUom)();
+    $uomB = ($this->makeUom)($tenantB);
     $outputB = ($this->makeItem)($tenantB, $uomB, 'Bread B', true);
     $recipeB = ($this->makeRecipe)($tenantB, $outputB, true);
     $userB = ($this->makeUser)($tenantB);

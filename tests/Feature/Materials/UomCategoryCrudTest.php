@@ -31,17 +31,20 @@ beforeEach(function () {
 
 it('creates a uom category via ajax', function () {
     $response = $this->actingAs($this->authorizedUser)
-        ->postJson(route('materials.uom-categories.store'), ['name' => 'Mass']);
+        ->postJson(route('materials.uom-categories.store'), ['name' => 'Mass Custom']);
 
     $response->assertStatus(201)
         ->assertJsonStructure(['id', 'name'])
-        ->assertJson(['name' => 'Mass']);
+        ->assertJson(['name' => 'Mass Custom']);
 
-    $this->assertDatabaseHas('uom_categories', ['name' => 'Mass']);
+    $this->assertDatabaseHas('uom_categories', ['name' => 'Mass Custom']);
 });
 
 it('updates a uom category via ajax', function () {
-    $category = UomCategory::create(['name' => 'Mass']);
+    $category = UomCategory::create([
+        'tenant_id' => $this->tenant->id,
+        'name' => 'Mass Custom',
+    ]);
 
     $response = $this->actingAs($this->authorizedUser)
         ->patchJson(route('materials.uom-categories.update', $category), ['name' => 'Weight']);
@@ -59,7 +62,10 @@ it('updates a uom category via ajax', function () {
 });
 
 it('deletes a uom category via ajax', function () {
-    $category = UomCategory::create(['name' => 'Volume']);
+    $category = UomCategory::create([
+        'tenant_id' => $this->tenant->id,
+        'name' => 'Volume Custom',
+    ]);
 
     $this->actingAs($this->authorizedUser)
         ->deleteJson(route('materials.uom-categories.destroy', $category))
@@ -76,7 +82,10 @@ it('validates required name on create', function () {
 });
 
 it('validates required name on update', function () {
-    $category = UomCategory::create(['name' => 'Count']);
+    $category = UomCategory::create([
+        'tenant_id' => $this->tenant->id,
+        'name' => 'Count Custom',
+    ]);
 
     $this->actingAs($this->authorizedUser)
         ->patchJson(route('materials.uom-categories.update', $category), ['name' => ''])
@@ -85,20 +94,29 @@ it('validates required name on update', function () {
 });
 
 it('rejects duplicate category names', function () {
-    UomCategory::create(['name' => 'Mass']);
+    UomCategory::create([
+        'tenant_id' => $this->tenant->id,
+        'name' => 'Mass Custom',
+    ]);
 
     $this->actingAs($this->authorizedUser)
-        ->postJson(route('materials.uom-categories.store'), ['name' => 'Mass'])
+        ->postJson(route('materials.uom-categories.store'), ['name' => 'Mass Custom'])
         ->assertStatus(422)
         ->assertJsonValidationErrors(['name']);
 });
 
 it('rejects duplicate names on update', function () {
-    UomCategory::create(['name' => 'Mass']);
-    $otherCategory = UomCategory::create(['name' => 'Volume']);
+    UomCategory::create([
+        'tenant_id' => $this->tenant->id,
+        'name' => 'Mass Custom',
+    ]);
+    $otherCategory = UomCategory::create([
+        'tenant_id' => $this->tenant->id,
+        'name' => 'Volume Custom',
+    ]);
 
     $this->actingAs($this->authorizedUser)
-        ->patchJson(route('materials.uom-categories.update', $otherCategory), ['name' => 'Mass'])
+        ->patchJson(route('materials.uom-categories.update', $otherCategory), ['name' => 'Mass Custom'])
         ->assertStatus(422)
         ->assertJsonValidationErrors(['name']);
 });

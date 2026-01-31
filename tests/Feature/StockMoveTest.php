@@ -30,13 +30,21 @@ function makeTenantItemWithGrams(): array
     $tenant = Tenant::factory()->create();
     $user = User::factory()->create(['tenant_id' => $tenant->id]);
 
-    $category = UomCategory::create(['name' => 'Mass']);
-
-    $grams = Uom::create([
-        'uom_category_id' => $category->id,
-        'name' => 'Gram',
-        'symbol' => 'g',
+    $category = UomCategory::firstOrCreate([
+        'tenant_id' => $tenant->id,
+        'name' => 'Mass',
     ]);
+
+    $grams = Uom::firstOrCreate(
+        [
+            'tenant_id' => $tenant->id,
+            'symbol' => 'g',
+        ],
+        [
+            'uom_category_id' => $category->id,
+            'name' => 'Gram',
+        ]
+    );
 
     $item = Item::create([
         'tenant_id' => $tenant->id,
@@ -124,11 +132,16 @@ it('rejects stock moves when uom_id does not match item base_uom_id', function (
 
     $this->actingAs($user);
 
-    $kg = Uom::create([
-        'uom_category_id' => $grams->uom_category_id,
-        'name' => 'Kilogram',
-        'symbol' => 'kg',
-    ]);
+    $kg = Uom::firstOrCreate(
+        [
+            'tenant_id' => $tenant->id,
+            'symbol' => 'kg',
+        ],
+        [
+            'uom_category_id' => $grams->uom_category_id,
+            'name' => 'Kilogram',
+        ]
+    );
 
     $this->expectException(\InvalidArgumentException::class);
 

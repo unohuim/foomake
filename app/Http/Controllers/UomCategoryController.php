@@ -40,11 +40,21 @@ class UomCategoryController extends Controller
     {
         Gate::authorize('inventory-materials-manage');
 
+        $tenantId = $request->user()->tenant_id;
+
         $validated = $request->validate([
-            'name' => ['required', 'string', 'max:255', 'unique:uom_categories,name'],
+            'name' => [
+                'required',
+                'string',
+                'max:255',
+                Rule::unique('uom_categories', 'name')->where('tenant_id', $tenantId),
+            ],
         ]);
 
-        $category = UomCategory::create($validated);
+        $category = UomCategory::create([
+            'tenant_id' => $tenantId,
+            'name' => $validated['name'],
+        ]);
 
         return response()->json([
             'id' => $category->id,
@@ -59,12 +69,16 @@ class UomCategoryController extends Controller
     {
         Gate::authorize('inventory-materials-manage');
 
+        $tenantId = $request->user()->tenant_id;
+
         $validated = $request->validate([
             'name' => [
                 'required',
                 'string',
                 'max:255',
-                Rule::unique('uom_categories', 'name')->ignore($uomCategory->id),
+                Rule::unique('uom_categories', 'name')
+                    ->where('tenant_id', $tenantId)
+                    ->ignore($uomCategory->id),
             ],
         ]);
 

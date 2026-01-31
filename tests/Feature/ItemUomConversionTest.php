@@ -19,20 +19,30 @@ class ItemUomConversionTest extends TestCase
     {
         $tenant = Tenant::factory()->create();
 
-        $mass = UomCategory::create(['name' => 'Mass']);
-        $count = UomCategory::create(['name' => 'Count']);
+        $mass = UomCategory::firstOrCreate(['tenant_id' => $tenant->id, 'name' => 'Mass']);
+        $count = UomCategory::firstOrCreate(['tenant_id' => $tenant->id, 'name' => 'Count']);
 
-        $grams = Uom::create([
-            'uom_category_id' => $mass->id,
-            'name' => 'Gram',
-            'symbol' => 'g',
-        ]);
+        $grams = Uom::firstOrCreate(
+            [
+                'tenant_id' => $tenant->id,
+                'symbol' => 'g',
+            ],
+            [
+                'uom_category_id' => $mass->id,
+                'name' => 'Gram',
+            ]
+        );
 
-        $each = Uom::create([
-            'uom_category_id' => $count->id,
-            'name' => 'Each',
-            'symbol' => 'ea',
-        ]);
+        $each = Uom::firstOrCreate(
+            [
+                'tenant_id' => $tenant->id,
+                'symbol' => 'ea',
+            ],
+            [
+                'uom_category_id' => $count->id,
+                'name' => 'Each',
+            ]
+        );
 
         $item = Item::create([
             'tenant_id' => $tenant->id,
@@ -58,20 +68,30 @@ class ItemUomConversionTest extends TestCase
     {
         $tenant = Tenant::factory()->create();
 
-        $mass = UomCategory::create(['name' => 'Mass']);
-        $count = UomCategory::create(['name' => 'Count']);
+        $mass = UomCategory::firstOrCreate(['tenant_id' => $tenant->id, 'name' => 'Mass']);
+        $count = UomCategory::firstOrCreate(['tenant_id' => $tenant->id, 'name' => 'Count']);
 
-        $grams = Uom::create([
-            'uom_category_id' => $mass->id,
-            'name' => 'Gram',
-            'symbol' => 'g',
-        ]);
+        $grams = Uom::firstOrCreate(
+            [
+                'tenant_id' => $tenant->id,
+                'symbol' => 'g',
+            ],
+            [
+                'uom_category_id' => $mass->id,
+                'name' => 'Gram',
+            ]
+        );
 
-        $each = Uom::create([
-            'uom_category_id' => $count->id,
-            'name' => 'Each',
-            'symbol' => 'ea',
-        ]);
+        $each = Uom::firstOrCreate(
+            [
+                'tenant_id' => $tenant->id,
+                'symbol' => 'ea',
+            ],
+            [
+                'uom_category_id' => $count->id,
+                'name' => 'Each',
+            ]
+        );
 
         $itemA = Item::create([
             'tenant_id' => $tenant->id,
@@ -105,13 +125,18 @@ class ItemUomConversionTest extends TestCase
     {
         $tenant = Tenant::factory()->create();
 
-        $category = UomCategory::create(['name' => 'Mass']);
+        $category = UomCategory::firstOrCreate(['tenant_id' => $tenant->id, 'name' => 'Mass']);
 
-        $kg = Uom::create([
-            'uom_category_id' => $category->id,
-            'name' => 'Kilogram',
-            'symbol' => 'kg',
-        ]);
+        $kg = Uom::firstOrCreate(
+            [
+                'tenant_id' => $tenant->id,
+                'symbol' => 'kg',
+            ],
+            [
+                'uom_category_id' => $category->id,
+                'name' => 'Kilogram',
+            ]
+        );
 
         $item = Item::create([
             'tenant_id' => $tenant->id,

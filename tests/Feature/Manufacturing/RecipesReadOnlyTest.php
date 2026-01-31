@@ -22,14 +22,16 @@ beforeEach(function () {
         ]);
     };
 
-    $this->makeUom = function (): Uom {
+    $this->makeUom = function (Tenant $tenant): Uom {
         $suffix = (string) Str::uuid();
 
         $category = UomCategory::query()->forceCreate([
+            'tenant_id' => $tenant->id,
             'name' => 'Category ' . $suffix,
         ]);
 
         return Uom::query()->forceCreate([
+            'tenant_id' => $tenant->id,
             'uom_category_id' => $category->id,
             'name' => 'Uom ' . $suffix,
             'symbol' => 'u' . str_replace('-', '', $suffix),
@@ -93,7 +95,7 @@ beforeEach(function () {
 
 test('guests are redirected to login for recipes index and detail', function () {
     $tenant = ($this->makeTenant)('Tenant A');
-    $uom = ($this->makeUom)();
+    $uom = ($this->makeUom)($tenant);
     $output = ($this->makeItem)($tenant, $uom, 'Output A', true);
     $recipe = ($this->makeRecipe)($tenant, $output, true);
 
@@ -108,7 +110,7 @@ test('forbids users without inventory-recipes-view permission', function () {
     $tenant = ($this->makeTenant)('Tenant A');
     $user = User::factory()->for($tenant)->create();
 
-    $uom = ($this->makeUom)();
+    $uom = ($this->makeUom)($tenant);
     $output = ($this->makeItem)($tenant, $uom, 'Output A', true);
     $recipe = ($this->makeRecipe)($tenant, $output, true);
 
@@ -126,7 +128,7 @@ test('forbids users with manage but without view permission', function () {
     $user = User::factory()->for($tenant)->create();
     ($this->grantMakeOrdersManage)($user);
 
-    $uom = ($this->makeUom)();
+    $uom = ($this->makeUom)($tenant);
     $output = ($this->makeItem)($tenant, $uom, 'Output A', true);
     $recipe = ($this->makeRecipe)($tenant, $output, true);
 
@@ -149,7 +151,7 @@ test('allows users with inventory-recipes-view permission to view recipes and re
 
     expect(Gate::forUser($user)->allows('inventory-recipes-view'))->toBeTrue();
 
-    $uom = ($this->makeUom)();
+    $uom = ($this->makeUom)($tenant);
 
     $output = ($this->makeItem)($tenant, $uom, 'Output A', true);
     $input = ($this->makeItem)($tenant, $uom, 'Input Flour', false);
@@ -183,7 +185,7 @@ test('view permission shows pages but not manage controls and can_manage payload
     $user = User::factory()->for($tenant)->create();
     ($this->grantInventoryRecipesView)($user);
 
-    $uom = ($this->makeUom)();
+    $uom = ($this->makeUom)($tenant);
     $output = ($this->makeItem)($tenant, $uom, 'Output A', true);
     $recipe = ($this->makeRecipe)($tenant, $output, true);
 
@@ -214,7 +216,7 @@ test('view and manage permissions include can_manage true in payload', function 
     ($this->grantInventoryRecipesView)($user);
     ($this->grantMakeOrdersManage)($user);
 
-    $uom = ($this->makeUom)();
+    $uom = ($this->makeUom)($tenant);
     $output = ($this->makeItem)($tenant, $uom, 'Output A', true);
     $recipe = ($this->makeRecipe)($tenant, $output, true);
 
@@ -234,7 +236,7 @@ test('show page renders multiple line quantities in 2dp format near item names',
     $user = User::factory()->for($tenant)->create();
     ($this->grantInventoryRecipesView)($user);
 
-    $uom = ($this->makeUom)();
+    $uom = ($this->makeUom)($tenant);
     $output = ($this->makeItem)($tenant, $uom, 'Output A', true);
     $inputA = ($this->makeItem)($tenant, $uom, 'Input One', false);
     $inputB = ($this->makeItem)($tenant, $uom, 'Input Two', false);
@@ -265,8 +267,8 @@ test('recipes index is tenant scoped', function () {
     $user = User::factory()->for($tenantA)->create();
     ($this->grantInventoryRecipesView)($user);
 
-    $uomA = ($this->makeUom)();
-    $uomB = ($this->makeUom)();
+    $uomA = ($this->makeUom)($tenantA);
+    $uomB = ($this->makeUom)($tenantB);
 
     $outputA = ($this->makeItem)($tenantA, $uomA, 'Output A', true);
     $outputB = ($this->makeItem)($tenantB, $uomB, 'Output B', true);
@@ -288,7 +290,7 @@ test('returns 404 when accessing another tenant recipe', function () {
     $user = User::factory()->for($tenantA)->create();
     ($this->grantInventoryRecipesView)($user);
 
-    $uomB = ($this->makeUom)();
+    $uomB = ($this->makeUom)($tenantB);
     $outputB = ($this->makeItem)($tenantB, $uomB, 'Output B', true);
     $recipeB = ($this->makeRecipe)($tenantB, $outputB, true);
 

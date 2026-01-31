@@ -22,10 +22,12 @@ beforeEach(function () {
     ]);
 
     $this->uomCategory = UomCategory::query()->forceCreate([
+        'tenant_id' => $this->tenant->id,
         'name' => 'Mass '.$this->tenant->id,
     ]);
 
     $this->uom = Uom::query()->forceCreate([
+        'tenant_id' => $this->tenant->id,
         'uom_category_id' => $this->uomCategory->id,
         'name' => 'Gram '.$this->tenant->id,
         'symbol' => 'g'.$this->tenant->id,

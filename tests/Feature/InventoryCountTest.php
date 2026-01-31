@@ -17,14 +17,16 @@ use Illuminate\Support\Str;
 uses(RefreshDatabase::class);
 
 beforeEach(function () {
-    $this->makeUom = function (): Uom {
+    $this->makeUom = function (Tenant $tenant): Uom {
         $suffix = Str::random(12);
 
         $category = UomCategory::query()->forceCreate([
+            'tenant_id' => $tenant->id,
             'name' => 'Category ' . $suffix,
         ]);
 
         return Uom::query()->forceCreate([
+            'tenant_id' => $tenant->id,
             'uom_category_id' => $category->id,
             'name' => 'Unit ' . $suffix,
             'symbol' => 'u' . $suffix,
@@ -179,7 +181,7 @@ it('requires execute permission for all mutations (count CRUD, line CRUD, post)'
 
     ($this->grantPermission)($user, 'inventory-adjustments-view');
 
-    $uom = ($this->makeUom)();
+    $uom = ($this->makeUom)($tenant);
     $item = ($this->makeItem)($tenant, $uom);
 
     $count = InventoryCount::query()->forceCreate([
@@ -290,7 +292,7 @@ it('validates line create/update payloads (regex + exists scoped to tenant, requ
 
     ($this->grantPermission)($user, 'inventory-adjustments-execute');
 
-    $uom = ($this->makeUom)();
+    $uom = ($this->makeUom)($tenant);
     $item = ($this->makeItem)($tenant, $uom);
 
     $count = InventoryCount::query()->forceCreate([
@@ -364,7 +366,7 @@ it('creates/updates/deletes draft counts and lines with correct JSON shape + sta
     expect($update->json('count.counted_at'))->toBe($updatedAt->format('Y-m-d H:i'));
     expect($update->json('count.counted_at_iso'))->toBe($updatedAt->format('Y-m-d\TH:i'));
 
-    $uom = ($this->makeUom)();
+    $uom = ($this->makeUom)($tenant);
     $item = ($this->makeItem)($tenant, $uom);
 
     $line = ($this->createLineViaApi)($user, $count, [
@@ -438,9 +440,10 @@ it('enforces line ownership: other-tenant count is 404; count/line mismatch is 4
 
     ($this->grantPermission)($userA, 'inventory-adjustments-execute');
 
-    $uom = ($this->makeUom)();
-    $itemA = ($this->makeItem)($tenantA, $uom);
-    $itemB = ($this->makeItem)($tenantB, $uom);
+    $uomA = ($this->makeUom)($tenantA);
+    $uomB = ($this->makeUom)($tenantB);
+    $itemA = ($this->makeItem)($tenantA, $uomA);
+    $itemB = ($this->makeItem)($tenantB, $uomB);
 
     $countB = InventoryCount::query()->forceCreate([
         'tenant_id' => $tenantB->id,
@@ -517,7 +520,7 @@ it('posts: creates adjustment moves, locks the count, blocks all future mutation
     ($this->grantPermission)($user, 'inventory-adjustments-view');
     ($this->grantPermission)($user, 'inventory-adjustments-execute');
 
-    $uom = ($this->makeUom)();
+    $uom = ($this->makeUom)($tenant);
     $item = ($this->makeItem)($tenant, $uom);
 
     $item->stockMoves()->create([
@@ -604,9 +607,10 @@ it('prevents cross-tenant item usage via validation (line create/update uses ten
 
     ($this->grantPermission)($userA, 'inventory-adjustments-execute');
 
-    $uom = ($this->makeUom)();
-    $itemA = ($this->makeItem)($tenantA, $uom);
-    $itemB = ($this->makeItem)($tenantB, $uom);
+    $uomA = ($this->makeUom)($tenantA);
+    $uomB = ($this->makeUom)($tenantB);
+    $itemA = ($this->makeItem)($tenantA, $uomA);
+    $itemB = ($this->makeItem)($tenantB, $uomB);
 
     $countA = InventoryCount::query()->forceCreate([
         'tenant_id' => $tenantA->id,

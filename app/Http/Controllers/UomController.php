@@ -14,12 +14,12 @@ use Illuminate\View\View;
 /**
  * Class UomController
  *
- * Handles Units of Measure CRUD operations.
+ * Handles UoM CRUD operations.
  */
 class UomController extends Controller
 {
     /**
-     * Display the Units of Measure index.
+     * Display the UoM index.
      */
     public function index(): View
     {
@@ -27,8 +27,7 @@ class UomController extends Controller
 
         $categories = UomCategory::query()
             ->with(['uoms' => function ($query) {
-                $query->orderBy('name')
-                    ->select(['id', 'uom_category_id', 'name', 'symbol']);
+                $query->orderBy('name');
             }])
             ->orderBy('name')
             ->get(['id', 'name']);
@@ -39,19 +38,35 @@ class UomController extends Controller
     }
 
     /**
-     * Store a new Unit of Measure.
+     * Store a new UoM.
      */
     public function store(Request $request): JsonResponse
     {
         Gate::authorize('inventory-materials-manage');
 
+        $tenantId = $request->user()->tenant_id;
+
         $validated = $request->validate([
-            'uom_category_id' => ['required', 'integer', 'exists:uom_categories,id'],
-            'name' => ['required', 'string', 'max:255', 'unique:uoms,name'],
-            'symbol' => ['required', 'string', 'max:255', 'unique:uoms,symbol'],
+            'uom_category_id' => [
+                'required',
+                'integer',
+                Rule::exists('uom_categories', 'id')->where('tenant_id', $tenantId),
+            ],
+            'name' => ['required', 'string', 'max:255'],
+            'symbol' => [
+                'required',
+                'string',
+                'max:255',
+                Rule::unique('uoms', 'symbol')->where('tenant_id', $tenantId),
+            ],
         ]);
 
-        $uom = Uom::create($validated);
+        $uom = Uom::create([
+            'tenant_id' => $tenantId,
+            'uom_category_id' => $validated['uom_category_id'],
+            'name' => $validated['name'],
+            'symbol' => $validated['symbol'],
+        ]);
 
         return response()->json([
             'id' => $uom->id,
@@ -62,29 +77,36 @@ class UomController extends Controller
     }
 
     /**
-     * Update the specified Unit of Measure.
+     * Update the specified UoM.
      */
     public function update(Request $request, Uom $uom): JsonResponse
     {
         Gate::authorize('inventory-materials-manage');
 
+        $tenantId = $request->user()->tenant_id;
+
         $validated = $request->validate([
-            'uom_category_id' => ['required', 'integer', 'exists:uom_categories,id'],
-            'name' => [
+            'uom_category_id' => [
                 'required',
-                'string',
-                'max:255',
-                Rule::unique('uoms', 'name')->ignore($uom->id),
+                'integer',
+                Rule::exists('uom_categories', 'id')->where('tenant_id', $tenantId),
             ],
+            'name' => ['required', 'string', 'max:255'],
             'symbol' => [
                 'required',
                 'string',
                 'max:255',
-                Rule::unique('uoms', 'symbol')->ignore($uom->id),
+                Rule::unique('uoms', 'symbol')
+                    ->where('tenant_id', $tenantId)
+                    ->ignore($uom->id),
             ],
         ]);
 
-        $uom->update($validated);
+        $uom->update([
+            'uom_category_id' => $validated['uom_category_id'],
+            'name' => $validated['name'],
+            'symbol' => $validated['symbol'],
+        ]);
 
         return response()->json([
             'id' => $uom->id,
@@ -95,19 +117,13 @@ class UomController extends Controller
     }
 
     /**
-     * Remove the specified Unit of Measure.
+     * Remove the specified UoM.
      */
     public function destroy(Uom $uom): Response|JsonResponse
     {
         Gate::authorize('inventory-materials-manage');
 
-        try {
-            $uom->delete();
-        } catch (\Throwable $exception) {
-            return response()->json([
-                'message' => 'Unable to delete the unit of measure.',
-            ], 409);
-        }
+        $uom->delete();
 
         return response()->noContent();
     }

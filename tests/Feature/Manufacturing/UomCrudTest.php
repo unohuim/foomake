@@ -57,27 +57,30 @@ it('allows access to users with manage permission', function () {
 });
 
 it('creates a uom via ajax', function () {
-    $category = UomCategory::create(['name' => 'Mass']);
+    $category = UomCategory::create([
+        'tenant_id' => $this->tenant->id,
+        'name' => 'Mass Custom',
+    ]);
 
     $response = $this->actingAs($this->manageUser)
         ->postJson(route('manufacturing.uoms.store'), [
             'uom_category_id' => $category->id,
-            'name' => 'Gram',
-            'symbol' => 'g',
+            'name' => 'Test Gram',
+            'symbol' => 'tg',
         ]);
 
     $response->assertStatus(201)
         ->assertJsonStructure(['id', 'uom_category_id', 'name', 'symbol'])
         ->assertJson([
             'uom_category_id' => $category->id,
-            'name' => 'Gram',
-            'symbol' => 'g',
+            'name' => 'Test Gram',
+            'symbol' => 'tg',
         ]);
 
     $this->assertDatabaseHas('uoms', [
         'uom_category_id' => $category->id,
-        'name' => 'Gram',
-        'symbol' => 'g',
+        'name' => 'Test Gram',
+        'symbol' => 'tg',
     ]);
 });
 
@@ -100,45 +103,56 @@ it('requires a valid category on create', function () {
 });
 
 it('updates a uom via ajax', function () {
-    $category = UomCategory::create(['name' => 'Mass']);
-    $newCategory = UomCategory::create(['name' => 'Volume']);
+    $category = UomCategory::create([
+        'tenant_id' => $this->tenant->id,
+        'name' => 'Mass Custom',
+    ]);
+    $newCategory = UomCategory::create([
+        'tenant_id' => $this->tenant->id,
+        'name' => 'Volume Custom',
+    ]);
 
     $uom = Uom::create([
+        'tenant_id' => $this->tenant->id,
         'uom_category_id' => $category->id,
-        'name' => 'Gram',
-        'symbol' => 'g',
+        'name' => 'Test Gram',
+        'symbol' => 'tg',
     ]);
 
     $response = $this->actingAs($this->manageUser)
         ->patchJson(route('manufacturing.uoms.update', $uom), [
             'uom_category_id' => $newCategory->id,
-            'name' => 'Kilogram',
-            'symbol' => 'kg',
+            'name' => 'Test Kilogram',
+            'symbol' => 'tkg',
         ]);
 
     $response->assertOk()
         ->assertJson([
             'id' => $uom->id,
             'uom_category_id' => $newCategory->id,
-            'name' => 'Kilogram',
-            'symbol' => 'kg',
+            'name' => 'Test Kilogram',
+            'symbol' => 'tkg',
         ]);
 
     $this->assertDatabaseHas('uoms', [
         'id' => $uom->id,
         'uom_category_id' => $newCategory->id,
-        'name' => 'Kilogram',
-        'symbol' => 'kg',
+        'name' => 'Test Kilogram',
+        'symbol' => 'tkg',
     ]);
 });
 
 it('deletes a uom via ajax', function () {
-    $category = UomCategory::create(['name' => 'Mass']);
+    $category = UomCategory::create([
+        'tenant_id' => $this->tenant->id,
+        'name' => 'Mass Custom',
+    ]);
 
     $uom = Uom::create([
+        'tenant_id' => $this->tenant->id,
         'uom_category_id' => $category->id,
-        'name' => 'Gram',
-        'symbol' => 'g',
+        'name' => 'Test Gram',
+        'symbol' => 'tg',
     ]);
 
     $this->actingAs($this->manageUser)
@@ -150,27 +164,31 @@ it('deletes a uom via ajax', function () {
 
 
 it('denies create/update/delete for users without manage permission', function () {
-    $category = UomCategory::create(['name' => 'Mass']);
+    $category = UomCategory::create([
+        'tenant_id' => $this->tenant->id,
+        'name' => 'Mass Custom',
+    ]);
 
     $uom = Uom::create([
+        'tenant_id' => $this->tenant->id,
         'uom_category_id' => $category->id,
-        'name' => 'xGram',
-        'symbol' => 'xg',
+        'name' => 'xTest Gram',
+        'symbol' => 'xtg',
     ]);
 
     $this->actingAs($this->viewUser)
         ->postJson(route('manufacturing.uoms.store'), [
             'uom_category_id' => $category->id,
-            'name' => 'xLiter',
-            'symbol' => 'xL',
+            'name' => 'xTest Liter',
+            'symbol' => 'xtl',
         ])
         ->assertForbidden();
 
     $this->actingAs($this->viewUser)
         ->patchJson(route('manufacturing.uoms.update', $uom), [
             'uom_category_id' => $category->id,
-            'name' => 'xKilogram',
-            'symbol' => 'xkg',
+            'name' => 'xTest Kilogram',
+            'symbol' => 'xtkg',
         ])
         ->assertForbidden();
 

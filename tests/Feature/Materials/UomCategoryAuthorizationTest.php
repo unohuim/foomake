@@ -40,7 +40,10 @@ it('allows users with permission to access the uom categories index', function (
 });
 
 it('denies users without permission from uom category routes', function () {
-    $category = UomCategory::create(['name' => 'Volume']);
+    $category = UomCategory::create([
+        'tenant_id' => $this->tenant->id,
+        'name' => 'Volume Custom',
+    ]);
 
     $this->actingAs($this->unauthorizedUser)
         ->get(route('materials.uom-categories.index'))

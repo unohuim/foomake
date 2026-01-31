@@ -13,12 +13,14 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 uses(RefreshDatabase::class);
 
 beforeEach(function () {
-    $this->makeUom = function (): Uom {
+    $this->makeUom = function (Tenant $tenant): Uom {
         $category = UomCategory::create([
+            'tenant_id' => $tenant->id,
             'name' => 'Category ' . uniqid(),
         ]);
 
         return Uom::create([
+            'tenant_id' => $tenant->id,
             'uom_category_id' => $category->id,
             'name' => 'Uom ' . uniqid(),
             'symbol' => 'u' . substr(uniqid(), -6),
@@ -54,7 +56,7 @@ beforeEach(function () {
 it('executes a simple recipe and derives inventory from stock moves', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeTenantUser)($tenant);
-    $uom = ($this->makeUom)();
+    $uom = ($this->makeUom)($tenant);
 
     $this->actingAs($user);
 
@@ -109,7 +111,7 @@ it('executes a simple recipe and derives inventory from stock moves', function (
 it('executes recursive recipes via stock moves', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeTenantUser)($tenant);
-    $uom = ($this->makeUom)();
+    $uom = ($this->makeUom)($tenant);
 
     $this->actingAs($user);
 
@@ -164,7 +166,7 @@ it('executes recursive recipes via stock moves', function () {
 it('allows multiple active recipes per item', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeTenantUser)($tenant);
-    $uom = ($this->makeUom)();
+    $uom = ($this->makeUom)($tenant);
 
     $this->actingAs($user);
 
@@ -202,7 +204,7 @@ it('allows multiple active recipes per item', function () {
 it('requires manufacturable items for recipes', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeTenantUser)($tenant);
-    $uom = ($this->makeUom)();
+    $uom = ($this->makeUom)($tenant);
 
     $this->actingAs($user);
 
@@ -224,7 +226,7 @@ it('scopes recipes by tenant and prevents cross-tenant execution', function () {
     $userA = ($this->makeTenantUser)($tenantA);
     $userB = ($this->makeTenantUser)($tenantB);
 
-    $uom = ($this->makeUom)();
+    $uom = ($this->makeUom)($tenantA);
 
     $this->actingAs($userA);
 

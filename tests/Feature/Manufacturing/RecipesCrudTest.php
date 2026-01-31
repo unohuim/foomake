@@ -21,14 +21,16 @@ beforeEach(function () {
         ]);
     };
 
-    $this->makeUom = function (): Uom {
+    $this->makeUom = function (Tenant $tenant): Uom {
         $suffix = (string) Str::uuid();
 
         $category = UomCategory::query()->forceCreate([
+            'tenant_id' => $tenant->id,
             'name' => 'Category ' . $suffix,
         ]);
 
         return Uom::query()->forceCreate([
+            'tenant_id' => $tenant->id,
             'uom_category_id' => $category->id,
             'name' => 'Uom ' . $suffix,
             'symbol' => 'u' . str_replace('-', '', $suffix),
@@ -86,7 +88,7 @@ beforeEach(function () {
 test('forbids recipe and line writes without inventory-make-orders-manage permission', function () {
     $tenant = ($this->makeTenant)('Tenant A');
     $user = User::factory()->for($tenant)->create();
-    $uom = ($this->makeUom)();
+    $uom = ($this->makeUom)($tenant);
 
     $output = ($this->makeItem)($tenant, $uom, 'Output A', ['is_manufacturable' => true]);
     $input = ($this->makeItem)($tenant, $uom, 'Input A');
@@ -137,7 +139,7 @@ test('allows recipe and line writes with inventory-make-orders-manage permission
     $user = User::factory()->for($tenant)->create();
     ($this->grantMakeOrdersManage)($user);
 
-    $uom = ($this->makeUom)();
+    $uom = ($this->makeUom)($tenant);
     $output = ($this->makeItem)($tenant, $uom, 'Output A', ['is_manufacturable' => true]);
     $input = ($this->makeItem)($tenant, $uom, 'Input A');
 
@@ -190,7 +192,7 @@ test('creates recipes with default active flag, default is_default false, and re
     $user = User::factory()->for($tenant)->create();
     ($this->grantMakeOrdersManage)($user);
 
-    $uom = ($this->makeUom)();
+    $uom = ($this->makeUom)($tenant);
     $output = ($this->makeItem)($tenant, $uom, 'Output A', ['is_manufacturable' => true]);
     $nonManufacturable = ($this->makeItem)($tenant, $uom, 'Output B');
 
@@ -217,7 +219,7 @@ test('prevents changing output item when recipe has lines and returns stable err
     $user = User::factory()->for($tenant)->create();
     ($this->grantMakeOrdersManage)($user);
 
-    $uom = ($this->makeUom)();
+    $uom = ($this->makeUom)($tenant);
     $output = ($this->makeItem)($tenant, $uom, 'Output A', ['is_manufacturable' => true]);
     $otherOutput = ($this->makeItem)($tenant, $uom, 'Output B', ['is_manufacturable' => true]);
     $input = ($this->makeItem)($tenant, $uom, 'Input A');
@@ -245,7 +247,7 @@ test('allows changing output item when recipe has zero lines', function () {
     $user = User::factory()->for($tenant)->create();
     ($this->grantMakeOrdersManage)($user);
 
-    $uom = ($this->makeUom)();
+    $uom = ($this->makeUom)($tenant);
     $output = ($this->makeItem)($tenant, $uom, 'Output A', ['is_manufacturable' => true]);
     $otherOutput = ($this->makeItem)($tenant, $uom, 'Output B', ['is_manufacturable' => true]);
 
@@ -266,7 +268,7 @@ test('rejects line item when it equals output item on create', function () {
     $user = User::factory()->for($tenant)->create();
     ($this->grantMakeOrdersManage)($user);
 
-    $uom = ($this->makeUom)();
+    $uom = ($this->makeUom)($tenant);
     $output = ($this->makeItem)($tenant, $uom, 'Output A', ['is_manufacturable' => true]);
 
     $recipe = ($this->makeRecipe)($tenant, $output, true, false);
@@ -284,7 +286,7 @@ test('rejects line item when it equals output item on update', function () {
     $user = User::factory()->for($tenant)->create();
     ($this->grantMakeOrdersManage)($user);
 
-    $uom = ($this->makeUom)();
+    $uom = ($this->makeUom)($tenant);
     $output = ($this->makeItem)($tenant, $uom, 'Output A', ['is_manufacturable' => true]);
     $input = ($this->makeItem)($tenant, $uom, 'Input A');
 
@@ -304,7 +306,7 @@ test('accepts quantity at canonical minimum positive and rejects zero at canonic
     $user = User::factory()->for($tenant)->create();
     ($this->grantMakeOrdersManage)($user);
 
-    $uom = ($this->makeUom)();
+    $uom = ($this->makeUom)($tenant);
     $output = ($this->makeItem)($tenant, $uom, 'Output A', ['is_manufacturable' => true]);
     $input = ($this->makeItem)($tenant, $uom, 'Input A');
 
@@ -330,7 +332,7 @@ test('rejects invalid recipe line quantities and returns stable error shape', fu
     $user = User::factory()->for($tenant)->create();
     ($this->grantMakeOrdersManage)($user);
 
-    $uom = ($this->makeUom)();
+    $uom = ($this->makeUom)($tenant);
     $output = ($this->makeItem)($tenant, $uom, 'Output A', ['is_manufacturable' => true]);
     $input = ($this->makeItem)($tenant, $uom, 'Input A');
 
@@ -366,7 +368,7 @@ test('returns 404 for cross-tenant recipe and line writes', function () {
     $userA = User::factory()->for($tenantA)->create();
     ($this->grantMakeOrdersManage)($userA);
 
-    $uom = ($this->makeUom)();
+    $uom = ($this->makeUom)($tenantB);
     $outputB = ($this->makeItem)($tenantB, $uom, 'Output B', ['is_manufacturable' => true]);
     $inputB = ($this->makeItem)($tenantB, $uom, 'Input B');
 
@@ -409,7 +411,7 @@ test('deleting a recipe removes its lines', function () {
     $user = User::factory()->for($tenant)->create();
     ($this->grantMakeOrdersManage)($user);
 
-    $uom = ($this->makeUom)();
+    $uom = ($this->makeUom)($tenant);
     $output = ($this->makeItem)($tenant, $uom, 'Output A', ['is_manufacturable' => true]);
     $input = ($this->makeItem)($tenant, $uom, 'Input A');
 
@@ -429,7 +431,7 @@ test('is_default: setting a recipe default unsets prior default for same output 
     $user = User::factory()->for($tenant)->create();
     ($this->grantMakeOrdersManage)($user);
 
-    $uom = ($this->makeUom)();
+    $uom = ($this->makeUom)($tenant);
     $output = ($this->makeItem)($tenant, $uom, 'Output A', ['is_manufacturable' => true]);
 
     $recipeA = ($this->makeRecipe)($tenant, $output, true, true);
@@ -455,7 +457,7 @@ test('is_default: setting default does not affect other output items', function 
     $user = User::factory()->for($tenant)->create();
     ($this->grantMakeOrdersManage)($user);
 
-    $uom = ($this->makeUom)();
+    $uom = ($this->makeUom)($tenant);
     $outputA = ($this->makeItem)($tenant, $uom, 'Output A', ['is_manufacturable' => true]);
     $outputB = ($this->makeItem)($tenant, $uom, 'Output B', ['is_manufacturable' => true]);
 
@@ -488,10 +490,11 @@ test('is_default: setting default does not affect other tenants', function () {
     $userA = User::factory()->for($tenantA)->create();
     ($this->grantMakeOrdersManage)($userA);
 
-    $uom = ($this->makeUom)();
+    $uomA = ($this->makeUom)($tenantA);
+    $uomB = ($this->makeUom)($tenantB);
 
-    $outputA = ($this->makeItem)($tenantA, $uom, 'Output A', ['is_manufacturable' => true]);
-    $outputB = ($this->makeItem)($tenantB, $uom, 'Output A (Other Tenant)', ['is_manufacturable' => true]);
+    $outputA = ($this->makeItem)($tenantA, $uomA, 'Output A', ['is_manufacturable' => true]);
+    $outputB = ($this->makeItem)($tenantB, $uomB, 'Output A (Other Tenant)', ['is_manufacturable' => true]);
 
     $a1 = ($this->makeRecipe)($tenantA, $outputA, true, true);
     $a2 = ($this->makeRecipe)($tenantA, $outputA, true, false);
@@ -520,7 +523,7 @@ test('is_default: deleting the default recipe leaves no default (no auto-promoti
     $user = User::factory()->for($tenant)->create();
     ($this->grantMakeOrdersManage)($user);
 
-    $uom = ($this->makeUom)();
+    $uom = ($this->makeUom)($tenant);
     $output = ($this->makeItem)($tenant, $uom, 'Output A', ['is_manufacturable' => true]);
 
     $defaultRecipe = ($this->makeRecipe)($tenant, $output, true, true);
@@ -546,7 +549,7 @@ test('is_default: can set default on create and it unsets prior default for same
     $user = User::factory()->for($tenant)->create();
     ($this->grantMakeOrdersManage)($user);
 
-    $uom = ($this->makeUom)();
+    $uom = ($this->makeUom)($tenant);
     $output = ($this->makeItem)($tenant, $uom, 'Output A', ['is_manufacturable' => true]);
 
     $existingDefault = ($this->makeRecipe)($tenant, $output, true, true);

@@ -48,15 +48,21 @@ class ItemUomTest extends TestCase
 
         $this->actingAs($user);
 
-        $category = UomCategory::create([
+        $category = UomCategory::firstOrCreate([
+            'tenant_id' => $tenant->id,
             'name' => 'Mass',
         ]);
 
-        $uom = Uom::create([
-            'uom_category_id' => $category->id,
-            'name' => 'Gram',
-            'symbol' => 'g',
-        ]);
+        $uom = Uom::firstOrCreate(
+            [
+                'tenant_id' => $tenant->id,
+                'symbol' => 'g',
+            ],
+            [
+                'uom_category_id' => $category->id,
+                'name' => 'Gram',
+            ]
+        );
 
         $item = Item::create([
             'tenant_id' => $tenant->id,

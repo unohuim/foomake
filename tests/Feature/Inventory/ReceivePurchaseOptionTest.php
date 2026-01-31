@@ -19,14 +19,22 @@ beforeEach(function () {
 
     $this->makeTenant = fn (string $name): Tenant => Tenant::create(['tenant_name' => $name]);
 
-    $this->makeCategory = fn (string $name): UomCategory => UomCategory::create(['name' => $name]);
+    $this->makeCategory = fn (Tenant $tenant, string $name): UomCategory => UomCategory::firstOrCreate([
+        'tenant_id' => $tenant->id,
+        'name' => $name,
+    ]);
 
-    $this->makeUom = function (UomCategory $category, string $name, string $symbol): Uom {
-        return Uom::create([
-            'uom_category_id' => $category->id,
-            'name' => $name,
-            'symbol' => $symbol,
-        ]);
+    $this->makeUom = function (Tenant $tenant, UomCategory $category, string $name, string $symbol): Uom {
+        return Uom::firstOrCreate(
+            [
+                'tenant_id' => $tenant->id,
+                'symbol' => $symbol,
+            ],
+            [
+                'uom_category_id' => $category->id,
+                'name' => $name,
+            ]
+        );
     };
 
     $this->makeItem = function (Tenant $tenant, Uom $baseUom, string $name): Item {
@@ -52,9 +60,9 @@ beforeEach(function () {
 it('receives one 10kg pack into base grams', function () {
     $tenant = ($this->makeTenant)('Tenant A');
 
-    $mass = ($this->makeCategory)('Mass');
-    $kg = ($this->makeUom)($mass, 'Kilogram', 'kg');
-    $grams = ($this->makeUom)($mass, 'Gram', 'g');
+    $mass = ($this->makeCategory)($tenant, 'Mass');
+    $kg = ($this->makeUom)($tenant, $mass, 'Kilogram', 'kg');
+    $grams = ($this->makeUom)($tenant, $mass, 'Gram', 'g');
 
     UomConversion::create([
         'from_uom_id' => $kg->id,
@@ -77,9 +85,9 @@ it('receives one 10kg pack into base grams', function () {
 it('receives two 20kg packs and aggregates correctly', function () {
     $tenant = ($this->makeTenant)('Tenant A');
 
-    $mass = ($this->makeCategory)('Mass');
-    $kg = ($this->makeUom)($mass, 'Kilogram', 'kg');
-    $grams = ($this->makeUom)($mass, 'Gram', 'g');
+    $mass = ($this->makeCategory)($tenant, 'Mass');
+    $kg = ($this->makeUom)($tenant, $mass, 'Kilogram', 'kg');
+    $grams = ($this->makeUom)($tenant, $mass, 'Gram', 'g');
 
     UomConversion::create([
         'from_uom_id' => $kg->id,
@@ -100,11 +108,11 @@ it('receives two 20kg packs and aggregates correctly', function () {
 it('requires item-specific conversion for cross-category receiving', function () {
     $tenant = ($this->makeTenant)('Tenant A');
 
-    $mass = ($this->makeCategory)('Mass');
-    $count = ($this->makeCategory)('Count');
+    $mass = ($this->makeCategory)($tenant, 'Mass');
+    $count = ($this->makeCategory)($tenant, 'Count');
 
-    $grams = ($this->makeUom)($mass, 'Gram', 'g');
-    $patty = ($this->makeUom)($count, 'Patty', 'patty');
+    $grams = ($this->makeUom)($tenant, $mass, 'Gram', 'g');
+    $patty = ($this->makeUom)($tenant, $count, 'Patty', 'patty');
 
     $item = ($this->makeItem)($tenant, $grams, 'Burger');
     $option = ($this->makeOption)($tenant, $item, $patty, '40.000000');
@@ -127,11 +135,11 @@ it('requires item-specific conversion for cross-category receiving', function ()
 it('throws when cross-category conversion is missing', function () {
     $tenant = ($this->makeTenant)('Tenant A');
 
-    $mass = ($this->makeCategory)('Mass');
-    $count = ($this->makeCategory)('Count');
+    $mass = ($this->makeCategory)($tenant, 'Mass');
+    $count = ($this->makeCategory)($tenant, 'Count');
 
-    $grams = ($this->makeUom)($mass, 'Gram', 'g');
-    $patty = ($this->makeUom)($count, 'Patty', 'patty');
+    $grams = ($this->makeUom)($tenant, $mass, 'Gram', 'g');
+    $patty = ($this->makeUom)($tenant, $count, 'Patty', 'patty');
 
     $item = ($this->makeItem)($tenant, $grams, 'Burger');
     $option = ($this->makeOption)($tenant, $item, $patty, '40.000000');
@@ -147,9 +155,9 @@ it('throws when cross-category conversion is missing', function () {
 it('throws when pack_count is zero or negative', function () {
     $tenant = ($this->makeTenant)('Tenant A');
 
-    $mass = ($this->makeCategory)('Mass');
-    $kg = ($this->makeUom)($mass, 'Kilogram', 'kg');
-    $grams = ($this->makeUom)($mass, 'Gram', 'g');
+    $mass = ($this->makeCategory)($tenant, 'Mass');
+    $kg = ($this->makeUom)($tenant, $mass, 'Kilogram', 'kg');
+    $grams = ($this->makeUom)($tenant, $mass, 'Gram', 'g');
 
     UomConversion::create([
         'from_uom_id' => $kg->id,
@@ -174,10 +182,10 @@ it('throws when pack_count is zero or negative', function () {
 it('requires a direct same-category conversion (no chained conversions)', function () {
     $tenant = ($this->makeTenant)('Tenant A');
 
-    $mass = ($this->makeCategory)('Mass');
-    $kg = ($this->makeUom)($mass, 'Kilogram', 'kg');
-    $grams = ($this->makeUom)($mass, 'Gram', 'g');
-    $mg = ($this->makeUom)($mass, 'Milligram', 'mg');
+    $mass = ($this->makeCategory)($tenant, 'Mass');
+    $kg = ($this->makeUom)($tenant, $mass, 'Kilogram', 'kg');
+    $grams = ($this->makeUom)($tenant, $mass, 'Gram', 'g');
+    $mg = ($this->makeUom)($tenant, $mass, 'Milligram', 'mg');
 
     UomConversion::create([
         'from_uom_id' => $kg->id,
@@ -206,9 +214,9 @@ it('enforces authenticated tenant isolation', function () {
     $tenantA = ($this->makeTenant)('Tenant A');
     $tenantB = ($this->makeTenant)('Tenant B');
 
-    $mass = ($this->makeCategory)('Mass');
-    $kg = ($this->makeUom)($mass, 'Kilogram', 'kg');
-    $grams = ($this->makeUom)($mass, 'Gram', 'g');
+    $mass = ($this->makeCategory)($tenantA, 'Mass');
+    $kg = ($this->makeUom)($tenantA, $mass, 'Kilogram', 'kg');
+    $grams = ($this->makeUom)($tenantA, $mass, 'Gram', 'g');
 
     UomConversion::create([
         'from_uom_id' => $kg->id,
@@ -234,9 +242,9 @@ it('throws when option tenant does not match item tenant', function () {
     $tenantA = ($this->makeTenant)('Tenant A');
     $tenantB = ($this->makeTenant)('Tenant B');
 
-    $mass = ($this->makeCategory)('Mass');
-    $kg = ($this->makeUom)($mass, 'Kilogram', 'kg');
-    $grams = ($this->makeUom)($mass, 'Gram', 'g');
+    $mass = ($this->makeCategory)($tenantA, 'Mass');
+    $kg = ($this->makeUom)($tenantA, $mass, 'Kilogram', 'kg');
+    $grams = ($this->makeUom)($tenantA, $mass, 'Gram', 'g');
 
     UomConversion::create([
         'from_uom_id' => $kg->id,

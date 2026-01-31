@@ -14,14 +14,16 @@ use Illuminate\Support\Str;
 uses(RefreshDatabase::class);
 
 beforeEach(function () {
-    $this->makeUom = function (): Uom {
+    $this->makeUom = function (Tenant $tenant): Uom {
         $suffix = Str::random(12);
 
         $category = UomCategory::query()->forceCreate([
+            'tenant_id' => $tenant->id,
             'name' => 'Category ' . $suffix,
         ]);
 
         return Uom::query()->forceCreate([
+            'tenant_id' => $tenant->id,
             'uom_category_id' => $category->id,
             'name' => 'Uom ' . $suffix,
             'symbol' => 'u' . $suffix,
@@ -29,7 +31,7 @@ beforeEach(function () {
     };
 
     $this->makeItem = function (Tenant $tenant, array $overrides = []): array {
-        $uom = $overrides['uom'] ?? ($this->makeUom)();
+        $uom = $overrides['uom'] ?? ($this->makeUom)($tenant);
 
         $item = Item::query()->forceCreate(array_merge([
             'tenant_id' => $tenant->id,
