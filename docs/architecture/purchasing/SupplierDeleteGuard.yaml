@@ -1,0 +1,25 @@
+name: Supplier Delete Guard
+type: Domain Guard / Service Interface
+location:
+  - app/Services/Purchasing/SupplierDeleteGuard.php
+  - app/Services/Purchasing/DefaultSupplierDeleteGuard.php
+  - app/Http/Controllers/SupplierController.php
+purpose: Provide a seam to block supplier deletion when linked materials exist, without schema changes.
+when_to_use:
+  - Deleting suppliers via AJAX endpoints
+  - Anticipating future supplier-material relationships
+when_not_to_use:
+  - Deleting non-supplier entities
+  - Implementing cross-tenant access rules
+rules:
+  - Deletion is allowed unless the guard reports linked materials.
+  - Guarded deletes return HTTP 422 with a message-only JSON payload.
+  - The guard is resolved from the container to allow test overrides.
+public_interface:
+  - SupplierDeleteGuard::isLinkedToMaterials(Supplier $supplier): bool
+example_usage: |
+  if ($guard->isLinkedToMaterials($supplier)) {
+      return response()->json([
+          'message' => 'Supplier cannot be deleted because it is linked to materials.',
+      ], 422);
+  }

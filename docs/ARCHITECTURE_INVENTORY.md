@@ -806,6 +806,38 @@ $supplier = Supplier::create([
 
 ---
 
+### Supplier Delete Guard
+
+**Name:** Supplier Delete Guard  
+**Type:** Domain Guard / Service Interface  
+**Location:**  
+- `app/Services/Purchasing/SupplierDeleteGuard.php`  
+- `app/Services/Purchasing/DefaultSupplierDeleteGuard.php`  
+- `app/Http/Controllers/SupplierController.php`
+
+**Purpose:**  
+Provide a seam to block supplier deletion when linked materials exist, without schema changes.
+
+**When to Use:**  
+Deleting suppliers via AJAX endpoints with a future-safe link check.
+
+**When Not to Use:**  
+Delete guards for non-supplier entities.
+
+**Public Interface:**  
+- `SupplierDeleteGuard::isLinkedToMaterials(Supplier $supplier): bool`
+
+**Example Usage:**  
+```php
+if ($guard->isLinkedToMaterials($supplier)) {
+    return response()->json([
+        'message' => 'Supplier cannot be deleted because it is linked to materials.',
+    ], 422);
+}
+```
+
+---
+
 ### ItemPurchaseOption
 
 **Name:** ItemPurchaseOption  

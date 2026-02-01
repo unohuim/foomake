@@ -1913,6 +1913,38 @@ $supplier = Supplier::create([
 
 ---
 
+### Supplier Delete Guard
+
+**Name:** Supplier Delete Guard  
+**Type:** Domain Guard / Service Interface  
+**Location:**  
+- `app/Services/Purchasing/SupplierDeleteGuard.php`  
+- `app/Services/Purchasing/DefaultSupplierDeleteGuard.php`  
+- `app/Http/Controllers/SupplierController.php`
+
+**Purpose:**  
+Provide a seam to block supplier deletion when linked materials exist, without schema changes.
+
+**When to Use:**  
+Deleting suppliers via AJAX endpoints with a future-safe link check.
+
+**When Not to Use:**  
+Delete guards for non-supplier entities.
+
+**Public Interface:**  
+- `SupplierDeleteGuard::isLinkedToMaterials(Supplier $supplier): bool`
+
+**Example Usage:**  
+```php
+if ($guard->isLinkedToMaterials($supplier)) {
+    return response()->json([
+        'message' => 'Supplier cannot be deleted because it is linked to materials.',
+    ], 422);
+}
+```
+
+---
+
 ### ItemPurchaseOption
 
 **Name:** ItemPurchaseOption  
@@ -4105,6 +4137,10 @@ Route::middleware('auth')->group(function () {
         ->name('purchasing.suppliers.index');
     Route::post('/purchasing/suppliers', [SupplierController::class, 'store'])
         ->name('purchasing.suppliers.store');
+    Route::patch('/purchasing/suppliers/{supplier}', [SupplierController::class, 'update'])
+        ->name('purchasing.suppliers.update');
+    Route::delete('/purchasing/suppliers/{supplier}', [SupplierController::class, 'destroy'])
+        ->name('purchasing.suppliers.destroy');
 
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
