@@ -111,6 +111,10 @@ Route::middleware('auth')->group(function () {
         ->name('purchasing.suppliers.index');
     Route::post('/purchasing/suppliers', [SupplierController::class, 'store'])
         ->name('purchasing.suppliers.store');
+    Route::patch('/purchasing/suppliers/{supplier}', [SupplierController::class, 'update'])
+        ->name('purchasing.suppliers.update');
+    Route::delete('/purchasing/suppliers/{supplier}', [SupplierController::class, 'destroy'])
+        ->name('purchasing.suppliers.destroy');
 
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');

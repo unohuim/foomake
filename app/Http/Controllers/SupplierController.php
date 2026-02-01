@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\Purchasing\SupplierUpdateRequest;
 use App\Models\Supplier;
+use App\Services\Purchasing\SupplierDeleteGuard;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -77,5 +79,82 @@ class SupplierController extends Controller
                 'currency_code' => $supplier->currency_code,
             ],
         ], 201);
+    }
+
+    /**
+     * Update an existing supplier.
+     */
+    public function update(SupplierUpdateRequest $request, Supplier $supplier): JsonResponse
+    {
+        Gate::authorize('purchasing-suppliers-manage');
+
+        $this->abortIfWrongTenant($request, $supplier);
+
+        $validated = $request->validated();
+
+        $updateData = [
+            'company_name' => $validated['company_name'],
+        ];
+
+        $payload = $request->all();
+
+        foreach (['url', 'phone', 'email', 'currency_code'] as $field) {
+            if (!array_key_exists($field, $payload)) {
+                continue;
+            }
+
+            $value = $validated[$field] ?? null;
+
+            if ($field === 'currency_code' && $value !== null && $value !== '') {
+                $value = strtoupper($value);
+            }
+
+            $updateData[$field] = $value;
+        }
+
+        $supplier->update($updateData);
+
+        return response()->json([
+            'data' => [
+                'id' => $supplier->id,
+                'company_name' => $supplier->company_name,
+                'url' => $supplier->url,
+                'phone' => $supplier->phone,
+                'email' => $supplier->email,
+                'currency_code' => $supplier->currency_code,
+            ],
+        ]);
+    }
+
+    /**
+     * Delete a supplier.
+     */
+    public function destroy(Request $request, Supplier $supplier, SupplierDeleteGuard $deleteGuard): JsonResponse
+    {
+        Gate::authorize('purchasing-suppliers-manage');
+
+        $this->abortIfWrongTenant($request, $supplier);
+
+        if ($deleteGuard->isLinkedToMaterials($supplier)) {
+            return response()->json([
+                'message' => 'Supplier cannot be deleted because it is linked to materials.',
+            ], 422);
+        }
+
+        $supplier->delete();
+
+        return response()->json([
+            'message' => 'Deleted.',
+        ]);
+    }
+
+    /**
+     * Abort with 404 if the supplier does not belong to the authenticated tenant.
+     */
+    private function abortIfWrongTenant(Request $request, Supplier $supplier): void
+    {
+        if ($request->user() && $supplier->tenant_id !== $request->user()->tenant_id) {
+            abort(404);
+        }
     }
 }
