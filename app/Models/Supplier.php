@@ -3,8 +3,10 @@
 namespace App\Models;
 
 use App\Models\Concerns\HasTenantScope;
+use App\Models\ItemPurchaseOption;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * Class Supplier
@@ -39,5 +41,13 @@ class Supplier extends Model
     public function tenant(): BelongsTo
     {
         return $this->belongsTo(Tenant::class);
+    }
+
+    /**
+     * Get the purchase options for the supplier.
+     */
+    public function purchaseOptions(): HasMany
+    {
+        return $this->hasMany(ItemPurchaseOption::class);
     }
 }

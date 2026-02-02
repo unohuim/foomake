@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Item;
+use App\Models\ItemPurchaseOption;
 use App\Models\Uom;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -36,8 +37,47 @@ class ItemController extends Controller
             ]);
         }
 
+        $canViewPurchasing = Gate::allows('purchasing-suppliers-view');
+        $packages = [];
+
+        if ($canViewPurchasing) {
+            $packages = ItemPurchaseOption::query()
+                ->with(['supplier', 'packUom', 'currentPrice'])
+                ->where('item_id', $item->id)
+                ->whereNotNull('supplier_id')
+                ->whereHas('supplier')
+                ->orderBy('id')
+                ->get()
+                ->map(function (ItemPurchaseOption $option) {
+                    $currentPrice = $option->currentPrice;
+
+                    return [
+                        'id' => $option->id,
+                        'supplier_company_name' => $option->supplier?->company_name,
+                        'pack_quantity' => bcadd((string) $option->pack_quantity, '0', 6),
+                        'pack_uom_symbol' => $option->packUom?->symbol,
+                        'supplier_sku' => $option->supplier_sku,
+                        'current_price_display' => $currentPrice
+                            ? $this->formatMoney($currentPrice->price_currency_code, $currentPrice->converted_price_cents)
+                            : null,
+                    ];
+                })
+                ->values()
+                ->toArray();
+        }
+
+        $payload = [
+            'item' => [
+                'id' => $item->id,
+                'name' => $item->name,
+            ],
+            'packages' => $packages,
+            'canViewPurchasing' => $canViewPurchasing,
+        ];
+
         return view('materials.show', [
             'item' => $item,
+            'payload' => $payload,
         ]);
     }
 
@@ -231,6 +271,18 @@ class ItemController extends Controller
             'default_price_cents' => $normalizedCents,
             'default_price_currency_code' => $currencyCode,
         ];
+    }
+
+    /**
+     * Format cents into currency display.
+     */
+    private function formatMoney(?string $currencyCode, ?int $cents): ?string
+    {
+        if (!$currencyCode || $cents === null) {
+            return null;
+        }
+
+        return sprintf('%s %s', $currencyCode, number_format($cents / 100, 2, '.', ''));
     }
 
     /**

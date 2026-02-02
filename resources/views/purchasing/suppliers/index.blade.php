@@ -14,6 +14,7 @@
                 'phone' => $supplier->phone,
                 'email' => $supplier->email,
                 'currency_code' => $supplier->currency_code,
+                'showUrl' => route('purchasing.suppliers.show', $supplier),
             ];
         });
         $payload = [
@@ -94,7 +95,14 @@
                                 <tbody class="divide-y divide-gray-100">
                                     <template x-for="supplier in suppliers" :key="supplier.id">
                                         <tr>
-                                            <td class="px-4 py-4 text-sm text-gray-900" x-text="supplier.company_name"></td>
+                                        <td class="px-4 py-4 text-sm text-gray-900">
+                                            <a
+                                                class="text-blue-600 hover:text-blue-500"
+                                                :href="supplier.showUrl"
+                                            >
+                                                <span x-text="supplier.company_name"></span>
+                                            </a>
+                                        </td>
                                             <td class="px-4 py-4 text-sm text-gray-700">
                                                 <span x-text="supplier.currency_code || '—'"></span>
                                             </td>

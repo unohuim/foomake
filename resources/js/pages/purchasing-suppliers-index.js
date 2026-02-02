@@ -245,18 +245,13 @@ export function mount(rootEl, payload) {
 
             const data = await response.json();
             if (data.data) {
-                this.suppliers.unshift({
-                    id: data.data.id,
-                    company_name: data.data.company_name,
-                    url: data.data.url,
-                    phone: data.data.phone,
-                    email: data.data.email,
-                    currency_code: data.data.currency_code,
-                });
+                const showUrl = data.data.show_url || `${this.updateUrlBase}/${data.data.id}`;
+                window.location.href = showUrl;
+                return;
             }
 
-            this.showToast('success', 'Supplier created.');
-            this.closeCreate();
+            this.generalError = 'Supplier created but unable to determine redirect.';
+            this.isSubmitting = false;
         },
         async submitEdit() {
             this.isEditSubmitting = true;

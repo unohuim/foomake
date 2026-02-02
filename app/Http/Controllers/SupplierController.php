@@ -3,7 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\Purchasing\SupplierUpdateRequest;
+use App\Models\Item;
+use App\Models\ItemPurchaseOption;
 use App\Models\Supplier;
+use App\Models\Uom;
 use App\Services\Purchasing\SupplierDeleteGuard;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -33,6 +36,85 @@ class SupplierController extends Controller
             'suppliers' => $suppliers,
             'defaultCurrency' => $defaultCurrency,
         ]);
+    }
+
+    /**
+     * Display a supplier detail page with pricing.
+     */
+    public function show(Request $request, Supplier $supplier): View
+    {
+        Gate::authorize('purchasing-suppliers-view');
+        $this->abortIfWrongTenant($request, $supplier);
+
+        $tenantCurrency = strtoupper((string) ($request->user()?->tenant?->currency_code ?: config('app.currency_code', 'USD')));
+        $packages = $supplier->purchaseOptions()
+            ->with(['item', 'packUom', 'currentPrice'])
+            ->orderBy('id')
+            ->get()
+            ->map(function (ItemPurchaseOption $option) {
+                $currentPrice = $option->currentPrice;
+
+                return [
+                    'id' => $option->id,
+                    'item_id' => $option->item_id,
+                    'item_name' => $option->item?->name,
+                    'pack_quantity' => bcadd((string) $option->pack_quantity, '0', 6),
+                    'pack_uom_id' => $option->pack_uom_id,
+                    'pack_uom_symbol' => $option->packUom?->symbol,
+                    'pack_uom_name' => $option->packUom?->name,
+                    'supplier_sku' => $option->supplier_sku,
+                    'current_price_display' => $currentPrice
+                        ? $this->formatMoney($currentPrice->price_currency_code, $currentPrice->converted_price_cents)
+                        : null,
+                    'current_price_currency_code' => $currentPrice?->price_currency_code,
+                    'current_price_cents' => $currentPrice?->converted_price_cents,
+                ];
+            })
+            ->values()
+            ->toArray();
+
+        $payload = [
+            'supplier' => [
+                'id' => $supplier->id,
+                'company_name' => $supplier->company_name,
+                'currency_code' => $supplier->currency_code,
+            ],
+            'packages' => $packages,
+            'canManage' => Gate::allows('purchasing-suppliers-manage'),
+            'packageStoreUrl' => route('purchasing.suppliers.purchase-options.store', $supplier),
+            'priceStoreUrlBase' => url('/purchasing/purchase-options'),
+            'csrfToken' => csrf_token(),
+            'tenantCurrencyCode' => $tenantCurrency,
+            'supplierCurrencyCode' => $supplier->currency_code ? strtoupper($supplier->currency_code) : null,
+            'purchasableItems' => Item::query()
+                ->where('tenant_id', $supplier->tenant_id)
+                ->where('is_purchasable', true)
+                ->orderBy('name')
+                ->get(['id', 'name'])
+                ->toArray(),
+            'uoms' => Uom::query()
+                ->where('tenant_id', $supplier->tenant_id)
+                ->orderBy('symbol')
+                ->get(['id', 'symbol', 'name'])
+                ->toArray(),
+        ];
+
+        return view('purchasing.suppliers.show', [
+            'supplier' => $supplier,
+            'payload' => $payload,
+        ]);
+    }
+
+    /**
+     * Format money for display.
+     */
+    private function formatMoney(?string $currencyCode, ?int $cents): ?string
+    {
+        if (! $currencyCode || $cents === null) {
+            return null;
+        }
+
+        return sprintf('%s %s', $currencyCode, number_format($cents / 100, 2, '.', ''));
     }
 
     /**
@@ -77,6 +159,7 @@ class SupplierController extends Controller
                 'phone' => $supplier->phone,
                 'email' => $supplier->email,
                 'currency_code' => $supplier->currency_code,
+                'show_url' => route('purchasing.suppliers.show', $supplier),
             ],
         ], 201);
     }

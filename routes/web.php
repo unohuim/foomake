@@ -3,11 +3,13 @@
 use App\Http\Controllers\InventoryController;
 use App\Http\Controllers\InventoryCountController;
 use App\Http\Controllers\ItemController;
+use App\Http\Controllers\ItemPurchaseOptionPriceController;
 use App\Http\Controllers\MakeOrderController;
 use App\Http\Controllers\MaterialController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\RecipeController;
 use App\Http\Controllers\SupplierController;
+use App\Http\Controllers\SupplierPurchaseOptionController;
 use App\Http\Controllers\UomCategoryController;
 use App\Http\Controllers\UomController;
 use Illuminate\Support\Facades\Route;
@@ -111,10 +113,18 @@ Route::middleware('auth')->group(function () {
         ->name('purchasing.suppliers.index');
     Route::post('/purchasing/suppliers', [SupplierController::class, 'store'])
         ->name('purchasing.suppliers.store');
+    Route::get('/purchasing/suppliers/{supplier}', [SupplierController::class, 'show'])
+        ->name('purchasing.suppliers.show');
     Route::patch('/purchasing/suppliers/{supplier}', [SupplierController::class, 'update'])
         ->name('purchasing.suppliers.update');
     Route::delete('/purchasing/suppliers/{supplier}', [SupplierController::class, 'destroy'])
         ->name('purchasing.suppliers.destroy');
+    Route::post('/purchasing/suppliers/{supplier}/purchase-options', [SupplierPurchaseOptionController::class, 'store'])
+        ->name('purchasing.suppliers.purchase-options.store');
+    Route::delete('/purchasing/suppliers/{supplier}/purchase-options/{option}', [SupplierPurchaseOptionController::class, 'destroy'])
+        ->name('purchasing.suppliers.purchase-options.destroy');
+    Route::post('/purchasing/purchase-options/{option}/prices', [ItemPurchaseOptionPriceController::class, 'store'])
+        ->name('purchasing.purchase-options.prices.store');
 
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
