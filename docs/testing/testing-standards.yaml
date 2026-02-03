@@ -1,0 +1,199 @@
+version: 1
+id: testing-standards
+purpose: >
+  Single Source of Truth for automated test completeness and sufficiency.
+  These rules are written for AI agents (Codex/LLMs) and are non-negotiable unless
+  an explicit repo doc contradicts them (must be cited).
+
+scope:
+  applies_to:
+    - all PR test work
+    - all test audits triggered by standards changes
+  non_goals:
+    - writing production code
+    - refactoring non-test files unless explicitly instructed
+    - changing routes/controllers/models unless required to make tests deterministic and correct
+
+agent_contract:
+  hard_rules:
+    - tests_only: true
+    - no_planning_in_output: true
+    - no_partial_completion: true
+    - no_early_exit_phrases:
+        - "awaiting review"
+        - "ready for review"
+        - "hand off"
+      allowed_only_if:
+        - all_completion_gates_passed: true
+    - deterministic_only:
+        forbid:
+          - real_time_clock
+          - randomness_without_seed
+          - external_network_calls
+          - background_jobs_without_sync
+          - flaky timing assertions
+    - read_docs_first:
+        required_paths:
+          - "docs/**/*.md"
+          - "docs/**/*.yaml"
+          - "AGENTS.md"
+        rule: >
+          Agent MUST read all docs above BEFORE editing any test file.
+          If docs conflict with this YAML, agent must cite the exact doc + section
+          and ask exactly ONE clarifying question, then stop.
+    - coding_standards:
+        php:
+          psr_12: true
+          strict_types: true
+        tests:
+          framework: "pest"
+          no_global_state: true
+          one_cohesive_suite_per_file: true
+          full_file_outputs_only: true
+          no_diffs_or_snippets: true
+  compliance_language:
+    - "MUST"
+    - "MUST NOT"
+    - "BLOCKING"
+    - "INCOMPLETE"
+
+test_authoring_policy:
+  allowed_test_file_paths:
+    # Default convention (can be overridden by repo docs):
+    - "tests/Feature/**"
+    - "tests/Unit/**"
+  file_output_constraints:
+    - output_entire_file_contents_for_each_changed_test_file: true
+    - do_not_split_files_into_segments: true
+
+redundancy_policy:
+  default_rule: >
+    Avoid redundant “echo tests” that repeat GET payload assertions without introducing
+    a distinct behavior.
+  explicit_exceptions_where_repetition_is_required:
+    - authorization_matrices
+    - tenancy_isolation_matrices
+  conflict_resolver: >
+    Authorization/Tenancy Coverage Overrides “No Redundant Echo Tests”.
+    If a test seems repetitive but is part of the endpoint×verb auth/tenancy matrix,
+    it is REQUIRED and not considered redundant.
+
+quantitative_enforcement_gates:
+  per_file_test_count_gate:
+    min_it_tests_per_file: 20
+    blocking: true
+    exception_policy: >
+      If repo docs explicitly forbid this (must cite), agent asks exactly ONE
+      clarifying question during ACK step and stops.
+  endpoint_verb_auth_tenancy_matrix_gate:
+    required: true
+    blocking: true
+    matrix_cells_must_include_test_names: true
+    dimensions:
+      coverage_dimensions:
+        - guest_blocked
+        - authed_without_permission_blocked
+        - authed_with_permission_allowed
+        - cross_tenant_blocked_where_applicable
+
+acknowledgment_gate:
+  required: true
+  response_before_any_edit:
+    format: "checklist"
+    checklist_items_must_include:
+      - "ACK docs read first (docs/**/*.md, docs/**/*.yaml, AGENTS.md)"
+      - "ACK tests-only scope"
+      - "ACK deterministic-only rule"
+      - "ACK PSR-12 + strict_types for PHP tests"
+      - "ACK full-file outputs only (no diffs/snippets)"
+      - "ACK no global state"
+      - "ACK authorization/tenancy per-endpoint tests required even if repetitive"
+      - "ACK ≥20 it(...) tests per modified/created test file (or cite conflict doc)"
+      - "ACK endpoint×verb auth+tenancy checklist must be output and fully mapped to test names"
+      - "ACK completion gates: may not stop early"
+    clarifying_questions:
+      allowed_count: 1
+      only_if_unclear_or_conflicting: true
+    refusal_rule: >
+      Agent MUST refuse to edit files until the checklist is fully ACKNOWLEDGED.
+
+coverage_framework:
+  # The five required coverage categories for each behavior/decision.
+  categories:
+    A: "Request validation (422/403/404 etc.)"
+    B: "Normalization/defaulting behavior (request input → stored value)"
+    C: "Persistence/DB contract (stored fields match expected representation)"
+    D: "API contract (response keys + values)"
+    E: "Read contract via HTTP (GET/SHOW/INDEX)"
+  end_to_end_requirement:
+    rule: >
+      For EVERY behavior that affects externally visible data (API returns or UI consumes),
+      at least ONE end-to-end test MUST flow:
+      REQUEST (store/update) → DB ASSERTIONS → READ VIA HTTP (show/index) ASSERTIONS
+    anti_echo_rule: >
+      “Read contract” tests MUST NOT be satisfied solely by seeding DB rows and asserting GET echoes them.
+      At least ONE read test MUST be driven by store/update inputs for each surfaced/changed field set.
+    redundancy_exception: "Auth/tenancy matrices override anti-echo restrictions."
+
+deliverable_contract:
+  codex_output_order_must_be:
+    - "Files changed/created (exact paths)"
+    - "Finalized Minimum Coverage Matrix (COVERED / NOT COVERED)"
+    - "Numbered requirements checklist (SATISFIED / UNSATISFIED)"
+    - "Endpoint×Verb Auth+Tenancy checklist (every cell mapped to test names; otherwise INCOMPLETE)"
+    - "Per-file test count report (each file’s it(...) count; any <20 => INCOMPLETE)"
+  stop_rule: "Then STOP. No extra commentary."
+
+completion_gate:
+  blocking_conditions:
+    - any_minimum_coverage_matrix_entry_not_covered
+    - any_numbered_requirement_unsatisfied
+    - endpoint_verb_auth_tenancy_matrix_missing_cells_or_missing_test_names
+    - any_modified_or_created_test_file_has_fewer_than_min_it_tests
+  incomplete_format:
+    must_output:
+      - "INCOMPLETE: <short reason>"
+      - "Exactly what remains and where it should be added"
+  forbidden_completion_behavior:
+    - "Do not claim completion while any blocking condition remains"
+
+audit_workflow_template:
+  # This section describes the ideal “middleware audit” flow you mentioned.
+  # It is a template contract that your automation can enforce.
+  trigger_conditions:
+    - "docs/**/*.yaml changed"
+    - "docs/**/*.md changed that affects testing standards"
+  branch_naming:
+    pattern: "ai/test-audits/{identifier}"
+    identifier_guidance:
+      - "date-yyyymmdd"
+      - "short-hash-of-standards-change"
+  audit_steps:
+    - "Parse docs/yaml as authoritative testing contracts"
+    - "Enumerate tests impacted by changed contracts"
+    - "Open new branch per pattern"
+    - "Update only test files to satisfy contracts"
+    - "Ensure all gates pass (quantitative + matrix + requirements)"
+  non_goals:
+    - "Do not change production code unless absolutely necessary for deterministic tests; if required, stop and request explicit permission"
+
+pr_templates:
+  # Per-PR YAMLs should import/extend this standards YAML conceptually.
+  # Each PR adds PR-specific endpoint lists, behaviors, requirements, and matrices.
+  required_fields_for_pr_yaml:
+    - pr_id
+    - pr_name
+    - goal
+    - endpoints_in_scope
+    - permissions
+    - tenancy_rules
+    - behaviors_and_decisions
+    - out_of_scope
+    - minimum_coverage_matrix_ids
+    - numbered_requirements
+
+pr_example_reference:
+  file: "docs/testing/pr2-pur-004.purchase-orders.yaml"
+  note: >
+    Create a PR-specific YAML for PR2-PUR-004 that follows required_fields_for_pr_yaml
+    and leverages these standards as the enforcement layer.

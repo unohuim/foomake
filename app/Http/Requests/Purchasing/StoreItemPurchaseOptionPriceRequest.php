@@ -32,24 +32,22 @@ class StoreItemPurchaseOptionPriceRequest extends FormRequest
         $tenantCurrency = $this->resolveTenantCurrency();
         $supplierCurrency = $this->resolveSupplierCurrency();
         $normalizedCurrency = $this->normalizeCurrencyInput();
-        $hasFxInput = $this->hasAnyFxInput();
 
         if ($normalizedCurrency !== null) {
             $this->finalCurrency = $normalizedCurrency;
             $this->merge(['price_currency_code' => $normalizedCurrency]);
-        } elseif ($supplierCurrency === null) {
+        } elseif ($supplierCurrency !== null) {
+            $this->finalCurrency = $supplierCurrency;
+            $this->merge(['price_currency_code' => $supplierCurrency]);
+        } elseif ($tenantCurrency !== null) {
             $this->finalCurrency = $tenantCurrency;
             $this->merge(['price_currency_code' => $tenantCurrency]);
-        } elseif ($hasFxInput) {
-            $defaultCurrency = $supplierCurrency ?? $tenantCurrency;
-            $this->finalCurrency = $defaultCurrency;
-            $this->merge(['price_currency_code' => $defaultCurrency]);
         } else {
             $this->finalCurrency = null;
         }
 
-        if ($this->finalCurrency !== null && $this->finalCurrency === $tenantCurrency) {
-            $this->mergeFxDefaults($tenantCurrency);
+        if ($this->finalCurrency !== null && $tenantCurrency !== null && $this->finalCurrency === $tenantCurrency) {
+            $this->mergeFxDefaults();
         }
     }
 
@@ -62,7 +60,7 @@ class StoreItemPurchaseOptionPriceRequest extends FormRequest
     {
         $tenantCurrency = $this->resolveTenantCurrency();
         $currencyCode = $this->finalCurrency;
-        $fxRequired = $currencyCode !== null && $currencyCode !== $tenantCurrency;
+        $fxRequired = $tenantCurrency !== null && $currencyCode !== null && $currencyCode !== $tenantCurrency;
 
         return [
             'price_cents' => ['required', 'integer', 'min:0'],
@@ -123,22 +121,6 @@ class StoreItemPurchaseOptionPriceRequest extends FormRequest
     }
 
     /**
-     * Determine if any FX field has a non-empty value.
-     */
-    private function hasAnyFxInput(): bool
-    {
-        return $this->hasNonEmpty('fx_rate') || $this->hasNonEmpty('fx_rate_as_of');
-    }
-
-    /**
-     * Determine if the named field has a non-empty value.
-     */
-    private function hasNonEmpty(string $field): bool
-    {
-        return $this->has($field) && $this->input($field) !== '' && $this->input($field) !== null;
-    }
-
-    /**
      * Resolve the supplier currency for the option being priced.
      */
     private function resolveSupplierCurrency(): ?string
@@ -161,7 +143,7 @@ class StoreItemPurchaseOptionPriceRequest extends FormRequest
     /**
      * Merge FX defaults when the currency matches the tenant currency.
      */
-    private function mergeFxDefaults(string $tenantCurrency): void
+    private function mergeFxDefaults(): void
     {
         $fxRate = $this->hasNonEmpty('fx_rate') ? $this->input('fx_rate') : '1';
         $fxRateAsOf = $this->hasNonEmpty('fx_rate_as_of')
@@ -177,10 +159,28 @@ class StoreItemPurchaseOptionPriceRequest extends FormRequest
     /**
      * Resolve the tenant currency code (uppercase).
      */
-    private function resolveTenantCurrency(): string
+    private function resolveTenantCurrency(): ?string
     {
         $tenantCurrency = $this->user()?->tenant?->currency_code;
 
-        return strtoupper((string) ($tenantCurrency ?: config('app.currency_code', 'USD')));
+        if (! is_string($tenantCurrency)) {
+            return null;
+        }
+
+        $trimmed = trim($tenantCurrency);
+
+        if ($trimmed === '') {
+            return null;
+        }
+
+        return strtoupper($trimmed);
+    }
+
+    /**
+     * Determine if the named field has a non-empty value.
+     */
+    private function hasNonEmpty(string $field): bool
+    {
+        return $this->has($field) && $this->input($field) !== '' && $this->input($field) !== null;
     }
 }

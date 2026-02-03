@@ -16,7 +16,26 @@ Authority Order (highest to lowest — conflicts resolved by this order):
 8. docs/UI_DESIGN.md
 9. routes/web.php (main web routes — included here for complete bootstrap context)
 
+10. Then, for each item in the above order, add a level-2 header exactly like this:
+
 ## docs/AI_CHAT_CODEX.md
+
+(or ## routes/web.php for the last one)
+
+Followed immediately by the full, verbatim content of that file/document.
+
+Do NOT summarize, shorten, paraphrase, omit lines, or change formatting — copy the entire original text exactly as it exists in the repository.
+
+- For Markdown files: preserve all headers, tables, lists, code blocks.
+- For PHP files (routes/web.php): include the full code with all use statements, Route:: definitions, middleware groups, and comments — exactly as written.
+- If any file does not yet exist (e.g., docs/AI_CHAT_CODEX.md), insert a placeholder comment under its header like:
+## docs/AI_CHAT_CODEX.md
+
+<!-- TODO: add content -->
+
+
+## docs/AI_CHAT_CODEX.md
+
 # AI Chat Bootstrap (READ FIRST)
 
 You are assisting with development on this repository.
@@ -248,6 +267,7 @@ If unsure, **stop immediately and ask**.
 - The **smallest possible change per PR**
 
 ## docs/PR2_ROADMAP.md
+
 # PR2_ROADMAP — UI + Domain Completion (Post-PR-006)
 
 This roadmap defines the **second major phase** of work: completing **Items, Inventory, Suppliers, and Manufacturing**
@@ -851,6 +871,7 @@ Replace Breeze Blade UI components with Tailwind-only markup.
 - Optional UI smoke checks
 
 ## docs/CONVENTIONS.md
+
 # Conventions
 
 This document defines the **mandatory development conventions** for this repository.  
@@ -1105,6 +1126,7 @@ These rules apply to:
 - Any inventory-affecting calculations
 
 ## docs/ARCHITECTURE_INVENTORY.md
+
 # Architecture Inventory
 
 This document tracks **reusable abstractions, components, and architectural patterns**
@@ -2502,6 +2524,7 @@ it('creates a material', function () {
 ---
 
 ## docs/PERMISSIONS_MATRIX.md
+
 # Permissions Matrix
 
 This document is the source-of-truth for **authorization intent** in this repository.
@@ -2675,6 +2698,7 @@ return [
 ```
 
 ## docs/ENUMS.md
+
 # ENUMS — Canonical Enum Authority
 
 This document defines the canonical, normative enum-like values used throughout the system.
@@ -2778,6 +2802,7 @@ Do not introduce new enum values without updating this document.
 No conflicts or ambiguities were found at time of creation based on existing migrations, models, actions, and tests.
 
 ## docs/DB_SCHEMA.md
+
 # Database Schema Inventory (DB_SCHEMA)
 
 This document inventories **all database tables and columns** as defined by migrations.
@@ -3496,6 +3521,7 @@ Migrations remain the **sole source of truth**.
 **End of DB_SCHEMA**
 
 ## docs/UI_DESIGN.md
+
 # UI_DESIGN.md — Canonical UI Direction & Constraints
 
 This document defines the **authoritative UI design rules** for this repository.
@@ -4024,16 +4050,19 @@ They are mandatory, not stylistic.
 ::contentReference[oaicite:0]{index=0}
 
 ## routes/web.php
+
 <?php
 
 use App\Http\Controllers\InventoryController;
 use App\Http\Controllers\InventoryCountController;
 use App\Http\Controllers\ItemController;
+use App\Http\Controllers\ItemPurchaseOptionPriceController;
 use App\Http\Controllers\MakeOrderController;
 use App\Http\Controllers\MaterialController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\RecipeController;
 use App\Http\Controllers\SupplierController;
+use App\Http\Controllers\SupplierPurchaseOptionController;
 use App\Http\Controllers\UomCategoryController;
 use App\Http\Controllers\UomController;
 use Illuminate\Support\Facades\Route;
@@ -4137,10 +4166,18 @@ Route::middleware('auth')->group(function () {
         ->name('purchasing.suppliers.index');
     Route::post('/purchasing/suppliers', [SupplierController::class, 'store'])
         ->name('purchasing.suppliers.store');
+    Route::get('/purchasing/suppliers/{supplier}', [SupplierController::class, 'show'])
+        ->name('purchasing.suppliers.show');
     Route::patch('/purchasing/suppliers/{supplier}', [SupplierController::class, 'update'])
         ->name('purchasing.suppliers.update');
     Route::delete('/purchasing/suppliers/{supplier}', [SupplierController::class, 'destroy'])
         ->name('purchasing.suppliers.destroy');
+    Route::post('/purchasing/suppliers/{supplier}/purchase-options', [SupplierPurchaseOptionController::class, 'store'])
+        ->name('purchasing.suppliers.purchase-options.store');
+    Route::delete('/purchasing/suppliers/{supplier}/purchase-options/{option}', [SupplierPurchaseOptionController::class, 'destroy'])
+        ->name('purchasing.suppliers.purchase-options.destroy');
+    Route::post('/purchasing/purchase-options/{option}/prices', [ItemPurchaseOptionPriceController::class, 'store'])
+        ->name('purchasing.purchase-options.prices.store');
 
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
@@ -4148,3 +4185,4 @@ Route::middleware('auth')->group(function () {
 });
 
 require __DIR__ . '/auth.php';
+

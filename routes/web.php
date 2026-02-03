@@ -7,6 +7,8 @@ use App\Http\Controllers\ItemPurchaseOptionPriceController;
 use App\Http\Controllers\MakeOrderController;
 use App\Http\Controllers\MaterialController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\PurchaseOrderController;
+use App\Http\Controllers\PurchaseOrderLineController;
 use App\Http\Controllers\RecipeController;
 use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\SupplierPurchaseOptionController;
@@ -125,6 +127,25 @@ Route::middleware('auth')->group(function () {
         ->name('purchasing.suppliers.purchase-options.destroy');
     Route::post('/purchasing/purchase-options/{option}/prices', [ItemPurchaseOptionPriceController::class, 'store'])
         ->name('purchasing.purchase-options.prices.store');
+
+    Route::get('/purchasing/orders', [PurchaseOrderController::class, 'index'])
+        ->name('purchasing.orders.index');
+    Route::post('/purchasing/orders', [PurchaseOrderController::class, 'store'])
+        ->name('purchasing.orders.store');
+    Route::get('/purchasing/orders/{purchaseOrder}', [PurchaseOrderController::class, 'show'])
+        ->name('purchasing.orders.show');
+    Route::patch('/purchasing/orders/{purchaseOrder}', [PurchaseOrderController::class, 'update'])
+        ->name('purchasing.orders.update');
+    Route::put('/purchasing/orders/{purchaseOrder}', [PurchaseOrderController::class, 'update']);
+    Route::delete('/purchasing/orders/{purchaseOrderId}', [PurchaseOrderController::class, 'destroy'])
+        ->name('purchasing.orders.destroy');
+
+    Route::post('/purchasing/orders/{purchaseOrderId}/lines', [PurchaseOrderLineController::class, 'store'])
+        ->name('purchasing.orders.lines.store');
+    Route::patch('/purchasing/orders/{purchaseOrder}/lines/{line}', [PurchaseOrderLineController::class, 'update'])
+        ->name('purchasing.orders.lines.update');
+    Route::delete('/purchasing/orders/{purchaseOrderId}/lines/{lineId}', [PurchaseOrderLineController::class, 'destroy'])
+        ->name('purchasing.orders.lines.destroy');
 
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');

@@ -67,6 +67,36 @@ Do not introduce new enum values without updating this document.
 
 ---
 
+## Purchasing
+
+### Purchase Order Status
+
+**Name:** PurchaseOrder status  
+**Storage location(s):** `purchase_orders.status` (string column)  
+**Allowed values:**
+
+- `DRAFT`
+- `OPEN`
+- `RECEIVED`
+- `SHORT CLOSED`
+- `CANCELLED`
+- `BACKORDERED`
+
+**Semantic meaning:**
+
+- `DRAFT`: Purchase order is being assembled and may be edited.
+- `OPEN`: Purchase order has been issued to the supplier.
+- `RECEIVED`: All ordered items have been received.
+- `SHORT CLOSED`: Order closed with a short receipt.
+- `CANCELLED`: Order has been cancelled.
+- `BACKORDERED`: Order contains backordered items.
+
+**Notes:**
+
+- Only DRAFT behavior is editable in PR2-PUR-004.
+
+---
+
 ## Stock / Inventory Ledger
 
 ### Stock Move Type

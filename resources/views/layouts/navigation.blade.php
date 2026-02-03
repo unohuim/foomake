@@ -35,6 +35,11 @@
                         </x-slot>
 
                         <x-slot name="content">
+                            @can('purchasing-purchase-orders-create')
+                                <x-dropdown-link :href="route('purchasing.orders.index')">
+                                    {{ __('Orders') }}
+                                </x-dropdown-link>
+                            @endcan
                             <x-dropdown-link :href="route('purchasing.suppliers.index')">
                                 {{ __('Suppliers') }}
                             </x-dropdown-link>
@@ -134,6 +139,11 @@
             <x-responsive-nav-link :href="route('dashboard')" :active="request()->routeIs('dashboard')">
                 {{ __('Dashboard') }}
             </x-responsive-nav-link>
+            @can('purchasing-purchase-orders-create')
+                <x-responsive-nav-link :href="route('purchasing.orders.index')" :active="request()->routeIs('purchasing.orders.*')">
+                    {{ __('Orders') }}
+                </x-responsive-nav-link>
+            @endcan
             <x-responsive-nav-link :href="route('purchasing.suppliers.index')" :active="request()->routeIs('purchasing.*')">
                 {{ __('Suppliers') }}
             </x-responsive-nav-link>

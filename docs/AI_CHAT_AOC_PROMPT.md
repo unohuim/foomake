@@ -16,9 +16,10 @@ You must track certainty for:
 8. Authorization
 9. Routes & Controllers
 10. UI / Interaction Pattern
-11. Validation & Error Handling
-12. Testing Plan
-13. Documentation Impact
+11. UI Aesthetics
+12. Validation & Error Handling
+13. Testing Plan
+14. Documentation Impact
 
 ## Required Response Format (every turn)
 

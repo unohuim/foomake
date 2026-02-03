@@ -260,9 +260,9 @@ it('validates price_cents non-negative', function () {
 });
 
 it('validates price_currency_code required', function () {
-    $tenant = ($this->makeTenant)(['currency_code' => 'USD']);
+    $tenant = ($this->makeTenant)(['currency_code' => null]);
     $user = ($this->makeUser)($tenant);
-    $supplier = ($this->makeSupplier)($tenant);
+    $supplier = ($this->makeSupplier)($tenant, ['currency_code' => null]);
     $uom = ($this->makeUom)($tenant);
     $item = ($this->makeItem)($tenant, $uom);
     $option = ($this->makeOption)($tenant, $supplier, $item, $uom);

@@ -13,9 +13,11 @@ Before proposing a plan or writing any files, Codex MUST read and treat the foll
 
 - README.md
 - docs/AI_RULES.md
+- docs/AI_CODEX_BOOTSTRAP.md
 - docs/CONVENTIONS.md
 - docs/PR2_ROADMAP.md
 - docs/ENUMS.md
+- docs/PERMISSIONS_MATRIX.md
 - docs/UI_DESIGN.md
 - docs/architecture/README.yaml
 - docs/ARCHITECTURE_INVENTORY.md
@@ -24,6 +26,7 @@ Before proposing a plan or writing any files, Codex MUST read and treat the foll
 
 - docs/architecture/README.yaml
 - docs/architecture/**/**/\*.yaml
+- docs/testing/\*.yaml
 
 These YAML files define canonical domain rules, invariants, and approved abstractions.
 
@@ -50,7 +53,6 @@ If any conflicts are detected between sources, work MUST pause and be escalated 
 
 ## Workflow
 
-- Always work on a branch per task.
 - Before editing anything, Codex must present a plan and wait for human approval.
 - Codex must be >95% certain of requirements before proposing a plan.
 - Codex must never proceed based on inferred or partial intent.

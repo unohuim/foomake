@@ -29,6 +29,7 @@ Migrations remain the **sole source of truth**.
 - inventory_counts
 - inventory_count_lines
 - item_purchase_options
+- item_purchase_option_prices
 - item_uom_conversions
 - items
 - job_batches
@@ -37,6 +38,8 @@ Migrations remain the **sole source of truth**.
 - password_reset_tokens
 - permissions
 - permission_role
+- purchase_order_lines
+- purchase_orders
 - recipes
 - recipe_lines
 - roles
@@ -199,6 +202,38 @@ Migrations remain the **sole source of truth**.
 - Index: `(tenant_id, supplier_sku)`
 - Implicit (FK index): `item_id`
 - Implicit (FK index): `pack_uom_id`
+
+---
+
+## item_purchase_option_prices
+
+**Tenant-owned:** Yes  
+**Purpose:** Purchase option price snapshots
+
+### Columns
+
+| Name                    | Type           | Nullable | Notes                                         |
+| ----------------------- | -------------- | -------- | --------------------------------------------- |
+| id                      | bigint         | No       | Primary key                                   |
+| tenant_id               | bigint         | No       | FK → tenants.id (CASCADE)                     |
+| item_purchase_option_id | bigint         | No       | FK → item_purchase_options.id (CASCADE)       |
+| price_cents             | unsignedInt    | No       | —                                             |
+| price_currency_code     | char(3)        | No       | —                                             |
+| converted_price_cents   | unsignedInt    | No       | —                                             |
+| fx_rate                 | decimal(18,8)  | No       | —                                             |
+| fx_rate_as_of           | date           | No       | —                                             |
+| effective_at            | timestamp      | No       | —                                             |
+| ended_at                | timestamp      | Yes      | —                                             |
+| created_at              | timestamp      | Yes      | —                                             |
+| updated_at              | timestamp      | Yes      | —                                             |
+
+### Keys & Indexes
+
+- PK: `id`
+- Index: `(tenant_id, item_purchase_option_id)` (ipop_prices_tenant_option_idx)
+- Index: `(item_purchase_option_id, ended_at)` (ipop_prices_option_ended_idx)
+- Implicit (FK index): `tenant_id`
+- Implicit (FK index): `item_purchase_option_id`
 
 ---
 
@@ -406,6 +441,83 @@ Migrations remain the **sole source of truth**.
 - Unique: `(permission_id, role_id)`
 - Implicit (FK index): `permission_id`
 - Implicit (FK index): `role_id`
+
+---
+
+## purchase_order_lines
+
+**Tenant-owned:** Yes  
+**Purpose:** Purchase order line items with price snapshots
+
+### Columns
+
+| Name                       | Type           | Nullable | Notes                                        |
+| -------------------------- | -------------- | -------- | -------------------------------------------- |
+| id                         | bigint         | No       | Primary key                                  |
+| tenant_id                  | bigint         | No       | FK → tenants.id (CASCADE)                    |
+| purchase_order_id          | bigint         | No       | Part of composite FK                         |
+| item_id                    | bigint         | No       | FK → items.id (CASCADE)                      |
+| item_purchase_option_id    | bigint         | No       | FK → item_purchase_options.id (CASCADE)      |
+| pack_count                 | integer        | No       | Unsigned, CHECK ≥ 1                          |
+| unit_price_cents           | integer        | No       | Unsigned                                     |
+| line_subtotal_cents        | integer        | No       | Unsigned, unit_price_cents * pack_count      |
+| unit_price_amount          | integer        | No       | Unsigned, snapshot cents                     |
+| unit_price_currency_code   | char(3)        | No       | Snapshot currency                            |
+| converted_unit_price_amount | integer        | No       | Unsigned, snapshot converted cents           |
+| fx_rate                    | decimal(18,8)  | No       | Snapshot FX rate                             |
+| fx_rate_as_of              | date           | No       | Snapshot FX rate date                        |
+| created_at                 | timestamp      | Yes      | —                                            |
+| updated_at                 | timestamp      | Yes      | —                                            |
+
+### Foreign Keys
+
+- `(purchase_order_id, tenant_id)` → purchase_orders.(id, tenant_id) (CASCADE)
+- `item_id` → items.id (CASCADE)
+- `item_purchase_option_id` → item_purchase_options.id (CASCADE)
+
+### Keys & Indexes
+
+- PK: `id`
+- Index: `(purchase_order_id, item_id)`
+- Implicit (FK index): `tenant_id`
+- Implicit (FK index): `item_id`
+- Implicit (FK index): `item_purchase_option_id`
+
+---
+
+## purchase_orders
+
+**Tenant-owned:** Yes  
+**Purpose:** Purchase order headers
+
+### Columns
+
+| Name                | Type        | Nullable | Notes                     |
+| ------------------- | ----------- | -------- | ------------------------- |
+| id                  | bigint      | No       | Primary key               |
+| tenant_id           | bigint      | No       | FK → tenants.id (CASCADE) |
+| created_by_user_id  | bigint      | Yes      | FK → users.id (SET NULL)  |
+| supplier_id         | bigint      | Yes      | FK → suppliers.id (SET NULL) |
+| order_date          | date        | Yes      | —                         |
+| shipping_cents      | integer     | Yes      | Unsigned                  |
+| tax_cents           | integer     | Yes      | Unsigned                  |
+| po_subtotal_cents   | integer     | No       | Unsigned, default 0       |
+| po_grand_total_cents | integer     | No       | Unsigned, default 0       |
+| po_number           | string      | Yes      | —                         |
+| notes               | text        | Yes      | —                         |
+| status              | string      | No       | See ENUMS.md              |
+| created_at          | timestamp   | Yes      | —                         |
+| updated_at          | timestamp   | Yes      | —                         |
+
+### Keys & Indexes
+
+- PK: `id`
+- Unique: `(id, tenant_id)`
+- Index: `tenant_id`
+- Index: `(tenant_id, status)`
+- Index: `(tenant_id, supplier_id)`
+- Implicit (FK index): `created_by_user_id`
+- Implicit (FK index): `supplier_id`
 
 ---
 
