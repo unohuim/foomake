@@ -473,28 +473,133 @@ Define which materials are bought from which suppliers, including **supplier-spe
 
 ### PR2-PUR-004 — Purchase Orders (Draft + Pricing Snapshot)
 
-**Goal**  
-Create purchase orders with **immutable price snapshots**.
+---
 
-**Includes**
+## Goal
 
-- Nav: **Purchasing → Orders**
-- PO index + create draft (AJAX)
-- PO lines sourced from supplier-material catalog
-- Each PO line stores:
-    - `unit_price_amount`
-    - `unit_price_currency_code`
-    - `converted_unit_price_amount` (tenant currency)
-    - `fx_rate`
-    - `fx_rate_as_of`
-- Gates:
-    - View: `purchasing-purchase-orders-view`
-    - Create: `purchasing-purchase-orders-create`
+Introduce Purchase Orders with **immutable pricing snapshots** captured at the moment a line is added.
 
-**Rules**
+This PR establishes the **foundation of the PO system**: draft creation, line management, and permanent price capture.  
+Workflow, lifecycle, and advanced status rules are intentionally **out of scope**.
 
-- PO prices never change after creation
-- Supplier price changes do **not** affect existing POs
+---
+
+## Navigation
+
+**Purchasing → Orders**
+
+Routes introduced:
+
+- `/purchasing/orders` — Index
+- `/purchasing/orders/{id}` — Show / Manage lines
+
+---
+
+## Includes (In Scope)
+
+- Purchase Order index page
+- Ability to **create a draft PO** via AJAX
+- Ability to **delete a PO**
+- Ability to **add lines** to a PO via AJAX
+- Ability to **remove lines** from a PO via AJAX
+- Lines are sourced strictly from the **supplier-material catalog**
+- All monetary fields stored as **integer cents**
+- All suppliers in this PR use the **same currency as the tenant**
+- Taxes are **ignored**
+- Shipping is the **only manual monetary input**
+- Pricing is **fully calculated**, except shipping
+
+---
+
+## Critical Concept — Pricing Snapshot
+
+When a line is added to a PO, the following fields must be permanently written to the line:
+
+- `unit_price_amount` (supplier currency, integer cents)
+- `unit_price_currency_code`
+- `converted_unit_price_amount` (tenant currency, integer cents)
+- `fx_rate`
+- `fx_rate_as_of`
+
+### Immutable Rule
+
+> These values must NEVER change after being written.
+
+If the supplier later changes prices, or FX rates change, **existing PO lines must remain untouched**.
+
+This is the core guarantee of this PR.
+
+---
+
+## Line Endpoints (AJAX)
+
+- Add line to PO
+- Remove line from PO
+
+---
+
+## Permissions (Single Gate for This PR)
+
+All PO behavior in this PR is controlled by **one permission only**:
+
+`purchasing-purchase-orders-create`
+
+This permission allows:
+
+- Viewing index
+- Viewing a PO
+- Creating a PO
+- Deleting a PO
+- Adding lines
+- Removing lines
+
+There is **no separate "view" permission** in this PR.
+
+---
+
+## Purchase Order Header Fields (In Scope)
+
+| Field            | Type            | Notes                         |
+| ---------------- | --------------- | ----------------------------- |
+| `supplier_id`    | nullable FK     | Required before leaving DRAFT |
+| `order_date`     | nullable date   | Required before leaving DRAFT |
+| `shipping_cents` | nullable int    | Required before leaving DRAFT |
+| `po_number`      | nullable string | Optional forever              |
+| `notes`          | nullable text   | Optional                      |
+| `status`         | enum            | Defaults to `DRAFT`           |
+
+---
+
+## Draft Behavior
+
+When a user creates a PO:
+
+- A new record is immediately created
+- Status is always `DRAFT`
+- All header fields are nullable
+- User enters header fields manually later
+- System does **not** auto-populate anything except defaults
+
+To move out of DRAFT (future PR):
+
+- `supplier_id`
+- `order_date`
+- `shipping_cents`
+
+---
+
+## Explicitly Out of Scope (Handled in Future PRs)
+
+- Status workflow enforcement
+- Receiving inventory
+- Cancelling logic
+- Taxes
+- Multi-currency suppliers
+- Editing prices
+- Editing snapshot data
+- Lifecycle transitions beyond DRAFT
+- Accounting integration
+- Approval flows
 
 ---
 
@@ -513,11 +618,11 @@ Create purchase orders with **immutable price snapshots**.
 
 ### Pricing Layer Invariant
 
-| Layer          | Location                 | Purpose                  |
-| -------------- | ------------------------ | ------------------------ |
-| Planning       | `items.default_price_cents` + `items.default_price_currency_code` | Forecasting only |
-| Supplier       | `supplier_item_prices.*` | Expected buy price       |
-| Purchase Order | `purchase_order_lines.*` | Legal / accounting truth |
+| Layer          | Location                                                          | Purpose                  |
+| -------------- | ----------------------------------------------------------------- | ------------------------ |
+| Planning       | `items.default_price_cents` + `items.default_price_currency_code` | Forecasting only         |
+| Supplier       | `supplier_item_prices.*`                                          | Expected buy price       |
+| Purchase Order | `purchase_order_lines.*`                                          | Legal / accounting truth |
 
 ---
 

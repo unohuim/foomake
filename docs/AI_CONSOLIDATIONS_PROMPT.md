@@ -1,6 +1,6 @@
 You are assisting with project documentation.
 
-Create (or overwrite if it exists) the file: docs/AI_CHAT_BOOTSTRAP.md
+Create (or overwrite if it exists) the file: docs/AI_CHAT_BOOTSTRAP2.md
 
 Purpose: This single file consolidates **all core authoritative documents and the main routes file** required to bootstrap an LLM chat session (e.g. Grok, ChatGPT, Codex CLI, etc.) so the human doesn't have to paste multiple separate files every time.
 
