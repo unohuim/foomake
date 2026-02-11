@@ -25,6 +25,7 @@ class StockMove extends Model
         'uom_id',
         'quantity',
         'type',
+        'status',
         'source_type',
         'source_id',
     ];

@@ -190,6 +190,28 @@ it('allows show with permission', function () {
         ->assertOk();
 });
 
+it('blocks cross-tenant show access', function () {
+    $tenantA = ($this->makeTenant)(['tenant_name' => 'Tenant A']);
+    $tenantB = ($this->makeTenant)(['tenant_name' => 'Tenant B']);
+    $userA = ($this->makeUser)($tenantA);
+    $userB = ($this->makeUser)($tenantB);
+
+    ($this->grantPermission)($userA, 'purchasing-purchase-orders-create');
+    ($this->grantPermission)($userB, 'purchasing-purchase-orders-create');
+
+    $supplierB = ($this->makeSupplier)($tenantB);
+    $orderResponse = ($this->createOrder)($userB, [
+        'supplier_id' => $supplierB->id,
+        'order_date' => '2026-02-02',
+    ])->assertCreated();
+
+    $orderId = (int) ($orderResponse->json('data.id') ?? 0);
+
+    $this->actingAs($userA)
+        ->get("/purchasing/orders/{$orderId}")
+        ->assertNotFound();
+});
+
 it('renders show payload markers', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
@@ -711,4 +733,329 @@ it('shows po_number null when not set', function () {
     if (array_key_exists('po_number', $order)) {
         expect($order['po_number'])->toBeNull();
     }
+});
+
+it('includes receipt history in show payload after receipt event', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermission)($user, 'purchasing-purchase-orders-create');
+    ($this->grantPermission)($user, 'purchasing-purchase-orders-receive');
+
+    $uom = ($this->makeUom)($tenant);
+    $supplier = ($this->makeSupplier)($tenant);
+    $item = ($this->makeItem)($tenant, $uom);
+    $option = ($this->makeOption)($tenant, $supplier, $item, $uom);
+
+    $orderResponse = ($this->createOrder)($user, [
+        'supplier_id' => $supplier->id,
+        'order_date' => '2026-02-20',
+    ])->assertCreated();
+
+    $orderId = (int) ($orderResponse->json('data.id') ?? 0);
+
+    DB::table('purchase_orders')
+        ->where('id', $orderId)
+        ->update(['status' => 'OPEN']);
+
+    ($this->addLine)($user, $orderId, [
+        'item_purchase_option_id' => $option->id,
+        'pack_count' => 2,
+        'unit_price_cents' => 100,
+    ])->assertCreated();
+
+    $line = DB::table('purchase_order_lines')->where('purchase_order_id', $orderId)->first();
+
+    $this->actingAs($user)
+        ->postJson("/purchasing/orders/{$orderId}/receipts", [
+            'received_at' => '2026-02-20 09:00:00',
+            'reference' => 'RCPT-55',
+            'notes' => 'Receipt notes',
+            'purchase_order_line_id' => $line->id,
+            'received_quantity' => '2.000000',
+        ])->assertCreated();
+
+    $response = $this->actingAs($user)->get("/purchasing/orders/{$orderId}")->assertOk();
+    $payload = ($this->extractPayload)($response, 'purchasing-orders-show-payload');
+
+    $receipts = $payload['receipts'] ?? [];
+    expect($receipts)->toHaveCount(1);
+
+    $entry = $receipts[0] ?? [];
+    expect($entry['reference'] ?? null)->toBe('RCPT-55');
+    expect($entry['notes'] ?? null)->toBe('Receipt notes');
+    expect($entry['lines_count'] ?? null)->toBe(1);
+    expect($entry['total_packs'] ?? null)->toBe('2.000000');
+    expect($entry['received_at'] ?? null)->toBe('2026-02-20 09:00:00');
+    expect($entry['received_by'] ?? null)->toBe($user->name);
+});
+
+it('shows updated status in show payload after receipt event', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermission)($user, 'purchasing-purchase-orders-create');
+    ($this->grantPermission)($user, 'purchasing-purchase-orders-receive');
+
+    $uom = ($this->makeUom)($tenant);
+    $supplier = ($this->makeSupplier)($tenant);
+    $item = ($this->makeItem)($tenant, $uom);
+    $option = ($this->makeOption)($tenant, $supplier, $item, $uom);
+
+    $orderResponse = ($this->createOrder)($user, [
+        'supplier_id' => $supplier->id,
+        'order_date' => '2026-02-23',
+    ])->assertCreated();
+
+    $orderId = (int) ($orderResponse->json('data.id') ?? 0);
+
+    ($this->addLine)($user, $orderId, [
+        'item_purchase_option_id' => $option->id,
+        'pack_count' => 2,
+        'unit_price_cents' => 120,
+    ])->assertCreated();
+
+    $this->actingAs($user)
+        ->patchJson("/purchasing/orders/{$orderId}/status", ['status' => 'OPEN'])
+        ->assertOk();
+
+    $line = DB::table('purchase_order_lines')->where('purchase_order_id', $orderId)->first();
+
+    $this->actingAs($user)
+        ->postJson("/purchasing/orders/{$orderId}/receipts", [
+            'received_at' => '2026-02-23 10:00:00',
+            'purchase_order_line_id' => $line->id,
+            'received_quantity' => '1.000000',
+        ])->assertCreated();
+
+    $response = $this->actingAs($user)->get("/purchasing/orders/{$orderId}")->assertOk();
+    $payload = ($this->extractPayload)($response, 'purchasing-orders-show-payload');
+
+    $order = $payload['order']
+        ?? $payload['purchaseOrder']
+        ?? $payload['purchase_order']
+        ?? [];
+
+    expect($order['status'] ?? null)->toBe('PARTIALLY-RECEIVED');
+});
+
+it('includes short-close history in show payload after short-close event', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermission)($user, 'purchasing-purchase-orders-create');
+    ($this->grantPermission)($user, 'purchasing-purchase-orders-receive');
+
+    $uom = ($this->makeUom)($tenant);
+    $supplier = ($this->makeSupplier)($tenant);
+    $item = ($this->makeItem)($tenant, $uom);
+    $option = ($this->makeOption)($tenant, $supplier, $item, $uom);
+
+    $orderResponse = ($this->createOrder)($user, [
+        'supplier_id' => $supplier->id,
+        'order_date' => '2026-02-21',
+    ])->assertCreated();
+
+    $orderId = (int) ($orderResponse->json('data.id') ?? 0);
+
+    DB::table('purchase_orders')
+        ->where('id', $orderId)
+        ->update(['status' => 'OPEN']);
+
+    ($this->addLine)($user, $orderId, [
+        'item_purchase_option_id' => $option->id,
+        'pack_count' => 3,
+        'unit_price_cents' => 120,
+    ])->assertCreated();
+
+    $line = DB::table('purchase_order_lines')->where('purchase_order_id', $orderId)->first();
+
+    $this->actingAs($user)
+        ->postJson("/purchasing/orders/{$orderId}/short-closures", [
+            'short_closed_at' => '2026-02-21 10:00:00',
+            'reference' => 'SC-55',
+            'notes' => 'Short close notes',
+            'purchase_order_line_id' => $line->id,
+            'short_closed_quantity' => '3.000000',
+        ])->assertCreated();
+
+    $response = $this->actingAs($user)->get("/purchasing/orders/{$orderId}")->assertOk();
+    $payload = ($this->extractPayload)($response, 'purchasing-orders-show-payload');
+
+    $shortClosures = $payload['shortClosures'] ?? [];
+    expect($shortClosures)->toHaveCount(1);
+
+    $entry = $shortClosures[0] ?? [];
+    expect($entry['reference'] ?? null)->toBe('SC-55');
+    expect($entry['notes'] ?? null)->toBe('Short close notes');
+    expect($entry['lines_count'] ?? null)->toBe(1);
+    expect($entry['total_packs'] ?? null)->toBe('3.000000');
+    expect($entry['short_closed_at'] ?? null)->toBe('2026-02-21 10:00:00');
+    expect($entry['short_closed_by'] ?? null)->toBe($user->name);
+});
+
+it('shows updated status in show payload after short-close event', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermission)($user, 'purchasing-purchase-orders-create');
+    ($this->grantPermission)($user, 'purchasing-purchase-orders-receive');
+
+    $uom = ($this->makeUom)($tenant);
+    $supplier = ($this->makeSupplier)($tenant);
+    $item = ($this->makeItem)($tenant, $uom);
+    $option = ($this->makeOption)($tenant, $supplier, $item, $uom);
+
+    $orderResponse = ($this->createOrder)($user, [
+        'supplier_id' => $supplier->id,
+        'order_date' => '2026-02-25',
+    ])->assertCreated();
+
+    $orderId = (int) ($orderResponse->json('data.id') ?? 0);
+
+    ($this->addLine)($user, $orderId, [
+        'item_purchase_option_id' => $option->id,
+        'pack_count' => 2,
+        'unit_price_cents' => 120,
+    ])->assertCreated();
+
+    $this->actingAs($user)
+        ->patchJson("/purchasing/orders/{$orderId}/status", ['status' => 'OPEN'])
+        ->assertOk();
+
+    $line = DB::table('purchase_order_lines')->where('purchase_order_id', $orderId)->first();
+
+    $this->actingAs($user)
+        ->postJson("/purchasing/orders/{$orderId}/short-closures", [
+            'short_closed_at' => '2026-02-25 10:15:00',
+            'purchase_order_line_id' => $line->id,
+            'short_closed_quantity' => '2.000000',
+        ])->assertCreated();
+
+    $response = $this->actingAs($user)->get("/purchasing/orders/{$orderId}")->assertOk();
+    $payload = ($this->extractPayload)($response, 'purchasing-orders-show-payload');
+
+    $order = $payload['order']
+        ?? $payload['purchaseOrder']
+        ?? $payload['purchase_order']
+        ?? [];
+
+    expect($order['status'] ?? null)->toBe('SHORT-CLOSED');
+});
+
+it('shows received and short-closed sums in line payload after events', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermission)($user, 'purchasing-purchase-orders-create');
+    ($this->grantPermission)($user, 'purchasing-purchase-orders-receive');
+
+    $uom = ($this->makeUom)($tenant);
+    $supplier = ($this->makeSupplier)($tenant);
+    $item = ($this->makeItem)($tenant, $uom);
+    $option = ($this->makeOption)($tenant, $supplier, $item, $uom);
+
+    $orderResponse = ($this->createOrder)($user, [
+        'supplier_id' => $supplier->id,
+        'order_date' => '2026-02-22',
+    ])->assertCreated();
+
+    $orderId = (int) ($orderResponse->json('data.id') ?? 0);
+
+    DB::table('purchase_orders')
+        ->where('id', $orderId)
+        ->update(['status' => 'OPEN']);
+
+    ($this->addLine)($user, $orderId, [
+        'item_purchase_option_id' => $option->id,
+        'pack_count' => 10,
+        'unit_price_cents' => 100,
+    ])->assertCreated();
+
+    $line = DB::table('purchase_order_lines')->where('purchase_order_id', $orderId)->first();
+
+    $this->actingAs($user)
+        ->postJson("/purchasing/orders/{$orderId}/receipts", [
+            'received_at' => '2026-02-22 09:00:00',
+            'purchase_order_line_id' => $line->id,
+            'received_quantity' => '4.000000',
+        ])->assertCreated();
+
+    $this->actingAs($user)
+        ->postJson("/purchasing/orders/{$orderId}/short-closures", [
+            'short_closed_at' => '2026-02-22 09:30:00',
+            'purchase_order_line_id' => $line->id,
+            'short_closed_quantity' => '2.000000',
+        ])->assertCreated();
+
+    $response = $this->actingAs($user)->get("/purchasing/orders/{$orderId}")->assertOk();
+    $payload = ($this->extractPayload)($response, 'purchasing-orders-show-payload');
+
+    $lines = $payload['lines']
+        ?? $payload['order_lines']
+        ?? $payload['purchaseOrderLines']
+        ?? [];
+
+    $linePayload = $lines[0] ?? [];
+    expect($linePayload['received_sum'] ?? null)->toBe('4.000000');
+    expect($linePayload['short_closed_sum'] ?? null)->toBe('2.000000');
+    expect($linePayload['remaining_balance'] ?? null)->toBe('4.000000');
+});
+
+it('shows remaining balance after multiple receipts in line payload', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermission)($user, 'purchasing-purchase-orders-create');
+    ($this->grantPermission)($user, 'purchasing-purchase-orders-receive');
+
+    $uom = ($this->makeUom)($tenant);
+    $supplier = ($this->makeSupplier)($tenant);
+    $item = ($this->makeItem)($tenant, $uom);
+    $option = ($this->makeOption)($tenant, $supplier, $item, $uom);
+
+    $orderResponse = ($this->createOrder)($user, [
+        'supplier_id' => $supplier->id,
+        'order_date' => '2026-02-24',
+    ])->assertCreated();
+
+    $orderId = (int) ($orderResponse->json('data.id') ?? 0);
+
+    ($this->addLine)($user, $orderId, [
+        'item_purchase_option_id' => $option->id,
+        'pack_count' => 10,
+        'unit_price_cents' => 100,
+    ])->assertCreated();
+
+    $this->actingAs($user)
+        ->patchJson("/purchasing/orders/{$orderId}/status", ['status' => 'OPEN'])
+        ->assertOk();
+
+    $line = DB::table('purchase_order_lines')->where('purchase_order_id', $orderId)->first();
+
+    $this->actingAs($user)
+        ->postJson("/purchasing/orders/{$orderId}/receipts", [
+            'received_at' => '2026-02-24 09:00:00',
+            'purchase_order_line_id' => $line->id,
+            'received_quantity' => '3.000000',
+        ])->assertCreated();
+
+    $this->actingAs($user)
+        ->postJson("/purchasing/orders/{$orderId}/receipts", [
+            'received_at' => '2026-02-24 10:00:00',
+            'purchase_order_line_id' => $line->id,
+            'received_quantity' => '2.000000',
+        ])->assertCreated();
+
+    $response = $this->actingAs($user)->get("/purchasing/orders/{$orderId}")->assertOk();
+    $payload = ($this->extractPayload)($response, 'purchasing-orders-show-payload');
+
+    $lines = $payload['lines']
+        ?? $payload['order_lines']
+        ?? $payload['purchaseOrderLines']
+        ?? [];
+
+    $linePayload = $lines[0] ?? [];
+    expect($linePayload['received_sum'] ?? null)->toBe('5.000000');
+    expect($linePayload['remaining_balance'] ?? null)->toBe('5.000000');
 });

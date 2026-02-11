@@ -2,6 +2,7 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
@@ -16,7 +17,11 @@ return new class extends Migration
             $table->foreignId('tenant_id')->constrained()->cascadeOnDelete();
             $table->foreignId('item_id')->constrained()->cascadeOnDelete();
             $table->foreignId('uom_id')->constrained('uoms')->cascadeOnDelete();
-            $table->decimal('quantity', 18, 6);
+            if (DB::getDriverName() === 'sqlite') {
+                $table->text('quantity');
+            } else {
+                $table->decimal('quantity', 18, 6);
+            }
             $table->enum('type', ['receipt', 'issue', 'adjustment', 'inventory_count_adjustment']);
             $table->nullableMorphs('source');
             $table->timestamp('created_at')->useCurrent();

@@ -626,6 +626,231 @@ To move out of DRAFT (future PR):
 
 ---
 
+### PR2-PUR-005 — Purchase Order Lifecycle & Receiving
+
+Goal
+
+Introduce full Purchase Order lifecycle beyond DRAFT and implement industry-standard receiving with:
+
+Line-level receipts
+
+Receipt history (header + lines)
+
+Automatic inventory impact (stock_moves)
+
+Status transitions derived from receipts
+
+Manual lifecycle controls where appropriate
+
+This PR turns Purchase Orders from a pricing document into a true operational document.
+
+Purchase Order Statuses
+
+DRAFT
+
+OPEN
+
+PARTIALLY-RECEIVED
+
+RECEIVED
+
+BACK-ORDERED
+
+SHORT-CLOSED
+
+CANCELLED
+
+Terminal States
+
+RECEIVED
+
+SHORT-CLOSED
+
+CANCELLED
+
+Receiving is not allowed in terminal states.
+
+Status Transition Rules (Industry Standard)
+
+DRAFT → OPEN (manual)
+
+OPEN → CANCELLED (only if no receipts exist)
+
+OPEN → BACK-ORDERED (manual)
+
+BACK-ORDERED → OPEN (manual)
+
+OPEN → PARTIALLY-RECEIVED (automatic after first receipt)
+
+BACK-ORDERED → PARTIALLY-RECEIVED (automatic after receipt)
+
+PARTIALLY-RECEIVED → RECEIVED (automatic when fully received)
+
+PARTIALLY-RECEIVED → SHORT-CLOSED (manual when remaining qty is short-closed)
+
+Receiving Model (Core of This PR)
+
+Receiving is event-based, not status-based.
+
+New Table — purchase_order_receipts (header)
+
+id (PK)
+
+tenant_id (FK)
+
+purchase_order_id (FK)
+
+received_at (datetime)
+
+received_by_user_id (FK → users)
+
+reference (nullable)
+
+notes (nullable)
+
+New Table — purchase_order_receipt_lines
+
+id (PK)
+
+tenant_id (FK)
+
+purchase_order_receipt_id (FK)
+
+purchase_order_line_id (FK)
+
+received_quantity (BCMath string, canonical scale)
+
+Inventory Impact
+
+Each receipt line must create:
+
+stock_moves.type = RECEIPT
+
+stock_moves.status = POSTED
+
+Receipts exist for audit trail.
+Stock moves exist for inventory truth.
+
+Short-Close Model
+
+Short-close is line-level.
+
+Users record the remaining quantity that will never be received.
+
+When all remaining quantities are either:
+
+Received
+
+Short-closed
+
+The PO becomes SHORT-CLOSED.
+
+Permissions
+
+New permission slug:
+
+purchasing-purchase-orders-receive
+
+This permission controls:
+
+Receiving
+
+Short-closing
+
+Status changes beyond DRAFT and OPEN
+
+UI Requirements
+PO Index
+
+Show status column
+
+Row actions menu includes:
+
+View
+
+Receive (opens slide-over)
+
+Contextual status actions
+
+PO Show Page
+
+Status control (dropdown/actions)
+
+“Receive” button at PO level (multi-line)
+
+“Receive” button per line (single-line)
+
+Slide-over receive panel (AJAX)
+
+Receiving UX Rules
+Action Behavior
+Receive from PO Multi-line receipt
+Receive from line Single-line receipt
+Submit receipt Creates receipt + stock moves + auto status update
+Validation 422 JSON, no page refresh
+
+Receiving allowed only when status is:
+
+OPEN
+
+BACK-ORDERED
+
+PARTIALLY-RECEIVED
+
+Cancellation Rule
+
+Allowed only if no receipts exist
+
+After receiving begins, user must short-close instead
+
+AJAX / Controller Pattern
+
+All endpoints are JSON-only and must follow the Ajax CRUD pattern:
+
+Receive
+
+Short-close
+
+Status change
+
+No redirects. No page refresh.
+
+Tests (Pest Feature)
+
+Tests must cover:
+
+All status transitions (allow + deny)
+
+Receiving rules
+
+Stock move creation
+
+Cancel prevention after receipt
+
+Short-close rules
+
+Permission allow/deny
+
+Terminal state protections
+
+Minimum 20 tests per file.
+
+Documentation Impact
+
+This PR requires updates to:
+
+ENUMS.md (PO statuses)
+
+DB_SCHEMA.md (receipt tables)
+
+ARCHITECTURE_INVENTORY.md (Receipt + Lifecycle patterns)
+
+Architecture YAML files for:
+
+PO Lifecycle
+
+## Receipt Event Pattern
+
 ## DOMAIN 5 — Shared UI Infrastructure (As Needed)
 
 > Created **only when duplication appears**.

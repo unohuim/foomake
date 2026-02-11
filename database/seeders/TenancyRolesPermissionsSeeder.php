@@ -32,6 +32,7 @@ class TenancyRolesPermissionsSeeder extends Seeder
             'purchasing-purchase-orders-create',
             'purchasing-purchase-orders-update',
             'purchasing-purchase-orders-manage',
+            'purchasing-purchase-orders-receive',
             'purchasing-receiving-view',
             'purchasing-receiving-execute',
         ];

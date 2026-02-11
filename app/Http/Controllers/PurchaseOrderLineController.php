@@ -29,9 +29,9 @@ class PurchaseOrderLineController extends Controller
             ->where('tenant_id', $request->user()->tenant_id)
             ->findOrFail($purchaseOrderId);
 
-        if ($purchaseOrder->status !== PurchaseOrder::STATUS_DRAFT) {
+        if (! in_array($purchaseOrder->status, [PurchaseOrder::STATUS_DRAFT, PurchaseOrder::STATUS_OPEN], true)) {
             return response()->json([
-                'message' => 'Only draft purchase orders can be edited.',
+                'message' => 'Only draft or open purchase orders can be edited.',
             ], 422);
         }
 
@@ -102,7 +102,7 @@ class PurchaseOrderLineController extends Controller
                 ->lockForUpdate()
                 ->findOrFail($purchaseOrder->id);
 
-            if ($lockedOrder->status !== PurchaseOrder::STATUS_DRAFT) {
+            if (! in_array($lockedOrder->status, [PurchaseOrder::STATUS_DRAFT, PurchaseOrder::STATUS_OPEN], true)) {
                 return;
             }
 
@@ -127,7 +127,7 @@ class PurchaseOrderLineController extends Controller
 
         if (! $createdLine || ! $updatedOrder) {
             return response()->json([
-                'message' => 'Only draft purchase orders can be edited.',
+                'message' => 'Only draft or open purchase orders can be edited.',
             ], 422);
         }
 
@@ -279,18 +279,22 @@ class PurchaseOrderLineController extends Controller
     private function linePayload(PurchaseOrderLine $line, string $tenantCurrency): array
     {
         $option = $line->purchaseOption;
+        $packCount = bcadd((string) $line->pack_count, '0', 6);
 
         return [
             'id' => $line->id,
             'item_id' => $line->item_id,
             'item_name' => $line->item?->name,
             'item_purchase_option_id' => $line->item_purchase_option_id,
-            'pack_count' => $line->pack_count,
+            'pack_count' => $packCount,
             'unit_price_cents' => $line->unit_price_cents,
             'line_subtotal_cents' => $line->line_subtotal_cents,
             'pack_quantity' => $option ? bcadd((string) $option->pack_quantity, '0', 6) : null,
             'pack_uom_symbol' => $option?->packUom?->symbol,
             'pack_uom_name' => $option?->packUom?->name,
+            'received_sum' => '0.000000',
+            'short_closed_sum' => '0.000000',
+            'remaining_balance' => $packCount,
             'currency_code' => $tenantCurrency,
         ];
     }

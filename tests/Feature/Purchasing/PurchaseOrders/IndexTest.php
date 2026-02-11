@@ -12,6 +12,7 @@ use App\Models\Uom;
 use App\Models\UomCategory;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 
 uses(RefreshDatabase::class);
 
@@ -119,6 +120,14 @@ beforeEach(function () {
 
     $this->addLine = function (User $user, int $orderId, array $payload = []) {
         return $this->actingAs($user)->postJson("/purchasing/orders/{$orderId}/lines", $payload);
+    };
+
+    $this->updateStatus = function (User $user, int $orderId, array $payload = []) {
+        return $this->actingAs($user)->patchJson("/purchasing/orders/{$orderId}/status", $payload);
+    };
+
+    $this->postReceipt = function (User $user, int $orderId, array $payload = []) {
+        return $this->actingAs($user)->postJson("/purchasing/orders/{$orderId}/receipts", $payload);
     };
 
     $this->extractPayload = function ($response, string $payloadId): array {
@@ -566,4 +575,97 @@ it('index includes orders created with shipping only', function () {
     $this->actingAs($user)
         ->get('/purchasing/orders')
         ->assertOk();
+});
+
+it('index reflects updated status after receipt event', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermission)($user, 'purchasing-purchase-orders-create');
+    ($this->grantPermission)($user, 'purchasing-purchase-orders-receive');
+
+    $uom = ($this->makeUom)($tenant);
+    $supplier = ($this->makeSupplier)($tenant, ['company_name' => 'Status Supplier']);
+    $item = ($this->makeItem)($tenant, $uom);
+    $option = ($this->makeOption)($tenant, $supplier, $item, $uom);
+
+    $orderResponse = ($this->createOrder)($user, [
+        'supplier_id' => $supplier->id,
+        'order_date' => '2026-02-20',
+    ])->assertCreated();
+
+    $orderId = (int) ($orderResponse->json('data.id') ?? 0);
+
+    ($this->addLine)($user, $orderId, [
+        'item_purchase_option_id' => $option->id,
+        'pack_count' => 2,
+        'unit_price_cents' => 100,
+    ])->assertCreated();
+
+    ($this->updateStatus)($user, $orderId, ['status' => 'OPEN'])
+        ->assertOk();
+
+    $line = DB::table('purchase_order_lines')->where('purchase_order_id', $orderId)->first();
+
+    ($this->postReceipt)($user, $orderId, [
+        'received_at' => '2026-02-20 08:00:00',
+        'purchase_order_line_id' => $line->id,
+        'received_quantity' => '1.000000',
+    ])->assertCreated();
+
+    $response = $this->actingAs($user)->get('/purchasing/orders')->assertOk();
+    $payload = ($this->extractPayload)($response, 'purchasing-orders-index-payload');
+
+    $orders = $payload['orders'] ?? $payload['purchase_orders'] ?? [];
+    $orderData = collect($orders)->firstWhere('id', $orderId);
+
+    expect($orderData)->not->toBeNull();
+    expect($orderData['status'] ?? null)->toBe('PARTIALLY-RECEIVED');
+});
+
+it('index reflects short-closed status after short-close event', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermission)($user, 'purchasing-purchase-orders-create');
+    ($this->grantPermission)($user, 'purchasing-purchase-orders-receive');
+
+    $uom = ($this->makeUom)($tenant);
+    $supplier = ($this->makeSupplier)($tenant, ['company_name' => 'Short Close Supplier']);
+    $item = ($this->makeItem)($tenant, $uom);
+    $option = ($this->makeOption)($tenant, $supplier, $item, $uom);
+
+    $orderResponse = ($this->createOrder)($user, [
+        'supplier_id' => $supplier->id,
+        'order_date' => '2026-02-21',
+    ])->assertCreated();
+
+    $orderId = (int) ($orderResponse->json('data.id') ?? 0);
+
+    ($this->addLine)($user, $orderId, [
+        'item_purchase_option_id' => $option->id,
+        'pack_count' => 2,
+        'unit_price_cents' => 100,
+    ])->assertCreated();
+
+    ($this->updateStatus)($user, $orderId, ['status' => 'OPEN'])
+        ->assertOk();
+
+    $line = DB::table('purchase_order_lines')->where('purchase_order_id', $orderId)->first();
+
+    $this->actingAs($user)
+        ->postJson("/purchasing/orders/{$orderId}/short-closures", [
+            'short_closed_at' => '2026-02-21 08:30:00',
+            'purchase_order_line_id' => $line->id,
+            'short_closed_quantity' => '2.000000',
+        ])->assertCreated();
+
+    $response = $this->actingAs($user)->get('/purchasing/orders')->assertOk();
+    $payload = ($this->extractPayload)($response, 'purchasing-orders-index-payload');
+
+    $orders = $payload['orders'] ?? $payload['purchase_orders'] ?? [];
+    $orderData = collect($orders)->firstWhere('id', $orderId);
+
+    expect($orderData)->not->toBeNull();
+    expect($orderData['status'] ?? null)->toBe('SHORT-CLOSED');
 });

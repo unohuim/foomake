@@ -9,6 +9,9 @@ use App\Http\Controllers\MaterialController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\PurchaseOrderController;
 use App\Http\Controllers\PurchaseOrderLineController;
+use App\Http\Controllers\PurchaseOrderReceiptController;
+use App\Http\Controllers\PurchaseOrderShortClosureController;
+use App\Http\Controllers\PurchaseOrderStatusController;
 use App\Http\Controllers\RecipeController;
 use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\SupplierPurchaseOptionController;
@@ -139,6 +142,12 @@ Route::middleware('auth')->group(function () {
     Route::put('/purchasing/orders/{purchaseOrder}', [PurchaseOrderController::class, 'update']);
     Route::delete('/purchasing/orders/{purchaseOrderId}', [PurchaseOrderController::class, 'destroy'])
         ->name('purchasing.orders.destroy');
+    Route::patch('/purchasing/orders/{purchaseOrder}/status', [PurchaseOrderStatusController::class, 'update'])
+        ->name('purchasing.orders.status.update');
+    Route::post('/purchasing/orders/{purchaseOrder}/receipts', [PurchaseOrderReceiptController::class, 'store'])
+        ->name('purchasing.orders.receipts.store');
+    Route::post('/purchasing/orders/{purchaseOrder}/short-closures', [PurchaseOrderShortClosureController::class, 'store'])
+        ->name('purchasing.orders.short-closures.store');
 
     Route::post('/purchasing/orders/{purchaseOrderId}/lines', [PurchaseOrderLineController::class, 'store'])
         ->name('purchasing.orders.lines.store');

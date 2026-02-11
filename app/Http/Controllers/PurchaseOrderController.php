@@ -6,6 +6,7 @@ use App\Models\ItemPurchaseOption;
 use App\Models\PurchaseOrder;
 use App\Models\PurchaseOrderLine;
 use App\Models\Supplier;
+use App\Services\Purchasing\PurchaseOrderLifecycleService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -22,12 +23,15 @@ class PurchaseOrderController extends Controller
     /**
      * Display the purchase orders index.
      */
-    public function index(Request $request): View
+    public function index(Request $request, PurchaseOrderLifecycleService $lifecycleService): View
     {
         Gate::authorize('purchasing-purchase-orders-create');
 
         $purchaseOrders = PurchaseOrder::query()
             ->with('supplier')
+            ->with('lines')
+            ->with('lines.item')
+            ->with('lines.purchaseOption.packUom')
             ->withCount('lines')
             ->orderByDesc('created_at')
             ->get();
@@ -36,9 +40,19 @@ class PurchaseOrderController extends Controller
             (string) ($request->user()?->tenant?->currency_code ?: config('app.currency_code', 'USD'))
         );
 
+        $canReceive = Gate::allows('purchasing-purchase-orders-receive');
+
+        $lineTotalsByOrder = [];
+
+        foreach ($purchaseOrders as $purchaseOrder) {
+            $lineTotalsByOrder[$purchaseOrder->id] = $lifecycleService->computeLineTotals($purchaseOrder);
+        }
+
         return view('purchasing.orders.index', [
             'purchaseOrders' => $purchaseOrders,
             'tenantCurrency' => $tenantCurrency,
+            'canReceive' => $canReceive,
+            'lineTotalsByOrder' => $lineTotalsByOrder,
         ]);
     }
 
@@ -89,7 +103,11 @@ class PurchaseOrderController extends Controller
     /**
      * Display a purchase order detail page.
      */
-    public function show(Request $request, PurchaseOrder $purchaseOrder): View
+    public function show(
+        Request $request,
+        PurchaseOrder $purchaseOrder,
+        PurchaseOrderLifecycleService $lifecycleService
+    ): View
     {
         Gate::authorize('purchasing-purchase-orders-create');
 
@@ -98,6 +116,12 @@ class PurchaseOrderController extends Controller
             'lines',
             'lines.item',
             'lines.purchaseOption.packUom',
+            'receipts',
+            'receipts.lines',
+            'receipts.receivedByUser',
+            'shortClosures',
+            'shortClosures.lines',
+            'shortClosures.shortClosedByUser',
         ]);
 
         $tenantCurrency = strtoupper(
@@ -114,10 +138,13 @@ class PurchaseOrderController extends Controller
             ->orderBy('id')
             ->get();
 
+        $lineTotals = $lifecycleService->computeLineTotals($purchaseOrder);
+        $canReceive = Gate::allows('purchasing-purchase-orders-receive');
+
         $payload = [
             'purchaseOrder' => $this->purchaseOrderPayload($purchaseOrder),
-            'lines' => $purchaseOrder->lines->map(function (PurchaseOrderLine $line) use ($tenantCurrency) {
-                return $this->linePayload($line, $tenantCurrency);
+            'lines' => $purchaseOrder->lines->map(function (PurchaseOrderLine $line) use ($tenantCurrency, $lineTotals) {
+                return $this->linePayload($line, $tenantCurrency, $lineTotals[$line->id] ?? []);
             })->values()->all(),
             'suppliers' => $suppliers->map(function (Supplier $supplier) {
                 return [
@@ -140,13 +167,20 @@ class PurchaseOrderController extends Controller
                     'currency_code' => $tenantCurrency,
                 ];
             })->values()->all(),
+            'receipts' => $this->receiptHistoryPayload($purchaseOrder),
+            'shortClosures' => $this->shortClosureHistoryPayload($purchaseOrder),
             'tenantCurrency' => $tenantCurrency,
             'updateUrl' => route('purchasing.orders.update', $purchaseOrder),
             'deleteUrl' => route('purchasing.orders.destroy', $purchaseOrder),
             'lineStoreUrl' => route('purchasing.orders.lines.store', $purchaseOrder),
             'lineUpdateUrlBase' => url("/purchasing/orders/{$purchaseOrder->id}/lines"),
             'lineDeleteUrlBase' => url("/purchasing/orders/{$purchaseOrder->id}/lines"),
+            'receiptStoreUrl' => route('purchasing.orders.receipts.store', $purchaseOrder),
+            'shortCloseStoreUrl' => route('purchasing.orders.short-closures.store', $purchaseOrder),
+            'statusUpdateUrl' => route('purchasing.orders.status.update', $purchaseOrder),
             'indexUrl' => route('purchasing.orders.index'),
+            'canReceive' => $canReceive,
+            'currentUserName' => $request->user()?->name,
             'csrfToken' => csrf_token(),
         ];
 
@@ -288,23 +322,86 @@ class PurchaseOrderController extends Controller
     /**
      * Build line payloads for the UI.
      */
-    private function linePayload(PurchaseOrderLine $line, string $tenantCurrency): array
+    private function linePayload(PurchaseOrderLine $line, string $tenantCurrency, array $lineTotals = []): array
     {
         $option = $line->purchaseOption;
+        $packCount = bcadd((string) $line->pack_count, '0', 6);
+        $receivedSum = $lineTotals['received_sum'] ?? '0.000000';
+        $shortClosedSum = $lineTotals['short_closed_sum'] ?? '0.000000';
+        $balance = $lineTotals['balance'] ?? $packCount;
 
         return [
             'id' => $line->id,
             'item_id' => $line->item_id,
             'item_name' => $line->item?->name,
             'item_purchase_option_id' => $line->item_purchase_option_id,
-            'pack_count' => $line->pack_count,
+            'pack_count' => $packCount,
             'unit_price_cents' => $line->unit_price_cents,
             'line_subtotal_cents' => $line->line_subtotal_cents,
             'pack_quantity' => $option ? bcadd((string) $option->pack_quantity, '0', 6) : null,
             'pack_uom_symbol' => $option?->packUom?->symbol,
             'pack_uom_name' => $option?->packUom?->name,
+            'received_sum' => $receivedSum,
+            'short_closed_sum' => $shortClosedSum,
+            'remaining_balance' => $balance,
             'currency_code' => $tenantCurrency,
         ];
+    }
+
+    /**
+     * Build receipt history payloads for the UI.
+     */
+    private function receiptHistoryPayload(PurchaseOrder $purchaseOrder): array
+    {
+        return $purchaseOrder->receipts
+            ->sortByDesc('received_at')
+            ->map(function ($receipt) {
+                $total = '0.000000';
+
+                foreach ($receipt->lines as $line) {
+                    $total = bcadd($total, (string) $line->received_quantity, 6);
+                }
+
+                return [
+                    'id' => $receipt->id,
+                    'received_at' => $receipt->received_at?->format('Y-m-d H:i:s'),
+                    'received_by' => $receipt->receivedByUser?->name,
+                    'reference' => $receipt->reference,
+                    'notes' => $receipt->notes,
+                    'lines_count' => $receipt->lines->count(),
+                    'total_packs' => $total,
+                ];
+            })
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Build short-close history payloads for the UI.
+     */
+    private function shortClosureHistoryPayload(PurchaseOrder $purchaseOrder): array
+    {
+        return $purchaseOrder->shortClosures
+            ->sortByDesc('short_closed_at')
+            ->map(function ($shortClosure) {
+                $total = '0.000000';
+
+                foreach ($shortClosure->lines as $line) {
+                    $total = bcadd($total, (string) $line->short_closed_quantity, 6);
+                }
+
+                return [
+                    'id' => $shortClosure->id,
+                    'short_closed_at' => $shortClosure->short_closed_at?->format('Y-m-d H:i:s'),
+                    'short_closed_by' => $shortClosure->shortClosedByUser?->name,
+                    'reference' => $shortClosure->reference,
+                    'notes' => $shortClosure->notes,
+                    'lines_count' => $shortClosure->lines->count(),
+                    'total_packs' => $total,
+                ];
+            })
+            ->values()
+            ->all();
     }
 
     /**

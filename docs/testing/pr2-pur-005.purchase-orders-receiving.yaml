@@ -1,0 +1,56 @@
+pr_id: PR2-PUR-005
+pr_name: Purchase Order Lifecycle & Receiving
+goal: >
+  Implement purchase order lifecycle transitions beyond draft,
+  enable receiving and short-close events, and reflect history
+  and status changes in UI and stock moves.
+endpoints_in_scope:
+  - method: POST
+    path: /purchasing/orders/{purchaseOrder}/receipts
+  - method: POST
+    path: /purchasing/orders/{purchaseOrder}/short-closures
+  - method: PATCH
+    path: /purchasing/orders/{purchaseOrder}/status
+  - method: GET
+    path: /purchasing/orders
+  - method: GET
+    path: /purchasing/orders/{purchaseOrder}
+permissions:
+  purchase_orders_create:
+    slug: purchasing-purchase-orders-create
+    applies_to:
+      - GET /purchasing/orders
+      - GET /purchasing/orders/{purchaseOrder}
+  purchase_orders_receive:
+    slug: purchasing-purchase-orders-receive
+    applies_to:
+      - POST /purchasing/orders/{purchaseOrder}/receipts
+      - POST /purchasing/orders/{purchaseOrder}/short-closures
+      - PATCH /purchasing/orders/{purchaseOrder}/status
+tenancy_rules:
+  - Tenant-owned purchase orders, lines, receipts, short-closures, and stock moves
+    must be inaccessible cross-tenant and return 404 when scoped.
+behaviors_and_decisions:
+  - Receiving allowed only in OPEN, BACK-ORDERED, PARTIALLY-RECEIVED
+  - Cancel allowed only from OPEN when no receipt events exist
+  - Manual transitions allowed: DRAFT->OPEN, OPEN<->BACK-ORDERED, OPEN->CANCELLED
+  - Derived transitions after events follow precedence rules
+  - Receipt creates stock_moves with type=RECEIPT and status=POSTED
+  - Short-close creates no stock_moves
+  - Validation: quantity > 0, per-line received + short_closed <= pack_count
+out_of_scope:
+  - UI for draft-only edits beyond existing behavior
+  - Non-purchasing inventory adjustments
+minimum_coverage_matrix_ids:
+  - A
+  - B
+  - C
+  - D
+  - E
+numbered_requirements:
+  - R1: Permission enforcement for create vs receive gates across endpoints.
+  - R2: Status transitions enforce allowed/denied matrix and cancel rule.
+  - R3: Receipt creation persists headers, lines, and stock moves.
+  - R4: Short-close creation persists headers and lines without stock moves.
+  - R5: Derived status precedence logic after receipts/short-closures.
+  - R6: Validation errors include nested lines keys with stable shape.

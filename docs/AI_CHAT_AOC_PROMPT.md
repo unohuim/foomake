@@ -34,7 +34,8 @@ Anything not listed here is **not assumed**.
 
 ### Next Question
 
-Ask **exactly one** question that will increase certainty in any AOC that is <95%.
+Ask **exactly one** question that will increase certainty in any AOC that is <95%.  
+Every time you ask a question, also beneath that question provide what industry best practice does for that question.
 
 Do not ask multiple questions.  
 Do not plan.  

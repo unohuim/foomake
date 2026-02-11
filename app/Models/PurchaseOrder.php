@@ -28,10 +28,11 @@ class PurchaseOrder extends Model
 
     public const STATUS_DRAFT = 'DRAFT';
     public const STATUS_OPEN = 'OPEN';
+    public const STATUS_PARTIALLY_RECEIVED = 'PARTIALLY-RECEIVED';
     public const STATUS_RECEIVED = 'RECEIVED';
-    public const STATUS_SHORT_CLOSED = 'SHORT CLOSED';
+    public const STATUS_BACK_ORDERED = 'BACK-ORDERED';
+    public const STATUS_SHORT_CLOSED = 'SHORT-CLOSED';
     public const STATUS_CANCELLED = 'CANCELLED';
-    public const STATUS_BACKORDERED = 'BACKORDERED';
 
     protected $guarded = [];
 
@@ -72,5 +73,21 @@ class PurchaseOrder extends Model
     public function lines(): HasMany
     {
         return $this->hasMany(PurchaseOrderLine::class);
+    }
+
+    /**
+     * @return HasMany
+     */
+    public function receipts(): HasMany
+    {
+        return $this->hasMany(PurchaseOrderReceipt::class);
+    }
+
+    /**
+     * @return HasMany
+     */
+    public function shortClosures(): HasMany
+    {
+        return $this->hasMany(PurchaseOrderShortClosure::class);
     }
 }

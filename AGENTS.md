@@ -13,7 +13,6 @@ Before proposing a plan or writing any files, Codex MUST read and treat the foll
 
 - README.md
 - docs/AI_RULES.md
-- docs/AI_CODEX_BOOTSTRAP.md
 - docs/CONVENTIONS.md
 - docs/PR2_ROADMAP.md
 - docs/ENUMS.md

@@ -24,11 +24,61 @@ export function mount(rootEl, payload) {
         unit_price_cents: [],
     });
 
+    const emptyReceiveErrors = () => ({
+        received_at: [],
+        reference: [],
+        notes: [],
+        lines: [],
+    });
+
+    const emptyShortCloseErrors = () => ({
+        short_closed_at: [],
+        reference: [],
+        notes: [],
+        short_closed_quantity: [],
+    });
+
+    const normalizeDecimal = (value) => {
+        const raw = value === null || value === undefined ? '' : String(value).trim();
+        if (raw === '') {
+            return '0.000000';
+        }
+
+        const parts = raw.split('.');
+        const whole = parts[0] === '' ? '0' : parts[0];
+        const fraction = (parts[1] || '').padEnd(6, '0').slice(0, 6);
+
+        return `${whole}.${fraction}`;
+    };
+
+    const toMicro = (value) => {
+        const normalized = normalizeDecimal(value);
+        const parts = normalized.split('.');
+        const whole = parts[0];
+        const fraction = parts[1] || '000000';
+
+        return BigInt(whole) * 1000000n + BigInt(fraction);
+    };
+
+    const fromMicro = (value) => {
+        const sign = value < 0n;
+        const abs = sign ? -value : value;
+        const whole = abs / 1000000n;
+        const fraction = abs % 1000000n;
+
+        return `${sign ? '-' : ''}${whole.toString()}.${fraction.toString().padStart(6, '0')}`;
+    };
+
+    const subtractDecimal = (left, right) => fromMicro(toMicro(left) - toMicro(right));
+    const addDecimal = (left, right) => fromMicro(toMicro(left) + toMicro(right));
+
     Alpine.data('purchasingOrdersShow', () => ({
         purchaseOrder: safePayload.purchaseOrder || {},
         lines: safePayload.lines || [],
         suppliers: safePayload.suppliers || [],
         purchaseOptions: safePayload.purchaseOptions || [],
+        receipts: safePayload.receipts || [],
+        shortClosures: safePayload.shortClosures || [],
         tenantCurrency: safePayload.tenantCurrency || 'USD',
         updateUrl: safePayload.updateUrl || '',
         deleteUrl: safePayload.deleteUrl || '',
@@ -36,6 +86,11 @@ export function mount(rootEl, payload) {
         lineStoreUrl: safePayload.lineStoreUrl || '',
         lineUpdateUrlBase: safePayload.lineUpdateUrlBase || '',
         lineDeleteUrlBase: safePayload.lineDeleteUrlBase || '',
+        receiptStoreUrl: safePayload.receiptStoreUrl || '',
+        shortCloseStoreUrl: safePayload.shortCloseStoreUrl || '',
+        statusUpdateUrl: safePayload.statusUpdateUrl || '',
+        canReceive: safePayload.canReceive || false,
+        currentUserName: safePayload.currentUserName || '',
         csrfToken: safePayload.csrfToken || '',
         isEditable: (safePayload.purchaseOrder?.status || '') === 'DRAFT',
         isHeaderSubmitting: false,
@@ -59,6 +114,30 @@ export function mount(rootEl, payload) {
         isDeleteOrderOpen: false,
         isDeleteOrderSubmitting: false,
         deleteOrderError: '',
+        isReceiveOpen: false,
+        receiveForm: {
+            received_at: '',
+            reference: '',
+            notes: '',
+            lines: [],
+        },
+        receiveErrors: emptyReceiveErrors(),
+        receiveLineErrors: {},
+        receiveError: '',
+        isReceiveSubmitting: false,
+        isShortCloseOpen: false,
+        shortCloseForm: {
+            short_closed_at: '',
+            reference: '',
+            notes: '',
+            purchase_order_line_id: null,
+            short_closed_quantity: '',
+        },
+        shortCloseLineLabel: '',
+        shortCloseErrors: emptyShortCloseErrors(),
+        shortCloseError: '',
+        isShortCloseSubmitting: false,
+        statusError: '',
         toast: {
             visible: false,
             message: '',
@@ -163,6 +242,18 @@ export function mount(rootEl, payload) {
                 .filter((option) => option.item_id === itemId)
                 .map((option) => this.decorateOption(option));
         },
+        get canReceiveOrder() {
+            return ['OPEN', 'BACK-ORDERED', 'PARTIALLY-RECEIVED'].includes(this.purchaseOrder.status);
+        },
+        get canOpenOrder() {
+            return ['DRAFT', 'BACK-ORDERED'].includes(this.purchaseOrder.status);
+        },
+        get canBackOrder() {
+            return this.purchaseOrder.status === 'OPEN';
+        },
+        get canCancelOrder() {
+            return this.purchaseOrder.status === 'OPEN';
+        },
         decorateOption(option) {
             const quantity = this.formatQuantity(option.pack_quantity);
             const uom = option.pack_uom_symbol || option.pack_uom_name || 'pack';
@@ -209,7 +300,8 @@ export function mount(rootEl, payload) {
         lineSummary(line) {
             const unit = this.formatMoney(line.unit_price_cents);
             const subtotal = this.formatMoney(line.line_subtotal_cents);
-            return `${unit} - Qty ${line.pack_count} - Subtotal ${subtotal}`;
+            const packCount = this.formatQuantity(line.pack_count);
+            return `${unit} - Qty ${packCount} - Subtotal ${subtotal}`;
         },
         resetLineForm() {
             this.lineForm = {
@@ -218,6 +310,169 @@ export function mount(rootEl, payload) {
                 pack_count: 1,
                 unit_price_cents: '',
             };
+        },
+        receiptLineSummary(receipt) {
+            const lineCount = receipt.lines_count ?? 0;
+            const total = this.formatQuantity(receipt.total_packs ?? '0.000000');
+            return `${lineCount} lines, ${total} total packs`;
+        },
+        shortCloseLineSummary(shortClose) {
+            const lineCount = shortClose.lines_count ?? 0;
+            const total = this.formatQuantity(shortClose.total_packs ?? '0.000000');
+            return `${lineCount} lines, ${total} total packs`;
+        },
+        canReceiveLine(line) {
+            return this.canReceiveOrder && normalizeDecimal(line.remaining_balance) !== '0.000000';
+        },
+        canShortCloseLine(line) {
+            return this.canReceiveOrder && normalizeDecimal(line.remaining_balance) !== '0.000000';
+        },
+        normalizeReceiveErrors(errors) {
+            const defaults = emptyReceiveErrors();
+            const normalized = { ...defaults };
+
+            if (!errors || typeof errors !== 'object') {
+                return normalized;
+            }
+
+            Object.keys(defaults).forEach((key) => {
+                normalized[key] = Array.isArray(errors[key]) ? errors[key] : [];
+            });
+
+            const lineErrors = {};
+
+            Object.keys(errors).forEach((key) => {
+                if (key.startsWith('lines.')) {
+                    const match = key.match(/^lines\.(\d+)\.received_quantity$/);
+                    if (match) {
+                        const index = Number(match[1]);
+                        lineErrors[index] = Array.isArray(errors[key]) ? errors[key][0] : '';
+                    }
+                }
+            });
+
+            this.receiveLineErrors = lineErrors;
+
+            return normalized;
+        },
+        receiveLineError(index) {
+            if (!this.receiveLineErrors[index]) {
+                return '';
+            }
+
+            return this.receiveLineErrors[index];
+        },
+        openReceive() {
+            if (!this.canReceive || !this.canReceiveOrder) {
+                return;
+            }
+
+            const lines = this.lines
+                .filter((line) => normalizeDecimal(line.remaining_balance) !== '0.000000')
+                .map((line) => ({
+                    id: line.id,
+                    item_name: line.item_name,
+                    remaining_balance: normalizeDecimal(line.remaining_balance),
+                    received_quantity: normalizeDecimal(line.remaining_balance),
+                }));
+
+            if (lines.length === 0) {
+                return;
+            }
+
+            this.receiveForm = {
+                received_at: '',
+                reference: '',
+                notes: '',
+                lines,
+            };
+            this.receiveErrors = emptyReceiveErrors();
+            this.receiveLineErrors = {};
+            this.receiveError = '';
+            this.isReceiveOpen = true;
+        },
+        openReceiveLine(line) {
+            if (!this.canReceiveLine(line)) {
+                return;
+            }
+
+            this.receiveForm = {
+                received_at: '',
+                reference: '',
+                notes: '',
+                lines: [
+                    {
+                        id: line.id,
+                        item_name: line.item_name,
+                        remaining_balance: normalizeDecimal(line.remaining_balance),
+                        received_quantity: normalizeDecimal(line.remaining_balance),
+                    },
+                ],
+            };
+            this.receiveErrors = emptyReceiveErrors();
+            this.receiveLineErrors = {};
+            this.receiveError = '';
+            this.isReceiveOpen = true;
+        },
+        closeReceive() {
+            this.isReceiveOpen = false;
+            this.receiveForm = {
+                received_at: '',
+                reference: '',
+                notes: '',
+                lines: [],
+            };
+            this.receiveErrors = emptyReceiveErrors();
+            this.receiveLineErrors = {};
+            this.receiveError = '';
+            this.isReceiveSubmitting = false;
+        },
+        openShortCloseLine(line) {
+            if (!this.canShortCloseLine(line)) {
+                return;
+            }
+
+            this.shortCloseForm = {
+                short_closed_at: '',
+                reference: '',
+                notes: '',
+                purchase_order_line_id: line.id,
+                short_closed_quantity: normalizeDecimal(line.remaining_balance),
+            };
+            this.shortCloseLineLabel = line.item_name || 'Line';
+            this.shortCloseErrors = emptyShortCloseErrors();
+            this.shortCloseError = '';
+            this.isShortCloseOpen = true;
+        },
+        closeShortClose() {
+            this.isShortCloseOpen = false;
+            this.shortCloseForm = {
+                short_closed_at: '',
+                reference: '',
+                notes: '',
+                purchase_order_line_id: null,
+                short_closed_quantity: '',
+            };
+            this.shortCloseLineLabel = '';
+            this.shortCloseErrors = emptyShortCloseErrors();
+            this.shortCloseError = '';
+            this.isShortCloseSubmitting = false;
+        },
+        updateDerivedStatus() {
+            const balances = this.lines.map((line) => normalizeDecimal(line.remaining_balance));
+            const allZero = balances.length > 0 && balances.every((balance) => balance === '0.000000');
+            const anyReceipt = this.lines.some((line) => normalizeDecimal(line.received_sum) !== '0.000000');
+            const anyShortClose = this.lines.some((line) => normalizeDecimal(line.short_closed_sum) !== '0.000000');
+
+            if (allZero && anyShortClose) {
+                this.purchaseOrder.status = 'SHORT-CLOSED';
+            } else if (allZero && anyReceipt) {
+                this.purchaseOrder.status = 'RECEIVED';
+            } else if (!allZero && anyReceipt) {
+                this.purchaseOrder.status = 'PARTIALLY-RECEIVED';
+            }
+
+            this.isEditable = this.purchaseOrder.status === 'DRAFT';
         },
         async submitHeader() {
             if (!this.isEditable || !this.updateUrl || this.isHeaderSubmitting) {
@@ -547,6 +802,193 @@ export function mount(rootEl, payload) {
                 this.deleteOrderError = 'Unable to delete purchase order.';
             } finally {
                 this.isDeleteOrderSubmitting = false;
+            }
+        },
+        async submitReceive() {
+            if (!this.receiptStoreUrl || this.isReceiveSubmitting) {
+                return;
+            }
+
+            this.isReceiveSubmitting = true;
+            this.receiveErrors = emptyReceiveErrors();
+            this.receiveLineErrors = {};
+            this.receiveError = '';
+
+            const payloadData = {
+                received_at: this.receiveForm.received_at || null,
+                reference: this.receiveForm.reference || null,
+                notes: this.receiveForm.notes || null,
+                lines: this.receiveForm.lines.map((line) => ({
+                    purchase_order_line_id: line.id,
+                    received_quantity: normalizeDecimal(line.received_quantity),
+                })),
+            };
+
+            try {
+                const response = await fetch(this.receiptStoreUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        Accept: 'application/json',
+                        'X-CSRF-TOKEN': this.csrfToken,
+                    },
+                    body: JSON.stringify(payloadData),
+                });
+
+                if (response.status === 422) {
+                    const data = await response.json();
+                    this.receiveErrors = this.normalizeReceiveErrors(data.errors);
+                    this.receiveError = data.message || 'Unable to receive order.';
+                    return;
+                }
+
+                if (!response.ok) {
+                    this.receiveError = 'Unable to receive order.';
+                    return;
+                }
+
+                const totalPacks = this.receiveForm.lines.reduce(
+                    (total, line) => addDecimal(total, normalizeDecimal(line.received_quantity)),
+                    '0.000000'
+                );
+
+                this.receiveForm.lines.forEach((line) => {
+                    const lineState = this.lines.find((entry) => entry.id === line.id);
+                    if (!lineState) {
+                        return;
+                    }
+
+                    const receivedQty = normalizeDecimal(line.received_quantity);
+                    lineState.received_sum = addDecimal(lineState.received_sum, receivedQty);
+                    lineState.remaining_balance = subtractDecimal(lineState.remaining_balance, receivedQty);
+                });
+
+                this.receipts.unshift({
+                    id: Date.now(),
+                    received_at: this.receiveForm.received_at || null,
+                    received_by: this.currentUserName || null,
+                    reference: this.receiveForm.reference || null,
+                    notes: this.receiveForm.notes || null,
+                    lines_count: this.receiveForm.lines.length,
+                    total_packs: totalPacks,
+                });
+
+                this.updateDerivedStatus();
+                this.showToast('success', 'Receipt recorded.');
+                this.closeReceive();
+            } catch (error) {
+                // eslint-disable-next-line no-console
+                console.error(error);
+                this.receiveError = 'Unable to receive order.';
+            } finally {
+                this.isReceiveSubmitting = false;
+            }
+        },
+        async submitShortClose() {
+            if (!this.shortCloseStoreUrl || this.isShortCloseSubmitting) {
+                return;
+            }
+
+            this.isShortCloseSubmitting = true;
+            this.shortCloseErrors = emptyShortCloseErrors();
+            this.shortCloseError = '';
+
+            const payloadData = {
+                short_closed_at: this.shortCloseForm.short_closed_at || null,
+                reference: this.shortCloseForm.reference || null,
+                notes: this.shortCloseForm.notes || null,
+                purchase_order_line_id: this.shortCloseForm.purchase_order_line_id,
+                short_closed_quantity: normalizeDecimal(this.shortCloseForm.short_closed_quantity),
+            };
+
+            try {
+                const response = await fetch(this.shortCloseStoreUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        Accept: 'application/json',
+                        'X-CSRF-TOKEN': this.csrfToken,
+                    },
+                    body: JSON.stringify(payloadData),
+                });
+
+                if (response.status === 422) {
+                    const data = await response.json();
+                    this.shortCloseErrors = this.normalizeErrors(data.errors, emptyShortCloseErrors);
+                    this.shortCloseError = data.message || 'Unable to short-close line.';
+                    return;
+                }
+
+                if (!response.ok) {
+                    this.shortCloseError = 'Unable to short-close line.';
+                    return;
+                }
+
+                const lineState = this.lines.find((entry) => entry.id === this.shortCloseForm.purchase_order_line_id);
+                if (lineState) {
+                    const shortClosedQty = normalizeDecimal(this.shortCloseForm.short_closed_quantity);
+                    lineState.short_closed_sum = addDecimal(lineState.short_closed_sum, shortClosedQty);
+                    lineState.remaining_balance = subtractDecimal(lineState.remaining_balance, shortClosedQty);
+                }
+
+                this.shortClosures.unshift({
+                    id: Date.now(),
+                    short_closed_at: this.shortCloseForm.short_closed_at || null,
+                    short_closed_by: this.currentUserName || null,
+                    reference: this.shortCloseForm.reference || null,
+                    notes: this.shortCloseForm.notes || null,
+                    lines_count: 1,
+                    total_packs: normalizeDecimal(this.shortCloseForm.short_closed_quantity),
+                });
+
+                this.updateDerivedStatus();
+                this.showToast('success', 'Short-close recorded.');
+                this.closeShortClose();
+            } catch (error) {
+                // eslint-disable-next-line no-console
+                console.error(error);
+                this.shortCloseError = 'Unable to short-close line.';
+            } finally {
+                this.isShortCloseSubmitting = false;
+            }
+        },
+        async submitStatus(status) {
+            if (!this.statusUpdateUrl) {
+                return;
+            }
+
+            this.statusError = '';
+
+            try {
+                const response = await fetch(this.statusUpdateUrl, {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        Accept: 'application/json',
+                        'X-CSRF-TOKEN': this.csrfToken,
+                    },
+                    body: JSON.stringify({ status }),
+                });
+
+                if (response.status === 422) {
+                    const data = await response.json();
+                    this.statusError = data.message || 'Unable to update status.';
+                    return;
+                }
+
+                if (!response.ok) {
+                    this.statusError = 'Unable to update status.';
+                    return;
+                }
+
+                const data = await response.json();
+                this.purchaseOrder.status = data.data?.status || status;
+                this.isEditable = this.purchaseOrder.status === 'DRAFT';
+                this.showToast('success', 'Status updated.');
+            } catch (error) {
+                // eslint-disable-next-line no-console
+                console.error(error);
+                this.statusError = 'Unable to update status.';
             }
         },
     }));

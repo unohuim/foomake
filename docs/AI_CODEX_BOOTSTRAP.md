@@ -37,18 +37,24 @@ When conflicts exist, this order wins:
 7. docs/DB_SCHEMA.md
 8. docs/UI_DESIGN.md
 9. docs/architecture/README.yaml
-10. routes/web.php
-11. docs/architecture/ui/PageModuleContract.yaml
+10. docs/architecture/ui/PageModuleContract.yaml
+11. docs/testing/testing-standards.yaml
+12. docs/testing/\*.yaml
+13. routes/web.php
 
 For architecture invariants, priority is:
 
 CONVENTIONS → ENUMS → architecture yaml → code
 
+For testing standards/invariants, priority is:
+
+docs/testing/testing-standards.yaml → docs/testing/\*.yaml → code
+
 ---
 
 ## Step 1 — Mandatory Document Intake
 
-Codex must open and read every file in the Authority Order.
+Codex must open and read every file in the Authority Order (including `docs/testing/testing-standards.yaml` and all `docs/testing/*.yaml`).
 
 Codex must not summarize, plan, or propose changes.
 
@@ -109,16 +115,16 @@ List each AOC with current certainty %.
 
 ### Assumptions
 
-List all assumptions currently being made.  
+List all assumptions currently being made.
 Anything not listed here is not assumed.
 
 ### Next Question
 
 Ask exactly one question that will increase certainty in any AOC that is <95%.
 
-Do not ask multiple questions.  
-Do not plan.  
-Do not suggest implementation.  
+Do not ask multiple questions.
+Do not plan.
+Do not suggest implementation.
 Do not summarize.
 
 ---
@@ -158,6 +164,16 @@ When instructed to write tests, Codex must obey the following **Test Writing Pro
 
 When approved to write tests for the PR, Codex must:
 
+### 0. Testing Standards Intake (Non-Negotiable)
+
+Before creating or editing any test file:
+
+- Read `docs/testing/testing-standards.yaml` and **treat it as the canonical template**
+- Read all `docs/testing/*.yaml` and apply any additional rules
+- If `docs/testing/*.yaml` conflicts, `docs/testing/testing-standards.yaml` wins
+
+Codex must structure and write tests to match the patterns, naming, assertions style, and file organization described in `docs/testing/testing-standards.yaml`.
+
 ### 1. Restate PR Context
 
 Accurately restate:
@@ -169,7 +185,7 @@ Accurately restate:
 ### 2. Operating Constraints
 
 - Tests only
-- Read all `docs/*.md` and test convention docs before editing
+- Must comply with `docs/testing/testing-standards.yaml` and all `docs/testing/*.yaml`
 - Deterministic tests only
 - PSR-12 compliant
 - No global state
@@ -215,6 +231,8 @@ Codex must first output a checklist marked ACKNOWLEDGED and ask exactly one clar
 
 Must acknowledge:
 
+- `docs/testing/testing-standards.yaml` is the canonical template for tests
+- All `docs/testing/*.yaml` must be followed
 - Auth/tenancy repetition requirement
 - ≥20 tests-per-file requirement
 - Endpoint×verb matrix requirement
@@ -227,10 +245,10 @@ No file edits before acknowledgment.
 
 For each PR behavior/decision, map tests across:
 
-A) Validation  
-B) Normalization/defaulting  
-C) Persistence/DB contract  
-D) API contract  
+A) Validation
+B) Normalization/defaulting
+C) Persistence/DB contract
+D) API contract
 E) Read via HTTP
 
 At least one test must flow:
@@ -316,7 +334,7 @@ If yes, update only when instructed.
 
 If architecture changed:
 
-- Update/create docs/architecture/\*_/_.yaml
+- Update/create docs/architecture/_/_/\*.yaml
 - Follow docs/architecture/README.yaml
 - Update docs/ARCHITECTURE_INVENTORY.md
 
@@ -330,3 +348,4 @@ If architecture changed:
 - Never run tests
 - Never summarize the PR scope
 - Never propose plans before all AOCs ≥95%
+- Never create/edit tests without first applying `docs/testing/testing-standards.yaml` + `docs/testing/*.yaml`
