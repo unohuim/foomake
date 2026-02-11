@@ -4,7 +4,6 @@ You are Codex CLI with full repository access.
 
 Follow docs authority order and read these FIRST (do not modify docs unless explicitly instructed):
 
-- docs/AI_CHAT_CODEX.md
 - docs/PR2_ROADMAP.md
 - docs/CONVENTIONS.md
 - docs/ARCHITECTURE_INVENTORY.md

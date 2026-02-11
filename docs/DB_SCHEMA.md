@@ -521,6 +521,124 @@ Migrations remain the **sole source of truth**.
 
 ---
 
+## purchase_order_receipts
+
+**Tenant-owned:** Yes  
+**Purpose:** Receipt event headers for purchase orders
+
+### Columns
+
+| Name                | Type      | Nullable | Notes                                   |
+| ------------------- | --------- | -------- | --------------------------------------- |
+| id                  | bigint    | No       | Primary key                             |
+| tenant_id           | bigint    | No       | FK → tenants.id (CASCADE)               |
+| purchase_order_id   | bigint    | No       | Part of composite FK                    |
+| received_at         | datetime  | No       | —                                       |
+| received_by_user_id | bigint    | No       | FK → users.id                           |
+| reference           | string    | Yes      | —                                       |
+| notes               | text      | Yes      | —                                       |
+| created_at          | timestamp | Yes      | —                                       |
+| updated_at          | timestamp | Yes      | —                                       |
+
+### Foreign Keys
+
+- `(purchase_order_id, tenant_id)` → purchase_orders.(id, tenant_id) (CASCADE)
+- `received_by_user_id` → users.id
+
+### Keys & Indexes
+
+- PK: `id`
+- Index: `tenant_id`
+
+---
+
+## purchase_order_receipt_lines
+
+**Tenant-owned:** Yes  
+**Purpose:** Receipt event line items for purchase orders
+
+### Columns
+
+| Name                     | Type           | Nullable | Notes                                   |
+| ------------------------ | -------------- | -------- | --------------------------------------- |
+| id                       | bigint         | No       | Primary key                             |
+| tenant_id                | bigint         | No       | FK → tenants.id (CASCADE)               |
+| purchase_order_receipt_id | bigint        | No       | FK → purchase_order_receipts.id (CASCADE) |
+| purchase_order_line_id   | bigint         | No       | FK → purchase_order_lines.id (CASCADE)  |
+| received_quantity        | decimal(18,6)  | No       | Pack count                              |
+| created_at               | timestamp      | Yes      | —                                       |
+| updated_at               | timestamp      | Yes      | —                                       |
+
+### Keys & Indexes
+
+- PK: `id`
+- Index: `tenant_id`
+- Index: `purchase_order_receipt_id`
+- Index: `purchase_order_line_id`
+- Implicit (FK index): `purchase_order_receipt_id`
+- Implicit (FK index): `purchase_order_line_id`
+
+---
+
+## purchase_order_short_closures
+
+**Tenant-owned:** Yes  
+**Purpose:** Short-close event headers for purchase orders
+
+### Columns
+
+| Name                   | Type      | Nullable | Notes                                   |
+| ---------------------- | --------- | -------- | --------------------------------------- |
+| id                     | bigint    | No       | Primary key                             |
+| tenant_id              | bigint    | No       | FK → tenants.id (CASCADE)               |
+| purchase_order_id      | bigint    | No       | Part of composite FK                    |
+| short_closed_at        | datetime  | No       | —                                       |
+| short_closed_by_user_id | bigint   | No       | FK → users.id                           |
+| reference              | string    | Yes      | —                                       |
+| notes                  | text      | Yes      | —                                       |
+| created_at             | timestamp | Yes      | —                                       |
+| updated_at             | timestamp | Yes      | —                                       |
+
+### Foreign Keys
+
+- `(purchase_order_id, tenant_id)` → purchase_orders.(id, tenant_id) (CASCADE)
+- `short_closed_by_user_id` → users.id
+
+### Keys & Indexes
+
+- PK: `id`
+- Index: `tenant_id`
+
+---
+
+## purchase_order_short_closure_lines
+
+**Tenant-owned:** Yes  
+**Purpose:** Short-close event line items for purchase orders
+
+### Columns
+
+| Name                            | Type           | Nullable | Notes                                   |
+| ------------------------------- | -------------- | -------- | --------------------------------------- |
+| id                              | bigint         | No       | Primary key                             |
+| tenant_id                       | bigint         | No       | FK → tenants.id (CASCADE)               |
+| purchase_order_short_closure_id | bigint         | No       | FK → purchase_order_short_closures.id (CASCADE) |
+| purchase_order_line_id          | bigint         | No       | FK → purchase_order_lines.id (CASCADE)  |
+| short_closed_quantity           | decimal(18,6)  | No       | Pack count                              |
+| created_at                      | timestamp      | Yes      | —                                       |
+| updated_at                      | timestamp      | Yes      | —                                       |
+
+### Keys & Indexes
+
+- PK: `id`
+- Index: `tenant_id`
+- Index: `purchase_order_short_closure_id`
+- Index: `purchase_order_line_id`
+- Implicit (FK index): `purchase_order_short_closure_id`
+- Implicit (FK index): `purchase_order_line_id`
+
+---
+
 ## recipes
 
 **Tenant-owned:** Yes  
@@ -664,6 +782,7 @@ Migrations remain the **sole source of truth**.
 | uom_id      | bigint        | No       | FK → uoms.id (CASCADE)        |
 | quantity    | decimal(18,6) | No       | Signed                        |
 | type        | enum          | No       | See ENUMS.md                  |
+| status      | string        | No       | See ENUMS.md                  |
 | source_type | string        | Yes      | Polymorphic                   |
 | source_id   | bigint        | Yes      | Polymorphic                   |
 | created_at  | timestamp     | No       | Defaults to CURRENT_TIMESTAMP |

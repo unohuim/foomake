@@ -8,6 +8,7 @@ purchasing-purchase-orders-view
 purchasing-purchase-orders-create
 purchasing-purchase-orders-update
 purchasing-purchase-orders-manage
+purchasing-purchase-orders-receive
 purchasing-receiving-execute
 purchasing-receiving-view
 

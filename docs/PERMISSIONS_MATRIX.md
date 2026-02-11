@@ -27,6 +27,7 @@ This document is the source-of-truth for **authorization intent** in this reposi
 - `purchasing-purchase-orders-create`
 - `purchasing-purchase-orders-update`
 - `purchasing-purchase-orders-manage`
+- `purchasing-purchase-orders-receive`
 - `purchasing-receiving-view`
 - `purchasing-receiving-execute`
 
@@ -103,6 +104,7 @@ Procurement-focused role.
 - `purchasing-purchase-orders-create`
 - `purchasing-purchase-orders-update`
 - `purchasing-purchase-orders-manage`
+- `purchasing-purchase-orders-receive`
 - `purchasing-receiving-view`
 - `purchasing-receiving-execute`
 - `reports-view`
