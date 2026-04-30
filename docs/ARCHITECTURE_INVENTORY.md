@@ -659,6 +659,7 @@ Centralize UI quantity string formatting using UoM display precision.
 - Accepts numeric strings, ints, floats, and null.
 - Clamps precision to `0..6`.
 - Preserves trailing zeros to requested precision.
+- Uses string-safe half-up rounding for display output.
 - Uses UoM-driven precision via `display_precision`.
 
 **When to Use:**  
@@ -878,10 +879,10 @@ $supplier = Supplier::create([
 - `app/Http/Controllers/SupplierController.php`
 
 **Purpose:**  
-Provide a seam to block supplier deletion when linked materials exist, without schema changes.
+Provide a seam to block supplier deletion when supplier-linked purchasing catalog records exist, without broad schema refactors.
 
 **When to Use:**  
-Deleting suppliers via AJAX endpoints with a future-safe link check.
+Deleting suppliers via AJAX endpoints with a supplier catalog link check.
 
 **When Not to Use:**  
 Delete guards for non-supplier entities.
@@ -893,7 +894,7 @@ Delete guards for non-supplier entities.
 ```php
 if ($guard->isLinkedToMaterials($supplier)) {
     return response()->json([
-        'message' => 'Supplier cannot be deleted because it is linked to materials.',
+        'message' => 'Supplier cannot be deleted because it is linked to purchasing records.',
     ], 422);
 }
 ```

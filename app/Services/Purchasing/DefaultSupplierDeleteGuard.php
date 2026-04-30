@@ -14,6 +14,6 @@ class DefaultSupplierDeleteGuard implements SupplierDeleteGuard
      */
     public function isLinkedToMaterials(Supplier $supplier): bool
     {
-        return false;
+        return $supplier->purchaseOptions()->exists();
     }
 }

@@ -4,7 +4,7 @@ location:
   - resources/js/app.js
   - resources/js/pages/**
   - resources/views/**
-purpose: Define the framework-agnostic, page-scoped UI module contract that eliminates executable Blade JavaScript and guarantees deterministic Alpine initialization.
+purpose: Define the framework-agnostic, page-scoped UI module contract that eliminates executable Blade script blocks and guarantees deterministic Alpine initialization.
 when_to_use:
   - Building or migrating any interactive Blade page to the page-module pattern
   - Adding new UI behavior that depends on Alpine state or fetch-based CRUD
@@ -16,9 +16,10 @@ when_not_to_use:
 rules:
   - Every interactive page must have exactly one page root element with data-page and data-payload attributes.
   - Every interactive page must include exactly one payload script tag with type application/json and an id matching data-payload.
-  - Blade templates must contain no executable JavaScript.
+  - Blade templates must contain no executable script tags beyond JSON payload blocks.
   - The only allowed script tag in Blade is a payload block: <script type="application/json">.
   - All page UI logic must live in resources/js/pages/**.
+  - During the current staged migration, Alpine directives may remain in Blade until a page is fully migrated to the page-module pattern.
   - Each page module must export a mount(rootEl, payload) function.
   - Page modules must register Alpine components inside mount using Alpine.data('ComponentName', ...).
   - Alpine.start() must run exactly once and only after the page module has mounted when data-page is present.

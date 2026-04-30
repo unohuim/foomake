@@ -23,13 +23,13 @@ This document is the source-of-truth for **authorization intent** in this reposi
 
 - `purchasing-suppliers-view`
 - `purchasing-suppliers-manage`
-- `purchasing-purchase-orders-view`
 - `purchasing-purchase-orders-create`
-- `purchasing-purchase-orders-update`
-- `purchasing-purchase-orders-manage`
 - `purchasing-purchase-orders-receive`
-- `purchasing-receiving-view`
-- `purchasing-receiving-execute`
+- `purchasing-purchase-orders-view` (defined but not used by current purchase-order routes)
+- `purchasing-purchase-orders-update` (defined but not used by current purchase-order routes)
+- `purchasing-purchase-orders-manage` (defined but not used by current purchase-order routes)
+- `purchasing-receiving-view` (defined but not used by current purchase-order routes)
+- `purchasing-receiving-execute` (defined but not used by current purchase-order routes)
 
 ### Sales
 
@@ -153,6 +153,9 @@ Execution-only role.
 ## Enforcement Notes
 
 - **All permission checks** must use gates: `Gate::allows('<permission-slug>')` or `@can('<permission-slug>')`.
+- Current purchase-order routes use a two-gate model:
+  - `purchasing-purchase-orders-create` for index/show/create/update/delete and line mutations
+  - `purchasing-purchase-orders-receive` for receipts, short-closes, and manual status transitions
 - Make Orders execute permission does not imply view; both gates must be evaluated where required.
 - Do not hardcode role names in controllers/services (except `super-admin` bypass in `Gate::before`).
 - Any new domain area must introduce permission slugs and update this matrix in the same PR.

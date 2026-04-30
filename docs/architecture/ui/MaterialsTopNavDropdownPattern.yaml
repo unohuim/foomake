@@ -1,10 +1,10 @@
-name: Materials Top Nav Dropdown Pattern
+name: Manufacturing Top Nav Dropdown Pattern
 type: UI Pattern
 location:
   - resources/views/layouts/navigation.blade.php
-purpose: Group Materials and supporting entities under a single top navigation dropdown.
+purpose: Group manufacturing-owned operational primitives under a single top navigation dropdown.
 when_to_use:
-  - A top-level domain owns mandatory supporting subdomains
+  - A process domain owns mandatory supporting subdomains and operational primitives
 when_not_to_use:
   - Unrelated or optional domains
 rules:
@@ -14,8 +14,9 @@ public_interface:
   - Blade markup and Alpine interaction in the navigation layout
 example_usage: |
   <x-dropdown>
-      <x-slot name="trigger">Materials</x-slot>
+      <x-slot name="trigger">Manufacturing</x-slot>
       <x-slot name="content">
+          <x-dropdown-link href="/inventory">Inventory</x-dropdown-link>
           <x-dropdown-link href="/materials">Materials</x-dropdown-link>
       </x-slot>
   </x-dropdown>

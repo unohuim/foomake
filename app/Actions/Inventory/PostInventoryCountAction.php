@@ -11,6 +11,9 @@ use Illuminate\Support\Facades\DB;
 
 /**
  * Post an inventory count and write variance adjustments to the ledger.
+ *
+ * BCMath remains the repository standard. This localized legacy Brick\Math
+ * usage is retained for now and must not be expanded without approval.
  */
 class PostInventoryCountAction
 {

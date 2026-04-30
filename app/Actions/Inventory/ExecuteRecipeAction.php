@@ -11,6 +11,9 @@ use InvalidArgumentException;
 
 /**
  * Execute a recipe by posting inventory stock moves.
+ *
+ * BCMath remains the repository standard. This localized legacy Brick\Math
+ * usage is retained for now and must not be expanded without approval.
  */
 class ExecuteRecipeAction
 {

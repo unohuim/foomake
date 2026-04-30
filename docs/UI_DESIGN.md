@@ -64,13 +64,10 @@ The UI should feel:
 
 - **Top horizontal navigation only**
 - Left-aligned app identity
-- Domain menu items appear inline:
-    - Materials
-    - Products
-    - Recipes
-    - Suppliers
-    - Purchase Orders
-    - Make Orders
+- Domain menu items are **process-based top-level entries**
+- Current implementation groups functionality under top-level dropdowns such as:
+    - Purchasing
+    - Manufacturing
 
 - No nested mega-menus initially
 - Active state must be subtle (underline or tone shift)
@@ -98,7 +95,8 @@ The UI should feel:
 ### Page Module Contract (Enforced)
 
 - Blade templates must not include executable `<script>` tags (JSON payloads only).
-- Inline JavaScript handlers in Blade are forbidden; use page modules instead.
+- Page modules remain the target pattern for new interactive pages.
+- During the current staged migration, Alpine directives in Blade are allowed, but executable `<script>` tags remain forbidden.
 
 ---
 
@@ -316,10 +314,7 @@ Focus: supplier relationships and inbound procurement.
 **Dropdown items:**
 
 - Orders
-- Bills / Invoices
 - Suppliers
-- Products  
-  _(Items where `is_purchasable = true`, with purchasing-specific attributes such as pack sizes, costs, and lead times)_
 
 ---
 
@@ -331,6 +326,8 @@ Focus: production execution and operational primitives.
 
 - Orders (Make Orders)
 - Inventory
+- Inventory Counts
+- Materials
 - Recipes
 - Units of Measure (UoM)
 - UoM Categories
@@ -363,10 +360,12 @@ Each interactive page **must** have:
     - `data-page="page-slug"`
     - `data-payload="payload-script-id"`
 - A **single** `<script type="application/json">` payload block
-- **No executable JavaScript** in Blade templates
+- **No executable `<script>` blocks** in Blade templates
 
 All UI logic **must** live in:
 resources/js/pages/\*\*
+
+For pages not yet migrated to the page-module pattern, Alpine directives may remain in Blade while fetch/state orchestration is progressively moved into page modules.
 
 ---
 
@@ -449,7 +448,7 @@ Required:
 
 errors = { name: [], base_uom_id: [] }
 
-422 responses must be normalized into this shape.
+For page-module and page-module-compatible interactive screens, 422 responses must be normalized into this shape.
 
 3. Alpine Expressions Must Be Defensive
 
@@ -518,6 +517,13 @@ Predictable
 Debuggable
 
 Production-safe
+
+### Migration Status
+
+- The current implementation is in a staged migration state.
+- Breeze layouts/components and Alpine directives are still present in active Blade views.
+- New or migrated interactive pages should follow the page-module contract.
+- Existing Blade/Alpine interactions may remain until they are intentionally migrated.
 
 Framework-agnostic
 

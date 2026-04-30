@@ -14,7 +14,8 @@ when_not_to_use:
   - Backend-only changes with no UI impact
 rules:
   - Blade views must not include executable script tags; only application/json payload scripts are allowed.
-  - Inline JavaScript event handlers in Blade are forbidden.
+  - Raw inline JavaScript event handlers in Blade are forbidden.
+  - Alpine directives in Blade are allowed during the staged page-module migration.
   - Optional-chaining assignment on the left-hand side is forbidden in JavaScript sources.
 public_interface:
   - scripts/ci/blade-guardrails.sh

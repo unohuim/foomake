@@ -3,11 +3,13 @@
 This roadmap defines the **second major phase** of work: completing **Items, Inventory, Suppliers, and Manufacturing**
 with **modern, minimalist UI**, aligned with **Breeze** and constrained by `UI_DESIGN.md`.
 
+This reconciled version reflects the **current implementation state** of the repository.
+
 This version explicitly accounts for the **dependency chain**:
 
 > **UoM Category → UoM → Item (Material)**
 
-and introduces a **Materials top-nav dropdown** instead of separate top-level menu items.
+and uses **process-based top-level navigation**, with Materials grouped under **Manufacturing**.
 
 ---
 
@@ -23,22 +25,26 @@ and introduces a **Materials top-nav dropdown** instead of separate top-level me
 
 ---
 
-## Navigation Model (Revised)
+## Navigation Model (Reconciled)
 
 - **Top horizontal navigation (Breeze-style)**
 - No sidebars
 - No dashboard-heavy layouts
 
-### Materials Navigation Pattern
+### Current Navigation Pattern
 
-- **Materials** is a **top-level nav item**
-- Click → `/materials` (Materials index)
-- Hover → dropdown menu with:
+- **Purchasing** and **Manufacturing** are the current top-level domain menus
+- **Materials** is reached via **Manufacturing → Materials**
+- Manufacturing dropdown currently includes:
+    - Inventory
+    - Inventory Counts
+    - Orders (Make Orders)
     - Materials
-    - UoM Categories
+    - Recipes
     - Units of Measure
+    - UoM Categories
 
-This establishes Materials as the _parent domain_ for its required support entities.
+This keeps navigation aligned with current process-based domain ownership.
 
 ---
 
@@ -46,14 +52,14 @@ This establishes Materials as the _parent domain_ for its required support entit
 
 > Materials are the **first UI domain** because all downstream domains depend on Items.
 
-### PR2-MAT-001 — Materials Navigation + Index ✅ (Completed)
+### PR2-MAT-001 — Materials Navigation + Index ✅ (Implemented, later expanded)
 
 **Goal**  
 Expose Materials as a first-class domain with read-only visibility.
 
 **Includes**
 
-- Add **Materials** to top horizontal navigation
+- Add Materials visibility within current top horizontal navigation
 - Route: `/materials`
 - Gate enforcement: `inventory-materials-view`
 - Index view listing all Items
@@ -62,12 +68,11 @@ Expose Materials as a first-class domain with read-only visibility.
 
 - Clean list/table (Tailwind, Breeze-aligned)
 - Columns: Name, Base UoM, Flags
-- Empty state with “Create Material” CTA (non-functional)
+- Empty state with “Create Material” CTA
 
-**Out of Scope**
+**Implementation Note**
 
-- Create / Edit / Delete
-- UoM management
+- The current codebase has already expanded beyond this original slice to include create/edit/delete and related UoM management.
 
 ---
 
@@ -101,8 +106,8 @@ Allow managing Units of Measure within categories.
 
 **Includes**
 
-- Materials nav dropdown entry: **Units**
-- Route: `/materials/uoms`
+- Manufacturing nav dropdown entry: **Units**
+- Route: `/manufacturing/uoms`
 - List filtered/grouped by category
 - Create + Edit + Delete (AJAX)
 - Requires category selection
@@ -293,7 +298,7 @@ Enable full recipe authoring with minimal, calm AJAX-first UX.
 
 ---
 
-### PR3-MO-001 — Make Orders (Execute Recipe)
+### PR3-MO-001 — Make Orders (Execute Recipe) _(Superseded in implementation by persisted make orders)_
 
 **Goal**  
 Allow executing a recipe to create ledger movements.
@@ -313,7 +318,7 @@ Allow executing a recipe to create ledger movements.
 
 - Ledger-first execution (issues + receipt)
 - BCMath with canonical scale
-- No persisted make-order record unless approved
+- This original direct-execution-only approach was later replaced in the current implementation by persisted make orders (`PR3b`)
 
 **Permissions**
 
@@ -360,7 +365,7 @@ Implement persisted Make Orders with full lifecycle (Draft → Scheduled → Mad
 
 ## DOMAIN 4 — Suppliers & Purchasing (Revised)
 
-This domain introduces **supplier management, supplier-specific material pricing, and purchasing primitives**, with clear separation between **planning prices**, **supplier prices**, and **order price snapshots**.
+This domain introduces **supplier management, supplier-specific material pricing, and purchasing primitives**, with clear separation between **planning prices**, **supplier catalog/prices**, and **order price snapshots**.
 
 ---
 
@@ -395,7 +400,7 @@ Introduce tenant-owned Suppliers as a first-class Purchasing domain.
 
 ---
 
-### PR2-MAT-004 — Material Planning Price (Schema + UI)
+### PR2-MAT-006 — Material Planning Price (Schema + UI)
 
 **Goal**  
 Add a **planning-only placeholder price** to materials.
@@ -429,7 +434,7 @@ Complete supplier lifecycle management.
 
 - Edit supplier (AJAX slide-over)
 - Delete supplier
-- Delete blocked if supplier has linked materials (future-safe)
+- Delete blocked if supplier has linked supplier catalog records
 - Gate: `purchasing-suppliers-manage`
 
 ---
@@ -441,7 +446,9 @@ Define which materials are bought from which suppliers, including **supplier-spe
 
 **Includes**
 
-- New tenant-owned table/model (recommended): `supplier_item_prices`
+- Implemented as tenant-owned supplier catalog records using:
+    - `item_purchase_options`
+    - `item_purchase_option_prices`
 - Fields:
     - `tenant_id`
     - `supplier_id`
@@ -467,7 +474,7 @@ Define which materials are bought from which suppliers, including **supplier-spe
 
 - Many suppliers per material
 - Many materials per supplier
-- Prices represent **expected/current** pricing, not history
+- The current implementation keeps supplier purchase options and separate price records for expected/current pricing
 
 ---
 
@@ -480,7 +487,7 @@ Define which materials are bought from which suppliers, including **supplier-spe
 Introduce Purchase Orders with **immutable pricing snapshots** captured at the moment a line is added.
 
 This PR establishes the **foundation of the PO system**: draft creation, line management, and permanent price capture.  
-Workflow, lifecycle, and advanced status rules are intentionally **out of scope**.
+This was the original foundation slice. The current implementation later expanded into lifecycle and receiving behavior covered by `PR2-PUR-005`.
 
 ---
 
@@ -621,7 +628,7 @@ To move out of DRAFT (future PR):
 | Layer          | Location                                                          | Purpose                  |
 | -------------- | ----------------------------------------------------------------- | ------------------------ |
 | Planning       | `items.default_price_cents` + `items.default_price_currency_code` | Forecasting only         |
-| Supplier       | `supplier_item_prices.*`                                          | Expected buy price       |
+| Supplier       | `item_purchase_options.*` + `item_purchase_option_prices.*`       | Expected buy price       |
 | Purchase Order | `purchase_order_lines.*`                                          | Legal / accounting truth |
 
 ---
@@ -882,15 +889,15 @@ After PR2 completion:
 
 ---
 
-### PR2-UOM-TEN-001 — Tenant-Scoped Units of Measure (Schema + Refactor)
+### PR2-UOM-TEN-001 — Tenant-Scoped Units of Measure (Schema + Refactor) ✅ (Implemented)
 
 **Problem Statement**  
-UoM Categories and Units are currently **global**, but CRUD access implies tenant ownership.
+UoM Categories and Units required tenant ownership to match CRUD access expectations.
 
-**Decision**  
-Defer tenancy alignment to a **dedicated PR**.
+**Implementation Note**  
+Tenant scoping is already implemented in the current codebase.
 
-**Includes (Planned)**
+**Includes**
 
 - Add `tenant_id` to:
     - `uom_categories`
@@ -901,9 +908,9 @@ Defer tenancy alignment to a **dedicated PR**.
 - Update `ARCHITECTURE_INVENTORY.md`
 - Update `DB_SCHEMA.md`
 
-**Out of Scope (for now)**
+**Result**
 
-- Any tenancy changes in PR2-UOM-001 / PR2-UOM-002
+- UoM Categories and UoMs are tenant-owned, while system defaults continue to use `tenant_id = null`.
 
 ---
 
@@ -932,7 +939,7 @@ Replace Breeze Blade UI components with Tailwind-only markup.
 
 ---
 
-### PR2-UOM-003 — UoM Display Precision + Global Quantity Formatting (UI-only)
+### PR2-UOM-003 — UoM Display Precision + Global Quantity Formatting (UI-only) ✅ (Implemented)
 
 **Goal**  
 Introduce a UoM-level display precision field and enforce consistent quantity formatting across all UI views.
@@ -941,7 +948,7 @@ Introduce a UoM-level display precision field and enforce consistent quantity fo
 
 - Add `display_precision` to `uoms` (required, default = 1, allowed range = 0–6)
 - Extend UoM CRUD UI to manage `display_precision`
-- Introduce a single `QuantityFormatter` abstraction (single source of truth)
+- Introduce a single `QuantityFormatter` abstraction for centralized display formatting
 - Introduce a Blade directive/helper that wraps the formatter
 - Replace all quantity rendering in Blade views across all domains:
 - Materials
@@ -951,6 +958,7 @@ Introduce a UoM-level display precision field and enforce consistent quantity fo
 - Make Orders
 - Purchasing (Orders, Receipts, Short-Closures)
 - Enforce trailing zeros to match display precision
+- Use string-safe half-up display rounding without changing storage precision
 - No changes to storage math or BCMath canonical scale (remains 6)
 
 **Rules**
