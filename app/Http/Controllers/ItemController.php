@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Item;
 use App\Models\ItemPurchaseOption;
 use App\Models\Uom;
+use App\Support\QuantityFormatter;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -50,11 +51,14 @@ class ItemController extends Controller
                 ->get()
                 ->map(function (ItemPurchaseOption $option) {
                     $currentPrice = $option->currentPrice;
+                    $packQuantity = bcadd((string) $option->pack_quantity, '0', 6);
+                    $packPrecision = (int) ($option->packUom?->display_precision ?? 1);
 
                     return [
                         'id' => $option->id,
                         'supplier_company_name' => $option->supplier?->company_name,
-                        'pack_quantity' => bcadd((string) $option->pack_quantity, '0', 6),
+                        'pack_quantity' => $packQuantity,
+                        'pack_quantity_display' => QuantityFormatter::format($packQuantity, $packPrecision),
                         'pack_uom_symbol' => $option->packUom?->symbol,
                         'supplier_sku' => $option->supplier_sku,
                         'current_price_display' => $currentPrice

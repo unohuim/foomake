@@ -6,6 +6,7 @@ use App\Actions\Inventory\PostInventoryCountAction;
 use App\Models\InventoryCount;
 use App\Models\InventoryCountLine;
 use App\Models\Item;
+use App\Support\QuantityFormatter;
 use DomainException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -327,6 +328,7 @@ class InventoryCountController extends Controller
             'item_id' => $line->item_id,
             'item_display' => $line->item->name . ' (' . $line->item->baseUom->symbol . ')',
             'counted_quantity' => $line->counted_quantity,
+            'counted_quantity_display' => QuantityFormatter::formatForUom($line->counted_quantity, $line->item?->baseUom, 1),
             'notes' => $line->notes ?? '',
             'update_url' => route('inventory.counts.lines.update', [
                 'inventoryCount' => $line->inventory_count_id,

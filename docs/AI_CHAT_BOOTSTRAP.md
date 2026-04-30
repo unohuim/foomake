@@ -371,6 +371,52 @@ Allow managing Units of Measure within categories.
 
 ---
 
+### PR2-UOM-003 — UoM Display Precision + Global Quantity Formatting (UI-only) ✅ (Completed)
+
+**Goal**  
+Introduce a UoM-level display precision field and enforce consistent quantity formatting across all UI views.
+
+**Includes**
+
+- Add `display_precision` to `uoms`
+- Required, non-null, default = `1`
+- Allowed range: `0–6`
+- Extend UoM CRUD UI to manage `display_precision`
+- Introduce `App\Support\QuantityFormatter` as the single source of truth
+- Introduce Blade quantity directives/helpers wrapping `QuantityFormatter`
+- Replace quantity rendering across UI views with backend-formatted display strings or Blade formatter usage
+- Apply formatting across Materials, Inventory, Inventory Counts, Recipes, Make Orders, and Purchasing views
+- Enforce trailing zeros to exactly match the UoM display precision
+
+**Rules**
+
+- `display_precision` cannot exceed `6`
+- `display_precision` may be `0` for whole-unit display
+- Formatting is UI-only
+- Storage precision and BCMath canonical scale remain unchanged
+- Formatting must be centralized through `QuantityFormatter`
+- No ad-hoc quantity formatting in Blade views
+- No JavaScript-side quantity decimal formatting
+- No global JavaScript state
+
+**Permissions**
+
+- No new permission slugs
+- Managed under existing UoM CRUD permission: `inventory-materials-manage`
+
+**Documentation Impact**
+
+- `docs/DB_SCHEMA.md` documents `uoms.display_precision`
+- `docs/ARCHITECTURE_INVENTORY.md` documents `QuantityFormatter` and Blade quantity directive/helper usage
+- `docs/ENUMS.md` unaffected
+
+**Out of Scope**
+
+- Any changes to storage precision or BCMath scale
+- JavaScript formatting or UI-only overrides per view
+
+---
+
 ## DOMAIN 1B — Materials CRUD (Now Unblocked)
 
 ### PR2-MAT-002 — Create Material (AJAX) _(Renumbered)_
@@ -1437,6 +1483,19 @@ These rules apply to:
 - Unit conversions
 - Any inventory-affecting calculations
 
+## Quantity Display Formatting (UI-only)
+
+Quantity display formatting is separate from quantity storage and math.
+
+- Stored quantities remain canonical BCMath strings at scale 6.
+- Displayed quantities must use the related UoM's `display_precision`.
+- `display_precision` is an integer from `0` to `6`, defaulting to `1`.
+- Display formatting must preserve trailing zeros exactly to the configured precision.
+- All PHP-side quantity display formatting must go through `App\Support\QuantityFormatter`.
+- Blade views must use the approved Blade quantity directive/helper pattern instead of ad-hoc formatting.
+- JavaScript must not perform quantity decimal formatting; it may only render backend-provided display strings.
+- This rule is UI-only and must not change storage precision, arithmetic, or BCMath scale.
+
 ## docs/ARCHITECTURE_INVENTORY.md
 
 # Architecture Inventory
@@ -1881,6 +1940,44 @@ $total = bcadd($a, $b, 6);
 
 ---
 
+### QuantityFormatter
+
+**Name:** QuantityFormatter  
+**Type:** Support Class / UI Formatting Abstraction  
+**Location:** `app/Support/QuantityFormatter.php`
+
+**Purpose:**  
+Provide the single source of truth for UI-only quantity display formatting based on UoM display precision.
+
+**When to Use:**  
+Any time a quantity is displayed in Blade, page payloads, or UI-facing controller data.
+
+**When Not to Use:**  
+Inventory math, purchasing math, stock movement calculations, persistence, validation of canonical quantity scale, or any storage-affecting operation.
+
+**Public Interface:**
+
+- `QuantityFormatter::format($quantity, int $precision): string`
+- `QuantityFormatter::formatForUom($quantity, ?Uom $uom): string`
+- Blade quantity directive/helper pattern registered in `App\Providers\AppServiceProvider`
+
+**Rules:**
+
+- Uses `uoms.display_precision` for display precision.
+- Preserves trailing zeros exactly to the configured precision.
+- Supports precision `0–6`.
+- Defaults to precision `1` when a UoM omits display precision.
+- Does not alter stored quantity values or BCMath canonical scale.
+- JavaScript must not duplicate quantity decimal formatting.
+
+**Example Usage:**
+
+```blade
+@qtyForUom($quantity, $uom)
+```
+
+---
+
 ### Item
 
 **Name:** Item  
@@ -2182,6 +2279,8 @@ Represent a unit of measure belonging to a single category.
 
 - Tenant-owned. System defaults use `tenant_id = null`.
 - `symbol` is unique per tenant; `name` is not unique.
+- `display_precision` controls UI-only quantity decimals and defaults to `1`.
+- Allowed `display_precision` range is `0–6`.
 
 **When to Use:**  
 Assigning units to items and recording quantities.
@@ -2194,6 +2293,7 @@ Implicit unit assumptions.
 - `category()`
 - `conversionsFrom()`
 - `conversionsTo()`
+- `display_precision`
 
 **Example Usage:**
 
@@ -2203,6 +2303,7 @@ $uom = Uom::create([
     'uom_category_id' => $category->id,
     'name' => 'Gram',
     'symbol' => 'g',
+    'display_precision' => 3,
 ]);
 ```
 
@@ -4170,15 +4271,16 @@ Migrations remain the **sole source of truth**.
 
 ### Columns
 
-| Name            | Type      | Nullable | Notes                            |
-| --------------- | --------- | -------- | -------------------------------- |
-| id              | bigint    | No       | Primary key                      |
-| tenant_id       | bigint    | Yes      | FK → tenants.id (CASCADE)        |
-| uom_category_id | bigint    | No       | FK → uom_categories.id (CASCADE) |
-| name            | string    | No       | Not unique                       |
-| symbol          | string    | No       | Unique per tenant                |
-| created_at      | timestamp | Yes      | —                                |
-| updated_at      | timestamp | Yes      | —                                |
+| Name              | Type             | Nullable | Notes                                                  |
+| ----------------- | ---------------- | -------- | ------------------------------------------------------ |
+| id                | bigint           | No       | Primary key                                            |
+| tenant_id         | bigint           | Yes      | FK → tenants.id (CASCADE)                              |
+| uom_category_id   | bigint           | No       | FK → uom_categories.id (CASCADE)                       |
+| name              | string           | No       | Not unique                                             |
+| symbol            | string           | No       | Unique per tenant                                      |
+| display_precision | unsigned tinyint | No       | UI quantity decimals, default `1`, allowed range `0–6` |
+| created_at        | timestamp        | Yes      | —                                                      |
+| updated_at        | timestamp        | Yes      | —                                                      |
 
 ### Keys & Indexes
 

@@ -59,6 +59,7 @@ class UomController extends Controller
                 'max:255',
                 Rule::unique('uoms', 'symbol')->where('tenant_id', $tenantId),
             ],
+            'display_precision' => ['sometimes', 'integer', 'between:0,6'],
         ]);
 
         $uom = Uom::create([
@@ -66,6 +67,7 @@ class UomController extends Controller
             'uom_category_id' => $validated['uom_category_id'],
             'name' => $validated['name'],
             'symbol' => $validated['symbol'],
+            'display_precision' => $validated['display_precision'] ?? 1,
         ]);
 
         return response()->json([
@@ -73,6 +75,7 @@ class UomController extends Controller
             'uom_category_id' => $uom->uom_category_id,
             'name' => $uom->name,
             'symbol' => $uom->symbol,
+            'display_precision' => $uom->display_precision,
         ], 201);
     }
 
@@ -100,12 +103,14 @@ class UomController extends Controller
                     ->where('tenant_id', $tenantId)
                     ->ignore($uom->id),
             ],
+            'display_precision' => ['sometimes', 'integer', 'between:0,6'],
         ]);
 
         $uom->update([
             'uom_category_id' => $validated['uom_category_id'],
             'name' => $validated['name'],
             'symbol' => $validated['symbol'],
+            'display_precision' => $validated['display_precision'] ?? $uom->display_precision,
         ]);
 
         return response()->json([
@@ -113,6 +118,7 @@ class UomController extends Controller
             'uom_category_id' => $uom->uom_category_id,
             'name' => $uom->name,
             'symbol' => $uom->symbol,
+            'display_precision' => $uom->display_precision,
         ]);
     }
 

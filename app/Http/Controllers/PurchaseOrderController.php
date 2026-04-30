@@ -6,6 +6,7 @@ use App\Models\ItemPurchaseOption;
 use App\Models\PurchaseOrder;
 use App\Models\PurchaseOrderLine;
 use App\Models\Supplier;
+use App\Support\QuantityFormatter;
 use App\Services\Purchasing\PurchaseOrderLifecycleService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\JsonResponse;
@@ -154,13 +155,17 @@ class PurchaseOrderController extends Controller
             })->values()->all(),
             'purchaseOptions' => $purchaseOptions->map(function (ItemPurchaseOption $option) use ($tenantCurrency) {
                 $currentPrice = $option->currentPrice;
+                $packQuantity = bcadd((string) $option->pack_quantity, '0', 6);
+                $packPrecision = (int) ($option->packUom?->display_precision ?? 1);
 
                 return [
                     'id' => $option->id,
                     'supplier_id' => $option->supplier_id,
                     'item_id' => $option->item_id,
                     'item_name' => $option->item?->name,
-                    'pack_quantity' => bcadd((string) $option->pack_quantity, '0', 6),
+                    'pack_quantity' => $packQuantity,
+                    'pack_quantity_display' => QuantityFormatter::format($packQuantity, $packPrecision),
+                    'pack_precision' => $packPrecision,
                     'pack_uom_symbol' => $option->packUom?->symbol,
                     'pack_uom_name' => $option->packUom?->name,
                     'current_price_cents' => $currentPrice?->converted_price_cents ?? 0,
@@ -326,6 +331,8 @@ class PurchaseOrderController extends Controller
     {
         $option = $line->purchaseOption;
         $packCount = bcadd((string) $line->pack_count, '0', 6);
+        $packQuantity = $option ? bcadd((string) $option->pack_quantity, '0', 6) : null;
+        $packPrecision = (int) ($option?->packUom?->display_precision ?? 1);
         $receivedSum = $lineTotals['received_sum'] ?? '0.000000';
         $shortClosedSum = $lineTotals['short_closed_sum'] ?? '0.000000';
         $balance = $lineTotals['balance'] ?? $packCount;
@@ -336,14 +343,22 @@ class PurchaseOrderController extends Controller
             'item_name' => $line->item?->name,
             'item_purchase_option_id' => $line->item_purchase_option_id,
             'pack_count' => $packCount,
+            'pack_count_display' => QuantityFormatter::format($packCount, $packPrecision),
             'unit_price_cents' => $line->unit_price_cents,
             'line_subtotal_cents' => $line->line_subtotal_cents,
-            'pack_quantity' => $option ? bcadd((string) $option->pack_quantity, '0', 6) : null,
+            'pack_quantity' => $packQuantity,
+            'pack_quantity_display' => $packQuantity !== null
+                ? QuantityFormatter::format($packQuantity, $packPrecision)
+                : null,
+            'pack_precision' => $packPrecision,
             'pack_uom_symbol' => $option?->packUom?->symbol,
             'pack_uom_name' => $option?->packUom?->name,
             'received_sum' => $receivedSum,
+            'received_sum_display' => QuantityFormatter::format($receivedSum, $packPrecision),
             'short_closed_sum' => $shortClosedSum,
+            'short_closed_sum_display' => QuantityFormatter::format($shortClosedSum, $packPrecision),
             'remaining_balance' => $balance,
+            'remaining_balance_display' => QuantityFormatter::format($balance, $packPrecision),
             'currency_code' => $tenantCurrency,
         ];
     }

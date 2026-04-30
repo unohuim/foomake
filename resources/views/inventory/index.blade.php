@@ -33,7 +33,7 @@
                                                 {{ $item->baseUom->name }} ({{ $item->baseUom->symbol }})
                                             </td>
                                             <td class="px-3 py-3 text-right text-gray-900">
-                                                {{ $item->onHandQuantity() }}
+                                                @qtyForUom($item->onHandQuantity(), $item->baseUom, 1)
                                             </td>
                                         </tr>
                                     @endforeach

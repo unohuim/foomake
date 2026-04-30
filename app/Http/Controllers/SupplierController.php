@@ -8,6 +8,7 @@ use App\Models\ItemPurchaseOption;
 use App\Models\Supplier;
 use App\Models\Uom;
 use App\Services\Purchasing\SupplierDeleteGuard;
+use App\Support\QuantityFormatter;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -53,12 +54,15 @@ class SupplierController extends Controller
             ->get()
             ->map(function (ItemPurchaseOption $option) {
                 $currentPrice = $option->currentPrice;
+                $packQuantity = bcadd((string) $option->pack_quantity, '0', 6);
+                $packPrecision = (int) ($option->packUom?->display_precision ?? 1);
 
                 return [
                     'id' => $option->id,
                     'item_id' => $option->item_id,
                     'item_name' => $option->item?->name,
-                    'pack_quantity' => bcadd((string) $option->pack_quantity, '0', 6),
+                    'pack_quantity' => $packQuantity,
+                    'pack_quantity_display' => QuantityFormatter::format($packQuantity, $packPrecision),
                     'pack_uom_id' => $option->pack_uom_id,
                     'pack_uom_symbol' => $option->packUom?->symbol,
                     'pack_uom_name' => $option->packUom?->name,

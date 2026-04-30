@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Actions\Inventory\ExecuteRecipeAction;
 use App\Models\MakeOrder;
 use App\Models\Recipe;
+use App\Support\QuantityFormatter;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -28,7 +29,7 @@ class MakeOrderController extends Controller
 
         $makeOrders = MakeOrder::query()
             ->where('tenant_id', $request->user()->tenant_id)
-            ->with(['recipe', 'outputItem'])
+            ->with(['recipe', 'outputItem.baseUom'])
             ->orderByDesc('created_at')
             ->get();
 
@@ -100,7 +101,7 @@ class MakeOrderController extends Controller
             'created_by_user_id' => $request->user()->id,
         ]);
 
-        $makeOrder->load(['recipe', 'outputItem']);
+        $makeOrder->load(['recipe', 'outputItem.baseUom']);
 
         return response()->json([
             'data' => $this->makeOrderPayload($makeOrder),
@@ -120,7 +121,7 @@ class MakeOrderController extends Controller
 
         $makeOrderModel = MakeOrder::query()
             ->where('tenant_id', $request->user()->tenant_id)
-            ->with(['recipe', 'outputItem'])
+            ->with(['recipe', 'outputItem.baseUom'])
             ->findOrFail($makeOrder);
 
         if ($makeOrderModel->status === MakeOrder::STATUS_MADE) {
@@ -187,7 +188,7 @@ class MakeOrderController extends Controller
                 $makeOrderModel->made_by_user_id = $request->user()->id;
                 $makeOrderModel->save();
 
-                $makeOrderModel->load(['recipe', 'outputItem']);
+                $makeOrderModel->load(['recipe', 'outputItem.baseUom']);
 
                 return [
                     'make_order' => $makeOrderModel,
@@ -218,6 +219,11 @@ class MakeOrderController extends Controller
             'output_item_id' => $makeOrder->output_item_id,
             'output_item_name' => $makeOrder->outputItem?->name ?? '—',
             'output_quantity' => (string) $makeOrder->output_quantity,
+            'output_quantity_display' => QuantityFormatter::formatForUom(
+                (string) $makeOrder->output_quantity,
+                $makeOrder->outputItem?->baseUom,
+                1
+            ),
             'status' => $makeOrder->status,
             'due_date' => $makeOrder->due_date?->format('Y-m-d'),
             'scheduled_at' => $makeOrder->scheduled_at?->format('Y-m-d H:i'),

@@ -24,6 +24,14 @@ class Uom extends Model
         'uom_category_id',
         'name',
         'symbol',
+        'display_precision',
+    ];
+
+    /**
+     * @var array<string, string>
+     */
+    protected $casts = [
+        'display_precision' => 'integer',
     ];
 
     /**

@@ -188,6 +188,7 @@
                                             data-line-id="{{ $line->id }}"
                                             data-item-id="{{ $line->item_id }}"
                                             data-counted-quantity="{{ $line->counted_quantity }}"
+                                            data-counted-quantity-display="@qtyForUom($line->counted_quantity, $line->item?->baseUom, 1)"
                                             data-notes="{{ $line->notes ?? '' }}"
                                             data-update-url="{{ route('inventory.counts.lines.update', [$inventoryCount, $line]) }}"
                                             data-delete-url="{{ route('inventory.counts.lines.destroy', [$inventoryCount, $line]) }}"
@@ -196,7 +197,7 @@
                                                 {{ $line->item->name }} ({{ $line->item->baseUom->symbol }})
                                             </td>
                                             <td class="px-3 py-3 text-gray-600" data-role="counted-quantity">
-                                                {{ $line->counted_quantity }}
+                                                @qtyForUom($line->counted_quantity, $line->item?->baseUom, 1)
                                             </td>
                                             <td class="px-3 py-3 text-gray-600" data-role="notes">
                                                 {{ $line->notes ?? '—' }}

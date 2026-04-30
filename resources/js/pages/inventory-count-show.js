@@ -302,6 +302,7 @@ export function mount(rootEl, payload) {
             row.dataset.lineId = line.id;
             row.dataset.itemId = line.item_id;
             row.dataset.countedQuantity = line.counted_quantity;
+            row.dataset.countedQuantityDisplay = line.counted_quantity_display || line.counted_quantity;
             row.dataset.notes = line.notes || '';
             row.dataset.updateUrl = line.update_url;
             row.dataset.deleteUrl = line.delete_url;
@@ -312,7 +313,7 @@ export function mount(rootEl, payload) {
             }
             const countedQuantityEl = row.querySelector('[data-role="counted-quantity"]');
             if (countedQuantityEl) {
-                countedQuantityEl.textContent = line.counted_quantity;
+                countedQuantityEl.textContent = line.counted_quantity_display || line.counted_quantity;
             }
             const notesEl = row.querySelector('[data-role="notes"]');
             if (notesEl) {

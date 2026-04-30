@@ -51,26 +51,6 @@ export function mount(rootEl, payload) {
         return `${whole}.${fraction}`;
     };
 
-    const toMicro = (value) => {
-        const normalized = normalizeDecimal(value);
-        const parts = normalized.split('.');
-        const whole = parts[0];
-        const fraction = parts[1] || '000000';
-
-        return BigInt(whole) * 1000000n + BigInt(fraction);
-    };
-
-    const fromMicro = (value) => {
-        const sign = value < 0n;
-        const abs = sign ? -value : value;
-        const whole = abs / 1000000n;
-        const fraction = abs % 1000000n;
-
-        return `${sign ? '-' : ''}${whole.toString()}.${fraction.toString().padStart(6, '0')}`;
-    };
-
-    const subtractDecimal = (left, right) => fromMicro(toMicro(left) - toMicro(right));
-    const addDecimal = (left, right) => fromMicro(toMicro(left) + toMicro(right));
 
     Alpine.data('purchasingOrdersShow', () => ({
         purchaseOrder: safePayload.purchaseOrder || {},
@@ -208,7 +188,7 @@ export function mount(rootEl, payload) {
                 return '0';
             }
 
-            return raw.replace(/\.0+$/, '').replace(/(\.\d*[1-9])0+$/, '$1');
+            return raw;
         },
         get supplierOptions() {
             const supplierId = Number(this.form.supplier_id);
@@ -255,7 +235,7 @@ export function mount(rootEl, payload) {
             return this.purchaseOrder.status === 'OPEN';
         },
         decorateOption(option) {
-            const quantity = this.formatQuantity(option.pack_quantity);
+            const quantity = option.pack_quantity_display || this.formatQuantity(option.pack_quantity);
             const uom = option.pack_uom_symbol || option.pack_uom_name || 'pack';
             return {
                 ...option,
@@ -293,14 +273,14 @@ export function mount(rootEl, payload) {
                 return 'Pack';
             }
 
-            const quantity = this.formatQuantity(line.pack_quantity);
+            const quantity = line.pack_quantity_display || this.formatQuantity(line.pack_quantity);
             const uom = line.pack_uom_symbol || line.pack_uom_name || 'pack';
             return `${quantity} ${uom} pack`;
         },
         lineSummary(line) {
             const unit = this.formatMoney(line.unit_price_cents);
             const subtotal = this.formatMoney(line.line_subtotal_cents);
-            const packCount = this.formatQuantity(line.pack_count);
+            const packCount = line.pack_count_display || this.formatQuantity(line.pack_count);
             return `${unit} - Qty ${packCount} - Subtotal ${subtotal}`;
         },
         resetLineForm() {
@@ -373,6 +353,7 @@ export function mount(rootEl, payload) {
                     id: line.id,
                     item_name: line.item_name,
                     remaining_balance: normalizeDecimal(line.remaining_balance),
+                    remaining_balance_display: line.remaining_balance_display,
                     received_quantity: normalizeDecimal(line.remaining_balance),
                 }));
 
@@ -405,6 +386,7 @@ export function mount(rootEl, payload) {
                         id: line.id,
                         item_name: line.item_name,
                         remaining_balance: normalizeDecimal(line.remaining_balance),
+                        remaining_balance_display: line.remaining_balance_display,
                         received_quantity: normalizeDecimal(line.remaining_balance),
                     },
                 ],
@@ -847,35 +829,8 @@ export function mount(rootEl, payload) {
                     return;
                 }
 
-                const totalPacks = this.receiveForm.lines.reduce(
-                    (total, line) => addDecimal(total, normalizeDecimal(line.received_quantity)),
-                    '0.000000'
-                );
-
-                this.receiveForm.lines.forEach((line) => {
-                    const lineState = this.lines.find((entry) => entry.id === line.id);
-                    if (!lineState) {
-                        return;
-                    }
-
-                    const receivedQty = normalizeDecimal(line.received_quantity);
-                    lineState.received_sum = addDecimal(lineState.received_sum, receivedQty);
-                    lineState.remaining_balance = subtractDecimal(lineState.remaining_balance, receivedQty);
-                });
-
-                this.receipts.unshift({
-                    id: Date.now(),
-                    received_at: this.receiveForm.received_at || null,
-                    received_by: this.currentUserName || null,
-                    reference: this.receiveForm.reference || null,
-                    notes: this.receiveForm.notes || null,
-                    lines_count: this.receiveForm.lines.length,
-                    total_packs: totalPacks,
-                });
-
-                this.updateDerivedStatus();
-                this.showToast('success', 'Receipt recorded.');
-                this.closeReceive();
+                window.location.reload();
+                return;
             } catch (error) {
                 // eslint-disable-next-line no-console
                 console.error(error);
@@ -924,26 +879,8 @@ export function mount(rootEl, payload) {
                     return;
                 }
 
-                const lineState = this.lines.find((entry) => entry.id === this.shortCloseForm.purchase_order_line_id);
-                if (lineState) {
-                    const shortClosedQty = normalizeDecimal(this.shortCloseForm.short_closed_quantity);
-                    lineState.short_closed_sum = addDecimal(lineState.short_closed_sum, shortClosedQty);
-                    lineState.remaining_balance = subtractDecimal(lineState.remaining_balance, shortClosedQty);
-                }
-
-                this.shortClosures.unshift({
-                    id: Date.now(),
-                    short_closed_at: this.shortCloseForm.short_closed_at || null,
-                    short_closed_by: this.currentUserName || null,
-                    reference: this.shortCloseForm.reference || null,
-                    notes: this.shortCloseForm.notes || null,
-                    lines_count: 1,
-                    total_packs: normalizeDecimal(this.shortCloseForm.short_closed_quantity),
-                });
-
-                this.updateDerivedStatus();
-                this.showToast('success', 'Short-close recorded.');
-                this.closeShortClose();
+                window.location.reload();
+                return;
             } catch (error) {
                 // eslint-disable-next-line no-console
                 console.error(error);

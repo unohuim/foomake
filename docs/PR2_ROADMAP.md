@@ -929,3 +929,67 @@ Replace Breeze Blade UI components with Tailwind-only markup.
 
 - No new domain tests
 - Optional UI smoke checks
+
+---
+
+### PR2-UOM-003 — UoM Display Precision + Global Quantity Formatting (UI-only)
+
+**Goal**  
+Introduce a UoM-level display precision field and enforce consistent quantity formatting across all UI views.
+
+**Includes**
+
+- Add `display_precision` to `uoms` (required, default = 1, allowed range = 0–6)
+- Extend UoM CRUD UI to manage `display_precision`
+- Introduce a single `QuantityFormatter` abstraction (single source of truth)
+- Introduce a Blade directive/helper that wraps the formatter
+- Replace all quantity rendering in Blade views across all domains:
+- Materials
+- Inventory
+- Inventory Counts
+- Recipes
+- Make Orders
+- Purchasing (Orders, Receipts, Short-Closures)
+- Enforce trailing zeros to match display precision
+- No changes to storage math or BCMath canonical scale (remains 6)
+
+**Rules**
+
+- `display_precision` cannot exceed 6
+- `display_precision` may be 0 (whole-unit display)
+- Formatting is UI-only; storage precision is unchanged
+- Formatting must be centralized (no ad-hoc formatting in views)
+- No JavaScript-side formatting
+- No global JavaScript state
+
+**Permissions**
+
+- No new permission slugs
+- Managed under existing UoM CRUD permission: `inventory-materials-manage`
+
+**Testing**
+
+- Pest tests only
+- Minimum 20 tests per file
+- Tests must be complete and sufficient
+- Coverage must include:
+- Validation bounds (0–6)
+- Default value behavior
+- Authorization
+- Formatter correctness
+- Trailing zero enforcement
+- Precision 0 edge case
+- Precision 6 edge case
+
+**Documentation Impact**
+
+- `DB_SCHEMA.md` must reflect the new `uoms.display_precision` column
+- `ARCHITECTURE_INVENTORY.md` must include:
+- `QuantityFormatter` abstraction
+- Blade directive/helper usage pattern
+- `ENUMS.md` unaffected
+
+**Out of Scope**
+
+- Any changes to storage precision or BCMath scale
+- JavaScript formatting or UI-only overrides per view

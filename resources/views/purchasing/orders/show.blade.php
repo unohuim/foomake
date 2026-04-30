@@ -141,9 +141,9 @@
                                                 <h4 class="mt-1 text-base font-semibold text-gray-900" x-text="line.item_name || 'Item'"></h4>
                                                 <p class="mt-1 text-sm text-gray-600" x-text="lineSummary(line)"></p>
                                                 <p class="mt-1 text-xs text-gray-500">
-                                                    Received: <span x-text="formatQuantity(line.received_sum)"></span>
-                                                    · Short-closed: <span x-text="formatQuantity(line.short_closed_sum)"></span>
-                                                    · Remaining: <span x-text="formatQuantity(line.remaining_balance)"></span>
+                                                    Received: <span x-text="line.received_sum_display"></span>
+                                                    · Short-closed: <span x-text="line.short_closed_sum_display"></span>
+                                                    · Remaining: <span x-text="line.remaining_balance_display"></span>
                                                 </p>
                                             </div>
                                             <div class="flex items-center gap-3 text-sm text-gray-600" x-show="isEditable">
@@ -622,7 +622,7 @@
                                 <div class="rounded-md border border-gray-100 bg-gray-50 p-3">
                                     <div class="flex items-center justify-between text-sm text-gray-700">
                                         <span class="font-medium" x-text="line.item_name || 'Item'"></span>
-                                        <span class="text-xs text-gray-500">Remaining: <span x-text="formatQuantity(line.remaining_balance)"></span></span>
+                                        <span class="text-xs text-gray-500">Remaining: <span x-text="line.remaining_balance_display"></span></span>
                                     </div>
                                     <div class="mt-2">
                                         <label class="block text-xs font-semibold uppercase text-gray-500">

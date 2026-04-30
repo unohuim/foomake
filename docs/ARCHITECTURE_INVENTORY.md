@@ -646,6 +646,68 @@ Recipe creation, editing, or execution flows.
 
 ## Units of Measure
 
+### QuantityFormatter
+
+**Name:** QuantityFormatter  
+**Type:** Support Utility  
+**Location:** `app/Support/QuantityFormatter.php`
+
+**Purpose:**  
+Centralize UI quantity string formatting using UoM display precision.
+
+**Notes:**  
+- Accepts numeric strings, ints, floats, and null.
+- Clamps precision to `0..6`.
+- Preserves trailing zeros to requested precision.
+- Uses UoM-driven precision via `display_precision`.
+
+**When to Use:**  
+Rendering quantities for HTML and page payloads.
+
+**When Not to Use:**  
+Storage math or domain arithmetic (use BCMath with canonical scale 6).
+
+**Public Interface:**  
+- `QuantityFormatter::format($quantity, $precision)`  
+- `QuantityFormatter::formatForUom($quantity, $uom, $fallbackPrecision = 6)`
+
+**Example Usage:**  
+```php
+$display = QuantityFormatter::formatForUom($line->quantity, $line->item?->baseUom, 1);
+```
+
+---
+
+### Blade Quantity Directives
+
+**Name:** Blade Quantity Directives  
+**Type:** Blade Integration Pattern  
+**Location:** `app/Providers/AppServiceProvider.php`
+
+**Purpose:**  
+Provide a Blade-first wrapper over `QuantityFormatter` so views do not format quantities ad-hoc.
+
+**Notes:**  
+- Quantity display in Blade should use directives backed by `QuantityFormatter`.
+- JavaScript must consume backend-provided display strings; it must not reformat quantities.
+
+**When to Use:**  
+Any quantity rendered directly in Blade templates.
+
+**When Not to Use:**  
+Currency formatting or non-quantity values.
+
+**Public Interface:**  
+- `@qty($value, $precision)`  
+- `@qtyForUom($value, $uom, $fallbackPrecision = 6)`
+
+**Example Usage:**  
+```blade
+@qtyForUom($item->onHandQuantity(), $item->baseUom, 1)
+```
+
+---
+
 ### UomCategory
 
 **Name:** UomCategory  

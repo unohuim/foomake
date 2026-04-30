@@ -13,7 +13,7 @@ export function mount(rootEl, payload) {
         deleteOpen: false,
         isEditing: false,
         isSubmitting: false,
-        form: { id: null, name: "", symbol: "", uom_category_id: "" },
+        form: { id: null, name: "", symbol: "", uom_category_id: "", display_precision: 1 },
         errors: {},
         errorMessage: "",
         toastMessage: "",
@@ -30,7 +30,7 @@ export function mount(rootEl, payload) {
 
         openCreate() {
             this.resetErrors();
-            this.form = { id: null, name: "", symbol: "", uom_category_id: "" };
+            this.form = { id: null, name: "", symbol: "", uom_category_id: "", display_precision: 1 };
             this.isEditing = false;
             this.formOpen = true;
         },
@@ -42,6 +42,7 @@ export function mount(rootEl, payload) {
                 name: uom.name,
                 symbol: uom.symbol,
                 uom_category_id: uom.uom_category_id,
+                display_precision: uom.display_precision ?? 1,
             };
             this.isEditing = true;
             this.formOpen = true;
@@ -85,6 +86,7 @@ export function mount(rootEl, payload) {
                 ...uom,
                 id: String(uom.id),
                 uom_category_id: String(uom.uom_category_id),
+                display_precision: Number(uom.display_precision ?? 1),
             };
         },
 
@@ -150,6 +152,7 @@ export function mount(rootEl, payload) {
                     name: this.form.name,
                     symbol: this.form.symbol,
                     uom_category_id: this.form.uom_category_id,
+                    display_precision: Number(this.form.display_precision),
                 }),
             });
 

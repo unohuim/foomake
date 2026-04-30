@@ -22,26 +22,6 @@ export function mount(rootEl, payload) {
         return `${whole}.${fraction}`;
     };
 
-    const toMicro = (value) => {
-        const normalized = normalizeDecimal(value);
-        const parts = normalized.split('.');
-        const whole = parts[0];
-        const fraction = parts[1] || '000000';
-
-        return BigInt(whole) * 1000000n + BigInt(fraction);
-    };
-
-    const fromMicro = (value) => {
-        const sign = value < 0n;
-        const abs = sign ? -value : value;
-        const whole = abs / 1000000n;
-        const fraction = abs % 1000000n;
-
-        return `${sign ? '-' : ''}${whole.toString()}.${fraction.toString().padStart(6, '0')}`;
-    };
-
-    const subtractDecimal = (left, right) => fromMicro(toMicro(left) - toMicro(right));
-    const addDecimal = (left, right) => fromMicro(toMicro(left) + toMicro(right));
 
     Alpine.data('purchasingOrdersIndex', () => ({
         orders: safePayload.orders || [],
@@ -99,7 +79,7 @@ export function mount(rootEl, payload) {
                 return '0';
             }
 
-            return raw.replace(/\.0+$/, '').replace(/(\.\d*[1-9])0+$/, '$1');
+            return raw;
         },
         toggleActionMenu(event, orderId) {
             if (this.actionMenuOpen && this.actionMenuOrderId === orderId) {
@@ -289,32 +269,8 @@ export function mount(rootEl, payload) {
                     return;
                 }
 
-                this.receiveForm.lines.forEach((line) => {
-                    const lineState = (order.lines || []).find((entry) => entry.id === line.id);
-                    if (!lineState) {
-                        return;
-                    }
-
-                    const receivedQty = normalizeDecimal(line.received_quantity);
-                    lineState.received_sum = addDecimal(lineState.received_sum, receivedQty);
-                    lineState.remaining_balance = subtractDecimal(lineState.remaining_balance, receivedQty);
-                });
-
-                const balances = (order.lines || []).map((line) => normalizeDecimal(line.remaining_balance));
-                const allZero = balances.every((balance) => balance === '0.000000');
-                const anyReceipt = (order.lines || []).some((line) => normalizeDecimal(line.received_sum) !== '0.000000');
-                const anyShortClose = (order.lines || []).some((line) => normalizeDecimal(line.short_closed_sum) !== '0.000000');
-
-                if (allZero && anyShortClose) {
-                    order.status = 'SHORT-CLOSED';
-                } else if (allZero && anyReceipt) {
-                    order.status = 'RECEIVED';
-                } else if (anyReceipt) {
-                    order.status = 'PARTIALLY-RECEIVED';
-                }
-
-                this.showToast('success', 'Receipt recorded.');
-                this.closeReceive();
+                window.location.reload();
+                return;
             } catch (error) {
                 // eslint-disable-next-line no-console
                 console.error(error);

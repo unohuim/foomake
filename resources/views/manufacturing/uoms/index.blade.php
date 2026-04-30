@@ -74,6 +74,9 @@
                                                 <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                                     {{ __('Symbol') }}
                                                 </th>
+                                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                    {{ __('Display Precision') }}
+                                                </th>
                                                 <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                                                     {{ __('Actions') }}
                                                 </th>
@@ -84,6 +87,7 @@
                                                 <tr>
                                                     <td class="px-6 py-4 text-sm text-gray-900" x-text="uom.name"></td>
                                                     <td class="px-6 py-4 text-sm text-gray-600" x-text="uom.symbol"></td>
+                                                    <td class="px-6 py-4 text-sm text-gray-600" x-text="uom.display_precision"></td>
                                                     <td class="px-6 py-4 text-right text-sm">
                                                         <button type="button" class="text-blue-600 hover:text-blue-500 mr-4" @click="openEdit(uom)">
                                                             {{ __('Edit') }}
@@ -138,6 +142,12 @@
                                         </template>
                                     </select>
                                     <p class="mt-1 text-sm text-red-600" x-text="errors.uom_category_id ? errors.uom_category_id[0] : ''"></p>
+                                </div>
+
+                                <div>
+                                    <label for="uom-display-precision" class="block text-sm font-medium text-gray-700">{{ __('Display Precision') }}</label>
+                                    <input id="uom-display-precision" type="number" min="0" max="6" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500" x-model="form.display_precision" />
+                                    <p class="mt-1 text-sm text-red-600" x-text="errors.display_precision ? errors.display_precision[0] : ''"></p>
                                 </div>
                             </div>
 

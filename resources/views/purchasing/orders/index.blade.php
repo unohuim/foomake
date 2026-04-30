@@ -12,14 +12,20 @@
             $linesPayload = $purchaseOrder->lines->map(function ($line) use ($lineTotals) {
                 $packCount = bcadd((string) $line->pack_count, '0', 6);
                 $totals = $lineTotals[$line->id] ?? [];
+                $packPrecision = (int) ($line->purchaseOption?->packUom?->display_precision ?? 1);
 
                 return [
                     'id' => $line->id,
                     'item_name' => $line->item?->name,
                     'pack_count' => $packCount,
+                    'pack_precision' => $packPrecision,
+                    'pack_count_display' => \App\Support\QuantityFormatter::format($packCount, $packPrecision),
                     'received_sum' => $totals['received_sum'] ?? '0.000000',
+                    'received_sum_display' => \App\Support\QuantityFormatter::format($totals['received_sum'] ?? '0.000000', $packPrecision),
                     'short_closed_sum' => $totals['short_closed_sum'] ?? '0.000000',
+                    'short_closed_sum_display' => \App\Support\QuantityFormatter::format($totals['short_closed_sum'] ?? '0.000000', $packPrecision),
                     'remaining_balance' => $totals['balance'] ?? $packCount,
+                    'remaining_balance_display' => \App\Support\QuantityFormatter::format($totals['balance'] ?? $packCount, $packPrecision),
                 ];
             })->values()->all();
 
@@ -242,7 +248,7 @@
                                 <div class="rounded-md border border-gray-100 bg-gray-50 p-3">
                                     <div class="flex items-center justify-between text-sm text-gray-700">
                                         <span class="font-medium" x-text="line.item_name || 'Item'"></span>
-                                        <span class="text-xs text-gray-500">Remaining: <span x-text="formatQuantity(line.remaining_balance)"></span></span>
+                                        <span class="text-xs text-gray-500">Remaining: <span x-text="line.remaining_balance_display"></span></span>
                                     </div>
                                     <div class="mt-2">
                                         <label class="block text-xs font-semibold uppercase text-gray-500">

@@ -11,19 +11,21 @@ use App\Models\UomCategory;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Gate;
-use Illuminate\Support\Str;
 
 uses(RefreshDatabase::class);
 
 beforeEach(function () {
+    $this->uomCounter = 1;
+
     $this->makeTenant = function (string $name): Tenant {
         return Tenant::factory()->create([
             'tenant_name' => $name,
         ]);
     };
 
-    $this->makeUom = function (Tenant $tenant): Uom {
-        $suffix = (string) Str::uuid();
+    $this->makeUom = function (Tenant $tenant, int $displayPrecision = 1): Uom {
+        $suffix = (string) $this->uomCounter;
+        $this->uomCounter++;
 
         $category = UomCategory::query()->forceCreate([
             'tenant_id' => $tenant->id,
@@ -34,7 +36,8 @@ beforeEach(function () {
             'tenant_id' => $tenant->id,
             'uom_category_id' => $category->id,
             'name' => 'Uom ' . $suffix,
-            'symbol' => 'u' . str_replace('-', '', $suffix),
+            'symbol' => 'u' . $suffix,
+            'display_precision' => $displayPrecision,
         ]);
     };
 
@@ -90,6 +93,18 @@ beforeEach(function () {
 
         $role->permissions()->syncWithoutDetaching([$permission->id]);
         $user->roles()->syncWithoutDetaching([$role->id]);
+    };
+
+    $this->extractPayload = function ($response, string $payloadId): array {
+        $html = $response->getContent();
+        $pattern = '/<script type="application\\/json" id="' . preg_quote($payloadId, '/') . '">\\s*(.*?)\\s*<\\/script>/s';
+
+        preg_match($pattern, $html, $matches);
+
+        $json = $matches[1] ?? '';
+        $payload = json_decode($json, true);
+
+        return is_array($payload) ? $payload : [];
     };
 });
 
@@ -151,10 +166,11 @@ test('allows users with inventory-recipes-view permission to view recipes and re
 
     expect(Gate::forUser($user)->allows('inventory-recipes-view'))->toBeTrue();
 
-    $uom = ($this->makeUom)($tenant);
+    $outputUom = ($this->makeUom)($tenant, 1);
+    $lineUom = ($this->makeUom)($tenant, 3);
 
-    $output = ($this->makeItem)($tenant, $uom, 'Output A', true);
-    $input = ($this->makeItem)($tenant, $uom, 'Input Flour', false);
+    $output = ($this->makeItem)($tenant, $outputUom, 'Output A', true);
+    $input = ($this->makeItem)($tenant, $lineUom, 'Input Flour', false);
 
     $recipe = ($this->makeRecipe)($tenant, $output, true);
     ($this->addRecipeLine)($tenant, $recipe, $input, '2.000000');
@@ -173,11 +189,11 @@ test('allows users with inventory-recipes-view permission to view recipes and re
         ->assertSee($output->name)
         ->assertSee($input->name);
 
-    $html = $showResponse->getContent();
+    $payload = ($this->extractPayload)($showResponse, 'manufacturing-recipes-show-payload');
 
-    expect($html)->toMatch(
-        '/Input Flour[\s\S]{0,800}2\.00|2\.00[\s\S]{0,800}Input Flour/'
-    );
+    expect($payload['lines'][0]['item_name'] ?? null)->toBe('Input Flour');
+    expect($payload['lines'][0])->toHaveKey('quantity_display');
+    expect($payload['lines'][0]['quantity_display'] ?? null)->toBe('2.000');
 });
 
 test('view permission shows pages but not manage controls and can_manage payload is false', function () {
@@ -231,15 +247,17 @@ test('view and manage permissions include can_manage true in payload', function 
         ->assertSee('"can_manage":true', false);
 });
 
-test('show page renders multiple line quantities in 2dp format near item names', function () {
+test('show page payload renders line quantities using each line item uom display precision', function () {
     $tenant = ($this->makeTenant)('Tenant A');
     $user = User::factory()->for($tenant)->create();
     ($this->grantInventoryRecipesView)($user);
 
-    $uom = ($this->makeUom)($tenant);
-    $output = ($this->makeItem)($tenant, $uom, 'Output A', true);
-    $inputA = ($this->makeItem)($tenant, $uom, 'Input One', false);
-    $inputB = ($this->makeItem)($tenant, $uom, 'Input Two', false);
+    $outputUom = ($this->makeUom)($tenant, 1);
+    $lineUomZero = ($this->makeUom)($tenant, 0);
+    $lineUomSix = ($this->makeUom)($tenant, 6);
+    $output = ($this->makeItem)($tenant, $outputUom, 'Output A', true);
+    $inputA = ($this->makeItem)($tenant, $lineUomZero, 'Input One', false);
+    $inputB = ($this->makeItem)($tenant, $lineUomSix, 'Input Two', false);
 
     $recipe = ($this->makeRecipe)($tenant, $output, true);
     ($this->addRecipeLine)($tenant, $recipe, $inputA, '2.000000');
@@ -249,15 +267,229 @@ test('show page renders multiple line quantities in 2dp format near item names',
         ->get(route('manufacturing.recipes.show', $recipe))
         ->assertOk();
 
-    $html = $showResponse->getContent();
+    $payload = ($this->extractPayload)($showResponse, 'manufacturing-recipes-show-payload');
 
-    expect($html)->toMatch(
-        '/Input One[\s\S]{0,800}2\.00|2\.00[\s\S]{0,800}Input One/'
-    );
+    $lineByItem = collect($payload['lines'] ?? [])->mapWithKeys(function (array $line): array {
+        return [($line['item_name'] ?? '') => ($line['quantity_display'] ?? null)];
+    });
 
-    expect($html)->toMatch(
-        '/Input Two[\s\S]{0,800}1\.25|1\.25[\s\S]{0,800}Input Two/'
-    );
+    expect($lineByItem->get('Input One'))->toBe('2');
+    expect($lineByItem->get('Input Two'))->toBe('1.250000');
+});
+
+test('show payload includes quantity_display key for every recipe line', function () {
+    $tenant = ($this->makeTenant)('Tenant A');
+    $user = User::factory()->for($tenant)->create();
+    ($this->grantInventoryRecipesView)($user);
+
+    $uom = ($this->makeUom)($tenant, 2);
+    $output = ($this->makeItem)($tenant, $uom, 'Output A', true);
+    $inputA = ($this->makeItem)($tenant, $uom, 'Input One');
+    $inputB = ($this->makeItem)($tenant, $uom, 'Input Two');
+    $recipe = ($this->makeRecipe)($tenant, $output);
+
+    ($this->addRecipeLine)($tenant, $recipe, $inputA, '1.000000');
+    ($this->addRecipeLine)($tenant, $recipe, $inputB, '2.345000');
+
+    $response = $this->actingAs($user)->get(route('manufacturing.recipes.show', $recipe))->assertOk();
+    $payload = ($this->extractPayload)($response, 'manufacturing-recipes-show-payload');
+
+    foreach ($payload['lines'] as $line) {
+        expect($line)->toHaveKey('quantity_display');
+    }
+});
+
+test('show payload renders precision 0 for recipe line quantity', function () {
+    $tenant = ($this->makeTenant)('Tenant A');
+    $user = User::factory()->for($tenant)->create();
+    ($this->grantInventoryRecipesView)($user);
+
+    $outputUom = ($this->makeUom)($tenant, 1);
+    $lineUom = ($this->makeUom)($tenant, 0);
+    $output = ($this->makeItem)($tenant, $outputUom, 'Output A', true);
+    $input = ($this->makeItem)($tenant, $lineUom, 'Input Zero');
+    $recipe = ($this->makeRecipe)($tenant, $output);
+    ($this->addRecipeLine)($tenant, $recipe, $input, '2.900000');
+
+    $response = $this->actingAs($user)->get(route('manufacturing.recipes.show', $recipe))->assertOk();
+    $payload = ($this->extractPayload)($response, 'manufacturing-recipes-show-payload');
+
+    expect($payload['lines'][0]['quantity_display'] ?? null)->toBe('3');
+});
+
+test('show payload renders precision 1 for recipe line quantity', function () {
+    $tenant = ($this->makeTenant)('Tenant A');
+    $user = User::factory()->for($tenant)->create();
+    ($this->grantInventoryRecipesView)($user);
+
+    $outputUom = ($this->makeUom)($tenant, 2);
+    $lineUom = ($this->makeUom)($tenant, 1);
+    $output = ($this->makeItem)($tenant, $outputUom, 'Output A', true);
+    $input = ($this->makeItem)($tenant, $lineUom, 'Input One');
+    $recipe = ($this->makeRecipe)($tenant, $output);
+    ($this->addRecipeLine)($tenant, $recipe, $input, '2.140000');
+
+    $response = $this->actingAs($user)->get(route('manufacturing.recipes.show', $recipe))->assertOk();
+    $payload = ($this->extractPayload)($response, 'manufacturing-recipes-show-payload');
+
+    expect($payload['lines'][0]['quantity_display'] ?? null)->toBe('2.1');
+});
+
+test('show payload rounds up at precision 2 for recipe line quantity', function () {
+    $tenant = ($this->makeTenant)('Tenant A');
+    $user = User::factory()->for($tenant)->create();
+    ($this->grantInventoryRecipesView)($user);
+
+    $outputUom = ($this->makeUom)($tenant, 1);
+    $lineUom = ($this->makeUom)($tenant, 2);
+    $output = ($this->makeItem)($tenant, $outputUom, 'Output A', true);
+    $input = ($this->makeItem)($tenant, $lineUom, 'Input Round Up');
+    $recipe = ($this->makeRecipe)($tenant, $output);
+    ($this->addRecipeLine)($tenant, $recipe, $input, '2.345000');
+
+    $response = $this->actingAs($user)->get(route('manufacturing.recipes.show', $recipe))->assertOk();
+    $payload = ($this->extractPayload)($response, 'manufacturing-recipes-show-payload');
+
+    expect($payload['lines'][0]['quantity_display'] ?? null)->toBe('2.35');
+});
+
+test('show payload rounds down at precision 2 for recipe line quantity', function () {
+    $tenant = ($this->makeTenant)('Tenant A');
+    $user = User::factory()->for($tenant)->create();
+    ($this->grantInventoryRecipesView)($user);
+
+    $outputUom = ($this->makeUom)($tenant, 1);
+    $lineUom = ($this->makeUom)($tenant, 2);
+    $output = ($this->makeItem)($tenant, $outputUom, 'Output A', true);
+    $input = ($this->makeItem)($tenant, $lineUom, 'Input Round Down');
+    $recipe = ($this->makeRecipe)($tenant, $output);
+    ($this->addRecipeLine)($tenant, $recipe, $input, '2.344000');
+
+    $response = $this->actingAs($user)->get(route('manufacturing.recipes.show', $recipe))->assertOk();
+    $payload = ($this->extractPayload)($response, 'manufacturing-recipes-show-payload');
+
+    expect($payload['lines'][0]['quantity_display'] ?? null)->toBe('2.34');
+});
+
+test('show payload preserves trailing zeros at precision 3 for recipe line quantity', function () {
+    $tenant = ($this->makeTenant)('Tenant A');
+    $user = User::factory()->for($tenant)->create();
+    ($this->grantInventoryRecipesView)($user);
+
+    $outputUom = ($this->makeUom)($tenant, 1);
+    $lineUom = ($this->makeUom)($tenant, 3);
+    $output = ($this->makeItem)($tenant, $outputUom, 'Output A', true);
+    $input = ($this->makeItem)($tenant, $lineUom, 'Input Three');
+    $recipe = ($this->makeRecipe)($tenant, $output);
+    ($this->addRecipeLine)($tenant, $recipe, $input, '2.100000');
+
+    $response = $this->actingAs($user)->get(route('manufacturing.recipes.show', $recipe))->assertOk();
+    $payload = ($this->extractPayload)($response, 'manufacturing-recipes-show-payload');
+
+    expect($payload['lines'][0]['quantity_display'] ?? null)->toBe('2.100');
+});
+
+test('show payload preserves trailing zeros at precision 6 for recipe line quantity', function () {
+    $tenant = ($this->makeTenant)('Tenant A');
+    $user = User::factory()->for($tenant)->create();
+    ($this->grantInventoryRecipesView)($user);
+
+    $outputUom = ($this->makeUom)($tenant, 1);
+    $lineUom = ($this->makeUom)($tenant, 6);
+    $output = ($this->makeItem)($tenant, $outputUom, 'Output A', true);
+    $input = ($this->makeItem)($tenant, $lineUom, 'Input Six');
+    $recipe = ($this->makeRecipe)($tenant, $output);
+    ($this->addRecipeLine)($tenant, $recipe, $input, '0.005000');
+
+    $response = $this->actingAs($user)->get(route('manufacturing.recipes.show', $recipe))->assertOk();
+    $payload = ($this->extractPayload)($response, 'manufacturing-recipes-show-payload');
+
+    expect($payload['lines'][0]['quantity_display'] ?? null)->toBe('0.005000');
+});
+
+test('show payload renders zero quantity with configured precision 3', function () {
+    $tenant = ($this->makeTenant)('Tenant A');
+    $user = User::factory()->for($tenant)->create();
+    ($this->grantInventoryRecipesView)($user);
+
+    $outputUom = ($this->makeUom)($tenant, 1);
+    $lineUom = ($this->makeUom)($tenant, 3);
+    $output = ($this->makeItem)($tenant, $outputUom, 'Output A', true);
+    $input = ($this->makeItem)($tenant, $lineUom, 'Input Zero Three');
+    $recipe = ($this->makeRecipe)($tenant, $output);
+    ($this->addRecipeLine)($tenant, $recipe, $input, '0.000000');
+
+    $response = $this->actingAs($user)->get(route('manufacturing.recipes.show', $recipe))->assertOk();
+    $payload = ($this->extractPayload)($response, 'manufacturing-recipes-show-payload');
+
+    expect($payload['lines'][0]['quantity_display'] ?? null)->toBe('0.000');
+});
+
+test('show payload uses line item uom precision instead of output item uom precision', function () {
+    $tenant = ($this->makeTenant)('Tenant A');
+    $user = User::factory()->for($tenant)->create();
+    ($this->grantInventoryRecipesView)($user);
+
+    $outputUom = ($this->makeUom)($tenant, 6);
+    $lineUom = ($this->makeUom)($tenant, 0);
+    $output = ($this->makeItem)($tenant, $outputUom, 'Output A', true);
+    $input = ($this->makeItem)($tenant, $lineUom, 'Input Uses Own Uom');
+    $recipe = ($this->makeRecipe)($tenant, $output);
+    ($this->addRecipeLine)($tenant, $recipe, $input, '2.100000');
+
+    $response = $this->actingAs($user)->get(route('manufacturing.recipes.show', $recipe))->assertOk();
+    $payload = ($this->extractPayload)($response, 'manufacturing-recipes-show-payload');
+
+    expect($payload['lines'][0]['quantity_display'] ?? null)->toBe('2');
+});
+
+test('show payload defaults recipe line quantity display to one decimal when uom precision omitted', function () {
+    $tenant = ($this->makeTenant)('Tenant A');
+    $user = User::factory()->for($tenant)->create();
+    ($this->grantInventoryRecipesView)($user);
+
+    $outputUom = ($this->makeUom)($tenant, 1);
+    $lineUom = ($this->makeUom)($tenant);
+    $output = ($this->makeItem)($tenant, $outputUom, 'Output A', true);
+    $input = ($this->makeItem)($tenant, $lineUom, 'Input Default One');
+    $recipe = ($this->makeRecipe)($tenant, $output);
+    ($this->addRecipeLine)($tenant, $recipe, $input, '2.100000');
+
+    $response = $this->actingAs($user)->get(route('manufacturing.recipes.show', $recipe))->assertOk();
+    $payload = ($this->extractPayload)($response, 'manufacturing-recipes-show-payload');
+
+    expect($payload['lines'][0]['quantity_display'] ?? null)->toBe('2.1');
+});
+
+test('show payload can render three recipe lines with distinct precision outputs', function () {
+    $tenant = ($this->makeTenant)('Tenant A');
+    $user = User::factory()->for($tenant)->create();
+    ($this->grantInventoryRecipesView)($user);
+
+    $outputUom = ($this->makeUom)($tenant, 1);
+    $uomZero = ($this->makeUom)($tenant, 0);
+    $uomThree = ($this->makeUom)($tenant, 3);
+    $uomSix = ($this->makeUom)($tenant, 6);
+    $output = ($this->makeItem)($tenant, $outputUom, 'Output A', true);
+    $inputA = ($this->makeItem)($tenant, $uomZero, 'Input Zero');
+    $inputB = ($this->makeItem)($tenant, $uomThree, 'Input Three');
+    $inputC = ($this->makeItem)($tenant, $uomSix, 'Input Six');
+    $recipe = ($this->makeRecipe)($tenant, $output);
+
+    ($this->addRecipeLine)($tenant, $recipe, $inputA, '2.900000');
+    ($this->addRecipeLine)($tenant, $recipe, $inputB, '2.100000');
+    ($this->addRecipeLine)($tenant, $recipe, $inputC, '0.005000');
+
+    $response = $this->actingAs($user)->get(route('manufacturing.recipes.show', $recipe))->assertOk();
+    $payload = ($this->extractPayload)($response, 'manufacturing-recipes-show-payload');
+
+    $lineByItem = collect($payload['lines'] ?? [])->mapWithKeys(function (array $line): array {
+        return [($line['item_name'] ?? '') => ($line['quantity_display'] ?? null)];
+    });
+
+    expect($lineByItem->get('Input Zero'))->toBe('3');
+    expect($lineByItem->get('Input Three'))->toBe('2.100');
+    expect($lineByItem->get('Input Six'))->toBe('0.005000');
 });
 
 test('recipes index is tenant scoped', function () {

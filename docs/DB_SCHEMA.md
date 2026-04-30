@@ -905,6 +905,7 @@ Migrations remain the **sole source of truth**.
 | uom_category_id | bigint    | No       | FK → uom_categories.id (CASCADE) |
 | name            | string    | No       | Not unique                       |
 | symbol          | string    | No       | Unique per tenant                |
+| display_precision | unsignedTinyInteger | No | Default `1`; UI display precision (0..6) |
 | created_at      | timestamp | Yes      | —                                |
 | updated_at      | timestamp | Yes      | —                                |
 

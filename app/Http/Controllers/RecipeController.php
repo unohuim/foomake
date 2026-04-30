@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Item;
 use App\Models\Recipe;
 use App\Models\RecipeLine;
+use App\Support\QuantityFormatter;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -382,7 +383,7 @@ class RecipeController extends Controller
                 ? $line->item->baseUom->name . ' (' . $line->item->baseUom->symbol . ')'
                 : '—',
             'quantity' => $line->quantity,
-            'quantity_display' => number_format((float) $line->quantity, 2, '.', ''),
+            'quantity_display' => QuantityFormatter::formatForUom($line->quantity, $line->item?->baseUom, 1),
             'update_url' => route('manufacturing.recipes.lines.update', [
                 'recipe' => $line->recipe_id,
                 'line' => $line->id,

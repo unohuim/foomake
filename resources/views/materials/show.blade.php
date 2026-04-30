@@ -99,7 +99,7 @@
                                                 {{ $package['supplier_company_name'] ?? 'Supplier' }}
                                             </p>
                                             <p class="text-xs text-gray-600">
-                                                {{ bcdiv($package['pack_quantity'], '1', 2) }}
+                                                {{ $package['pack_quantity_display'] ?? $package['pack_quantity'] }}
                                                 {{ $package['pack_uom_symbol'] ?? '—' }}
                                             </p>
                                         </div>

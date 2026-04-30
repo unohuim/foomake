@@ -47,7 +47,7 @@
                                                 {{ $package['item_name'] ?? 'Material' }}
                                             </p>
                                             <p class="text-xs text-gray-600">
-                                                {{ $package['pack_quantity'] ?? '0.000000' }}
+                                                {{ $package['pack_quantity_display'] ?? $package['pack_quantity'] ?? '0.000000' }}
                                                 {{ $package['pack_uom_symbol'] ?? '—' }}
                                             </p>
                                         </div>

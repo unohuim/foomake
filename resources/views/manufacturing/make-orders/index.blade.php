@@ -112,7 +112,7 @@
                                     <template x-for="order in makeOrders" :key="order.id">
                                         <tr>
                                             <td class="px-3 py-3 text-gray-900" x-text="order.output_item_name"></td>
-                                            <td class="px-3 py-3 text-gray-600" x-text="order.output_quantity"></td>
+                                            <td class="px-3 py-3 text-gray-600" x-text="order.output_quantity_display"></td>
                                             <td class="px-3 py-3 text-gray-600" x-text="order.status"></td>
                                             <td class="px-3 py-3 text-gray-600">
                                                 <div class="space-y-1">
