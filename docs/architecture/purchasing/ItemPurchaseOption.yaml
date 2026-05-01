@@ -11,7 +11,7 @@ when_not_to_use:
   - Representing stockable entities
 rules:
   - Purchase options are not inventory identities.
-  - Pack quantities convert into the item base UoM on receipt.
+  - Pack quantities convert into the item base UoM on receipt using BCMath string math at scale 6.
 public_interface:
   - item()
   - packUom()

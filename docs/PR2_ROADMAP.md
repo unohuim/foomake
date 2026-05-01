@@ -916,10 +916,12 @@ Includes
 
 Enforce stock move creation for every receipt line
 Ensure:
-stock_moves.type = RECEIPT
+stock_moves.type = receipt
 stock_moves.status = POSTED
 Guarantee linkage between receipt lines and stock moves
 Ensure idempotency (no duplicate stock moves per receipt line)
+Ensure receipt stock move quantity uses:
+received_quantity × item_purchase_options.pack_quantity
 
 Rules
 

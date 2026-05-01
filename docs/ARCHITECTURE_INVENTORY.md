@@ -931,6 +931,35 @@ $option = ItemPurchaseOption::create([
 ]);
 ```
 
+### Purchase Order Receipt Inventory Impact
+
+**Name:** Purchase Order Receipt Inventory Impact  
+**Type:** Domain Rule  
+**Location:**  
+- `docs/architecture/purchasing/PurchaseOrderReceiptInventoryImpact.yaml`  
+- `app/Services/Purchasing/PurchaseOrderLifecycleService.php`  
+- `app/Models/PurchaseOrderReceiptLine.php`
+
+**Purpose:**  
+Ensure every purchase order receipt line posts exactly one linked stock move and updates inventory in item base units.
+
+**When to Use:**  
+Purchase order receiving and receipt-ledger audit checks.
+
+**When Not to Use:**  
+Short-close events or non-purchasing inventory adjustments.
+
+**Public Interface:**  
+- `PurchaseOrderLifecycleService::createReceipt()`  
+- `PurchaseOrderReceiptLine::stockMove()`  
+- `Item::onHandQuantity()`
+
+**Example Usage:**  
+```php
+$baseQuantity = bcmul('2.000000', '500.000000', 6);
+// $baseQuantity === '1000.000000'
+```
+
 ---
 
 ### ReceivePurchaseOptionAction

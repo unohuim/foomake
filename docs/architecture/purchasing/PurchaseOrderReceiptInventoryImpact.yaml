@@ -1,0 +1,27 @@
+name: Purchase Order Receipt Inventory Impact
+type: Domain Rule
+location:
+  - app/Services/Purchasing/PurchaseOrderLifecycleService.php
+  - app/Models/PurchaseOrderReceiptLine.php
+  - app/Models/StockMove.php
+  - database/migrations/2026_04_30_000001_add_stock_move_id_to_purchase_order_receipt_lines_table.php
+purpose: Ensure every purchase order receipt line posts exactly one linked stock move and updates inventory in item base units.
+when_to_use:
+  - Receiving purchase orders into inventory
+  - Auditing inventory impact for purchase receipts
+when_not_to_use:
+  - Short-closing purchase orders
+  - Manual inventory adjustments outside purchase receiving
+rules:
+  - Every purchase order receipt line must create exactly one stock move.
+  - Each receipt line must link to its stock move through stock_move_id.
+  - Receipt stock move quantity is calculated as received_quantity multiplied by item_purchase_options.pack_quantity using BCMath at scale 6.
+  - Receipt stock moves must remain the source of truth for inventory on-hand.
+  - Receipt creation must fail transactionally if stock move creation fails.
+public_interface:
+  - PurchaseOrderLifecycleService::createReceipt()
+  - PurchaseOrderReceiptLine::stockMove()
+  - Item::onHandQuantity()
+example_usage: |
+  $baseQuantity = bcmul('2.000000', '500.000000', 6);
+  // $baseQuantity === '1000.000000'

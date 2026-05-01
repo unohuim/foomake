@@ -10,6 +10,7 @@ when_not_to_use:
 rules:
   - Stock moves are append-only and must not be updated or deleted.
   - Quantity is signed and recorded in the item base UoM.
+  - Purchase receipt stock moves are created one-to-one from purchase_order_receipt_lines and linked back to the receipt line.
   - Enum-like values must use values defined in docs/ENUMS.md.
 public_interface:
   - Item::stockMoves()

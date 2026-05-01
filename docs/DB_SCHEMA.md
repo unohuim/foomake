@@ -565,9 +565,16 @@ Migrations remain the **sole source of truth**.
 | tenant_id                | bigint         | No       | FK → tenants.id (CASCADE)               |
 | purchase_order_receipt_id | bigint        | No       | FK → purchase_order_receipts.id (CASCADE) |
 | purchase_order_line_id   | bigint         | No       | FK → purchase_order_lines.id (CASCADE)  |
+| stock_move_id            | bigint         | Yes      | FK → stock_moves.id (SET NULL)          |
 | received_quantity        | decimal(18,6)  | No       | Pack count                              |
 | created_at               | timestamp      | Yes      | —                                       |
 | updated_at               | timestamp      | Yes      | —                                       |
+
+### Foreign Keys
+
+- `purchase_order_receipt_id` → purchase_order_receipts.id (CASCADE)
+- `purchase_order_line_id` → purchase_order_lines.id (CASCADE)
+- `stock_move_id` → stock_moves.id (SET NULL)
 
 ### Keys & Indexes
 
@@ -575,8 +582,10 @@ Migrations remain the **sole source of truth**.
 - Index: `tenant_id`
 - Index: `purchase_order_receipt_id`
 - Index: `purchase_order_line_id`
+- Unique: `stock_move_id`
 - Implicit (FK index): `purchase_order_receipt_id`
 - Implicit (FK index): `purchase_order_line_id`
+- Implicit (FK index): `stock_move_id`
 
 ---
 
@@ -783,8 +792,8 @@ Migrations remain the **sole source of truth**.
 | quantity    | decimal(18,6) | No       | Signed                        |
 | type        | enum          | No       | See ENUMS.md                  |
 | status      | string        | No       | See ENUMS.md                  |
-| source_type | string        | Yes      | Polymorphic                   |
-| source_id   | bigint        | Yes      | Polymorphic                   |
+| source_type | string        | Yes      | Polymorphic; purchase receipts use `purchase_order_receipt_line` |
+| source_id   | bigint        | Yes      | Polymorphic; purchase receipts reference purchase_order_receipt_lines.id |
 | created_at  | timestamp     | No       | Defaults to CURRENT_TIMESTAMP |
 
 ### Keys & Indexes
