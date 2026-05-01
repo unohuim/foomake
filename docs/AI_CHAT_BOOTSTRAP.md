@@ -255,11 +255,13 @@ If unsure, **stop immediately and ask**.
 This roadmap defines the **second major phase** of work: completing **Items, Inventory, Suppliers, and Manufacturing**
 with **modern, minimalist UI**, aligned with **Breeze** and constrained by `UI_DESIGN.md`.
 
+This reconciled version reflects the **current implementation state** of the repository.
+
 This version explicitly accounts for the **dependency chain**:
 
 > **UoM Category → UoM → Item (Material)**
 
-and introduces a **Materials top-nav dropdown** instead of separate top-level menu items.
+and uses **process-based top-level navigation**, with Materials grouped under **Manufacturing**.
 
 ---
 
@@ -275,22 +277,26 @@ and introduces a **Materials top-nav dropdown** instead of separate top-level me
 
 ---
 
-## Navigation Model (Revised)
+## Navigation Model (Reconciled)
 
 - **Top horizontal navigation (Breeze-style)**
 - No sidebars
 - No dashboard-heavy layouts
 
-### Materials Navigation Pattern
+### Current Navigation Pattern
 
-- **Materials** is a **top-level nav item**
-- Click → `/materials` (Materials index)
-- Hover → dropdown menu with:
+- **Purchasing** and **Manufacturing** are the current top-level domain menus
+- **Materials** is reached via **Manufacturing → Materials**
+- Manufacturing dropdown currently includes:
+    - Inventory
+    - Inventory Counts
+    - Orders (Make Orders)
     - Materials
-    - UoM Categories
+    - Recipes
     - Units of Measure
+    - UoM Categories
 
-This establishes Materials as the _parent domain_ for its required support entities.
+This keeps navigation aligned with current process-based domain ownership.
 
 ---
 
@@ -298,14 +304,14 @@ This establishes Materials as the _parent domain_ for its required support entit
 
 > Materials are the **first UI domain** because all downstream domains depend on Items.
 
-### PR2-MAT-001 — Materials Navigation + Index ✅ (Completed)
+### PR2-MAT-001 — Materials Navigation + Index ✅ (Implemented, later expanded)
 
 **Goal**  
 Expose Materials as a first-class domain with read-only visibility.
 
 **Includes**
 
-- Add **Materials** to top horizontal navigation
+- Add Materials visibility within current top horizontal navigation
 - Route: `/materials`
 - Gate enforcement: `inventory-materials-view`
 - Index view listing all Items
@@ -314,12 +320,11 @@ Expose Materials as a first-class domain with read-only visibility.
 
 - Clean list/table (Tailwind, Breeze-aligned)
 - Columns: Name, Base UoM, Flags
-- Empty state with “Create Material” CTA (non-functional)
+- Empty state with “Create Material” CTA
 
-**Out of Scope**
+**Implementation Note**
 
-- Create / Edit / Delete
-- UoM management
+- The current codebase has already expanded beyond this original slice to include create/edit/delete and related UoM management.
 
 ---
 
@@ -353,8 +358,8 @@ Allow managing Units of Measure within categories.
 
 **Includes**
 
-- Materials nav dropdown entry: **Units**
-- Route: `/materials/uoms`
+- Manufacturing nav dropdown entry: **Units**
+- Route: `/manufacturing/uoms`
 - List filtered/grouped by category
 - Create + Edit + Delete (AJAX)
 - Requires category selection
@@ -368,52 +373,6 @@ Allow managing Units of Measure within categories.
 **Permissions**
 
 - `inventory-materials-manage`
-
----
-
-### PR2-UOM-003 — UoM Display Precision + Global Quantity Formatting (UI-only) ✅ (Completed)
-
-**Goal**  
-Introduce a UoM-level display precision field and enforce consistent quantity formatting across all UI views.
-
-**Includes**
-
-- Add `display_precision` to `uoms`
-- Required, non-null, default = `1`
-- Allowed range: `0–6`
-- Extend UoM CRUD UI to manage `display_precision`
-- Introduce `App\Support\QuantityFormatter` as the single source of truth
-- Introduce Blade quantity directives/helpers wrapping `QuantityFormatter`
-- Replace quantity rendering across UI views with backend-formatted display strings or Blade formatter usage
-- Apply formatting across Materials, Inventory, Inventory Counts, Recipes, Make Orders, and Purchasing views
-- Enforce trailing zeros to exactly match the UoM display precision
-
-**Rules**
-
-- `display_precision` cannot exceed `6`
-- `display_precision` may be `0` for whole-unit display
-- Formatting is UI-only
-- Storage precision and BCMath canonical scale remain unchanged
-- Formatting must be centralized through `QuantityFormatter`
-- No ad-hoc quantity formatting in Blade views
-- No JavaScript-side quantity decimal formatting
-- No global JavaScript state
-
-**Permissions**
-
-- No new permission slugs
-- Managed under existing UoM CRUD permission: `inventory-materials-manage`
-
-**Documentation Impact**
-
-- `docs/DB_SCHEMA.md` documents `uoms.display_precision`
-- `docs/ARCHITECTURE_INVENTORY.md` documents `QuantityFormatter` and Blade quantity directive/helper usage
-- `docs/ENUMS.md` unaffected
-
-**Out of Scope**
-
-- Any changes to storage precision or BCMath scale
-- JavaScript formatting or UI-only overrides per view
 
 ---
 
@@ -591,7 +550,51 @@ Enable full recipe authoring with minimal, calm AJAX-first UX.
 
 ---
 
-### PR3-MO-001 — Make Orders (Execute Recipe)
+### PR3-REC-003 — Recipe Output Quantity Support
+
+**Goal**  
+Introduce explicit output quantity for recipes.
+
+**Problem Statement**  
+Recipes currently define output item and UoM but not quantity.
+
+**Includes**
+
+- Add `output_quantity` to recipes
+- Default existing records to `'0.000000'`
+- Update create/edit UI to capture quantity
+- Display output quantity in index and detail views
+- Persist using BCMath string (scale = 6)
+
+**Rules**
+
+- Output quantity is required for new/updated recipes
+- Must be ≥ 0 (existing default = 0 allowed for legacy)
+- Stored as string, not float
+- Uses canonical scale = 6
+
+**Execution Impact**
+
+`ExecuteRecipeAction` must scale inputs relative to defined output quantity.
+
+Example:
+Recipe output = 10
+Execute 20 → multiplier = 2
+
+**Testing**
+
+- Creation and validation
+- Default backfill behavior
+- Execution scaling correctness
+- Precision handling
+
+**Documentation Impact**
+
+- Update architecture docs to reflect new recipe invariant
+
+---
+
+### PR3-MO-001 — Make Orders (Execute Recipe) _(Superseded in implementation by persisted make orders)_
 
 **Goal**  
 Allow executing a recipe to create ledger movements.
@@ -611,7 +614,7 @@ Allow executing a recipe to create ledger movements.
 
 - Ledger-first execution (issues + receipt)
 - BCMath with canonical scale
-- No persisted make-order record unless approved
+- This original direct-execution-only approach was later replaced in the current implementation by persisted make orders (`PR3b`)
 
 **Permissions**
 
@@ -658,7 +661,7 @@ Implement persisted Make Orders with full lifecycle (Draft → Scheduled → Mad
 
 ## DOMAIN 4 — Suppliers & Purchasing (Revised)
 
-This domain introduces **supplier management, supplier-specific material pricing, and purchasing primitives**, with clear separation between **planning prices**, **supplier prices**, and **order price snapshots**.
+This domain introduces **supplier management, supplier-specific material pricing, and purchasing primitives**, with clear separation between **planning prices**, **supplier catalog/prices**, and **order price snapshots**.
 
 ---
 
@@ -693,7 +696,7 @@ Introduce tenant-owned Suppliers as a first-class Purchasing domain.
 
 ---
 
-### PR2-MAT-004 — Material Planning Price (Schema + UI)
+### PR2-MAT-006 — Material Planning Price (Schema + UI)
 
 **Goal**  
 Add a **planning-only placeholder price** to materials.
@@ -727,7 +730,7 @@ Complete supplier lifecycle management.
 
 - Edit supplier (AJAX slide-over)
 - Delete supplier
-- Delete blocked if supplier has linked materials (future-safe)
+- Delete blocked if supplier has linked supplier catalog records
 - Gate: `purchasing-suppliers-manage`
 
 ---
@@ -739,7 +742,9 @@ Define which materials are bought from which suppliers, including **supplier-spe
 
 **Includes**
 
-- New tenant-owned table/model (recommended): `supplier_item_prices`
+- Implemented as tenant-owned supplier catalog records using:
+    - `item_purchase_options`
+    - `item_purchase_option_prices`
 - Fields:
     - `tenant_id`
     - `supplier_id`
@@ -765,7 +770,7 @@ Define which materials are bought from which suppliers, including **supplier-spe
 
 - Many suppliers per material
 - Many materials per supplier
-- Prices represent **expected/current** pricing, not history
+- The current implementation keeps supplier purchase options and separate price records for expected/current pricing
 
 ---
 
@@ -778,7 +783,7 @@ Define which materials are bought from which suppliers, including **supplier-spe
 Introduce Purchase Orders with **immutable pricing snapshots** captured at the moment a line is added.
 
 This PR establishes the **foundation of the PO system**: draft creation, line management, and permanent price capture.  
-Workflow, lifecycle, and advanced status rules are intentionally **out of scope**.
+This was the original foundation slice. The current implementation later expanded into lifecycle and receiving behavior covered by `PR2-PUR-005`.
 
 ---
 
@@ -919,7 +924,7 @@ To move out of DRAFT (future PR):
 | Layer          | Location                                                          | Purpose                  |
 | -------------- | ----------------------------------------------------------------- | ------------------------ |
 | Planning       | `items.default_price_cents` + `items.default_price_currency_code` | Forecasting only         |
-| Supplier       | `supplier_item_prices.*`                                          | Expected buy price       |
+| Supplier       | `item_purchase_options.*` + `item_purchase_option_prices.*`       | Expected buy price       |
 | Purchase Order | `purchase_order_lines.*`                                          | Legal / accounting truth |
 
 ---
@@ -1149,6 +1154,51 @@ PO Lifecycle
 
 ## Receipt Event Pattern
 
+---
+
+### PR2-PUR-006 — Receiving Inventory Impact Fix
+
+Goal
+Ensure purchase order receiving always impacts inventory via stock moves.
+
+Problem Statement
+Current behavior allows purchase orders to reach RECEIVED without reliably creating stock moves.
+
+Includes
+
+Enforce stock move creation for every receipt line
+Ensure:
+stock_moves.type = RECEIPT
+stock_moves.status = POSTED
+Guarantee linkage between receipt lines and stock moves
+Ensure idempotency (no duplicate stock moves per receipt line)
+
+Rules
+
+Inventory impact is mandatory for all receipts
+A PO cannot be considered RECEIVED unless inventory is updated
+All quantity math uses BCMath (scale = 6)
+No float math
+Stock moves are the single source of truth
+
+Validation
+
+Receipt must fail if stock move creation fails
+Use transactional integrity (receipt + stock moves)
+
+Testing
+
+Receipt creates stock moves
+Duplicate prevention
+Multi-line receipts
+Status transitions tied to inventory
+Permission enforcement
+
+Documentation Impact
+
+Clarify invariant: receiving always creates stock moves
+Update architecture docs only if required
+
 ## DOMAIN 5 — Shared UI Infrastructure (As Needed)
 
 > Created **only when duplication appears**.
@@ -1180,15 +1230,15 @@ After PR2 completion:
 
 ---
 
-### PR2-UOM-TEN-001 — Tenant-Scoped Units of Measure (Schema + Refactor)
+### PR2-UOM-TEN-001 — Tenant-Scoped Units of Measure (Schema + Refactor) ✅ (Implemented)
 
 **Problem Statement**  
-UoM Categories and Units are currently **global**, but CRUD access implies tenant ownership.
+UoM Categories and Units required tenant ownership to match CRUD access expectations.
 
-**Decision**  
-Defer tenancy alignment to a **dedicated PR**.
+**Implementation Note**  
+Tenant scoping is already implemented in the current codebase.
 
-**Includes (Planned)**
+**Includes**
 
 - Add `tenant_id` to:
     - `uom_categories`
@@ -1199,9 +1249,9 @@ Defer tenancy alignment to a **dedicated PR**.
 - Update `ARCHITECTURE_INVENTORY.md`
 - Update `DB_SCHEMA.md`
 
-**Out of Scope (for now)**
+**Result**
 
-- Any tenancy changes in PR2-UOM-001 / PR2-UOM-002
+- UoM Categories and UoMs are tenant-owned, while system defaults continue to use `tenant_id = null`.
 
 ---
 
@@ -1227,6 +1277,71 @@ Replace Breeze Blade UI components with Tailwind-only markup.
 
 - No new domain tests
 - Optional UI smoke checks
+
+---
+
+### PR2-UOM-003 — UoM Display Precision + Global Quantity Formatting (UI-only) ✅ (Implemented)
+
+**Goal**  
+Introduce a UoM-level display precision field and enforce consistent quantity formatting across all UI views.
+
+**Includes**
+
+- Add `display_precision` to `uoms` (required, default = 1, allowed range = 0–6)
+- Extend UoM CRUD UI to manage `display_precision`
+- Introduce a single `QuantityFormatter` abstraction for centralized display formatting
+- Introduce a Blade directive/helper that wraps the formatter
+- Replace all quantity rendering in Blade views across all domains:
+- Materials
+- Inventory
+- Inventory Counts
+- Recipes
+- Make Orders
+- Purchasing (Orders, Receipts, Short-Closures)
+- Enforce trailing zeros to match display precision
+- Use string-safe half-up display rounding without changing storage precision
+- No changes to storage math or BCMath canonical scale (remains 6)
+
+**Rules**
+
+- `display_precision` cannot exceed 6
+- `display_precision` may be 0 (whole-unit display)
+- Formatting is UI-only; storage precision is unchanged
+- Formatting must be centralized (no ad-hoc formatting in views)
+- No JavaScript-side formatting
+- No global JavaScript state
+
+**Permissions**
+
+- No new permission slugs
+- Managed under existing UoM CRUD permission: `inventory-materials-manage`
+
+**Testing**
+
+- Pest tests only
+- Minimum 20 tests per file
+- Tests must be complete and sufficient
+- Coverage must include:
+- Validation bounds (0–6)
+- Default value behavior
+- Authorization
+- Formatter correctness
+- Trailing zero enforcement
+- Precision 0 edge case
+- Precision 6 edge case
+
+**Documentation Impact**
+
+- `DB_SCHEMA.md` must reflect the new `uoms.display_precision` column
+- `ARCHITECTURE_INVENTORY.md` must include:
+- `QuantityFormatter` abstraction
+- Blade directive/helper usage pattern
+- `ENUMS.md` unaffected
+
+**Out of Scope**
+
+- Any changes to storage precision or BCMath scale
+- JavaScript formatting or UI-only overrides per view
 
 ## docs/CONVENTIONS.md
 
@@ -1482,19 +1597,6 @@ These rules apply to:
 - Receiving logic
 - Unit conversions
 - Any inventory-affecting calculations
-
-## Quantity Display Formatting (UI-only)
-
-Quantity display formatting is separate from quantity storage and math.
-
-- Stored quantities remain canonical BCMath strings at scale 6.
-- Displayed quantities must use the related UoM's `display_precision`.
-- `display_precision` is an integer from `0` to `6`, defaulting to `1`.
-- Display formatting must preserve trailing zeros exactly to the configured precision.
-- All PHP-side quantity display formatting must go through `App\Support\QuantityFormatter`.
-- Blade views must use the approved Blade quantity directive/helper pattern instead of ad-hoc formatting.
-- JavaScript must not perform quantity decimal formatting; it may only render backend-provided display strings.
-- This rule is UI-only and must not change storage precision, arithmetic, or BCMath scale.
 
 ## docs/ARCHITECTURE_INVENTORY.md
 
@@ -1940,44 +2042,6 @@ $total = bcadd($a, $b, 6);
 
 ---
 
-### QuantityFormatter
-
-**Name:** QuantityFormatter  
-**Type:** Support Class / UI Formatting Abstraction  
-**Location:** `app/Support/QuantityFormatter.php`
-
-**Purpose:**  
-Provide the single source of truth for UI-only quantity display formatting based on UoM display precision.
-
-**When to Use:**  
-Any time a quantity is displayed in Blade, page payloads, or UI-facing controller data.
-
-**When Not to Use:**  
-Inventory math, purchasing math, stock movement calculations, persistence, validation of canonical quantity scale, or any storage-affecting operation.
-
-**Public Interface:**
-
-- `QuantityFormatter::format($quantity, int $precision): string`
-- `QuantityFormatter::formatForUom($quantity, ?Uom $uom): string`
-- Blade quantity directive/helper pattern registered in `App\Providers\AppServiceProvider`
-
-**Rules:**
-
-- Uses `uoms.display_precision` for display precision.
-- Preserves trailing zeros exactly to the configured precision.
-- Supports precision `0–6`.
-- Defaults to precision `1` when a UoM omits display precision.
-- Does not alter stored quantity values or BCMath canonical scale.
-- JavaScript must not duplicate quantity decimal formatting.
-
-**Example Usage:**
-
-```blade
-@qtyForUom($quantity, $uom)
-```
-
----
-
 ### Item
 
 **Name:** Item  
@@ -2231,6 +2295,75 @@ Recipe creation, editing, or execution flows.
 
 ## Units of Measure
 
+### QuantityFormatter
+
+**Name:** QuantityFormatter  
+**Type:** Support Utility  
+**Location:** `app/Support/QuantityFormatter.php`
+
+**Purpose:**  
+Centralize UI quantity string formatting using UoM display precision.
+
+**Notes:**
+
+- Accepts numeric strings, ints, floats, and null.
+- Clamps precision to `0..6`.
+- Preserves trailing zeros to requested precision.
+- Uses string-safe half-up rounding for display output.
+- Uses UoM-driven precision via `display_precision`.
+
+**When to Use:**  
+Rendering quantities for HTML and page payloads.
+
+**When Not to Use:**  
+Storage math or domain arithmetic (use BCMath with canonical scale 6).
+
+**Public Interface:**
+
+- `QuantityFormatter::format($quantity, $precision)`
+- `QuantityFormatter::formatForUom($quantity, $uom, $fallbackPrecision = 6)`
+
+**Example Usage:**
+
+```php
+$display = QuantityFormatter::formatForUom($line->quantity, $line->item?->baseUom, 1);
+```
+
+---
+
+### Blade Quantity Directives
+
+**Name:** Blade Quantity Directives  
+**Type:** Blade Integration Pattern  
+**Location:** `app/Providers/AppServiceProvider.php`
+
+**Purpose:**  
+Provide a Blade-first wrapper over `QuantityFormatter` so views do not format quantities ad-hoc.
+
+**Notes:**
+
+- Quantity display in Blade should use directives backed by `QuantityFormatter`.
+- JavaScript must consume backend-provided display strings; it must not reformat quantities.
+
+**When to Use:**  
+Any quantity rendered directly in Blade templates.
+
+**When Not to Use:**  
+Currency formatting or non-quantity values.
+
+**Public Interface:**
+
+- `@qty($value, $precision)`
+- `@qtyForUom($value, $uom, $fallbackPrecision = 6)`
+
+**Example Usage:**
+
+```blade
+@qtyForUom($item->onHandQuantity(), $item->baseUom, 1)
+```
+
+---
+
 ### UomCategory
 
 **Name:** UomCategory  
@@ -2279,8 +2412,6 @@ Represent a unit of measure belonging to a single category.
 
 - Tenant-owned. System defaults use `tenant_id = null`.
 - `symbol` is unique per tenant; `name` is not unique.
-- `display_precision` controls UI-only quantity decimals and defaults to `1`.
-- Allowed `display_precision` range is `0–6`.
 
 **When to Use:**  
 Assigning units to items and recording quantities.
@@ -2293,7 +2424,6 @@ Implicit unit assumptions.
 - `category()`
 - `conversionsFrom()`
 - `conversionsTo()`
-- `display_precision`
 
 **Example Usage:**
 
@@ -2303,7 +2433,6 @@ $uom = Uom::create([
     'uom_category_id' => $category->id,
     'name' => 'Gram',
     'symbol' => 'g',
-    'display_precision' => 3,
 ]);
 ```
 
@@ -2418,10 +2547,10 @@ $supplier = Supplier::create([
 - `app/Http/Controllers/SupplierController.php`
 
 **Purpose:**  
-Provide a seam to block supplier deletion when linked materials exist, without schema changes.
+Provide a seam to block supplier deletion when supplier-linked purchasing catalog records exist, without broad schema refactors.
 
 **When to Use:**  
-Deleting suppliers via AJAX endpoints with a future-safe link check.
+Deleting suppliers via AJAX endpoints with a supplier catalog link check.
 
 **When Not to Use:**  
 Delete guards for non-supplier entities.
@@ -2435,7 +2564,7 @@ Delete guards for non-supplier entities.
 ```php
 if ($guard->isLinkedToMaterials($supplier)) {
     return response()->json([
-        'message' => 'Supplier cannot be deleted because it is linked to materials.',
+        'message' => 'Supplier cannot be deleted because it is linked to purchasing records.',
     ], 422);
 }
 ```
@@ -3068,13 +3197,13 @@ This document is the source-of-truth for **authorization intent** in this reposi
 
 - `purchasing-suppliers-view`
 - `purchasing-suppliers-manage`
-- `purchasing-purchase-orders-view`
 - `purchasing-purchase-orders-create`
-- `purchasing-purchase-orders-update`
-- `purchasing-purchase-orders-manage`
 - `purchasing-purchase-orders-receive`
-- `purchasing-receiving-view`
-- `purchasing-receiving-execute`
+- `purchasing-purchase-orders-view` (defined but not used by current purchase-order routes)
+- `purchasing-purchase-orders-update` (defined but not used by current purchase-order routes)
+- `purchasing-purchase-orders-manage` (defined but not used by current purchase-order routes)
+- `purchasing-receiving-view` (defined but not used by current purchase-order routes)
+- `purchasing-receiving-execute` (defined but not used by current purchase-order routes)
 
 ### Sales
 
@@ -3198,6 +3327,9 @@ Execution-only role.
 ## Enforcement Notes
 
 - **All permission checks** must use gates: `Gate::allows('<permission-slug>')` or `@can('<permission-slug>')`.
+- Current purchase-order routes use a two-gate model:
+    - `purchasing-purchase-orders-create` for index/show/create/update/delete and line mutations
+    - `purchasing-purchase-orders-receive` for receipts, short-closes, and manual status transitions
 - Make Orders execute permission does not imply view; both gates must be evaluated where required.
 - Do not hardcode role names in controllers/services (except `super-admin` bypass in `Gate::before`).
 - Any new domain area must introduce permission slugs and update this matrix in the same PR.
@@ -4271,16 +4403,16 @@ Migrations remain the **sole source of truth**.
 
 ### Columns
 
-| Name              | Type             | Nullable | Notes                                                  |
-| ----------------- | ---------------- | -------- | ------------------------------------------------------ |
-| id                | bigint           | No       | Primary key                                            |
-| tenant_id         | bigint           | Yes      | FK → tenants.id (CASCADE)                              |
-| uom_category_id   | bigint           | No       | FK → uom_categories.id (CASCADE)                       |
-| name              | string           | No       | Not unique                                             |
-| symbol            | string           | No       | Unique per tenant                                      |
-| display_precision | unsigned tinyint | No       | UI quantity decimals, default `1`, allowed range `0–6` |
-| created_at        | timestamp        | Yes      | —                                                      |
-| updated_at        | timestamp        | Yes      | —                                                      |
+| Name              | Type                | Nullable | Notes                                    |
+| ----------------- | ------------------- | -------- | ---------------------------------------- |
+| id                | bigint              | No       | Primary key                              |
+| tenant_id         | bigint              | Yes      | FK → tenants.id (CASCADE)                |
+| uom_category_id   | bigint              | No       | FK → uom_categories.id (CASCADE)         |
+| name              | string              | No       | Not unique                               |
+| symbol            | string              | No       | Unique per tenant                        |
+| display_precision | unsignedTinyInteger | No       | Default `1`; UI display precision (0..6) |
+| created_at        | timestamp           | Yes      | —                                        |
+| updated_at        | timestamp           | Yes      | —                                        |
 
 ### Keys & Indexes
 
@@ -4388,13 +4520,10 @@ The UI should feel:
 
 - **Top horizontal navigation only**
 - Left-aligned app identity
-- Domain menu items appear inline:
-    - Materials
-    - Products
-    - Recipes
-    - Suppliers
-    - Purchase Orders
-    - Make Orders
+- Domain menu items are **process-based top-level entries**
+- Current implementation groups functionality under top-level dropdowns such as:
+    - Purchasing
+    - Manufacturing
 
 - No nested mega-menus initially
 - Active state must be subtle (underline or tone shift)
@@ -4422,7 +4551,8 @@ The UI should feel:
 ### Page Module Contract (Enforced)
 
 - Blade templates must not include executable `<script>` tags (JSON payloads only).
-- Inline JavaScript handlers in Blade are forbidden; use page modules instead.
+- Page modules remain the target pattern for new interactive pages.
+- During the current staged migration, Alpine directives in Blade are allowed, but executable `<script>` tags remain forbidden.
 
 ---
 
@@ -4640,10 +4770,7 @@ Focus: supplier relationships and inbound procurement.
 **Dropdown items:**
 
 - Orders
-- Bills / Invoices
 - Suppliers
-- Products  
-  _(Items where `is_purchasable = true`, with purchasing-specific attributes such as pack sizes, costs, and lead times)_
 
 ---
 
@@ -4655,6 +4782,8 @@ Focus: production execution and operational primitives.
 
 - Orders (Make Orders)
 - Inventory
+- Inventory Counts
+- Materials
 - Recipes
 - Units of Measure (UoM)
 - UoM Categories
@@ -4687,10 +4816,12 @@ Each interactive page **must** have:
     - `data-page="page-slug"`
     - `data-payload="payload-script-id"`
 - A **single** `<script type="application/json">` payload block
-- **No executable JavaScript** in Blade templates
+- **No executable `<script>` blocks** in Blade templates
 
 All UI logic **must** live in:
 resources/js/pages/\*\*
+
+For pages not yet migrated to the page-module pattern, Alpine directives may remain in Blade while fetch/state orchestration is progressively moved into page modules.
 
 ---
 
@@ -4773,7 +4904,7 @@ Required:
 
 errors = { name: [], base_uom_id: [] }
 
-422 responses must be normalized into this shape.
+For page-module and page-module-compatible interactive screens, 422 responses must be normalized into this shape.
 
 3. Alpine Expressions Must Be Defensive
 
@@ -4842,6 +4973,13 @@ Predictable
 Debuggable
 
 Production-safe
+
+### Migration Status
+
+- The current implementation is in a staged migration state.
+- Breeze layouts/components and Alpine directives are still present in active Blade views.
+- New or migrated interactive pages should follow the page-module contract.
+- Existing Blade/Alpine interactions may remain until they are intentionally migrated.
 
 Framework-agnostic
 

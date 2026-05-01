@@ -298,6 +298,50 @@ Enable full recipe authoring with minimal, calm AJAX-first UX.
 
 ---
 
+### PR3-REC-003 — Recipe Output Quantity Support
+
+**Goal**  
+Introduce explicit output quantity for recipes.
+
+**Problem Statement**  
+Recipes currently define output item and UoM but not quantity.
+
+**Includes**
+
+- Add `output_quantity` to recipes
+- Default existing records to `'0.000000'`
+- Update create/edit UI to capture quantity
+- Display output quantity in index and detail views
+- Persist using BCMath string (scale = 6)
+
+**Rules**
+
+- Output quantity is required for new/updated recipes
+- Must be ≥ 0 (existing default = 0 allowed for legacy)
+- Stored as string, not float
+- Uses canonical scale = 6
+
+**Execution Impact**
+
+`ExecuteRecipeAction` must scale inputs relative to defined output quantity.
+
+Example:
+Recipe output = 10
+Execute 20 → multiplier = 2
+
+**Testing**
+
+- Creation and validation
+- Default backfill behavior
+- Execution scaling correctness
+- Precision handling
+
+**Documentation Impact**
+
+- Update architecture docs to reflect new recipe invariant
+
+---
+
 ### PR3-MO-001 — Make Orders (Execute Recipe) _(Superseded in implementation by persisted make orders)_
 
 **Goal**  
@@ -857,6 +901,51 @@ Architecture YAML files for:
 PO Lifecycle
 
 ## Receipt Event Pattern
+
+---
+
+### PR2-PUR-006 — Receiving Inventory Impact Fix
+
+Goal
+Ensure purchase order receiving always impacts inventory via stock moves.
+
+Problem Statement
+Current behavior allows purchase orders to reach RECEIVED without reliably creating stock moves.
+
+Includes
+
+Enforce stock move creation for every receipt line
+Ensure:
+stock_moves.type = RECEIPT
+stock_moves.status = POSTED
+Guarantee linkage between receipt lines and stock moves
+Ensure idempotency (no duplicate stock moves per receipt line)
+
+Rules
+
+Inventory impact is mandatory for all receipts
+A PO cannot be considered RECEIVED unless inventory is updated
+All quantity math uses BCMath (scale = 6)
+No float math
+Stock moves are the single source of truth
+
+Validation
+
+Receipt must fail if stock move creation fails
+Use transactional integrity (receipt + stock moves)
+
+Testing
+
+Receipt creates stock moves
+Duplicate prevention
+Multi-line receipts
+Status transitions tied to inventory
+Permission enforcement
+
+Documentation Impact
+
+Clarify invariant: receiving always creates stock moves
+Update architecture docs only if required
 
 ## DOMAIN 5 — Shared UI Infrastructure (As Needed)
 

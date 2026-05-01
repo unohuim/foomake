@@ -17,6 +17,8 @@ class Item extends Model
 {
     use HasTenantScope;
 
+    private const QUANTITY_SCALE = 6;
+
     protected $fillable = [
         'tenant_id',
         'name',
@@ -104,10 +106,19 @@ class Item extends Model
      */
     public function onHandQuantity(): string
     {
-        $total = $this->stockMoves()
-            ->selectRaw('COALESCE(SUM(quantity), 0) as total')
-            ->value('total');
+        $total = '0.000000';
 
-        return (string) $total;
+        $quantities = $this->stockMoves()
+            ->where(function ($query): void {
+                $query->where('status', 'POSTED')
+                    ->orWhereNull('status');
+            })
+            ->pluck('quantity');
+
+        foreach ($quantities as $quantity) {
+            $total = bcadd($total, (string) $quantity, self::QUANTITY_SCALE);
+        }
+
+        return $total;
     }
 }

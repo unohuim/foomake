@@ -8,6 +8,7 @@ use App\Models\Tenant;
 use App\Models\Uom;
 use App\Models\UomCategory;
 use App\Models\User;
+use App\Support\QuantityFormatter;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
 uses(RefreshDatabase::class);
@@ -91,7 +92,7 @@ test('authorized user sees inventory overview data', function () {
         ->assertOk()
         ->assertSee($item->name)
         ->assertSee($this->uom->name . ' (' . $this->uom->symbol . ')')
-        ->assertSee($item->onHandQuantity());
+        ->assertSee(QuantityFormatter::formatForUom($item->onHandQuantity(), $this->uom, 1));
 });
 
 test('inventory overview is tenant scoped', function () {

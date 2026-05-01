@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property int $tenant_id
  * @property int $purchase_order_receipt_id
  * @property int $purchase_order_line_id
+ * @property int|null $stock_move_id
  * @property string $received_quantity
  */
 class PurchaseOrderReceiptLine extends Model
@@ -40,5 +41,13 @@ class PurchaseOrderReceiptLine extends Model
     public function purchaseOrderLine(): BelongsTo
     {
         return $this->belongsTo(PurchaseOrderLine::class);
+    }
+
+    /**
+     * @return BelongsTo
+     */
+    public function stockMove(): BelongsTo
+    {
+        return $this->belongsTo(StockMove::class);
     }
 }

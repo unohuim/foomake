@@ -48,6 +48,7 @@ class PurchaseOrderLifecycleService
             foreach ($lineItems as $item) {
                 $line = $item['line'];
                 $quantity = $this->normalizeQuantity($item['quantity']);
+                $stockMoveQuantity = $this->calculateReceiptStockMoveQuantity($line, $quantity);
 
                 $receiptLine = PurchaseOrderReceiptLine::query()->create([
                     'tenant_id' => $lockedOrder->tenant_id,
@@ -56,16 +57,20 @@ class PurchaseOrderLifecycleService
                     'received_quantity' => $quantity,
                 ]);
 
-                StockMove::query()->create([
+                $stockMove = StockMove::query()->create([
                     'tenant_id' => $lockedOrder->tenant_id,
                     'item_id' => $line->item_id,
                     'uom_id' => $line->item->base_uom_id,
-                    'quantity' => $quantity,
+                    'quantity' => $stockMoveQuantity,
                     'type' => 'receipt',
                     'status' => 'POSTED',
                     'source_type' => 'purchase_order_receipt_line',
                     'source_id' => $receiptLine->id,
                 ]);
+
+                $receiptLine->forceFill([
+                    'stock_move_id' => $stockMove->id,
+                ])->save();
             }
 
             $this->updateDerivedStatus($lockedOrder);
@@ -239,5 +244,16 @@ class PurchaseOrderLifecycleService
         }
 
         return $normalized . '.' . str_repeat('0', self::SCALE);
+    }
+
+    private function calculateReceiptStockMoveQuantity(PurchaseOrderLine $line, string $receivedQuantity): string
+    {
+        $packQuantity = $line->purchaseOption?->pack_quantity;
+
+        if ($packQuantity === null) {
+            throw new DomainException('Purchase order line is missing a purchase option pack quantity.');
+        }
+
+        return bcmul($receivedQuantity, $this->normalizeQuantity((string) $packQuantity), self::SCALE);
     }
 }
