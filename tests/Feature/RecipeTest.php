@@ -69,7 +69,9 @@ it('executes a simple recipe and derives inventory from stock moves', function (
     $recipe = Recipe::create([
         'tenant_id' => $tenant->id,
         'item_id' => $bread->id,
+        'name' => 'Simple Recipe',
         'is_active' => true,
+        'output_quantity' => '10.000000',
     ]);
 
     $recipe->lines()->create([
@@ -99,13 +101,13 @@ it('executes a simple recipe and derives inventory from stock moves', function (
         ->and($issueMoves->first()->quantity)->toBe('-6.000000');
 
     expect($receiptMoves)->toHaveCount(1)
-        ->and($receiptMoves->first()->quantity)->toBe('3.000000');
+        ->and($receiptMoves->first()->quantity)->toBe('30.000000');
 
     $flour->refresh();
     $bread->refresh();
 
-    expect((float) $flour->onHandQuantity())->toBe(-6.0);
-    expect((float) $bread->onHandQuantity())->toBe(3.0);
+    expect($flour->onHandQuantity())->toBe('-6.000000');
+    expect($bread->onHandQuantity())->toBe('30.000000');
 });
 
 it('executes recursive recipes via stock moves', function () {
@@ -128,7 +130,9 @@ it('executes recursive recipes via stock moves', function () {
     $subRecipe = Recipe::create([
         'tenant_id' => $tenant->id,
         'item_id' => $subItem->id,
+        'name' => 'Batch of Patties',
         'is_active' => true,
+        'output_quantity' => '4.000000',
     ]);
 
     $subRecipe->lines()->create([
@@ -140,7 +144,9 @@ it('executes recursive recipes via stock moves', function () {
     $parentRecipe = Recipe::create([
         'tenant_id' => $tenant->id,
         'item_id' => $parentItem->id,
+        'name' => 'Drum of Patties',
         'is_active' => true,
+        'output_quantity' => '2.000000',
     ]);
 
     $parentRecipe->lines()->create([
@@ -151,16 +157,16 @@ it('executes recursive recipes via stock moves', function () {
 
     $action = new ExecuteRecipeAction();
 
-    $action->execute($subRecipe, '1.000000');
-    $action->execute($parentRecipe, '1.000000');
+    $action->execute($subRecipe, '2.000000');
+    $action->execute($parentRecipe, '4.000000');
 
     $raw->refresh();
     $subItem->refresh();
     $parentItem->refresh();
 
-    expect((float) $raw->onHandQuantity())->toBe(-2.0);
-    expect((float) $subItem->onHandQuantity())->toBe(0.0);
-    expect((float) $parentItem->onHandQuantity())->toBe(1.0);
+    expect($raw->onHandQuantity())->toBe('-4.000000');
+    expect($subItem->onHandQuantity())->toBe('4.000000');
+    expect($parentItem->onHandQuantity())->toBe('8.000000');
 });
 
 it('allows multiple active recipes per item', function () {
@@ -178,19 +184,25 @@ it('allows multiple active recipes per item', function () {
     Recipe::create([
         'tenant_id' => $tenant->id,
         'item_id' => $item->id,
+        'name' => 'Batch of Patties',
         'is_active' => true,
+        'output_quantity' => '1.000000',
     ]);
 
     Recipe::create([
         'tenant_id' => $tenant->id,
         'item_id' => $item->id,
+        'name' => 'Drum of Patties',
         'is_active' => true,
+        'output_quantity' => '2.000000',
     ]);
 
     Recipe::create([
         'tenant_id' => $tenant->id,
         'item_id' => $item->id,
+        'name' => 'Simple Recipe',
         'is_active' => true,
+        'output_quantity' => '3.000000',
     ]);
 
     expect(Recipe::query()
@@ -214,7 +226,9 @@ it('requires manufacturable items for recipes', function () {
         Recipe::create([
             'tenant_id' => $tenant->id,
             'item_id' => $item->id,
+            'name' => 'Simple Recipe',
             'is_active' => true,
+            'output_quantity' => '1.000000',
         ]);
     })->toThrow(InvalidArgumentException::class);
 });
@@ -239,7 +253,9 @@ it('scopes recipes by tenant and prevents cross-tenant execution', function () {
     $recipeA = Recipe::create([
         'tenant_id' => $tenantA->id,
         'item_id' => $outputA->id,
+        'name' => 'Simple Recipe',
         'is_active' => true,
+        'output_quantity' => '5.000000',
     ]);
 
     $recipeA->lines()->create([
@@ -260,4 +276,38 @@ it('scopes recipes by tenant and prevents cross-tenant execution', function () {
     })->toThrow(InvalidArgumentException::class);
 
     expect(StockMove::count())->toBe($before);
+});
+
+it('blocks execution when recipe output quantity is zero', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeTenantUser)($tenant);
+    $uom = ($this->makeUom)($tenant);
+
+    $this->actingAs($user);
+
+    $flour = ($this->makeItem)($tenant, $uom, ['name' => 'Flour']);
+    $bread = ($this->makeItem)($tenant, $uom, [
+        'name' => 'Bread',
+        'is_manufacturable' => true,
+    ]);
+
+    $recipe = Recipe::create([
+        'tenant_id' => $tenant->id,
+        'item_id' => $bread->id,
+        'name' => 'Simple Recipe',
+        'is_active' => true,
+        'output_quantity' => '0.000000',
+    ]);
+
+    $recipe->lines()->create([
+        'tenant_id' => $tenant->id,
+        'item_id' => $flour->id,
+        'quantity' => '2.000000',
+    ]);
+
+    $action = new ExecuteRecipeAction();
+
+    expect(function () use ($action, $recipe) {
+        $action->execute($recipe, '1.000000');
+    })->toThrow(InvalidArgumentException::class);
 });

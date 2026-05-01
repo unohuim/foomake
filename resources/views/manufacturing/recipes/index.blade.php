@@ -64,7 +64,9 @@
                             <table class="min-w-full text-sm">
                                 <thead class="text-left text-gray-500">
                                     <tr class="border-b border-gray-100">
+                                        <th class="px-3 py-2 font-medium">{{ __('Recipe Name') }}</th>
                                         <th class="px-3 py-2 font-medium">{{ __('Output Item') }}</th>
+                                        <th class="px-3 py-2 font-medium">{{ __('Output per Run') }}</th>
                                         <th class="px-3 py-2 font-medium">{{ __('Active') }}</th>
                                         <th class="px-3 py-2 font-medium">{{ __('Updated') }}</th>
                                         <th class="px-3 py-2 text-right font-medium">{{ __('Actions') }}</th>
@@ -73,6 +75,7 @@
                                 <tbody class="divide-y divide-gray-100">
                                     <template x-for="recipe in recipes" :key="recipe.id">
                                         <tr>
+                                            <td class="px-3 py-3 text-gray-900" x-text="recipe.name"></td>
                                             <td class="px-3 py-3 text-gray-900">
                                                 <a
                                                     class="text-gray-900 hover:text-blue-600"
@@ -80,6 +83,7 @@
                                                     x-text="recipe.item_name"
                                                 ></a>
                                             </td>
+                                            <td class="px-3 py-3 text-gray-600" x-text="recipe.output_quantity_display"></td>
                                             <td class="px-3 py-3 text-gray-600" x-text="recipe.is_active ? 'Yes' : 'No'"></td>
                                             <td class="px-3 py-3 text-gray-600" x-text="recipe.updated_at"></td>
                                             <td class="px-3 py-3 text-right text-sm">

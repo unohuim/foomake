@@ -52,11 +52,19 @@ beforeEach(function () {
         ]);
     };
 
-    $this->makeRecipe = function (Tenant $tenant, Item $outputItem, bool $isActive = true): Recipe {
+    $this->makeRecipe = function (
+        Tenant $tenant,
+        Item $outputItem,
+        bool $isActive = true,
+        string $name = 'Recipe A',
+        string $outputQuantity = '1.000000'
+    ): Recipe {
         return Recipe::query()->forceCreate([
             'tenant_id' => $tenant->id,
             'item_id' => $outputItem->id,
+            'name' => $name,
             'is_active' => $isActive,
+            'output_quantity' => $outputQuantity,
         ]);
     };
 
@@ -172,25 +180,32 @@ test('allows users with inventory-recipes-view permission to view recipes and re
     $output = ($this->makeItem)($tenant, $outputUom, 'Output A', true);
     $input = ($this->makeItem)($tenant, $lineUom, 'Input Flour', false);
 
-    $recipe = ($this->makeRecipe)($tenant, $output, true);
+    $recipe = ($this->makeRecipe)($tenant, $output, true, 'Batch of Patties', '54.000000');
     ($this->addRecipeLine)($tenant, $recipe, $input, '2.000000');
 
     $this->actingAs($user)
         ->get(route('manufacturing.recipes.index'))
         ->assertOk()
         ->assertSee('Recipes')
-        ->assertSee($output->name);
+        ->assertSee('Batch of Patties')
+        ->assertSee('Output per Run')
+        ->assertSee('54.0');
 
     $showResponse = $this->actingAs($user)
         ->get(route('manufacturing.recipes.show', $recipe));
 
     $showResponse
         ->assertOk()
-        ->assertSee($output->name)
-        ->assertSee($input->name);
+        ->assertSee('Batch of Patties')
+        ->assertSee($input->name)
+        ->assertSee('Output per Run')
+        ->assertSee('54.0');
 
     $payload = ($this->extractPayload)($showResponse, 'manufacturing-recipes-show-payload');
 
+    expect($payload['recipe']['name'] ?? null)->toBe('Batch of Patties');
+    expect($payload['recipe']['output_quantity'] ?? null)->toBe('54.000000');
+    expect($payload['recipe']['output_quantity_display'] ?? null)->toBe('54.0');
     expect($payload['lines'][0]['item_name'] ?? null)->toBe('Input Flour');
     expect($payload['lines'][0])->toHaveKey('quantity_display');
     expect($payload['lines'][0]['quantity_display'] ?? null)->toBe('2.000');
@@ -245,6 +260,71 @@ test('view and manage permissions include can_manage true in payload', function 
         ->get(route('manufacturing.recipes.show', $recipe))
         ->assertOk()
         ->assertSee('"can_manage":true', false);
+});
+
+test('index payload includes recipe output quantity per run display', function () {
+    $tenant = ($this->makeTenant)('Tenant A');
+    $user = User::factory()->for($tenant)->create();
+    ($this->grantInventoryRecipesView)($user);
+
+    $uom = ($this->makeUom)($tenant, 3);
+    $output = ($this->makeItem)($tenant, $uom, 'Output A', true);
+    ($this->makeRecipe)($tenant, $output, true, 'Drum of Patties', '324.125000');
+
+    $response = $this->actingAs($user)
+        ->get(route('manufacturing.recipes.index'))
+        ->assertOk();
+
+    $payload = ($this->extractPayload)($response, 'manufacturing-recipes-index-payload');
+
+    expect($payload['recipes'][0]['name'] ?? null)->toBe('Drum of Patties');
+    expect($payload['recipes'][0]['output_quantity'] ?? null)->toBe('324.125000');
+    expect($payload['recipes'][0]['output_quantity_display'] ?? null)->toBe('324.125');
+});
+
+test('recipes index can distinguish multiple recipes for the same output item by name', function () {
+    $tenant = ($this->makeTenant)('Tenant A');
+    $user = User::factory()->for($tenant)->create();
+    ($this->grantInventoryRecipesView)($user);
+
+    $uom = ($this->makeUom)($tenant, 2);
+    $output = ($this->makeItem)($tenant, $uom, 'Patties', true);
+
+    ($this->makeRecipe)($tenant, $output, true, 'Batch of Patties', '54.000000');
+    ($this->makeRecipe)($tenant, $output, true, 'Drum of Patties', '324.000000');
+
+    $response = $this->actingAs($user)
+        ->get(route('manufacturing.recipes.index'))
+        ->assertOk()
+        ->assertSee('Batch of Patties')
+        ->assertSee('Drum of Patties');
+
+    $payload = ($this->extractPayload)($response, 'manufacturing-recipes-index-payload');
+
+    expect(collect($payload['recipes'] ?? [])->pluck('name')->all())
+        ->toContain('Batch of Patties', 'Drum of Patties');
+});
+
+test('show payload uses output item uom precision for output quantity per run display', function () {
+    $tenant = ($this->makeTenant)('Tenant A');
+    $user = User::factory()->for($tenant)->create();
+    ($this->grantInventoryRecipesView)($user);
+
+    $outputUom = ($this->makeUom)($tenant, 2);
+    $lineUom = ($this->makeUom)($tenant, 6);
+    $output = ($this->makeItem)($tenant, $outputUom, 'Output A', true);
+    $input = ($this->makeItem)($tenant, $lineUom, 'Input A');
+    $recipe = ($this->makeRecipe)($tenant, $output, true, 'Precision Batch', '12.345000');
+    ($this->addRecipeLine)($tenant, $recipe, $input, '0.500000');
+
+    $response = $this->actingAs($user)
+        ->get(route('manufacturing.recipes.show', $recipe))
+        ->assertOk();
+
+    $payload = ($this->extractPayload)($response, 'manufacturing-recipes-show-payload');
+
+    expect($payload['recipe']['name'] ?? null)->toBe('Precision Batch');
+    expect($payload['recipe']['output_quantity_display'] ?? null)->toBe('12.35');
 });
 
 test('show page payload renders line quantities using each line item uom display precision', function () {

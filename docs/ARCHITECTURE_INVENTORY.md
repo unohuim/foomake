@@ -534,7 +534,7 @@ $action->execute($inventoryCount, $userId);
 **Location:** `app/Models/Recipe.php`
 
 **Purpose:**  
-Represent manufacturing recipes for items.
+Represent named manufacturing recipes for items, including output quantity per run.
 
 **When to Use:**  
 Defining recipes and their line items.
@@ -550,7 +550,12 @@ Non-manufacturing inventory relationships.
 
 **Example Usage:**  
 ```php
-$recipe = $item->recipe;
+$recipe = Recipe::create([
+    'tenant_id' => $tenant->id,
+    'item_id' => $item->id,
+    'name' => 'Batch of Patties',
+    'output_quantity' => '54.000000',
+]);
 ```
 
 ---
@@ -602,7 +607,7 @@ Manufacturing or make-order execution.
 Inventory adjustments or corrections.
 
 **Public Interface:**  
-- `execute(Recipe $recipe, string $outputQuantity): array`
+- `execute(Recipe $recipe, string $runs): array`
 
 **Example Usage:**  
 ```php
@@ -637,6 +642,7 @@ Recipe creation, editing, or execution flows.
 
 **Example Usage:**  
 ```blade
+<th>{{ __('Recipe Name') }}</th>
 <th>{{ __('Input Item') }}</th>
 <th>{{ __('Quantity') }}</th>
 <th>{{ __('UoM') }}</th>

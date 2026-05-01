@@ -2,7 +2,7 @@
     <x-slot name="header">
         <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div>
-                <h2 class="font-semibold text-xl text-gray-800 leading-tight">{{ __('Recipe') }}</h2>
+                <h2 class="font-semibold text-xl text-gray-800 leading-tight" x-text="recipe.name || 'Recipe'"></h2>
                 <p class="mt-1 text-sm text-gray-500">{{ $recipe->item?->name ?? '—' }}</p>
             </div>
             <a
@@ -60,12 +60,20 @@
 
                     <dl class="grid grid-cols-1 sm:grid-cols-2 gap-6 text-sm">
                         <div>
+                            <dt class="text-sm font-medium text-gray-500">{{ __('Recipe Name') }}</dt>
+                            <dd class="mt-1 text-gray-900" x-text="recipe.name"></dd>
+                        </div>
+                        <div>
                             <dt class="text-sm font-medium text-gray-500">{{ __('Name') }}</dt>
                             <dd class="mt-1 text-gray-900" x-text="recipe.item_name"></dd>
                         </div>
                         <div>
                             <dt class="text-sm font-medium text-gray-500">{{ __('Base UoM') }}</dt>
                             <dd class="mt-1 text-gray-900" x-text="recipe.item_uom"></dd>
+                        </div>
+                        <div>
+                            <dt class="text-sm font-medium text-gray-500">{{ __('Output per Run') }}</dt>
+                            <dd class="mt-1 text-gray-900" x-text="recipe.output_quantity_display"></dd>
                         </div>
                     </dl>
                 </div>

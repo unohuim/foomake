@@ -27,7 +27,7 @@ class RecipeController extends Controller
         Gate::authorize('inventory-recipes-view');
 
         $recipes = Recipe::query()
-            ->with('item')
+            ->with('item.baseUom')
             ->withCount('lines')
             ->orderByDesc('updated_at')
             ->get();
@@ -138,6 +138,8 @@ class RecipeController extends Controller
                     ->where('tenant_id', $request->user()->tenant_id)
                     ->where('is_manufacturable', true),
             ],
+            'name' => ['required', 'string', 'max:255'],
+            'output_quantity' => ['required', 'string', 'regex:/^\d+(?:\.\d{1,6})?$/'],
             'is_active' => ['nullable', 'boolean'],
             'is_default' => ['nullable', 'boolean'],
         ]);
@@ -159,6 +161,8 @@ class RecipeController extends Controller
                 return Recipe::query()->create([
                     'tenant_id' => $tenantId,
                     'item_id' => $validated['item_id'],
+                    'name' => $validated['name'],
+                    'output_quantity' => $validated['output_quantity'],
                     'is_active' => $isActive,
                     'is_default' => $isDefault,
                 ]);
@@ -167,7 +171,7 @@ class RecipeController extends Controller
             return $this->handleRecipeException($exception);
         }
 
-        $recipe->load('item');
+        $recipe->load('item.baseUom');
         $recipe->loadCount('lines');
 
         return response()->json([
@@ -190,6 +194,8 @@ class RecipeController extends Controller
                     ->where('tenant_id', $request->user()->tenant_id)
                     ->where('is_manufacturable', true),
             ],
+            'name' => ['required', 'string', 'max:255'],
+            'output_quantity' => ['required', 'string', 'regex:/^\d+(?:\.\d{1,6})?$/'],
             'is_active' => ['required', 'boolean'],
             'is_default' => ['nullable', 'boolean'],
         ]);
@@ -207,7 +213,7 @@ class RecipeController extends Controller
         $isDefault = $request->has('is_default') ? $request->boolean('is_default') : $recipe->is_default;
 
         try {
-            DB::transaction(function () use ($recipe, $tenantId, $itemId, $request, $isDefault) {
+            DB::transaction(function () use ($recipe, $tenantId, $itemId, $request, $isDefault, $validated) {
                 if ($isDefault) {
                     Recipe::query()
                         ->where('tenant_id', $tenantId)
@@ -218,6 +224,8 @@ class RecipeController extends Controller
                 }
 
                 $recipe->item_id = $itemId;
+                $recipe->name = $validated['name'];
+                $recipe->output_quantity = $validated['output_quantity'];
                 $recipe->is_active = $request->boolean('is_active');
                 $recipe->is_default = $isDefault;
                 $recipe->save();
@@ -226,7 +234,7 @@ class RecipeController extends Controller
             return $this->handleRecipeException($exception);
         }
 
-        $recipe->load('item');
+        $recipe->load('item.baseUom');
         $recipe->loadCount('lines');
 
         return response()->json([
@@ -361,7 +369,14 @@ class RecipeController extends Controller
         return [
             'id' => $recipe->id,
             'item_id' => $recipe->item_id,
+            'name' => $recipe->name,
             'item_name' => $recipe->item?->name ?? '—',
+            'output_quantity' => (string) $recipe->output_quantity,
+            'output_quantity_display' => QuantityFormatter::formatForUom(
+                (string) $recipe->output_quantity,
+                $recipe->item?->baseUom,
+                1
+            ),
             'is_active' => $recipe->is_active,
             'is_default' => $recipe->is_default,
             'updated_at' => $recipe->updated_at?->format('Y-m-d H:i') ?? '—',

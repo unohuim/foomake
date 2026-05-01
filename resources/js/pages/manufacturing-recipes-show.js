@@ -4,6 +4,8 @@ export function mount(rootEl, payload) {
     const safePayload = payload || {};
     const emptyRecipeErrors = () => ({
         item_id: [],
+        name: [],
+        output_quantity: [],
         is_active: [],
     });
     const emptyLineErrors = () => ({
@@ -15,7 +17,10 @@ export function mount(rootEl, payload) {
         recipe: safePayload.recipe || {
             id: null,
             item_id: '',
+            name: '',
             item_name: '',
+            output_quantity: '0.000000',
+            output_quantity_display: '0.0',
             item_uom: '—',
             is_active: false,
             update_url: '',
@@ -30,7 +35,7 @@ export function mount(rootEl, payload) {
         csrfToken: safePayload.csrf_token || '',
         isEditOpen: false,
         isEditSubmitting: false,
-        editForm: { item_id: '', is_active: true },
+        editForm: { item_id: '', name: '', output_quantity: '', is_active: true },
         editErrors: emptyRecipeErrors(),
         editGeneralError: '',
         editOutputLocked: false,
@@ -65,6 +70,8 @@ export function mount(rootEl, payload) {
                 ...emptyRecipeErrors(),
                 ...errors,
                 item_id: Array.isArray(errors.item_id) ? errors.item_id : [],
+                name: Array.isArray(errors.name) ? errors.name : [],
+                output_quantity: Array.isArray(errors.output_quantity) ? errors.output_quantity : [],
                 is_active: Array.isArray(errors.is_active) ? errors.is_active : [],
             };
         },
@@ -106,6 +113,8 @@ export function mount(rootEl, payload) {
             this.editGeneralError = '';
             this.editForm = {
                 item_id: this.recipe.item_id,
+                name: this.recipe.name,
+                output_quantity: this.recipe.output_quantity,
                 is_active: this.recipe.is_active,
             };
             this.editOutputLocked = Boolean(this.recipe.has_lines);
@@ -166,6 +175,8 @@ export function mount(rootEl, payload) {
                 },
                 body: JSON.stringify({
                     item_id: this.editForm.item_id,
+                    name: this.editForm.name,
+                    output_quantity: this.editForm.output_quantity,
                     is_active: this.editForm.is_active,
                 }),
             });

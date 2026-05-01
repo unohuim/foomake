@@ -11,11 +11,15 @@ when_not_to_use:
   - Costing or planning calculations
 rules:
   - Recipe must be active and output item manufacturable.
+  - Recipe output_quantity must be greater than zero.
+  - Runs must be greater than zero.
   - Inputs are issued and outputs are receipted as stock moves.
+  - Input stock move quantity is recipe line quantity multiplied by runs.
+  - Output stock move quantity is recipe output_quantity multiplied by runs.
   - Quantities are recorded in each item base UoM.
   - Enum-like values must use values defined in docs/ENUMS.md.
 public_interface:
-  - execute(Recipe $recipe, string $outputQuantity)
+  - execute(Recipe $recipe, string $runs)
 example_usage: |
   $action = new ExecuteRecipeAction();
   $action->execute($recipe, '5.000000');

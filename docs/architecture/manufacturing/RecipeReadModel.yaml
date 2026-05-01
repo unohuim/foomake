@@ -12,16 +12,21 @@ when_not_to_use:
   - Recipe creation, editing, or execution flows
   - Inventory ledger or make-order execution screens
 rules:
+  - Each recipe read view must display the recipe name.
   - Each recipe read view must display the output item name.
+  - Each recipe read view must display output quantity per run.
   - The output item base UoM may be displayed when available.
   - The active flag is displayed as a read-only status.
   - Recipe lines list input item, quantity, and UoM when available.
-  - Quantity display uses a two-decimal format (e.g., 2.00) for now and must be consistent across recipe views.
+  - Recipe output quantity display uses the output item's base UoM display precision when available.
+  - Recipe line quantity display uses each line item's base UoM display precision when available.
+  - Make Order recipe selection must identify recipes by recipe name.
   - Empty states are required when no recipes or lines exist.
 public_interface:
   - manufacturing.recipes.index view contract
   - manufacturing.recipes.show view contract
 example_usage: |
+  <th>{{ __('Recipe Name') }}</th>
   <th>{{ __('Input Item') }}</th>
   <th>{{ __('Quantity') }}</th>
   <th>{{ __('UoM') }}</th>

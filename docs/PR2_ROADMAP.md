@@ -298,24 +298,26 @@ Enable full recipe authoring with minimal, calm AJAX-first UX.
 
 ---
 
-### PR3-REC-003 — Recipe Output Quantity Support
+### PR3-REC-003 — Recipe Output Quantity Support + Recipe Naming
 
 **Goal**  
-Introduce explicit output quantity for recipes.
+Introduce explicit output quantity and user-defined naming for recipes.
 
 **Problem Statement**  
-Recipes currently define output item and UoM but not quantity.
+Recipes currently need both explicit output quantity and a user-facing name so multiple recipes for the same output item can be distinguished.
 
 **Includes**
 
+- Add required `name` to recipes
 - Add `output_quantity` to recipes
 - Default existing records to `'0.000000'`
-- Update create/edit UI to capture quantity
-- Display output quantity in index and detail views
+- Update create/edit UI to capture recipe name and quantity
+- Display recipe name and output quantity in index and detail views
 - Persist using BCMath string (scale = 6)
 
 **Rules**
 
+- Recipe name is required for new/updated recipes
 - Output quantity is required for new/updated recipes
 - Must be ≥ 0 (existing default = 0 allowed for legacy)
 - Stored as string, not float
@@ -323,17 +325,18 @@ Recipes currently define output item and UoM but not quantity.
 
 **Execution Impact**
 
-`ExecuteRecipeAction` must scale inputs relative to defined output quantity.
+`ExecuteRecipeAction` must treat its argument as runs and scale output from the recipe-defined output quantity.
 
 Example:
 Recipe output = 10
-Execute 20 → multiplier = 2
+Execute 2 runs → output receipt = 20
 
 **Testing**
 
 - Creation and validation
+- Recipe naming and same-output differentiation
 - Default backfill behavior
-- Execution scaling correctness
+- Runs semantics and execution scaling correctness
 - Precision handling
 
 **Documentation Impact**
@@ -353,7 +356,7 @@ Allow executing a recipe to create ledger movements.
 - Route: `/manufacturing/make-orders`
 - Execution UI:
     - Select recipe
-    - Enter output quantity
+    - Enter runs
     - Submit (AJAX)
 - Calls `ExecuteRecipeAction`
 - Success toast + lightweight summary
@@ -378,8 +381,8 @@ Implement persisted Make Orders with full lifecycle (Draft → Scheduled → Mad
 
 **Includes**
 
-- Index UI: table of Make Orders (Recipe/Output, Qty, Status, Due Date, Actions)
-- Create draft: slide-over (select active recipe + output qty) → saves as DRAFT
+- Index UI: table of Make Orders (Recipe/Output, Runs, Status, Due Date, Actions)
+- Create draft: slide-over (select active recipe + runs) → saves as DRAFT
 - Schedule: set due date on draft → status SCHEDULED
 - Make/Execute: on scheduled order → calls ExecuteRecipeAction → status MADE + stock moves
 - Tenant isolation, permission gates, AJAX actions, toasts/errors
@@ -388,6 +391,8 @@ Implement persisted Make Orders with full lifecycle (Draft → Scheduled → Mad
 **Rules**
 
 - Ledger-first on "make": issues inputs + receipts output via ExecuteRecipeAction
+- Make Order quantity is runs, not desired output quantity
+- Produced output is `runs × recipe.output_quantity`
 - BCMath canonical scale=6
 - Status: DRAFT, SCHEDULED, MADE
 - Active recipe required

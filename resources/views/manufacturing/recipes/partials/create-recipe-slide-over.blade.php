@@ -37,6 +37,17 @@
 
                         <div class="mt-6 space-y-5">
                             <div>
+                                <label for="recipe-name" class="block text-sm font-medium text-gray-700">{{ __('Recipe Name') }}</label>
+                                <input
+                                    id="recipe-name"
+                                    type="text"
+                                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                                    x-model="createForm.name"
+                                />
+                                <p class="mt-1 text-sm text-red-600" x-show="createErrors.name.length" x-text="createErrors.name[0]"></p>
+                            </div>
+
+                            <div>
                                 <label for="recipe-output-item" class="block text-sm font-medium text-gray-700">{{ __('Output Item') }}</label>
                                 <select
                                     id="recipe-output-item"
@@ -49,6 +60,19 @@
                                     </template>
                                 </select>
                                 <p class="mt-1 text-sm text-red-600" x-show="createErrors.item_id.length" x-text="createErrors.item_id[0]"></p>
+                            </div>
+
+                            <div>
+                                <label for="recipe-output-quantity" class="block text-sm font-medium text-gray-700">{{ __('Output per Run') }}</label>
+                                <input
+                                    id="recipe-output-quantity"
+                                    type="text"
+                                    inputmode="decimal"
+                                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                                    placeholder="0.000000"
+                                    x-model="createForm.output_quantity"
+                                />
+                                <p class="mt-1 text-sm text-red-600" x-show="createErrors.output_quantity.length" x-text="createErrors.output_quantity[0]"></p>
                             </div>
 
                             <div>

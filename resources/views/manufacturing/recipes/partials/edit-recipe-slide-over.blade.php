@@ -36,6 +36,17 @@
 
                         <div class="mt-6 space-y-5">
                             <div>
+                                <label for="recipe-edit-name" class="block text-sm font-medium text-gray-700">{{ __('Recipe Name') }}</label>
+                                <input
+                                    id="recipe-edit-name"
+                                    type="text"
+                                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                                    x-model="editForm.name"
+                                />
+                                <p class="mt-1 text-sm text-red-600" x-show="editErrors.name.length" x-text="editErrors.name[0]"></p>
+                            </div>
+
+                            <div>
                                 <label for="recipe-edit-output-item" class="block text-sm font-medium text-gray-700">{{ __('Output Item') }}</label>
                                 <select
                                     id="recipe-edit-output-item"
@@ -53,6 +64,19 @@
                                     {{ __('Output item is locked because the recipe has lines.') }}
                                 </p>
                                 <p class="mt-1 text-sm text-red-600" x-show="editErrors.item_id.length" x-text="editErrors.item_id[0]"></p>
+                            </div>
+
+                            <div>
+                                <label for="recipe-edit-output-quantity" class="block text-sm font-medium text-gray-700">{{ __('Output per Run') }}</label>
+                                <input
+                                    id="recipe-edit-output-quantity"
+                                    type="text"
+                                    inputmode="decimal"
+                                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                                    placeholder="0.000000"
+                                    x-model="editForm.output_quantity"
+                                />
+                                <p class="mt-1 text-sm text-red-600" x-show="editErrors.output_quantity.length" x-text="editErrors.output_quantity[0]"></p>
                             </div>
 
                             <div>

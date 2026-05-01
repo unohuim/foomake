@@ -125,6 +125,7 @@ beforeEach(function () {
         return Recipe::query()->create([
             'tenant_id' => $tenant->id,
             'item_id' => $output->id,
+            'name' => 'Simple Recipe',
             'is_active' => true,
             'is_default' => false,
         ]);

@@ -56,11 +56,19 @@ beforeEach(function () {
         ]);
     };
 
-    $this->makeRecipe = function (Tenant $tenant, Item $outputItem, bool $isActive = true): Recipe {
+    $this->makeRecipe = function (
+        Tenant $tenant,
+        Item $outputItem,
+        bool $isActive = true,
+        string $name = 'Recipe A',
+        string $outputQuantity = '1.000000'
+    ): Recipe {
         return Recipe::query()->forceCreate([
             'tenant_id' => $tenant->id,
             'item_id' => $outputItem->id,
+            'name' => $name,
             'is_active' => $isActive,
+            'output_quantity' => $outputQuantity,
         ]);
     };
 
@@ -155,7 +163,7 @@ test('execute permission allows create and schedule but not view access', functi
     $storeResponse = $this->actingAs($user)
         ->postJson(route('manufacturing.make-orders.store'), [
             'recipe_id' => $recipe->id,
-            'output_quantity' => '1.000000',
+            'runs' => '1.000000',
         ])
         ->assertCreated();
 
@@ -175,7 +183,7 @@ test('view permission can access make orders index and payload lists tenant scop
 
     $uom = ($this->makeUom)($tenant);
     $output = ($this->makeItem)($tenant, $uom, 'Output A', true);
-    $recipe = ($this->makeRecipe)($tenant, $output, true);
+    $recipe = ($this->makeRecipe)($tenant, $output, true, 'Batch of Patties');
 
     ($this->makeOrder)($tenant, $recipe, $user, [
         'output_quantity' => '2.500000',
@@ -187,6 +195,8 @@ test('view permission can access make orders index and payload lists tenant scop
         ->assertOk();
 
     $response
+        ->assertSee('Runs')
+        ->assertDontSee('Output quantity')
         ->assertSee('data-page="manufacturing-make-orders"', false)
         ->assertSee('data-payload="manufacturing-make-orders-payload"', false)
         ->assertSee('<script type="application/json"', false);
@@ -198,10 +208,33 @@ test('view permission can access make orders index and payload lists tenant scop
 
     $order = $payload['make_orders'][0] ?? [];
 
-    expect($order)->toHaveKeys(['id', 'recipe_id', 'output_item_id', 'output_item_name', 'output_quantity', 'status']);
+    expect($order)->toHaveKeys(['id', 'recipe_id', 'output_item_id', 'output_item_name', 'runs', 'status']);
     expect($order['output_item_name'])->toBe($output->name);
-    expect($order['output_quantity'])->toBe('2.500000');
+    expect($order['runs'])->toBe('2.500000');
     expect($order['status'])->toBe('DRAFT');
+});
+
+test('make order selection payload uses recipe names for same-item recipes', function () {
+    $tenant = ($this->makeTenant)('Tenant A');
+    $user = ($this->makeUser)($tenant);
+    ($this->grantPermission)($user, 'inventory-make-orders-view');
+
+    $uom = ($this->makeUom)($tenant);
+    $output = ($this->makeItem)($tenant, $uom, 'Patties', true);
+
+    ($this->makeRecipe)($tenant, $output, true, 'Batch of Patties', '54.000000');
+    ($this->makeRecipe)($tenant, $output, true, 'Drum of Patties', '324.000000');
+
+    $response = $this->actingAs($user)
+        ->get(route('manufacturing.make-orders.index'))
+        ->assertOk()
+        ->assertSee('Batch of Patties')
+        ->assertSee('Drum of Patties');
+
+    $payload = ($this->extractPayload)($response, 'manufacturing-make-orders-payload');
+
+    expect(collect($payload['recipes'] ?? [])->pluck('name')->all())
+        ->toContain('Batch of Patties', 'Drum of Patties');
 });
 
 test('make orders index is tenant scoped and empty state returns empty payload list', function () {
@@ -257,7 +290,7 @@ test('create draft make order validates payload and does not create stock moves'
     $this->actingAs($user)
         ->postJson(route('manufacturing.make-orders.store'), [])
         ->assertStatus(422)
-        ->assertJsonValidationErrors(['recipe_id', 'output_quantity']);
+        ->assertJsonValidationErrors(['recipe_id', 'runs']);
 
     $uom = ($this->makeUom)($tenant);
     $output = ($this->makeItem)($tenant, $uom, 'Bread', true);
@@ -266,7 +299,7 @@ test('create draft make order validates payload and does not create stock moves'
     $this->actingAs($user)
         ->postJson(route('manufacturing.make-orders.store'), [
             'recipe_id' => 999999,
-            'output_quantity' => '1.000000',
+            'runs' => '1.000000',
         ])
         ->assertStatus(422)
         ->assertJsonValidationErrors(['recipe_id']);
@@ -274,33 +307,33 @@ test('create draft make order validates payload and does not create stock moves'
     $this->actingAs($user)
         ->postJson(route('manufacturing.make-orders.store'), [
             'recipe_id' => $recipe->id,
-            'output_quantity' => '-1.000000',
+            'runs' => '-1.000000',
         ])
         ->assertStatus(422)
-        ->assertJsonValidationErrors(['output_quantity']);
+        ->assertJsonValidationErrors(['runs']);
 
     $this->actingAs($user)
         ->postJson(route('manufacturing.make-orders.store'), [
             'recipe_id' => $recipe->id,
-            'output_quantity' => '0',
+            'runs' => '0',
         ])
         ->assertStatus(422)
-        ->assertJsonValidationErrors(['output_quantity']);
+        ->assertJsonValidationErrors(['runs']);
 
     $this->actingAs($user)
         ->postJson(route('manufacturing.make-orders.store'), [
             'recipe_id' => $recipe->id,
-            'output_quantity' => '1.0000000',
+            'runs' => '1.0000000',
         ])
         ->assertStatus(422)
-        ->assertJsonValidationErrors(['output_quantity']);
+        ->assertJsonValidationErrors(['runs']);
 
     $beforeMoves = StockMove::query()->count();
 
     $response = $this->actingAs($user)
         ->postJson(route('manufacturing.make-orders.store'), [
             'recipe_id' => $recipe->id,
-            'output_quantity' => '2.000000',
+            'runs' => '2.000000',
         ])
         ->assertCreated();
 
@@ -312,6 +345,7 @@ test('create draft make order validates payload and does not create stock moves'
     expect($makeOrder->output_quantity)->toBe('2.000000');
     expect($makeOrder->created_by_user_id)->toBe($user->id);
     expect($makeOrder->made_at)->toBeNull();
+    expect($response->json('data.runs'))->toBe('2.000000');
 
     expect(StockMove::query()->count())->toBe($beforeMoves);
 });
@@ -328,10 +362,32 @@ test('create rejects inactive recipe', function () {
     $this->actingAs($user)
         ->postJson(route('manufacturing.make-orders.store'), [
             'recipe_id' => $recipe->id,
-            'output_quantity' => '1.000000',
+            'runs' => '1.000000',
         ])
         ->assertStatus(422)
         ->assertJsonValidationErrors(['recipe_id']);
+});
+
+test('create accepts fractional runs and stores them without float conversion', function () {
+    $tenant = ($this->makeTenant)('Tenant A');
+    $user = ($this->makeUser)($tenant);
+    ($this->grantPermission)($user, 'inventory-make-orders-execute');
+
+    $uom = ($this->makeUom)($tenant);
+    $output = ($this->makeItem)($tenant, $uom, 'Bread', true);
+    $recipe = ($this->makeRecipe)($tenant, $output, true, 'Fractional Runs Recipe', '54.000000');
+
+    $response = $this->actingAs($user)
+        ->postJson(route('manufacturing.make-orders.store'), [
+            'recipe_id' => $recipe->id,
+            'runs' => '2.500000',
+        ])
+        ->assertCreated()
+        ->assertJsonPath('data.runs', '2.500000');
+
+    $makeOrder = MakeOrder::query()->findOrFail($response->json('data.id'));
+
+    expect($makeOrder->output_quantity)->toBe('2.500000');
 });
 
 test('schedule sets due date and status without creating stock moves', function () {
@@ -398,7 +454,7 @@ test('schedule rejects inactive recipe and invalid due date', function () {
         ->assertJsonValidationErrors(['recipe_id']);
 });
 
-test('make creates stock moves once and sets made fields', function () {
+test('make treats make order quantity as runs and scales recipe inputs and outputs correctly', function () {
     $tenant = ($this->makeTenant)('Tenant A');
     $user = ($this->makeUser)($tenant);
     ($this->grantPermission)($user, 'inventory-make-orders-execute');
@@ -408,7 +464,7 @@ test('make creates stock moves once and sets made fields', function () {
     $inputB = ($this->makeItem)($tenant, $uom, 'Water', false);
     $output = ($this->makeItem)($tenant, $uom, 'Bread', true);
 
-    $recipe = ($this->makeRecipe)($tenant, $output, true);
+    $recipe = ($this->makeRecipe)($tenant, $output, true, 'Run Scaling Recipe', '10.000000');
     ($this->addRecipeLine)($tenant, $recipe, $inputA, '2.000000');
     ($this->addRecipeLine)($tenant, $recipe, $inputB, '1.000000');
 
@@ -451,7 +507,7 @@ test('make creates stock moves once and sets made fields', function () {
     expect($moveByItem[$inputB->id]->tenant_id)->toBe($tenant->id);
     expect($moveByItem[$inputB->id]->uom_id)->toBe($inputB->base_uom_id);
 
-    expect((string) $moveByItem[$output->id]->quantity)->toBe('3.000000');
+    expect((string) $moveByItem[$output->id]->quantity)->toBe('30.000000');
     expect($moveByItem[$output->id]->type)->toBe('receipt');
     expect($moveByItem[$output->id]->tenant_id)->toBe($tenant->id);
     expect($moveByItem[$output->id]->uom_id)->toBe($output->base_uom_id);
@@ -536,7 +592,7 @@ test('tenant isolation is enforced for store, schedule, and make', function () {
     $this->actingAs($userA)
         ->postJson(route('manufacturing.make-orders.store'), [
             'recipe_id' => $recipeB->id,
-            'output_quantity' => '1.000000',
+            'runs' => '1.000000',
         ])
         ->assertStatus(422)
         ->assertJsonValidationErrors(['recipe_id']);
@@ -555,3 +611,64 @@ test('tenant isolation is enforced for store, schedule, and make', function () {
         ->postJson(route('manufacturing.make-orders.make', $makeOrderB))
         ->assertNotFound();
 });
+
+test('make blocks execution when recipe output quantity is zero', function () {
+    $tenant = ($this->makeTenant)('Tenant A');
+    $user = ($this->makeUser)($tenant);
+    ($this->grantPermission)($user, 'inventory-make-orders-execute');
+
+    $uom = ($this->makeUom)($tenant);
+    $input = ($this->makeItem)($tenant, $uom, 'Flour', false);
+    $output = ($this->makeItem)($tenant, $uom, 'Bread', true);
+
+    $recipe = ($this->makeRecipe)($tenant, $output, true, 'Zero Output Recipe', '0.000000');
+    ($this->addRecipeLine)($tenant, $recipe, $input, '1.000000');
+
+    $makeOrder = ($this->makeOrder)($tenant, $recipe, $user, [
+        'output_quantity' => '1.000000',
+        'status' => 'SCHEDULED',
+        'due_date' => '2026-02-01',
+        'scheduled_at' => now(),
+    ]);
+
+    $beforeMoves = StockMove::query()->count();
+
+    $this->actingAs($user)
+        ->postJson(route('manufacturing.make-orders.make', $makeOrder))
+        ->assertStatus(422)
+        ->assertJsonValidationErrors(['runs']);
+
+    expect(StockMove::query()->count())->toBe($beforeMoves);
+});
+
+test('make blocks execution when runs are negative or zero on persisted orders', function (string $runs) {
+    $tenant = ($this->makeTenant)('Tenant A');
+    $user = ($this->makeUser)($tenant);
+    ($this->grantPermission)($user, 'inventory-make-orders-execute');
+
+    $uom = ($this->makeUom)($tenant);
+    $input = ($this->makeItem)($tenant, $uom, 'Flour', false);
+    $output = ($this->makeItem)($tenant, $uom, 'Bread', true);
+
+    $recipe = ($this->makeRecipe)($tenant, $output, true, 'Blocked Runs Recipe', '5.000000');
+    ($this->addRecipeLine)($tenant, $recipe, $input, '1.000000');
+
+    $makeOrder = ($this->makeOrder)($tenant, $recipe, $user, [
+        'output_quantity' => $runs,
+        'status' => 'SCHEDULED',
+        'due_date' => '2026-02-01',
+        'scheduled_at' => now(),
+    ]);
+
+    $beforeMoves = StockMove::query()->count();
+
+    $this->actingAs($user)
+        ->postJson(route('manufacturing.make-orders.make', $makeOrder))
+        ->assertStatus(422)
+        ->assertJsonValidationErrors(['runs']);
+
+    expect(StockMove::query()->count())->toBe($beforeMoves);
+})->with([
+    '0.000000',
+    '-1.000000',
+]);

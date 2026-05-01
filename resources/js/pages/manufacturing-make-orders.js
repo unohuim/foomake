@@ -4,7 +4,7 @@ export function mount(rootEl, payload) {
     const safePayload = payload || {};
     const emptyCreateErrors = () => ({
         recipe_id: [],
-        output_quantity: [],
+        runs: [],
     });
     const emptyScheduleErrors = () => ({
         due_date: [],
@@ -24,7 +24,7 @@ export function mount(rootEl, payload) {
         canExecute: Boolean(safePayload.can_execute),
         createForm: {
             recipe_id: '',
-            output_quantity: '',
+            runs: '',
         },
         createErrors: emptyCreateErrors(),
         createGeneralError: '',
@@ -49,7 +49,7 @@ export function mount(rootEl, payload) {
                 ...emptyCreateErrors(),
                 ...errors,
                 recipe_id: Array.isArray(errors.recipe_id) ? errors.recipe_id : [],
-                output_quantity: Array.isArray(errors.output_quantity) ? errors.output_quantity : [],
+                runs: Array.isArray(errors.runs) ? errors.runs : [],
             };
         },
         normalizeScheduleErrors(errors) {
@@ -133,7 +133,7 @@ export function mount(rootEl, payload) {
                 },
                 body: JSON.stringify({
                     recipe_id: this.createForm.recipe_id ? Number(this.createForm.recipe_id) : this.createForm.recipe_id,
-                    output_quantity: this.createForm.output_quantity,
+                    runs: this.createForm.runs,
                 }),
             });
 
@@ -158,7 +158,7 @@ export function mount(rootEl, payload) {
             }
 
             this.showToast('success', 'Make order created.');
-            this.createForm = { recipe_id: '', output_quantity: '' };
+            this.createForm = { recipe_id: '', runs: '' };
             this.isCreateSubmitting = false;
         },
         async scheduleOrder(orderId) {

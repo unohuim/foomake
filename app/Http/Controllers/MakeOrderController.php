@@ -36,7 +36,7 @@ class MakeOrderController extends Controller
         $recipes = Recipe::query()
             ->where('tenant_id', $request->user()->tenant_id)
             ->where('is_active', true)
-            ->with('item')
+            ->with('item.baseUom')
             ->orderBy('id')
             ->get();
 
@@ -72,13 +72,13 @@ class MakeOrderController extends Controller
                 'integer',
                 Rule::exists('recipes', 'id')->where('tenant_id', $request->user()->tenant_id),
             ],
-            'output_quantity' => ['required', 'string', 'regex:/^\d+(\.\d{1,6})?$/'],
+            'runs' => ['required', 'string', 'regex:/^\d+(?:\.\d{1,6})?$/'],
         ]);
 
-        if (bccomp($validated['output_quantity'], '0', 6) !== 1) {
+        if (bccomp($validated['runs'], '0.000000', 6) !== 1) {
             return $this->validationError([
-                'output_quantity' => ['Output quantity must be greater than zero.'],
-            ], 'Output quantity must be greater than zero.');
+                'runs' => ['Runs must be greater than zero.'],
+            ], 'Runs must be greater than zero.');
         }
 
         $recipe = Recipe::query()
@@ -96,7 +96,7 @@ class MakeOrderController extends Controller
             'tenant_id' => $request->user()->tenant_id,
             'recipe_id' => $recipe->id,
             'output_item_id' => $recipe->item_id,
-            'output_quantity' => $validated['output_quantity'],
+            'output_quantity' => $validated['runs'],
             'status' => MakeOrder::STATUS_DRAFT,
             'created_by_user_id' => $request->user()->id,
         ]);
@@ -218,11 +218,10 @@ class MakeOrderController extends Controller
             'recipe_id' => $makeOrder->recipe_id,
             'output_item_id' => $makeOrder->output_item_id,
             'output_item_name' => $makeOrder->outputItem?->name ?? '—',
-            'output_quantity' => (string) $makeOrder->output_quantity,
-            'output_quantity_display' => QuantityFormatter::formatForUom(
+            'runs' => (string) $makeOrder->output_quantity,
+            'runs_display' => QuantityFormatter::format(
                 (string) $makeOrder->output_quantity,
-                $makeOrder->outputItem?->baseUom,
-                1
+                6
             ),
             'status' => $makeOrder->status,
             'due_date' => $makeOrder->due_date?->format('Y-m-d'),
@@ -240,8 +239,15 @@ class MakeOrderController extends Controller
     {
         return [
             'id' => $recipe->id,
+            'name' => $recipe->name,
             'item_id' => $recipe->item_id,
             'item_name' => $recipe->item?->name ?? '—',
+            'output_quantity' => (string) $recipe->output_quantity,
+            'output_quantity_display' => QuantityFormatter::formatForUom(
+                (string) $recipe->output_quantity,
+                $recipe->item?->baseUom,
+                1
+            ),
         ];
     }
 
@@ -265,8 +271,8 @@ class MakeOrderController extends Controller
 
         $field = 'recipe_id';
 
-        if (str_contains($message, 'quantity')) {
-            $field = 'output_quantity';
+        if (str_contains($message, 'Runs') || str_contains($message, 'output quantity')) {
+            $field = 'runs';
         }
 
         return $this->validationError([

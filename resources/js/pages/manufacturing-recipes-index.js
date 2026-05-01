@@ -4,6 +4,8 @@ export function mount(rootEl, payload) {
     const safePayload = payload || {};
     const emptyErrors = () => ({
         item_id: [],
+        name: [],
+        output_quantity: [],
         is_active: [],
     });
 
@@ -16,12 +18,12 @@ export function mount(rootEl, payload) {
         csrfToken: safePayload.csrf_token || '',
         isCreateOpen: false,
         isCreateSubmitting: false,
-        createForm: { item_id: '', is_active: true },
+        createForm: { item_id: '', name: '', output_quantity: '', is_active: true },
         createErrors: emptyErrors(),
         createGeneralError: '',
         isEditOpen: false,
         isEditSubmitting: false,
-        editForm: { item_id: '', is_active: true },
+        editForm: { item_id: '', name: '', output_quantity: '', is_active: true },
         editErrors: emptyErrors(),
         editGeneralError: '',
         editRecipeId: null,
@@ -50,6 +52,8 @@ export function mount(rootEl, payload) {
                 ...emptyErrors(),
                 ...errors,
                 item_id: Array.isArray(errors.item_id) ? errors.item_id : [],
+                name: Array.isArray(errors.name) ? errors.name : [],
+                output_quantity: Array.isArray(errors.output_quantity) ? errors.output_quantity : [],
                 is_active: Array.isArray(errors.is_active) ? errors.is_active : [],
             };
         },
@@ -69,7 +73,7 @@ export function mount(rootEl, payload) {
         openCreate() {
             this.createErrors = emptyErrors();
             this.createGeneralError = '';
-            this.createForm = { item_id: '', is_active: true };
+            this.createForm = { item_id: '', name: '', output_quantity: '', is_active: true };
             this.isCreateOpen = true;
         },
         closeCreate() {
@@ -77,12 +81,14 @@ export function mount(rootEl, payload) {
             this.isCreateSubmitting = false;
             this.createErrors = emptyErrors();
             this.createGeneralError = '';
-            this.createForm = { item_id: '', is_active: true };
+            this.createForm = { item_id: '', name: '', output_quantity: '', is_active: true };
         },
         openEdit(recipe) {
             this.editRecipeId = recipe.id;
             this.editForm = {
                 item_id: recipe.item_id,
+                name: recipe.name,
+                output_quantity: recipe.output_quantity,
                 is_active: recipe.is_active,
             };
             this.editOutputLocked = (recipe.lines_count || 0) > 0;
@@ -150,6 +156,8 @@ export function mount(rootEl, payload) {
                 },
                 body: JSON.stringify({
                     item_id: this.createForm.item_id,
+                    name: this.createForm.name,
+                    output_quantity: this.createForm.output_quantity,
                     is_active: this.createForm.is_active,
                 }),
             });
@@ -186,6 +194,8 @@ export function mount(rootEl, payload) {
                 },
                 body: JSON.stringify({
                     item_id: this.editForm.item_id,
+                    name: this.editForm.name,
+                    output_quantity: this.editForm.output_quantity,
                     is_active: this.editForm.is_active,
                 }),
             });

@@ -1168,10 +1168,12 @@ Includes
 
 Enforce stock move creation for every receipt line
 Ensure:
-stock_moves.type = RECEIPT
+stock_moves.type = receipt
 stock_moves.status = POSTED
 Guarantee linkage between receipt lines and stock moves
 Ensure idempotency (no duplicate stock moves per receipt line)
+Ensure receipt stock move quantity uses:
+received_quantity × item_purchase_options.pack_quantity
 
 Rules
 
@@ -2601,6 +2603,38 @@ $option = ItemPurchaseOption::create([
     'pack_quantity' => '10.000000',
     'pack_uom_id' => $kg->id,
 ]);
+```
+
+### Purchase Order Receipt Inventory Impact
+
+**Name:** Purchase Order Receipt Inventory Impact  
+**Type:** Domain Rule  
+**Location:**
+
+- `docs/architecture/purchasing/PurchaseOrderReceiptInventoryImpact.yaml`
+- `app/Services/Purchasing/PurchaseOrderLifecycleService.php`
+- `app/Models/PurchaseOrderReceiptLine.php`
+
+**Purpose:**  
+Ensure every purchase order receipt line posts exactly one linked stock move and updates inventory in item base units.
+
+**When to Use:**  
+Purchase order receiving and receipt-ledger audit checks.
+
+**When Not to Use:**  
+Short-close events or non-purchasing inventory adjustments.
+
+**Public Interface:**
+
+- `PurchaseOrderLifecycleService::createReceipt()`
+- `PurchaseOrderReceiptLine::stockMove()`
+- `Item::onHandQuantity()`
+
+**Example Usage:**
+
+```php
+$baseQuantity = bcmul('2.000000', '500.000000', 6);
+// $baseQuantity === '1000.000000'
 ```
 
 ---
@@ -4070,9 +4104,16 @@ Migrations remain the **sole source of truth**.
 | tenant_id                 | bigint        | No       | FK → tenants.id (CASCADE)                 |
 | purchase_order_receipt_id | bigint        | No       | FK → purchase_order_receipts.id (CASCADE) |
 | purchase_order_line_id    | bigint        | No       | FK → purchase_order_lines.id (CASCADE)    |
+| stock_move_id             | bigint        | Yes      | FK → stock_moves.id (SET NULL)            |
 | received_quantity         | decimal(18,6) | No       | Pack count                                |
 | created_at                | timestamp     | Yes      | —                                         |
 | updated_at                | timestamp     | Yes      | —                                         |
+
+### Foreign Keys
+
+- `purchase_order_receipt_id` → purchase_order_receipts.id (CASCADE)
+- `purchase_order_line_id` → purchase_order_lines.id (CASCADE)
+- `stock_move_id` → stock_moves.id (SET NULL)
 
 ### Keys & Indexes
 
@@ -4080,8 +4121,10 @@ Migrations remain the **sole source of truth**.
 - Index: `tenant_id`
 - Index: `purchase_order_receipt_id`
 - Index: `purchase_order_line_id`
+- Unique: `stock_move_id`
 - Implicit (FK index): `purchase_order_receipt_id`
 - Implicit (FK index): `purchase_order_line_id`
+- Implicit (FK index): `stock_move_id`
 
 ---
 
@@ -4279,18 +4322,18 @@ Migrations remain the **sole source of truth**.
 
 ### Columns
 
-| Name        | Type          | Nullable | Notes                         |
-| ----------- | ------------- | -------- | ----------------------------- |
-| id          | bigint        | No       | Primary key                   |
-| tenant_id   | bigint        | No       | FK → tenants.id (CASCADE)     |
-| item_id     | bigint        | No       | FK → items.id (CASCADE)       |
-| uom_id      | bigint        | No       | FK → uoms.id (CASCADE)        |
-| quantity    | decimal(18,6) | No       | Signed                        |
-| type        | enum          | No       | See ENUMS.md                  |
-| status      | string        | No       | See ENUMS.md                  |
-| source_type | string        | Yes      | Polymorphic                   |
-| source_id   | bigint        | Yes      | Polymorphic                   |
-| created_at  | timestamp     | No       | Defaults to CURRENT_TIMESTAMP |
+| Name        | Type          | Nullable | Notes                                                                    |
+| ----------- | ------------- | -------- | ------------------------------------------------------------------------ |
+| id          | bigint        | No       | Primary key                                                              |
+| tenant_id   | bigint        | No       | FK → tenants.id (CASCADE)                                                |
+| item_id     | bigint        | No       | FK → items.id (CASCADE)                                                  |
+| uom_id      | bigint        | No       | FK → uoms.id (CASCADE)                                                   |
+| quantity    | decimal(18,6) | No       | Signed                                                                   |
+| type        | enum          | No       | See ENUMS.md                                                             |
+| status      | string        | No       | See ENUMS.md                                                             |
+| source_type | string        | Yes      | Polymorphic; purchase receipts use `purchase_order_receipt_line`         |
+| source_id   | bigint        | Yes      | Polymorphic; purchase receipts reference purchase_order_receipt_lines.id |
+| created_at  | timestamp     | No       | Defaults to CURRENT_TIMESTAMP                                            |
 
 ### Keys & Indexes
 

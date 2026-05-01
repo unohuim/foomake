@@ -355,7 +355,7 @@ Migrations remain the **sole source of truth**.
 | tenant_id          | bigint        | No       | FK → tenants.id (CASCADE)             |
 | recipe_id          | bigint        | No       | FK → recipes.id (CASCADE)             |
 | output_item_id     | bigint        | No       | FK → items.id (CASCADE)               |
-| output_quantity    | decimal(18,6) | No       | Canonical scale                       |
+| output_quantity    | decimal(18,6) | No       | Stored runs; canonical scale          |
 | status             | string        | No       | DRAFT, SCHEDULED, MADE                |
 | due_date           | date          | Yes      | Set on schedule                       |
 | scheduled_at       | timestamp     | Yes      | Set on schedule                       |
@@ -657,13 +657,15 @@ Migrations remain the **sole source of truth**.
 
 | Name       | Type      | Nullable | Notes                     |
 | ---------- | --------- | -------- | ------------------------- |
-| id         | bigint    | No       | Primary key               |
-| tenant_id  | bigint    | No       | FK → tenants.id (CASCADE) |
-| item_id    | bigint    | No       | FK → items.id (CASCADE)   |
-| is_active  | boolean   | No       | Default true              |
-| is_default | boolean   | No       | Default false             |
-| created_at | timestamp | Yes      | —                         |
-| updated_at | timestamp | Yes      | —                         |
+| id              | bigint        | No       | Primary key               |
+| tenant_id       | bigint        | No       | FK → tenants.id (CASCADE) |
+| item_id         | bigint        | No       | FK → items.id (CASCADE)   |
+| name            | string        | No       | User-defined recipe name  |
+| output_quantity | decimal(18,6) | No       | Canonical scale           |
+| is_active       | boolean       | No       | Default true              |
+| is_default      | boolean       | No       | Default false             |
+| created_at      | timestamp     | Yes      | —                         |
+| updated_at      | timestamp     | Yes      | —                         |
 
 ### Keys & Indexes
 

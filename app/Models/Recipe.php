@@ -21,11 +21,14 @@ class Recipe extends Model
     protected $fillable = [
         'tenant_id',
         'item_id',
+        'name',
+        'output_quantity',
         'is_active',
         'is_default',
     ];
 
     protected $casts = [
+        'output_quantity' => 'decimal:6',
         'is_active' => 'boolean',
         'is_default' => 'boolean',
     ];

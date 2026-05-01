@@ -43,25 +43,25 @@
                             >
                                 <option value="">{{ __('Select a recipe') }}</option>
                                 <template x-for="recipe in recipes" :key="recipe.id">
-                                    <option x-bind:value="recipe.id" x-text="recipe.item_name"></option>
+                                    <option x-bind:value="recipe.id" x-text="recipe.name"></option>
                                 </template>
                             </select>
                             <p class="mt-1 text-xs text-red-600" x-cloak x-show="createErrors.recipe_id.length" x-text="createErrors.recipe_id[0]"></p>
                         </div>
 
                         <div class="sm:col-span-1">
-                            <label for="output_quantity" class="block text-sm font-medium text-gray-700">
-                                {{ __('Output quantity') }}
+                            <label for="runs" class="block text-sm font-medium text-gray-700">
+                                {{ __('Runs') }}
                             </label>
                             <input
-                                id="output_quantity"
+                                id="runs"
                                 type="text"
                                 inputmode="decimal"
                                 class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                                x-model="createForm.output_quantity"
+                                x-model="createForm.runs"
                                 placeholder="0.000000"
                             />
-                            <p class="mt-1 text-xs text-red-600" x-cloak x-show="createErrors.output_quantity.length" x-text="createErrors.output_quantity[0]"></p>
+                            <p class="mt-1 text-xs text-red-600" x-cloak x-show="createErrors.runs.length" x-text="createErrors.runs[0]"></p>
                         </div>
 
                         <div class="sm:col-span-1 flex items-end justify-end">
@@ -102,7 +102,7 @@
                                 <thead class="text-left text-gray-500">
                                     <tr class="border-b border-gray-100">
                                         <th class="px-3 py-2 font-medium">{{ __('Output Item') }}</th>
-                                        <th class="px-3 py-2 font-medium">{{ __('Quantity') }}</th>
+                                        <th class="px-3 py-2 font-medium">{{ __('Runs') }}</th>
                                         <th class="px-3 py-2 font-medium">{{ __('Status') }}</th>
                                         <th class="px-3 py-2 font-medium">{{ __('Due Date') }}</th>
                                         <th class="px-3 py-2 text-right font-medium">{{ __('Actions') }}</th>
@@ -112,7 +112,7 @@
                                     <template x-for="order in makeOrders" :key="order.id">
                                         <tr>
                                             <td class="px-3 py-3 text-gray-900" x-text="order.output_item_name"></td>
-                                            <td class="px-3 py-3 text-gray-600" x-text="order.output_quantity_display"></td>
+                                            <td class="px-3 py-3 text-gray-600" x-text="order.runs_display"></td>
                                             <td class="px-3 py-3 text-gray-600" x-text="order.status"></td>
                                             <td class="px-3 py-3 text-gray-600">
                                                 <div class="space-y-1">
