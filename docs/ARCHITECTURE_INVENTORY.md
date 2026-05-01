@@ -813,6 +813,73 @@ UomConversion::create([
 
 ---
 
+### UoM Conversion System
+
+**Name:** UoM Conversion System  
+**Type:** Domain Rule Set / UI + Persistence Pattern  
+**Location:**  
+- `app/Http/Controllers/UomConversionController.php`  
+- `app/Models/UomConversion.php`  
+- `app/Models/ItemUomConversion.php`  
+- `app/Services/Uom/SystemUomCloner.php`  
+- `resources/views/manufacturing/uom-conversions/index.blade.php`
+
+**Purpose:**  
+Unify global, tenant-managed, and item-specific conversion behavior behind one manufacturing UI and one precedence-aware lookup model.
+
+**When to Use:**  
+- Managing same-category global or tenant conversions  
+- Managing item-specific overrides  
+- Resolving a conversion for operational workflows
+
+**When Not to Use:**  
+- Implicit ad hoc unit math outside the defined conversion system  
+- Cross-category general conversions
+
+**Public Interface:**  
+- `manufacturing.uom-conversions.*` routes  
+- `UomConversion`  
+- `ItemUomConversion`
+
+**Example Usage:**  
+```php
+Gate::authorize('inventory-materials-manage');
+```
+
+---
+
+### Conversion Precedence Pattern
+
+**Name:** Conversion Precedence Pattern  
+**Type:** Domain Resolution Rule  
+**Location:**  
+- `app/Http/Controllers/UomConversionController.php`  
+- `app/Actions/Inventory/ReceivePurchaseOptionAction.php`  
+- `docs/architecture/uom/ConversionPrecedence.yaml`
+
+**Purpose:**  
+Resolve unit conversions deterministically when multiple scopes can define a mapping.
+
+**When to Use:**  
+- Any lookup that must choose between item-specific, tenant, and global conversions
+
+**When Not to Use:**  
+- Writes or validations that should target one explicit scope only
+
+**Public Interface:**  
+- `resolve()` behavior  
+- `item-specific > tenant > global`
+
+**Example Usage:**  
+```php
+// Resolution order:
+// 1. item-specific
+// 2. tenant
+// 3. global
+```
+
+---
+
 ### ItemUomConversion
 
 **Name:** ItemUomConversion  

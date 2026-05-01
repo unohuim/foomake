@@ -879,24 +879,26 @@ Migrations remain the **sole source of truth**.
 
 ## uom_conversions
 
-**Tenant-owned:** No  
-**Purpose:** Global UoM conversions
+**Tenant-owned:** Mixed (`tenant_id = null` for global/system rows)  
+**Purpose:** Global and tenant-managed UoM conversions
 
 ### Columns
 
-| Name        | Type          | Nullable | Notes                  |
-| ----------- | ------------- | -------- | ---------------------- |
-| id          | bigint        | No       | Primary key            |
-| from_uom_id | bigint        | No       | FK → uoms.id (CASCADE) |
-| to_uom_id   | bigint        | No       | FK → uoms.id (CASCADE) |
-| multiplier  | decimal(18,8) | No       | —                      |
-| created_at  | timestamp     | Yes      | —                      |
-| updated_at  | timestamp     | Yes      | —                      |
+| Name        | Type          | Nullable | Notes                                               |
+| ----------- | ------------- | -------- | --------------------------------------------------- |
+| id          | bigint        | No       | Primary key                                         |
+| tenant_id   | bigint        | Yes      | FK → tenants.id (CASCADE); `null` for global rows   |
+| from_uom_id | bigint        | No       | FK → uoms.id (CASCADE)                              |
+| to_uom_id   | bigint        | No       | FK → uoms.id (CASCADE)                              |
+| multiplier  | decimal(18,8) | No       | Stored precision for general conversion multiplier   |
+| created_at  | timestamp     | Yes      | —                                                   |
+| updated_at  | timestamp     | Yes      | —                                                   |
 
 ### Keys & Indexes
 
 - PK: `id`
-- Unique: `(from_uom_id, to_uom_id)`
+- Unique: `(tenant_id, from_uom_id, to_uom_id)`
+- Implicit (FK index): `tenant_id`
 - Implicit (FK index): `from_uom_id`
 - Implicit (FK index): `to_uom_id`
 

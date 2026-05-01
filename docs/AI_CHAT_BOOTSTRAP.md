@@ -332,7 +332,7 @@ Expose Materials as a first-class domain with read-only visibility.
 
 > These PRs unblock **Material creation** and must precede PR2-MAT-004.
 
-### PR2-UOM-001 — UoM Categories CRUD (AJAX)
+### PR2-UOM-001 — UoM Categories CRUD (AJAX) ✅ (Implemented)
 
 **Goal**  
 Allow managing UoM Categories required by Units and Items.
@@ -351,7 +351,7 @@ Allow managing UoM Categories required by Units and Items.
 
 ---
 
-### PR2-UOM-002 — Units of Measure CRUD (AJAX)
+### PR2-UOM-002 — Units of Measure CRUD (AJAX) ✅ (Implemented)
 
 **Goal**  
 Allow managing Units of Measure within categories.
@@ -376,9 +376,189 @@ Allow managing Units of Measure within categories.
 
 ---
 
+### PR2-UOM-004 — Default + User-Managed UoM Conversions (Global + Tenant + Item-Specific) ✅ (Implemented)
+
+## Goal
+
+Introduce a complete UoM conversion system with:
+
+- System-seeded universal conversions
+- Tenant-managed conversions
+- Item-specific conversions (cross-category support)
+- Clear separation between global, tenant, and item-level behavior
+
+---
+
+## Includes
+
+- Add `tenant_id` to `uom_conversions`
+- Unique constraint:
+    - `(tenant_id, from_uom_id, to_uom_id)`
+- Seed global conversions (`tenant_id = null`)
+- Idempotent seeding (runs every seed)
+- Automatic bidirectional generation
+- Same-category enforcement (non-item conversions)
+
+- Integrate existing `item_uom_conversions` into unified UI
+- Support cross-category conversions at item level
+
+---
+
+## Global Conversion Rules
+
+Allowed:
+
+- Mass (g, kg, lb, oz)
+- Volume (ml, l)
+- Length (cm, m)
+
+Not allowed:
+
+- Count (ea, pc)
+- Cross-category
+
+Seeding:
+
+- Must fail loudly
+- No silent skips
+
+---
+
+## User (Tenant) Conversions
+
+Navigation:
+
+Manufacturing → Units of Measure → Conversions
+
+Routes:
+
+/manufacturing/uom-conversions
+
+Includes:
+
+- Full AJAX CRUD
+- Create / Edit / Delete
+- Permission: `inventory-materials-manage`
+
+---
+
+## Item-Specific Conversions
+
+Handled via: `item_uom_conversions`
+
+Includes:
+
+- Cross-category conversions allowed
+- Item-scoped (tenant-isolated)
+- CRUD within same conversions interface
+- Fields:
+    - `item_id`
+    - `from_uom_id`
+    - `to_uom_id`
+    - `conversion_factor`
+
+Rules:
+
+- Applies only to selected item
+- Overrides tenant and global conversions
+- Supports discrete-to-measurable mappings (e.g. `1 pc = 180 g`)
+
+---
+
+## UI Behavior
+
+Single unified interface:
+
+### Section 1 — General Conversions
+
+- Show all conversions:
+    - Global (read-only)
+    - Tenant (editable)
+
+Rules:
+
+- Global cannot be edited or deleted
+- Tenant conversions fully editable
+
+---
+
+### Section 2 — Item-Specific Conversions
+
+- Separate section or tab within same page
+- CRUD list scoped to selected item
+- Allows cross-category definitions
+- Clear visual distinction from general conversions
+
+---
+
+## Precedence Rules
+
+Conversion resolution order:
+
+1. Item-specific (`item_uom_conversions`)
+2. Tenant-level (`uom_conversions.tenant_id = tenant`)
+3. Global (`tenant_id = null`)
+
+---
+
+## Validation Rules
+
+- Same-category enforcement for general conversions
+- Cross-category allowed only for item-specific
+- Unique constraint enforced
+- No duplicate conversions
+- Global conversions immutable
+- Seeding fails on invalid config
+
+---
+
+## Testing (Pest Feature)
+
+- Minimum 20 tests (target 30+)
+
+Must cover:
+
+- Bidirectional generation
+- Idempotent seeding
+- Same-category validation
+- Cross-category item validation
+- Global vs tenant vs item visibility
+- Read-only enforcement (global)
+- Precedence resolution
+- Unique constraint enforcement
+- Failure cases for invalid config
+
+---
+
+## Documentation Impact
+
+Update:
+
+- `DB_SCHEMA.md`
+    - Add `uom_conversions.tenant_id`
+
+- `ARCHITECTURE_INVENTORY.md`
+    - UoM Conversion System
+    - Conversion Precedence Pattern
+
+Add architecture YAML:
+
+- UoM Conversion System
+- Conversion Precedence Rules
+
+---
+
+## Out of Scope
+
+- Automatic inference of item-specific conversions
+- Bulk import of conversions
+- Conversion suggestion engine
+
+---
+
 ## DOMAIN 1B — Materials CRUD (Now Unblocked)
 
-### PR2-MAT-002 — Create Material (AJAX) _(Renumbered)_
+### PR2-MAT-002 — Create Material (AJAX) ✅ (Implemented, renumbered)
 
 **Goal**  
 Allow creating a Material once UoMs exist.
@@ -412,7 +592,7 @@ Allow creating a Material once UoMs exist.
 
 ---
 
-### PR2-MAT-003 — Edit Material (AJAX)
+### PR2-MAT-003 — Edit Material (AJAX) ✅ (Implemented)
 
 **Goal**  
 Allow editing an existing Material safely.
@@ -431,7 +611,7 @@ Allow editing an existing Material safely.
 
 ---
 
-### PR2-MAT-004 — Row Actions Menu + Delete
+### PR2-MAT-004 — Row Actions Menu + Delete ✅ (Implemented)
 
 **Goal**  
 Introduce contextual actions and safe deletion.
@@ -450,7 +630,7 @@ Introduce contextual actions and safe deletion.
 
 ---
 
-### PR2-MAT-005 — Material Detail View (Read-Only)
+### PR2-MAT-005 — Material Detail View (Read-Only) ✅ (Implemented, later expanded)
 
 **Goal**  
 Provide a stable anchor for future expansions.
@@ -472,7 +652,7 @@ Provide a stable anchor for future expansions.
 
 ---
 
-## DOMAIN 2 — PR2-INV-001 — Inventory Visibility & Counts
+## DOMAIN 2 — PR2-INV-001 — Inventory Visibility & Counts ✅ (Implemented)
 
 _(Unchanged)_
 
@@ -484,7 +664,7 @@ _(Unchanged)_
 
 ## DOMAIN 3 — Recipes & Manufacturing
 
-### PR3-REC-001 — Recipes Index + Detail (Read-Only)
+### PR3-REC-001 — Recipes Index + Detail (Read-Only) ✅ (Implemented, later expanded)
 
 **Goal**  
 Expose recipes as a visible domain with a stable read-only anchor for later CRUD and execution.
@@ -510,7 +690,7 @@ Expose recipes as a visible domain with a stable read-only anchor for later CRUD
 
 ---
 
-### PR3-REC-002 — Recipes CRUD + Recipe Lines CRUD (AJAX)
+### PR3-REC-002 — Recipes CRUD + Recipe Lines CRUD (AJAX) ✅ (Implemented)
 
 **Goal**  
 Enable full recipe authoring with minimal, calm AJAX-first UX.
@@ -550,24 +730,26 @@ Enable full recipe authoring with minimal, calm AJAX-first UX.
 
 ---
 
-### PR3-REC-003 — Recipe Output Quantity Support
+### PR3-REC-003 — Recipe Output Quantity Support + Recipe Naming ✅ (Implemented)
 
 **Goal**  
-Introduce explicit output quantity for recipes.
+Introduce explicit output quantity and user-defined naming for recipes.
 
 **Problem Statement**  
-Recipes currently define output item and UoM but not quantity.
+Recipes currently need both explicit output quantity and a user-facing name so multiple recipes for the same output item can be distinguished.
 
 **Includes**
 
+- Add required `name` to recipes
 - Add `output_quantity` to recipes
 - Default existing records to `'0.000000'`
-- Update create/edit UI to capture quantity
-- Display output quantity in index and detail views
+- Update create/edit UI to capture recipe name and quantity
+- Display recipe name and output quantity in index and detail views
 - Persist using BCMath string (scale = 6)
 
 **Rules**
 
+- Recipe name is required for new/updated recipes
 - Output quantity is required for new/updated recipes
 - Must be ≥ 0 (existing default = 0 allowed for legacy)
 - Stored as string, not float
@@ -575,17 +757,18 @@ Recipes currently define output item and UoM but not quantity.
 
 **Execution Impact**
 
-`ExecuteRecipeAction` must scale inputs relative to defined output quantity.
+`ExecuteRecipeAction` must treat its argument as runs and scale output from the recipe-defined output quantity.
 
 Example:
 Recipe output = 10
-Execute 20 → multiplier = 2
+Execute 2 runs → output receipt = 20
 
 **Testing**
 
 - Creation and validation
+- Recipe naming and same-output differentiation
 - Default backfill behavior
-- Execution scaling correctness
+- Runs semantics and execution scaling correctness
 - Precision handling
 
 **Documentation Impact**
@@ -594,7 +777,7 @@ Execute 20 → multiplier = 2
 
 ---
 
-### PR3-MO-001 — Make Orders (Execute Recipe) _(Superseded in implementation by persisted make orders)_
+### PR3-MO-001 — Make Orders (Execute Recipe) ✅ (Implemented via persisted make orders)
 
 **Goal**  
 Allow executing a recipe to create ledger movements.
@@ -605,7 +788,7 @@ Allow executing a recipe to create ledger movements.
 - Route: `/manufacturing/make-orders`
 - Execution UI:
     - Select recipe
-    - Enter output quantity
+    - Enter runs
     - Submit (AJAX)
 - Calls `ExecuteRecipeAction`
 - Success toast + lightweight summary
@@ -623,15 +806,15 @@ Allow executing a recipe to create ledger movements.
 
 ---
 
-### PR3b — Make Orders Lifecycle (Persisted)
+### PR3b — Make Orders Lifecycle (Persisted) ✅ (Implemented)
 
 **Goal**  
 Implement persisted Make Orders with full lifecycle (Draft → Scheduled → Made/Executed), replacing direct execution. Index list at /manufacturing/make-orders.
 
 **Includes**
 
-- Index UI: table of Make Orders (Recipe/Output, Qty, Status, Due Date, Actions)
-- Create draft: slide-over (select active recipe + output qty) → saves as DRAFT
+- Index UI: table of Make Orders (Recipe/Output, Runs, Status, Due Date, Actions)
+- Create draft: slide-over (select active recipe + runs) → saves as DRAFT
 - Schedule: set due date on draft → status SCHEDULED
 - Make/Execute: on scheduled order → calls ExecuteRecipeAction → status MADE + stock moves
 - Tenant isolation, permission gates, AJAX actions, toasts/errors
@@ -640,6 +823,8 @@ Implement persisted Make Orders with full lifecycle (Draft → Scheduled → Mad
 **Rules**
 
 - Ledger-first on "make": issues inputs + receipts output via ExecuteRecipeAction
+- Make Order quantity is runs, not desired output quantity
+- Produced output is `runs × recipe.output_quantity`
 - BCMath canonical scale=6
 - Status: DRAFT, SCHEDULED, MADE
 - Active recipe required
@@ -665,7 +850,7 @@ This domain introduces **supplier management, supplier-specific material pricing
 
 ---
 
-### PR2-PUR-001 — Suppliers Index + Create (AJAX)
+### PR2-PUR-001 — Suppliers Index + Create (AJAX) ✅ (Implemented)
 
 **Goal**  
 Introduce tenant-owned Suppliers as a first-class Purchasing domain.
@@ -696,7 +881,7 @@ Introduce tenant-owned Suppliers as a first-class Purchasing domain.
 
 ---
 
-### PR2-MAT-006 — Material Planning Price (Schema + UI)
+### PR2-MAT-006 — Material Planning Price (Schema + UI) ✅ (Implemented)
 
 **Goal**  
 Add a **planning-only placeholder price** to materials.
@@ -721,7 +906,7 @@ Add a **planning-only placeholder price** to materials.
 
 ---
 
-### PR2-PUR-002 — Supplier CRUD (Edit + Delete)
+### PR2-PUR-002 — Supplier CRUD (Edit + Delete) ✅ (Implemented)
 
 **Goal**  
 Complete supplier lifecycle management.
@@ -735,7 +920,7 @@ Complete supplier lifecycle management.
 
 ---
 
-### PR2-PUR-003 — Supplier ↔ Material Catalog + Pricing
+### PR2-PUR-003 — Supplier ↔ Material Catalog + Pricing ✅ (Implemented)
 
 **Goal**  
 Define which materials are bought from which suppliers, including **supplier-specific pricing**.
@@ -774,7 +959,7 @@ Define which materials are bought from which suppliers, including **supplier-spe
 
 ---
 
-### PR2-PUR-004 — Purchase Orders (Draft + Pricing Snapshot)
+### PR2-PUR-004 — Purchase Orders (Draft + Pricing Snapshot) ✅ (Implemented, later expanded)
 
 ---
 
@@ -929,7 +1114,7 @@ To move out of DRAFT (future PR):
 
 ---
 
-### PR2-PUR-005 — Purchase Order Lifecycle & Receiving
+### PR2-PUR-005 — Purchase Order Lifecycle & Receiving ✅ (Implemented)
 
 Goal
 
@@ -1156,7 +1341,7 @@ PO Lifecycle
 
 ---
 
-### PR2-PUR-006 — Receiving Inventory Impact Fix
+### PR2-PUR-006 — Receiving Inventory Impact Fix ✅ (Implemented)
 
 Goal
 Ensure purchase order receiving always impacts inventory via stock moves.
@@ -2176,7 +2361,7 @@ $action->execute($inventoryCount, $userId);
 **Location:** `app/Models/Recipe.php`
 
 **Purpose:**  
-Represent manufacturing recipes for items.
+Represent named manufacturing recipes for items, including output quantity per run.
 
 **When to Use:**  
 Defining recipes and their line items.
@@ -2194,7 +2379,12 @@ Non-manufacturing inventory relationships.
 **Example Usage:**
 
 ```php
-$recipe = $item->recipe;
+$recipe = Recipe::create([
+    'tenant_id' => $tenant->id,
+    'item_id' => $item->id,
+    'name' => 'Batch of Patties',
+    'output_quantity' => '54.000000',
+]);
 ```
 
 ---
@@ -2249,7 +2439,7 @@ Inventory adjustments or corrections.
 
 **Public Interface:**
 
-- `execute(Recipe $recipe, string $outputQuantity): array`
+- `execute(Recipe $recipe, string $runs): array`
 
 **Example Usage:**
 
@@ -2288,6 +2478,7 @@ Recipe creation, editing, or execution flows.
 **Example Usage:**
 
 ```blade
+<th>{{ __('Recipe Name') }}</th>
 <th>{{ __('Input Item') }}</th>
 <th>{{ __('Quantity') }}</th>
 <th>{{ __('UoM') }}</th>
@@ -2468,6 +2659,83 @@ UomConversion::create([
     'to_uom_id' => $grams->id,
     'multiplier' => '1000.00000000',
 ]);
+```
+
+---
+
+### UoM Conversion System
+
+**Name:** UoM Conversion System  
+**Type:** Domain Rule Set / UI + Persistence Pattern  
+**Location:**
+
+- `app/Http/Controllers/UomConversionController.php`
+- `app/Models/UomConversion.php`
+- `app/Models/ItemUomConversion.php`
+- `app/Services/Uom/SystemUomCloner.php`
+- `resources/views/manufacturing/uom-conversions/index.blade.php`
+
+**Purpose:**  
+Unify global, tenant-managed, and item-specific conversion behavior behind one manufacturing UI and one precedence-aware lookup model.
+
+**When to Use:**
+
+- Managing same-category global or tenant conversions
+- Managing item-specific overrides
+- Resolving a conversion for operational workflows
+
+**When Not to Use:**
+
+- Implicit ad hoc unit math outside the defined conversion system
+- Cross-category general conversions
+
+**Public Interface:**
+
+- `manufacturing.uom-conversions.*` routes
+- `UomConversion`
+- `ItemUomConversion`
+
+**Example Usage:**
+
+```php
+Gate::authorize('inventory-materials-manage');
+```
+
+---
+
+### Conversion Precedence Pattern
+
+**Name:** Conversion Precedence Pattern  
+**Type:** Domain Resolution Rule  
+**Location:**
+
+- `app/Http/Controllers/UomConversionController.php`
+- `app/Actions/Inventory/ReceivePurchaseOptionAction.php`
+- `docs/architecture/uom/ConversionPrecedence.yaml`
+
+**Purpose:**  
+Resolve unit conversions deterministically when multiple scopes can define a mapping.
+
+**When to Use:**
+
+- Any lookup that must choose between item-specific, tenant, and global conversions
+
+**When Not to Use:**
+
+- Writes or validations that should target one explicit scope only
+
+**Public Interface:**
+
+- `resolve()` behavior
+- `item-specific > tenant > global`
+
+**Example Usage:**
+
+```php
+// Resolution order:
+// 1. item-specific
+// 2. tenant
+// 3. global
 ```
 
 ---
@@ -3888,21 +4156,21 @@ Migrations remain the **sole source of truth**.
 
 ### Columns
 
-| Name               | Type          | Nullable | Notes                     |
-| ------------------ | ------------- | -------- | ------------------------- |
-| id                 | bigint        | No       | Primary key               |
-| tenant_id          | bigint        | No       | FK → tenants.id (CASCADE) |
-| recipe_id          | bigint        | No       | FK → recipes.id (CASCADE) |
-| output_item_id     | bigint        | No       | FK → items.id (CASCADE)   |
-| output_quantity    | decimal(18,6) | No       | Canonical scale           |
-| status             | string        | No       | DRAFT, SCHEDULED, MADE    |
-| due_date           | date          | Yes      | Set on schedule           |
-| scheduled_at       | timestamp     | Yes      | Set on schedule           |
-| made_at            | timestamp     | Yes      | Set on make               |
-| created_by_user_id | bigint        | Yes      | FK → users.id (SET NULL)  |
-| made_by_user_id    | bigint        | Yes      | FK → users.id (SET NULL)  |
-| created_at         | timestamp     | Yes      | —                         |
-| updated_at         | timestamp     | Yes      | —                         |
+| Name               | Type          | Nullable | Notes                        |
+| ------------------ | ------------- | -------- | ---------------------------- |
+| id                 | bigint        | No       | Primary key                  |
+| tenant_id          | bigint        | No       | FK → tenants.id (CASCADE)    |
+| recipe_id          | bigint        | No       | FK → recipes.id (CASCADE)    |
+| output_item_id     | bigint        | No       | FK → items.id (CASCADE)      |
+| output_quantity    | decimal(18,6) | No       | Stored runs; canonical scale |
+| status             | string        | No       | DRAFT, SCHEDULED, MADE       |
+| due_date           | date          | Yes      | Set on schedule              |
+| scheduled_at       | timestamp     | Yes      | Set on schedule              |
+| made_at            | timestamp     | Yes      | Set on make                  |
+| created_by_user_id | bigint        | Yes      | FK → users.id (SET NULL)     |
+| made_by_user_id    | bigint        | Yes      | FK → users.id (SET NULL)     |
+| created_at         | timestamp     | Yes      | —                            |
+| updated_at         | timestamp     | Yes      | —                            |
 
 ### Keys & Indexes
 
@@ -4194,15 +4462,17 @@ Migrations remain the **sole source of truth**.
 
 ### Columns
 
-| Name       | Type      | Nullable | Notes                     |
-| ---------- | --------- | -------- | ------------------------- |
-| id         | bigint    | No       | Primary key               |
-| tenant_id  | bigint    | No       | FK → tenants.id (CASCADE) |
-| item_id    | bigint    | No       | FK → items.id (CASCADE)   |
-| is_active  | boolean   | No       | Default true              |
-| is_default | boolean   | No       | Default false             |
-| created_at | timestamp | Yes      | —                         |
-| updated_at | timestamp | Yes      | —                         |
+| Name            | Type          | Nullable | Notes                     |
+| --------------- | ------------- | -------- | ------------------------- |
+| id              | bigint        | No       | Primary key               |
+| tenant_id       | bigint        | No       | FK → tenants.id (CASCADE) |
+| item_id         | bigint        | No       | FK → items.id (CASCADE)   |
+| name            | string        | No       | User-defined recipe name  |
+| output_quantity | decimal(18,6) | No       | Canonical scale           |
+| is_active       | boolean       | No       | Default true              |
+| is_default      | boolean       | No       | Default false             |
+| created_at      | timestamp     | Yes      | —                         |
+| updated_at      | timestamp     | Yes      | —                         |
 
 ### Keys & Indexes
 
@@ -4416,24 +4686,26 @@ Migrations remain the **sole source of truth**.
 
 ## uom_conversions
 
-**Tenant-owned:** No  
-**Purpose:** Global UoM conversions
+**Tenant-owned:** Mixed (`tenant_id = null` for global/system rows)  
+**Purpose:** Global and tenant-managed UoM conversions
 
 ### Columns
 
-| Name        | Type          | Nullable | Notes                  |
-| ----------- | ------------- | -------- | ---------------------- |
-| id          | bigint        | No       | Primary key            |
-| from_uom_id | bigint        | No       | FK → uoms.id (CASCADE) |
-| to_uom_id   | bigint        | No       | FK → uoms.id (CASCADE) |
-| multiplier  | decimal(18,8) | No       | —                      |
-| created_at  | timestamp     | Yes      | —                      |
-| updated_at  | timestamp     | Yes      | —                      |
+| Name        | Type          | Nullable | Notes                                              |
+| ----------- | ------------- | -------- | -------------------------------------------------- |
+| id          | bigint        | No       | Primary key                                        |
+| tenant_id   | bigint        | Yes      | FK → tenants.id (CASCADE); `null` for global rows  |
+| from_uom_id | bigint        | No       | FK → uoms.id (CASCADE)                             |
+| to_uom_id   | bigint        | No       | FK → uoms.id (CASCADE)                             |
+| multiplier  | decimal(18,8) | No       | Stored precision for general conversion multiplier |
+| created_at  | timestamp     | Yes      | —                                                  |
+| updated_at  | timestamp     | Yes      | —                                                  |
 
 ### Keys & Indexes
 
 - PK: `id`
-- Unique: `(from_uom_id, to_uom_id)`
+- Unique: `(tenant_id, from_uom_id, to_uom_id)`
+- Implicit (FK index): `tenant_id`
 - Implicit (FK index): `from_uom_id`
 - Implicit (FK index): `to_uom_id`
 
@@ -4732,6 +5004,32 @@ If a UI element feels:
 It is probably **wrong** for this system.
 
 ## Clarity, calmness, and restraint win.
+
+---
+
+## Page Notes
+
+### `/manufacturing/uom-conversions`
+
+This page follows the page-module + AJAX CRUD pattern and is split into two sections:
+
+- **General Conversions**
+    - Shows global and tenant conversions together
+    - Global rows are visible but read-only
+    - Tenant rows are editable and deletable
+    - Create/edit uses a right-docked slide-over
+- **Item-Specific Conversions**
+    - Shows item-scoped overrides
+    - Create/edit/delete is available from the same page
+    - Item-specific conversions may cross categories because they are item-bound
+
+Behavioral rules reflected in the UI:
+
+- Global conversions are system-seeded and immutable in the UI
+- Tenant conversions are user-managed and stay within a single UoM category
+- Item-specific conversions override tenant and global conversions for the selected item
+- All create/edit/delete actions are AJAX-only and do not redirect
+- Validation errors render inline; success feedback uses page-scoped toast behavior
 
 ## UI Quoting & Alpine Safety Rules (Mandatory)
 
@@ -5050,6 +5348,7 @@ use App\Http\Controllers\RecipeController;
 use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\SupplierPurchaseOptionController;
 use App\Http\Controllers\UomCategoryController;
+use App\Http\Controllers\UomConversionController;
 use App\Http\Controllers\UomController;
 use Illuminate\Support\Facades\Route;
 
@@ -5121,7 +5420,14 @@ Route::middleware('auth')->group(function () {
         ->name('manufacturing.uoms.update');
     Route::delete('/manufacturing/uoms/{uom}', [UomController::class, 'destroy'])
         ->name('manufacturing.uoms.destroy');
-
+    Route::get('/manufacturing/uom-conversions', [UomConversionController::class, 'index'])
+        ->name('manufacturing.uom-conversions.index');
+    Route::post('/manufacturing/uom-conversions', [UomConversionController::class, 'store'])
+        ->name('manufacturing.uom-conversions.store');
+    Route::patch('/manufacturing/uom-conversions/{conversion}', [UomConversionController::class, 'update'])
+        ->name('manufacturing.uom-conversions.update');
+    Route::delete('/manufacturing/uom-conversions/{conversion}', [UomConversionController::class, 'destroy'])
+        ->name('manufacturing.uom-conversions.destroy');
     Route::get('/manufacturing/recipes', [RecipeController::class, 'index'])
         ->name('manufacturing.recipes.index');
     Route::get('/manufacturing/recipes/{recipe}', [RecipeController::class, 'show'])
@@ -5194,5 +5500,14 @@ Route::middleware('auth')->group(function () {
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 });
+
+Route::post('/manufacturing/uom-conversions/resolve', [UomConversionController::class, 'resolve'])
+    ->name('manufacturing.uom-conversions.resolve');
+Route::post('/manufacturing/uom-conversions/items', [UomConversionController::class, 'storeItem'])
+    ->name('manufacturing.uom-conversions.items.store');
+Route::patch('/manufacturing/uom-conversions/items/{itemConversion}', [UomConversionController::class, 'updateItem'])
+    ->name('manufacturing.uom-conversions.items.update');
+Route::delete('/manufacturing/uom-conversions/items/{itemConversion}', [UomConversionController::class, 'destroyItem'])
+    ->name('manufacturing.uom-conversions.items.destroy');
 
 require __DIR__ . '/auth.php';

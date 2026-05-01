@@ -1,0 +1,37 @@
+name: Conversion Precedence
+type: Domain Resolution Rule
+location:
+  - app/Http/Controllers/UomConversionController.php
+  - app/Actions/Inventory/ReceivePurchaseOptionAction.php
+purpose: >
+  Define deterministic conversion lookup order when more than one scope can provide
+  a valid mapping between the same UoMs.
+when_to_use:
+  - Resolving a conversion for a specific item
+  - Resolving a tenant-scoped conversion when no item override exists
+  - Falling back to global seeded conversions
+when_not_to_use:
+  - Validating whether a write belongs to the correct scope
+  - Creating new conversion rows
+entities_involved:
+  - Item
+  - ItemUomConversion
+  - UomConversion
+precedence:
+  - item-specific
+  - tenant
+  - global
+rules:
+  - If an item-specific conversion exists for the item and UoM pair, it wins.
+  - If no item-specific conversion exists, a tenant general conversion may be used.
+  - If no tenant conversion exists, a global seeded conversion may be used.
+  - General conversions remain same-category only even when used through precedence lookup.
+  - Item-specific conversions may cross categories because they are item-scoped.
+public_interface:
+  - resolve()
+  - ReceivePurchaseOptionAction conversion lookup
+example_usage: |
+  For item 42 converting ea -> g:
+    1. Look for ItemUomConversion(item_id=42, from=ea, to=g)
+    2. Else look for UomConversion(tenant_id=current tenant, from=ea, to=g)
+    3. Else look for UomConversion(tenant_id=null, from=ea, to=g)

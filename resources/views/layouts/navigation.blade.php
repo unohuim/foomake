@@ -14,7 +14,8 @@
                     $manufacturingActive = request()->routeIs('materials.*')
                         || request()->routeIs('manufacturing.*')
                         || request()->routeIs('inventory.*')
-                        || request()->routeIs('inventory.counts.*');
+                        || request()->routeIs('inventory.counts.*')
+                        || request()->routeIs('manufacturing.uom-conversions.*');
                     $purchasingActive = request()->routeIs('purchasing.*');
                 @endphp
 
@@ -78,6 +79,9 @@
                             @endcan
                             <x-dropdown-link :href="route('manufacturing.uoms.index')">
                                 {{ __('Units of Measure') }}
+                            </x-dropdown-link>
+                            <x-dropdown-link :href="route('manufacturing.uom-conversions.index')">
+                                {{ __('UoM Conversions') }}
                             </x-dropdown-link>
                             <x-dropdown-link :href="route('materials.uom-categories.index')">
                                 {{ __('UoM Categories') }}
@@ -168,6 +172,9 @@
             @endcan
             <x-responsive-nav-link :href="route('manufacturing.uoms.index')" :active="request()->routeIs('manufacturing.uoms.*')">
                 {{ __('Units of Measure') }}
+            </x-responsive-nav-link>
+            <x-responsive-nav-link :href="route('manufacturing.uom-conversions.index')" :active="request()->routeIs('manufacturing.uom-conversions.*')">
+                {{ __('UoM Conversions') }}
             </x-responsive-nav-link>
             <x-responsive-nav-link :href="route('materials.uom-categories.index')" :active="request()->routeIs('materials.uom-categories.*')">
                 {{ __('UoM Categories') }}

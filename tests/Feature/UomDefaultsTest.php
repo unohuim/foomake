@@ -7,7 +7,6 @@ use App\Models\User;
 use App\Services\Uom\SystemUomCloner;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use RuntimeException;
 
 uses(RefreshDatabase::class);
 
@@ -111,7 +110,7 @@ it('malformed config without categories throws', function () {
 
     expect(function () {
         ($this->seedSystemDefaults)();
-    })->toThrow(RuntimeException::class);
+    })->toThrow(\RuntimeException::class);
 });
 
 it('malformed config without uoms throws', function () {
@@ -119,7 +118,7 @@ it('malformed config without uoms throws', function () {
 
     expect(function () {
         ($this->seedSystemDefaults)();
-    })->toThrow(RuntimeException::class);
+    })->toThrow(\RuntimeException::class);
 });
 
 it('malformed category entry throws', function () {
@@ -134,7 +133,7 @@ it('malformed category entry throws', function () {
 
     expect(function () {
         ($this->seedSystemDefaults)();
-    })->toThrow(RuntimeException::class);
+    })->toThrow(\RuntimeException::class);
 });
 
 it('malformed uom entry throws', function () {
@@ -151,7 +150,7 @@ it('malformed uom entry throws', function () {
 
     expect(function () {
         ($this->seedSystemDefaults)();
-    })->toThrow(RuntimeException::class);
+    })->toThrow(\RuntimeException::class);
 });
 
 it('tenant creation via Tenant::create auto-clones defaults', function () {

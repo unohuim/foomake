@@ -14,12 +14,14 @@ use InvalidArgumentException;
 class UomConversion extends Model
 {
     protected $fillable = [
+        'tenant_id',
         'from_uom_id',
         'to_uom_id',
         'multiplier',
     ];
 
     protected $casts = [
+        'tenant_id' => 'integer',
         'multiplier' => 'decimal:8',
     ];
 
@@ -61,5 +63,13 @@ class UomConversion extends Model
     public function toUom(): BelongsTo
     {
         return $this->belongsTo(Uom::class, 'to_uom_id');
+    }
+
+    /**
+     * Determine whether the conversion is a global seeded conversion.
+     */
+    public function isGlobal(): bool
+    {
+        return $this->tenant_id === null;
     }
 }

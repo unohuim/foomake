@@ -1,0 +1,54 @@
+name: UoM Conversion System
+type: Domain Rule Set
+location:
+  - app/Http/Controllers/UomConversionController.php
+  - app/Models/UomConversion.php
+  - app/Models/ItemUomConversion.php
+  - app/Services/Uom/SystemUomCloner.php
+  - resources/views/manufacturing/uom-conversions/index.blade.php
+purpose: >
+  Define how global, tenant-managed, and item-specific UoM conversions coexist,
+  are managed in the manufacturing UI, and are validated at their appropriate scope.
+when_to_use:
+  - Managing general conversions within a UoM category
+  - Managing item-specific overrides for a tenant-owned item
+  - Reading conversion data for the unified UoM conversions page
+when_not_to_use:
+  - Cross-category general conversions
+  - Implicit conversion math outside defined conversion records
+entities_involved:
+  - Uom
+  - UomCategory
+  - UomConversion
+  - Item
+  - ItemUomConversion
+relationships:
+  - UomConversion belongs to fromUom and toUom
+  - ItemUomConversion belongs to item, fromUom, and toUom
+  - Global general conversions use uom_conversions.tenant_id = null
+  - Tenant general conversions use uom_conversions.tenant_id = tenant.id
+rules:
+  - General conversions must stay within the same UoM category.
+  - Cross-category conversions are forbidden for general conversions.
+  - Cross-category conversions are allowed only for item-specific conversions.
+  - Global conversions are system-seeded and read-only in the UI.
+  - Tenant conversions are user-managed and editable only within the owning tenant scope.
+  - Item-specific conversions are editable only within the owning tenant scope.
+public_interface:
+  - manufacturing.uom-conversions.index
+  - manufacturing.uom-conversions.store
+  - manufacturing.uom-conversions.update
+  - manufacturing.uom-conversions.destroy
+  - manufacturing.uom-conversions.items.store
+  - manufacturing.uom-conversions.items.update
+  - manufacturing.uom-conversions.items.destroy
+example_usage: |
+  General conversion:
+    tenant_id = null  => global seeded conversion
+    tenant_id = 5     => tenant-managed conversion
+
+  Item-specific conversion:
+    item_id = 42
+    from_uom_id = ea
+    to_uom_id = g
+    conversion_factor = 180.000000

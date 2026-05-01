@@ -5,6 +5,7 @@ namespace App\Services\Uom;
 use App\Models\Tenant;
 use App\Models\Uom;
 use App\Models\UomCategory;
+use App\Models\UomConversion;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
@@ -30,6 +31,7 @@ class SystemUomCloner
         DB::transaction(function () use ($data): void {
             $categoryMap = $this->ensureSystemCategories($data['categories']);
             $this->ensureSystemUoms($categoryMap, $data['uoms']);
+            $this->ensureSystemConversions($categoryMap, $data['conversions']);
         });
     }
 
@@ -51,7 +53,11 @@ class SystemUomCloner
     }
 
     /**
-     * @return array{categories: array<int, array<string, string>>, uoms: array<int, array<string, string>>}
+     * @return array{
+     *     categories: array<int, array<string, string>>,
+     *     uoms: array<int, array<string, string>>,
+     *     conversions: array<string, array<int, array<string, string>>>
+     * }
      */
     private function loadConfig(): array
     {
@@ -63,23 +69,35 @@ class SystemUomCloner
 
         $categories = Arr::get($config, 'categories');
         $uoms = Arr::get($config, 'uoms');
+        $conversions = Arr::get($config, 'conversions', []);
 
         if (! is_array($categories) || ! is_array($uoms)) {
             throw new RuntimeException('system_uoms config must include categories and uoms arrays.');
         }
 
+        if (! is_array($conversions)) {
+            throw new RuntimeException('system_uoms conversions config must be an array.');
+        }
+
         return [
             'categories' => $categories,
             'uoms' => $uoms,
+            'conversions' => $conversions,
         ];
     }
 
     /**
-     * @param array{categories: array<int, array<string, string>>, uoms: array<int, array<string, string>>} $data
+     * @param array{
+     *     categories: array<int, array<string, string>>,
+     *     uoms: array<int, array<string, string>>,
+     *     conversions: array<string, array<int, array<string, string>>>
+     * } $data
      */
     private function isEmptyConfig(array $data): bool
     {
-        return count($data['categories']) === 0 && count($data['uoms']) === 0;
+        return count($data['categories']) === 0
+            && count($data['uoms']) === 0
+            && count($data['conversions']) === 0;
     }
 
     /**
@@ -195,6 +213,79 @@ class SystemUomCloner
                 'uom_category_id' => $category->id,
                 'name' => $name,
             ]);
+        }
+    }
+
+    /**
+     * @param array<string, UomCategory> $categoryMap
+     * @param array<string, array<int, array<string, string>>> $conversions
+     */
+    private function ensureSystemConversions(array $categoryMap, array $conversions): void
+    {
+        foreach ($conversions as $categoryKey => $entries) {
+            if (! is_array($entries)) {
+                throw new RuntimeException('Invalid system_uoms conversions entry.');
+            }
+
+            $category = $categoryMap[$categoryKey] ?? null;
+
+            if (! $category) {
+                throw new RuntimeException('system_uoms conversion references unknown category key.');
+            }
+
+            foreach ($entries as $entry) {
+                $fromSymbol = $entry['from'] ?? null;
+                $toSymbol = $entry['to'] ?? null;
+                $multiplier = $entry['multiplier'] ?? null;
+
+                if (
+                    ! is_string($fromSymbol) || $fromSymbol === ''
+                    || ! is_string($toSymbol) || $toSymbol === ''
+                    || ! is_string($multiplier) || $multiplier === ''
+                ) {
+                    throw new RuntimeException('Invalid system_uoms conversion entry.');
+                }
+
+                if (bccomp($multiplier, '0', 8) <= 0) {
+                    throw new RuntimeException('system_uoms conversion multiplier must be greater than zero.');
+                }
+
+                $fromUom = Uom::query()
+                    ->withoutGlobalScopes()
+                    ->whereNull('tenant_id')
+                    ->where('symbol', $fromSymbol)
+                    ->first();
+
+                $toUom = Uom::query()
+                    ->withoutGlobalScopes()
+                    ->whereNull('tenant_id')
+                    ->where('symbol', $toSymbol)
+                    ->first();
+
+                if (! $fromUom || ! $toUom) {
+                    throw new RuntimeException('system_uoms conversion references missing UoMs.');
+                }
+
+                if ((int) $fromUom->uom_category_id !== (int) $category->id || (int) $toUom->uom_category_id !== (int) $category->id) {
+                    throw new RuntimeException('system_uoms conversion category mismatch.');
+                }
+
+                UomConversion::query()->firstOrCreate([
+                    'tenant_id' => null,
+                    'from_uom_id' => $fromUom->id,
+                    'to_uom_id' => $toUom->id,
+                ], [
+                    'multiplier' => $multiplier,
+                ]);
+
+                UomConversion::query()->firstOrCreate([
+                    'tenant_id' => null,
+                    'from_uom_id' => $toUom->id,
+                    'to_uom_id' => $fromUom->id,
+                ], [
+                    'multiplier' => bcdiv('1', $multiplier, 8),
+                ]);
+            }
         }
     }
 }

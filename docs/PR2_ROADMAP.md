@@ -80,7 +80,7 @@ Expose Materials as a first-class domain with read-only visibility.
 
 > These PRs unblock **Material creation** and must precede PR2-MAT-004.
 
-### PR2-UOM-001 — UoM Categories CRUD (AJAX)
+### PR2-UOM-001 — UoM Categories CRUD (AJAX) ✅ (Implemented)
 
 **Goal**  
 Allow managing UoM Categories required by Units and Items.
@@ -99,7 +99,7 @@ Allow managing UoM Categories required by Units and Items.
 
 ---
 
-### PR2-UOM-002 — Units of Measure CRUD (AJAX)
+### PR2-UOM-002 — Units of Measure CRUD (AJAX) ✅ (Implemented)
 
 **Goal**  
 Allow managing Units of Measure within categories.
@@ -124,9 +124,189 @@ Allow managing Units of Measure within categories.
 
 ---
 
+### PR2-UOM-004 — Default + User-Managed UoM Conversions (Global + Tenant + Item-Specific) ✅ (Implemented)
+
+## Goal
+
+Introduce a complete UoM conversion system with:
+
+- System-seeded universal conversions
+- Tenant-managed conversions
+- Item-specific conversions (cross-category support)
+- Clear separation between global, tenant, and item-level behavior
+
+---
+
+## Includes
+
+- Add `tenant_id` to `uom_conversions`
+- Unique constraint:
+    - `(tenant_id, from_uom_id, to_uom_id)`
+- Seed global conversions (`tenant_id = null`)
+- Idempotent seeding (runs every seed)
+- Automatic bidirectional generation
+- Same-category enforcement (non-item conversions)
+
+- Integrate existing `item_uom_conversions` into unified UI
+- Support cross-category conversions at item level
+
+---
+
+## Global Conversion Rules
+
+Allowed:
+
+- Mass (g, kg, lb, oz)
+- Volume (ml, l)
+- Length (cm, m)
+
+Not allowed:
+
+- Count (ea, pc)
+- Cross-category
+
+Seeding:
+
+- Must fail loudly
+- No silent skips
+
+---
+
+## User (Tenant) Conversions
+
+Navigation:
+
+Manufacturing → Units of Measure → Conversions
+
+Routes:
+
+/manufacturing/uom-conversions
+
+Includes:
+
+- Full AJAX CRUD
+- Create / Edit / Delete
+- Permission: `inventory-materials-manage`
+
+---
+
+## Item-Specific Conversions
+
+Handled via: `item_uom_conversions`
+
+Includes:
+
+- Cross-category conversions allowed
+- Item-scoped (tenant-isolated)
+- CRUD within same conversions interface
+- Fields:
+    - `item_id`
+    - `from_uom_id`
+    - `to_uom_id`
+    - `conversion_factor`
+
+Rules:
+
+- Applies only to selected item
+- Overrides tenant and global conversions
+- Supports discrete-to-measurable mappings (e.g. `1 pc = 180 g`)
+
+---
+
+## UI Behavior
+
+Single unified interface:
+
+### Section 1 — General Conversions
+
+- Show all conversions:
+    - Global (read-only)
+    - Tenant (editable)
+
+Rules:
+
+- Global cannot be edited or deleted
+- Tenant conversions fully editable
+
+---
+
+### Section 2 — Item-Specific Conversions
+
+- Separate section or tab within same page
+- CRUD list scoped to selected item
+- Allows cross-category definitions
+- Clear visual distinction from general conversions
+
+---
+
+## Precedence Rules
+
+Conversion resolution order:
+
+1. Item-specific (`item_uom_conversions`)
+2. Tenant-level (`uom_conversions.tenant_id = tenant`)
+3. Global (`tenant_id = null`)
+
+---
+
+## Validation Rules
+
+- Same-category enforcement for general conversions
+- Cross-category allowed only for item-specific
+- Unique constraint enforced
+- No duplicate conversions
+- Global conversions immutable
+- Seeding fails on invalid config
+
+---
+
+## Testing (Pest Feature)
+
+- Minimum 20 tests (target 30+)
+
+Must cover:
+
+- Bidirectional generation
+- Idempotent seeding
+- Same-category validation
+- Cross-category item validation
+- Global vs tenant vs item visibility
+- Read-only enforcement (global)
+- Precedence resolution
+- Unique constraint enforcement
+- Failure cases for invalid config
+
+---
+
+## Documentation Impact
+
+Update:
+
+- `DB_SCHEMA.md`
+    - Add `uom_conversions.tenant_id`
+
+- `ARCHITECTURE_INVENTORY.md`
+    - UoM Conversion System
+    - Conversion Precedence Pattern
+
+Add architecture YAML:
+
+- UoM Conversion System
+- Conversion Precedence Rules
+
+---
+
+## Out of Scope
+
+- Automatic inference of item-specific conversions
+- Bulk import of conversions
+- Conversion suggestion engine
+
+---
+
 ## DOMAIN 1B — Materials CRUD (Now Unblocked)
 
-### PR2-MAT-002 — Create Material (AJAX) _(Renumbered)_
+### PR2-MAT-002 — Create Material (AJAX) ✅ (Implemented, renumbered)
 
 **Goal**  
 Allow creating a Material once UoMs exist.
@@ -160,7 +340,7 @@ Allow creating a Material once UoMs exist.
 
 ---
 
-### PR2-MAT-003 — Edit Material (AJAX)
+### PR2-MAT-003 — Edit Material (AJAX) ✅ (Implemented)
 
 **Goal**  
 Allow editing an existing Material safely.
@@ -179,7 +359,7 @@ Allow editing an existing Material safely.
 
 ---
 
-### PR2-MAT-004 — Row Actions Menu + Delete
+### PR2-MAT-004 — Row Actions Menu + Delete ✅ (Implemented)
 
 **Goal**  
 Introduce contextual actions and safe deletion.
@@ -198,7 +378,7 @@ Introduce contextual actions and safe deletion.
 
 ---
 
-### PR2-MAT-005 — Material Detail View (Read-Only)
+### PR2-MAT-005 — Material Detail View (Read-Only) ✅ (Implemented, later expanded)
 
 **Goal**  
 Provide a stable anchor for future expansions.
@@ -220,7 +400,7 @@ Provide a stable anchor for future expansions.
 
 ---
 
-## DOMAIN 2 — PR2-INV-001 — Inventory Visibility & Counts
+## DOMAIN 2 — PR2-INV-001 — Inventory Visibility & Counts ✅ (Implemented)
 
 _(Unchanged)_
 
@@ -232,7 +412,7 @@ _(Unchanged)_
 
 ## DOMAIN 3 — Recipes & Manufacturing
 
-### PR3-REC-001 — Recipes Index + Detail (Read-Only)
+### PR3-REC-001 — Recipes Index + Detail (Read-Only) ✅ (Implemented, later expanded)
 
 **Goal**  
 Expose recipes as a visible domain with a stable read-only anchor for later CRUD and execution.
@@ -258,7 +438,7 @@ Expose recipes as a visible domain with a stable read-only anchor for later CRUD
 
 ---
 
-### PR3-REC-002 — Recipes CRUD + Recipe Lines CRUD (AJAX)
+### PR3-REC-002 — Recipes CRUD + Recipe Lines CRUD (AJAX) ✅ (Implemented)
 
 **Goal**  
 Enable full recipe authoring with minimal, calm AJAX-first UX.
@@ -298,7 +478,7 @@ Enable full recipe authoring with minimal, calm AJAX-first UX.
 
 ---
 
-### PR3-REC-003 — Recipe Output Quantity Support + Recipe Naming
+### PR3-REC-003 — Recipe Output Quantity Support + Recipe Naming ✅ (Implemented)
 
 **Goal**  
 Introduce explicit output quantity and user-defined naming for recipes.
@@ -345,7 +525,7 @@ Execute 2 runs → output receipt = 20
 
 ---
 
-### PR3-MO-001 — Make Orders (Execute Recipe) _(Superseded in implementation by persisted make orders)_
+### PR3-MO-001 — Make Orders (Execute Recipe) ✅ (Implemented via persisted make orders)
 
 **Goal**  
 Allow executing a recipe to create ledger movements.
@@ -374,7 +554,7 @@ Allow executing a recipe to create ledger movements.
 
 ---
 
-### PR3b — Make Orders Lifecycle (Persisted)
+### PR3b — Make Orders Lifecycle (Persisted) ✅ (Implemented)
 
 **Goal**  
 Implement persisted Make Orders with full lifecycle (Draft → Scheduled → Made/Executed), replacing direct execution. Index list at /manufacturing/make-orders.
@@ -418,7 +598,7 @@ This domain introduces **supplier management, supplier-specific material pricing
 
 ---
 
-### PR2-PUR-001 — Suppliers Index + Create (AJAX)
+### PR2-PUR-001 — Suppliers Index + Create (AJAX) ✅ (Implemented)
 
 **Goal**  
 Introduce tenant-owned Suppliers as a first-class Purchasing domain.
@@ -449,7 +629,7 @@ Introduce tenant-owned Suppliers as a first-class Purchasing domain.
 
 ---
 
-### PR2-MAT-006 — Material Planning Price (Schema + UI)
+### PR2-MAT-006 — Material Planning Price (Schema + UI) ✅ (Implemented)
 
 **Goal**  
 Add a **planning-only placeholder price** to materials.
@@ -474,7 +654,7 @@ Add a **planning-only placeholder price** to materials.
 
 ---
 
-### PR2-PUR-002 — Supplier CRUD (Edit + Delete)
+### PR2-PUR-002 — Supplier CRUD (Edit + Delete) ✅ (Implemented)
 
 **Goal**  
 Complete supplier lifecycle management.
@@ -488,7 +668,7 @@ Complete supplier lifecycle management.
 
 ---
 
-### PR2-PUR-003 — Supplier ↔ Material Catalog + Pricing
+### PR2-PUR-003 — Supplier ↔ Material Catalog + Pricing ✅ (Implemented)
 
 **Goal**  
 Define which materials are bought from which suppliers, including **supplier-specific pricing**.
@@ -527,7 +707,7 @@ Define which materials are bought from which suppliers, including **supplier-spe
 
 ---
 
-### PR2-PUR-004 — Purchase Orders (Draft + Pricing Snapshot)
+### PR2-PUR-004 — Purchase Orders (Draft + Pricing Snapshot) ✅ (Implemented, later expanded)
 
 ---
 
@@ -682,7 +862,7 @@ To move out of DRAFT (future PR):
 
 ---
 
-### PR2-PUR-005 — Purchase Order Lifecycle & Receiving
+### PR2-PUR-005 — Purchase Order Lifecycle & Receiving ✅ (Implemented)
 
 Goal
 
@@ -909,7 +1089,7 @@ PO Lifecycle
 
 ---
 
-### PR2-PUR-006 — Receiving Inventory Impact Fix
+### PR2-PUR-006 — Receiving Inventory Impact Fix ✅ (Implemented)
 
 Goal
 Ensure purchase order receiving always impacts inventory via stock moves.

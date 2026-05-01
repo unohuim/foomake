@@ -99,8 +99,30 @@ class ReceivePurchaseOptionAction
             return $quantity;
         }
 
+        $itemConversion = ItemUomConversion::query()
+            ->where('tenant_id', $option->tenant_id)
+            ->where('item_id', $item->id)
+            ->where('from_uom_id', $packUom->id)
+            ->where('to_uom_id', $baseUom->id)
+            ->first();
+
+        if ($itemConversion) {
+            return bcmul($quantity, (string) $itemConversion->conversion_factor, self::SCALE);
+        }
+
         if ($packUom->uom_category_id === $baseUom->uom_category_id) {
             $conversion = UomConversion::query()
+                ->where('tenant_id', $option->tenant_id)
+                ->where('from_uom_id', $packUom->id)
+                ->where('to_uom_id', $baseUom->id)
+                ->first();
+
+            if ($conversion) {
+                return bcmul($quantity, (string) $conversion->multiplier, self::SCALE);
+            }
+
+            $conversion = UomConversion::query()
+                ->whereNull('tenant_id')
                 ->where('from_uom_id', $packUom->id)
                 ->where('to_uom_id', $baseUom->id)
                 ->first();
@@ -111,13 +133,6 @@ class ReceivePurchaseOptionAction
 
             return bcmul($quantity, (string) $conversion->multiplier, self::SCALE);
         }
-
-        $itemConversion = ItemUomConversion::query()
-            ->where('tenant_id', $option->tenant_id)
-            ->where('item_id', $item->id)
-            ->where('from_uom_id', $packUom->id)
-            ->where('to_uom_id', $baseUom->id)
-            ->first();
 
         if (!$itemConversion) {
             throw new DomainException('Missing item-specific unit conversion.');

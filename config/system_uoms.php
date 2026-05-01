@@ -71,4 +71,32 @@ return [
             'symbol' => 'm',
         ],
     ],
+    'conversions' => [
+        'mass' => [
+            [
+                'from' => 'kg',
+                'to' => 'g',
+                'multiplier' => '1000.00000000',
+            ],
+            [
+                'from' => 'lb',
+                'to' => 'oz',
+                'multiplier' => '16.00000000',
+            ],
+        ],
+        'volume' => [
+            [
+                'from' => 'l',
+                'to' => 'ml',
+                'multiplier' => '1000.00000000',
+            ],
+        ],
+        'length' => [
+            [
+                'from' => 'm',
+                'to' => 'cm',
+                'multiplier' => '100.00000000',
+            ],
+        ],
+    ],
 ];

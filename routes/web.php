@@ -16,6 +16,7 @@ use App\Http\Controllers\RecipeController;
 use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\SupplierPurchaseOptionController;
 use App\Http\Controllers\UomCategoryController;
+use App\Http\Controllers\UomConversionController;
 use App\Http\Controllers\UomController;
 use Illuminate\Support\Facades\Route;
 
@@ -87,7 +88,14 @@ Route::middleware('auth')->group(function () {
         ->name('manufacturing.uoms.update');
     Route::delete('/manufacturing/uoms/{uom}', [UomController::class, 'destroy'])
         ->name('manufacturing.uoms.destroy');
-
+    Route::get('/manufacturing/uom-conversions', [UomConversionController::class, 'index'])
+        ->name('manufacturing.uom-conversions.index');
+    Route::post('/manufacturing/uom-conversions', [UomConversionController::class, 'store'])
+        ->name('manufacturing.uom-conversions.store');
+    Route::patch('/manufacturing/uom-conversions/{conversion}', [UomConversionController::class, 'update'])
+        ->name('manufacturing.uom-conversions.update');
+    Route::delete('/manufacturing/uom-conversions/{conversion}', [UomConversionController::class, 'destroy'])
+        ->name('manufacturing.uom-conversions.destroy');
     Route::get('/manufacturing/recipes', [RecipeController::class, 'index'])
         ->name('manufacturing.recipes.index');
     Route::get('/manufacturing/recipes/{recipe}', [RecipeController::class, 'show'])
@@ -160,5 +168,14 @@ Route::middleware('auth')->group(function () {
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 });
+
+Route::post('/manufacturing/uom-conversions/resolve', [UomConversionController::class, 'resolve'])
+    ->name('manufacturing.uom-conversions.resolve');
+Route::post('/manufacturing/uom-conversions/items', [UomConversionController::class, 'storeItem'])
+    ->name('manufacturing.uom-conversions.items.store');
+Route::patch('/manufacturing/uom-conversions/items/{itemConversion}', [UomConversionController::class, 'updateItem'])
+    ->name('manufacturing.uom-conversions.items.update');
+Route::delete('/manufacturing/uom-conversions/items/{itemConversion}', [UomConversionController::class, 'destroyItem'])
+    ->name('manufacturing.uom-conversions.items.destroy');
 
 require __DIR__ . '/auth.php';

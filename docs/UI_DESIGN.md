@@ -234,6 +234,32 @@ It is probably **wrong** for this system.
 
 ## Clarity, calmness, and restraint win.
 
+---
+
+## Page Notes
+
+### `/manufacturing/uom-conversions`
+
+This page follows the page-module + AJAX CRUD pattern and is split into two sections:
+
+- **General Conversions**
+    - Shows global and tenant conversions together
+    - Global rows are visible but read-only
+    - Tenant rows are editable and deletable
+    - Create/edit uses a right-docked slide-over
+- **Item-Specific Conversions**
+    - Shows item-scoped overrides
+    - Create/edit/delete is available from the same page
+    - Item-specific conversions may cross categories because they are item-bound
+
+Behavioral rules reflected in the UI:
+
+- Global conversions are system-seeded and immutable in the UI
+- Tenant conversions are user-managed and stay within a single UoM category
+- Item-specific conversions override tenant and global conversions for the selected item
+- All create/edit/delete actions are AJAX-only and do not redirect
+- Validation errors render inline; success feedback uses page-scoped toast behavior
+
 ## UI Quoting & Alpine Safety Rules (Mandatory)
 
 These rules exist to prevent silent Alpine parsing failures and Blade-rendered JavaScript leakage into the UI.
