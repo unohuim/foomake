@@ -25,6 +25,7 @@ Migrations remain the **sole source of truth**.
 
 - cache
 - cache_locks
+- customers
 - failed_jobs
 - inventory_counts
 - inventory_count_lines
@@ -90,6 +91,32 @@ Migrations remain the **sole source of truth**.
 ### Keys & Indexes
 
 - PK: `key`
+
+---
+
+## customers
+
+**Tenant-owned:** Yes  
+**Purpose:** Sales customer records
+
+### Columns
+
+| Name       | Type      | Nullable | Notes                     |
+| ---------- | --------- | -------- | ------------------------- |
+| id         | bigint    | No       | Primary key               |
+| tenant_id  | bigint    | No       | FK → tenants.id (CASCADE) |
+| name       | string    | No       | —                         |
+| status     | string    | No       | Defaults to `active`      |
+| notes      | text      | Yes      | —                         |
+| created_at | timestamp | Yes      | —                         |
+| updated_at | timestamp | Yes      | —                         |
+
+### Keys & Indexes
+
+- PK: `id`
+- Index: `(tenant_id, name)`
+- Index: `(tenant_id, status)`
+- Implicit (FK index): `tenant_id`
 
 ---
 

@@ -6,6 +6,7 @@ use App\Http\Controllers\ItemController;
 use App\Http\Controllers\ItemPurchaseOptionPriceController;
 use App\Http\Controllers\MakeOrderController;
 use App\Http\Controllers\MaterialController;
+use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\PurchaseOrderController;
 use App\Http\Controllers\PurchaseOrderLineController;
@@ -163,6 +164,17 @@ Route::middleware('auth')->group(function () {
         ->name('purchasing.orders.lines.update');
     Route::delete('/purchasing/orders/{purchaseOrderId}/lines/{lineId}', [PurchaseOrderLineController::class, 'destroy'])
         ->name('purchasing.orders.lines.destroy');
+
+    Route::get('/sales/customers', [CustomerController::class, 'index'])
+        ->name('sales.customers.index');
+    Route::get('/sales/customers/{customer}', [CustomerController::class, 'show'])
+        ->name('sales.customers.show');
+    Route::post('/sales/customers', [CustomerController::class, 'store'])
+        ->name('sales.customers.store');
+    Route::patch('/sales/customers/{customer}', [CustomerController::class, 'update'])
+        ->name('sales.customers.update');
+    Route::delete('/sales/customers/{customer}', [CustomerController::class, 'destroy'])
+        ->name('sales.customers.destroy');
 
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');

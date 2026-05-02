@@ -15,6 +15,7 @@ Before proposing a plan or writing any files, Codex MUST read and treat the foll
 - docs/AI_RULES.md
 - docs/CONVENTIONS.md
 - docs/PR2_ROADMAP.md
+- docs/PR3_ROADMAP.md
 - docs/ENUMS.md
 - docs/PERMISSIONS_MATRIX.md
 - docs/UI_DESIGN.md

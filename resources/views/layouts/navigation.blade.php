@@ -7,9 +7,11 @@
         || request()->routeIs('inventory.counts.*')
         || request()->routeIs('manufacturing.uom-conversions.*');
     $purchasingActive = request()->routeIs('purchasing.*');
+    $salesActive = request()->routeIs('sales.*');
 
     $canViewPurchaseOrders = $user?->can('purchasing-purchase-orders-create') ?? false;
     $canViewSuppliers = $user?->can('purchasing-suppliers-view') ?? false;
+    $canManageCustomers = $user?->can('sales-customers-manage') ?? false;
     $canViewInventory = $user?->can('inventory-adjustments-view') ?? false;
     $canViewMakeOrders = $user?->can('inventory-make-orders-view') ?? false;
     $canViewMaterials = $user?->can('inventory-materials-view') ?? false;
@@ -17,6 +19,7 @@
     $canViewRecipes = $user?->can('inventory-recipes-view') ?? false;
 
     $showPurchasingNav = $canViewPurchaseOrders || $canViewSuppliers;
+    $showSalesNav = $canManageCustomers;
     $showManufacturingNav = $canViewInventory
         || $canViewMakeOrders
         || $canViewMaterials
@@ -52,6 +55,22 @@
                             @can('purchasing-suppliers-view')
                                 <x-nav-dropdown-link :href="route('purchasing.suppliers.index')" :active="request()->routeIs('purchasing.suppliers.*')">
                                     {{ __('Suppliers') }}
+                                </x-nav-dropdown-link>
+                            @endcan
+                        </x-slot>
+                    </x-nav-dropdown>
+                @endif
+
+                @if ($showSalesNav)
+                    <x-nav-dropdown :active="$salesActive" align="left" data-nav-dropdown-trigger="sales">
+                        <x-slot name="trigger">
+                            {{ __('Sales') }}
+                        </x-slot>
+
+                        <x-slot name="content">
+                            @can('sales-customers-manage')
+                                <x-nav-dropdown-link :href="route('sales.customers.index')" :active="request()->routeIs('sales.customers.*')">
+                                    {{ __('Customers') }}
                                 </x-nav-dropdown-link>
                             @endcan
                         </x-slot>
@@ -184,6 +203,22 @@
                         @can('purchasing-suppliers-view')
                             <x-nav-dropdown-link :href="route('purchasing.suppliers.index')" :active="request()->routeIs('purchasing.suppliers.*')" mobile>
                                 {{ __('Suppliers') }}
+                            </x-nav-dropdown-link>
+                        @endcan
+                    </x-slot>
+                </x-nav-dropdown>
+            @endif
+
+            @if ($showSalesNav)
+                <x-nav-dropdown :active="$salesActive" mobile panel-id="mobile-nav-sales" data-nav-mobile-group="sales">
+                    <x-slot name="trigger">
+                        {{ __('Sales') }}
+                    </x-slot>
+
+                    <x-slot name="content">
+                        @can('sales-customers-manage')
+                            <x-nav-dropdown-link :href="route('sales.customers.index')" :active="request()->routeIs('sales.customers.*')" mobile>
+                                {{ __('Customers') }}
                             </x-nav-dropdown-link>
                         @endcan
                     </x-slot>

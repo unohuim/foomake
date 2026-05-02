@@ -3720,6 +3720,7 @@ Migrations remain the **sole source of truth**.
 
 - cache
 - cache_locks
+- customers
 - failed_jobs
 - inventory_counts
 - inventory_count_lines
@@ -3785,6 +3786,32 @@ Migrations remain the **sole source of truth**.
 ### Keys & Indexes
 
 - PK: `key`
+
+---
+
+## customers
+
+**Tenant-owned:** Yes  
+**Purpose:** Sales customer records
+
+### Columns
+
+| Name       | Type      | Nullable | Notes                     |
+| ---------- | --------- | -------- | ------------------------- |
+| id         | bigint    | No       | Primary key               |
+| tenant_id  | bigint    | No       | FK → tenants.id (CASCADE) |
+| name       | string    | No       | —                         |
+| status     | string    | No       | Defaults to `active`      |
+| notes      | text      | Yes      | —                         |
+| created_at | timestamp | Yes      | —                         |
+| updated_at | timestamp | Yes      | —                         |
+
+### Keys & Indexes
+
+- PK: `id`
+- Index: `(tenant_id, name)`
+- Index: `(tenant_id, status)`
+- Implicit (FK index): `tenant_id`
 
 ---
 
@@ -5246,6 +5273,7 @@ use App\Http\Controllers\ItemController;
 use App\Http\Controllers\ItemPurchaseOptionPriceController;
 use App\Http\Controllers\MakeOrderController;
 use App\Http\Controllers\MaterialController;
+use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\PurchaseOrderController;
 use App\Http\Controllers\PurchaseOrderLineController;
@@ -5404,6 +5432,17 @@ Route::middleware('auth')->group(function () {
     Route::delete('/purchasing/orders/{purchaseOrderId}/lines/{lineId}', [PurchaseOrderLineController::class, 'destroy'])
         ->name('purchasing.orders.lines.destroy');
 
+    Route::get('/sales/customers', [CustomerController::class, 'index'])
+        ->name('sales.customers.index');
+    Route::get('/sales/customers/{customer}', [CustomerController::class, 'show'])
+        ->name('sales.customers.show');
+    Route::post('/sales/customers', [CustomerController::class, 'store'])
+        ->name('sales.customers.store');
+    Route::patch('/sales/customers/{customer}', [CustomerController::class, 'update'])
+        ->name('sales.customers.update');
+    Route::delete('/sales/customers/{customer}', [CustomerController::class, 'destroy'])
+        ->name('sales.customers.destroy');
+
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
@@ -5419,3 +5458,4 @@ Route::delete('/manufacturing/uom-conversions/items/{itemConversion}', [UomConve
     ->name('manufacturing.uom-conversions.items.destroy');
 
 require __DIR__ . '/auth.php';
+

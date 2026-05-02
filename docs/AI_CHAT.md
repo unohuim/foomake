@@ -84,6 +84,7 @@ The following documents are the **source of truth**, in strict priority order:
 6. docs/ENUMS.md
 7. docs/DB_SCHEMA.md
 8. docs/UI_DESIGN.md
+9. docs/PR3_ROADMAP.md
 
 If any conflict exists, **higher priority always wins**.
 
