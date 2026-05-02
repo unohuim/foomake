@@ -72,6 +72,26 @@ The UI should feel:
 - No nested mega-menus initially
 - Active state must be subtle (underline or tone shift)
 
+### Navigation Implementation
+
+- The native `<nav>` element must remain in `resources/views/layouts/navigation.blade.php`
+- Navigation parts must use:
+    - `<x-nav-link>`
+    - `<x-nav-dropdown>`
+    - `<x-nav-dropdown-link>`
+- Navigation should use atomic Blade components, not a monolithic `<x-nav>` component
+- Breeze navigation component usage is not allowed in the navigation layout going forward
+- Shared Breeze components must not be deleted unless confirmed unused outside navigation
+- Desktop dropdowns use floating panels
+- Mobile nested navigation uses accordion-style groups
+- Mobile must not reuse desktop flyout behavior
+- Dark charcoal/navy top navigation is approved for this application
+- Styling must remain calm, operational, and restrained
+- Tailwind utilities only
+- Preserve subtle active states, rounded nav items, subtle borders, and soft shadows
+- Do not introduce flashy, marketing-style, or dashboard-heavy navigation
+- Navigation refactors must preserve route names, gates, `@can` checks, active states, and existing behavior
+
 ---
 
 ## Technology Constraints

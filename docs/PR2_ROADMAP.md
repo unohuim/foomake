@@ -1192,26 +1192,38 @@ Tenant scoping is already implemented in the current codebase.
 
 ## DOMAIN 5 — UI Component Refactor (Post-PR2 Cleanup)
 
-### PR2-UI-001 — Remove Breeze UI Components
+### PR2-UI-001 — Navigation-Only Tailwind Refactor
 
 **Goal**  
-Replace Breeze Blade UI components with Tailwind-only markup.
+Replace the Breeze-based navigation UI only with a modern, sleek, dark Tailwind-only navigation system.
 
 **Includes**
 
-- Replace Breeze nav + dropdown components
-- Preserve routes, permissions, and behavior
-- No visual redesign
+- Keep the native `<nav>` element in the layout
+- Use Blade components only for navigation parts:
+    - `<x-nav-link>`
+    - `<x-nav-dropdown>`
+    - `<x-nav-dropdown-link>`
+- Cover nav items, nav dropdowns, and nav dropdown links
+- Preserve all existing routes, gates, `@can` checks, active states, and behavior
+- Preserve desktop and mobile navigation behavior
+- Remove Breeze component usage from navigation only
+- Dark charcoal/navy top bar with clean white text
+- Rounded nav items, floating dropdown panels, subtle shadows and borders
+- Smooth hover/open states
+- Multi-level dropdown readiness
+- Mobile menus use accordion-style nested items, not desktop flyouts
+- Do not delete shared Breeze components unless confirmed unused outside navigation
 
 **Out of Scope**
 
+- Sidebar redesign
+- Page layout redesign
 - Domain logic changes
-- New features
-
-**Testing**
-
-- No new domain tests
-- Optional UI smoke checks
+- Route changes
+- Permission changes
+- Deleting Breeze/shared components used outside navigation
+- Any non-navigation UI refactor
 
 ---
 

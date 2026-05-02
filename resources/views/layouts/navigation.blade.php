@@ -1,209 +1,264 @@
-<nav x-data="{ open: false }" class="bg-white border-b border-gray-100">
-    <!-- Primary Navigation Menu -->
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div class="flex justify-between h-16">
-            <div class="flex">
-                <!-- Logo -->
-                <div class="shrink-0 flex items-center">
-                    <a href="{{ route('dashboard') }}">
-                        <x-application-logo class="block h-9 w-auto fill-current text-gray-800" />
-                    </a>
-                </div>
+@php
+    $user = auth()->user();
 
-                @php
-                    $manufacturingActive = request()->routeIs('materials.*')
-                        || request()->routeIs('manufacturing.*')
-                        || request()->routeIs('inventory.*')
-                        || request()->routeIs('inventory.counts.*')
-                        || request()->routeIs('manufacturing.uom-conversions.*');
-                    $purchasingActive = request()->routeIs('purchasing.*');
-                @endphp
+    $manufacturingActive = request()->routeIs('materials.*')
+        || request()->routeIs('manufacturing.*')
+        || request()->routeIs('inventory.*')
+        || request()->routeIs('inventory.counts.*')
+        || request()->routeIs('manufacturing.uom-conversions.*');
+    $purchasingActive = request()->routeIs('purchasing.*');
 
-                <!-- Navigation Links -->
-                <div class="hidden space-x-8 sm:-my-px sm:ms-10 sm:flex">
-                    <x-nav-link :href="route('dashboard')" :active="request()->routeIs('dashboard')">
-                        {{ __('Dashboard') }}
-                    </x-nav-link>
+    $canViewPurchaseOrders = $user?->can('purchasing-purchase-orders-create') ?? false;
+    $canViewSuppliers = $user?->can('purchasing-suppliers-view') ?? false;
+    $canViewInventory = $user?->can('inventory-adjustments-view') ?? false;
+    $canViewMakeOrders = $user?->can('inventory-make-orders-view') ?? false;
+    $canViewMaterials = $user?->can('inventory-materials-view') ?? false;
+    $canManageMaterials = $user?->can('inventory-materials-manage') ?? false;
+    $canViewRecipes = $user?->can('inventory-recipes-view') ?? false;
 
-                    <x-dropdown align="left" width="48" class="flex items-center">
+    $showPurchasingNav = $canViewPurchaseOrders || $canViewSuppliers;
+    $showManufacturingNav = $canViewInventory
+        || $canViewMakeOrders
+        || $canViewMaterials
+        || $canManageMaterials
+        || $canViewRecipes;
+@endphp
+
+<nav x-data="{ open: false }" class="border-b border-slate-800 bg-slate-950 shadow-lg shadow-slate-950/20">
+    <div class="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
+        <div class="flex items-center gap-3">
+            <a href="{{ route('dashboard') }}" class="flex items-center rounded-full border border-transparent p-2 transition duration-200 ease-out hover:border-slate-700 hover:bg-slate-900/80">
+                <x-application-logo class="block h-8 w-auto fill-current text-white" />
+            </a>
+
+            <div class="hidden items-center gap-2 sm:flex">
+                <x-nav-link :href="route('dashboard')" :active="request()->routeIs('dashboard')">
+                    {{ __('Dashboard') }}
+                </x-nav-link>
+
+                @if ($showPurchasingNav)
+                    <x-nav-dropdown :active="$purchasingActive" align="left" data-nav-dropdown-trigger="purchasing">
                         <x-slot name="trigger">
-                            <button class="{{ $purchasingActive ? 'inline-flex items-center px-1 pt-1 border-b-2 border-indigo-400 text-sm font-medium leading-5 text-gray-900 focus:outline-none focus:border-indigo-700 transition duration-150 ease-in-out' : 'inline-flex items-center px-1 pt-1 border-b-2 border-transparent text-sm font-medium leading-5 text-gray-500 hover:text-gray-700 hover:border-gray-300 focus:outline-none focus:text-gray-700 focus:border-gray-300 transition duration-150 ease-in-out' }}">
-                                <span>{{ __('Purchasing') }}</span>
-                                <svg class="ms-2 h-4 w-4 fill-current" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
-                                    <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
-                                </svg>
-                            </button>
+                            {{ __('Purchasing') }}
                         </x-slot>
 
                         <x-slot name="content">
                             @can('purchasing-purchase-orders-create')
-                                <x-dropdown-link :href="route('purchasing.orders.index')">
+                                <x-nav-dropdown-link :href="route('purchasing.orders.index')" :active="request()->routeIs('purchasing.orders.*')">
                                     {{ __('Orders') }}
-                                </x-dropdown-link>
+                                </x-nav-dropdown-link>
                             @endcan
-                            <x-dropdown-link :href="route('purchasing.suppliers.index')">
-                                {{ __('Suppliers') }}
-                            </x-dropdown-link>
-                        </x-slot>
-                    </x-dropdown>
 
-                    <x-dropdown align="left" width="48" class="flex items-center">
+                            @can('purchasing-suppliers-view')
+                                <x-nav-dropdown-link :href="route('purchasing.suppliers.index')" :active="request()->routeIs('purchasing.suppliers.*')">
+                                    {{ __('Suppliers') }}
+                                </x-nav-dropdown-link>
+                            @endcan
+                        </x-slot>
+                    </x-nav-dropdown>
+                @endif
+
+                @if ($showManufacturingNav)
+                    <x-nav-dropdown :active="$manufacturingActive" align="left" data-nav-dropdown-trigger="manufacturing">
                         <x-slot name="trigger">
-                            <button class="{{ $manufacturingActive ? 'inline-flex items-center px-1 pt-1 border-b-2 border-indigo-400 text-sm font-medium leading-5 text-gray-900 focus:outline-none focus:border-indigo-700 transition duration-150 ease-in-out' : 'inline-flex items-center px-1 pt-1 border-b-2 border-transparent text-sm font-medium leading-5 text-gray-500 hover:text-gray-700 hover:border-gray-300 focus:outline-none focus:text-gray-700 focus:border-gray-300 transition duration-150 ease-in-out' }}">
-                                <span>{{ __('Manufacturing') }}</span>
-                                <svg class="ms-2 h-4 w-4 fill-current" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
-                                    <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
-                                </svg>
-                            </button>
+                            {{ __('Manufacturing') }}
                         </x-slot>
 
                         <x-slot name="content">
-                            <x-dropdown-link :href="route('inventory.index')">
-                                {{ __('Inventory') }}
-                            </x-dropdown-link>
-                            <x-dropdown-link :href="route('inventory.counts.index')">
-                                {{ __('Inventory Counts') }}
-                            </x-dropdown-link>
+                            @can('inventory-adjustments-view')
+                                <x-nav-dropdown-link :href="route('inventory.index')" :active="request()->routeIs('inventory.index')">
+                                    {{ __('Inventory') }}
+                                </x-nav-dropdown-link>
+
+                                <x-nav-dropdown-link :href="route('inventory.counts.index')" :active="request()->routeIs('inventory.counts.*')">
+                                    {{ __('Inventory Counts') }}
+                                </x-nav-dropdown-link>
+                            @endcan
+
                             @can('inventory-make-orders-view')
-                                <x-dropdown-link :href="route('manufacturing.make-orders.index')">
+                                <x-nav-dropdown-link :href="route('manufacturing.make-orders.index')" :active="request()->routeIs('manufacturing.make-orders.*')">
                                     {{ __('Orders (Make Orders)') }}
-                                </x-dropdown-link>
+                                </x-nav-dropdown-link>
                             @endcan
-                            <x-dropdown-link :href="route('materials.index')">
-                                {{ __('Materials') }}
-                            </x-dropdown-link>
+
+                            @can('inventory-materials-view')
+                                <x-nav-dropdown-link :href="route('materials.index')" :active="request()->routeIs('materials.*')">
+                                    {{ __('Materials') }}
+                                </x-nav-dropdown-link>
+                            @endcan
+
                             @can('inventory-recipes-view')
-                                <x-dropdown-link :href="route('manufacturing.recipes.index')">
+                                <x-nav-dropdown-link :href="route('manufacturing.recipes.index')" :active="request()->routeIs('manufacturing.recipes.*')">
                                     {{ __('Recipes') }}
-                                </x-dropdown-link>
+                                </x-nav-dropdown-link>
                             @endcan
-                            <x-dropdown-link :href="route('manufacturing.uoms.index')">
-                                {{ __('Units of Measure') }}
-                            </x-dropdown-link>
-                            <x-dropdown-link :href="route('manufacturing.uom-conversions.index')">
-                                {{ __('UoM Conversions') }}
-                            </x-dropdown-link>
-                            <x-dropdown-link :href="route('materials.uom-categories.index')">
-                                {{ __('UoM Categories') }}
-                            </x-dropdown-link>
+
+                            @can('inventory-materials-manage')
+                                <x-nav-dropdown-link :href="route('manufacturing.uoms.index')" :active="request()->routeIs('manufacturing.uoms.*')">
+                                    {{ __('Units of Measure') }}
+                                </x-nav-dropdown-link>
+
+                                <x-nav-dropdown-link :href="route('manufacturing.uom-conversions.index')" :active="request()->routeIs('manufacturing.uom-conversions.*')">
+                                    {{ __('UoM Conversions') }}
+                                </x-nav-dropdown-link>
+
+                                <x-nav-dropdown-link :href="route('materials.uom-categories.index')" :active="request()->routeIs('materials.uom-categories.*')">
+                                    {{ __('UoM Categories') }}
+                                </x-nav-dropdown-link>
+                            @endcan
                         </x-slot>
-                    </x-dropdown>
-                </div>
+                    </x-nav-dropdown>
+                @endif
             </div>
+        </div>
 
-            <!-- Settings Dropdown -->
-            <div class="hidden sm:flex sm:items-center sm:ms-6">
-                <x-dropdown align="right" width="48">
-                    <x-slot name="trigger">
-                        <button class="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-gray-500 bg-white hover:text-gray-700 focus:outline-none transition ease-in-out duration-150">
-                            <div>{{ Auth::user()->name }}</div>
+        <div class="hidden items-center sm:flex">
+            <x-nav-dropdown align="right">
+                <x-slot name="trigger">
+                    {{ $user?->name }}
+                </x-slot>
 
-                            <div class="ms-1">
-                                <svg class="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
-                                    <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
-                                </svg>
-                            </div>
-                        </button>
-                    </x-slot>
+                <x-slot name="content">
+                    <x-nav-dropdown-link :href="route('profile.edit')" :active="request()->routeIs('profile.edit')">
+                        {{ __('Profile') }}
+                    </x-nav-dropdown-link>
 
-                    <x-slot name="content">
-                        <x-dropdown-link :href="route('profile.edit')">
-                            {{ __('Profile') }}
-                        </x-dropdown-link>
+                    <form method="POST" action="{{ route('logout') }}">
+                        @csrf
+                        <x-nav-dropdown-link as="button" type="submit">
+                            {{ __('Log Out') }}
+                        </x-nav-dropdown-link>
+                    </form>
+                </x-slot>
+            </x-nav-dropdown>
+        </div>
 
-                        <!-- Authentication -->
-                        <form method="POST" action="{{ route('logout') }}">
-                            @csrf
-
-                            <x-dropdown-link :href="route('logout')"
-                                    onclick="event.preventDefault();
-                                                this.closest('form').submit();">
-                                {{ __('Log Out') }}
-                            </x-dropdown-link>
-                        </form>
-                    </x-slot>
-                </x-dropdown>
-            </div>
-
-            <!-- Hamburger -->
-            <div class="-me-2 flex items-center sm:hidden">
-                <button @click="open = ! open" class="inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 focus:outline-none focus:bg-gray-100 focus:text-gray-500 transition duration-150 ease-in-out">
-                    <svg class="h-6 w-6" stroke="currentColor" fill="none" viewBox="0 0 24 24">
-                        <path :class="{'hidden': open, 'inline-flex': ! open }" class="inline-flex" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
-                        <path :class="{'hidden': ! open, 'inline-flex': open }" class="hidden" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                </button>
-            </div>
+        <div class="flex items-center sm:hidden">
+            <button
+                type="button"
+                class="inline-flex items-center justify-center rounded-full border border-slate-700 bg-slate-900/80 p-2 text-slate-200 transition duration-200 ease-out hover:bg-slate-800 hover:text-white"
+                x-on:click="open = !open"
+                x-bind:aria-expanded="open ? 'true' : 'false'"
+                aria-controls="mobile-nav-panel"
+            >
+                <span class="sr-only">{{ __('Toggle navigation') }}</span>
+                <svg class="h-5 w-5" stroke="currentColor" fill="none" viewBox="0 0 24 24" aria-hidden="true">
+                    <path x-bind:class="open ? 'hidden' : 'inline-flex'" class="inline-flex" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M4 6h16M4 12h16M4 18h16" />
+                    <path x-bind:class="open ? 'inline-flex' : 'hidden'" class="hidden" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M6 6l12 12M18 6L6 18" />
+                </svg>
+            </button>
         </div>
     </div>
 
-    <!-- Responsive Navigation Menu -->
-    <div :class="{'block': open, 'hidden': ! open}" class="hidden sm:hidden">
-        <div class="pt-2 pb-3 space-y-1">
-            <x-responsive-nav-link :href="route('dashboard')" :active="request()->routeIs('dashboard')">
+    <div
+        id="mobile-nav-panel"
+        class="border-t border-slate-800 bg-slate-950 px-4 pb-4 pt-3 sm:hidden"
+        data-nav-mobile-panel
+        x-cloak
+        x-show="open"
+        x-transition:enter="transition ease-out duration-200"
+        x-transition:enter-start="opacity-0 -translate-y-1"
+        x-transition:enter-end="opacity-100 translate-y-0"
+        x-transition:leave="transition ease-in duration-150"
+        x-transition:leave-start="opacity-100 translate-y-0"
+        x-transition:leave-end="opacity-0 -translate-y-1"
+    >
+        <div class="space-y-2">
+            <x-nav-link :href="route('dashboard')" :active="request()->routeIs('dashboard')" mobile>
                 {{ __('Dashboard') }}
-            </x-responsive-nav-link>
-            @can('purchasing-purchase-orders-create')
-                <x-responsive-nav-link :href="route('purchasing.orders.index')" :active="request()->routeIs('purchasing.orders.*')">
-                    {{ __('Orders') }}
-                </x-responsive-nav-link>
-            @endcan
-            <x-responsive-nav-link :href="route('purchasing.suppliers.index')" :active="request()->routeIs('purchasing.*')">
-                {{ __('Suppliers') }}
-            </x-responsive-nav-link>
-            <x-responsive-nav-link :href="route('inventory.index')" :active="request()->routeIs('inventory.*')">
-                {{ __('Inventory') }}
-            </x-responsive-nav-link>
-            <x-responsive-nav-link :href="route('inventory.counts.index')" :active="request()->routeIs('inventory.counts.*')">
-                {{ __('Inventory Counts') }}
-            </x-responsive-nav-link>
-            @can('inventory-make-orders-view')
-                <x-responsive-nav-link :href="route('manufacturing.make-orders.index')" :active="request()->routeIs('manufacturing.make-orders.*')">
-                    {{ __('Orders (Make Orders)') }}
-                </x-responsive-nav-link>
-            @endcan
-            <x-responsive-nav-link :href="route('materials.index')" :active="request()->routeIs('materials.index')">
-                {{ __('Materials') }}
-            </x-responsive-nav-link>
-            @can('inventory-recipes-view')
-                <x-responsive-nav-link :href="route('manufacturing.recipes.index')" :active="request()->routeIs('manufacturing.recipes.*')">
-                    {{ __('Recipes') }}
-                </x-responsive-nav-link>
-            @endcan
-            <x-responsive-nav-link :href="route('manufacturing.uoms.index')" :active="request()->routeIs('manufacturing.uoms.*')">
-                {{ __('Units of Measure') }}
-            </x-responsive-nav-link>
-            <x-responsive-nav-link :href="route('manufacturing.uom-conversions.index')" :active="request()->routeIs('manufacturing.uom-conversions.*')">
-                {{ __('UoM Conversions') }}
-            </x-responsive-nav-link>
-            <x-responsive-nav-link :href="route('materials.uom-categories.index')" :active="request()->routeIs('materials.uom-categories.*')">
-                {{ __('UoM Categories') }}
-            </x-responsive-nav-link>
+            </x-nav-link>
+
+            @if ($showPurchasingNav)
+                <x-nav-dropdown :active="$purchasingActive" mobile panel-id="mobile-nav-purchasing" data-nav-mobile-group="purchasing">
+                    <x-slot name="trigger">
+                        {{ __('Purchasing') }}
+                    </x-slot>
+
+                    <x-slot name="content">
+                        @can('purchasing-purchase-orders-create')
+                            <x-nav-dropdown-link :href="route('purchasing.orders.index')" :active="request()->routeIs('purchasing.orders.*')" mobile>
+                                {{ __('Orders') }}
+                            </x-nav-dropdown-link>
+                        @endcan
+
+                        @can('purchasing-suppliers-view')
+                            <x-nav-dropdown-link :href="route('purchasing.suppliers.index')" :active="request()->routeIs('purchasing.suppliers.*')" mobile>
+                                {{ __('Suppliers') }}
+                            </x-nav-dropdown-link>
+                        @endcan
+                    </x-slot>
+                </x-nav-dropdown>
+            @endif
+
+            @if ($showManufacturingNav)
+                <x-nav-dropdown :active="$manufacturingActive" mobile panel-id="mobile-nav-manufacturing" data-nav-mobile-group="manufacturing">
+                    <x-slot name="trigger">
+                        {{ __('Manufacturing') }}
+                    </x-slot>
+
+                    <x-slot name="content">
+                        @can('inventory-adjustments-view')
+                            <x-nav-dropdown-link :href="route('inventory.index')" :active="request()->routeIs('inventory.index')" mobile>
+                                {{ __('Inventory') }}
+                            </x-nav-dropdown-link>
+
+                            <x-nav-dropdown-link :href="route('inventory.counts.index')" :active="request()->routeIs('inventory.counts.*')" mobile>
+                                {{ __('Inventory Counts') }}
+                            </x-nav-dropdown-link>
+                        @endcan
+
+                        @can('inventory-make-orders-view')
+                            <x-nav-dropdown-link :href="route('manufacturing.make-orders.index')" :active="request()->routeIs('manufacturing.make-orders.*')" mobile>
+                                {{ __('Orders (Make Orders)') }}
+                            </x-nav-dropdown-link>
+                        @endcan
+
+                        @can('inventory-materials-view')
+                            <x-nav-dropdown-link :href="route('materials.index')" :active="request()->routeIs('materials.*')" mobile>
+                                {{ __('Materials') }}
+                            </x-nav-dropdown-link>
+                        @endcan
+
+                        @can('inventory-recipes-view')
+                            <x-nav-dropdown-link :href="route('manufacturing.recipes.index')" :active="request()->routeIs('manufacturing.recipes.*')" mobile>
+                                {{ __('Recipes') }}
+                            </x-nav-dropdown-link>
+                        @endcan
+
+                        @can('inventory-materials-manage')
+                            <x-nav-dropdown-link :href="route('manufacturing.uoms.index')" :active="request()->routeIs('manufacturing.uoms.*')" mobile>
+                                {{ __('Units of Measure') }}
+                            </x-nav-dropdown-link>
+
+                            <x-nav-dropdown-link :href="route('manufacturing.uom-conversions.index')" :active="request()->routeIs('manufacturing.uom-conversions.*')" mobile>
+                                {{ __('UoM Conversions') }}
+                            </x-nav-dropdown-link>
+
+                            <x-nav-dropdown-link :href="route('materials.uom-categories.index')" :active="request()->routeIs('materials.uom-categories.*')" mobile>
+                                {{ __('UoM Categories') }}
+                            </x-nav-dropdown-link>
+                        @endcan
+                    </x-slot>
+                </x-nav-dropdown>
+            @endif
         </div>
 
-        <!-- Responsive Settings Options -->
-        <div class="pt-4 pb-1 border-t border-gray-200">
-            <div class="px-4">
-                <div class="font-medium text-base text-gray-800">{{ Auth::user()->name }}</div>
-                <div class="font-medium text-sm text-gray-500">{{ Auth::user()->email }}</div>
-            </div>
+        <div class="mt-4 rounded-2xl border border-slate-800 bg-slate-900/70 px-4 py-3">
+            <p class="text-sm font-medium text-white">{{ $user?->name }}</p>
+            <p class="mt-1 text-xs text-slate-400">{{ $user?->email }}</p>
+        </div>
 
-            <div class="mt-3 space-y-1">
-                <x-responsive-nav-link :href="route('profile.edit')">
-                    {{ __('Profile') }}
-                </x-responsive-nav-link>
+        <div class="mt-3 space-y-2">
+            <x-nav-link :href="route('profile.edit')" :active="request()->routeIs('profile.edit')" mobile>
+                {{ __('Profile') }}
+            </x-nav-link>
 
-                <!-- Authentication -->
-                <form method="POST" action="{{ route('logout') }}">
-                    @csrf
-
-                    <x-responsive-nav-link :href="route('logout')"
-                            onclick="event.preventDefault();
-                                        this.closest('form').submit();">
-                        {{ __('Log Out') }}
-                    </x-responsive-nav-link>
-                </form>
-            </div>
+            <form method="POST" action="{{ route('logout') }}">
+                @csrf
+                <x-nav-link as="button" type="submit" mobile>
+                    {{ __('Log Out') }}
+                </x-nav-link>
+            </form>
         </div>
     </div>
 </nav>

@@ -1444,26 +1444,38 @@ Tenant scoping is already implemented in the current codebase.
 
 ## DOMAIN 5 — UI Component Refactor (Post-PR2 Cleanup)
 
-### PR2-UI-001 — Remove Breeze UI Components
+### PR2-UI-001 — Navigation-Only Tailwind Refactor
 
 **Goal**  
-Replace Breeze Blade UI components with Tailwind-only markup.
+Replace the Breeze-based navigation UI only with a modern, sleek, dark Tailwind-only navigation system.
 
 **Includes**
 
-- Replace Breeze nav + dropdown components
-- Preserve routes, permissions, and behavior
-- No visual redesign
+- Keep the native `<nav>` element in the layout
+- Use Blade components only for navigation parts:
+    - `<x-nav-link>`
+    - `<x-nav-dropdown>`
+    - `<x-nav-dropdown-link>`
+- Cover nav items, nav dropdowns, and nav dropdown links
+- Preserve all existing routes, gates, `@can` checks, active states, and behavior
+- Preserve desktop and mobile navigation behavior
+- Remove Breeze component usage from navigation only
+- Dark charcoal/navy top bar with clean white text
+- Rounded nav items, floating dropdown panels, subtle shadows and borders
+- Smooth hover/open states
+- Multi-level dropdown readiness
+- Mobile menus use accordion-style nested items, not desktop flyouts
+- Do not delete shared Breeze components unless confirmed unused outside navigation
 
 **Out of Scope**
 
+- Sidebar redesign
+- Page layout redesign
 - Domain logic changes
-- New features
-
-**Testing**
-
-- No new domain tests
-- Optional UI smoke checks
+- Route changes
+- Permission changes
+- Deleting Breeze/shared components used outside navigation
+- Any non-navigation UI refactor
 
 ---
 
@@ -1831,10 +1843,9 @@ Each entry includes:
 
 **Name:** Single Database Tenant Scoping  
 **Type:** Architectural Pattern  
-**Location:**
-
-- `app/Models/Concerns/HasTenantScope.php`
-- `app/Models/Scopes/TenantScope.php`
+**Location:**  
+- `app/Models/Concerns/HasTenantScope.php`  
+- `app/Models/Scopes/TenantScope.php`  
 - `database/migrations/`
 
 **Purpose:**  
@@ -1846,12 +1857,10 @@ Any tenant-owned model or table.
 **When Not to Use:**  
 Global/system tables or authentication identity resolution.
 
-**Public Interface:**
-
+**Public Interface:**  
 - `use HasTenantScope`
 
-**Example Usage:**
-
+**Example Usage:**  
 ```php
 class Item extends Model
 {
@@ -1865,9 +1874,8 @@ class Item extends Model
 
 **Name:** Tenant Scope Trait  
 **Type:** Trait / Global Eloquent Scope  
-**Location:**
-
-- `app/Models/Concerns/HasTenantScope.php`
+**Location:**  
+- `app/Models/Concerns/HasTenantScope.php`  
 - `app/Models/Scopes/TenantScope.php`
 
 **Purpose:**  
@@ -1879,12 +1887,10 @@ Any tenant-owned Eloquent model.
 **When Not to Use:**  
 Global/system models or auth identity models like `User`.
 
-**Public Interface:**
-
+**Public Interface:**  
 - `use HasTenantScope`
 
-**Example Usage:**
-
+**Example Usage:**  
 ```php
 class StockMove extends Model
 {
@@ -1909,12 +1915,10 @@ Authentication and identity lookup.
 **When Not to Use:**  
 Tenant-owned domain data queries.
 
-**Public Interface:**
-
+**Public Interface:**  
 - `User::query()`
 
-**Example Usage:**
-
+**Example Usage:**  
 ```php
 $user = User::where('email', $email)->first();
 ```
@@ -1925,10 +1929,9 @@ $user = User::where('email', $email)->first();
 
 **Name:** Manufacturing Recipes Tenant Isolation  
 **Type:** Tenancy Rule  
-**Location:**
-
-- `docs/architecture/tenancy/ManufacturingRecipesTenantIsolation.yaml`
-- `app/Models/Recipe.php`
+**Location:**  
+- `docs/architecture/tenancy/ManufacturingRecipesTenantIsolation.yaml`  
+- `app/Models/Recipe.php`  
 - `app/Models/RecipeLine.php`
 
 **Purpose:**  
@@ -1940,14 +1943,12 @@ Recipe index/show queries and route model binding.
 **When Not to Use:**  
 Auth identity resolution or global/system models.
 
-**Public Interface:**
-
-- `use HasTenantScope`
-- `Recipe::query()`
+**Public Interface:**  
+- `use HasTenantScope`  
+- `Recipe::query()`  
 - `RecipeLine::query()`
 
-**Example Usage:**
-
+**Example Usage:**  
 ```php
 $recipe = Recipe::query()->findOrFail($id);
 ```
@@ -1969,12 +1970,10 @@ Associating users and data with a tenant.
 **When Not to Use:**  
 Global/system configuration unrelated to a tenant.
 
-**Public Interface:**
-
+**Public Interface:**  
 - `users()`
 
-**Example Usage:**
-
+**Example Usage:**  
 ```php
 $tenant = Tenant::create(['tenant_name' => 'Acme Foods']);
 $users = $tenant->users;
@@ -1999,13 +1998,11 @@ Any access control decision.
 **When Not to Use:**  
 UI-only visibility decisions without backend enforcement.
 
-**Public Interface:**
-
-- `Gate::allows()`
+**Public Interface:**  
+- `Gate::allows()`  
 - `Gate::authorize()`
 
-**Example Usage:**
-
+**Example Usage:**  
 ```php
 Gate::authorize('inventory-materials-manage');
 ```
@@ -2016,12 +2013,11 @@ Gate::authorize('inventory-materials-manage');
 
 **Name:** Manufacturing Recipes Read-Only Access  
 **Type:** Authorization Rule  
-**Location:**
-
-- `docs/architecture/auth/ManufacturingRecipesReadOnlyAccess.yaml`
-- `app/Providers/AuthServiceProvider.php`
-- `app/Http/Controllers/RecipeController.php`
-- `routes/web.php`
+**Location:**  
+- `docs/architecture/auth/ManufacturingRecipesReadOnlyAccess.yaml`  
+- `app/Providers/AuthServiceProvider.php`  
+- `app/Http/Controllers/RecipeController.php`  
+- `routes/web.php`  
 - `resources/views/layouts/navigation.blade.php`
 
 **Purpose:**  
@@ -2033,14 +2029,12 @@ Restricting recipes index/show routes and navigation visibility.
 **When Not to Use:**  
 Recipe write or execution flows.
 
-**Public Interface:**
-
-- `Gate::authorize('inventory-recipes-view')`
-- `@can('inventory-recipes-view')`
+**Public Interface:**  
+- `Gate::authorize('inventory-recipes-view')`  
+- `@can('inventory-recipes-view')`  
 - `manufacturing.recipes.*`
 
-**Example Usage:**
-
+**Example Usage:**  
 ```php
 Gate::authorize('inventory-recipes-view');
 ```
@@ -2062,13 +2056,11 @@ Assigning responsibilities and permissions to users.
 **When Not to Use:**  
 Per-tenant role definitions.
 
-**Public Interface:**
-
-- `users()`
+**Public Interface:**  
+- `users()`  
 - `permissions()`
 
-**Example Usage:**
-
+**Example Usage:**  
 ```php
 $user->roles()->attach($roleId);
 ```
@@ -2090,12 +2082,10 @@ Authorization checks and role-permission mappings.
 **When Not to Use:**  
 UI-only access decisions without backend enforcement.
 
-**Public Interface:**
-
+**Public Interface:**  
 - `roles()`
 
-**Example Usage:**
-
+**Example Usage:**  
 ```php
 $permission->roles()->attach($roleId);
 ```
@@ -2117,15 +2107,13 @@ Authentication and authorization checks.
 **When Not to Use:**  
 Tenant-scoped domain queries.
 
-**Public Interface:**
-
-- `tenant()`
-- `roles()`
-- `hasRole()`
+**Public Interface:**  
+- `tenant()`  
+- `roles()`  
+- `hasRole()`  
 - `hasPermission()`
 
-**Example Usage:**
-
+**Example Usage:**  
 ```php
 if ($user->hasPermission('inventory-materials-manage')) {
     // ...
@@ -2151,15 +2139,13 @@ Any inventory-affecting operation such as receipts, issues, or adjustments.
 **When Not to Use:**  
 Storing or mutating on-hand totals directly.
 
-**Public Interface:**
-
-- `tenant()`
-- `item()`
-- `uom()`
+**Public Interface:**  
+- `tenant()`  
+- `item()`  
+- `uom()`  
 - `source()`
 
-**Example Usage:**
-
+**Example Usage:**  
 ```php
 StockMove::create([
     'tenant_id' => $tenant->id,
@@ -2187,13 +2173,11 @@ Deleting tenant-owned items tracked in the inventory ledger.
 **When Not to Use:**  
 Entities without inventory history.
 
-**Public Interface:**
-
-- `ItemController::destroy()`
+**Public Interface:**  
+- `ItemController::destroy()`  
 - `Item::stockMoves()`
 
-**Example Usage:**
-
+**Example Usage:**  
 ```http
 DELETE /materials/{item}
 -> 422 { "message": "Material cannot be deleted because stock moves exist." }
@@ -2216,13 +2200,11 @@ Any inventory-affecting calculations or unit conversions.
 **When Not to Use:**  
 Non-quantity calculations.
 
-**Public Interface:**
-
-- BCMath functions
+**Public Interface:**  
+- BCMath functions  
 - Canonical scale rules in `docs/CONVENTIONS.md`
 
-**Example Usage:**
-
+**Example Usage:**  
 ```php
 $total = bcadd($a, $b, 6);
 ```
@@ -2244,17 +2226,15 @@ Modeling materials or products and computing on-hand quantities.
 **When Not to Use:**  
 Storing denormalized on-hand quantities.
 
-**Public Interface:**
-
-- `baseUom()`
-- `stockMoves()`
-- `onHandQuantity()`
-- `itemUomConversions()`
-- `recipes()`
+**Public Interface:**  
+- `baseUom()`  
+- `stockMoves()`  
+- `onHandQuantity()`  
+- `itemUomConversions()`  
+- `recipes()`  
 - `activeRecipe()`
 
-**Example Usage:**
-
+**Example Usage:**  
 ```php
 $onHand = $item->onHandQuantity();
 ```
@@ -2276,16 +2256,14 @@ Recording inventory count sessions and posting adjustments.
 **When Not to Use:**  
 Inventory adjustments outside a count context.
 
-**Public Interface:**
-
-- `tenant()`
-- `lines()`
-- `postedByUser()`
-- `stockMoves()`
+**Public Interface:**  
+- `tenant()`  
+- `lines()`  
+- `postedByUser()`  
+- `stockMoves()`  
 - `getStatusAttribute()`
 
-**Example Usage:**
-
+**Example Usage:**  
 ```php
 $status = $inventoryCount->status;
 ```
@@ -2307,13 +2285,11 @@ Recording counted quantities for items.
 **When Not to Use:**  
 Recording inventory adjustments outside a count.
 
-**Public Interface:**
-
-- `inventoryCount()`
+**Public Interface:**  
+- `inventoryCount()`  
 - `item()`
 
-**Example Usage:**
-
+**Example Usage:**  
 ```php
 $line = $count->lines()->create([
     'tenant_id' => $tenant->id,
@@ -2339,12 +2315,10 @@ Posting inventory count results to the ledger.
 **When Not to Use:**  
 Generic inventory adjustments.
 
-**Public Interface:**
-
+**Public Interface:**  
 - `execute(InventoryCount $inventoryCount, int $postedByUserId): InventoryCount`
 
-**Example Usage:**
-
+**Example Usage:**  
 ```php
 $action = new PostInventoryCountAction();
 $action->execute($inventoryCount, $userId);
@@ -2369,15 +2343,13 @@ Defining recipes and their line items.
 **When Not to Use:**  
 Non-manufacturing inventory relationships.
 
-**Public Interface:**
-
-- `tenant()`
-- `item()`
-- `lines()`
+**Public Interface:**  
+- `tenant()`  
+- `item()`  
+- `lines()`  
 - `stockMoves()`
 
-**Example Usage:**
-
+**Example Usage:**  
 ```php
 $recipe = Recipe::create([
     'tenant_id' => $tenant->id,
@@ -2404,14 +2376,12 @@ Capturing input items and quantities for recipes.
 **When Not to Use:**  
 Inventory movements or adjustments.
 
-**Public Interface:**
-
-- `tenant()`
-- `recipe()`
+**Public Interface:**  
+- `tenant()`  
+- `recipe()`  
 - `item()`
 
-**Example Usage:**
-
+**Example Usage:**  
 ```php
 $recipe->lines()->create([
     'tenant_id' => $tenant->id,
@@ -2437,12 +2407,10 @@ Manufacturing or make-order execution.
 **When Not to Use:**  
 Inventory adjustments or corrections.
 
-**Public Interface:**
-
+**Public Interface:**  
 - `execute(Recipe $recipe, string $runs): array`
 
-**Example Usage:**
-
+**Example Usage:**  
 ```php
 $action = new ExecuteRecipeAction();
 $action->execute($recipe, '5.000000');
@@ -2454,11 +2422,10 @@ $action->execute($recipe, '5.000000');
 
 **Name:** Recipe Read Model  
 **Type:** Read Model / UI Contract  
-**Location:**
-
-- `docs/architecture/manufacturing/RecipeReadModel.yaml`
-- `app/Http/Controllers/RecipeController.php`
-- `resources/views/manufacturing/recipes/index.blade.php`
+**Location:**  
+- `docs/architecture/manufacturing/RecipeReadModel.yaml`  
+- `app/Http/Controllers/RecipeController.php`  
+- `resources/views/manufacturing/recipes/index.blade.php`  
 - `resources/views/manufacturing/recipes/show.blade.php`
 
 **Purpose:**  
@@ -2470,13 +2437,11 @@ Rendering manufacturing recipe read-only views.
 **When Not to Use:**  
 Recipe creation, editing, or execution flows.
 
-**Public Interface:**
-
-- `manufacturing.recipes.index`
+**Public Interface:**  
+- `manufacturing.recipes.index`  
 - `manufacturing.recipes.show`
 
-**Example Usage:**
-
+**Example Usage:**  
 ```blade
 <th>{{ __('Recipe Name') }}</th>
 <th>{{ __('Input Item') }}</th>
@@ -2497,8 +2462,7 @@ Recipe creation, editing, or execution flows.
 **Purpose:**  
 Centralize UI quantity string formatting using UoM display precision.
 
-**Notes:**
-
+**Notes:**  
 - Accepts numeric strings, ints, floats, and null.
 - Clamps precision to `0..6`.
 - Preserves trailing zeros to requested precision.
@@ -2511,13 +2475,11 @@ Rendering quantities for HTML and page payloads.
 **When Not to Use:**  
 Storage math or domain arithmetic (use BCMath with canonical scale 6).
 
-**Public Interface:**
-
-- `QuantityFormatter::format($quantity, $precision)`
+**Public Interface:**  
+- `QuantityFormatter::format($quantity, $precision)`  
 - `QuantityFormatter::formatForUom($quantity, $uom, $fallbackPrecision = 6)`
 
-**Example Usage:**
-
+**Example Usage:**  
 ```php
 $display = QuantityFormatter::formatForUom($line->quantity, $line->item?->baseUom, 1);
 ```
@@ -2533,8 +2495,7 @@ $display = QuantityFormatter::formatForUom($line->quantity, $line->item?->baseUo
 **Purpose:**  
 Provide a Blade-first wrapper over `QuantityFormatter` so views do not format quantities ad-hoc.
 
-**Notes:**
-
+**Notes:**  
 - Quantity display in Blade should use directives backed by `QuantityFormatter`.
 - JavaScript must consume backend-provided display strings; it must not reformat quantities.
 
@@ -2544,13 +2505,11 @@ Any quantity rendered directly in Blade templates.
 **When Not to Use:**  
 Currency formatting or non-quantity values.
 
-**Public Interface:**
-
-- `@qty($value, $precision)`
+**Public Interface:**  
+- `@qty($value, $precision)`  
 - `@qtyForUom($value, $uom, $fallbackPrecision = 6)`
 
-**Example Usage:**
-
+**Example Usage:**  
 ```blade
 @qtyForUom($item->onHandQuantity(), $item->baseUom, 1)
 ```
@@ -2566,8 +2525,7 @@ Currency formatting or non-quantity values.
 **Purpose:**  
 Group units of measure into categories that define safe conversion boundaries.
 
-**Notes:**
-
+**Notes:**  
 - Tenant-owned. System defaults use `tenant_id = null`.
 - Names are unique per tenant.
 
@@ -2577,12 +2535,10 @@ Defining conversion-safe groupings such as mass or volume.
 **When Not to Use:**  
 Cross-category conversion logic.
 
-**Public Interface:**
-
+**Public Interface:**  
 - `uoms()`
 
-**Example Usage:**
-
+**Example Usage:**  
 ```php
 $category = UomCategory::create([
     'tenant_id' => $tenant->id,
@@ -2601,8 +2557,7 @@ $category = UomCategory::create([
 **Purpose:**  
 Represent a unit of measure belonging to a single category.
 
-**Notes:**
-
+**Notes:**  
 - Tenant-owned. System defaults use `tenant_id = null`.
 - `symbol` is unique per tenant; `name` is not unique.
 
@@ -2612,14 +2567,12 @@ Assigning units to items and recording quantities.
 **When Not to Use:**  
 Implicit unit assumptions.
 
-**Public Interface:**
-
-- `category()`
-- `conversionsFrom()`
+**Public Interface:**  
+- `category()`  
+- `conversionsFrom()`  
 - `conversionsTo()`
 
-**Example Usage:**
-
+**Example Usage:**  
 ```php
 $uom = Uom::create([
     'tenant_id' => $tenant->id,
@@ -2646,13 +2599,11 @@ Universal conversions within a category.
 **When Not to Use:**  
 Cross-category conversions or item-specific conversions.
 
-**Public Interface:**
-
-- `fromUom()`
+**Public Interface:**  
+- `fromUom()`  
 - `toUom()`
 
-**Example Usage:**
-
+**Example Usage:**  
 ```php
 UomConversion::create([
     'from_uom_id' => $kg->id,
@@ -2667,36 +2618,31 @@ UomConversion::create([
 
 **Name:** UoM Conversion System  
 **Type:** Domain Rule Set / UI + Persistence Pattern  
-**Location:**
-
-- `app/Http/Controllers/UomConversionController.php`
-- `app/Models/UomConversion.php`
-- `app/Models/ItemUomConversion.php`
-- `app/Services/Uom/SystemUomCloner.php`
+**Location:**  
+- `app/Http/Controllers/UomConversionController.php`  
+- `app/Models/UomConversion.php`  
+- `app/Models/ItemUomConversion.php`  
+- `app/Services/Uom/SystemUomCloner.php`  
 - `resources/views/manufacturing/uom-conversions/index.blade.php`
 
 **Purpose:**  
 Unify global, tenant-managed, and item-specific conversion behavior behind one manufacturing UI and one precedence-aware lookup model.
 
-**When to Use:**
-
-- Managing same-category global or tenant conversions
-- Managing item-specific overrides
+**When to Use:**  
+- Managing same-category global or tenant conversions  
+- Managing item-specific overrides  
 - Resolving a conversion for operational workflows
 
-**When Not to Use:**
-
-- Implicit ad hoc unit math outside the defined conversion system
+**When Not to Use:**  
+- Implicit ad hoc unit math outside the defined conversion system  
 - Cross-category general conversions
 
-**Public Interface:**
-
-- `manufacturing.uom-conversions.*` routes
-- `UomConversion`
+**Public Interface:**  
+- `manufacturing.uom-conversions.*` routes  
+- `UomConversion`  
 - `ItemUomConversion`
 
-**Example Usage:**
-
+**Example Usage:**  
 ```php
 Gate::authorize('inventory-materials-manage');
 ```
@@ -2707,30 +2653,25 @@ Gate::authorize('inventory-materials-manage');
 
 **Name:** Conversion Precedence Pattern  
 **Type:** Domain Resolution Rule  
-**Location:**
-
-- `app/Http/Controllers/UomConversionController.php`
-- `app/Actions/Inventory/ReceivePurchaseOptionAction.php`
+**Location:**  
+- `app/Http/Controllers/UomConversionController.php`  
+- `app/Actions/Inventory/ReceivePurchaseOptionAction.php`  
 - `docs/architecture/uom/ConversionPrecedence.yaml`
 
 **Purpose:**  
 Resolve unit conversions deterministically when multiple scopes can define a mapping.
 
-**When to Use:**
-
+**When to Use:**  
 - Any lookup that must choose between item-specific, tenant, and global conversions
 
-**When Not to Use:**
-
+**When Not to Use:**  
 - Writes or validations that should target one explicit scope only
 
-**Public Interface:**
-
-- `resolve()` behavior
+**Public Interface:**  
+- `resolve()` behavior  
 - `item-specific > tenant > global`
 
-**Example Usage:**
-
+**Example Usage:**  
 ```php
 // Resolution order:
 // 1. item-specific
@@ -2755,14 +2696,12 @@ Conversions that are true only for a specific item.
 **When Not to Use:**  
 Global conversions shared across items.
 
-**Public Interface:**
-
-- `item()`
-- `fromUom()`
+**Public Interface:**  
+- `item()`  
+- `fromUom()`  
 - `toUom()`
 
-**Example Usage:**
-
+**Example Usage:**  
 ```php
 $item->itemUomConversions()->create([
     'tenant_id' => $tenant->id,
@@ -2791,12 +2730,10 @@ Managing suppliers for purchasing workflows.
 **When Not to Use:**  
 Materials or inventory entities.
 
-**Public Interface:**
-
+**Public Interface:**  
 - `tenant()`
 
-**Example Usage:**
-
+**Example Usage:**  
 ```php
 $supplier = Supplier::create([
     'tenant_id' => $tenant->id,
@@ -2810,10 +2747,9 @@ $supplier = Supplier::create([
 
 **Name:** Supplier Delete Guard  
 **Type:** Domain Guard / Service Interface  
-**Location:**
-
-- `app/Services/Purchasing/SupplierDeleteGuard.php`
-- `app/Services/Purchasing/DefaultSupplierDeleteGuard.php`
+**Location:**  
+- `app/Services/Purchasing/SupplierDeleteGuard.php`  
+- `app/Services/Purchasing/DefaultSupplierDeleteGuard.php`  
 - `app/Http/Controllers/SupplierController.php`
 
 **Purpose:**  
@@ -2825,12 +2761,10 @@ Deleting suppliers via AJAX endpoints with a supplier catalog link check.
 **When Not to Use:**  
 Delete guards for non-supplier entities.
 
-**Public Interface:**
-
+**Public Interface:**  
 - `SupplierDeleteGuard::isLinkedToMaterials(Supplier $supplier): bool`
 
-**Example Usage:**
-
+**Example Usage:**  
 ```php
 if ($guard->isLinkedToMaterials($supplier)) {
     return response()->json([
@@ -2856,14 +2790,12 @@ Receiving inventory in supplier pack quantities.
 **When Not to Use:**  
 Tracking inventory on-hand directly.
 
-**Public Interface:**
-
-- `tenant()`
-- `item()`
+**Public Interface:**  
+- `tenant()`  
+- `item()`  
 - `packUom()`
 
-**Example Usage:**
-
+**Example Usage:**  
 ```php
 $option = ItemPurchaseOption::create([
     'tenant_id' => $tenant->id,
@@ -2877,10 +2809,9 @@ $option = ItemPurchaseOption::create([
 
 **Name:** Purchase Order Receipt Inventory Impact  
 **Type:** Domain Rule  
-**Location:**
-
-- `docs/architecture/purchasing/PurchaseOrderReceiptInventoryImpact.yaml`
-- `app/Services/Purchasing/PurchaseOrderLifecycleService.php`
+**Location:**  
+- `docs/architecture/purchasing/PurchaseOrderReceiptInventoryImpact.yaml`  
+- `app/Services/Purchasing/PurchaseOrderLifecycleService.php`  
 - `app/Models/PurchaseOrderReceiptLine.php`
 
 **Purpose:**  
@@ -2892,14 +2823,12 @@ Purchase order receiving and receipt-ledger audit checks.
 **When Not to Use:**  
 Short-close events or non-purchasing inventory adjustments.
 
-**Public Interface:**
-
-- `PurchaseOrderLifecycleService::createReceipt()`
-- `PurchaseOrderReceiptLine::stockMove()`
+**Public Interface:**  
+- `PurchaseOrderLifecycleService::createReceipt()`  
+- `PurchaseOrderReceiptLine::stockMove()`  
 - `Item::onHandQuantity()`
 
-**Example Usage:**
-
+**Example Usage:**  
 ```php
 $baseQuantity = bcmul('2.000000', '500.000000', 6);
 // $baseQuantity === '1000.000000'
@@ -2922,12 +2851,10 @@ Receiving inventory from supplier pack quantities.
 **When Not to Use:**  
 Generic inventory adjustments.
 
-**Public Interface:**
-
+**Public Interface:**  
 - `execute(ItemPurchaseOption $option, string $packCount): StockMove`
 
-**Example Usage:**
-
+**Example Usage:**  
 ```php
 $action = new ReceivePurchaseOptionAction();
 $action->execute($option, '2.000000');
@@ -2941,10 +2868,9 @@ $action->execute($option, '2.000000');
 
 **Name:** AJAX CRUD Controller Pattern  
 **Type:** Architectural Pattern  
-**Location:**
-
-- `app/Http/Controllers/UomCategoryController.php`
-- `app/Http/Controllers/UomController.php`
+**Location:**  
+- `app/Http/Controllers/UomCategoryController.php`  
+- `app/Http/Controllers/UomController.php`  
 - `app/Http/Controllers/ItemController.php`
 
 **Purpose:**  
@@ -2956,14 +2882,12 @@ Single-entity CRUD with fetch-based requests.
 **When Not to Use:**  
 Multi-step workflows or transactional orchestration.
 
-**Public Interface:**
-
-- `store()`
-- `update()`
+**Public Interface:**  
+- `store()`  
+- `update()`  
 - `destroy()`
 
-**Example Usage:**
-
+**Example Usage:**  
 ```php
 $response = $this->postJson('/materials', [
     'name' => 'Flour',
@@ -2988,12 +2912,10 @@ A top-level domain owns mandatory supporting subdomains.
 **When Not to Use:**  
 Unrelated or optional domains.
 
-**Public Interface:**
-
+**Public Interface:**  
 - Blade markup using `x-dropdown` and `x-dropdown-link`
 
-**Example Usage:**
-
+**Example Usage:**  
 ```blade
 <x-dropdown align="left">
     <x-slot name="trigger">
@@ -3022,12 +2944,10 @@ CRUD forms with multiple fields.
 **When Not to Use:**  
 Confirmations or single-field actions.
 
-**Public Interface:**
-
+**Public Interface:**  
 - Blade partial with Alpine state and form markup
 
-**Example Usage:**
-
+**Example Usage:**  
 ```blade
 <form x-on:submit.prevent="submitCreate()">
     <input type="text" x-model="form.name" />
@@ -3051,12 +2971,10 @@ Tables or lists with multiple row actions.
 **When Not to Use:**  
 Primary or global actions.
 
-**Public Interface:**
-
+**Public Interface:**  
 - Dropdown trigger + content for row actions
 
-**Example Usage:**
-
+**Example Usage:**  
 ```blade
 <button type="button">⋮</button>
 ```
@@ -3078,14 +2996,12 @@ Non-blocking success or error feedback after AJAX actions.
 **When Not to Use:**  
 Blocking alerts or full-page loaders.
 
-**Public Interface:**
-
+**Public Interface:**  
 - Page-level `showToast(type, message)` handler
 
-**Example Usage:**
-
+**Example Usage:**  
 ```js
-showToast("success", "Material deleted.");
+showToast('success', 'Material deleted.');
 ```
 
 ---
@@ -3107,13 +3023,11 @@ Inline dropdown menus for actions or navigation.
 **When Not to Use:**  
 Primary actions that should remain visible.
 
-**Public Interface:**
-
-- `trigger` slot
+**Public Interface:**  
+- `trigger` slot  
 - `content` slot
 
-**Example Usage:**
-
+**Example Usage:**  
 ```blade
 <x-dropdown>
     <x-slot name="trigger">⋮</x-slot>
@@ -3138,12 +3052,10 @@ Dropdown menus linking to routes.
 **When Not to Use:**  
 Standalone buttons outside dropdown menus.
 
-**Public Interface:**
-
+**Public Interface:**  
 - Standard Blade component props
 
-**Example Usage:**
-
+**Example Usage:**  
 ```blade
 <x-dropdown-link href="/materials">Materials</x-dropdown-link>
 ```
@@ -3165,13 +3077,11 @@ Confirmation dialogs or short forms.
 **When Not to Use:**  
 Long multi-step flows.
 
-**Public Interface:**
-
-- `name` prop
+**Public Interface:**  
+- `name` prop  
 - `show` prop
 
-**Example Usage:**
-
+**Example Usage:**  
 ```blade
 <x-modal name="confirm-delete" :show="true">...</x-modal>
 ```
@@ -3193,13 +3103,11 @@ Top navigation links.
 **When Not to Use:**  
 Inline links within content.
 
-**Public Interface:**
-
-- `href` prop
+**Public Interface:**  
+- `href` prop  
 - `active` prop
 
-**Example Usage:**
-
+**Example Usage:**  
 ```blade
 <x-nav-link href="/materials" :active="request()->routeIs('materials.index')">Materials</x-nav-link>
 ```
@@ -3221,13 +3129,11 @@ Form fields requiring labels.
 **When Not to Use:**  
 Decorative text without input association.
 
-**Public Interface:**
-
-- `for` prop
+**Public Interface:**  
+- `for` prop  
 - Slot content
 
-**Example Usage:**
-
+**Example Usage:**  
 ```blade
 <x-input-label for="name" value="Name" />
 ```
@@ -3249,12 +3155,10 @@ Form inputs using standard text fields.
 **When Not to Use:**  
 Non-textual inputs like selects or checkboxes.
 
-**Public Interface:**
-
+**Public Interface:**  
 - Standard input props
 
-**Example Usage:**
-
+**Example Usage:**  
 ```blade
 <x-text-input id="name" type="text" name="name" />
 ```
@@ -3276,12 +3180,10 @@ Form validation error display.
 **When Not to Use:**  
 Non-form error messaging.
 
-**Public Interface:**
-
+**Public Interface:**  
 - `messages` prop
 
-**Example Usage:**
-
+**Example Usage:**  
 ```blade
 <x-input-error :messages="$errors->get('name')" />
 ```
@@ -3303,12 +3205,10 @@ Non-primary actions in forms or dialogs.
 **When Not to Use:**  
 Primary actions that require emphasis.
 
-**Public Interface:**
-
+**Public Interface:**  
 - Slot content
 
-**Example Usage:**
-
+**Example Usage:**  
 ```blade
 <x-secondary-button>Cancel</x-secondary-button>
 ```
@@ -3330,12 +3230,10 @@ Login and password reset screens.
 **When Not to Use:**  
 General-purpose alerts outside auth flows.
 
-**Public Interface:**
-
+**Public Interface:**  
 - `status` prop
 
-**Example Usage:**
-
+**Example Usage:**  
 ```blade
 <x-auth-session-status :status="session('status')" />
 ```
@@ -3359,13 +3257,11 @@ Any Blade template with Alpine directives.
 **When Not to Use:**  
 Templates without Alpine usage.
 
-**Public Interface:**
-
-- HTML attributes use double quotes
+**Public Interface:**  
+- HTML attributes use double quotes  
 - Alpine JS string literals use single quotes
 
-**Example Usage:**
-
+**Example Usage:**  
 ```blade
 <div x-data="{ open: false }"></div>
 ```
@@ -3376,8 +3272,7 @@ Templates without Alpine usage.
 
 **Name:** Page Module Contract  
 **Type:** UI Architecture Invariant  
-**Location:**
-
+**Location:**  
 - `docs/architecture/ui/PageModuleContract.yaml`
 
 **Purpose:**  
@@ -3389,15 +3284,13 @@ Any interactive Blade page using Alpine state or fetch-based CRUD.
 **When Not to Use:**  
 Static Blade pages with no interactivity.
 
-**Public Interface:**
-
-- `docs/architecture/ui/PageModuleContract.yaml`
-- `docs/UI_DESIGN.md`
-- `resources/js/app.js`
+**Public Interface:**  
+- `docs/architecture/ui/PageModuleContract.yaml`  
+- `docs/UI_DESIGN.md`  
+- `resources/js/app.js`  
 - `resources/js/pages/**`
 
-**Example Usage:**
-
+**Example Usage:**  
 ```blade
 <script type="application/json" id="materials-index-payload">@json($payload)</script>
 <div data-page="materials-index" data-payload="materials-index-payload" x-data="materialsIndex"></div>
@@ -3409,11 +3302,10 @@ Static Blade pages with no interactivity.
 
 **Name:** Page Module Guardrails  
 **Type:** UI Constraint  
-**Location:**
-
-- `docs/architecture/ui/PageModuleGuardrails.yaml`
-- `scripts/ci/blade-guardrails.sh`
-- `scripts/ci/js-syntax-guardrails.sh`
+**Location:**  
+- `docs/architecture/ui/PageModuleGuardrails.yaml`  
+- `scripts/ci/blade-guardrails.sh`  
+- `scripts/ci/js-syntax-guardrails.sh`  
 - `ci.sh`
 
 **Purpose:**  
@@ -3425,14 +3317,12 @@ Any interactive Blade view or page module change.
 **When Not to Use:**  
 Vendor or generated views excluded from repository checks, plus Breeze/shared layouts and components pending migration.
 
-**Public Interface:**
-
-- `scripts/ci/blade-guardrails.sh`
-- `scripts/ci/js-syntax-guardrails.sh`
+**Public Interface:**  
+- `scripts/ci/blade-guardrails.sh`  
+- `scripts/ci/js-syntax-guardrails.sh`  
 - `./ci.sh`
 
-**Example Usage:**
-
+**Example Usage:**  
 ```bash
 ./ci.sh
 ```
@@ -3456,14 +3346,12 @@ All new automated tests.
 **When Not to Use:**  
 New PHPUnit test classes.
 
-**Public Interface:**
-
-- `uses()`
-- `it()`
+**Public Interface:**  
+- `uses()`  
+- `it()`  
 - `expect()`
 
-**Example Usage:**
-
+**Example Usage:**  
 ```php
 it('creates a material', function () {
     expect(true)->toBeTrue();
@@ -3630,8 +3518,8 @@ Execution-only role.
 
 - **All permission checks** must use gates: `Gate::allows('<permission-slug>')` or `@can('<permission-slug>')`.
 - Current purchase-order routes use a two-gate model:
-    - `purchasing-purchase-orders-create` for index/show/create/update/delete and line mutations
-    - `purchasing-purchase-orders-receive` for receipts, short-closes, and manual status transitions
+  - `purchasing-purchase-orders-create` for index/show/create/update/delete and line mutations
+  - `purchasing-purchase-orders-receive` for receipts, short-closes, and manual status transitions
 - Make Orders execute permission does not imply view; both gates must be evaluated where required.
 - Do not hardcode role names in controllers/services (except `super-admin` bypass in `Gate::before`).
 - Any new domain area must introduce permission slugs and update this matrix in the same PR.
@@ -4019,20 +3907,20 @@ Migrations remain the **sole source of truth**.
 
 ### Columns
 
-| Name                    | Type          | Nullable | Notes                                   |
-| ----------------------- | ------------- | -------- | --------------------------------------- |
-| id                      | bigint        | No       | Primary key                             |
-| tenant_id               | bigint        | No       | FK → tenants.id (CASCADE)               |
-| item_purchase_option_id | bigint        | No       | FK → item_purchase_options.id (CASCADE) |
-| price_cents             | unsignedInt   | No       | —                                       |
-| price_currency_code     | char(3)       | No       | —                                       |
-| converted_price_cents   | unsignedInt   | No       | —                                       |
-| fx_rate                 | decimal(18,8) | No       | —                                       |
-| fx_rate_as_of           | date          | No       | —                                       |
-| effective_at            | timestamp     | No       | —                                       |
-| ended_at                | timestamp     | Yes      | —                                       |
-| created_at              | timestamp     | Yes      | —                                       |
-| updated_at              | timestamp     | Yes      | —                                       |
+| Name                    | Type           | Nullable | Notes                                         |
+| ----------------------- | -------------- | -------- | --------------------------------------------- |
+| id                      | bigint         | No       | Primary key                                   |
+| tenant_id               | bigint         | No       | FK → tenants.id (CASCADE)                     |
+| item_purchase_option_id | bigint         | No       | FK → item_purchase_options.id (CASCADE)       |
+| price_cents             | unsignedInt    | No       | —                                             |
+| price_currency_code     | char(3)        | No       | —                                             |
+| converted_price_cents   | unsignedInt    | No       | —                                             |
+| fx_rate                 | decimal(18,8)  | No       | —                                             |
+| fx_rate_as_of           | date           | No       | —                                             |
+| effective_at            | timestamp      | No       | —                                             |
+| ended_at                | timestamp      | Yes      | —                                             |
+| created_at              | timestamp      | Yes      | —                                             |
+| updated_at              | timestamp      | Yes      | —                                             |
 
 ### Keys & Indexes
 
@@ -4077,19 +3965,19 @@ Migrations remain the **sole source of truth**.
 
 ### Columns
 
-| Name                        | Type      | Nullable | Notes                     |
-| --------------------------- | --------- | -------- | ------------------------- |
-| id                          | bigint    | No       | Primary key               |
-| tenant_id                   | bigint    | No       | FK → tenants.id (CASCADE) |
-| name                        | string    | No       | —                         |
-| is_purchasable              | boolean   | No       | Default false             |
-| is_sellable                 | boolean   | No       | Default false             |
-| is_manufacturable           | boolean   | No       | Default false             |
-| base_uom_id                 | bigint    | No       | FK → uoms.id              |
-| default_price_cents         | integer   | Yes      | Unsigned                  |
-| default_price_currency_code | char(3)   | Yes      | —                         |
-| created_at                  | timestamp | Yes      | —                         |
-| updated_at                  | timestamp | Yes      | —                         |
+| Name              | Type      | Nullable | Notes                     |
+| ----------------- | --------- | -------- | ------------------------- |
+| id                | bigint    | No       | Primary key               |
+| tenant_id         | bigint    | No       | FK → tenants.id (CASCADE) |
+| name              | string    | No       | —                         |
+| is_purchasable    | boolean   | No       | Default false             |
+| is_sellable       | boolean   | No       | Default false             |
+| is_manufacturable | boolean   | No       | Default false             |
+| base_uom_id       | bigint    | No       | FK → uoms.id              |
+| default_price_cents | integer | Yes      | Unsigned                  |
+| default_price_currency_code | char(3) | Yes | —                        |
+| created_at        | timestamp | Yes      | —                         |
+| updated_at        | timestamp | Yes      | —                         |
 
 ### Keys & Indexes
 
@@ -4156,21 +4044,21 @@ Migrations remain the **sole source of truth**.
 
 ### Columns
 
-| Name               | Type          | Nullable | Notes                        |
-| ------------------ | ------------- | -------- | ---------------------------- |
-| id                 | bigint        | No       | Primary key                  |
-| tenant_id          | bigint        | No       | FK → tenants.id (CASCADE)    |
-| recipe_id          | bigint        | No       | FK → recipes.id (CASCADE)    |
-| output_item_id     | bigint        | No       | FK → items.id (CASCADE)      |
-| output_quantity    | decimal(18,6) | No       | Stored runs; canonical scale |
-| status             | string        | No       | DRAFT, SCHEDULED, MADE       |
-| due_date           | date          | Yes      | Set on schedule              |
-| scheduled_at       | timestamp     | Yes      | Set on schedule              |
-| made_at            | timestamp     | Yes      | Set on make                  |
-| created_by_user_id | bigint        | Yes      | FK → users.id (SET NULL)     |
-| made_by_user_id    | bigint        | Yes      | FK → users.id (SET NULL)     |
-| created_at         | timestamp     | Yes      | —                            |
-| updated_at         | timestamp     | Yes      | —                            |
+| Name               | Type          | Nullable | Notes                                 |
+| ------------------ | ------------- | -------- | ------------------------------------- |
+| id                 | bigint        | No       | Primary key                           |
+| tenant_id          | bigint        | No       | FK → tenants.id (CASCADE)             |
+| recipe_id          | bigint        | No       | FK → recipes.id (CASCADE)             |
+| output_item_id     | bigint        | No       | FK → items.id (CASCADE)               |
+| output_quantity    | decimal(18,6) | No       | Stored runs; canonical scale          |
+| status             | string        | No       | DRAFT, SCHEDULED, MADE                |
+| due_date           | date          | Yes      | Set on schedule                       |
+| scheduled_at       | timestamp     | Yes      | Set on schedule                       |
+| made_at            | timestamp     | Yes      | Set on make                           |
+| created_by_user_id | bigint        | Yes      | FK → users.id (SET NULL)              |
+| made_by_user_id    | bigint        | Yes      | FK → users.id (SET NULL)              |
+| created_at         | timestamp     | Yes      | —                                     |
+| updated_at         | timestamp     | Yes      | —                                     |
 
 ### Keys & Indexes
 
@@ -4258,23 +4146,23 @@ Migrations remain the **sole source of truth**.
 
 ### Columns
 
-| Name                        | Type          | Nullable | Notes                                    |
-| --------------------------- | ------------- | -------- | ---------------------------------------- |
-| id                          | bigint        | No       | Primary key                              |
-| tenant_id                   | bigint        | No       | FK → tenants.id (CASCADE)                |
-| purchase_order_id           | bigint        | No       | Part of composite FK                     |
-| item_id                     | bigint        | No       | FK → items.id (CASCADE)                  |
-| item_purchase_option_id     | bigint        | No       | FK → item_purchase_options.id (CASCADE)  |
-| pack_count                  | integer       | No       | Unsigned, CHECK ≥ 1                      |
-| unit_price_cents            | integer       | No       | Unsigned                                 |
-| line_subtotal_cents         | integer       | No       | Unsigned, unit_price_cents \* pack_count |
-| unit_price_amount           | integer       | No       | Unsigned, snapshot cents                 |
-| unit_price_currency_code    | char(3)       | No       | Snapshot currency                        |
-| converted_unit_price_amount | integer       | No       | Unsigned, snapshot converted cents       |
-| fx_rate                     | decimal(18,8) | No       | Snapshot FX rate                         |
-| fx_rate_as_of               | date          | No       | Snapshot FX rate date                    |
-| created_at                  | timestamp     | Yes      | —                                        |
-| updated_at                  | timestamp     | Yes      | —                                        |
+| Name                       | Type           | Nullable | Notes                                        |
+| -------------------------- | -------------- | -------- | -------------------------------------------- |
+| id                         | bigint         | No       | Primary key                                  |
+| tenant_id                  | bigint         | No       | FK → tenants.id (CASCADE)                    |
+| purchase_order_id          | bigint         | No       | Part of composite FK                         |
+| item_id                    | bigint         | No       | FK → items.id (CASCADE)                      |
+| item_purchase_option_id    | bigint         | No       | FK → item_purchase_options.id (CASCADE)      |
+| pack_count                 | integer        | No       | Unsigned, CHECK ≥ 1                          |
+| unit_price_cents           | integer        | No       | Unsigned                                     |
+| line_subtotal_cents        | integer        | No       | Unsigned, unit_price_cents * pack_count      |
+| unit_price_amount          | integer        | No       | Unsigned, snapshot cents                     |
+| unit_price_currency_code   | char(3)        | No       | Snapshot currency                            |
+| converted_unit_price_amount | integer        | No       | Unsigned, snapshot converted cents           |
+| fx_rate                    | decimal(18,8)  | No       | Snapshot FX rate                             |
+| fx_rate_as_of              | date           | No       | Snapshot FX rate date                        |
+| created_at                 | timestamp      | Yes      | —                                            |
+| updated_at                 | timestamp      | Yes      | —                                            |
 
 ### Foreign Keys
 
@@ -4299,22 +4187,22 @@ Migrations remain the **sole source of truth**.
 
 ### Columns
 
-| Name                 | Type      | Nullable | Notes                        |
-| -------------------- | --------- | -------- | ---------------------------- |
-| id                   | bigint    | No       | Primary key                  |
-| tenant_id            | bigint    | No       | FK → tenants.id (CASCADE)    |
-| created_by_user_id   | bigint    | Yes      | FK → users.id (SET NULL)     |
-| supplier_id          | bigint    | Yes      | FK → suppliers.id (SET NULL) |
-| order_date           | date      | Yes      | —                            |
-| shipping_cents       | integer   | Yes      | Unsigned                     |
-| tax_cents            | integer   | Yes      | Unsigned                     |
-| po_subtotal_cents    | integer   | No       | Unsigned, default 0          |
-| po_grand_total_cents | integer   | No       | Unsigned, default 0          |
-| po_number            | string    | Yes      | —                            |
-| notes                | text      | Yes      | —                            |
-| status               | string    | No       | See ENUMS.md                 |
-| created_at           | timestamp | Yes      | —                            |
-| updated_at           | timestamp | Yes      | —                            |
+| Name                | Type        | Nullable | Notes                     |
+| ------------------- | ----------- | -------- | ------------------------- |
+| id                  | bigint      | No       | Primary key               |
+| tenant_id           | bigint      | No       | FK → tenants.id (CASCADE) |
+| created_by_user_id  | bigint      | Yes      | FK → users.id (SET NULL)  |
+| supplier_id         | bigint      | Yes      | FK → suppliers.id (SET NULL) |
+| order_date          | date        | Yes      | —                         |
+| shipping_cents      | integer     | Yes      | Unsigned                  |
+| tax_cents           | integer     | Yes      | Unsigned                  |
+| po_subtotal_cents   | integer     | No       | Unsigned, default 0       |
+| po_grand_total_cents | integer     | No       | Unsigned, default 0       |
+| po_number           | string      | Yes      | —                         |
+| notes               | text        | Yes      | —                         |
+| status              | string      | No       | See ENUMS.md              |
+| created_at          | timestamp   | Yes      | —                         |
+| updated_at          | timestamp   | Yes      | —                         |
 
 ### Keys & Indexes
 
@@ -4335,17 +4223,17 @@ Migrations remain the **sole source of truth**.
 
 ### Columns
 
-| Name                | Type      | Nullable | Notes                     |
-| ------------------- | --------- | -------- | ------------------------- |
-| id                  | bigint    | No       | Primary key               |
-| tenant_id           | bigint    | No       | FK → tenants.id (CASCADE) |
-| purchase_order_id   | bigint    | No       | Part of composite FK      |
-| received_at         | datetime  | No       | —                         |
-| received_by_user_id | bigint    | No       | FK → users.id             |
-| reference           | string    | Yes      | —                         |
-| notes               | text      | Yes      | —                         |
-| created_at          | timestamp | Yes      | —                         |
-| updated_at          | timestamp | Yes      | —                         |
+| Name                | Type      | Nullable | Notes                                   |
+| ------------------- | --------- | -------- | --------------------------------------- |
+| id                  | bigint    | No       | Primary key                             |
+| tenant_id           | bigint    | No       | FK → tenants.id (CASCADE)               |
+| purchase_order_id   | bigint    | No       | Part of composite FK                    |
+| received_at         | datetime  | No       | —                                       |
+| received_by_user_id | bigint    | No       | FK → users.id                           |
+| reference           | string    | Yes      | —                                       |
+| notes               | text      | Yes      | —                                       |
+| created_at          | timestamp | Yes      | —                                       |
+| updated_at          | timestamp | Yes      | —                                       |
 
 ### Foreign Keys
 
@@ -4366,16 +4254,16 @@ Migrations remain the **sole source of truth**.
 
 ### Columns
 
-| Name                      | Type          | Nullable | Notes                                     |
-| ------------------------- | ------------- | -------- | ----------------------------------------- |
-| id                        | bigint        | No       | Primary key                               |
-| tenant_id                 | bigint        | No       | FK → tenants.id (CASCADE)                 |
+| Name                     | Type           | Nullable | Notes                                   |
+| ------------------------ | -------------- | -------- | --------------------------------------- |
+| id                       | bigint         | No       | Primary key                             |
+| tenant_id                | bigint         | No       | FK → tenants.id (CASCADE)               |
 | purchase_order_receipt_id | bigint        | No       | FK → purchase_order_receipts.id (CASCADE) |
-| purchase_order_line_id    | bigint        | No       | FK → purchase_order_lines.id (CASCADE)    |
-| stock_move_id             | bigint        | Yes      | FK → stock_moves.id (SET NULL)            |
-| received_quantity         | decimal(18,6) | No       | Pack count                                |
-| created_at                | timestamp     | Yes      | —                                         |
-| updated_at                | timestamp     | Yes      | —                                         |
+| purchase_order_line_id   | bigint         | No       | FK → purchase_order_lines.id (CASCADE)  |
+| stock_move_id            | bigint         | Yes      | FK → stock_moves.id (SET NULL)          |
+| received_quantity        | decimal(18,6)  | No       | Pack count                              |
+| created_at               | timestamp      | Yes      | —                                       |
+| updated_at               | timestamp      | Yes      | —                                       |
 
 ### Foreign Keys
 
@@ -4403,17 +4291,17 @@ Migrations remain the **sole source of truth**.
 
 ### Columns
 
-| Name                    | Type      | Nullable | Notes                     |
-| ----------------------- | --------- | -------- | ------------------------- |
-| id                      | bigint    | No       | Primary key               |
-| tenant_id               | bigint    | No       | FK → tenants.id (CASCADE) |
-| purchase_order_id       | bigint    | No       | Part of composite FK      |
-| short_closed_at         | datetime  | No       | —                         |
-| short_closed_by_user_id | bigint    | No       | FK → users.id             |
-| reference               | string    | Yes      | —                         |
-| notes                   | text      | Yes      | —                         |
-| created_at              | timestamp | Yes      | —                         |
-| updated_at              | timestamp | Yes      | —                         |
+| Name                   | Type      | Nullable | Notes                                   |
+| ---------------------- | --------- | -------- | --------------------------------------- |
+| id                     | bigint    | No       | Primary key                             |
+| tenant_id              | bigint    | No       | FK → tenants.id (CASCADE)               |
+| purchase_order_id      | bigint    | No       | Part of composite FK                    |
+| short_closed_at        | datetime  | No       | —                                       |
+| short_closed_by_user_id | bigint   | No       | FK → users.id                           |
+| reference              | string    | Yes      | —                                       |
+| notes                  | text      | Yes      | —                                       |
+| created_at             | timestamp | Yes      | —                                       |
+| updated_at             | timestamp | Yes      | —                                       |
 
 ### Foreign Keys
 
@@ -4434,15 +4322,15 @@ Migrations remain the **sole source of truth**.
 
 ### Columns
 
-| Name                            | Type          | Nullable | Notes                                           |
-| ------------------------------- | ------------- | -------- | ----------------------------------------------- |
-| id                              | bigint        | No       | Primary key                                     |
-| tenant_id                       | bigint        | No       | FK → tenants.id (CASCADE)                       |
-| purchase_order_short_closure_id | bigint        | No       | FK → purchase_order_short_closures.id (CASCADE) |
-| purchase_order_line_id          | bigint        | No       | FK → purchase_order_lines.id (CASCADE)          |
-| short_closed_quantity           | decimal(18,6) | No       | Pack count                                      |
-| created_at                      | timestamp     | Yes      | —                                               |
-| updated_at                      | timestamp     | Yes      | —                                               |
+| Name                            | Type           | Nullable | Notes                                   |
+| ------------------------------- | -------------- | -------- | --------------------------------------- |
+| id                              | bigint         | No       | Primary key                             |
+| tenant_id                       | bigint         | No       | FK → tenants.id (CASCADE)               |
+| purchase_order_short_closure_id | bigint         | No       | FK → purchase_order_short_closures.id (CASCADE) |
+| purchase_order_line_id          | bigint         | No       | FK → purchase_order_lines.id (CASCADE)  |
+| short_closed_quantity           | decimal(18,6)  | No       | Pack count                              |
+| created_at                      | timestamp      | Yes      | —                                       |
+| updated_at                      | timestamp      | Yes      | —                                       |
 
 ### Keys & Indexes
 
@@ -4462,8 +4350,8 @@ Migrations remain the **sole source of truth**.
 
 ### Columns
 
-| Name            | Type          | Nullable | Notes                     |
-| --------------- | ------------- | -------- | ------------------------- |
+| Name       | Type      | Nullable | Notes                     |
+| ---------- | --------- | -------- | ------------------------- |
 | id              | bigint        | No       | Primary key               |
 | tenant_id       | bigint        | No       | FK → tenants.id (CASCADE) |
 | item_id         | bigint        | No       | FK → items.id (CASCADE)   |
@@ -4592,18 +4480,18 @@ Migrations remain the **sole source of truth**.
 
 ### Columns
 
-| Name        | Type          | Nullable | Notes                                                                    |
-| ----------- | ------------- | -------- | ------------------------------------------------------------------------ |
-| id          | bigint        | No       | Primary key                                                              |
-| tenant_id   | bigint        | No       | FK → tenants.id (CASCADE)                                                |
-| item_id     | bigint        | No       | FK → items.id (CASCADE)                                                  |
-| uom_id      | bigint        | No       | FK → uoms.id (CASCADE)                                                   |
-| quantity    | decimal(18,6) | No       | Signed                                                                   |
-| type        | enum          | No       | See ENUMS.md                                                             |
-| status      | string        | No       | See ENUMS.md                                                             |
-| source_type | string        | Yes      | Polymorphic; purchase receipts use `purchase_order_receipt_line`         |
+| Name        | Type          | Nullable | Notes                         |
+| ----------- | ------------- | -------- | ----------------------------- |
+| id          | bigint        | No       | Primary key                   |
+| tenant_id   | bigint        | No       | FK → tenants.id (CASCADE)     |
+| item_id     | bigint        | No       | FK → items.id (CASCADE)       |
+| uom_id      | bigint        | No       | FK → uoms.id (CASCADE)        |
+| quantity    | decimal(18,6) | No       | Signed                        |
+| type        | enum          | No       | See ENUMS.md                  |
+| status      | string        | No       | See ENUMS.md                  |
+| source_type | string        | Yes      | Polymorphic; purchase receipts use `purchase_order_receipt_line` |
 | source_id   | bigint        | Yes      | Polymorphic; purchase receipts reference purchase_order_receipt_lines.id |
-| created_at  | timestamp     | No       | Defaults to CURRENT_TIMESTAMP                                            |
+| created_at  | timestamp     | No       | Defaults to CURRENT_TIMESTAMP |
 
 ### Keys & Indexes
 
@@ -4647,13 +4535,13 @@ Migrations remain the **sole source of truth**.
 
 ### Columns
 
-| Name          | Type      | Nullable | Notes                                      |
-| ------------- | --------- | -------- | ------------------------------------------ |
-| id            | bigint    | No       | Primary key                                |
-| tenant_name   | string    | Yes      | —                                          |
-| currency_code | string    | Yes      | Default config('app.currency_code', 'USD') |
-| created_at    | timestamp | Yes      | —                                          |
-| updated_at    | timestamp | Yes      | —                                          |
+| Name        | Type      | Nullable | Notes       |
+| ----------- | --------- | -------- | ----------- |
+| id          | bigint    | No       | Primary key |
+| tenant_name | string    | Yes      | —           |
+| currency_code | string  | Yes      | Default config('app.currency_code', 'USD') |
+| created_at  | timestamp | Yes      | —           |
+| updated_at  | timestamp | Yes      | —           |
 
 ### Keys & Indexes
 
@@ -4668,13 +4556,13 @@ Migrations remain the **sole source of truth**.
 
 ### Columns
 
-| Name       | Type      | Nullable | Notes                     |
-| ---------- | --------- | -------- | ------------------------- |
-| id         | bigint    | No       | Primary key               |
-| tenant_id  | bigint    | Yes      | FK → tenants.id (CASCADE) |
-| name       | string    | No       | Unique per tenant         |
-| created_at | timestamp | Yes      | —                         |
-| updated_at | timestamp | Yes      | —                         |
+| Name       | Type      | Nullable | Notes                      |
+| ---------- | --------- | -------- | -------------------------- |
+| id         | bigint    | No       | Primary key                |
+| tenant_id  | bigint    | Yes      | FK → tenants.id (CASCADE)  |
+| name       | string    | No       | Unique per tenant          |
+| created_at | timestamp | Yes      | —                          |
+| updated_at | timestamp | Yes      | —                          |
 
 ### Keys & Indexes
 
@@ -4691,15 +4579,15 @@ Migrations remain the **sole source of truth**.
 
 ### Columns
 
-| Name        | Type          | Nullable | Notes                                              |
-| ----------- | ------------- | -------- | -------------------------------------------------- |
-| id          | bigint        | No       | Primary key                                        |
-| tenant_id   | bigint        | Yes      | FK → tenants.id (CASCADE); `null` for global rows  |
-| from_uom_id | bigint        | No       | FK → uoms.id (CASCADE)                             |
-| to_uom_id   | bigint        | No       | FK → uoms.id (CASCADE)                             |
-| multiplier  | decimal(18,8) | No       | Stored precision for general conversion multiplier |
-| created_at  | timestamp     | Yes      | —                                                  |
-| updated_at  | timestamp     | Yes      | —                                                  |
+| Name        | Type          | Nullable | Notes                                               |
+| ----------- | ------------- | -------- | --------------------------------------------------- |
+| id          | bigint        | No       | Primary key                                         |
+| tenant_id   | bigint        | Yes      | FK → tenants.id (CASCADE); `null` for global rows   |
+| from_uom_id | bigint        | No       | FK → uoms.id (CASCADE)                              |
+| to_uom_id   | bigint        | No       | FK → uoms.id (CASCADE)                              |
+| multiplier  | decimal(18,8) | No       | Stored precision for general conversion multiplier   |
+| created_at  | timestamp     | Yes      | —                                                   |
+| updated_at  | timestamp     | Yes      | —                                                   |
 
 ### Keys & Indexes
 
@@ -4718,16 +4606,16 @@ Migrations remain the **sole source of truth**.
 
 ### Columns
 
-| Name              | Type                | Nullable | Notes                                    |
-| ----------------- | ------------------- | -------- | ---------------------------------------- |
-| id                | bigint              | No       | Primary key                              |
-| tenant_id         | bigint              | Yes      | FK → tenants.id (CASCADE)                |
-| uom_category_id   | bigint              | No       | FK → uom_categories.id (CASCADE)         |
-| name              | string              | No       | Not unique                               |
-| symbol            | string              | No       | Unique per tenant                        |
-| display_precision | unsignedTinyInteger | No       | Default `1`; UI display precision (0..6) |
-| created_at        | timestamp           | Yes      | —                                        |
-| updated_at        | timestamp           | Yes      | —                                        |
+| Name            | Type      | Nullable | Notes                            |
+| --------------- | --------- | -------- | -------------------------------- |
+| id              | bigint    | No       | Primary key                      |
+| tenant_id       | bigint    | Yes      | FK → tenants.id (CASCADE)        |
+| uom_category_id | bigint    | No       | FK → uom_categories.id (CASCADE) |
+| name            | string    | No       | Not unique                       |
+| symbol          | string    | No       | Unique per tenant                |
+| display_precision | unsignedTinyInteger | No | Default `1`; UI display precision (0..6) |
+| created_at      | timestamp | Yes      | —                                |
+| updated_at      | timestamp | Yes      | —                                |
 
 ### Keys & Indexes
 
@@ -4842,6 +4730,26 @@ The UI should feel:
 
 - No nested mega-menus initially
 - Active state must be subtle (underline or tone shift)
+
+### Navigation Implementation
+
+- The native `<nav>` element must remain in `resources/views/layouts/navigation.blade.php`
+- Navigation parts must use:
+    - `<x-nav-link>`
+    - `<x-nav-dropdown>`
+    - `<x-nav-dropdown-link>`
+- Navigation should use atomic Blade components, not a monolithic `<x-nav>` component
+- Breeze navigation component usage is not allowed in the navigation layout going forward
+- Shared Breeze components must not be deleted unless confirmed unused outside navigation
+- Desktop dropdowns use floating panels
+- Mobile nested navigation uses accordion-style groups
+- Mobile must not reuse desktop flyout behavior
+- Dark charcoal/navy top navigation is approved for this application
+- Styling must remain calm, operational, and restrained
+- Tailwind utilities only
+- Preserve subtle active states, rounded nav items, subtle borders, and soft shadows
+- Do not introduce flashy, marketing-style, or dashboard-heavy navigation
+- Navigation refactors must preserve route names, gates, `@can` checks, active states, and existing behavior
 
 ---
 
