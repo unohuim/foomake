@@ -6,6 +6,39 @@ export function mount(rootEl, payload) {
         name: [],
         status: [],
         notes: [],
+        address_line_1: [],
+        address_line_2: [],
+        city: [],
+        region: [],
+        postal_code: [],
+        country_code: [],
+        formatted_address: [],
+    });
+
+    const emptyForm = () => ({
+        name: '',
+        status: 'active',
+        notes: '',
+        address_line_1: '',
+        address_line_2: '',
+        city: '',
+        region: '',
+        postal_code: '',
+        country_code: '',
+        formatted_address: '',
+    });
+
+    const customerToForm = (customer) => ({
+        name: customer.name || '',
+        status: customer.status || 'active',
+        notes: customer.notes || '',
+        address_line_1: customer.address_line_1 || '',
+        address_line_2: customer.address_line_2 || '',
+        city: customer.city || '',
+        region: customer.region || '',
+        postal_code: customer.postal_code || '',
+        country_code: customer.country_code || '',
+        formatted_address: customer.formatted_address || '',
     });
 
     Alpine.data('salesCustomersIndex', () => ({
@@ -18,11 +51,7 @@ export function mount(rootEl, payload) {
         isSubmitting: false,
         formMode: 'create',
         editingCustomerId: null,
-        form: {
-            name: '',
-            status: 'active',
-            notes: '',
-        },
+        form: emptyForm(),
         errors: emptyErrors(),
         generalError: '',
         toast: {
@@ -60,11 +89,7 @@ export function mount(rootEl, payload) {
         openCreate() {
             this.formMode = 'create';
             this.editingCustomerId = null;
-            this.form = {
-                name: '',
-                status: 'active',
-                notes: '',
-            };
+            this.form = emptyForm();
             this.errors = emptyErrors();
             this.generalError = '';
             this.isFormOpen = true;
@@ -72,11 +97,7 @@ export function mount(rootEl, payload) {
         openEdit(customer) {
             this.formMode = 'edit';
             this.editingCustomerId = customer.id;
-            this.form = {
-                name: customer.name || '',
-                status: customer.status || 'active',
-                notes: customer.notes || '',
-            };
+            this.form = customerToForm(customer);
             this.errors = emptyErrors();
             this.generalError = '';
             this.isFormOpen = true;
@@ -99,6 +120,15 @@ export function mount(rootEl, payload) {
             const isCreate = this.formMode === 'create';
             const url = isCreate ? this.storeUrl : `${this.updateUrlBase}/${this.editingCustomerId}`;
             const method = isCreate ? 'POST' : 'PATCH';
+            const addressPayload = {
+                address_line_1: this.form.address_line_1 || null,
+                address_line_2: this.form.address_line_2 || null,
+                city: this.form.city || null,
+                region: this.form.region || null,
+                postal_code: this.form.postal_code || null,
+                country_code: this.form.country_code || null,
+                formatted_address: this.form.formatted_address || null,
+            };
 
             const response = await fetch(url, {
                 method,
@@ -112,11 +142,13 @@ export function mount(rootEl, payload) {
                         ? {
                             name: this.form.name,
                             notes: this.form.notes || null,
+                            ...addressPayload,
                         }
                         : {
                             name: this.form.name,
                             status: this.form.status,
                             notes: this.form.notes || null,
+                            ...addressPayload,
                         }
                 ),
             });

@@ -45,8 +45,24 @@ Introduce customers as tenant-owned entities.
     - name (required)
     - status (active/inactive/archived)
     - notes (nullable)
+    - address_line_1 (nullable)
+    - address_line_2 (nullable)
+    - city (nullable)
+    - region (nullable)
+    - postal_code (nullable)
+    - country_code (nullable, 2 chars)
+    - formatted_address (nullable)
+    - latitude (nullable, system/provider-managed)
+    - longitude (nullable, system/provider-managed)
+    - address_provider (nullable, system/provider-managed)
+    - address_provider_id (nullable, system/provider-managed)
 - Navigation: Sales → Customers
 - Create/edit uses the slide-over pattern
+- Create defaults `status` to `active`
+- Create has no status dropdown
+- Index shows active customers only
+- Index columns: Name, Address, Actions
+- Notes are shown on the customer detail view, not the index
 - Destroy archives instead of hard-deleting
 
 **Permissions**

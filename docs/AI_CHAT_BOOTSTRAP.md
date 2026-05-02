@@ -16,6 +16,7 @@ Authority Order (highest to lowest — conflicts resolved by this order):
 8. docs/UI_DESIGN.md
 9. routes/web.php (main web routes — included here for complete bootstrap context)
 
+
 ## docs/AI_CHAT_CODEX.md
 
 # AI Chat Bootstrap (READ FIRST)
@@ -247,6 +248,7 @@ If unsure, **stop immediately and ask**.
 - “Unauthenticated = no access” enforced via routes/gates,
   **not global model scopes**
 - The **smallest possible change per PR**
+
 
 ## docs/PR2_ROADMAP.md
 
@@ -1542,6 +1544,7 @@ Introduce a UoM-level display precision field and enforce consistent quantity fo
 - Any changes to storage precision or BCMath scale
 - JavaScript formatting or UI-only overrides per view
 
+
 ## docs/CONVENTIONS.md
 
 # Conventions
@@ -1796,6 +1799,7 @@ These rules apply to:
 - Receiving logic
 - Unit conversions
 - Any inventory-affecting calculations
+
 
 ## docs/ARCHITECTURE_INVENTORY.md
 
@@ -3360,6 +3364,7 @@ it('creates a material', function () {
 
 ---
 
+
 ## docs/PERMISSIONS_MATRIX.md
 
 # Permissions Matrix
@@ -3539,6 +3544,7 @@ return [
 ];
 ```
 
+
 ## docs/ENUMS.md
 
 # ENUMS — Canonical Enum Authority
@@ -3691,6 +3697,7 @@ Do not introduce new enum values without updating this document.
 
 No conflicts or ambiguities were found at time of creation based on existing migrations, models, actions, and tests.
 
+
 ## docs/DB_SCHEMA.md
 
 # Database Schema Inventory (DB_SCHEMA)
@@ -3803,6 +3810,17 @@ Migrations remain the **sole source of truth**.
 | name       | string    | No       | —                         |
 | status     | string    | No       | Defaults to `active`      |
 | notes      | text      | Yes      | —                         |
+| address_line_1 | string | Yes      | —                         |
+| address_line_2 | string | Yes      | —                         |
+| city       | string    | Yes      | —                         |
+| region     | string    | Yes      | —                         |
+| postal_code | string   | Yes      | —                         |
+| country_code | char(2) | Yes      | —                         |
+| formatted_address | text | Yes    | —                         |
+| latitude   | decimal(10,7) | Yes  | —                         |
+| longitude  | decimal(10,7) | Yes  | —                         |
+| address_provider | string | Yes   | Reserved for future mapping integration |
+| address_provider_id | string | Yes | Reserved for future mapping integration |
 | created_at | timestamp | Yes      | —                         |
 | updated_at | timestamp | Yes      | —                         |
 
@@ -4682,6 +4700,7 @@ Migrations remain the **sole source of truth**.
 
 **End of DB_SCHEMA**
 
+
 ## docs/UI_DESIGN.md
 
 # UI_DESIGN.md — Canonical UI Direction & Constraints
@@ -5262,6 +5281,7 @@ Framework-agnostic
 They are mandatory, not stylistic.
 
 ::contentReference[oaicite:0]{index=0}
+
 
 ## routes/web.php
 

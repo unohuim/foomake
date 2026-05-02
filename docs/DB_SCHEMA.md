@@ -108,6 +108,17 @@ Migrations remain the **sole source of truth**.
 | name       | string    | No       | —                         |
 | status     | string    | No       | Defaults to `active`      |
 | notes      | text      | Yes      | —                         |
+| address_line_1 | string | Yes      | —                         |
+| address_line_2 | string | Yes      | —                         |
+| city       | string    | Yes      | —                         |
+| region     | string    | Yes      | —                         |
+| postal_code | string   | Yes      | —                         |
+| country_code | char(2) | Yes      | —                         |
+| formatted_address | text | Yes    | —                         |
+| latitude   | decimal(10,7) | Yes  | —                         |
+| longitude  | decimal(10,7) | Yes  | —                         |
+| address_provider | string | Yes   | Reserved for future mapping integration |
+| address_provider_id | string | Yes | Reserved for future mapping integration |
 | created_at | timestamp | Yes      | —                         |
 | updated_at | timestamp | Yes      | —                         |
 

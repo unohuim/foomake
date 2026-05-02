@@ -6,6 +6,26 @@ export function mount(rootEl, payload) {
         name: [],
         status: [],
         notes: [],
+        address_line_1: [],
+        address_line_2: [],
+        city: [],
+        region: [],
+        postal_code: [],
+        country_code: [],
+        formatted_address: [],
+    });
+
+    const customerToForm = (customer) => ({
+        name: customer.name || '',
+        status: customer.status || 'active',
+        notes: customer.notes || '',
+        address_line_1: customer.address_line_1 || '',
+        address_line_2: customer.address_line_2 || '',
+        city: customer.city || '',
+        region: customer.region || '',
+        postal_code: customer.postal_code || '',
+        country_code: customer.country_code || '',
+        formatted_address: customer.formatted_address || '',
     });
 
     Alpine.data('salesCustomersShow', () => ({
@@ -17,11 +37,7 @@ export function mount(rootEl, payload) {
         statuses: safePayload.statuses || ['active', 'inactive', 'archived'],
         isFormOpen: false,
         isSubmitting: false,
-        form: {
-            name: safePayload.customer?.name || '',
-            status: safePayload.customer?.status || 'active',
-            notes: safePayload.customer?.notes || '',
-        },
+        form: customerToForm(safePayload.customer || {}),
         errors: emptyErrors(),
         generalError: '',
         toast: {
@@ -57,11 +73,7 @@ export function mount(rootEl, payload) {
             }, 2500);
         },
         openEdit() {
-            this.form = {
-                name: this.customer.name || '',
-                status: this.customer.status || 'active',
-                notes: this.customer.notes || '',
-            };
+            this.form = customerToForm(this.customer);
             this.errors = emptyErrors();
             this.generalError = '';
             this.isFormOpen = true;
@@ -80,6 +92,15 @@ export function mount(rootEl, payload) {
             this.isSubmitting = true;
             this.errors = emptyErrors();
             this.generalError = '';
+            const addressPayload = {
+                address_line_1: this.form.address_line_1 || null,
+                address_line_2: this.form.address_line_2 || null,
+                city: this.form.city || null,
+                region: this.form.region || null,
+                postal_code: this.form.postal_code || null,
+                country_code: this.form.country_code || null,
+                formatted_address: this.form.formatted_address || null,
+            };
 
             const response = await fetch(this.updateUrl, {
                 method: 'PATCH',
@@ -92,6 +113,7 @@ export function mount(rootEl, payload) {
                     name: this.form.name,
                     status: this.form.status,
                     notes: this.form.notes || null,
+                    ...addressPayload,
                 }),
             });
 

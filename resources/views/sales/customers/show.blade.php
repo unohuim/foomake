@@ -45,6 +45,63 @@
                             <p class="mt-1 text-base text-gray-900 whitespace-pre-line" x-text="customer.notes || '—'"></p>
                         </div>
                     </div>
+
+                    <div class="mt-8 rounded-2xl border border-gray-200 bg-gray-50/70 p-6">
+                        <div class="flex items-start justify-between gap-4">
+                            <div>
+                                <h3 class="text-sm font-semibold uppercase tracking-[0.2em] text-gray-500">Address</h3>
+                                <p class="mt-1 text-sm text-gray-600">Stored customer address details.</p>
+                            </div>
+                            <p class="text-sm text-gray-500" x-show="customer.address_summary" x-text="customer.address_summary"></p>
+                        </div>
+
+                        <div class="mt-6 grid gap-6 sm:grid-cols-2">
+                            <div>
+                                <p class="text-sm text-gray-500">Address line 1</p>
+                                <p class="mt-1 text-base text-gray-900" x-text="customer.address_line_1 || '—'"></p>
+                            </div>
+                            <div>
+                                <p class="text-sm text-gray-500">Address line 2</p>
+                                <p class="mt-1 text-base text-gray-900" x-text="customer.address_line_2 || '—'"></p>
+                            </div>
+                            <div>
+                                <p class="text-sm text-gray-500">City</p>
+                                <p class="mt-1 text-base text-gray-900" x-text="customer.city || '—'"></p>
+                            </div>
+                            <div>
+                                <p class="text-sm text-gray-500">Region</p>
+                                <p class="mt-1 text-base text-gray-900" x-text="customer.region || '—'"></p>
+                            </div>
+                            <div>
+                                <p class="text-sm text-gray-500">Postal code</p>
+                                <p class="mt-1 text-base text-gray-900" x-text="customer.postal_code || '—'"></p>
+                            </div>
+                            <div>
+                                <p class="text-sm text-gray-500">Country code</p>
+                                <p class="mt-1 text-base text-gray-900" x-text="customer.country_code || '—'"></p>
+                            </div>
+                            <div class="sm:col-span-2">
+                                <p class="text-sm text-gray-500">Formatted address</p>
+                                <p class="mt-1 whitespace-pre-line text-base text-gray-900" x-text="customer.formatted_address || '—'"></p>
+                            </div>
+                            <div>
+                                <p class="text-sm text-gray-500">Latitude</p>
+                                <p class="mt-1 text-base text-gray-900" x-text="customer.latitude || '—'"></p>
+                            </div>
+                            <div>
+                                <p class="text-sm text-gray-500">Longitude</p>
+                                <p class="mt-1 text-base text-gray-900" x-text="customer.longitude || '—'"></p>
+                            </div>
+                            <div>
+                                <p class="text-sm text-gray-500">Address provider</p>
+                                <p class="mt-1 text-base text-gray-900" x-text="customer.address_provider || '—'"></p>
+                            </div>
+                            <div>
+                                <p class="text-sm text-gray-500">Provider ID</p>
+                                <p class="mt-1 text-base text-gray-900" x-text="customer.address_provider_id || '—'"></p>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -116,6 +173,100 @@
                                             </label>
                                             <p class="mt-1 text-sm text-red-600" x-text="errors.notes[0]"></p>
                                         </div>
+
+                                        <section class="rounded-2xl border border-gray-200 bg-gray-50/60 p-4">
+                                            <div class="mb-4">
+                                                <h3 class="text-sm font-semibold uppercase tracking-[0.2em] text-gray-500">Address</h3>
+                                                <p class="mt-1 text-sm text-gray-600">Update the customer address fields used on the detail and list views.</p>
+                                            </div>
+
+                                            <div class="grid gap-4 sm:grid-cols-2">
+                                                <div class="sm:col-span-2">
+                                                    <label class="block text-sm font-medium text-gray-700">
+                                                        Address line 1
+                                                        <input
+                                                            type="text"
+                                                            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                                                            x-model="form.address_line_1"
+                                                        />
+                                                    </label>
+                                                    <p class="mt-1 text-sm text-red-600" x-text="errors.address_line_1[0]"></p>
+                                                </div>
+
+                                                <div class="sm:col-span-2">
+                                                    <label class="block text-sm font-medium text-gray-700">
+                                                        Address line 2
+                                                        <input
+                                                            type="text"
+                                                            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                                                            x-model="form.address_line_2"
+                                                        />
+                                                    </label>
+                                                    <p class="mt-1 text-sm text-red-600" x-text="errors.address_line_2[0]"></p>
+                                                </div>
+
+                                                <div>
+                                                    <label class="block text-sm font-medium text-gray-700">
+                                                        City
+                                                        <input
+                                                            type="text"
+                                                            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                                                            x-model="form.city"
+                                                        />
+                                                    </label>
+                                                    <p class="mt-1 text-sm text-red-600" x-text="errors.city[0]"></p>
+                                                </div>
+
+                                                <div>
+                                                    <label class="block text-sm font-medium text-gray-700">
+                                                        Region
+                                                        <input
+                                                            type="text"
+                                                            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                                                            x-model="form.region"
+                                                        />
+                                                    </label>
+                                                    <p class="mt-1 text-sm text-red-600" x-text="errors.region[0]"></p>
+                                                </div>
+
+                                                <div>
+                                                    <label class="block text-sm font-medium text-gray-700">
+                                                        Postal code
+                                                        <input
+                                                            type="text"
+                                                            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                                                            x-model="form.postal_code"
+                                                        />
+                                                    </label>
+                                                    <p class="mt-1 text-sm text-red-600" x-text="errors.postal_code[0]"></p>
+                                                </div>
+
+                                                <div>
+                                                    <label class="block text-sm font-medium text-gray-700">
+                                                        Country code
+                                                        <input
+                                                            type="text"
+                                                            maxlength="2"
+                                                            class="mt-1 block w-full rounded-md border-gray-300 uppercase shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                                                            x-model="form.country_code"
+                                                        />
+                                                    </label>
+                                                    <p class="mt-1 text-sm text-red-600" x-text="errors.country_code[0]"></p>
+                                                </div>
+
+                                                <div class="sm:col-span-2">
+                                                    <label class="block text-sm font-medium text-gray-700">
+                                                        Formatted address
+                                                        <textarea
+                                                            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                                                            rows="3"
+                                                            x-model="form.formatted_address"
+                                                        ></textarea>
+                                                    </label>
+                                                    <p class="mt-1 text-sm text-red-600" x-text="errors.formatted_address[0]"></p>
+                                                </div>
+                                            </div>
+                                        </section>
                                     </div>
 
                                     <p class="mt-4 text-sm text-red-600" x-show="generalError" x-text="generalError"></p>

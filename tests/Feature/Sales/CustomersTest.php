@@ -253,6 +253,26 @@ it('11. other-tenant customers are not visible in index', function () {
         ->assertDontSee('Hidden Customer');
 });
 
+it('11a. inactive customers are not visible in index', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    ($this->grantPermission)($user, 'sales-customers-manage');
+
+    ($this->createCustomer)($tenant, [
+        'name' => 'Active Customer',
+        'status' => 'active',
+    ]);
+    ($this->createCustomer)($tenant, [
+        'name' => 'Inactive Customer',
+        'status' => 'inactive',
+    ]);
+
+    ($this->getIndex)($user)
+        ->assertOk()
+        ->assertSee('Active Customer')
+        ->assertDontSee('Inactive Customer');
+});
+
 it('12. customer detail page loads for same tenant', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
@@ -386,6 +406,26 @@ it('20. navigation shows Sales to Customers only when authorized', function () {
         ->assertSee('Sales')
         ->assertSee('Customers')
         ->assertSee(route('sales.customers.index'), false);
+});
+
+it('20a. index shows name address and actions columns only', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    ($this->grantPermission)($user, 'sales-customers-manage');
+
+    ($this->createCustomer)($tenant, [
+        'name' => 'Column Check Customer',
+        'notes' => 'Index should not show this note',
+    ]);
+
+    ($this->getIndex)($user)
+        ->assertOk()
+        ->assertSee('Name')
+        ->assertSee('Address')
+        ->assertSee('Actions')
+        ->assertDontSee('Status')
+        ->assertDontSee('Notes')
+        ->assertDontSee('Index should not show this note');
 });
 
 it('21. validation errors return 422 JSON', function () {

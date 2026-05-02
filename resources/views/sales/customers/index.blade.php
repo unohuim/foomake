@@ -59,8 +59,7 @@
                                 <thead>
                                     <tr>
                                         <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
-                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Notes</th>
+                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Address</th>
                                         <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                                     </tr>
                                 </thead>
@@ -72,8 +71,9 @@
                                                     <span x-text="customer.name"></span>
                                                 </a>
                                             </td>
-                                            <td class="px-4 py-4 text-sm text-gray-700" x-text="customer.status"></td>
-                                            <td class="px-4 py-4 text-sm text-gray-700" x-text="customer.notes || '—'"></td>
+                                            <td class="px-4 py-4 text-sm text-gray-700">
+                                                <p class="max-w-sm whitespace-pre-line" x-text="customer.address_summary || '—'"></p>
+                                            </td>
                                             <td class="px-4 py-4 text-right text-sm">
                                                 <div class="inline-flex items-center gap-3">
                                                     <button type="button" class="text-blue-600 hover:text-blue-500" x-on:click="openEdit(customer)">Edit</button>
@@ -157,6 +157,100 @@
                                             </label>
                                             <p class="mt-1 text-sm text-red-600" x-text="errors.notes[0]"></p>
                                         </div>
+
+                                        <section class="rounded-2xl border border-gray-200 bg-gray-50/60 p-4">
+                                            <div class="mb-4">
+                                                <h3 class="text-sm font-semibold uppercase tracking-[0.2em] text-gray-500">Address</h3>
+                                                <p class="mt-1 text-sm text-gray-600">Capture mailing or service details without leaving the page.</p>
+                                            </div>
+
+                                            <div class="grid gap-4 sm:grid-cols-2">
+                                                <div class="sm:col-span-2">
+                                                    <label class="block text-sm font-medium text-gray-700">
+                                                        Address line 1
+                                                        <input
+                                                            type="text"
+                                                            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                                                            x-model="form.address_line_1"
+                                                        />
+                                                    </label>
+                                                    <p class="mt-1 text-sm text-red-600" x-text="errors.address_line_1[0]"></p>
+                                                </div>
+
+                                                <div class="sm:col-span-2">
+                                                    <label class="block text-sm font-medium text-gray-700">
+                                                        Address line 2
+                                                        <input
+                                                            type="text"
+                                                            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                                                            x-model="form.address_line_2"
+                                                        />
+                                                    </label>
+                                                    <p class="mt-1 text-sm text-red-600" x-text="errors.address_line_2[0]"></p>
+                                                </div>
+
+                                                <div>
+                                                    <label class="block text-sm font-medium text-gray-700">
+                                                        City
+                                                        <input
+                                                            type="text"
+                                                            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                                                            x-model="form.city"
+                                                        />
+                                                    </label>
+                                                    <p class="mt-1 text-sm text-red-600" x-text="errors.city[0]"></p>
+                                                </div>
+
+                                                <div>
+                                                    <label class="block text-sm font-medium text-gray-700">
+                                                        Region
+                                                        <input
+                                                            type="text"
+                                                            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                                                            x-model="form.region"
+                                                        />
+                                                    </label>
+                                                    <p class="mt-1 text-sm text-red-600" x-text="errors.region[0]"></p>
+                                                </div>
+
+                                                <div>
+                                                    <label class="block text-sm font-medium text-gray-700">
+                                                        Postal code
+                                                        <input
+                                                            type="text"
+                                                            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                                                            x-model="form.postal_code"
+                                                        />
+                                                    </label>
+                                                    <p class="mt-1 text-sm text-red-600" x-text="errors.postal_code[0]"></p>
+                                                </div>
+
+                                                <div>
+                                                    <label class="block text-sm font-medium text-gray-700">
+                                                        Country code
+                                                        <input
+                                                            type="text"
+                                                            maxlength="2"
+                                                            class="mt-1 block w-full rounded-md border-gray-300 uppercase shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                                                            x-model="form.country_code"
+                                                        />
+                                                    </label>
+                                                    <p class="mt-1 text-sm text-red-600" x-text="errors.country_code[0]"></p>
+                                                </div>
+
+                                                <div class="sm:col-span-2">
+                                                    <label class="block text-sm font-medium text-gray-700">
+                                                        Formatted address
+                                                        <textarea
+                                                            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                                                            rows="3"
+                                                            x-model="form.formatted_address"
+                                                        ></textarea>
+                                                    </label>
+                                                    <p class="mt-1 text-sm text-red-600" x-text="errors.formatted_address[0]"></p>
+                                                </div>
+                                            </div>
+                                        </section>
                                     </div>
 
                                     <p class="mt-4 text-sm text-red-600" x-show="generalError" x-text="generalError"></p>
