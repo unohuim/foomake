@@ -153,6 +153,9 @@ Execution-only role.
 ## Enforcement Notes
 
 - **All permission checks** must use gates: `Gate::allows('<permission-slug>')` or `@can('<permission-slug>')`.
+- Customer detail read access uses `sales-customers-view`.
+- Customer contacts reuse sales-customers-manage.
+- Customer contacts do not introduce a separate permission slug.
 - Current purchase-order routes use a two-gate model:
   - `purchasing-purchase-orders-create` for index/show/create/update/delete and line mutations
   - `purchasing-purchase-orders-receive` for receipts, short-closes, and manual status transitions

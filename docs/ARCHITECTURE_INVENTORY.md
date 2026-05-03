@@ -208,6 +208,46 @@ Gate::authorize('inventory-materials-manage');
 
 ---
 
+## Sales
+
+### Customer Contact Primary Invariant
+
+**Name:** Customer Contact Primary Invariant  
+**Type:** Domain Rule  
+**Location:**  
+- `docs/architecture/sales/CustomerContactPrimaryInvariant.yaml`  
+- `app/Http/Controllers/CustomerContactController.php`  
+- `app/Models/Customer.php`  
+- `app/Models/CustomerContact.php`  
+
+**Purpose:**  
+Document the customer-contact relationship, the split first-name/last-name contact shape, and the exactly-one-primary-when-contacts-exist invariant for customer contacts.
+
+**When to Use:**  
+Any customer contact create, update, delete, or primary-designation flow on the customer detail Contacts section.
+
+**When Not to Use:**  
+Customer records without contact mutations or unrelated sales-order contact snapshots.
+
+**Public Interface:**  
+- `Customer::contacts()`  
+- `sales.customers.contacts.store`  
+- `sales.customers.contacts.update`  
+- `sales.customers.contacts.destroy`  
+- `sales.customers.contacts.primary.update`  
+
+**Example Usage:**  
+```php
+$customer->contacts()->create([
+    'tenant_id' => $tenant->id,
+    'first_name' => 'Jane',
+    'last_name' => 'Buyer',
+    'is_primary' => true,
+]);
+```
+
+---
+
 ### Manufacturing Recipes Read-Only Access
 
 **Name:** Manufacturing Recipes Read-Only Access  

@@ -258,6 +258,14 @@ It is probably **wrong** for this system.
 
 ## Page Notes
 
+### Customer Detail Contacts Section
+
+- The customer detail page may expose a Contacts section to read-only customer viewers.
+- Each contact row and form uses `first_name`, `last_name`, and optional email, phone, and role fields.
+- Contact create, edit, delete, and set-primary controls must render only for users who can manage customers.
+- When contacts exist, the UI must always present exactly one primary contact for that customer.
+- Contacts are managed in-page with AJAX mutations and JSON validation feedback.
+
 ### `/manufacturing/uom-conversions`
 
 This page follows the page-module + AJAX CRUD pattern and is split into two sections:

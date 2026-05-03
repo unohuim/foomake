@@ -15,7 +15,7 @@ Authority Order (highest to lowest — conflicts resolved by this order):
 7. docs/DB_SCHEMA.md
 8. docs/UI_DESIGN.md
 9. routes/web.php (main web routes — included here for complete bootstrap context)
-
+10. docs/PR3_ROADMAP.md
 
 ## docs/AI_CHAT_CODEX.md
 
@@ -2013,6 +2013,46 @@ Gate::authorize('inventory-materials-manage');
 
 ---
 
+## Sales
+
+### Customer Contact Primary Invariant
+
+**Name:** Customer Contact Primary Invariant  
+**Type:** Domain Rule  
+**Location:**  
+- `docs/architecture/sales/CustomerContactPrimaryInvariant.yaml`  
+- `app/Http/Controllers/CustomerContactController.php`  
+- `app/Models/Customer.php`  
+- `app/Models/CustomerContact.php`  
+
+**Purpose:**  
+Document the customer-contact relationship, the split first-name/last-name contact shape, and the exactly-one-primary-when-contacts-exist invariant for customer contacts.
+
+**When to Use:**  
+Any customer contact create, update, delete, or primary-designation flow on the customer detail Contacts section.
+
+**When Not to Use:**  
+Customer records without contact mutations or unrelated sales-order contact snapshots.
+
+**Public Interface:**  
+- `Customer::contacts()`  
+- `sales.customers.contacts.store`  
+- `sales.customers.contacts.update`  
+- `sales.customers.contacts.destroy`  
+- `sales.customers.contacts.primary.update`  
+
+**Example Usage:**  
+```php
+$customer->contacts()->create([
+    'tenant_id' => $tenant->id,
+    'first_name' => 'Jane',
+    'last_name' => 'Buyer',
+    'is_primary' => true,
+]);
+```
+
+---
+
 ### Manufacturing Recipes Read-Only Access
 
 **Name:** Manufacturing Recipes Read-Only Access  
@@ -3522,6 +3562,9 @@ Execution-only role.
 ## Enforcement Notes
 
 - **All permission checks** must use gates: `Gate::allows('<permission-slug>')` or `@can('<permission-slug>')`.
+- Customer detail read access uses `sales-customers-view`.
+- Customer contacts reuse sales-customers-manage.
+- Customer contacts do not introduce a separate permission slug.
 - Current purchase-order routes use a two-gate model:
   - `purchasing-purchase-orders-create` for index/show/create/update/delete and line mutations
   - `purchasing-purchase-orders-receive` for receipts, short-closes, and manual status transitions
@@ -3727,6 +3770,7 @@ Migrations remain the **sole source of truth**.
 
 - cache
 - cache_locks
+- customer_contacts
 - customers
 - failed_jobs
 - inventory_counts
@@ -3830,6 +3874,37 @@ Migrations remain the **sole source of truth**.
 - Index: `(tenant_id, name)`
 - Index: `(tenant_id, status)`
 - Implicit (FK index): `tenant_id`
+
+---
+
+## customer_contacts
+
+**Tenant-owned:** Yes  
+**Purpose:** Customer-contact relationship records for the customer detail Contacts section
+
+### Columns
+
+| Name       | Type      | Nullable | Notes                     |
+| ---------- | --------- | -------- | ------------------------- |
+| id         | bigint    | No       | Primary key               |
+| tenant_id  | bigint    | No       | FK → tenants.id (CASCADE) |
+| customer_id | bigint   | No       | FK → customers.id (CASCADE) |
+| first_name | string    | No       | —                         |
+| last_name  | string    | No       | —                         |
+| email      | string    | Yes      | —                         |
+| phone      | string    | Yes      | —                         |
+| role       | string    | Yes      | —                         |
+| is_primary | boolean   | No       | Defaults to `false`       |
+| created_at | timestamp | Yes      | —                         |
+| updated_at | timestamp | Yes      | —                         |
+
+### Keys & Indexes
+
+- PK: `id`
+- Index: `(customer_id, is_primary)`
+- Index: `(tenant_id, customer_id)`
+- Implicit (FK index): `tenant_id`
+- Implicit (FK index): `customer_id`
 
 ---
 
@@ -4963,6 +5038,14 @@ It is probably **wrong** for this system.
 
 ## Page Notes
 
+### Customer Detail Contacts Section
+
+- The customer detail page may expose a Contacts section to read-only customer viewers.
+- Each contact row and form uses `first_name`, `last_name`, and optional email, phone, and role fields.
+- Contact create, edit, delete, and set-primary controls must render only for users who can manage customers.
+- When contacts exist, the UI must always present exactly one primary contact for that customer.
+- Contacts are managed in-page with AJAX mutations and JSON validation feedback.
+
 ### `/manufacturing/uom-conversions`
 
 This page follows the page-module + AJAX CRUD pattern and is split into two sections:
@@ -5294,6 +5377,7 @@ use App\Http\Controllers\ItemPurchaseOptionPriceController;
 use App\Http\Controllers\MakeOrderController;
 use App\Http\Controllers\MaterialController;
 use App\Http\Controllers\CustomerController;
+use App\Http\Controllers\CustomerContactController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\PurchaseOrderController;
 use App\Http\Controllers\PurchaseOrderLineController;
@@ -5462,6 +5546,14 @@ Route::middleware('auth')->group(function () {
         ->name('sales.customers.update');
     Route::delete('/sales/customers/{customer}', [CustomerController::class, 'destroy'])
         ->name('sales.customers.destroy');
+    Route::post('/sales/customers/{customer}/contacts', [CustomerContactController::class, 'store'])
+        ->name('sales.customers.contacts.store');
+    Route::patch('/sales/customers/{customer}/contacts/{contact}', [CustomerContactController::class, 'update'])
+        ->name('sales.customers.contacts.update');
+    Route::delete('/sales/customers/{customer}/contacts/{contact}', [CustomerContactController::class, 'destroy'])
+        ->name('sales.customers.contacts.destroy');
+    Route::patch('/sales/customers/{customer}/contacts/{contact}/primary', [CustomerContactController::class, 'setPrimary'])
+        ->name('sales.customers.contacts.primary.update');
 
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
@@ -5478,4 +5570,254 @@ Route::delete('/manufacturing/uom-conversions/items/{itemConversion}', [UomConve
     ->name('manufacturing.uom-conversions.items.destroy');
 
 require __DIR__ . '/auth.php';
+
+
+## docs/PR3_ROADMAP.md
+
+# PR3_ROADMAP — Sales + CRM Foundations
+
+This roadmap defines the third major phase of work: introducing the **Sales domain (CRM foundations + Sales Orders)**, fully integrated with inventory before any external integrations.
+
+---
+
+## Core Principles
+
+- Domain-segmented PRs
+- UI + backend together per PR
+- AJAX-first CRUD
+- Smallest possible change per PR
+- No speculative integrations
+- Inventory must be source of truth before external sync
+
+---
+
+## Navigation Model
+
+Top-level navigation:
+
+- **Sales**
+
+Dropdown includes:
+
+- Customers
+- Sales Orders
+
+---
+
+## DOMAIN 1 — Customers
+
+### PR3-CUST-001 — Customers CRUD
+
+Status: Implemented
+
+**Goal**
+Introduce customers as tenant-owned entities.
+
+**Includes**
+
+- Route: `/sales/customers`
+- Full CRUD (AJAX)
+- Fields:
+    - name (required)
+    - status (active/inactive/archived)
+    - notes (nullable)
+    - address_line_1 (nullable)
+    - address_line_2 (nullable)
+    - city (nullable)
+    - region (nullable)
+    - postal_code (nullable)
+    - country_code (nullable, 2 chars)
+    - formatted_address (nullable)
+    - latitude (nullable, system/provider-managed)
+    - longitude (nullable, system/provider-managed)
+    - address_provider (nullable, system/provider-managed)
+    - address_provider_id (nullable, system/provider-managed)
+- Navigation: Sales → Customers
+- Create/edit uses the slide-over pattern
+- Create defaults `status` to `active`
+- Create has no status dropdown
+- Index shows active customers only
+- Index columns: Name, Address, Actions
+- Notes are shown on the customer detail view, not the index
+- Destroy archives instead of hard-deleting
+
+**Permissions**
+
+- `sales-customers-manage`
+
+---
+
+### PR3-CUST-002 — Contacts (1:N)
+
+Status: Implemented
+
+**Goal**
+Allow multiple contacts per customer.
+
+**Includes**
+
+- Nested under customer detail
+- Customer detail page includes a Contacts section
+- CRUD (AJAX)
+- Fields:
+    - first_name
+    - last_name
+    - email (nullable)
+    - phone (nullable)
+    - role (nullable)
+    - is_primary
+    - customer_id
+    - tenant_id
+
+**Rules**
+
+- 1 customer → many contacts
+- A customer may have multiple contacts
+- Exactly one contact must be primary when contacts exist
+- The first contact created for a customer becomes primary automatically
+- Additional contacts are not primary by default
+- Setting a new primary contact unsets the previous primary for the same customer
+- Primary designation is scoped per customer, not tenant-wide
+- A primary contact cannot be deleted while other contacts exist
+- The only contact for a customer may be deleted, leaving zero contacts
+- Contacts section mutations return JSON and do not redirect
+
+**Permissions**
+
+- Customer detail read access uses `sales-customers-view`
+- Customer contacts reuse `sales-customers-manage`
+
+---
+
+### PR3-CUST-003 — Customer Detail View
+
+**Goal**
+Provide a stable read model.
+
+**Includes**
+
+- Route: `/sales/customers/{customer}`
+- Sections:
+    - Core fields
+    - Contacts section
+
+---
+
+## DOMAIN 2 — Sales Orders
+
+### PR3-SO-001 — Sales Orders (Draft)
+
+**Goal**
+Introduce draft sales orders.
+
+**Includes**
+
+- Route: `/sales/orders`
+- Create draft (AJAX)
+- Fields:
+    - customer_id (required)
+    - contact_id (nullable)
+    - status = DRAFT
+
+**Permissions**
+
+- `sales-orders-manage`
+
+---
+
+### PR3-SO-002 — Sales Order Lines
+
+**Goal**
+Allow adding items to sales orders.
+
+**Includes**
+
+- Add/remove lines (AJAX)
+- Fields:
+    - item_id
+    - quantity (BCMath string)
+    - unit_price snapshot
+
+**Rules**
+
+- BCMath enforced (scale = 6)
+- No float math
+
+---
+
+### PR3-SO-003 — Pricing Snapshot Invariant
+
+**Goal**
+Ensure immutable pricing at line creation.
+
+**Includes**
+
+- Store:
+    - unit_price_amount
+    - currency
+- Values never change after write
+
+---
+
+### PR3-SO-004 — Sales Order Lifecycle
+
+**Goal**
+Introduce lifecycle without inventory impact yet.
+
+**Statuses**
+
+- DRAFT
+- CONFIRMED
+- FULFILLED
+
+---
+
+### PR3-SO-005 — Inventory Impact (Critical)
+
+**Goal**
+Sales orders must update inventory.
+
+**Includes**
+
+- On fulfillment:
+    - Create stock_moves.type = issue
+    - Reduce inventory
+
+**Rules**
+
+- Inventory is source of truth
+- BCMath required
+- Transactional integrity
+
+---
+
+## DOMAIN 3 — External Integration (Post-Inventory Only)
+
+### PR3-INT-001 — External Hooks (Prep)
+
+**Goal**
+Prepare for Shopify/WooCommerce.
+
+**Includes**
+
+- Fields:
+    - external_source
+    - external_id
+
+**Out of Scope**
+
+- Sync logic
+- Webhooks
+
+---
+
+## End State
+
+After PR3 completion:
+
+- Sales domain fully operational
+- CRM foundation established
+- Sales orders impact inventory correctly
+- System ready for external integrations
+
 

@@ -73,26 +73,43 @@ Introduce customers as tenant-owned entities.
 
 ### PR3-CUST-002 — Contacts (1:N)
 
+Status: Implemented
+
 **Goal**
 Allow multiple contacts per customer.
 
 **Includes**
 
 - Nested under customer detail
+- Customer detail page includes a Contacts section
 - CRUD (AJAX)
 - Fields:
-    - name
-    - email
-    - phone
-    - role
+    - first_name
+    - last_name
+    - email (nullable)
+    - phone (nullable)
+    - role (nullable)
+    - is_primary
+    - customer_id
+    - tenant_id
 
 **Rules**
 
 - 1 customer → many contacts
+- A customer may have multiple contacts
+- Exactly one contact must be primary when contacts exist
+- The first contact created for a customer becomes primary automatically
+- Additional contacts are not primary by default
+- Setting a new primary contact unsets the previous primary for the same customer
+- Primary designation is scoped per customer, not tenant-wide
+- A primary contact cannot be deleted while other contacts exist
+- The only contact for a customer may be deleted, leaving zero contacts
+- Contacts section mutations return JSON and do not redirect
 
 **Permissions**
 
-- `sales-contacts-manage`
+- Customer detail read access uses `sales-customers-view`
+- Customer contacts reuse `sales-customers-manage`
 
 ---
 
@@ -106,7 +123,7 @@ Provide a stable read model.
 - Route: `/sales/customers/{customer}`
 - Sections:
     - Core fields
-    - Contacts list
+    - Contacts section
 
 ---
 

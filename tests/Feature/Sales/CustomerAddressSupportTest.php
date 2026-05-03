@@ -456,7 +456,7 @@ it('17. update rejects invalid longitude', function () {
 it('18. detail view displays address fields', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
-    ($this->grantPermission)($user, 'sales-customers-manage');
+    ($this->grantPermission)($user, 'sales-customers-view');
     $customer = ($this->createCustomer)($tenant, array_merge([
         'name' => 'Readable Address Customer',
     ], ($this->addressPayload)()));
@@ -511,7 +511,7 @@ it('20. other-tenant customer address is inaccessible', function () {
     $tenant = ($this->makeTenant)();
     $otherTenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
-    ($this->grantPermission)($user, 'sales-customers-manage');
+    ($this->grantPermission)($user, 'sales-customers-view');
     $customer = ($this->createCustomer)($otherTenant, array_merge([
         'name' => 'Hidden Address Customer',
     ], ($this->addressPayload)()));

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Customer;
+use App\Models\CustomerContact;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -27,7 +28,7 @@ class CustomerController extends Controller
             ->get();
 
         $payload = [
-            'customers' => $customers->map(fn (Customer $customer) => $this->customerData($customer))->values()->all(),
+            'customers' => $customers->map(fn (Customer $customer) => $this->customerIndexData($customer))->values()->all(),
             'storeUrl' => route('sales.customers.store'),
             'updateUrlBase' => url('/sales/customers'),
             'csrfToken' => csrf_token(),
@@ -45,12 +46,22 @@ class CustomerController extends Controller
      */
     public function show(Customer $customer): View
     {
-        Gate::authorize('sales-customers-manage');
+        Gate::authorize('sales-customers-view');
+
+        $customer->load('contacts');
+        $canManage = Gate::allows('sales-customers-manage');
 
         $payload = [
             'customer' => $this->customerData($customer),
-            'updateUrl' => route('sales.customers.update', $customer),
-            'deleteUrl' => route('sales.customers.destroy', $customer),
+            'contacts' => $customer->contacts
+                ->map(fn (CustomerContact $contact): array => $this->contactData($contact))
+                ->values()
+                ->all(),
+            'canManage' => $canManage,
+            'updateUrl' => $canManage ? route('sales.customers.update', $customer) : null,
+            'deleteUrl' => $canManage ? route('sales.customers.destroy', $customer) : null,
+            'contactsStoreUrl' => $canManage ? route('sales.customers.contacts.store', $customer) : null,
+            'contactsBaseUrl' => $canManage ? url('/sales/customers/' . $customer->id . '/contacts') : null,
             'indexUrl' => route('sales.customers.index'),
             'csrfToken' => csrf_token(),
             'statuses' => Customer::statuses(),
@@ -145,6 +156,55 @@ class CustomerController extends Controller
             'address_provider' => $customer->address_provider,
             'address_provider_id' => $customer->address_provider_id,
             'show_url' => route('sales.customers.show', $customer),
+        ];
+    }
+
+    /**
+     * Build the customer index payload.
+     *
+     * @return array<string, int|string|null>
+     */
+    private function customerIndexData(Customer $customer): array
+    {
+        return [
+            'id' => $customer->id,
+            'name' => $customer->name,
+            'status' => $customer->status,
+            'notes' => null,
+            'address_line_1' => $customer->address_line_1,
+            'address_line_2' => $customer->address_line_2,
+            'city' => $customer->city,
+            'region' => $customer->region,
+            'postal_code' => $customer->postal_code,
+            'country_code' => $customer->country_code,
+            'formatted_address' => $customer->formatted_address,
+            'address_summary' => $this->addressSummary($customer),
+            'latitude' => $customer->latitude,
+            'longitude' => $customer->longitude,
+            'address_provider' => $customer->address_provider,
+            'address_provider_id' => $customer->address_provider_id,
+            'show_url' => route('sales.customers.show', $customer),
+        ];
+    }
+
+    /**
+     * Build the customer contact response payload.
+     *
+     * @return array<string, int|string|bool|null>
+     */
+    private function contactData(CustomerContact $contact): array
+    {
+        return [
+            'id' => $contact->id,
+            'tenant_id' => $contact->tenant_id,
+            'customer_id' => $contact->customer_id,
+            'first_name' => $contact->first_name,
+            'last_name' => $contact->last_name,
+            'full_name' => $contact->full_name,
+            'email' => $contact->email,
+            'phone' => $contact->phone,
+            'role' => $contact->role,
+            'is_primary' => $contact->is_primary,
         ];
     }
 

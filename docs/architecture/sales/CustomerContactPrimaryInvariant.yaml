@@ -1,0 +1,38 @@
+name: Customer Contact Primary Invariant
+type: Domain Rule
+location:
+  - app/Http/Controllers/CustomerContactController.php
+  - app/Models/Customer.php
+  - app/Models/CustomerContact.php
+  - resources/views/sales/customers/show.blade.php
+purpose: Document the customer-contact relationship and enforce the primary-contact invariants for the customer detail Contacts section.
+when_to_use:
+  - Managing customer contacts through the customer detail Contacts section
+  - Validating create, update, delete, and primary-designation flows for customer contacts
+when_not_to_use:
+  - Customer records without contact mutations
+  - Sales-order contact snapshots or unrelated tenant-owned people records
+rules:
+  - A customer may have multiple contacts.
+  - Each contact stores first_name and last_name, with optional email, phone, and role fields.
+  - Exactly one contact must be primary when contacts exist.
+  - The first contact created for a customer becomes primary automatically.
+  - Additional contacts are not primary by default.
+  - Promoting a new primary contact must unset the previous primary for the same customer.
+  - Primary designation is scoped per customer, not tenant-wide.
+  - The current primary contact cannot be deleted while other contacts exist.
+  - The only contact for a customer may be deleted, leaving zero contacts.
+  - Customer detail read access uses sales-customers-view and customer-contact mutations reuse sales-customers-manage.
+public_interface:
+  - Customer::contacts()
+  - sales.customers.contacts.store
+  - sales.customers.contacts.update
+  - sales.customers.contacts.destroy
+  - sales.customers.contacts.primary.update
+example_usage: |
+  $customer->contacts()->create([
+      'tenant_id' => $tenant->id,
+      'first_name' => 'Jane',
+      'last_name' => 'Buyer',
+      'is_primary' => true,
+  ]);

@@ -276,7 +276,7 @@ it('11a. inactive customers are not visible in index', function () {
 it('12. customer detail page loads for same tenant', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
-    ($this->grantPermission)($user, 'sales-customers-manage');
+    ($this->grantPermission)($user, 'sales-customers-view');
     $customer = ($this->createCustomer)($tenant, ['name' => 'Detail Customer']);
 
     ($this->getShow)($user, $customer->id)
@@ -288,7 +288,7 @@ it('13. other-tenant customer detail returns 404', function () {
     $tenant = ($this->makeTenant)();
     $otherTenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
-    ($this->grantPermission)($user, 'sales-customers-manage');
+    ($this->grantPermission)($user, 'sales-customers-view');
     $customer = ($this->createCustomer)($otherTenant, ['name' => 'Other Tenant Customer']);
 
     ($this->getShow)($user, $customer->id)

@@ -7,6 +7,7 @@ use App\Http\Controllers\ItemPurchaseOptionPriceController;
 use App\Http\Controllers\MakeOrderController;
 use App\Http\Controllers\MaterialController;
 use App\Http\Controllers\CustomerController;
+use App\Http\Controllers\CustomerContactController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\PurchaseOrderController;
 use App\Http\Controllers\PurchaseOrderLineController;
@@ -175,6 +176,14 @@ Route::middleware('auth')->group(function () {
         ->name('sales.customers.update');
     Route::delete('/sales/customers/{customer}', [CustomerController::class, 'destroy'])
         ->name('sales.customers.destroy');
+    Route::post('/sales/customers/{customer}/contacts', [CustomerContactController::class, 'store'])
+        ->name('sales.customers.contacts.store');
+    Route::patch('/sales/customers/{customer}/contacts/{contact}', [CustomerContactController::class, 'update'])
+        ->name('sales.customers.contacts.update');
+    Route::delete('/sales/customers/{customer}/contacts/{contact}', [CustomerContactController::class, 'destroy'])
+        ->name('sales.customers.contacts.destroy');
+    Route::patch('/sales/customers/{customer}/contacts/{contact}/primary', [CustomerContactController::class, 'setPrimary'])
+        ->name('sales.customers.contacts.primary.update');
 
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');

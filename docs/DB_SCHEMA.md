@@ -25,6 +25,7 @@ Migrations remain the **sole source of truth**.
 
 - cache
 - cache_locks
+- customer_contacts
 - customers
 - failed_jobs
 - inventory_counts
@@ -128,6 +129,37 @@ Migrations remain the **sole source of truth**.
 - Index: `(tenant_id, name)`
 - Index: `(tenant_id, status)`
 - Implicit (FK index): `tenant_id`
+
+---
+
+## customer_contacts
+
+**Tenant-owned:** Yes  
+**Purpose:** Customer-contact relationship records for the customer detail Contacts section
+
+### Columns
+
+| Name       | Type      | Nullable | Notes                     |
+| ---------- | --------- | -------- | ------------------------- |
+| id         | bigint    | No       | Primary key               |
+| tenant_id  | bigint    | No       | FK → tenants.id (CASCADE) |
+| customer_id | bigint   | No       | FK → customers.id (CASCADE) |
+| first_name | string    | No       | —                         |
+| last_name  | string    | No       | —                         |
+| email      | string    | Yes      | —                         |
+| phone      | string    | Yes      | —                         |
+| role       | string    | Yes      | —                         |
+| is_primary | boolean   | No       | Defaults to `false`       |
+| created_at | timestamp | Yes      | —                         |
+| updated_at | timestamp | Yes      | —                         |
+
+### Keys & Indexes
+
+- PK: `id`
+- Index: `(customer_id, is_primary)`
+- Index: `(tenant_id, customer_id)`
+- Implicit (FK index): `tenant_id`
+- Implicit (FK index): `customer_id`
 
 ---
 

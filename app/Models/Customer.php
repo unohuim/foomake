@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Models\Concerns\HasTenantScope;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * Class Customer
@@ -69,6 +70,17 @@ class Customer extends Model
     public function tenant(): BelongsTo
     {
         return $this->belongsTo(Tenant::class);
+    }
+
+    /**
+     * Get the contacts for the customer.
+     */
+    public function contacts(): HasMany
+    {
+        return $this->hasMany(CustomerContact::class)
+            ->orderByDesc('is_primary')
+            ->orderBy('first_name')
+            ->orderBy('last_name');
     }
 
     /**
