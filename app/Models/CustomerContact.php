@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Models\Concerns\HasTenantScope;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * Class CustomerContact
@@ -58,6 +59,14 @@ class CustomerContact extends Model
     public function customer(): BelongsTo
     {
         return $this->belongsTo(Customer::class);
+    }
+
+    /**
+     * Get the sales orders using this contact.
+     */
+    public function salesOrders(): HasMany
+    {
+        return $this->hasMany(SalesOrder::class, 'contact_id');
     }
 
     /**

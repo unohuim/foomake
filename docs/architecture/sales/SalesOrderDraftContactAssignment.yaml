@@ -1,0 +1,42 @@
+name: Sales Order Draft Contact Assignment
+type: Domain Rule
+location:
+  - app/Http/Controllers/SalesOrderController.php
+  - app/Http/Requests/Sales/StoreSalesOrderRequest.php
+  - app/Http/Requests/Sales/UpdateSalesOrderRequest.php
+  - app/Models/SalesOrder.php
+  - resources/views/sales/orders/index.blade.php
+  - resources/views/sales/customers/show.blade.php
+purpose: Document the draft-only sales-order customer/contact rules shared by the Sales Orders index and the customer detail Orders mini-index.
+when_to_use:
+  - Creating or updating draft sales orders from the Sales Orders index
+  - Creating or updating draft sales orders from the customer detail Orders section
+  - Validating customer/contact combinations for sales-order forms
+when_not_to_use:
+  - Sales-order line items, pricing snapshots, fulfillment, inventory impact, or invoicing flows
+  - Customer-contact primary designation rules outside sales-order assignment
+rules:
+  - Sales orders are tenant-owned and tenant-scoped.
+  - PR3-SO-001 supports draft-only sales orders.
+  - customer_id is required and must belong to the current tenant.
+  - contact_id is optional but, when submitted, must belong to the selected customer in the current tenant.
+  - Creating a sales order without contact_id defaults contact_id to the selected customer's primary contact when one exists.
+  - Updating a sales order without an explicit valid contact_id preserves the current contact only when customer_id does not change.
+  - Changing customer_id resets contact_id to the new customer's primary contact unless an explicit valid contact_id for the new customer is submitted.
+  - A contact from the previous customer must never be preserved after customer_id changes.
+  - Sales-order create, update, and delete mutations return JSON for AJAX consumers and do not redirect.
+  - Sales-order mutations use sales-sales-orders-manage, while customer detail read access remains sales-customers-view.
+public_interface:
+  - SalesOrder::STATUS_DRAFT
+  - SalesOrder::statuses()
+  - sales.orders.index
+  - sales.orders.store
+  - sales.orders.update
+  - sales.orders.destroy
+example_usage: |
+  $order = SalesOrder::query()->create([
+      'tenant_id' => $tenant->id,
+      'customer_id' => $customer->id,
+      'contact_id' => $customer->contacts->firstWhere('is_primary', true)?->id,
+      'status' => SalesOrder::STATUS_DRAFT,
+  ]);

@@ -3,8 +3,10 @@
 namespace App\Models;
 
 use App\Models\Concerns\HasTenantScope;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
@@ -29,6 +31,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  */
 class Customer extends Model
 {
+    use HasFactory;
     use HasTenantScope;
 
     public const STATUS_ACTIVE = 'active';
@@ -81,6 +84,22 @@ class Customer extends Model
             ->orderByDesc('is_primary')
             ->orderBy('first_name')
             ->orderBy('last_name');
+    }
+
+    /**
+     * Get the primary contact for the customer.
+     */
+    public function primaryContact(): HasOne
+    {
+        return $this->hasOne(CustomerContact::class)->where('is_primary', true);
+    }
+
+    /**
+     * Get the sales orders for the customer.
+     */
+    public function salesOrders(): HasMany
+    {
+        return $this->hasMany(SalesOrder::class)->orderByDesc('created_at');
     }
 
     /**

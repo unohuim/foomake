@@ -26,7 +26,8 @@ Authority Order (highest to lowest — conflicts resolved by this order):
 8. docs/UI_DESIGN.md
 9. routes/web.php (main web routes — included here for complete bootstrap context)
 10. docs/PR3_ROADMAP.md
-11. Then, for each item in the above order, add a level-2 header exactly like this:
+
+Then, for each item in the above order, add a level-2 header exactly like this:
 
 ## docs/AI_CHAT_CODEX.md
 

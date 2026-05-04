@@ -46,6 +46,7 @@ Migrations remain the **sole source of truth**.
 - recipe_lines
 - roles
 - roles_users
+- sales_orders
 - sessions
 - stock_moves
 - suppliers
@@ -160,6 +161,35 @@ Migrations remain the **sole source of truth**.
 - Index: `(tenant_id, customer_id)`
 - Implicit (FK index): `tenant_id`
 - Implicit (FK index): `customer_id`
+
+---
+
+## sales_orders
+
+**Tenant-owned:** Yes  
+**Purpose:** Draft sales orders shared by the Sales Orders index and the customer detail Orders mini-index
+
+### Columns
+
+| Name       | Type      | Nullable | Notes                                |
+| ---------- | --------- | -------- | ------------------------------------ |
+| id         | bigint    | No       | Primary key                          |
+| tenant_id  | bigint    | No       | FK → tenants.id (CASCADE)            |
+| customer_id | bigint   | No       | FK → customers.id (CASCADE)          |
+| contact_id | bigint    | Yes      | FK → customer_contacts.id (SET NULL) |
+| status     | string    | No       | Defaults to `DRAFT`                  |
+| created_at | timestamp | Yes      | —                                    |
+| updated_at | timestamp | Yes      | —                                    |
+
+### Keys & Indexes
+
+- PK: `id`
+- Index: `(tenant_id, status)`
+- Index: `(tenant_id, customer_id)`
+- Index: `(tenant_id, contact_id)`
+- Implicit (FK index): `tenant_id`
+- Implicit (FK index): `customer_id`
+- Implicit (FK index): `contact_id`
 
 ---
 

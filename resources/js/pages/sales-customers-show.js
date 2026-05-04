@@ -24,6 +24,11 @@ export function mount(rootEl, payload) {
         is_primary: [],
     });
 
+    const emptyOrderErrors = () => ({
+        customer_id: [],
+        contact_id: [],
+    });
+
     const customerToForm = (customer) => ({
         name: customer.name || '',
         status: customer.status || 'active',
@@ -53,14 +58,30 @@ export function mount(rootEl, payload) {
         role: contact.role || '',
     });
 
+    const emptyOrderForm = () => ({
+        customer_id: '',
+        contact_id: '',
+    });
+
+    const orderToForm = (order) => ({
+        customer_id: order.customer_id ? String(order.customer_id) : '',
+        contact_id: order.contact_id ? String(order.contact_id) : '',
+    });
+
     Alpine.data('salesCustomersShow', () => ({
         customer: safePayload.customer || {},
         contacts: safePayload.contacts || [],
+        orders: safePayload.orders || [],
+        orderCustomers: safePayload.orderCustomers || [],
         canManage: safePayload.canManage || false,
+        canManageOrders: safePayload.canManageOrders || false,
         updateUrl: safePayload.updateUrl || '',
         deleteUrl: safePayload.deleteUrl || '',
         contactsStoreUrl: safePayload.contactsStoreUrl || '',
         contactsBaseUrl: safePayload.contactsBaseUrl || '',
+        ordersStoreUrl: safePayload.ordersStoreUrl || '',
+        ordersUpdateUrlBase: safePayload.ordersUpdateUrlBase || '',
+        ordersDeleteUrlBase: safePayload.ordersDeleteUrlBase || '',
         indexUrl: safePayload.indexUrl || '/sales/customers',
         csrfToken: safePayload.csrfToken || '',
         statuses: safePayload.statuses || ['active', 'inactive', 'archived'],
@@ -76,6 +97,13 @@ export function mount(rootEl, payload) {
         contactForm: emptyContactForm(),
         contactErrors: emptyContactErrors(),
         contactGeneralError: '',
+        isOrderFormOpen: false,
+        isOrderSubmitting: false,
+        orderFormMode: 'create',
+        editingOrderId: null,
+        orderForm: emptyOrderForm(),
+        orderErrors: emptyOrderErrors(),
+        orderGeneralError: '',
         toast: {
             visible: false,
             message: '',
@@ -97,6 +125,19 @@ export function mount(rootEl, payload) {
         },
         normalizeContactErrors(errors) {
             const normalized = emptyContactErrors();
+
+            if (!errors || typeof errors !== 'object') {
+                return normalized;
+            }
+
+            Object.keys(normalized).forEach((key) => {
+                normalized[key] = Array.isArray(errors[key]) ? errors[key] : [];
+            });
+
+            return normalized;
+        },
+        normalizeOrderErrors(errors) {
+            const normalized = emptyOrderErrors();
 
             if (!errors || typeof errors !== 'object') {
                 return normalized;
@@ -183,6 +224,103 @@ export function mount(rootEl, payload) {
 
                 return left.is_primary ? -1 : 1;
             });
+
+            this.syncOrderCustomerContacts();
+        },
+        syncOrderCustomerContacts() {
+            this.orderCustomers = this.orderCustomers.map((entry) => {
+                if (entry.id !== this.customer.id) {
+                    return entry;
+                }
+
+                const primaryContact = this.contacts.find((contact) => contact.is_primary);
+
+                return {
+                    ...entry,
+                    primary_contact_id: primaryContact ? primaryContact.id : null,
+                    contacts: this.contacts.map((contact) => ({
+                        id: contact.id,
+                        customer_id: contact.customer_id,
+                        full_name: contact.full_name,
+                        is_primary: contact.is_primary,
+                    })),
+                };
+            });
+        },
+        selectedOrderCustomer() {
+            const customerId = Number(this.orderForm.customer_id);
+
+            if (!customerId) {
+                return null;
+            }
+
+            return this.orderCustomers.find((entry) => entry.id === customerId) || null;
+        },
+        selectedOrderCustomerContacts() {
+            return this.selectedOrderCustomer()?.contacts || [];
+        },
+        orderContactOptionLabel(contact) {
+            return contact.full_name;
+        },
+        defaultOrderContactIdForCustomer(customerId) {
+            const customer = this.orderCustomers.find((entry) => entry.id === Number(customerId));
+
+            if (!customer || !customer.primary_contact_id) {
+                return '';
+            }
+
+            return String(customer.primary_contact_id);
+        },
+        handleOrderCustomerChange() {
+            this.orderForm.contact_id = this.defaultOrderContactIdForCustomer(this.orderForm.customer_id);
+        },
+        openOrderCreate() {
+            if (!this.canManageOrders) {
+                return;
+            }
+
+            this.orderFormMode = 'create';
+            this.editingOrderId = null;
+            this.orderForm = {
+                customer_id: String(this.customer.id || ''),
+                contact_id: this.defaultOrderContactIdForCustomer(this.customer.id),
+            };
+            this.orderErrors = emptyOrderErrors();
+            this.orderGeneralError = '';
+            this.isOrderFormOpen = true;
+        },
+        openOrderEdit(order) {
+            if (!this.canManageOrders) {
+                return;
+            }
+
+            this.orderFormMode = 'edit';
+            this.editingOrderId = order.id;
+            this.orderForm = orderToForm(order);
+            this.orderErrors = emptyOrderErrors();
+            this.orderGeneralError = '';
+            this.isOrderFormOpen = true;
+        },
+        closeOrderForm() {
+            this.isOrderFormOpen = false;
+            this.isOrderSubmitting = false;
+            this.orderErrors = emptyOrderErrors();
+            this.orderGeneralError = '';
+        },
+        upsertOrder(order) {
+            if (order.customer_id !== this.customer.id) {
+                this.orders = this.orders.filter((entry) => entry.id !== order.id);
+                return;
+            }
+
+            const existingIndex = this.orders.findIndex((entry) => entry.id === order.id);
+
+            if (existingIndex === -1) {
+                this.orders.unshift(order);
+                return;
+            }
+
+            this.orders.splice(existingIndex, 1, order);
         },
         async submitForm() {
             if (this.isSubmitting || !this.canManage) {
@@ -288,6 +426,54 @@ export function mount(rootEl, payload) {
             this.closeContactForm();
             this.showToast('success', isCreate ? 'Contact created.' : 'Contact updated.');
         },
+        async submitOrderForm() {
+            if (this.isOrderSubmitting || !this.canManageOrders) {
+                return;
+            }
+
+            this.isOrderSubmitting = true;
+            this.orderErrors = emptyOrderErrors();
+            this.orderGeneralError = '';
+
+            const isCreate = this.orderFormMode === 'create';
+            const url = isCreate
+                ? this.ordersStoreUrl
+                : `${this.ordersUpdateUrlBase}/${this.editingOrderId}`;
+            const method = isCreate ? 'POST' : 'PATCH';
+
+            const response = await fetch(url, {
+                method,
+                headers: {
+                    'Content-Type': 'application/json',
+                    Accept: 'application/json',
+                    'X-CSRF-TOKEN': this.csrfToken,
+                },
+                body: JSON.stringify({
+                    customer_id: this.orderForm.customer_id === '' ? null : Number(this.orderForm.customer_id),
+                    contact_id: this.orderForm.contact_id === '' ? null : Number(this.orderForm.contact_id),
+                }),
+            });
+
+            if (response.status === 422) {
+                const data = await response.json();
+                this.orderErrors = this.normalizeOrderErrors(data.errors);
+                this.orderGeneralError = data.message || 'Validation failed.';
+                this.isOrderSubmitting = false;
+                return;
+            }
+
+            if (!response.ok) {
+                this.orderGeneralError = 'Something went wrong. Please try again.';
+                this.showToast('error', this.orderGeneralError);
+                this.isOrderSubmitting = false;
+                return;
+            }
+
+            const data = await response.json();
+            this.upsertOrder(data.data);
+            this.closeOrderForm();
+            this.showToast('success', isCreate ? 'Sales order created.' : 'Sales order updated.');
+        },
         async setPrimary(contact) {
             if (!this.canManage) {
                 return;
@@ -339,7 +525,29 @@ export function mount(rootEl, payload) {
             }
 
             this.contacts = this.contacts.filter((entry) => entry.id !== contact.id);
+            this.syncOrderCustomerContacts();
             this.showToast('success', 'Contact deleted.');
+        },
+        async deleteOrder(order) {
+            if (!this.canManageOrders) {
+                return;
+            }
+
+            const response = await fetch(`${this.ordersDeleteUrlBase}/${order.id}`, {
+                method: 'DELETE',
+                headers: {
+                    Accept: 'application/json',
+                    'X-CSRF-TOKEN': this.csrfToken,
+                },
+            });
+
+            if (!response.ok) {
+                this.showToast('error', 'Unable to delete sales order.');
+                return;
+            }
+
+            this.orders = this.orders.filter((entry) => entry.id !== order.id);
+            this.showToast('success', 'Sales order deleted.');
         },
         async archive() {
             if (!this.canManage) {

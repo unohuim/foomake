@@ -187,6 +187,64 @@
                 </div>
             </section>
 
+            @if ($payload['canManageOrders'])
+                <section class="bg-white border border-gray-100 shadow-sm sm:rounded-lg" data-section="customer-orders">
+                    <div class="p-6">
+                        <div class="flex items-start justify-between gap-4">
+                            <div>
+                                <h3 class="text-lg font-medium text-gray-900">Orders</h3>
+                                <p class="mt-1 text-sm text-gray-600">Manage draft sales orders for this customer without leaving the detail page.</p>
+                            </div>
+
+                            <button
+                                type="button"
+                                class="inline-flex items-center rounded-md border border-transparent bg-blue-600 px-4 py-2 text-xs font-semibold uppercase tracking-widest text-white hover:bg-blue-500"
+                                x-on:click="openOrderCreate()"
+                            >
+                                Add Order
+                            </button>
+                        </div>
+
+                        <div class="mt-6 space-y-4" x-show="orders.length > 0">
+                            <template x-for="order in orders" :key="order.id">
+                                <div class="rounded-2xl border border-gray-200 bg-gray-50/70 p-4">
+                                    <div class="flex items-start justify-between gap-4">
+                                        <div>
+                                            <div class="flex items-center gap-3">
+                                                <p class="text-base font-semibold text-gray-900" x-text="order.customer_name || customer.name"></p>
+                                                <span class="inline-flex rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold uppercase tracking-wide text-gray-700" x-text="order.status"></span>
+                                            </div>
+                                            <p class="mt-2 text-sm text-gray-700" x-text="order.contact_name || '—'"></p>
+                                        </div>
+
+                                        <div class="flex items-center gap-3">
+                                            <button
+                                                type="button"
+                                                class="text-blue-600 hover:text-blue-500"
+                                                x-on:click="openOrderEdit(order)"
+                                            >
+                                                Edit
+                                            </button>
+                                            <button
+                                                type="button"
+                                                class="text-red-600 hover:text-red-500"
+                                                x-on:click="deleteOrder(order)"
+                                            >
+                                                Delete
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+
+                        <div class="mt-6 rounded-2xl border border-dashed border-gray-300 p-6 text-center text-sm text-gray-500" x-show="orders.length === 0">
+                            <p>No draft orders for this customer yet.</p>
+                        </div>
+                    </div>
+                </section>
+            @endif
+
             @if ($payload['canManage'])
                 <div
                     class="fixed inset-0 z-50 overflow-hidden"
@@ -485,6 +543,98 @@
                                             class="inline-flex items-center rounded-md border border-transparent bg-blue-600 px-4 py-2 text-xs font-semibold uppercase tracking-widest text-white hover:bg-blue-500"
                                             :disabled="isContactSubmitting"
                                             :class="isContactSubmitting ? 'opacity-50 cursor-not-allowed' : ''"
+                                        >
+                                            Save
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            @endif
+
+            @if ($payload['canManageOrders'])
+                <div
+                    class="fixed inset-0 z-50 overflow-hidden"
+                    x-show="isOrderFormOpen"
+                    x-cloak
+                    role="dialog"
+                    aria-modal="true"
+                >
+                    <div class="absolute inset-0 overflow-hidden">
+                        <div
+                            class="absolute inset-0 bg-gray-500 bg-opacity-25 transition-opacity"
+                            x-show="isOrderFormOpen"
+                            x-on:click="closeOrderForm()"
+                        ></div>
+
+                        <div class="pointer-events-none fixed inset-y-0 right-0 flex max-w-full pl-10">
+                            <div class="pointer-events-auto w-screen max-w-md">
+                                <form class="flex h-full flex-col bg-white shadow-xl" x-on:submit.prevent="submitOrderForm()">
+                                    <div class="flex-1 overflow-y-auto p-6">
+                                        <div class="flex items-start justify-between">
+                                            <div>
+                                                <h2 class="text-lg font-medium text-gray-900" x-text="orderFormMode === 'create' ? 'Add order' : 'Edit order'"></h2>
+                                                <p class="mt-1 text-sm text-gray-600">Manage draft sales orders from the customer detail page.</p>
+                                            </div>
+                                            <button type="button" class="rounded-md text-gray-400 hover:text-gray-500" x-on:click="closeOrderForm()">
+                                                <span class="sr-only">Close panel</span>
+                                                ✕
+                                            </button>
+                                        </div>
+
+                                        <div class="mt-6 space-y-4">
+                                            <div>
+                                                <label class="block text-sm font-medium text-gray-700">
+                                                    Customer
+                                                    <select
+                                                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                                                        x-model="orderForm.customer_id"
+                                                        x-on:change="handleOrderCustomerChange()"
+                                                    >
+                                                        <option value="">Select customer</option>
+                                                        <template x-for="entry in orderCustomers" :key="entry.id">
+                                                            <option :value="String(entry.id)" x-text="entry.name"></option>
+                                                        </template>
+                                                    </select>
+                                                </label>
+                                                <p class="mt-1 text-sm text-red-600" x-text="orderErrors.customer_id[0]"></p>
+                                            </div>
+
+                                            <div>
+                                                <label class="block text-sm font-medium text-gray-700">
+                                                    Contact
+                                                    <select
+                                                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                                                        x-model="orderForm.contact_id"
+                                                    >
+                                                        <option value="">No contact</option>
+                                                        <template x-for="contact in selectedOrderCustomerContacts()" :key="contact.id">
+                                                            <option :value="String(contact.id)" x-text="orderContactOptionLabel(contact)"></option>
+                                                        </template>
+                                                    </select>
+                                                </label>
+                                                <p class="mt-1 text-sm text-red-600" x-text="orderErrors.contact_id[0]"></p>
+                                            </div>
+                                        </div>
+
+                                        <p class="mt-4 text-sm text-red-600" x-show="orderGeneralError" x-text="orderGeneralError"></p>
+                                    </div>
+
+                                    <div class="flex shrink-0 justify-end gap-3 border-t border-gray-200 px-6 py-4">
+                                        <button
+                                            type="button"
+                                            class="inline-flex items-center rounded-md border border-gray-300 px-4 py-2 text-xs font-semibold uppercase tracking-widest text-gray-700 hover:bg-gray-50"
+                                            x-on:click="closeOrderForm()"
+                                        >
+                                            Cancel
+                                        </button>
+                                        <button
+                                            type="submit"
+                                            class="inline-flex items-center rounded-md border border-transparent bg-blue-600 px-4 py-2 text-xs font-semibold uppercase tracking-widest text-white hover:bg-blue-500"
+                                            :disabled="isOrderSubmitting"
+                                            :class="isOrderSubmitting ? 'opacity-50 cursor-not-allowed' : ''"
                                         >
                                             Save
                                         </button>

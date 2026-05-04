@@ -99,6 +99,27 @@ Do not introduce new enum values without updating this document.
 
 ---
 
+## Sales
+
+### Sales Order Status
+
+**Name:** SalesOrder status  
+**Storage location(s):** `sales_orders.status` (string column)  
+**Allowed values:**
+
+- `DRAFT`
+
+**Semantic meaning:**
+
+- `DRAFT`: Sales order is editable and has no lifecycle, inventory, fulfillment, invoicing, payment, shipping, or line-item effects in PR3-SO-001.
+
+**Notes:**
+
+- PR3-SO-001 is draft-only.
+- Future sales-order lifecycle statuses must be added here before use.
+
+---
+
 ## Stock / Inventory Ledger
 
 ### Stock Move Type

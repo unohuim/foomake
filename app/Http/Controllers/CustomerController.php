@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Customer;
 use App\Models\CustomerContact;
+use App\Models\SalesOrder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -48,8 +49,12 @@ class CustomerController extends Controller
     {
         Gate::authorize('sales-customers-view');
 
-        $customer->load('contacts');
+        $customer->load('contacts', 'salesOrders.contact', 'salesOrders.customer');
         $canManage = Gate::allows('sales-customers-manage');
+        $canManageOrders = Gate::allows('sales-sales-orders-manage');
+        $customersForOrders = $canManageOrders
+            ? Customer::query()->with('contacts')->orderBy('name')->get()
+            : collect();
 
         $payload = [
             'customer' => $this->customerData($customer),
@@ -58,10 +63,21 @@ class CustomerController extends Controller
                 ->values()
                 ->all(),
             'canManage' => $canManage,
+            'canManageOrders' => $canManageOrders,
             'updateUrl' => $canManage ? route('sales.customers.update', $customer) : null,
             'deleteUrl' => $canManage ? route('sales.customers.destroy', $customer) : null,
             'contactsStoreUrl' => $canManage ? route('sales.customers.contacts.store', $customer) : null,
             'contactsBaseUrl' => $canManage ? url('/sales/customers/' . $customer->id . '/contacts') : null,
+            'orders' => $canManageOrders
+                ? $customer->salesOrders->map(fn (SalesOrder $order): array => $this->orderData($order))->values()->all()
+                : [],
+            'orderCustomers' => $canManageOrders
+                ? $customersForOrders->map(fn (Customer $entry): array => $this->customerOrderOptionData($entry))->values()->all()
+                : [],
+            'ordersStoreUrl' => $canManageOrders ? route('sales.orders.store') : null,
+            'ordersUpdateUrlBase' => $canManageOrders ? url('/sales/orders') : null,
+            'ordersDeleteUrlBase' => $canManageOrders ? url('/sales/orders') : null,
+            'orderStatuses' => SalesOrder::statuses(),
             'indexUrl' => route('sales.customers.index'),
             'csrfToken' => csrf_token(),
             'statuses' => Customer::statuses(),
@@ -205,6 +221,46 @@ class CustomerController extends Controller
             'phone' => $contact->phone,
             'role' => $contact->role,
             'is_primary' => $contact->is_primary,
+        ];
+    }
+
+    /**
+     * Build the customer order response payload.
+     *
+     * @return array<string, int|string|null>
+     */
+    private function orderData(SalesOrder $order): array
+    {
+        return [
+            'id' => $order->id,
+            'customer_id' => $order->customer_id,
+            'customer_name' => $order->customer?->name,
+            'contact_id' => $order->contact_id,
+            'contact_name' => $order->contact?->full_name,
+            'status' => $order->status,
+        ];
+    }
+
+    /**
+     * Build customer order form options.
+     *
+     * @return array<string, int|string|null|array<int, array<string, int|string|bool|null>>>
+     */
+    private function customerOrderOptionData(Customer $customer): array
+    {
+        return [
+            'id' => $customer->id,
+            'name' => $customer->name,
+            'primary_contact_id' => $customer->contacts->firstWhere('is_primary', true)?->id,
+            'contacts' => $customer->contacts
+                ->map(fn (CustomerContact $contact): array => [
+                    'id' => $contact->id,
+                    'customer_id' => $contact->customer_id,
+                    'full_name' => $contact->full_name,
+                    'is_primary' => $contact->is_primary,
+                ])
+                ->values()
+                ->all(),
         ];
     }
 

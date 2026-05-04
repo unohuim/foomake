@@ -248,6 +248,46 @@ $customer->contacts()->create([
 
 ---
 
+### Sales Order Draft Contact Assignment
+
+**Name:** Sales Order Draft Contact Assignment  
+**Type:** Domain Rule  
+**Location:**  
+- `docs/architecture/sales/SalesOrderDraftContactAssignment.yaml`  
+- `app/Http/Controllers/SalesOrderController.php`  
+- `app/Http/Requests/Sales/StoreSalesOrderRequest.php`  
+- `app/Http/Requests/Sales/UpdateSalesOrderRequest.php`  
+- `app/Models/SalesOrder.php`  
+
+**Purpose:**  
+Document the draft-only sales-order customer/contact rules shared by the Sales Orders index and the customer detail Orders mini-index.
+
+**When to Use:**  
+Any draft sales-order create, update, delete, or validation flow, including customer changes that may re-default the assigned contact.
+
+**When Not to Use:**  
+Sales-order lines, pricing snapshots, fulfillment/inventory effects, invoicing, or customer-contact primary designation outside a sales-order assignment.
+
+**Public Interface:**  
+- `SalesOrder::STATUS_DRAFT`  
+- `SalesOrder::statuses()`  
+- `sales.orders.index`  
+- `sales.orders.store`  
+- `sales.orders.update`  
+- `sales.orders.destroy`  
+
+**Example Usage:**  
+```php
+$order = SalesOrder::query()->create([
+    'tenant_id' => $tenant->id,
+    'customer_id' => $customer->id,
+    'contact_id' => $customer->contacts->firstWhere('is_primary', true)?->id,
+    'status' => SalesOrder::STATUS_DRAFT,
+]);
+```
+
+---
+
 ### Manufacturing Recipes Read-Only Access
 
 **Name:** Manufacturing Recipes Read-Only Access  

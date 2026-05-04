@@ -131,21 +131,32 @@ Provide a stable read model.
 
 ### PR3-SO-001 — Sales Orders (Draft)
 
+Status: Implemented
+
 **Goal**
 Introduce draft sales orders.
 
 **Includes**
 
 - Route: `/sales/orders`
-- Create draft (AJAX)
+- Sales Orders index view
+- Customer detail Orders mini-index
+- Shared AJAX CRUD backend for both UI surfaces
+- Create/edit/delete draft orders (AJAX, no browser refresh)
 - Fields:
     - customer_id (required)
     - contact_id (nullable)
     - status = DRAFT
+- Create/edit forms allow changing customer and contact
+- Contacts are scoped to the selected customer
+- On create, missing `contact_id` defaults to the selected customer’s primary contact when one exists
+- On edit, changing `customer_id` resets `contact_id` to the new customer’s primary contact unless a valid contact for the new customer is explicitly submitted
+- A contact from the previous customer is never preserved after customer change
+- Sales → Orders remains visible but disabled when the tenant has zero customers
 
 **Permissions**
 
-- `sales-orders-manage`
+- `sales-sales-orders-manage`
 
 ---
 

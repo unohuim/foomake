@@ -1,0 +1,185 @@
+<x-app-layout>
+    <x-slot name="header">
+        <h2 class="font-semibold text-xl text-gray-800 leading-tight">
+            {{ __('Sales Orders') }}
+        </h2>
+    </x-slot>
+
+    <script type="application/json" id="sales-orders-index-payload">@json($payload)</script>
+
+    <div
+        class="py-12"
+        data-page="sales-orders-index"
+        data-payload="sales-orders-index-payload"
+        x-data="salesOrdersIndex"
+    >
+        <div class="fixed top-6 right-6 z-50" x-show="toast.visible">
+            <div
+                class="rounded-md px-4 py-3 text-sm shadow-md"
+                :class="toast.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'"
+                x-text="toast.message"
+            ></div>
+        </div>
+
+        <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
+            <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                    <h3 class="text-lg font-medium text-gray-900">Sales orders</h3>
+                    <p class="mt-1 text-sm text-gray-600">Manage draft sales orders without leaving the page.</p>
+                </div>
+
+                <button
+                    type="button"
+                    class="inline-flex items-center justify-center rounded-md border border-transparent bg-blue-600 px-4 py-2 text-xs font-semibold uppercase tracking-widest text-white hover:bg-blue-500"
+                    x-on:click="openCreate()"
+                >
+                    Create Sales Order
+                </button>
+            </div>
+
+            <div class="mt-8" x-cloak x-show="orders.length === 0">
+                <div class="rounded-lg border border-gray-100 bg-white shadow-sm">
+                    <div class="p-6">
+                        <h3 class="text-lg font-medium text-gray-900">No sales orders yet</h3>
+                        <p class="mt-2 text-sm text-gray-600">Create a draft sales order to assign a customer and contact.</p>
+                        <div class="mt-4">
+                            <button
+                                type="button"
+                                class="inline-flex items-center rounded-md border border-transparent bg-blue-600 px-4 py-2 text-xs font-semibold uppercase tracking-widest text-white hover:bg-blue-500"
+                                x-on:click="openCreate()"
+                            >
+                                Create Sales Order
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-6" x-show="orders.length > 0">
+                <div class="rounded-lg border border-gray-100 bg-white shadow-sm">
+                    <div class="p-6">
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full divide-y divide-gray-100">
+                                <thead>
+                                    <tr>
+                                        <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Customer</th>
+                                        <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Contact</th>
+                                        <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Status</th>
+                                        <th class="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-gray-100">
+                                    <template x-for="order in orders" :key="order.id">
+                                        <tr>
+                                            <td class="px-4 py-4 text-sm text-gray-900" x-text="order.customer_name || '—'"></td>
+                                            <td class="px-4 py-4 text-sm text-gray-700" x-text="order.contact_name || '—'"></td>
+                                            <td class="px-4 py-4 text-sm">
+                                                <span class="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold uppercase text-gray-600" x-text="order.status"></span>
+                                            </td>
+                                            <td class="px-4 py-4 text-right text-sm">
+                                                <div class="inline-flex items-center gap-3">
+                                                    <button type="button" class="text-blue-600 hover:text-blue-500" x-on:click="openEdit(order)">Edit</button>
+                                                    <button type="button" class="text-red-600 hover:text-red-500" x-on:click="deleteOrder(order)">Delete</button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    </template>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div
+                class="fixed inset-0 z-50 overflow-hidden"
+                x-show="isFormOpen"
+                x-cloak
+                role="dialog"
+                aria-modal="true"
+            >
+                <div class="absolute inset-0 overflow-hidden">
+                    <div
+                        class="absolute inset-0 bg-gray-500 bg-opacity-25 transition-opacity"
+                        x-show="isFormOpen"
+                        x-on:click="closeForm()"
+                    ></div>
+
+                    <div class="pointer-events-none fixed inset-y-0 right-0 flex max-w-full pl-10">
+                        <div class="pointer-events-auto w-screen max-w-md">
+                            <form class="flex h-full flex-col bg-white shadow-xl" x-on:submit.prevent="submitForm()">
+                                <div class="flex-1 overflow-y-auto p-6">
+                                    <div class="flex items-start justify-between">
+                                        <div>
+                                            <h2 class="text-lg font-medium text-gray-900" x-text="formMode === 'create' ? 'Create sales order' : 'Edit sales order'"></h2>
+                                            <p class="mt-1 text-sm text-gray-600">Assign the customer and contact for this draft sales order.</p>
+                                        </div>
+                                        <button type="button" class="rounded-md text-gray-400 hover:text-gray-500" x-on:click="closeForm()">
+                                            <span class="sr-only">Close panel</span>
+                                            ✕
+                                        </button>
+                                    </div>
+
+                                    <div class="mt-6 space-y-4">
+                                        <div>
+                                            <label class="block text-sm font-medium text-gray-700">
+                                                Customer
+                                                <select
+                                                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                                                    x-model="form.customer_id"
+                                                    x-on:change="handleCustomerChange()"
+                                                >
+                                                    <option value="">Select customer</option>
+                                                    <template x-for="customer in customers" :key="customer.id">
+                                                        <option :value="String(customer.id)" x-text="customer.name"></option>
+                                                    </template>
+                                                </select>
+                                            </label>
+                                            <p class="mt-1 text-sm text-red-600" x-text="errors.customer_id[0]"></p>
+                                        </div>
+
+                                        <div>
+                                            <label class="block text-sm font-medium text-gray-700">
+                                                Contact
+                                                <select
+                                                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                                                    x-model="form.contact_id"
+                                                >
+                                                    <option value="">No contact</option>
+                                                    <template x-for="contact in selectedCustomerContacts()" :key="contact.id">
+                                                        <option :value="String(contact.id)" x-text="contactOptionLabel(contact)"></option>
+                                                    </template>
+                                                </select>
+                                            </label>
+                                            <p class="mt-1 text-sm text-red-600" x-text="errors.contact_id[0]"></p>
+                                        </div>
+                                    </div>
+
+                                    <p class="mt-4 text-sm text-red-600" x-show="generalError" x-text="generalError"></p>
+                                </div>
+
+                                <div class="flex shrink-0 justify-end gap-3 border-t border-gray-200 px-6 py-4">
+                                    <button
+                                        type="button"
+                                        class="inline-flex items-center rounded-md border border-gray-300 px-4 py-2 text-xs font-semibold uppercase tracking-widest text-gray-700 hover:bg-gray-50"
+                                        x-on:click="closeForm()"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        class="inline-flex items-center rounded-md border border-transparent bg-blue-600 px-4 py-2 text-xs font-semibold uppercase tracking-widest text-white hover:bg-blue-500"
+                                        :disabled="isSubmitting"
+                                        :class="isSubmitting ? 'opacity-50 cursor-not-allowed' : ''"
+                                    >
+                                        Save
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</x-app-layout>

@@ -249,7 +249,6 @@ If unsure, **stop immediately and ask**.
   **not global model scopes**
 - The **smallest possible change per PR**
 
-
 ## docs/PR2_ROADMAP.md
 
 # PR2_ROADMAP — UI + Domain Completion (Post-PR-006)
@@ -1544,7 +1543,6 @@ Introduce a UoM-level display precision field and enforce consistent quantity fo
 - Any changes to storage precision or BCMath scale
 - JavaScript formatting or UI-only overrides per view
 
-
 ## docs/CONVENTIONS.md
 
 # Conventions
@@ -1800,7 +1798,6 @@ These rules apply to:
 - Unit conversions
 - Any inventory-affecting calculations
 
-
 ## docs/ARCHITECTURE_INVENTORY.md
 
 # Architecture Inventory
@@ -2048,6 +2045,46 @@ $customer->contacts()->create([
     'first_name' => 'Jane',
     'last_name' => 'Buyer',
     'is_primary' => true,
+]);
+```
+
+---
+
+### Sales Order Draft Contact Assignment
+
+**Name:** Sales Order Draft Contact Assignment  
+**Type:** Domain Rule  
+**Location:**  
+- `docs/architecture/sales/SalesOrderDraftContactAssignment.yaml`  
+- `app/Http/Controllers/SalesOrderController.php`  
+- `app/Http/Requests/Sales/StoreSalesOrderRequest.php`  
+- `app/Http/Requests/Sales/UpdateSalesOrderRequest.php`  
+- `app/Models/SalesOrder.php`  
+
+**Purpose:**  
+Document the draft-only sales-order customer/contact rules shared by the Sales Orders index and the customer detail Orders mini-index.
+
+**When to Use:**  
+Any draft sales-order create, update, delete, or validation flow, including customer changes that may re-default the assigned contact.
+
+**When Not to Use:**  
+Sales-order lines, pricing snapshots, fulfillment/inventory effects, invoicing, or customer-contact primary designation outside a sales-order assignment.
+
+**Public Interface:**  
+- `SalesOrder::STATUS_DRAFT`  
+- `SalesOrder::statuses()`  
+- `sales.orders.index`  
+- `sales.orders.store`  
+- `sales.orders.update`  
+- `sales.orders.destroy`  
+
+**Example Usage:**  
+```php
+$order = SalesOrder::query()->create([
+    'tenant_id' => $tenant->id,
+    'customer_id' => $customer->id,
+    'contact_id' => $customer->contacts->firstWhere('is_primary', true)?->id,
+    'status' => SalesOrder::STATUS_DRAFT,
 ]);
 ```
 
@@ -3404,7 +3441,6 @@ it('creates a material', function () {
 
 ---
 
-
 ## docs/PERMISSIONS_MATRIX.md
 
 # Permissions Matrix
@@ -3565,6 +3601,8 @@ Execution-only role.
 - Customer detail read access uses `sales-customers-view`.
 - Customer contacts reuse sales-customers-manage.
 - Customer contacts do not introduce a separate permission slug.
+- Sales orders use `sales-sales-orders-manage` for `/sales/orders` index/create/update/delete and for customer detail Orders mini-index CRUD.
+- Customer detail Orders mini-index read access remains under `sales-customers-view`, but its mutations still require `sales-sales-orders-manage`.
 - Current purchase-order routes use a two-gate model:
   - `purchasing-purchase-orders-create` for index/show/create/update/delete and line mutations
   - `purchasing-purchase-orders-receive` for receipts, short-closes, and manual status transitions
@@ -3586,7 +3624,6 @@ return [
     App\Providers\AuthServiceProvider::class,
 ];
 ```
-
 
 ## docs/ENUMS.md
 
@@ -3691,6 +3728,27 @@ Do not introduce new enum values without updating this document.
 
 ---
 
+## Sales
+
+### Sales Order Status
+
+**Name:** SalesOrder status  
+**Storage location(s):** `sales_orders.status` (string column)  
+**Allowed values:**
+
+- `DRAFT`
+
+**Semantic meaning:**
+
+- `DRAFT`: Sales order is editable and has no lifecycle, inventory, fulfillment, invoicing, payment, shipping, or line-item effects in PR3-SO-001.
+
+**Notes:**
+
+- PR3-SO-001 is draft-only.
+- Future sales-order lifecycle statuses must be added here before use.
+
+---
+
 ## Stock / Inventory Ledger
 
 ### Stock Move Type
@@ -3739,7 +3797,6 @@ Do not introduce new enum values without updating this document.
 ## Conflicts / Ambiguities Report
 
 No conflicts or ambiguities were found at time of creation based on existing migrations, models, actions, and tests.
-
 
 ## docs/DB_SCHEMA.md
 
@@ -3791,6 +3848,7 @@ Migrations remain the **sole source of truth**.
 - recipe_lines
 - roles
 - roles_users
+- sales_orders
 - sessions
 - stock_moves
 - suppliers
@@ -3905,6 +3963,35 @@ Migrations remain the **sole source of truth**.
 - Index: `(tenant_id, customer_id)`
 - Implicit (FK index): `tenant_id`
 - Implicit (FK index): `customer_id`
+
+---
+
+## sales_orders
+
+**Tenant-owned:** Yes  
+**Purpose:** Draft sales orders shared by the Sales Orders index and the customer detail Orders mini-index
+
+### Columns
+
+| Name       | Type      | Nullable | Notes                                |
+| ---------- | --------- | -------- | ------------------------------------ |
+| id         | bigint    | No       | Primary key                          |
+| tenant_id  | bigint    | No       | FK → tenants.id (CASCADE)            |
+| customer_id | bigint   | No       | FK → customers.id (CASCADE)          |
+| contact_id | bigint    | Yes      | FK → customer_contacts.id (SET NULL) |
+| status     | string    | No       | Defaults to `DRAFT`                  |
+| created_at | timestamp | Yes      | —                                    |
+| updated_at | timestamp | Yes      | —                                    |
+
+### Keys & Indexes
+
+- PK: `id`
+- Index: `(tenant_id, status)`
+- Index: `(tenant_id, customer_id)`
+- Index: `(tenant_id, contact_id)`
+- Implicit (FK index): `tenant_id`
+- Implicit (FK index): `customer_id`
+- Implicit (FK index): `contact_id`
 
 ---
 
@@ -4775,7 +4862,6 @@ Migrations remain the **sole source of truth**.
 
 **End of DB_SCHEMA**
 
-
 ## docs/UI_DESIGN.md
 
 # UI_DESIGN.md — Canonical UI Direction & Constraints
@@ -5365,7 +5451,6 @@ They are mandatory, not stylistic.
 
 ::contentReference[oaicite:0]{index=0}
 
-
 ## routes/web.php
 
 <?php
@@ -5385,6 +5470,7 @@ use App\Http\Controllers\PurchaseOrderReceiptController;
 use App\Http\Controllers\PurchaseOrderShortClosureController;
 use App\Http\Controllers\PurchaseOrderStatusController;
 use App\Http\Controllers\RecipeController;
+use App\Http\Controllers\SalesOrderController;
 use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\SupplierPurchaseOptionController;
 use App\Http\Controllers\UomCategoryController;
@@ -5555,6 +5641,15 @@ Route::middleware('auth')->group(function () {
     Route::patch('/sales/customers/{customer}/contacts/{contact}/primary', [CustomerContactController::class, 'setPrimary'])
         ->name('sales.customers.contacts.primary.update');
 
+    Route::get('/sales/orders', [SalesOrderController::class, 'index'])
+        ->name('sales.orders.index');
+    Route::post('/sales/orders', [SalesOrderController::class, 'store'])
+        ->name('sales.orders.store');
+    Route::patch('/sales/orders/{salesOrder}', [SalesOrderController::class, 'update'])
+        ->name('sales.orders.update');
+    Route::delete('/sales/orders/{salesOrder}', [SalesOrderController::class, 'destroy'])
+        ->name('sales.orders.destroy');
+
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
@@ -5570,7 +5665,6 @@ Route::delete('/manufacturing/uom-conversions/items/{itemConversion}', [UomConve
     ->name('manufacturing.uom-conversions.items.destroy');
 
 require __DIR__ . '/auth.php';
-
 
 ## docs/PR3_ROADMAP.md
 
@@ -5707,21 +5801,32 @@ Provide a stable read model.
 
 ### PR3-SO-001 — Sales Orders (Draft)
 
+Status: Implemented
+
 **Goal**
 Introduce draft sales orders.
 
 **Includes**
 
 - Route: `/sales/orders`
-- Create draft (AJAX)
+- Sales Orders index view
+- Customer detail Orders mini-index
+- Shared AJAX CRUD backend for both UI surfaces
+- Create/edit/delete draft orders (AJAX, no browser refresh)
 - Fields:
     - customer_id (required)
     - contact_id (nullable)
     - status = DRAFT
+- Create/edit forms allow changing customer and contact
+- Contacts are scoped to the selected customer
+- On create, missing `contact_id` defaults to the selected customer’s primary contact when one exists
+- On edit, changing `customer_id` resets `contact_id` to the new customer’s primary contact unless a valid contact for the new customer is explicitly submitted
+- A contact from the previous customer is never preserved after customer change
+- Sales → Orders remains visible but disabled when the tenant has zero customers
 
 **Permissions**
 
-- `sales-orders-manage`
+- `sales-sales-orders-manage`
 
 ---
 
@@ -5819,5 +5924,3 @@ After PR3 completion:
 - CRM foundation established
 - Sales orders impact inventory correctly
 - System ready for external integrations
-
-
