@@ -534,6 +534,34 @@ it('12. create validation errors return json 422 with stable structure', functio
     expect($response->json('message'))->toBe('The given data was invalid.');
 });
 
+it('12b. guest cannot update a sales order line quantity', function () {
+    $tenant = ($this->makeTenant)();
+    $customer = ($this->createCustomer)($tenant);
+    $order = ($this->createSalesOrder)($tenant, $customer->id);
+    $uom = ($this->makeUom)($tenant);
+    $item = ($this->createItem)($tenant, $uom);
+    $line = ($this->createSalesOrderLine)($tenant, $order->id, $item->id);
+
+    $this->patchJson(route('sales.orders.lines.update', [$order->id, $line->id]), [
+        'quantity' => '2.000000',
+    ])->assertUnauthorized();
+});
+
+it('12c. unauthorized user cannot update a sales order line quantity', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $customer = ($this->createCustomer)($tenant);
+    $order = ($this->createSalesOrder)($tenant, $customer->id);
+    $uom = ($this->makeUom)($tenant);
+    $item = ($this->createItem)($tenant, $uom);
+    $line = ($this->createSalesOrderLine)($tenant, $order->id, $item->id);
+
+    $this->actingAs($user)
+        ->patchJson(route('sales.orders.lines.update', [$order->id, $line->id]), [
+            'quantity' => '2.000000',
+        ])->assertForbidden();
+});
+
 it('13. quantity edit works on a draft sales order', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
@@ -554,6 +582,62 @@ it('13. quantity edit works on a draft sales order', function () {
 
     expect((string) ($updatedLine?->quantity ?? ''))->toBe('4.250000')
         ->and((string) ($response->json('data.line.quantity') ?? ''))->toBe('4.250000');
+});
+
+it('13b. quantity edit after later item price changes still recalculates from the stored line snapshot', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $customer = ($this->createCustomer)($tenant, ['name' => 'Snapshot Buyer']);
+    $order = ($this->createSalesOrder)($tenant, $customer->id);
+    $uom = ($this->makeUom)($tenant);
+    $item = ($this->createItem)($tenant, $uom, [
+        'name' => 'Frozen Pack',
+        'default_price_cents' => 250,
+        'default_price_currency_code' => 'USD',
+    ]);
+
+    ($this->grantPermission)($user, 'sales-sales-orders-manage');
+
+    $createResponse = $this->actingAs($user)
+        ->postJson(route('sales.orders.lines.store', $order->id), [
+            'item_id' => $item->id,
+            'quantity' => '2.000000',
+        ])->assertCreated();
+
+    $lineId = (int) $createResponse->json('data.line.id');
+
+    $item->update([
+        'default_price_cents' => 900,
+        'default_price_currency_code' => 'EUR',
+    ]);
+
+    $updateResponse = $this->actingAs($user)
+        ->patchJson(route('sales.orders.lines.update', [$order->id, $lineId]), [
+            'quantity' => '3.000000',
+        ])->assertOk();
+
+    $line = ($this->fetchSalesOrderLine)($lineId);
+    $lineModel = ($this->fetchSalesOrderLineModel)($lineId);
+
+    expect((int) ($line?->unit_price_cents ?? 0))->toBe(250)
+        ->and((string) ($line?->unit_price_currency_code ?? ''))->toBe('USD')
+        ->and($lineModel?->line_total_cents)->toBe('750.000000')
+        ->and($updateResponse->json('data.line.unit_price_cents'))->toBe(250)
+        ->and($updateResponse->json('data.line.unit_price_currency_code'))->toBe('USD')
+        ->and($updateResponse->json('data.line.line_total_cents'))->toBe('750.000000')
+        ->and($updateResponse->json('data.order.order_total_cents'))->toBe('750.000000');
+
+    $indexResponse = $this->actingAs($user)
+        ->get(route('sales.orders.index'))
+        ->assertOk();
+
+    $payload = ($this->extractPayload)($indexResponse, 'sales-orders-index-payload');
+    $orderPayload = collect($payload['orders'] ?? [])->firstWhere('id', $order->id);
+    $linePayload = collect($orderPayload['lines'] ?? [])->firstWhere('id', $lineId);
+
+    expect($linePayload['unit_price_cents'] ?? null)->toBe(250)
+        ->and($linePayload['unit_price_currency_code'] ?? null)->toBe('USD')
+        ->and($linePayload['line_total_cents'] ?? null)->toBe('750.000000');
 });
 
 it('14. quantity edit recalculates line total from the original unit price snapshot', function () {
