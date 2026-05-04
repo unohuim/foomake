@@ -2090,6 +2090,49 @@ $order = SalesOrder::query()->create([
 
 ---
 
+### Sales Order Line Pricing And Draft Rules
+
+**Name:** Sales Order Line Pricing And Draft Rules  
+**Type:** Domain Rule  
+**Location:**  
+- `docs/architecture/sales/SalesOrderLinePricingAndDraftRules.yaml`  
+- `app/Http/Controllers/SalesOrderLineController.php`  
+- `app/Http/Requests/Sales/StoreSalesOrderLineRequest.php`  
+- `app/Http/Requests/Sales/UpdateSalesOrderLineRequest.php`  
+- `app/Models/SalesOrder.php`  
+- `app/Models/SalesOrderLine.php`  
+
+**Purpose:**  
+Document the draft-only sales-order line mutation rules, immutable unit-price snapshots, and canonical scale-6 quantity/line-total behavior shared by the Sales Orders index and the customer detail Orders mini-index.
+
+**When to Use:**  
+Any sales-order line create, delete, or quantity-update flow for draft sales orders.
+
+**When Not to Use:**  
+Sales-order header customer/contact assignment, lifecycle transitions, fulfillment, shipping, invoicing, payments, or inventory impact.
+
+**Public Interface:**  
+- `SalesOrder::STATUS_DRAFT`  
+- `SalesOrder::lines()`  
+- `sales.orders.lines.store`  
+- `sales.orders.lines.update`  
+- `sales.orders.lines.destroy`  
+
+**Example Usage:**  
+```php
+$line = SalesOrderLine::query()->create([
+    'tenant_id' => $tenant->id,
+    'sales_order_id' => $order->id,
+    'item_id' => $item->id,
+    'quantity' => '2.500000',
+    'unit_price_cents' => $item->default_price_cents,
+    'unit_price_currency_code' => $item->default_price_currency_code,
+    'line_total_cents' => '832.500000',
+]);
+```
+
+---
+
 ### Manufacturing Recipes Read-Only Access
 
 **Name:** Manufacturing Recipes Read-Only Access  
@@ -3601,8 +3644,9 @@ Execution-only role.
 - Customer detail read access uses `sales-customers-view`.
 - Customer contacts reuse sales-customers-manage.
 - Customer contacts do not introduce a separate permission slug.
-- Sales orders use `sales-sales-orders-manage` for `/sales/orders` index/create/update/delete and for customer detail Orders mini-index CRUD.
+- Sales orders use `sales-sales-orders-manage` for `/sales/orders` index/create/update/delete, sales-order line CRUD, and customer detail Orders mini-index CRUD.
 - Customer detail Orders mini-index read access remains under `sales-customers-view`, but its mutations still require `sales-sales-orders-manage`.
+- Sales-order line create, quantity update, and delete mutations do not introduce a separate permission slug.
 - Current purchase-order routes use a two-gate model:
   - `purchasing-purchase-orders-create` for index/show/create/update/delete and line mutations
   - `purchasing-purchase-orders-receive` for receipts, short-closes, and manual status transitions
@@ -3740,11 +3784,12 @@ Do not introduce new enum values without updating this document.
 
 **Semantic meaning:**
 
-- `DRAFT`: Sales order is editable and has no lifecycle, inventory, fulfillment, invoicing, payment, shipping, or line-item effects in PR3-SO-001.
+- `DRAFT`: Sales order is editable. Header fields and sales-order lines may be created, updated, or deleted, but no lifecycle, inventory, fulfillment, invoicing, payment, or shipping effects exist in PR3-SO-001 / PR3-SO-002.
 
 **Notes:**
 
-- PR3-SO-001 is draft-only.
+- PR3-SO-001 / PR3-SO-002 are draft-only.
+- Sales-order lines may only be added, removed, or quantity-edited while the order remains `DRAFT`.
 - Future sales-order lifecycle statuses must be added here before use.
 
 ---
@@ -3849,6 +3894,7 @@ Migrations remain the **sole source of truth**.
 - roles
 - roles_users
 - sales_orders
+- sales_order_lines
 - sessions
 - stock_moves
 - suppliers
@@ -3992,6 +4038,37 @@ Migrations remain the **sole source of truth**.
 - Implicit (FK index): `tenant_id`
 - Implicit (FK index): `customer_id`
 - Implicit (FK index): `contact_id`
+
+---
+
+## sales_order_lines
+
+**Tenant-owned:** Yes  
+**Purpose:** Draft sales order line items with immutable price snapshots for the Sales Orders index and customer detail Orders mini-index
+
+### Columns
+
+| Name       | Type          | Nullable | Notes                                  |
+| ---------- | ------------- | -------- | -------------------------------------- |
+| id         | bigint        | No       | Primary key                            |
+| tenant_id  | bigint        | No       | FK → tenants.id (CASCADE)              |
+| sales_order_id | bigint    | No       | FK → sales_orders.id (CASCADE)         |
+| item_id    | bigint        | No       | FK → items.id (CASCADE)                |
+| quantity   | decimal(18,6) | No       | Canonical BCMath quantity string       |
+| unit_price_cents | unsignedInteger | No | Immutable unit price snapshot in minor currency units |
+| unit_price_currency_code | char(3) | No | Immutable unit price snapshot currency |
+| line_total_cents | decimal(18,6) | No | Line total in minor currency units     |
+| created_at | timestamp     | Yes      | —                                      |
+| updated_at | timestamp     | Yes      | —                                      |
+
+### Keys & Indexes
+
+- PK: `id`
+- Index: `(tenant_id, sales_order_id)`
+- Index: `(sales_order_id, item_id)`
+- Implicit (FK index): `tenant_id`
+- Implicit (FK index): `sales_order_id`
+- Implicit (FK index): `item_id`
 
 ---
 
@@ -5471,6 +5548,7 @@ use App\Http\Controllers\PurchaseOrderShortClosureController;
 use App\Http\Controllers\PurchaseOrderStatusController;
 use App\Http\Controllers\RecipeController;
 use App\Http\Controllers\SalesOrderController;
+use App\Http\Controllers\SalesOrderLineController;
 use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\SupplierPurchaseOptionController;
 use App\Http\Controllers\UomCategoryController;
@@ -5649,6 +5727,12 @@ Route::middleware('auth')->group(function () {
         ->name('sales.orders.update');
     Route::delete('/sales/orders/{salesOrder}', [SalesOrderController::class, 'destroy'])
         ->name('sales.orders.destroy');
+    Route::post('/sales/orders/{salesOrder}/lines', [SalesOrderLineController::class, 'store'])
+        ->name('sales.orders.lines.store');
+    Route::patch('/sales/orders/{salesOrder}/lines/{line}', [SalesOrderLineController::class, 'update'])
+        ->name('sales.orders.lines.update');
+    Route::delete('/sales/orders/{salesOrder}/lines/{line}', [SalesOrderLineController::class, 'destroy'])
+        ->name('sales.orders.lines.destroy');
 
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
@@ -5822,7 +5906,7 @@ Introduce draft sales orders.
 - On create, missing `contact_id` defaults to the selected customer’s primary contact when one exists
 - On edit, changing `customer_id` resets `contact_id` to the new customer’s primary contact unless a valid contact for the new customer is explicitly submitted
 - A contact from the previous customer is never preserved after customer change
-- Sales → Orders remains visible but disabled when the tenant has zero customers
+- Sales → Orders remains visible but disabled unless the tenant has at least one customer and at least one sellable item
 
 **Permissions**
 
@@ -5832,25 +5916,43 @@ Introduce draft sales orders.
 
 ### PR3-SO-002 — Sales Order Lines
 
+Status: Implemented
+
 **Goal**
-Allow adding items to sales orders.
+Allow adding items to existing draft sales orders.
 
 **Includes**
 
-- Add/remove lines (AJAX)
+- Add/remove lines and edit line quantity (AJAX, no browser refresh)
+- Shared JSON backend for both UI surfaces:
+    - Sales Orders index
+    - Customer detail Orders mini-index
 - Fields:
     - item_id
-    - quantity (BCMath string)
-    - unit_price snapshot
+    - quantity (BCMath string, canonical scale 6)
+    - unit_price_cents snapshot
+    - unit_price_currency_code snapshot
+    - line_total_cents
+- Sales → Orders remains visible but disabled unless the tenant has at least one customer and at least one sellable item
+- Customer detail create-order button remains visible but disabled when no sellable items exist
 
 **Rules**
 
-- BCMath enforced (scale = 6)
-- No float math
+- Sales order lines may be added, removed, or quantity-edited only while the parent sales order is `DRAFT`
+- Only items with `is_sellable = true` may be added
+- Quantity uses BCMath-compatible string math with canonical scale 6
+- Unit price snapshot is captured when the line is created
+- Quantity edits recalculate `line_total_cents` from the stored immutable unit price snapshot
+- Existing line unit price snapshot data is never changed by later item price changes
+- Mutations return JSON for AJAX consumers and do not redirect
+- Tenant isolation applies to sales orders, sales order lines, and items
+- No lifecycle, fulfillment, invoicing, payments, shipping, or inventory impact is introduced in this PR
 
 ---
 
 ### PR3-SO-003 — Pricing Snapshot Invariant
+
+Status: Subsumed by PR3-SO-002
 
 **Goal**
 Ensure immutable pricing at line creation.
@@ -5858,8 +5960,8 @@ Ensure immutable pricing at line creation.
 **Includes**
 
 - Store:
-    - unit_price_amount
-    - currency
+    - unit_price_cents
+    - unit_price_currency_code
 - Values never change after write
 
 ---

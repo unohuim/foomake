@@ -6,7 +6,9 @@ use App\Http\Requests\Sales\StoreSalesOrderRequest;
 use App\Http\Requests\Sales\UpdateSalesOrderRequest;
 use App\Models\Customer;
 use App\Models\CustomerContact;
+use App\Models\Item;
 use App\Models\SalesOrder;
+use App\Models\SalesOrderLine;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Gate;
@@ -16,6 +18,8 @@ use Illuminate\Support\Facades\Gate;
  */
 class SalesOrderController extends Controller
 {
+    private const SCALE = 6;
+
     /**
      * Display the sales orders index.
      */
@@ -24,7 +28,7 @@ class SalesOrderController extends Controller
         Gate::authorize('sales-sales-orders-manage');
 
         $orders = SalesOrder::query()
-            ->with(['customer', 'contact'])
+            ->with(['customer', 'contact', 'lines.item'])
             ->orderByDesc('created_at')
             ->get();
 
@@ -32,13 +36,19 @@ class SalesOrderController extends Controller
             ->with('contacts')
             ->orderBy('name')
             ->get();
+        $sellableItems = Item::query()
+            ->where('is_sellable', true)
+            ->orderBy('name')
+            ->get();
 
         $payload = [
             'orders' => $orders->map(fn (SalesOrder $order): array => $this->orderData($order))->values()->all(),
             'customers' => $customers->map(fn (Customer $customer): array => $this->customerOptionData($customer))->values()->all(),
+            'sellableItems' => $sellableItems->map(fn (Item $item): array => $this->sellableItemData($item))->values()->all(),
             'storeUrl' => route('sales.orders.store'),
             'updateUrlBase' => url('/sales/orders'),
             'deleteUrlBase' => url('/sales/orders'),
+            'lineStoreUrlBase' => url('/sales/orders'),
             'csrfToken' => csrf_token(),
             'statuses' => SalesOrder::statuses(),
         ];
@@ -66,7 +76,7 @@ class SalesOrderController extends Controller
             'status' => SalesOrder::STATUS_DRAFT,
         ]);
 
-        $order->load(['customer', 'contact']);
+        $order->load(['customer', 'contact', 'lines.item']);
 
         return response()->json([
             'data' => $this->orderData($order),
@@ -90,7 +100,7 @@ class SalesOrderController extends Controller
             'status' => SalesOrder::STATUS_DRAFT,
         ]);
 
-        $salesOrder->load(['customer', 'contact']);
+        $salesOrder->load(['customer', 'contact', 'lines.item']);
 
         return response()->json([
             'data' => $this->orderData($salesOrder),
@@ -114,15 +124,22 @@ class SalesOrderController extends Controller
     /**
      * Build the sales order response payload.
      *
-     * @return array<string, int|string|null>
+     * @return array<string, int|string|null|array<int, array<string, int|string|null>>>
      */
     public function orderData(SalesOrder $order): array
     {
         $contactName = null;
+        $orderTotalCents = '0.000000';
 
         if ($order->contact) {
             $contactName = $order->contact->full_name;
         }
+
+        $lines = $order->lines->map(function (SalesOrderLine $line) use (&$orderTotalCents): array {
+            $orderTotalCents = bcadd($orderTotalCents, (string) $line->line_total_cents, self::SCALE);
+
+            return $this->lineData($line);
+        })->values()->all();
 
         return [
             'id' => $order->id,
@@ -131,6 +148,10 @@ class SalesOrderController extends Controller
             'contact_id' => $order->contact_id,
             'contact_name' => $contactName,
             'status' => $order->status,
+            'lines' => $lines,
+            'line_count' => count($lines),
+            'order_total_cents' => $orderTotalCents,
+            'order_total_amount' => bcdiv($orderTotalCents, '100', self::SCALE),
         ];
     }
 
@@ -154,6 +175,43 @@ class SalesOrderController extends Controller
                 ])
                 ->values()
                 ->all(),
+        ];
+    }
+
+    /**
+     * Build sellable item options for sales order lines.
+     *
+     * @return array<string, int|string|null>
+     */
+    public function sellableItemData(Item $item): array
+    {
+        return [
+            'id' => $item->id,
+            'name' => $item->name,
+            'default_price_cents' => $item->default_price_cents,
+            'default_price_currency_code' => $item->default_price_currency_code,
+        ];
+    }
+
+    /**
+     * Build the sales order line response payload.
+     *
+     * @return array<string, int|string|null>
+     */
+    public function lineData(SalesOrderLine $line): array
+    {
+        $lineTotalCents = (string) $line->line_total_cents;
+
+        return [
+            'id' => $line->id,
+            'item_id' => $line->item_id,
+            'item_name' => $line->item?->name,
+            'quantity' => (string) $line->quantity,
+            'unit_price_cents' => $line->unit_price_cents,
+            'unit_price_currency_code' => $line->unit_price_currency_code,
+            'unit_price_amount' => bcdiv((string) $line->unit_price_cents, '100', 2),
+            'line_total_cents' => $lineTotalCents,
+            'line_total_amount' => bcdiv($lineTotalCents, '100', self::SCALE),
         ];
     }
 

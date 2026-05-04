@@ -12,12 +12,24 @@ export function mount(rootEl, payload) {
         contact_id: '',
     });
 
+    const emptyLineErrors = () => ({
+        item_id: [],
+        quantity: [],
+    });
+
+    const emptyLineForm = () => ({
+        item_id: '',
+        quantity: '1.000000',
+    });
+
     Alpine.data('salesOrdersIndex', () => ({
         orders: safePayload.orders || [],
         customers: safePayload.customers || [],
+        sellableItems: safePayload.sellableItems || [],
         storeUrl: safePayload.storeUrl || '',
         updateUrlBase: safePayload.updateUrlBase || '',
         deleteUrlBase: safePayload.deleteUrlBase || '',
+        lineStoreUrlBase: safePayload.lineStoreUrlBase || '',
         csrfToken: safePayload.csrfToken || '',
         isFormOpen: false,
         isSubmitting: false,
@@ -26,14 +38,37 @@ export function mount(rootEl, payload) {
         form: emptyForm(),
         errors: emptyErrors(),
         generalError: '',
+        lineForms: {},
+        lineErrorsByOrder: {},
+        lineGeneralErrorsByOrder: {},
+        lineEditQuantities: {},
+        lineEditErrorsByLine: {},
         toast: {
             visible: false,
             message: '',
             type: 'success',
             timeoutId: null,
         },
+        init() {
+            this.orders.forEach((order) => {
+                this.syncLineState(order);
+            });
+        },
         normalizeErrors(errors) {
             const normalized = emptyErrors();
+
+            if (!errors || typeof errors !== 'object') {
+                return normalized;
+            }
+
+            Object.keys(normalized).forEach((key) => {
+                normalized[key] = Array.isArray(errors[key]) ? errors[key] : [];
+            });
+
+            return normalized;
+        },
+        normalizeLineErrors(errors) {
+            const normalized = emptyLineErrors();
 
             if (!errors || typeof errors !== 'object') {
                 return normalized;
@@ -85,6 +120,30 @@ export function mount(rootEl, payload) {
         handleCustomerChange() {
             this.form.contact_id = this.defaultContactIdForCustomer(this.form.customer_id);
         },
+        ensureLineForm(orderId) {
+            if (!this.lineForms[orderId]) {
+                this.lineForms[orderId] = emptyLineForm();
+            }
+
+            if (!this.lineErrorsByOrder[orderId]) {
+                this.lineErrorsByOrder[orderId] = emptyLineErrors();
+            }
+
+            if (!Object.prototype.hasOwnProperty.call(this.lineGeneralErrorsByOrder, orderId)) {
+                this.lineGeneralErrorsByOrder[orderId] = '';
+            }
+        },
+        syncLineState(order) {
+            this.ensureLineForm(order.id);
+
+            (order.lines || []).forEach((line) => {
+                this.lineEditQuantities[line.id] = line.quantity;
+
+                if (!this.lineEditErrorsByLine[line.id]) {
+                    this.lineEditErrorsByLine[line.id] = emptyLineErrors();
+                }
+            });
+        },
         openCreate() {
             this.formMode = 'create';
             this.editingOrderId = null;
@@ -115,10 +174,15 @@ export function mount(rootEl, payload) {
 
             if (existingIndex === -1) {
                 this.orders.unshift(order);
+                this.syncLineState(order);
                 return;
             }
 
             this.orders.splice(existingIndex, 1, order);
+            this.syncLineState(order);
+        },
+        formatLineMoney(amount, currencyCode) {
+            return `${currencyCode} ${amount}`;
         },
         async submitForm() {
             if (this.isSubmitting) {
@@ -165,6 +229,99 @@ export function mount(rootEl, payload) {
             this.upsertOrder(data.data);
             this.closeForm();
             this.showToast('success', isCreate ? 'Sales order created.' : 'Sales order updated.');
+        },
+        async submitLine(order) {
+            this.ensureLineForm(order.id);
+            this.lineErrorsByOrder[order.id] = emptyLineErrors();
+            this.lineGeneralErrorsByOrder[order.id] = '';
+
+            const response = await fetch(`${this.lineStoreUrlBase}/${order.id}/lines`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Accept: 'application/json',
+                    'X-CSRF-TOKEN': this.csrfToken,
+                },
+                body: JSON.stringify({
+                    item_id: this.lineForms[order.id].item_id === '' ? null : Number(this.lineForms[order.id].item_id),
+                    quantity: this.lineForms[order.id].quantity,
+                }),
+            });
+
+            if (response.status === 422) {
+                const data = await response.json();
+                this.lineErrorsByOrder[order.id] = this.normalizeLineErrors(data.errors);
+                this.lineGeneralErrorsByOrder[order.id] = data.message || 'Validation failed.';
+                return;
+            }
+
+            if (!response.ok) {
+                this.lineGeneralErrorsByOrder[order.id] = 'Unable to add line.';
+                this.showToast('error', this.lineGeneralErrorsByOrder[order.id]);
+                return;
+            }
+
+            const data = await response.json();
+            this.upsertOrder(data.data.order);
+            this.lineForms[order.id] = emptyLineForm();
+            this.lineErrorsByOrder[order.id] = emptyLineErrors();
+            this.lineGeneralErrorsByOrder[order.id] = '';
+            this.showToast('success', 'Line added.');
+        },
+        async saveLineQuantity(order, line) {
+            this.lineEditErrorsByLine[line.id] = emptyLineErrors();
+
+            const response = await fetch(`${this.lineStoreUrlBase}/${order.id}/lines/${line.id}`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Accept: 'application/json',
+                    'X-CSRF-TOKEN': this.csrfToken,
+                },
+                body: JSON.stringify({
+                    quantity: this.lineEditQuantities[line.id] || line.quantity,
+                }),
+            });
+
+            if (response.status === 422) {
+                const data = await response.json();
+                this.lineEditErrorsByLine[line.id] = this.normalizeLineErrors(data.errors);
+                this.showToast('error', data.message || 'Unable to update line quantity.');
+                return;
+            }
+
+            if (!response.ok) {
+                this.showToast('error', 'Unable to update line quantity.');
+                return;
+            }
+
+            const data = await response.json();
+            this.upsertOrder(data.data.order);
+            this.showToast('success', 'Line quantity updated.');
+        },
+        async deleteLine(order, line) {
+            const response = await fetch(`${this.lineStoreUrlBase}/${order.id}/lines/${line.id}`, {
+                method: 'DELETE',
+                headers: {
+                    Accept: 'application/json',
+                    'X-CSRF-TOKEN': this.csrfToken,
+                },
+            });
+
+            if (response.status === 422) {
+                const data = await response.json();
+                this.showToast('error', data.message || 'Unable to remove line.');
+                return;
+            }
+
+            if (!response.ok) {
+                this.showToast('error', 'Unable to remove line.');
+                return;
+            }
+
+            const data = await response.json();
+            this.upsertOrder(data.data.order);
+            this.showToast('success', 'Line removed.');
         },
         async deleteOrder(order) {
             const response = await fetch(`${this.deleteUrlBase}/${order.id}`, {

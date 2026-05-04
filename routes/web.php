@@ -16,6 +16,7 @@ use App\Http\Controllers\PurchaseOrderShortClosureController;
 use App\Http\Controllers\PurchaseOrderStatusController;
 use App\Http\Controllers\RecipeController;
 use App\Http\Controllers\SalesOrderController;
+use App\Http\Controllers\SalesOrderLineController;
 use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\SupplierPurchaseOptionController;
 use App\Http\Controllers\UomCategoryController;
@@ -194,6 +195,12 @@ Route::middleware('auth')->group(function () {
         ->name('sales.orders.update');
     Route::delete('/sales/orders/{salesOrder}', [SalesOrderController::class, 'destroy'])
         ->name('sales.orders.destroy');
+    Route::post('/sales/orders/{salesOrder}/lines', [SalesOrderLineController::class, 'store'])
+        ->name('sales.orders.lines.store');
+    Route::patch('/sales/orders/{salesOrder}/lines/{line}', [SalesOrderLineController::class, 'update'])
+        ->name('sales.orders.lines.update');
+    Route::delete('/sales/orders/{salesOrder}/lines/{line}', [SalesOrderLineController::class, 'destroy'])
+        ->name('sales.orders.lines.destroy');
 
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');

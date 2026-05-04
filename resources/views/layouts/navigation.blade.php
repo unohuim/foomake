@@ -16,6 +16,10 @@
     $hasSalesOrderCustomers = $canManageSalesOrders
         ? \App\Models\Customer::query()->exists()
         : false;
+    $hasSellableSalesOrderItems = $canManageSalesOrders
+        ? \App\Models\Item::query()->where('is_sellable', true)->exists()
+        : false;
+    $canOpenSalesOrders = $hasSalesOrderCustomers && $hasSellableSalesOrderItems;
     $canViewInventory = $user?->can('inventory-adjustments-view') ?? false;
     $canViewMakeOrders = $user?->can('inventory-make-orders-view') ?? false;
     $canViewMaterials = $user?->can('inventory-materials-view') ?? false;
@@ -57,7 +61,7 @@
                             @endcan
 
                             @can('sales-sales-orders-manage')
-                                @if ($hasSalesOrderCustomers)
+                                @if ($canOpenSalesOrders)
                                     <x-nav-dropdown-link :href="route('sales.orders.index')" :active="request()->routeIs('sales.orders.*')">
                                         {{ __('Orders') }}
                                     </x-nav-dropdown-link>
@@ -217,7 +221,7 @@
                         @endcan
 
                         @can('sales-sales-orders-manage')
-                            @if ($hasSalesOrderCustomers)
+                            @if ($canOpenSalesOrders)
                                 <x-nav-dropdown-link :href="route('sales.orders.index')" :active="request()->routeIs('sales.orders.*')" mobile>
                                     {{ __('Orders') }}
                                 </x-nav-dropdown-link>

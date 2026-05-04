@@ -288,6 +288,49 @@ $order = SalesOrder::query()->create([
 
 ---
 
+### Sales Order Line Pricing And Draft Rules
+
+**Name:** Sales Order Line Pricing And Draft Rules  
+**Type:** Domain Rule  
+**Location:**  
+- `docs/architecture/sales/SalesOrderLinePricingAndDraftRules.yaml`  
+- `app/Http/Controllers/SalesOrderLineController.php`  
+- `app/Http/Requests/Sales/StoreSalesOrderLineRequest.php`  
+- `app/Http/Requests/Sales/UpdateSalesOrderLineRequest.php`  
+- `app/Models/SalesOrder.php`  
+- `app/Models/SalesOrderLine.php`  
+
+**Purpose:**  
+Document the draft-only sales-order line mutation rules, immutable unit-price snapshots, and canonical scale-6 quantity/line-total behavior shared by the Sales Orders index and the customer detail Orders mini-index.
+
+**When to Use:**  
+Any sales-order line create, delete, or quantity-update flow for draft sales orders.
+
+**When Not to Use:**  
+Sales-order header customer/contact assignment, lifecycle transitions, fulfillment, shipping, invoicing, payments, or inventory impact.
+
+**Public Interface:**  
+- `SalesOrder::STATUS_DRAFT`  
+- `SalesOrder::lines()`  
+- `sales.orders.lines.store`  
+- `sales.orders.lines.update`  
+- `sales.orders.lines.destroy`  
+
+**Example Usage:**  
+```php
+$line = SalesOrderLine::query()->create([
+    'tenant_id' => $tenant->id,
+    'sales_order_id' => $order->id,
+    'item_id' => $item->id,
+    'quantity' => '2.500000',
+    'unit_price_cents' => $item->default_price_cents,
+    'unit_price_currency_code' => $item->default_price_currency_code,
+    'line_total_cents' => '832.500000',
+]);
+```
+
+---
+
 ### Manufacturing Recipes Read-Only Access
 
 **Name:** Manufacturing Recipes Read-Only Access  

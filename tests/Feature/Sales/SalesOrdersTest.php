@@ -5,7 +5,10 @@ declare(strict_types=1);
 use App\Models\Permission;
 use App\Models\Role;
 use App\Models\Tenant;
+use App\Models\Uom;
+use App\Models\UomCategory;
 use App\Models\User;
+use App\Models\Item;
 use Illuminate\Support\Facades\DB;
 
 beforeEach(function () {
@@ -15,6 +18,8 @@ beforeEach(function () {
     $this->customerCounter = 1;
     $this->contactCounter = 1;
     $this->orderCounter = 1;
+    $this->uomCounter = 1;
+    $this->itemCounter = 1;
 
     $this->makeTenant = function (array $attributes = []): Tenant {
         $tenant = Tenant::query()->create(array_merge([
@@ -114,6 +119,51 @@ beforeEach(function () {
         $this->orderCounter++;
 
         return DB::table('sales_orders')->where('id', $orderId)->first();
+    };
+
+    $this->makeUom = function (Tenant $tenant, array $attributes = []): Uom {
+        $symbol = $attributes['symbol'] ?? 'SO-UOM-' . $this->uomCounter;
+        $existing = Uom::query()
+            ->where('tenant_id', $tenant->id)
+            ->where('symbol', $symbol)
+            ->first();
+
+        if ($existing) {
+            return $existing;
+        }
+
+        $category = UomCategory::query()->create([
+            'tenant_id' => $tenant->id,
+            'name' => $attributes['category_name'] ?? 'Sales Category ' . $this->uomCounter,
+        ]);
+
+        $uom = Uom::query()->create([
+            'tenant_id' => $tenant->id,
+            'uom_category_id' => $category->id,
+            'name' => $attributes['name'] ?? 'Sales UOM ' . $this->uomCounter,
+            'symbol' => $symbol,
+        ]);
+
+        $this->uomCounter++;
+
+        return $uom;
+    };
+
+    $this->createItem = function (Tenant $tenant, Uom $uom, array $attributes = []): Item {
+        $item = Item::query()->create(array_merge([
+            'tenant_id' => $tenant->id,
+            'name' => 'Item ' . $this->itemCounter,
+            'base_uom_id' => $uom->id,
+            'is_purchasable' => false,
+            'is_sellable' => false,
+            'is_manufacturable' => false,
+            'default_price_cents' => 1000,
+            'default_price_currency_code' => 'USD',
+        ], $attributes));
+
+        $this->itemCounter++;
+
+        return $item;
     };
 
     $this->fetchSalesOrder = function (int $orderId): ?object {
@@ -217,6 +267,8 @@ it('3a. sales navigation appears before other domain navigation groups', functio
 it('3b. sales orders navigation is visible but disabled when there are zero customers', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
+    $uom = ($this->makeUom)($tenant);
+    ($this->createItem)($tenant, $uom, ['is_sellable' => true]);
 
     ($this->grantPermission)($user, 'sales-sales-orders-manage');
 
@@ -235,6 +287,8 @@ it('3c. sales orders navigation is enabled when the tenant has at least one cust
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
     ($this->createCustomer)($tenant);
+    $uom = ($this->makeUom)($tenant);
+    ($this->createItem)($tenant, $uom, ['is_sellable' => true]);
 
     ($this->grantPermission)($user, 'sales-sales-orders-manage');
 

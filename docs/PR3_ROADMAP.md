@@ -152,7 +152,7 @@ Introduce draft sales orders.
 - On create, missing `contact_id` defaults to the selected customer’s primary contact when one exists
 - On edit, changing `customer_id` resets `contact_id` to the new customer’s primary contact unless a valid contact for the new customer is explicitly submitted
 - A contact from the previous customer is never preserved after customer change
-- Sales → Orders remains visible but disabled when the tenant has zero customers
+- Sales → Orders remains visible but disabled unless the tenant has at least one customer and at least one sellable item
 
 **Permissions**
 
@@ -162,25 +162,43 @@ Introduce draft sales orders.
 
 ### PR3-SO-002 — Sales Order Lines
 
+Status: Implemented
+
 **Goal**
-Allow adding items to sales orders.
+Allow adding items to existing draft sales orders.
 
 **Includes**
 
-- Add/remove lines (AJAX)
+- Add/remove lines and edit line quantity (AJAX, no browser refresh)
+- Shared JSON backend for both UI surfaces:
+    - Sales Orders index
+    - Customer detail Orders mini-index
 - Fields:
     - item_id
-    - quantity (BCMath string)
-    - unit_price snapshot
+    - quantity (BCMath string, canonical scale 6)
+    - unit_price_cents snapshot
+    - unit_price_currency_code snapshot
+    - line_total_cents
+- Sales → Orders remains visible but disabled unless the tenant has at least one customer and at least one sellable item
+- Customer detail create-order button remains visible but disabled when no sellable items exist
 
 **Rules**
 
-- BCMath enforced (scale = 6)
-- No float math
+- Sales order lines may be added, removed, or quantity-edited only while the parent sales order is `DRAFT`
+- Only items with `is_sellable = true` may be added
+- Quantity uses BCMath-compatible string math with canonical scale 6
+- Unit price snapshot is captured when the line is created
+- Quantity edits recalculate `line_total_cents` from the stored immutable unit price snapshot
+- Existing line unit price snapshot data is never changed by later item price changes
+- Mutations return JSON for AJAX consumers and do not redirect
+- Tenant isolation applies to sales orders, sales order lines, and items
+- No lifecycle, fulfillment, invoicing, payments, shipping, or inventory impact is introduced in this PR
 
 ---
 
 ### PR3-SO-003 — Pricing Snapshot Invariant
+
+Status: Subsumed by PR3-SO-002
 
 **Goal**
 Ensure immutable pricing at line creation.
@@ -188,8 +206,8 @@ Ensure immutable pricing at line creation.
 **Includes**
 
 - Store:
-    - unit_price_amount
-    - currency
+    - unit_price_cents
+    - unit_price_currency_code
 - Values never change after write
 
 ---

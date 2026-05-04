@@ -198,7 +198,9 @@
 
                             <button
                                 type="button"
-                                class="inline-flex items-center rounded-md border border-transparent bg-blue-600 px-4 py-2 text-xs font-semibold uppercase tracking-widest text-white hover:bg-blue-500"
+                                class="inline-flex items-center rounded-md border border-transparent bg-blue-600 px-4 py-2 text-xs font-semibold uppercase tracking-widest text-white hover:bg-blue-500 disabled:opacity-50"
+                                x-bind:disabled="orderItems.length === 0"
+                                x-bind:class="orderItems.length === 0 ? 'opacity-50 cursor-not-allowed' : ''"
                                 x-on:click="openOrderCreate()"
                             >
                                 Add Order
@@ -209,12 +211,82 @@
                             <template x-for="order in orders" :key="order.id">
                                 <div class="rounded-2xl border border-gray-200 bg-gray-50/70 p-4">
                                     <div class="flex items-start justify-between gap-4">
-                                        <div>
+                                        <div class="flex-1">
                                             <div class="flex items-center gap-3">
                                                 <p class="text-base font-semibold text-gray-900" x-text="order.customer_name || customer.name"></p>
                                                 <span class="inline-flex rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold uppercase tracking-wide text-gray-700" x-text="order.status"></span>
                                             </div>
                                             <p class="mt-2 text-sm text-gray-700" x-text="order.contact_name || '—'"></p>
+                                            <p class="mt-2 text-xs text-gray-500" x-text="`${order.line_count || 0} line(s) • ${formatOrderLineMoney(order.order_total_amount || '0.000000', order.lines)}`"></p>
+
+                                            <div class="mt-4 space-y-3" x-init="ensureOrderLineForm(order.id)">
+                                                <div class="space-y-2" x-show="(order.lines || []).length > 0">
+                                                    <template x-for="line in order.lines" :key="line.id">
+                                                        <div class="rounded-lg border border-gray-200 bg-white p-3">
+                                                            <div class="flex items-start justify-between gap-3">
+                                                                <div>
+                                                                    <p class="font-medium text-gray-900" x-text="line.item_name"></p>
+                                                                    <p class="mt-1 text-xs text-gray-500" x-text="formatLineMoney(line.unit_price_amount, line.unit_price_currency_code)"></p>
+                                                                    <p class="mt-1 text-xs text-gray-500" x-text="`Total: ${formatLineMoney(line.line_total_amount, line.unit_price_currency_code)}`"></p>
+                                                                </div>
+                                                                <button type="button" class="text-red-600 hover:text-red-500" x-on:click="deleteOrderLine(order, line)">Remove</button>
+                                                            </div>
+
+                                                            <div class="mt-3 flex items-start gap-2">
+                                                                <div class="flex-1">
+                                                                    <input
+                                                                        type="text"
+                                                                        class="block w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                                                                        x-model="orderLineEditQuantities[line.id]"
+                                                                    />
+                                                                    <p class="mt-1 text-xs text-red-600" x-text="(orderLineEditErrorsByLine[line.id] || {}).quantity?.[0]"></p>
+                                                                </div>
+                                                                <button type="button" class="inline-flex items-center rounded-md border border-gray-300 px-3 py-2 text-xs font-semibold uppercase tracking-widest text-gray-700 hover:bg-gray-50" x-on:click="saveOrderLineQuantity(order, line)">
+                                                                    Save
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    </template>
+                                                </div>
+
+                                                <div class="rounded-lg border border-dashed border-gray-300 p-3" x-show="(order.lines || []).length === 0">
+                                                    <p class="text-xs text-gray-500">No lines yet.</p>
+                                                </div>
+
+                                                <div class="rounded-lg border border-gray-200 bg-white p-3" x-show="orderItems.length > 0">
+                                                    <div class="grid gap-2 sm:grid-cols-[minmax(0,1fr)_140px_auto]">
+                                                        <div>
+                                                            <select
+                                                                class="block w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                                                                x-model="orderLineForms[order.id].item_id"
+                                                            >
+                                                                <option value="">Select item</option>
+                                                                <template x-for="item in orderItems" :key="item.id">
+                                                                    <option :value="String(item.id)" x-text="item.name"></option>
+                                                                </template>
+                                                            </select>
+                                                            <p class="mt-1 text-xs text-red-600" x-text="(orderLineErrorsByOrder[order.id] || {}).item_id?.[0]"></p>
+                                                        </div>
+                                                        <div>
+                                                            <input
+                                                                type="text"
+                                                                class="block w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                                                                x-model="orderLineForms[order.id].quantity"
+                                                                placeholder="1.000000"
+                                                            />
+                                                            <p class="mt-1 text-xs text-red-600" x-text="(orderLineErrorsByOrder[order.id] || {}).quantity?.[0]"></p>
+                                                        </div>
+                                                        <button type="button" class="inline-flex items-center justify-center rounded-md border border-transparent bg-blue-600 px-3 py-2 text-xs font-semibold uppercase tracking-widest text-white hover:bg-blue-500" x-on:click="submitOrderLine(order)">
+                                                            Add Line
+                                                        </button>
+                                                    </div>
+                                                    <p class="mt-2 text-xs text-red-600" x-show="orderLineGeneralErrorsByOrder[order.id]" x-text="orderLineGeneralErrorsByOrder[order.id]"></p>
+                                                </div>
+
+                                                <div class="rounded-lg border border-dashed border-gray-300 p-3" x-show="orderItems.length === 0">
+                                                    <p class="text-xs text-gray-500">Create a sellable item before adding sales order lines.</p>
+                                                </div>
+                                            </div>
                                         </div>
 
                                         <div class="flex items-center gap-3">

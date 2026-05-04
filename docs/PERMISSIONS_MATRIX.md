@@ -156,8 +156,9 @@ Execution-only role.
 - Customer detail read access uses `sales-customers-view`.
 - Customer contacts reuse sales-customers-manage.
 - Customer contacts do not introduce a separate permission slug.
-- Sales orders use `sales-sales-orders-manage` for `/sales/orders` index/create/update/delete and for customer detail Orders mini-index CRUD.
+- Sales orders use `sales-sales-orders-manage` for `/sales/orders` index/create/update/delete, sales-order line CRUD, and customer detail Orders mini-index CRUD.
 - Customer detail Orders mini-index read access remains under `sales-customers-view`, but its mutations still require `sales-sales-orders-manage`.
+- Sales-order line create, quantity update, and delete mutations do not introduce a separate permission slug.
 - Current purchase-order routes use a two-gate model:
   - `purchasing-purchase-orders-create` for index/show/create/update/delete and line mutations
   - `purchasing-purchase-orders-receive` for receipts, short-closes, and manual status transitions

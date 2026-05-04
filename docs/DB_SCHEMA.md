@@ -47,6 +47,7 @@ Migrations remain the **sole source of truth**.
 - roles
 - roles_users
 - sales_orders
+- sales_order_lines
 - sessions
 - stock_moves
 - suppliers
@@ -190,6 +191,37 @@ Migrations remain the **sole source of truth**.
 - Implicit (FK index): `tenant_id`
 - Implicit (FK index): `customer_id`
 - Implicit (FK index): `contact_id`
+
+---
+
+## sales_order_lines
+
+**Tenant-owned:** Yes  
+**Purpose:** Draft sales order line items with immutable price snapshots for the Sales Orders index and customer detail Orders mini-index
+
+### Columns
+
+| Name       | Type          | Nullable | Notes                                  |
+| ---------- | ------------- | -------- | -------------------------------------- |
+| id         | bigint        | No       | Primary key                            |
+| tenant_id  | bigint        | No       | FK → tenants.id (CASCADE)              |
+| sales_order_id | bigint    | No       | FK → sales_orders.id (CASCADE)         |
+| item_id    | bigint        | No       | FK → items.id (CASCADE)                |
+| quantity   | decimal(18,6) | No       | Canonical BCMath quantity string       |
+| unit_price_cents | unsignedInteger | No | Immutable unit price snapshot in minor currency units |
+| unit_price_currency_code | char(3) | No | Immutable unit price snapshot currency |
+| line_total_cents | decimal(18,6) | No | Line total in minor currency units     |
+| created_at | timestamp     | Yes      | —                                      |
+| updated_at | timestamp     | Yes      | —                                      |
+
+### Keys & Indexes
+
+- PK: `id`
+- Index: `(tenant_id, sales_order_id)`
+- Index: `(sales_order_id, item_id)`
+- Implicit (FK index): `tenant_id`
+- Implicit (FK index): `sales_order_id`
+- Implicit (FK index): `item_id`
 
 ---
 

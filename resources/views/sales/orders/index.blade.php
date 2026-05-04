@@ -65,6 +65,7 @@
                                         <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Customer</th>
                                         <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Contact</th>
                                         <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Status</th>
+                                        <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Lines</th>
                                         <th class="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">Actions</th>
                                     </tr>
                                 </thead>
@@ -75,6 +76,82 @@
                                             <td class="px-4 py-4 text-sm text-gray-700" x-text="order.contact_name || '—'"></td>
                                             <td class="px-4 py-4 text-sm">
                                                 <span class="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold uppercase text-gray-600" x-text="order.status"></span>
+                                            </td>
+                                            <td class="px-4 py-4 text-sm text-gray-700 align-top">
+                                                <div class="space-y-3" x-init="ensureLineForm(order.id)">
+                                                    <div class="text-xs text-gray-500">
+                                                        <span x-text="`${order.line_count || 0} line(s)`"></span>
+                                                        <span class="mx-1">•</span>
+                                                        <span x-text="formatLineMoney(order.order_total_amount || '0.000000', (order.lines[0] && order.lines[0].unit_price_currency_code) || 'USD')"></span>
+                                                    </div>
+
+                                                    <div class="space-y-2" x-show="(order.lines || []).length > 0">
+                                                        <template x-for="line in order.lines" :key="line.id">
+                                                            <div class="rounded-lg border border-gray-200 bg-gray-50 p-3">
+                                                                <div class="flex items-start justify-between gap-3">
+                                                                    <div>
+                                                                        <p class="font-medium text-gray-900" x-text="line.item_name"></p>
+                                                                        <p class="mt-1 text-xs text-gray-500" x-text="formatLineMoney(line.unit_price_amount, line.unit_price_currency_code)"></p>
+                                                                        <p class="mt-1 text-xs text-gray-500" x-text="`Total: ${formatLineMoney(line.line_total_amount, line.unit_price_currency_code)}`"></p>
+                                                                    </div>
+                                                                    <button type="button" class="text-red-600 hover:text-red-500" x-on:click="deleteLine(order, line)">Remove</button>
+                                                                </div>
+
+                                                                <div class="mt-3 flex items-start gap-2">
+                                                                    <div class="flex-1">
+                                                                        <input
+                                                                            type="text"
+                                                                            class="block w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                                                                            x-model="lineEditQuantities[line.id]"
+                                                                        />
+                                                                        <p class="mt-1 text-xs text-red-600" x-text="(lineEditErrorsByLine[line.id] || {}).quantity?.[0]"></p>
+                                                                    </div>
+                                                                    <button type="button" class="inline-flex items-center rounded-md border border-gray-300 px-3 py-2 text-xs font-semibold uppercase tracking-widest text-gray-700 hover:bg-gray-50" x-on:click="saveLineQuantity(order, line)">
+                                                                        Save
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                        </template>
+                                                    </div>
+
+                                                    <div class="rounded-lg border border-dashed border-gray-300 p-3" x-show="(order.lines || []).length === 0">
+                                                        <p class="text-xs text-gray-500">No lines yet.</p>
+                                                    </div>
+
+                                                    <div class="rounded-lg border border-gray-200 p-3" x-show="sellableItems.length > 0">
+                                                        <div class="grid gap-2 sm:grid-cols-[minmax(0,1fr)_140px_auto]">
+                                                            <div>
+                                                                <select
+                                                                    class="block w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                                                                    x-model="lineForms[order.id].item_id"
+                                                                >
+                                                                    <option value="">Select item</option>
+                                                                    <template x-for="item in sellableItems" :key="item.id">
+                                                                        <option :value="String(item.id)" x-text="item.name"></option>
+                                                                    </template>
+                                                                </select>
+                                                                <p class="mt-1 text-xs text-red-600" x-text="(lineErrorsByOrder[order.id] || {}).item_id?.[0]"></p>
+                                                            </div>
+                                                            <div>
+                                                                <input
+                                                                    type="text"
+                                                                    class="block w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                                                                    x-model="lineForms[order.id].quantity"
+                                                                    placeholder="1.000000"
+                                                                />
+                                                                <p class="mt-1 text-xs text-red-600" x-text="(lineErrorsByOrder[order.id] || {}).quantity?.[0]"></p>
+                                                            </div>
+                                                            <button type="button" class="inline-flex items-center justify-center rounded-md border border-transparent bg-blue-600 px-3 py-2 text-xs font-semibold uppercase tracking-widest text-white hover:bg-blue-500" x-on:click="submitLine(order)">
+                                                                Add Line
+                                                            </button>
+                                                        </div>
+                                                        <p class="mt-2 text-xs text-red-600" x-show="lineGeneralErrorsByOrder[order.id]" x-text="lineGeneralErrorsByOrder[order.id]"></p>
+                                                    </div>
+
+                                                    <div class="rounded-lg border border-dashed border-gray-300 p-3" x-show="sellableItems.length === 0">
+                                                        <p class="text-xs text-gray-500">Create a sellable item before adding sales order lines.</p>
+                                                    </div>
+                                                </div>
                                             </td>
                                             <td class="px-4 py-4 text-right text-sm">
                                                 <div class="inline-flex items-center gap-3">

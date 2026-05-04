@@ -77,6 +77,14 @@ class Item extends Model
     }
 
     /**
+     * Get the sales order lines using the item.
+     */
+    public function salesOrderLines(): HasMany
+    {
+        return $this->hasMany(SalesOrderLine::class);
+    }
+
+    /**
      * @return HasOne
      */
     public function activeRecipe(): HasOne

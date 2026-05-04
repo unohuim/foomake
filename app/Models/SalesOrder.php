@@ -6,6 +6,7 @@ use App\Models\Concerns\HasTenantScope;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * Class SalesOrder
@@ -55,6 +56,14 @@ class SalesOrder extends Model
     public function contact(): BelongsTo
     {
         return $this->belongsTo(CustomerContact::class, 'contact_id');
+    }
+
+    /**
+     * Get the lines attached to the sales order.
+     */
+    public function lines(): HasMany
+    {
+        return $this->hasMany(SalesOrderLine::class)->orderBy('created_at');
     }
 
     /**

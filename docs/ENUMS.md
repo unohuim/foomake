@@ -111,11 +111,12 @@ Do not introduce new enum values without updating this document.
 
 **Semantic meaning:**
 
-- `DRAFT`: Sales order is editable and has no lifecycle, inventory, fulfillment, invoicing, payment, shipping, or line-item effects in PR3-SO-001.
+- `DRAFT`: Sales order is editable. Header fields and sales-order lines may be created, updated, or deleted, but no lifecycle, inventory, fulfillment, invoicing, payment, or shipping effects exist in PR3-SO-001 / PR3-SO-002.
 
 **Notes:**
 
-- PR3-SO-001 is draft-only.
+- PR3-SO-001 / PR3-SO-002 are draft-only.
+- Sales-order lines may only be added, removed, or quantity-edited while the order remains `DRAFT`.
 - Future sales-order lifecycle statuses must be added here before use.
 
 ---

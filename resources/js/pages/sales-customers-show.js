@@ -29,6 +29,11 @@ export function mount(rootEl, payload) {
         contact_id: [],
     });
 
+    const emptyOrderLineErrors = () => ({
+        item_id: [],
+        quantity: [],
+    });
+
     const customerToForm = (customer) => ({
         name: customer.name || '',
         status: customer.status || 'active',
@@ -63,6 +68,11 @@ export function mount(rootEl, payload) {
         contact_id: '',
     });
 
+    const emptyOrderLineForm = () => ({
+        item_id: '',
+        quantity: '1.000000',
+    });
+
     const orderToForm = (order) => ({
         customer_id: order.customer_id ? String(order.customer_id) : '',
         contact_id: order.contact_id ? String(order.contact_id) : '',
@@ -73,6 +83,7 @@ export function mount(rootEl, payload) {
         contacts: safePayload.contacts || [],
         orders: safePayload.orders || [],
         orderCustomers: safePayload.orderCustomers || [],
+        orderItems: safePayload.orderItems || [],
         canManage: safePayload.canManage || false,
         canManageOrders: safePayload.canManageOrders || false,
         updateUrl: safePayload.updateUrl || '',
@@ -82,6 +93,7 @@ export function mount(rootEl, payload) {
         ordersStoreUrl: safePayload.ordersStoreUrl || '',
         ordersUpdateUrlBase: safePayload.ordersUpdateUrlBase || '',
         ordersDeleteUrlBase: safePayload.ordersDeleteUrlBase || '',
+        ordersLineStoreUrlBase: safePayload.ordersLineStoreUrlBase || '',
         indexUrl: safePayload.indexUrl || '/sales/customers',
         csrfToken: safePayload.csrfToken || '',
         statuses: safePayload.statuses || ['active', 'inactive', 'archived'],
@@ -104,11 +116,21 @@ export function mount(rootEl, payload) {
         orderForm: emptyOrderForm(),
         orderErrors: emptyOrderErrors(),
         orderGeneralError: '',
+        orderLineForms: {},
+        orderLineErrorsByOrder: {},
+        orderLineGeneralErrorsByOrder: {},
+        orderLineEditQuantities: {},
+        orderLineEditErrorsByLine: {},
         toast: {
             visible: false,
             message: '',
             type: 'success',
             timeoutId: null,
+        },
+        init() {
+            this.orders.forEach((order) => {
+                this.syncOrderLineState(order);
+            });
         },
         normalizeErrors(errors) {
             const normalized = emptyErrors();
@@ -138,6 +160,19 @@ export function mount(rootEl, payload) {
         },
         normalizeOrderErrors(errors) {
             const normalized = emptyOrderErrors();
+
+            if (!errors || typeof errors !== 'object') {
+                return normalized;
+            }
+
+            Object.keys(normalized).forEach((key) => {
+                normalized[key] = Array.isArray(errors[key]) ? errors[key] : [];
+            });
+
+            return normalized;
+        },
+        normalizeOrderLineErrors(errors) {
+            const normalized = emptyOrderLineErrors();
 
             if (!errors || typeof errors !== 'object') {
                 return normalized;
@@ -262,6 +297,15 @@ export function mount(rootEl, payload) {
         orderContactOptionLabel(contact) {
             return contact.full_name;
         },
+        formatLineMoney(amount, currencyCode) {
+            return `${currencyCode} ${amount}`;
+        },
+        formatOrderLineMoney(amount, lines) {
+            const firstLine = (lines || [])[0];
+            const currencyCode = firstLine ? firstLine.unit_price_currency_code : 'USD';
+
+            return this.formatLineMoney(amount, currencyCode);
+        },
         defaultOrderContactIdForCustomer(customerId) {
             const customer = this.orderCustomers.find((entry) => entry.id === Number(customerId));
 
@@ -274,8 +318,32 @@ export function mount(rootEl, payload) {
         handleOrderCustomerChange() {
             this.orderForm.contact_id = this.defaultOrderContactIdForCustomer(this.orderForm.customer_id);
         },
+        ensureOrderLineForm(orderId) {
+            if (!this.orderLineForms[orderId]) {
+                this.orderLineForms[orderId] = emptyOrderLineForm();
+            }
+
+            if (!this.orderLineErrorsByOrder[orderId]) {
+                this.orderLineErrorsByOrder[orderId] = emptyOrderLineErrors();
+            }
+
+            if (!Object.prototype.hasOwnProperty.call(this.orderLineGeneralErrorsByOrder, orderId)) {
+                this.orderLineGeneralErrorsByOrder[orderId] = '';
+            }
+        },
+        syncOrderLineState(order) {
+            this.ensureOrderLineForm(order.id);
+
+            (order.lines || []).forEach((line) => {
+                this.orderLineEditQuantities[line.id] = line.quantity;
+
+                if (!this.orderLineEditErrorsByLine[line.id]) {
+                    this.orderLineEditErrorsByLine[line.id] = emptyOrderLineErrors();
+                }
+            });
+        },
         openOrderCreate() {
-            if (!this.canManageOrders) {
+            if (!this.canManageOrders || this.orderItems.length === 0) {
                 return;
             }
 
@@ -317,10 +385,12 @@ export function mount(rootEl, payload) {
 
             if (existingIndex === -1) {
                 this.orders.unshift(order);
+                this.syncOrderLineState(order);
                 return;
             }
 
             this.orders.splice(existingIndex, 1, order);
+            this.syncOrderLineState(order);
         },
         async submitForm() {
             if (this.isSubmitting || !this.canManage) {
@@ -473,6 +543,111 @@ export function mount(rootEl, payload) {
             this.upsertOrder(data.data);
             this.closeOrderForm();
             this.showToast('success', isCreate ? 'Sales order created.' : 'Sales order updated.');
+        },
+        async submitOrderLine(order) {
+            if (!this.canManageOrders) {
+                return;
+            }
+
+            this.ensureOrderLineForm(order.id);
+            this.orderLineErrorsByOrder[order.id] = emptyOrderLineErrors();
+            this.orderLineGeneralErrorsByOrder[order.id] = '';
+
+            const response = await fetch(`${this.ordersLineStoreUrlBase}/${order.id}/lines`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Accept: 'application/json',
+                    'X-CSRF-TOKEN': this.csrfToken,
+                },
+                body: JSON.stringify({
+                    item_id: this.orderLineForms[order.id].item_id === '' ? null : Number(this.orderLineForms[order.id].item_id),
+                    quantity: this.orderLineForms[order.id].quantity,
+                }),
+            });
+
+            if (response.status === 422) {
+                const data = await response.json();
+                this.orderLineErrorsByOrder[order.id] = this.normalizeOrderLineErrors(data.errors);
+                this.orderLineGeneralErrorsByOrder[order.id] = data.message || 'Validation failed.';
+                return;
+            }
+
+            if (!response.ok) {
+                this.orderLineGeneralErrorsByOrder[order.id] = 'Unable to add line.';
+                this.showToast('error', this.orderLineGeneralErrorsByOrder[order.id]);
+                return;
+            }
+
+            const data = await response.json();
+            this.upsertOrder(data.data.order);
+            this.orderLineForms[order.id] = emptyOrderLineForm();
+            this.orderLineErrorsByOrder[order.id] = emptyOrderLineErrors();
+            this.orderLineGeneralErrorsByOrder[order.id] = '';
+            this.showToast('success', 'Line added.');
+        },
+        async saveOrderLineQuantity(order, line) {
+            if (!this.canManageOrders) {
+                return;
+            }
+
+            this.orderLineEditErrorsByLine[line.id] = emptyOrderLineErrors();
+
+            const response = await fetch(`${this.ordersLineStoreUrlBase}/${order.id}/lines/${line.id}`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Accept: 'application/json',
+                    'X-CSRF-TOKEN': this.csrfToken,
+                },
+                body: JSON.stringify({
+                    quantity: this.orderLineEditQuantities[line.id] || line.quantity,
+                }),
+            });
+
+            if (response.status === 422) {
+                const data = await response.json();
+                this.orderLineEditErrorsByLine[line.id] = this.normalizeOrderLineErrors(data.errors);
+                this.showToast('error', data.message || 'Unable to update line quantity.');
+                return;
+            }
+
+            if (!response.ok) {
+                this.showToast('error', 'Unable to update line quantity.');
+                return;
+            }
+
+            const data = await response.json();
+            this.upsertOrder(data.data.order);
+            this.showToast('success', 'Line quantity updated.');
+        },
+        async deleteOrderLine(order, line) {
+            if (!this.canManageOrders) {
+                return;
+            }
+
+            const response = await fetch(`${this.ordersLineStoreUrlBase}/${order.id}/lines/${line.id}`, {
+                method: 'DELETE',
+                headers: {
+                    Accept: 'application/json',
+                    'X-CSRF-TOKEN': this.csrfToken,
+                },
+            });
+
+            if (response.status === 422) {
+                const data = await response.json();
+                this.showToast('error', data.message || 'Unable to remove line.');
+                return;
+            }
+
+            if (!response.ok) {
+                this.showToast('error', 'Unable to remove line.');
+                return;
+            }
+
+            const data = await response.json();
+            this.upsertOrder(data.data.order);
+            this.showToast('success', 'Line removed.');
         },
         async setPrimary(contact) {
             if (!this.canManage) {
