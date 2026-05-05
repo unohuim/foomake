@@ -91,6 +91,7 @@ The UI should feel:
 - Preserve subtle active states, rounded nav items, subtle borders, and soft shadows
 - Do not introduce flashy, marketing-style, or dashboard-heavy navigation
 - Navigation refactors must preserve route names, gates, `@can` checks, active states, and existing behavior
+- When navigation availability is gated by server-rendered domain prerequisites, AJAX page modules may patch stale local nav DOM after a successful mutation, but must not introduce global JS state or client-side authority
 
 ---
 

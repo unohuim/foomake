@@ -260,16 +260,18 @@ $customer->contacts()->create([
 - `app/Models/SalesOrder.php`  
 
 **Purpose:**  
-Document the draft-only sales-order customer/contact rules shared by the Sales Orders index and the customer detail Orders mini-index.
+Document the sales-order customer/contact rules shared by the Sales Orders index and the customer detail Orders mini-index.
 
 **When to Use:**  
-Any draft sales-order create, update, delete, or validation flow, including customer changes that may re-default the assigned contact.
+Any editable sales-order create, update, delete, or validation flow, including customer changes that may re-default the assigned contact.
 
 **When Not to Use:**  
 Sales-order lines, pricing snapshots, fulfillment/inventory effects, invoicing, or customer-contact primary designation outside a sales-order assignment.
 
 **Public Interface:**  
 - `SalesOrder::STATUS_DRAFT`  
+- `SalesOrder::STATUS_OPEN`  
+- `SalesOrder::isEditable()`  
 - `SalesOrder::statuses()`  
 - `sales.orders.index`  
 - `sales.orders.store`  
@@ -288,9 +290,9 @@ $order = SalesOrder::query()->create([
 
 ---
 
-### Sales Order Line Pricing And Draft Rules
+### Sales Order Line Pricing And Editable Rules
 
-**Name:** Sales Order Line Pricing And Draft Rules  
+**Name:** Sales Order Line Pricing And Editable Rules  
 **Type:** Domain Rule  
 **Location:**  
 - `docs/architecture/sales/SalesOrderLinePricingAndDraftRules.yaml`  
@@ -301,16 +303,18 @@ $order = SalesOrder::query()->create([
 - `app/Models/SalesOrderLine.php`  
 
 **Purpose:**  
-Document the draft-only sales-order line mutation rules, immutable unit-price snapshots, and canonical scale-6 quantity/line-total behavior shared by the Sales Orders index and the customer detail Orders mini-index.
+Document the editable sales-order line mutation rules, immutable unit-price snapshots, and canonical scale-6 quantity/line-total behavior shared by the Sales Orders index and the customer detail Orders mini-index.
 
 **When to Use:**  
-Any sales-order line create, delete, or quantity-update flow for draft sales orders.
+Any sales-order line create, delete, or quantity-update flow for editable sales orders.
 
 **When Not to Use:**  
-Sales-order header customer/contact assignment, lifecycle transitions, fulfillment, shipping, invoicing, payments, or inventory impact.
+Sales-order header customer/contact assignment, lifecycle transitions, fulfillment, shipping, invoicing, payments, or completion inventory impact.
 
 **Public Interface:**  
 - `SalesOrder::STATUS_DRAFT`  
+- `SalesOrder::STATUS_OPEN`  
+- `SalesOrder::allowsLineMutations()`  
 - `SalesOrder::lines()`  
 - `sales.orders.lines.store`  
 - `sales.orders.lines.update`  
@@ -327,6 +331,38 @@ $line = SalesOrderLine::query()->create([
     'unit_price_currency_code' => $item->default_price_currency_code,
     'line_total_cents' => '832.500000',
 ]);
+```
+
+---
+
+### Sales Order Completion Inventory Impact
+
+**Name:** Sales Order Completion Inventory Impact  
+**Type:** Domain Rule  
+**Location:**  
+- `docs/architecture/sales/SalesOrderCompletionInventoryImpact.yaml`  
+- `app/Actions/Sales/CompleteSalesOrderAction.php`  
+- `app/Http/Controllers/SalesOrderStatusController.php`  
+- `app/Models/StockMove.php`  
+
+**Purpose:**  
+Document the inventory-ledger effects of `OPEN -> COMPLETED` sales-order transitions and the safeguards around transactional posting.
+
+**When to Use:**  
+Completing a sales order, posting issue stock moves from sales-order lines, or validating rollback/idempotency expectations.
+
+**When Not to Use:**  
+Editable header/line mutations, cancellation flows without inventory impact, or downstream fulfillment/invoicing/payment behavior.
+
+**Public Interface:**  
+- `CompleteSalesOrderAction::execute()`  
+- `SalesOrder::STATUS_OPEN`  
+- `SalesOrder::STATUS_COMPLETED`  
+- `sales.orders.status.update`  
+
+**Example Usage:**  
+```php
+$completedOrder = $completeSalesOrderAction->execute($salesOrder);
 ```
 
 ---

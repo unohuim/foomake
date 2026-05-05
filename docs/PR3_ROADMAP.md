@@ -153,6 +153,7 @@ Introduce draft sales orders.
 - On edit, changing `customer_id` resets `contact_id` to the new customer’s primary contact unless a valid contact for the new customer is explicitly submitted
 - A contact from the previous customer is never preserved after customer change
 - Sales → Orders remains visible but disabled unless the tenant has at least one customer and at least one sellable item
+- Statuses later expanded by PR3-SO-004 / PR3-SO-005 still preserve the same shared AJAX CRUD surface
 
 **Permissions**
 
@@ -184,7 +185,7 @@ Allow adding items to existing draft sales orders.
 
 **Rules**
 
-- Sales order lines may be added, removed, or quantity-edited only while the parent sales order is `DRAFT`
+- Sales order lines may be added, removed, or quantity-edited only while the parent sales order is editable in the current lifecycle slice
 - Only items with `is_sellable = true` may be added
 - Quantity uses BCMath-compatible string math with canonical scale 6
 - Unit price snapshot is captured when the line is created
@@ -214,6 +215,8 @@ Ensure immutable pricing at line creation.
 
 ### PR3-SO-004 — Sales Order Lifecycle
 
+Status: Implemented
+
 **Goal**
 Introduce lifecycle without inventory impact yet.
 
@@ -224,24 +227,49 @@ Introduce lifecycle without inventory impact yet.
 - COMPLETED
 - CANCELLED
 
+**Rules**
+
+- Allowed transitions:
+    - `DRAFT -> OPEN`
+    - `DRAFT -> CANCELLED`
+    - `OPEN -> COMPLETED`
+    - `OPEN -> CANCELLED`
+- `COMPLETED` and `CANCELLED` are terminal
+- Header and line editing are allowed only while the order is `DRAFT` or `OPEN`
+- Header and line editing are blocked while the order is `COMPLETED` or `CANCELLED`
+- Lifecycle status changes return JSON and do not redirect
+- `DRAFT -> OPEN` and any cancellation transition create no stock moves
+- Older roadmap-era statuses `CONFIRMED` and `FULFILLED` are not valid
+
 ---
 
 ### PR3-SO-005 — Inventory Impact (Critical)
+
+Status: Implemented
 
 **Goal**
 Sales orders must update inventory.
 
 **Includes**
 
-- On fulfillment:
-    - Create stock_moves.type = issue
-    - Reduce inventory
+- On `OPEN -> COMPLETED`:
+    - Create one `stock_moves` row per sales-order line
+    - Use `type = issue`
+    - Use `status = POSTED`
+    - Use the item base UoM
+    - Link the row with `source_type = App\Models\SalesOrderLine` and `source_id = sales_order_lines.id`
+    - Reduce on-hand inventory through the ledger
 
 **Rules**
 
 - Inventory is source of truth
 - BCMath required
 - Transactional integrity
+- Completion does not check availability in V1
+- Negative inventory is allowed in V1
+- `CANCELLED` creates no stock moves
+- Retrying completion must not create duplicate stock moves
+- If stock move creation fails, the order must remain `OPEN` and no partial stock moves may persist
 
 ---
 

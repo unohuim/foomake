@@ -62,11 +62,14 @@
 
                             @can('sales-sales-orders-manage')
                                 @if ($canOpenSalesOrders)
-                                    <x-nav-dropdown-link :href="route('sales.orders.index')" :active="request()->routeIs('sales.orders.*')">
+                                    <x-nav-dropdown-link :href="route('sales.orders.index')" :active="request()->routeIs('sales.orders.*')" data-sales-orders-nav-link="desktop">
                                         {{ __('Orders') }}
                                     </x-nav-dropdown-link>
                                 @else
-                                    <span class="block w-full cursor-not-allowed rounded-xl border border-transparent px-4 py-3 text-left text-sm font-medium text-slate-500 opacity-70">
+                                    <span
+                                        class="block w-full cursor-not-allowed rounded-xl border border-transparent px-4 py-3 text-left text-sm font-medium text-slate-500 opacity-70"
+                                        data-sales-orders-nav-disabled="desktop"
+                                    >
                                         {{ __('Orders') }}
                                     </span>
                                 @endif
@@ -222,11 +225,14 @@
 
                         @can('sales-sales-orders-manage')
                             @if ($canOpenSalesOrders)
-                                <x-nav-dropdown-link :href="route('sales.orders.index')" :active="request()->routeIs('sales.orders.*')" mobile>
+                                <x-nav-dropdown-link :href="route('sales.orders.index')" :active="request()->routeIs('sales.orders.*')" mobile data-sales-orders-nav-link="mobile">
                                     {{ __('Orders') }}
                                 </x-nav-dropdown-link>
                             @else
-                                <span class="block w-full cursor-not-allowed rounded-xl border border-transparent px-4 py-3 text-left text-sm font-medium text-slate-500 opacity-70">
+                                <span
+                                    class="block w-full cursor-not-allowed rounded-xl border border-transparent px-4 py-3 text-left text-sm font-medium text-slate-500 opacity-70"
+                                    data-sales-orders-nav-disabled="mobile"
+                                >
                                     {{ __('Orders') }}
                                 </span>
                             @endif

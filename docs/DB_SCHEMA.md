@@ -168,7 +168,7 @@ Migrations remain the **sole source of truth**.
 ## sales_orders
 
 **Tenant-owned:** Yes  
-**Purpose:** Draft sales orders shared by the Sales Orders index and the customer detail Orders mini-index
+**Purpose:** Sales order headers shared by the Sales Orders index and the customer detail Orders mini-index
 
 ### Columns
 
@@ -178,7 +178,7 @@ Migrations remain the **sole source of truth**.
 | tenant_id  | bigint    | No       | FK → tenants.id (CASCADE)            |
 | customer_id | bigint   | No       | FK → customers.id (CASCADE)          |
 | contact_id | bigint    | Yes      | FK → customer_contacts.id (SET NULL) |
-| status     | string    | No       | Defaults to `DRAFT`                  |
+| status     | string    | No       | Defaults to `DRAFT`; allowed values are defined in `docs/ENUMS.md` |
 | created_at | timestamp | Yes      | —                                    |
 | updated_at | timestamp | Yes      | —                                    |
 
@@ -192,12 +192,19 @@ Migrations remain the **sole source of truth**.
 - Implicit (FK index): `customer_id`
 - Implicit (FK index): `contact_id`
 
+### Behavioral Notes
+
+- Sales order headers remain editable only while `status` is `DRAFT` or `OPEN`.
+- `COMPLETED` and `CANCELLED` are terminal.
+- Transitioning from `OPEN` to `COMPLETED` may create one stock move per sales-order line.
+- `DRAFT -> OPEN`, `DRAFT -> CANCELLED`, and `OPEN -> CANCELLED` create no stock moves.
+
 ---
 
 ## sales_order_lines
 
 **Tenant-owned:** Yes  
-**Purpose:** Draft sales order line items with immutable price snapshots for the Sales Orders index and customer detail Orders mini-index
+**Purpose:** Sales order line items with immutable price snapshots for the Sales Orders index and customer detail Orders mini-index
 
 ### Columns
 
@@ -222,6 +229,11 @@ Migrations remain the **sole source of truth**.
 - Implicit (FK index): `tenant_id`
 - Implicit (FK index): `sales_order_id`
 - Implicit (FK index): `item_id`
+
+### Behavioral Notes
+
+- Sales order line mutations are allowed only while the parent sales order is `DRAFT` or `OPEN`.
+- On `OPEN -> COMPLETED`, each line may generate exactly one posted `stock_moves` ledger entry with `source_type = App\Models\SalesOrderLine` and `source_id = sales_order_lines.id`.
 
 ---
 
@@ -926,8 +938,8 @@ Migrations remain the **sole source of truth**.
 | quantity    | decimal(18,6) | No       | Signed                        |
 | type        | enum          | No       | See ENUMS.md                  |
 | status      | string        | No       | See ENUMS.md                  |
-| source_type | string        | Yes      | Polymorphic; purchase receipts use `purchase_order_receipt_line` |
-| source_id   | bigint        | Yes      | Polymorphic; purchase receipts reference purchase_order_receipt_lines.id |
+| source_type | string        | Yes      | Polymorphic source discriminator |
+| source_id   | bigint        | Yes      | Polymorphic source primary key |
 | created_at  | timestamp     | No       | Defaults to CURRENT_TIMESTAMP |
 
 ### Keys & Indexes
@@ -935,6 +947,13 @@ Migrations remain the **sole source of truth**.
 - PK: `id`
 - Index: `(source_type, source_id)`
 - Implicit (FK index): tenant_id, item_id, uom_id
+
+### Behavioral Notes
+
+- Purchase receipt stock moves may use `source_type = purchase_order_receipt_line`.
+- Sales-order completion stock moves use `source_type = App\Models\SalesOrderLine` and `source_id = sales_order_lines.id`.
+- Sales-order completion creates `issue` stock moves in the item base UoM with the line quantity as a signed negative ledger amount.
+- Negative inventory is allowed in V1. Sales-order completion does not perform availability blocking.
 
 ---
 

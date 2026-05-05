@@ -17,6 +17,7 @@ Authority Order (highest to lowest — conflicts resolved by this order):
 9. routes/web.php (main web routes — included here for complete bootstrap context)
 10. docs/PR3_ROADMAP.md
 
+
 ## docs/AI_CHAT_CODEX.md
 
 # AI Chat Bootstrap (READ FIRST)
@@ -248,6 +249,7 @@ If unsure, **stop immediately and ask**.
 - “Unauthenticated = no access” enforced via routes/gates,
   **not global model scopes**
 - The **smallest possible change per PR**
+
 
 ## docs/PR2_ROADMAP.md
 
@@ -1543,6 +1545,7 @@ Introduce a UoM-level display precision field and enforce consistent quantity fo
 - Any changes to storage precision or BCMath scale
 - JavaScript formatting or UI-only overrides per view
 
+
 ## docs/CONVENTIONS.md
 
 # Conventions
@@ -1797,6 +1800,7 @@ These rules apply to:
 - Receiving logic
 - Unit conversions
 - Any inventory-affecting calculations
+
 
 ## docs/ARCHITECTURE_INVENTORY.md
 
@@ -2062,16 +2066,18 @@ $customer->contacts()->create([
 - `app/Models/SalesOrder.php`  
 
 **Purpose:**  
-Document the draft-only sales-order customer/contact rules shared by the Sales Orders index and the customer detail Orders mini-index.
+Document the sales-order customer/contact rules shared by the Sales Orders index and the customer detail Orders mini-index.
 
 **When to Use:**  
-Any draft sales-order create, update, delete, or validation flow, including customer changes that may re-default the assigned contact.
+Any editable sales-order create, update, delete, or validation flow, including customer changes that may re-default the assigned contact.
 
 **When Not to Use:**  
 Sales-order lines, pricing snapshots, fulfillment/inventory effects, invoicing, or customer-contact primary designation outside a sales-order assignment.
 
 **Public Interface:**  
 - `SalesOrder::STATUS_DRAFT`  
+- `SalesOrder::STATUS_OPEN`  
+- `SalesOrder::isEditable()`  
 - `SalesOrder::statuses()`  
 - `sales.orders.index`  
 - `sales.orders.store`  
@@ -2090,9 +2096,9 @@ $order = SalesOrder::query()->create([
 
 ---
 
-### Sales Order Line Pricing And Draft Rules
+### Sales Order Line Pricing And Editable Rules
 
-**Name:** Sales Order Line Pricing And Draft Rules  
+**Name:** Sales Order Line Pricing And Editable Rules  
 **Type:** Domain Rule  
 **Location:**  
 - `docs/architecture/sales/SalesOrderLinePricingAndDraftRules.yaml`  
@@ -2103,16 +2109,18 @@ $order = SalesOrder::query()->create([
 - `app/Models/SalesOrderLine.php`  
 
 **Purpose:**  
-Document the draft-only sales-order line mutation rules, immutable unit-price snapshots, and canonical scale-6 quantity/line-total behavior shared by the Sales Orders index and the customer detail Orders mini-index.
+Document the editable sales-order line mutation rules, immutable unit-price snapshots, and canonical scale-6 quantity/line-total behavior shared by the Sales Orders index and the customer detail Orders mini-index.
 
 **When to Use:**  
-Any sales-order line create, delete, or quantity-update flow for draft sales orders.
+Any sales-order line create, delete, or quantity-update flow for editable sales orders.
 
 **When Not to Use:**  
-Sales-order header customer/contact assignment, lifecycle transitions, fulfillment, shipping, invoicing, payments, or inventory impact.
+Sales-order header customer/contact assignment, lifecycle transitions, fulfillment, shipping, invoicing, payments, or completion inventory impact.
 
 **Public Interface:**  
 - `SalesOrder::STATUS_DRAFT`  
+- `SalesOrder::STATUS_OPEN`  
+- `SalesOrder::allowsLineMutations()`  
 - `SalesOrder::lines()`  
 - `sales.orders.lines.store`  
 - `sales.orders.lines.update`  
@@ -2129,6 +2137,38 @@ $line = SalesOrderLine::query()->create([
     'unit_price_currency_code' => $item->default_price_currency_code,
     'line_total_cents' => '832.500000',
 ]);
+```
+
+---
+
+### Sales Order Completion Inventory Impact
+
+**Name:** Sales Order Completion Inventory Impact  
+**Type:** Domain Rule  
+**Location:**  
+- `docs/architecture/sales/SalesOrderCompletionInventoryImpact.yaml`  
+- `app/Actions/Sales/CompleteSalesOrderAction.php`  
+- `app/Http/Controllers/SalesOrderStatusController.php`  
+- `app/Models/StockMove.php`  
+
+**Purpose:**  
+Document the inventory-ledger effects of `OPEN -> COMPLETED` sales-order transitions and the safeguards around transactional posting.
+
+**When to Use:**  
+Completing a sales order, posting issue stock moves from sales-order lines, or validating rollback/idempotency expectations.
+
+**When Not to Use:**  
+Editable header/line mutations, cancellation flows without inventory impact, or downstream fulfillment/invoicing/payment behavior.
+
+**Public Interface:**  
+- `CompleteSalesOrderAction::execute()`  
+- `SalesOrder::STATUS_OPEN`  
+- `SalesOrder::STATUS_COMPLETED`  
+- `sales.orders.status.update`  
+
+**Example Usage:**  
+```php
+$completedOrder = $completeSalesOrderAction->execute($salesOrder);
 ```
 
 ---
@@ -3484,6 +3524,7 @@ it('creates a material', function () {
 
 ---
 
+
 ## docs/PERMISSIONS_MATRIX.md
 
 # Permissions Matrix
@@ -3669,6 +3710,7 @@ return [
 ];
 ```
 
+
 ## docs/ENUMS.md
 
 # ENUMS — Canonical Enum Authority
@@ -3781,16 +3823,27 @@ Do not introduce new enum values without updating this document.
 **Allowed values:**
 
 - `DRAFT`
+- `OPEN`
+- `COMPLETED`
+- `CANCELLED`
 
 **Semantic meaning:**
 
-- `DRAFT`: Sales order is editable. Header fields and sales-order lines may be created, updated, or deleted, but no lifecycle, inventory, fulfillment, invoicing, payment, or shipping effects exist in PR3-SO-001 / PR3-SO-002.
+- `DRAFT`: Sales order is editable. Header fields and sales-order lines may be created, updated, or deleted. No inventory impact exists yet.
+- `OPEN`: Sales order remains editable. Header fields and sales-order lines may still be created, updated, or deleted. No inventory impact exists yet.
+- `COMPLETED`: Terminal state. The order is no longer editable. Transitioning from `OPEN` to `COMPLETED` posts inventory issue stock moves.
+- `CANCELLED`: Terminal state. The order is no longer editable. Cancelling never posts inventory issue stock moves.
 
 **Notes:**
 
-- PR3-SO-001 / PR3-SO-002 are draft-only.
-- Sales-order lines may only be added, removed, or quantity-edited while the order remains `DRAFT`.
-- Future sales-order lifecycle statuses must be added here before use.
+- Allowed transitions are:
+    - `DRAFT -> OPEN`
+    - `DRAFT -> CANCELLED`
+    - `OPEN -> COMPLETED`
+    - `OPEN -> CANCELLED`
+- `COMPLETED` and `CANCELLED` are terminal.
+- Sales-order headers and lines may only be mutated while the order is `DRAFT` or `OPEN`.
+- Older roadmap-era statuses such as `CONFIRMED` and `FULFILLED` are not valid statuses.
 
 ---
 
@@ -3816,6 +3869,11 @@ Do not introduce new enum values without updating this document.
 
 **Notes:**
 
+- `inventory_count_adjustment` must be used for inventory count posting variance.
+- Do not use `adjustment` for inventory count posting.
+- `inventory_count_adjustment` exists to preserve auditability and traceability.
+- It allows inventory counts to be reported, reversed, or analyzed independently of generic adjustments.
+
 ### Stock Move Status
 
 **Name:** StockMove status  
@@ -3832,16 +3890,17 @@ Do not introduce new enum values without updating this document.
 - `SUBMITTED`: Stock move is queued for posting.
 - `POSTED`: Stock move is applied to the ledger.
 
-- `inventory_count_adjustment` must be used for inventory count posting variance.
-- Do not use `adjustment` for inventory count posting.
-- `inventory_count_adjustment` exists to preserve auditability and traceability.
-- It allows inventory counts to be reported, reversed, or analyzed independently of generic adjustments.
+**Notes:**
+
+- Sales-order completion inventory impact posts `issue` stock moves with `status = POSTED`.
+- Purchase-receipt and inventory-count posting flows also use `POSTED` when the move is ledger-valid.
 
 ---
 
 ## Conflicts / Ambiguities Report
 
 No conflicts or ambiguities were found at time of creation based on existing migrations, models, actions, and tests.
+
 
 ## docs/DB_SCHEMA.md
 
@@ -4015,7 +4074,7 @@ Migrations remain the **sole source of truth**.
 ## sales_orders
 
 **Tenant-owned:** Yes  
-**Purpose:** Draft sales orders shared by the Sales Orders index and the customer detail Orders mini-index
+**Purpose:** Sales order headers shared by the Sales Orders index and the customer detail Orders mini-index
 
 ### Columns
 
@@ -4025,7 +4084,7 @@ Migrations remain the **sole source of truth**.
 | tenant_id  | bigint    | No       | FK → tenants.id (CASCADE)            |
 | customer_id | bigint   | No       | FK → customers.id (CASCADE)          |
 | contact_id | bigint    | Yes      | FK → customer_contacts.id (SET NULL) |
-| status     | string    | No       | Defaults to `DRAFT`                  |
+| status     | string    | No       | Defaults to `DRAFT`; allowed values are defined in `docs/ENUMS.md` |
 | created_at | timestamp | Yes      | —                                    |
 | updated_at | timestamp | Yes      | —                                    |
 
@@ -4039,12 +4098,19 @@ Migrations remain the **sole source of truth**.
 - Implicit (FK index): `customer_id`
 - Implicit (FK index): `contact_id`
 
+### Behavioral Notes
+
+- Sales order headers remain editable only while `status` is `DRAFT` or `OPEN`.
+- `COMPLETED` and `CANCELLED` are terminal.
+- Transitioning from `OPEN` to `COMPLETED` may create one stock move per sales-order line.
+- `DRAFT -> OPEN`, `DRAFT -> CANCELLED`, and `OPEN -> CANCELLED` create no stock moves.
+
 ---
 
 ## sales_order_lines
 
 **Tenant-owned:** Yes  
-**Purpose:** Draft sales order line items with immutable price snapshots for the Sales Orders index and customer detail Orders mini-index
+**Purpose:** Sales order line items with immutable price snapshots for the Sales Orders index and customer detail Orders mini-index
 
 ### Columns
 
@@ -4069,6 +4135,11 @@ Migrations remain the **sole source of truth**.
 - Implicit (FK index): `tenant_id`
 - Implicit (FK index): `sales_order_id`
 - Implicit (FK index): `item_id`
+
+### Behavioral Notes
+
+- Sales order line mutations are allowed only while the parent sales order is `DRAFT` or `OPEN`.
+- On `OPEN -> COMPLETED`, each line may generate exactly one posted `stock_moves` ledger entry with `source_type = App\Models\SalesOrderLine` and `source_id = sales_order_lines.id`.
 
 ---
 
@@ -4773,8 +4844,8 @@ Migrations remain the **sole source of truth**.
 | quantity    | decimal(18,6) | No       | Signed                        |
 | type        | enum          | No       | See ENUMS.md                  |
 | status      | string        | No       | See ENUMS.md                  |
-| source_type | string        | Yes      | Polymorphic; purchase receipts use `purchase_order_receipt_line` |
-| source_id   | bigint        | Yes      | Polymorphic; purchase receipts reference purchase_order_receipt_lines.id |
+| source_type | string        | Yes      | Polymorphic source discriminator |
+| source_id   | bigint        | Yes      | Polymorphic source primary key |
 | created_at  | timestamp     | No       | Defaults to CURRENT_TIMESTAMP |
 
 ### Keys & Indexes
@@ -4782,6 +4853,13 @@ Migrations remain the **sole source of truth**.
 - PK: `id`
 - Index: `(source_type, source_id)`
 - Implicit (FK index): tenant_id, item_id, uom_id
+
+### Behavioral Notes
+
+- Purchase receipt stock moves may use `source_type = purchase_order_receipt_line`.
+- Sales-order completion stock moves use `source_type = App\Models\SalesOrderLine` and `source_id = sales_order_lines.id`.
+- Sales-order completion creates `issue` stock moves in the item base UoM with the line quantity as a signed negative ledger amount.
+- Negative inventory is allowed in V1. Sales-order completion does not perform availability blocking.
 
 ---
 
@@ -4939,6 +5017,7 @@ Migrations remain the **sole source of truth**.
 
 **End of DB_SCHEMA**
 
+
 ## docs/UI_DESIGN.md
 
 # UI_DESIGN.md — Canonical UI Direction & Constraints
@@ -5034,6 +5113,7 @@ The UI should feel:
 - Preserve subtle active states, rounded nav items, subtle borders, and soft shadows
 - Do not introduce flashy, marketing-style, or dashboard-heavy navigation
 - Navigation refactors must preserve route names, gates, `@can` checks, active states, and existing behavior
+- When navigation availability is gated by server-rendered domain prerequisites, AJAX page modules may patch stale local nav DOM after a successful mutation, but must not introduce global JS state or client-side authority
 
 ---
 
@@ -5528,6 +5608,7 @@ They are mandatory, not stylistic.
 
 ::contentReference[oaicite:0]{index=0}
 
+
 ## routes/web.php
 
 <?php
@@ -5549,6 +5630,7 @@ use App\Http\Controllers\PurchaseOrderStatusController;
 use App\Http\Controllers\RecipeController;
 use App\Http\Controllers\SalesOrderController;
 use App\Http\Controllers\SalesOrderLineController;
+use App\Http\Controllers\SalesOrderStatusController;
 use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\SupplierPurchaseOptionController;
 use App\Http\Controllers\UomCategoryController;
@@ -5725,6 +5807,8 @@ Route::middleware('auth')->group(function () {
         ->name('sales.orders.store');
     Route::patch('/sales/orders/{salesOrder}', [SalesOrderController::class, 'update'])
         ->name('sales.orders.update');
+    Route::patch('/sales/orders/{salesOrder}/status', [SalesOrderStatusController::class, 'update'])
+        ->name('sales.orders.status.update');
     Route::delete('/sales/orders/{salesOrder}', [SalesOrderController::class, 'destroy'])
         ->name('sales.orders.destroy');
     Route::post('/sales/orders/{salesOrder}/lines', [SalesOrderLineController::class, 'store'])
@@ -5749,6 +5833,7 @@ Route::delete('/manufacturing/uom-conversions/items/{itemConversion}', [UomConve
     ->name('manufacturing.uom-conversions.items.destroy');
 
 require __DIR__ . '/auth.php';
+
 
 ## docs/PR3_ROADMAP.md
 
@@ -5907,6 +5992,7 @@ Introduce draft sales orders.
 - On edit, changing `customer_id` resets `contact_id` to the new customer’s primary contact unless a valid contact for the new customer is explicitly submitted
 - A contact from the previous customer is never preserved after customer change
 - Sales → Orders remains visible but disabled unless the tenant has at least one customer and at least one sellable item
+- Statuses later expanded by PR3-SO-004 / PR3-SO-005 still preserve the same shared AJAX CRUD surface
 
 **Permissions**
 
@@ -5938,7 +6024,7 @@ Allow adding items to existing draft sales orders.
 
 **Rules**
 
-- Sales order lines may be added, removed, or quantity-edited only while the parent sales order is `DRAFT`
+- Sales order lines may be added, removed, or quantity-edited only while the parent sales order is editable in the current lifecycle slice
 - Only items with `is_sellable = true` may be added
 - Quantity uses BCMath-compatible string math with canonical scale 6
 - Unit price snapshot is captured when the line is created
@@ -5968,33 +6054,61 @@ Ensure immutable pricing at line creation.
 
 ### PR3-SO-004 — Sales Order Lifecycle
 
+Status: Implemented
+
 **Goal**
 Introduce lifecycle without inventory impact yet.
 
 **Statuses**
 
 - DRAFT
-- CONFIRMED
-- FULFILLED
+- OPEN
+- COMPLETED
+- CANCELLED
+
+**Rules**
+
+- Allowed transitions:
+    - `DRAFT -> OPEN`
+    - `DRAFT -> CANCELLED`
+    - `OPEN -> COMPLETED`
+    - `OPEN -> CANCELLED`
+- `COMPLETED` and `CANCELLED` are terminal
+- Header and line editing are allowed only while the order is `DRAFT` or `OPEN`
+- Header and line editing are blocked while the order is `COMPLETED` or `CANCELLED`
+- Lifecycle status changes return JSON and do not redirect
+- `DRAFT -> OPEN` and any cancellation transition create no stock moves
+- Older roadmap-era statuses `CONFIRMED` and `FULFILLED` are not valid
 
 ---
 
 ### PR3-SO-005 — Inventory Impact (Critical)
+
+Status: Implemented
 
 **Goal**
 Sales orders must update inventory.
 
 **Includes**
 
-- On fulfillment:
-    - Create stock_moves.type = issue
-    - Reduce inventory
+- On `OPEN -> COMPLETED`:
+    - Create one `stock_moves` row per sales-order line
+    - Use `type = issue`
+    - Use `status = POSTED`
+    - Use the item base UoM
+    - Link the row with `source_type = App\Models\SalesOrderLine` and `source_id = sales_order_lines.id`
+    - Reduce on-hand inventory through the ledger
 
 **Rules**
 
 - Inventory is source of truth
 - BCMath required
 - Transactional integrity
+- Completion does not check availability in V1
+- Negative inventory is allowed in V1
+- `CANCELLED` creates no stock moves
+- Retrying completion must not create duplicate stock moves
+- If stock move creation fails, the order must remain `OPEN` and no partial stock moves may persist
 
 ---
 

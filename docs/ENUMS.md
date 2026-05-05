@@ -108,16 +108,27 @@ Do not introduce new enum values without updating this document.
 **Allowed values:**
 
 - `DRAFT`
+- `OPEN`
+- `COMPLETED`
+- `CANCELLED`
 
 **Semantic meaning:**
 
-- `DRAFT`: Sales order is editable. Header fields and sales-order lines may be created, updated, or deleted, but no lifecycle, inventory, fulfillment, invoicing, payment, or shipping effects exist in PR3-SO-001 / PR3-SO-002.
+- `DRAFT`: Sales order is editable. Header fields and sales-order lines may be created, updated, or deleted. No inventory impact exists yet.
+- `OPEN`: Sales order remains editable. Header fields and sales-order lines may still be created, updated, or deleted. No inventory impact exists yet.
+- `COMPLETED`: Terminal state. The order is no longer editable. Transitioning from `OPEN` to `COMPLETED` posts inventory issue stock moves.
+- `CANCELLED`: Terminal state. The order is no longer editable. Cancelling never posts inventory issue stock moves.
 
 **Notes:**
 
-- PR3-SO-001 / PR3-SO-002 are draft-only.
-- Sales-order lines may only be added, removed, or quantity-edited while the order remains `DRAFT`.
-- Future sales-order lifecycle statuses must be added here before use.
+- Allowed transitions are:
+    - `DRAFT -> OPEN`
+    - `DRAFT -> CANCELLED`
+    - `OPEN -> COMPLETED`
+    - `OPEN -> CANCELLED`
+- `COMPLETED` and `CANCELLED` are terminal.
+- Sales-order headers and lines may only be mutated while the order is `DRAFT` or `OPEN`.
+- Older roadmap-era statuses such as `CONFIRMED` and `FULFILLED` are not valid statuses.
 
 ---
 
@@ -143,6 +154,11 @@ Do not introduce new enum values without updating this document.
 
 **Notes:**
 
+- `inventory_count_adjustment` must be used for inventory count posting variance.
+- Do not use `adjustment` for inventory count posting.
+- `inventory_count_adjustment` exists to preserve auditability and traceability.
+- It allows inventory counts to be reported, reversed, or analyzed independently of generic adjustments.
+
 ### Stock Move Status
 
 **Name:** StockMove status  
@@ -159,10 +175,10 @@ Do not introduce new enum values without updating this document.
 - `SUBMITTED`: Stock move is queued for posting.
 - `POSTED`: Stock move is applied to the ledger.
 
-- `inventory_count_adjustment` must be used for inventory count posting variance.
-- Do not use `adjustment` for inventory count posting.
-- `inventory_count_adjustment` exists to preserve auditability and traceability.
-- It allows inventory counts to be reported, reversed, or analyzed independently of generic adjustments.
+**Notes:**
+
+- Sales-order completion inventory impact posts `issue` stock moves with `status = POSTED`.
+- Purchase-receipt and inventory-count posting flows also use `POSTED` when the move is ledger-valid.
 
 ---
 

@@ -7,17 +7,17 @@ location:
   - app/Models/SalesOrder.php
   - resources/views/sales/orders/index.blade.php
   - resources/views/sales/customers/show.blade.php
-purpose: Document the draft-only sales-order customer/contact rules shared by the Sales Orders index and the customer detail Orders mini-index.
+purpose: Document the sales-order customer/contact assignment rules shared by the Sales Orders index and the customer detail Orders mini-index.
 when_to_use:
-  - Creating or updating draft sales orders from the Sales Orders index
-  - Creating or updating draft sales orders from the customer detail Orders section
+  - Creating or updating editable sales orders from the Sales Orders index
+  - Creating or updating editable sales orders from the customer detail Orders section
   - Validating customer/contact combinations for sales-order forms
 when_not_to_use:
   - Sales-order line items, pricing snapshots, fulfillment, inventory impact, or invoicing flows
   - Customer-contact primary designation rules outside sales-order assignment
 rules:
   - Sales orders are tenant-owned and tenant-scoped.
-  - PR3-SO-001 supports draft-only sales orders.
+  - Sales-order header mutations are allowed only while the order status is DRAFT or OPEN.
   - customer_id is required and must belong to the current tenant.
   - contact_id is optional but, when submitted, must belong to the selected customer in the current tenant.
   - Creating a sales order without contact_id defaults contact_id to the selected customer's primary contact when one exists.
@@ -25,9 +25,12 @@ rules:
   - Changing customer_id resets contact_id to the new customer's primary contact unless an explicit valid contact_id for the new customer is submitted.
   - A contact from the previous customer must never be preserved after customer_id changes.
   - Sales-order create, update, and delete mutations return JSON for AJAX consumers and do not redirect.
+  - Completed and cancelled sales orders are terminal and cannot be edited again.
   - Sales-order mutations use sales-sales-orders-manage, while customer detail read access remains sales-customers-view.
 public_interface:
   - SalesOrder::STATUS_DRAFT
+  - SalesOrder::STATUS_OPEN
+  - SalesOrder::isEditable()
   - SalesOrder::statuses()
   - sales.orders.index
   - sales.orders.store

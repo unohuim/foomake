@@ -3,6 +3,7 @@ import Alpine from 'alpinejs';
 export function mount(rootEl, payload) {
     const safePayload = payload || {};
     const payloadUoms = safePayload.uoms || [];
+    const inactiveNavLinkClasses = 'block w-full rounded-xl border border-transparent px-4 py-3 text-left text-sm font-medium text-slate-200 transition duration-200 ease-out hover:border-slate-700 hover:bg-slate-800/70 hover:text-white';
     const emptyErrors = () => ({
         name: [],
         base_uom_id: [],
@@ -18,6 +19,9 @@ export function mount(rootEl, payload) {
         updateUrlBase: safePayload.updateUrlBase || '',
         showUrlBase: safePayload.showUrlBase || '',
         storeUrl: safePayload.storeUrl || '',
+        canManageSalesOrders: Boolean(safePayload.canManageSalesOrders),
+        hasSalesOrderCustomers: Boolean(safePayload.hasSalesOrderCustomers),
+        salesOrdersNavUrl: safePayload.salesOrdersNavUrl || '',
         csrfToken: safePayload.csrfToken || '',
         tenantCurrency: safePayload.tenantCurrency || '',
         isCreateOpen: false,
@@ -95,6 +99,22 @@ export function mount(rootEl, payload) {
             this.toast.timeoutId = setTimeout(() => {
                 this.toast.visible = false;
             }, 2500);
+        },
+        enableSalesOrdersNavIfEligible() {
+            if (!this.canManageSalesOrders || !this.hasSalesOrderCustomers || !this.salesOrdersNavUrl) {
+                return;
+            }
+
+            document.querySelectorAll('[data-sales-orders-nav-disabled]').forEach((element) => {
+                const anchor = document.createElement('a');
+
+                anchor.href = this.salesOrdersNavUrl;
+                anchor.className = inactiveNavLinkClasses;
+                anchor.dataset.salesOrdersNavLink = element.dataset.salesOrdersNavDisabled || '';
+                anchor.textContent = 'Orders';
+
+                element.replaceWith(anchor);
+            });
         },
         openCreate() {
             if (!this.uomsExist) {
@@ -261,19 +281,23 @@ export function mount(rootEl, payload) {
             const data = await response.json();
             const uom = this.uomsById[data.data.base_uom_id] || { name: '', symbol: '' };
 
-                this.items.unshift({
-                    id: data.data.id,
-                    name: data.data.name,
-                    base_uom_id: data.data.base_uom_id,
-                    base_uom_name: uom.name,
-                    base_uom_symbol: uom.symbol,
-                    is_purchasable: data.data.is_purchasable,
-                    is_sellable: data.data.is_sellable,
-                    is_manufacturable: data.data.is_manufacturable,
-                    default_price_amount: data.data.default_price_amount,
-                    default_price_currency_code: data.data.default_price_currency_code,
-                    has_stock_moves: false,
-                });
+            this.items.unshift({
+                id: data.data.id,
+                name: data.data.name,
+                base_uom_id: data.data.base_uom_id,
+                base_uom_name: uom.name,
+                base_uom_symbol: uom.symbol,
+                is_purchasable: data.data.is_purchasable,
+                is_sellable: data.data.is_sellable,
+                is_manufacturable: data.data.is_manufacturable,
+                default_price_amount: data.data.default_price_amount,
+                default_price_currency_code: data.data.default_price_currency_code,
+                has_stock_moves: false,
+            });
+
+            if (data.data.is_sellable) {
+                this.enableSalesOrdersNavIfEligible();
+            }
 
             this.closeCreate();
         },
@@ -334,6 +358,10 @@ export function mount(rootEl, payload) {
                     default_price_currency_code: data.data.default_price_currency_code,
                     has_stock_moves: data.data.has_stock_moves ?? this.items[itemIndex].has_stock_moves,
                 };
+            }
+
+            if (data.data.is_sellable) {
+                this.enableSalesOrdersNavIfEligible();
             }
 
             this.showToast('success', 'Material updated.');

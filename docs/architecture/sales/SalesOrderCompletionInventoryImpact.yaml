@@ -1,0 +1,41 @@
+name: Sales Order Completion Inventory Impact
+type: Domain Rule
+location:
+  - app/Actions/Sales/CompleteSalesOrderAction.php
+  - app/Http/Controllers/SalesOrderStatusController.php
+  - app/Models/SalesOrder.php
+  - app/Models/SalesOrderLine.php
+  - app/Models/StockMove.php
+  - resources/views/sales/orders/index.blade.php
+  - resources/views/sales/customers/show.blade.php
+purpose: Document the inventory-ledger effects of completing a sales order and the safeguards around posting those issue moves.
+when_to_use:
+  - Completing an OPEN sales order
+  - Creating stock moves from sales-order lines
+  - Verifying rollback and idempotency expectations for sales-order completion
+when_not_to_use:
+  - Draft or open sales-order header edits
+  - Draft or open sales-order line edits
+  - Fulfillment allocation, shipping, invoicing, or payment workflows
+rules:
+  - Inventory impact occurs only when a sales order transitions from OPEN to COMPLETED.
+  - Completing a sales order creates exactly one stock move per sales-order line.
+  - Each completion stock move is tenant-scoped and uses the same tenant_id as the sales order and line.
+  - Each completion stock move uses the sales-order line item and that item's base UoM.
+  - Each completion stock move uses type = issue and status = POSTED.
+  - Each completion stock move records the sales-order line quantity as a signed negative canonical scale-6 ledger amount.
+  - Each completion stock move links back to the originating sales-order line with source_type = App\Models\SalesOrderLine and source_id = sales_order_lines.id.
+  - Completing a sales order with zero lines is allowed and creates zero stock moves.
+  - DRAFT to OPEN creates no stock moves.
+  - Any transition to CANCELLED creates no stock moves.
+  - Negative inventory is allowed in V1 and completion does not block on availability.
+  - Sales-order completion and stock-move creation must run in a single database transaction.
+  - If stock-move creation fails, the sales order must remain OPEN and no partial stock moves may persist.
+  - Retrying completion must not create duplicate stock moves for a line that already has completion inventory impact.
+public_interface:
+  - CompleteSalesOrderAction::execute()
+  - SalesOrder::STATUS_OPEN
+  - SalesOrder::STATUS_COMPLETED
+  - sales.orders.status.update
+example_usage: |
+  $completedOrder = $completeSalesOrderAction->execute($salesOrder);

@@ -882,7 +882,7 @@ it('37. status changes create no stock moves', function () {
     expect(($this->countStockMovesForTenant)($tenant))->toBe(0);
 });
 
-it('38. completing a sales order creates no stock moves', function () {
+it('38. completing a zero line sales order creates no stock moves', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
     $customer = ($this->createCustomer)($tenant);
@@ -940,5 +940,5 @@ it('40. status only lifecycle does not require inventory availability', function
         ->assertJsonPath('data.status', 'COMPLETED');
 
     expect(($this->fetchSalesOrder)($order->id)?->status)->toBe('COMPLETED')
-        ->and(($this->countStockMovesForTenant)($tenant))->toBe(0);
+        ->and(($this->countStockMovesForTenant)($tenant))->toBe(1);
 });

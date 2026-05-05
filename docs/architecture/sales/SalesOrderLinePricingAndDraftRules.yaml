@@ -1,4 +1,4 @@
-name: Sales Order Line Pricing And Draft Rules
+name: Sales Order Line Pricing And Editable Rules
 type: Domain Rule
 location:
   - app/Http/Controllers/SalesOrderLineController.php
@@ -9,18 +9,18 @@ location:
   - database/migrations/2026_05_04_000010_create_sales_order_lines_table.php
   - resources/views/sales/orders/index.blade.php
   - resources/views/sales/customers/show.blade.php
-purpose: Document the draft-only sales-order line mutation rules, immutable unit-price snapshots, and canonical quantity math shared by the Sales Orders index and the customer detail Orders mini-index.
+purpose: Document the editable sales-order line mutation rules, immutable unit-price snapshots, and canonical quantity math shared by the Sales Orders index and the customer detail Orders mini-index.
 when_to_use:
-  - Adding lines to draft sales orders
-  - Removing lines from draft sales orders
-  - Editing draft sales-order line quantities
+  - Adding lines to editable sales orders
+  - Removing lines from editable sales orders
+  - Editing editable sales-order line quantities
   - Validating sellable-item eligibility and line payloads
 when_not_to_use:
   - Sales-order header customer/contact assignment
-  - Sales-order lifecycle, fulfillment, shipping, invoicing, payments, or inventory impact
+  - Sales-order lifecycle transitions, fulfillment, shipping, invoicing, payments, or completion inventory posting
 rules:
   - Sales order lines are tenant-owned and tenant-scoped.
-  - Sales order line mutations are allowed only while the parent sales order remains in the draft-only PR slice.
+  - Sales order line mutations are allowed only while the parent sales order status is DRAFT or OPEN.
   - Only items eligible for selling may be added as sales-order lines.
   - quantity is stored and exposed as a canonical scale-6 BCMath string.
   - unit_price_cents is captured from the item at line creation and becomes an immutable snapshot.
@@ -29,9 +29,12 @@ rules:
   - Quantity edits recalculate line_total_cents from the stored unit price snapshot and must not mutate snapshot price fields.
   - Later item price changes must not mutate existing sales-order line snapshots.
   - Sales-order line mutations return JSON for AJAX consumers and do not redirect.
+  - Completed and cancelled sales orders do not allow line create, update, or delete mutations.
   - Sales-order line mutations use sales-sales-orders-manage and do not introduce a separate permission slug.
 public_interface:
   - SalesOrder::STATUS_DRAFT
+  - SalesOrder::STATUS_OPEN
+  - SalesOrder::allowsLineMutations()
   - SalesOrder::lines()
   - sales.orders.lines.store
   - sales.orders.lines.update
