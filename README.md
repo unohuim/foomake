@@ -29,6 +29,7 @@ All operational data is isolated via `tenant_id`.
 - Global roles + permission slugs
 - Domain-level authorization using Laravel Gates
 - No UI-based authorization
+- Backend-owned navigation eligibility for order menus, with AJAX refresh through `GET /navigation/state`
 - Tests are the behavioral source of truth
 
 ---

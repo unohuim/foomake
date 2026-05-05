@@ -27,11 +27,14 @@ rules:
   - No global JavaScript state may be introduced to implement this pattern.
   - Payload parsing must be safe (JSON parse with fallback to an empty object).
   - Page modules must avoid build-invalid syntax such as optional chaining on assignment LHS.
+  - Page modules may call shared DOM refresh helpers after successful AJAX mutations when server-rendered navigation or other page chrome becomes stale.
+  - Shared helpers must remain stateless and must not replace backend authority.
 public_interface:
   - docs/architecture/ui/PageModuleContract.yaml
   - docs/UI_DESIGN.md
   - resources/js/app.js
   - resources/js/pages/**
+  - resources/js/navigation/**
 example_usage: |
   Blade:
     <script type="application/json" id="materials-index-payload">@json($payload)</script>

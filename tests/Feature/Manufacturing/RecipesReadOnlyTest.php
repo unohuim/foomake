@@ -262,6 +262,22 @@ test('view and manage permissions include can_manage true in payload', function 
         ->assertSee('"can_manage":true', false);
 });
 
+test('recipes index payload includes the shared navigation state refresh url', function () {
+    $tenant = ($this->makeTenant)('Tenant A');
+    $user = User::factory()->for($tenant)->create();
+    ($this->grantInventoryRecipesView)($user);
+    ($this->grantMakeOrdersManage)($user);
+
+    $response = $this->actingAs($user)
+        ->get(route('manufacturing.recipes.index'))
+        ->assertOk()
+        ->assertSee('manufacturing-recipes-index-payload', false);
+
+    $payload = ($this->extractPayload)($response, 'manufacturing-recipes-index-payload');
+
+    expect($payload['navigationStateUrl'] ?? null)->toBe(url('/navigation/state'));
+});
+
 test('index payload includes recipe output quantity per run display', function () {
     $tenant = ($this->makeTenant)('Tenant A');
     $user = User::factory()->for($tenant)->create();

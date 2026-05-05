@@ -6,7 +6,6 @@
     </x-slot>
 
     @php
-        $canManageSalesOrders = auth()->user()?->can('sales-sales-orders-manage') ?? false;
         $uomsExist = \App\Models\Uom::query()->exists();
         $uoms = \App\Models\Uom::query()->orderBy('name')->get();
         $tenantCurrency = auth()->user()?->tenant?->currency_code ?: (string) config('app.currency_code', 'USD');
@@ -49,11 +48,7 @@
             'updateUrlBase' => url('/materials'),
             'showUrlBase' => url('/materials'),
             'storeUrl' => route('materials.store'),
-            'canManageSalesOrders' => $canManageSalesOrders,
-            'hasSalesOrderCustomers' => $canManageSalesOrders
-                ? \App\Models\Customer::query()->exists()
-                : false,
-            'salesOrdersNavUrl' => $canManageSalesOrders ? route('sales.orders.index') : null,
+            'navigationStateUrl' => route('navigation.state'),
             'csrfToken' => csrf_token(),
             'tenantCurrency' => $tenantCurrency,
         ];

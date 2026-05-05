@@ -51,6 +51,7 @@ class RecipeController extends Controller
             'update_url_base' => url('/manufacturing/recipes'),
             'delete_url_base' => url('/manufacturing/recipes'),
             'show_url_base' => url('/manufacturing/recipes'),
+            'navigationStateUrl' => route('navigation.state'),
             'csrf_token' => $request->session()->token(),
             'can_manage' => Gate::allows('inventory-make-orders-manage'),
         ];

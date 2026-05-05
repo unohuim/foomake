@@ -1,0 +1,45 @@
+name: Shared Navigation Eligibility State
+type: UI Architecture Invariant
+location:
+  - app/Navigation/NavigationEligibility.php
+  - app/Http/Controllers/NavigationStateController.php
+  - resources/views/layouts/navigation.blade.php
+  - resources/js/navigation/refresh-navigation-state.js
+  - routes/web.php
+purpose: Centralize tenant-scoped order-navigation eligibility in backend application code while allowing page modules to refresh stale nav DOM after successful AJAX mutations.
+when_to_use:
+  - Rendering Sales Orders, Purchase Orders, or Make Orders navigation items
+  - Returning the shared navigation state contract from backend code
+  - Refreshing stale navigation after customer, supplier, material, or recipe mutations
+when_not_to_use:
+  - Authorization decisions that must remain gate-based
+  - Hiding entire domains from users who lack permission to see them
+  - Replacing server-rendered initial navigation state with client-owned state
+rules:
+  - Backend code owns navigation eligibility.
+  - Navigation eligibility is tenant-scoped.
+  - The canonical eligibility keys are salesOrdersEnabled, purchaseOrdersEnabled, and makeOrdersEnabled.
+  - Sales Orders are enabled only when at least one customer exists and at least one sellable item exists.
+  - Purchase Orders are enabled only when at least one supplier exists and at least one purchasable item exists.
+  - Make Orders are enabled only when at least one manufacturable item exists and at least one active recipe exists.
+  - Blade navigation and GET /navigation/state must use the same NavigationEligibility service contract.
+  - Permissions remain layered separately through gates and @can checks.
+  - Disabled navigation items remain visible but inactive.
+  - Disabled navigation items must not render clickable href attributes.
+  - Enabled navigation items preserve their existing route destinations and active-state behavior.
+  - Frontend refresh behavior may patch only the affected nav DOM state after successful AJAX mutations.
+  - No global JavaScript state may be introduced for navigation eligibility.
+public_interface:
+  - NavigationEligibility::forUser()
+  - NavigationEligibility::forTenantId()
+  - GET /navigation/state
+  - navigation.state
+example_usage: |
+  $eligibility = app(\App\Navigation\NavigationEligibility::class)->forUser(auth()->user());
+
+  if ($eligibility['salesOrdersEnabled']) {
+      // render clickable orders link
+  }
+
+  const response = await fetch('/navigation/state', { headers: { Accept: 'application/json' } });
+  const state = await response.json();

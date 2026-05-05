@@ -311,7 +311,7 @@ it('3d. sales orders navigation remains gated by sales sales orders manage permi
         ->assertDontSee(route('sales.orders.index'), false);
 });
 
-it('3e. customers index payload includes the sales orders nav refresh gate state', function () {
+it('3e. customers index payload includes the shared navigation state refresh url', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
     $uom = ($this->makeUom)($tenant);
@@ -327,9 +327,7 @@ it('3e. customers index payload includes the sales orders nav refresh gate state
 
     $payload = ($this->extractPayload)($response, 'sales-customers-index-payload');
 
-    expect($payload['canManageSalesOrders'] ?? null)->toBeTrue()
-        ->and($payload['hasSellableSalesOrderItems'] ?? null)->toBeTrue()
-        ->and($payload['salesOrdersNavUrl'] ?? null)->toBe(route('sales.orders.index'));
+    expect($payload['navigationStateUrl'] ?? null)->toBe(url('/navigation/state'));
 });
 
 it('4. guest cannot create a sales order', function () {

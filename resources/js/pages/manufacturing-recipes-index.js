@@ -1,4 +1,5 @@
 import Alpine from 'alpinejs';
+import { refreshNavigationState } from '../navigation/refresh-navigation-state';
 
 export function mount(rootEl, payload) {
     const safePayload = payload || {};
@@ -15,6 +16,7 @@ export function mount(rootEl, payload) {
         storeUrl: safePayload.store_url || '',
         updateUrlBase: safePayload.update_url_base || '',
         deleteUrlBase: safePayload.delete_url_base || '',
+        navigationStateUrl: safePayload.navigationStateUrl || '',
         csrfToken: safePayload.csrf_token || '',
         isCreateOpen: false,
         isCreateSubmitting: false,
@@ -177,6 +179,7 @@ export function mount(rootEl, payload) {
 
             const data = await response.json();
             this.recipes.unshift(data.data);
+            await refreshNavigationState(this.navigationStateUrl);
             this.showToast('success', 'Recipe created.');
             this.closeCreate();
         },
@@ -224,6 +227,7 @@ export function mount(rootEl, payload) {
                 });
             }
 
+            await refreshNavigationState(this.navigationStateUrl);
             this.showToast('success', 'Recipe updated.');
             this.closeEdit();
         },
@@ -248,6 +252,7 @@ export function mount(rootEl, payload) {
             }
 
             this.recipes = this.recipes.filter((recipe) => recipe.id !== this.deleteRecipeId);
+            await refreshNavigationState(this.navigationStateUrl);
             this.showToast('success', 'Recipe deleted.');
             this.closeDelete();
         },

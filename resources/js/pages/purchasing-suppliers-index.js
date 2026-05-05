@@ -1,3 +1,5 @@
+import { refreshNavigationState } from '../navigation/refresh-navigation-state';
+
 export function mount(rootEl, payload) {
     const Alpine = window.Alpine;
     const safePayload = payload || {};
@@ -21,6 +23,7 @@ export function mount(rootEl, payload) {
         suppliers: safePayload.suppliers || [],
         storeUrl: safePayload.storeUrl || '',
         updateUrlBase: safePayload.updateUrlBase || '',
+        navigationStateUrl: safePayload.navigationStateUrl || '',
         csrfToken: safePayload.csrfToken || '',
         defaultCurrency: safePayload.defaultCurrency || '',
         isCreateOpen: false,
@@ -306,6 +309,7 @@ export function mount(rootEl, payload) {
                 };
             }
 
+            await refreshNavigationState(this.navigationStateUrl);
             this.showToast('success', 'Supplier updated.');
             this.closeEdit();
         },
@@ -337,6 +341,7 @@ export function mount(rootEl, payload) {
             }
 
             this.suppliers = this.suppliers.filter((supplier) => supplier.id !== this.deleteSupplierId);
+            await refreshNavigationState(this.navigationStateUrl);
             this.showToast('success', 'Supplier deleted.');
             this.closeDelete();
         },

@@ -64,7 +64,7 @@ it('forbids users without inventory-materials-view permission from viewing mater
     $response->assertForbidden();
 });
 
-it('includes the sales orders nav refresh gate state in the materials index payload', function () {
+it('includes the shared navigation state refresh url in the materials index payload', function () {
     $customerPermission = Permission::firstOrCreate([
         'slug' => 'inventory-materials-view',
     ]);
@@ -103,7 +103,5 @@ it('includes the sales orders nav refresh gate state in the materials index payl
 
     $payload = ($this->extractPayload)($response, 'materials-index-payload');
 
-    expect($payload['canManageSalesOrders'] ?? null)->toBeTrue()
-        ->and($payload['hasSalesOrderCustomers'] ?? null)->toBeTrue()
-        ->and($payload['salesOrdersNavUrl'] ?? null)->toBe(route('sales.orders.index'));
+    expect($payload['navigationStateUrl'] ?? null)->toBe(url('/navigation/state'));
 });

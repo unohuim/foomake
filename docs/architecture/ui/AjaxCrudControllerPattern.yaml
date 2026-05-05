@@ -13,10 +13,12 @@ when_not_to_use:
 rules:
   - Controllers return JSON responses with appropriate HTTP status codes.
   - Backend validation is authoritative for all CRUD operations.
+  - Successful AJAX CRUD flows may return enough context for page modules to refresh stale navigation or surrounding page chrome without a full page reload.
 public_interface:
   - store()
   - update()
   - destroy()
+  - GET /navigation/state
 example_usage: |
   $response = $this->postJson('/materials', [
       'name' => 'Flour',

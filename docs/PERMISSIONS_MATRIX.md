@@ -159,6 +159,10 @@ Execution-only role.
 - Sales orders use `sales-sales-orders-manage` for `/sales/orders` index/create/update/delete, sales-order line CRUD, and customer detail Orders mini-index CRUD.
 - Customer detail Orders mini-index read access remains under `sales-customers-view`, but its mutations still require `sales-sales-orders-manage`.
 - Sales-order line create, quantity update, and delete mutations do not introduce a separate permission slug.
+- Navigation clickability for Sales Orders, Purchase Orders, and Make Orders is not permission-only:
+  - permissions and `@can` checks still govern whether the user may see the relevant nav branch
+  - backend navigation eligibility decides whether the order item renders as clickable or visible-but-disabled
+  - eligibility is tenant-scoped and shared by Blade navigation and `GET /navigation/state`
 - Current purchase-order routes use a two-gate model:
   - `purchasing-purchase-orders-create` for index/show/create/update/delete and line mutations
   - `purchasing-purchase-orders-receive` for receipts, short-closes, and manual status transitions

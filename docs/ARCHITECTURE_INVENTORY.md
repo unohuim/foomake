@@ -1255,6 +1255,39 @@ $response = $this->postJson('/materials', [
 
 ---
 
+### Shared Navigation Eligibility State
+
+**Name:** Shared Navigation Eligibility State  
+**Type:** UI Architecture Invariant  
+**Location:**  
+- `docs/architecture/ui/SharedNavigationEligibilityState.yaml`  
+- `app/Navigation/NavigationEligibility.php`  
+- `app/Http/Controllers/NavigationStateController.php`  
+- `resources/views/layouts/navigation.blade.php`  
+- `resources/js/navigation/refresh-navigation-state.js`  
+
+**Purpose:**  
+Centralize tenant-scoped order-navigation eligibility in backend code while letting AJAX page modules refresh stale nav DOM after successful mutations.
+
+**When to Use:**  
+Rendering or refreshing Sales Orders, Purchase Orders, or Make Orders navigation state.
+
+**When Not to Use:**  
+Authorization decisions, route protection, or any client-owned navigation authority.
+
+**Public Interface:**  
+- `NavigationEligibility::forUser()`  
+- `NavigationEligibility::forTenantId()`  
+- `GET /navigation/state`  
+- `navigation.state`  
+
+**Example Usage:**  
+```php
+$eligibility = app(\App\Navigation\NavigationEligibility::class)->forUser(auth()->user());
+```
+
+---
+
 ### Top Navigation Dropdown
 
 **Name:** Top Navigation Dropdown  

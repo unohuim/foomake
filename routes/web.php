@@ -6,6 +6,7 @@ use App\Http\Controllers\ItemController;
 use App\Http\Controllers\ItemPurchaseOptionPriceController;
 use App\Http\Controllers\MakeOrderController;
 use App\Http\Controllers\MaterialController;
+use App\Http\Controllers\NavigationStateController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\CustomerContactController;
 use App\Http\Controllers\ProfileController;
@@ -34,6 +35,9 @@ Route::get('/dashboard', function () {
 })->middleware(['auth', 'verified'])->name('dashboard');
 
 Route::middleware('auth')->group(function () {
+    Route::get('/navigation/state', NavigationStateController::class)
+        ->name('navigation.state');
+
     Route::get('/inventory', [InventoryController::class, 'index'])->name('inventory.index');
     Route::get('/manufacturing/inventory', [InventoryController::class, 'index']);
 

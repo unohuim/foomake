@@ -1,9 +1,9 @@
 import Alpine from 'alpinejs';
+import { refreshNavigationState } from '../navigation/refresh-navigation-state';
 
 export function mount(rootEl, payload) {
     const safePayload = payload || {};
     const payloadUoms = safePayload.uoms || [];
-    const inactiveNavLinkClasses = 'block w-full rounded-xl border border-transparent px-4 py-3 text-left text-sm font-medium text-slate-200 transition duration-200 ease-out hover:border-slate-700 hover:bg-slate-800/70 hover:text-white';
     const emptyErrors = () => ({
         name: [],
         base_uom_id: [],
@@ -19,9 +19,7 @@ export function mount(rootEl, payload) {
         updateUrlBase: safePayload.updateUrlBase || '',
         showUrlBase: safePayload.showUrlBase || '',
         storeUrl: safePayload.storeUrl || '',
-        canManageSalesOrders: Boolean(safePayload.canManageSalesOrders),
-        hasSalesOrderCustomers: Boolean(safePayload.hasSalesOrderCustomers),
-        salesOrdersNavUrl: safePayload.salesOrdersNavUrl || '',
+        navigationStateUrl: safePayload.navigationStateUrl || '',
         csrfToken: safePayload.csrfToken || '',
         tenantCurrency: safePayload.tenantCurrency || '',
         isCreateOpen: false,
@@ -99,22 +97,6 @@ export function mount(rootEl, payload) {
             this.toast.timeoutId = setTimeout(() => {
                 this.toast.visible = false;
             }, 2500);
-        },
-        enableSalesOrdersNavIfEligible() {
-            if (!this.canManageSalesOrders || !this.hasSalesOrderCustomers || !this.salesOrdersNavUrl) {
-                return;
-            }
-
-            document.querySelectorAll('[data-sales-orders-nav-disabled]').forEach((element) => {
-                const anchor = document.createElement('a');
-
-                anchor.href = this.salesOrdersNavUrl;
-                anchor.className = inactiveNavLinkClasses;
-                anchor.dataset.salesOrdersNavLink = element.dataset.salesOrdersNavDisabled || '';
-                anchor.textContent = 'Orders';
-
-                element.replaceWith(anchor);
-            });
         },
         openCreate() {
             if (!this.uomsExist) {
@@ -295,10 +277,7 @@ export function mount(rootEl, payload) {
                 has_stock_moves: false,
             });
 
-            if (data.data.is_sellable) {
-                this.enableSalesOrdersNavIfEligible();
-            }
-
+            await refreshNavigationState(this.navigationStateUrl);
             this.closeCreate();
         },
         async submitEdit() {
@@ -360,10 +339,7 @@ export function mount(rootEl, payload) {
                 };
             }
 
-            if (data.data.is_sellable) {
-                this.enableSalesOrdersNavIfEligible();
-            }
-
+            await refreshNavigationState(this.navigationStateUrl);
             this.showToast('success', 'Material updated.');
             this.closeEdit();
         },
@@ -395,6 +371,7 @@ export function mount(rootEl, payload) {
             }
 
             this.items = this.items.filter((item) => item.id !== this.deleteItemId);
+            await refreshNavigationState(this.navigationStateUrl);
             this.showToast('success', 'Material deleted.');
             this.closeDelete();
         },

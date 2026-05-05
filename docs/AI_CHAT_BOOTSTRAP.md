@@ -17,9 +17,7 @@ Authority Order (highest to lowest — conflicts resolved by this order):
 9. routes/web.php (main web routes — included here for complete bootstrap context)
 10. docs/PR3_ROADMAP.md
 
-
 ## docs/AI_CHAT_CODEX.md
-
 # AI Chat Bootstrap (READ FIRST)
 
 You are assisting with development on this repository.
@@ -250,9 +248,7 @@ If unsure, **stop immediately and ask**.
   **not global model scopes**
 - The **smallest possible change per PR**
 
-
 ## docs/PR2_ROADMAP.md
-
 # PR2_ROADMAP — UI + Domain Completion (Post-PR-006)
 
 This roadmap defines the **second major phase** of work: completing **Items, Inventory, Suppliers, and Manufacturing**
@@ -1545,9 +1541,7 @@ Introduce a UoM-level display precision field and enforce consistent quantity fo
 - Any changes to storage precision or BCMath scale
 - JavaScript formatting or UI-only overrides per view
 
-
 ## docs/CONVENTIONS.md
-
 # Conventions
 
 This document defines the **mandatory development conventions** for this repository.  
@@ -1801,9 +1795,7 @@ These rules apply to:
 - Unit conversions
 - Any inventory-affecting calculations
 
-
 ## docs/ARCHITECTURE_INVENTORY.md
-
 # Architecture Inventory
 
 This document tracks **reusable abstractions, components, and architectural patterns**
@@ -3061,6 +3053,39 @@ $response = $this->postJson('/materials', [
 
 ---
 
+### Shared Navigation Eligibility State
+
+**Name:** Shared Navigation Eligibility State  
+**Type:** UI Architecture Invariant  
+**Location:**  
+- `docs/architecture/ui/SharedNavigationEligibilityState.yaml`  
+- `app/Navigation/NavigationEligibility.php`  
+- `app/Http/Controllers/NavigationStateController.php`  
+- `resources/views/layouts/navigation.blade.php`  
+- `resources/js/navigation/refresh-navigation-state.js`  
+
+**Purpose:**  
+Centralize tenant-scoped order-navigation eligibility in backend code while letting AJAX page modules refresh stale nav DOM after successful mutations.
+
+**When to Use:**  
+Rendering or refreshing Sales Orders, Purchase Orders, or Make Orders navigation state.
+
+**When Not to Use:**  
+Authorization decisions, route protection, or any client-owned navigation authority.
+
+**Public Interface:**  
+- `NavigationEligibility::forUser()`  
+- `NavigationEligibility::forTenantId()`  
+- `GET /navigation/state`  
+- `navigation.state`  
+
+**Example Usage:**  
+```php
+$eligibility = app(\App\Navigation\NavigationEligibility::class)->forUser(auth()->user());
+```
+
+---
+
 ### Top Navigation Dropdown
 
 **Name:** Top Navigation Dropdown  
@@ -3524,9 +3549,7 @@ it('creates a material', function () {
 
 ---
 
-
 ## docs/PERMISSIONS_MATRIX.md
-
 # Permissions Matrix
 
 This document is the source-of-truth for **authorization intent** in this repository.
@@ -3688,6 +3711,10 @@ Execution-only role.
 - Sales orders use `sales-sales-orders-manage` for `/sales/orders` index/create/update/delete, sales-order line CRUD, and customer detail Orders mini-index CRUD.
 - Customer detail Orders mini-index read access remains under `sales-customers-view`, but its mutations still require `sales-sales-orders-manage`.
 - Sales-order line create, quantity update, and delete mutations do not introduce a separate permission slug.
+- Navigation clickability for Sales Orders, Purchase Orders, and Make Orders is not permission-only:
+  - permissions and `@can` checks still govern whether the user may see the relevant nav branch
+  - backend navigation eligibility decides whether the order item renders as clickable or visible-but-disabled
+  - eligibility is tenant-scoped and shared by Blade navigation and `GET /navigation/state`
 - Current purchase-order routes use a two-gate model:
   - `purchasing-purchase-orders-create` for index/show/create/update/delete and line mutations
   - `purchasing-purchase-orders-receive` for receipts, short-closes, and manual status transitions
@@ -3710,9 +3737,7 @@ return [
 ];
 ```
 
-
 ## docs/ENUMS.md
-
 # ENUMS — Canonical Enum Authority
 
 This document defines the canonical, normative enum-like values used throughout the system.
@@ -3901,9 +3926,7 @@ Do not introduce new enum values without updating this document.
 
 No conflicts or ambiguities were found at time of creation based on existing migrations, models, actions, and tests.
 
-
 ## docs/DB_SCHEMA.md
-
 # Database Schema Inventory (DB_SCHEMA)
 
 This document inventories **all database tables and columns** as defined by migrations.
@@ -5017,9 +5040,7 @@ Migrations remain the **sole source of truth**.
 
 **End of DB_SCHEMA**
 
-
 ## docs/UI_DESIGN.md
-
 # UI_DESIGN.md — Canonical UI Direction & Constraints
 
 This document defines the **authoritative UI design rules** for this repository.
@@ -5114,6 +5135,11 @@ The UI should feel:
 - Do not introduce flashy, marketing-style, or dashboard-heavy navigation
 - Navigation refactors must preserve route names, gates, `@can` checks, active states, and existing behavior
 - When navigation availability is gated by server-rendered domain prerequisites, AJAX page modules may patch stale local nav DOM after a successful mutation, but must not introduce global JS state or client-side authority
+- Shared navigation eligibility is backend-owned and must be rendered from the same tenant-scoped contract in Blade and JSON refresh endpoints
+- Disabled navigation items remain visible but inactive
+- If domain prerequisites become true after AJAX create, update, or delete flows, the affected navigation item may become enabled without a full browser refresh
+- If domain prerequisites later become false, the affected navigation item must return to a visible but inactive state without a full browser refresh
+- Navigation refresh behavior must not use websockets or global JavaScript state
 
 ---
 
@@ -5608,9 +5634,7 @@ They are mandatory, not stylistic.
 
 ::contentReference[oaicite:0]{index=0}
 
-
 ## routes/web.php
-
 <?php
 
 use App\Http\Controllers\InventoryController;
@@ -5619,6 +5643,7 @@ use App\Http\Controllers\ItemController;
 use App\Http\Controllers\ItemPurchaseOptionPriceController;
 use App\Http\Controllers\MakeOrderController;
 use App\Http\Controllers\MaterialController;
+use App\Http\Controllers\NavigationStateController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\CustomerContactController;
 use App\Http\Controllers\ProfileController;
@@ -5647,6 +5672,9 @@ Route::get('/dashboard', function () {
 })->middleware(['auth', 'verified'])->name('dashboard');
 
 Route::middleware('auth')->group(function () {
+    Route::get('/navigation/state', NavigationStateController::class)
+        ->name('navigation.state');
+
     Route::get('/inventory', [InventoryController::class, 'index'])->name('inventory.index');
     Route::get('/manufacturing/inventory', [InventoryController::class, 'index']);
 
@@ -5834,9 +5862,7 @@ Route::delete('/manufacturing/uom-conversions/items/{itemConversion}', [UomConve
 
 require __DIR__ . '/auth.php';
 
-
 ## docs/PR3_ROADMAP.md
-
 # PR3_ROADMAP — Sales + CRM Foundations
 
 This roadmap defines the third major phase of work: introducing the **Sales domain (CRM foundations + Sales Orders)**, fully integrated with inventory before any external integrations.

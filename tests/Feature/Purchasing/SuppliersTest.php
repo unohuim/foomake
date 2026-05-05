@@ -90,6 +90,18 @@ beforeEach(function () {
         return $this->actingAs($user)->get('/purchasing/suppliers');
     };
 
+    $this->extractPayload = function ($response, string $payloadId): array {
+        preg_match(
+            '/<script[^>]+id="' . preg_quote($payloadId, '/') . '"[^>]*>(.*?)<\\/script>/s',
+            $response->getContent(),
+            $matches
+        );
+
+        expect($matches)->toHaveKey(1);
+
+        return json_decode(html_entity_decode($matches[1], ENT_QUOTES), true, 512, JSON_THROW_ON_ERROR);
+    };
+
     $this->assertStableUpdateErrors = function ($response) {
         $response->assertJsonStructure([
             'errors' => [
@@ -278,6 +290,22 @@ it('reflects update changes in the suppliers index', function () {
         ->assertOk()
         ->assertSee('Updated Index Supplier')
         ->assertSee('EUR');
+});
+
+it('includes the shared navigation state refresh url in the suppliers index payload', function () {
+    $tenant = ($this->makeTenant)(['currency_code' => 'USD']);
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermission)($user, 'purchasing-suppliers-view');
+    ($this->grantPermission)($user, 'purchasing-suppliers-manage');
+
+    $response = ($this->getSuppliersIndex)($user)
+        ->assertOk()
+        ->assertSee('purchasing-suppliers-index-payload', false);
+
+    $payload = ($this->extractPayload)($response, 'purchasing-suppliers-index-payload');
+
+    expect($payload['navigationStateUrl'] ?? null)->toBe(url('/navigation/state'));
 });
 
 it('validates company_name required on update', function () {

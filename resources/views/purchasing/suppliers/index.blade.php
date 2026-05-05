@@ -21,6 +21,7 @@
             'suppliers' => $suppliersPayload,
             'storeUrl' => route('purchasing.suppliers.store'),
             'updateUrlBase' => url('/purchasing/suppliers'),
+            'navigationStateUrl' => route('navigation.state'),
             'csrfToken' => csrf_token(),
             'defaultCurrency' => $defaultCurrency,
         ];

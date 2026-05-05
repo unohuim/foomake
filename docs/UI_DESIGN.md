@@ -92,6 +92,11 @@ The UI should feel:
 - Do not introduce flashy, marketing-style, or dashboard-heavy navigation
 - Navigation refactors must preserve route names, gates, `@can` checks, active states, and existing behavior
 - When navigation availability is gated by server-rendered domain prerequisites, AJAX page modules may patch stale local nav DOM after a successful mutation, but must not introduce global JS state or client-side authority
+- Shared navigation eligibility is backend-owned and must be rendered from the same tenant-scoped contract in Blade and JSON refresh endpoints
+- Disabled navigation items remain visible but inactive
+- If domain prerequisites become true after AJAX create, update, or delete flows, the affected navigation item may become enabled without a full browser refresh
+- If domain prerequisites later become false, the affected navigation item must return to a visible but inactive state without a full browser refresh
+- Navigation refresh behavior must not use websockets or global JavaScript state
 
 ---
 

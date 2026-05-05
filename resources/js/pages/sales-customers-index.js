@@ -1,7 +1,8 @@
+import { refreshNavigationState } from '../navigation/refresh-navigation-state';
+
 export function mount(rootEl, payload) {
     const Alpine = window.Alpine;
     const safePayload = payload || {};
-    const inactiveNavLinkClasses = 'block w-full rounded-xl border border-transparent px-4 py-3 text-left text-sm font-medium text-slate-200 transition duration-200 ease-out hover:border-slate-700 hover:bg-slate-800/70 hover:text-white';
 
     const emptyErrors = () => ({
         name: [],
@@ -46,9 +47,7 @@ export function mount(rootEl, payload) {
         customers: safePayload.customers || [],
         storeUrl: safePayload.storeUrl || '',
         updateUrlBase: safePayload.updateUrlBase || '',
-        canManageSalesOrders: Boolean(safePayload.canManageSalesOrders),
-        hasSellableSalesOrderItems: Boolean(safePayload.hasSellableSalesOrderItems),
-        salesOrdersNavUrl: safePayload.salesOrdersNavUrl || '',
+        navigationStateUrl: safePayload.navigationStateUrl || '',
         csrfToken: safePayload.csrfToken || '',
         statuses: safePayload.statuses || ['active', 'inactive', 'archived'],
         isFormOpen: false,
@@ -89,22 +88,6 @@ export function mount(rootEl, payload) {
             this.toast.timeoutId = setTimeout(() => {
                 this.toast.visible = false;
             }, 2500);
-        },
-        enableSalesOrdersNavIfEligible() {
-            if (!this.canManageSalesOrders || !this.hasSellableSalesOrderItems || !this.salesOrdersNavUrl) {
-                return;
-            }
-
-            document.querySelectorAll('[data-sales-orders-nav-disabled]').forEach((element) => {
-                const anchor = document.createElement('a');
-
-                anchor.href = this.salesOrdersNavUrl;
-                anchor.className = inactiveNavLinkClasses;
-                anchor.dataset.salesOrdersNavLink = element.dataset.salesOrdersNavDisabled || '';
-                anchor.textContent = 'Orders';
-
-                element.replaceWith(anchor);
-            });
         },
         openCreate() {
             this.formMode = 'create';
@@ -193,12 +176,12 @@ export function mount(rootEl, payload) {
 
             if (isCreate) {
                 this.customers.push(customer);
-                this.enableSalesOrdersNavIfEligible();
             } else {
                 this.customers = this.customers.map((entry) => entry.id === customer.id ? customer : entry);
             }
 
             this.customers.sort((left, right) => left.name.localeCompare(right.name));
+            await refreshNavigationState(this.navigationStateUrl);
             this.closeForm();
             this.showToast('success', isCreate ? 'Customer created.' : 'Customer updated.');
         },
@@ -217,6 +200,7 @@ export function mount(rootEl, payload) {
             }
 
             this.customers = this.customers.filter((entry) => entry.id !== customer.id);
+            await refreshNavigationState(this.navigationStateUrl);
             this.showToast('success', 'Customer archived.');
         },
     }));

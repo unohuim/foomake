@@ -1,5 +1,6 @@
 @php
     $user = auth()->user();
+    $navigationEligibility = app(\App\Navigation\NavigationEligibility::class)->forUser($user);
 
     $manufacturingActive = request()->routeIs('materials.*')
         || request()->routeIs('manufacturing.*')
@@ -13,15 +14,11 @@
     $canViewSuppliers = $user?->can('purchasing-suppliers-view') ?? false;
     $canManageCustomers = $user?->can('sales-customers-manage') ?? false;
     $canManageSalesOrders = $user?->can('sales-sales-orders-manage') ?? false;
-    $hasSalesOrderCustomers = $canManageSalesOrders
-        ? \App\Models\Customer::query()->exists()
-        : false;
-    $hasSellableSalesOrderItems = $canManageSalesOrders
-        ? \App\Models\Item::query()->where('is_sellable', true)->exists()
-        : false;
-    $canOpenSalesOrders = $hasSalesOrderCustomers && $hasSellableSalesOrderItems;
+    $canOpenSalesOrders = $navigationEligibility['salesOrdersEnabled'] ?? false;
+    $canOpenPurchaseOrders = $navigationEligibility['purchaseOrdersEnabled'] ?? false;
     $canViewInventory = $user?->can('inventory-adjustments-view') ?? false;
     $canViewMakeOrders = $user?->can('inventory-make-orders-view') ?? false;
+    $canOpenMakeOrders = $navigationEligibility['makeOrdersEnabled'] ?? false;
     $canViewMaterials = $user?->can('inventory-materials-view') ?? false;
     $canManageMaterials = $user?->can('inventory-materials-manage') ?? false;
     $canViewRecipes = $user?->can('inventory-recipes-view') ?? false;
@@ -62,13 +59,24 @@
 
                             @can('sales-sales-orders-manage')
                                 @if ($canOpenSalesOrders)
-                                    <x-nav-dropdown-link :href="route('sales.orders.index')" :active="request()->routeIs('sales.orders.*')" data-sales-orders-nav-link="desktop">
+                                    <x-nav-dropdown-link
+                                        :href="route('sales.orders.index')"
+                                        :active="request()->routeIs('sales.orders.*')"
+                                        data-sales-orders-nav-link="desktop"
+                                        data-nav-eligibility-key="salesOrdersEnabled"
+                                        data-nav-href="{{ route('sales.orders.index') }}"
+                                        data-nav-label="Orders"
+                                        data-nav-active="{{ request()->routeIs('sales.orders.*') ? 'true' : 'false' }}"
+                                    >
                                         {{ __('Orders') }}
                                     </x-nav-dropdown-link>
                                 @else
                                     <span
                                         class="block w-full cursor-not-allowed rounded-xl border border-transparent px-4 py-3 text-left text-sm font-medium text-slate-500 opacity-70"
                                         data-sales-orders-nav-disabled="desktop"
+                                        data-nav-eligibility-key="salesOrdersEnabled"
+                                        data-nav-label="Orders"
+                                        data-nav-active="{{ request()->routeIs('sales.orders.*') ? 'true' : 'false' }}"
                                     >
                                         {{ __('Orders') }}
                                     </span>
@@ -86,9 +94,29 @@
 
                         <x-slot name="content">
                             @can('purchasing-purchase-orders-create')
-                                <x-nav-dropdown-link :href="route('purchasing.orders.index')" :active="request()->routeIs('purchasing.orders.*')">
-                                    {{ __('Orders') }}
-                                </x-nav-dropdown-link>
+                                @if ($canOpenPurchaseOrders)
+                                    <x-nav-dropdown-link
+                                        :href="route('purchasing.orders.index')"
+                                        :active="request()->routeIs('purchasing.orders.*')"
+                                        data-purchase-orders-nav-link="desktop"
+                                        data-nav-eligibility-key="purchaseOrdersEnabled"
+                                        data-nav-href="{{ route('purchasing.orders.index') }}"
+                                        data-nav-label="Orders"
+                                        data-nav-active="{{ request()->routeIs('purchasing.orders.*') ? 'true' : 'false' }}"
+                                    >
+                                        {{ __('Orders') }}
+                                    </x-nav-dropdown-link>
+                                @else
+                                    <span
+                                        class="block w-full cursor-not-allowed rounded-xl border border-transparent px-4 py-3 text-left text-sm font-medium text-slate-500 opacity-70"
+                                        data-purchase-orders-nav-disabled="desktop"
+                                        data-nav-eligibility-key="purchaseOrdersEnabled"
+                                        data-nav-label="Orders"
+                                        data-nav-active="{{ request()->routeIs('purchasing.orders.*') ? 'true' : 'false' }}"
+                                    >
+                                        {{ __('Orders') }}
+                                    </span>
+                                @endif
                             @endcan
 
                             @can('purchasing-suppliers-view')
@@ -118,9 +146,29 @@
                             @endcan
 
                             @can('inventory-make-orders-view')
-                                <x-nav-dropdown-link :href="route('manufacturing.make-orders.index')" :active="request()->routeIs('manufacturing.make-orders.*')">
-                                    {{ __('Orders (Make Orders)') }}
-                                </x-nav-dropdown-link>
+                                @if ($canOpenMakeOrders)
+                                    <x-nav-dropdown-link
+                                        :href="route('manufacturing.make-orders.index')"
+                                        :active="request()->routeIs('manufacturing.make-orders.*')"
+                                        data-make-orders-nav-link="desktop"
+                                        data-nav-eligibility-key="makeOrdersEnabled"
+                                        data-nav-href="{{ route('manufacturing.make-orders.index') }}"
+                                        data-nav-label="Orders (Make Orders)"
+                                        data-nav-active="{{ request()->routeIs('manufacturing.make-orders.*') ? 'true' : 'false' }}"
+                                    >
+                                        {{ __('Orders (Make Orders)') }}
+                                    </x-nav-dropdown-link>
+                                @else
+                                    <span
+                                        class="block w-full cursor-not-allowed rounded-xl border border-transparent px-4 py-3 text-left text-sm font-medium text-slate-500 opacity-70"
+                                        data-make-orders-nav-disabled="desktop"
+                                        data-nav-eligibility-key="makeOrdersEnabled"
+                                        data-nav-label="Orders (Make Orders)"
+                                        data-nav-active="{{ request()->routeIs('manufacturing.make-orders.*') ? 'true' : 'false' }}"
+                                    >
+                                        {{ __('Orders (Make Orders)') }}
+                                    </span>
+                                @endif
                             @endcan
 
                             @can('inventory-materials-view')
@@ -225,13 +273,25 @@
 
                         @can('sales-sales-orders-manage')
                             @if ($canOpenSalesOrders)
-                                <x-nav-dropdown-link :href="route('sales.orders.index')" :active="request()->routeIs('sales.orders.*')" mobile data-sales-orders-nav-link="mobile">
+                                <x-nav-dropdown-link
+                                    :href="route('sales.orders.index')"
+                                    :active="request()->routeIs('sales.orders.*')"
+                                    mobile
+                                    data-sales-orders-nav-link="mobile"
+                                    data-nav-eligibility-key="salesOrdersEnabled"
+                                    data-nav-href="{{ route('sales.orders.index') }}"
+                                    data-nav-label="Orders"
+                                    data-nav-active="{{ request()->routeIs('sales.orders.*') ? 'true' : 'false' }}"
+                                >
                                     {{ __('Orders') }}
                                 </x-nav-dropdown-link>
                             @else
                                 <span
                                     class="block w-full cursor-not-allowed rounded-xl border border-transparent px-4 py-3 text-left text-sm font-medium text-slate-500 opacity-70"
                                     data-sales-orders-nav-disabled="mobile"
+                                    data-nav-eligibility-key="salesOrdersEnabled"
+                                    data-nav-label="Orders"
+                                    data-nav-active="{{ request()->routeIs('sales.orders.*') ? 'true' : 'false' }}"
                                 >
                                     {{ __('Orders') }}
                                 </span>
@@ -249,9 +309,30 @@
 
                     <x-slot name="content">
                         @can('purchasing-purchase-orders-create')
-                            <x-nav-dropdown-link :href="route('purchasing.orders.index')" :active="request()->routeIs('purchasing.orders.*')" mobile>
-                                {{ __('Orders') }}
-                            </x-nav-dropdown-link>
+                            @if ($canOpenPurchaseOrders)
+                                <x-nav-dropdown-link
+                                    :href="route('purchasing.orders.index')"
+                                    :active="request()->routeIs('purchasing.orders.*')"
+                                    mobile
+                                    data-purchase-orders-nav-link="mobile"
+                                    data-nav-eligibility-key="purchaseOrdersEnabled"
+                                    data-nav-href="{{ route('purchasing.orders.index') }}"
+                                    data-nav-label="Orders"
+                                    data-nav-active="{{ request()->routeIs('purchasing.orders.*') ? 'true' : 'false' }}"
+                                >
+                                    {{ __('Orders') }}
+                                </x-nav-dropdown-link>
+                            @else
+                                <span
+                                    class="block w-full cursor-not-allowed rounded-xl border border-transparent px-4 py-3 text-left text-sm font-medium text-slate-500 opacity-70"
+                                    data-purchase-orders-nav-disabled="mobile"
+                                    data-nav-eligibility-key="purchaseOrdersEnabled"
+                                    data-nav-label="Orders"
+                                    data-nav-active="{{ request()->routeIs('purchasing.orders.*') ? 'true' : 'false' }}"
+                                >
+                                    {{ __('Orders') }}
+                                </span>
+                            @endif
                         @endcan
 
                         @can('purchasing-suppliers-view')
@@ -281,9 +362,30 @@
                         @endcan
 
                         @can('inventory-make-orders-view')
-                            <x-nav-dropdown-link :href="route('manufacturing.make-orders.index')" :active="request()->routeIs('manufacturing.make-orders.*')" mobile>
-                                {{ __('Orders (Make Orders)') }}
-                            </x-nav-dropdown-link>
+                            @if ($canOpenMakeOrders)
+                                <x-nav-dropdown-link
+                                    :href="route('manufacturing.make-orders.index')"
+                                    :active="request()->routeIs('manufacturing.make-orders.*')"
+                                    mobile
+                                    data-make-orders-nav-link="mobile"
+                                    data-nav-eligibility-key="makeOrdersEnabled"
+                                    data-nav-href="{{ route('manufacturing.make-orders.index') }}"
+                                    data-nav-label="Orders (Make Orders)"
+                                    data-nav-active="{{ request()->routeIs('manufacturing.make-orders.*') ? 'true' : 'false' }}"
+                                >
+                                    {{ __('Orders (Make Orders)') }}
+                                </x-nav-dropdown-link>
+                            @else
+                                <span
+                                    class="block w-full cursor-not-allowed rounded-xl border border-transparent px-4 py-3 text-left text-sm font-medium text-slate-500 opacity-70"
+                                    data-make-orders-nav-disabled="mobile"
+                                    data-nav-eligibility-key="makeOrdersEnabled"
+                                    data-nav-label="Orders (Make Orders)"
+                                    data-nav-active="{{ request()->routeIs('manufacturing.make-orders.*') ? 'true' : 'false' }}"
+                                >
+                                    {{ __('Orders (Make Orders)') }}
+                                </span>
+                            @endif
                         @endcan
 
                         @can('inventory-materials-view')

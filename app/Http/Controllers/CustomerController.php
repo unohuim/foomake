@@ -31,17 +31,11 @@ class CustomerController extends Controller
             ->where('status', Customer::STATUS_ACTIVE)
             ->orderBy('name')
             ->get();
-        $canManageSalesOrders = Gate::allows('sales-sales-orders-manage');
-
         $payload = [
             'customers' => $customers->map(fn (Customer $customer) => $this->customerIndexData($customer))->values()->all(),
             'storeUrl' => route('sales.customers.store'),
             'updateUrlBase' => url('/sales/customers'),
-            'canManageSalesOrders' => $canManageSalesOrders,
-            'hasSellableSalesOrderItems' => $canManageSalesOrders
-                ? Item::query()->where('is_sellable', true)->exists()
-                : false,
-            'salesOrdersNavUrl' => $canManageSalesOrders ? route('sales.orders.index') : null,
+            'navigationStateUrl' => route('navigation.state'),
             'csrfToken' => csrf_token(),
             'statuses' => Customer::statuses(),
         ];
