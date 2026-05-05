@@ -238,7 +238,7 @@ class CustomerController extends Controller
     /**
      * Build the customer order response payload.
      *
-     * @return array<string, int|string|null|array<int, array<string, int|string|null>>>
+     * @return array<string, int|string|bool|null|array<int, array<string, int|string|null>>|list<string>>
      */
     private function orderData(SalesOrder $order): array
     {
@@ -256,6 +256,10 @@ class CustomerController extends Controller
             'contact_id' => $order->contact_id,
             'contact_name' => $order->contact?->full_name,
             'status' => $order->status,
+            'can_edit' => $order->isEditable(),
+            'can_manage_lines' => $order->allowsLineMutations(),
+            'available_status_transitions' => $order->availableTransitions(),
+            'status_update_url' => route('sales.orders.status.update', $order),
             'lines' => $lines,
             'line_count' => count($lines),
             'order_total_cents' => $orderTotalCents,

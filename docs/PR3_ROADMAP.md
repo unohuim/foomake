@@ -220,8 +220,9 @@ Introduce lifecycle without inventory impact yet.
 **Statuses**
 
 - DRAFT
-- CONFIRMED
-- FULFILLED
+- OPEN
+- COMPLETED
+- CANCELLED
 
 ---
 

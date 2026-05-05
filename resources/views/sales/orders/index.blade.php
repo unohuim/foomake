@@ -25,7 +25,7 @@
             <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                     <h3 class="text-lg font-medium text-gray-900">Sales orders</h3>
-                    <p class="mt-1 text-sm text-gray-600">Manage draft sales orders without leaving the page.</p>
+                    <p class="mt-1 text-sm text-gray-600">Manage sales orders and lifecycle changes without leaving the page.</p>
                 </div>
 
                 <button
@@ -41,7 +41,7 @@
                 <div class="rounded-lg border border-gray-100 bg-white shadow-sm">
                     <div class="p-6">
                         <h3 class="text-lg font-medium text-gray-900">No sales orders yet</h3>
-                        <p class="mt-2 text-sm text-gray-600">Create a draft sales order to assign a customer and contact.</p>
+                        <p class="mt-2 text-sm text-gray-600">Create a sales order to assign a customer and manage its lifecycle.</p>
                         <div class="mt-4">
                             <button
                                 type="button"
@@ -75,7 +75,19 @@
                                             <td class="px-4 py-4 text-sm text-gray-900" x-text="order.customer_name || '—'"></td>
                                             <td class="px-4 py-4 text-sm text-gray-700" x-text="order.contact_name || '—'"></td>
                                             <td class="px-4 py-4 text-sm">
-                                                <span class="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold uppercase text-gray-600" x-text="order.status"></span>
+                                                <div class="space-y-2">
+                                                    <span class="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold uppercase text-gray-600" x-text="order.status"></span>
+                                                    <div class="flex flex-wrap gap-2" x-show="canChangeStatus(order)">
+                                                        <template x-for="status in order.available_status_transitions" :key="`${order.id}-${status}`">
+                                                            <button
+                                                                type="button"
+                                                                class="inline-flex items-center rounded-md border border-gray-300 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-widest text-gray-700 hover:bg-gray-50"
+                                                                x-on:click="submitStatus(order, status)"
+                                                                x-text="status"
+                                                            ></button>
+                                                        </template>
+                                                    </div>
+                                                </div>
                                             </td>
                                             <td class="px-4 py-4 text-sm text-gray-700 align-top">
                                                 <div class="space-y-3" x-init="ensureLineForm(order.id)">
@@ -94,10 +106,10 @@
                                                                         <p class="mt-1 text-xs text-gray-500" x-text="formatLineMoney(line.unit_price_amount, line.unit_price_currency_code)"></p>
                                                                         <p class="mt-1 text-xs text-gray-500" x-text="`Total: ${formatLineMoney(line.line_total_amount, line.unit_price_currency_code)}`"></p>
                                                                     </div>
-                                                                    <button type="button" class="text-red-600 hover:text-red-500" x-on:click="deleteLine(order, line)">Remove</button>
+                                                                    <button type="button" class="text-red-600 hover:text-red-500" x-show="canManageOrderLines(order)" x-on:click="deleteLine(order, line)">Remove</button>
                                                                 </div>
 
-                                                                <div class="mt-3 flex items-start gap-2">
+                                                                <div class="mt-3 flex items-start gap-2" x-show="canManageOrderLines(order)">
                                                                     <div class="flex-1">
                                                                         <input
                                                                             type="text"
@@ -118,7 +130,7 @@
                                                         <p class="text-xs text-gray-500">No lines yet.</p>
                                                     </div>
 
-                                                    <div class="rounded-lg border border-gray-200 p-3" x-show="sellableItems.length > 0">
+                                                    <div class="rounded-lg border border-gray-200 p-3" x-show="sellableItems.length > 0 && canManageOrderLines(order)">
                                                         <div class="grid gap-2 sm:grid-cols-[minmax(0,1fr)_140px_auto]">
                                                             <div>
                                                                 <select
@@ -148,6 +160,10 @@
                                                         <p class="mt-2 text-xs text-red-600" x-show="lineGeneralErrorsByOrder[order.id]" x-text="lineGeneralErrorsByOrder[order.id]"></p>
                                                     </div>
 
+                                                    <div class="rounded-lg border border-dashed border-gray-300 p-3" x-show="!canManageOrderLines(order)">
+                                                        <p class="text-xs text-gray-500">Line editing is unavailable once an order is completed or cancelled.</p>
+                                                    </div>
+
                                                     <div class="rounded-lg border border-dashed border-gray-300 p-3" x-show="sellableItems.length === 0">
                                                         <p class="text-xs text-gray-500">Create a sellable item before adding sales order lines.</p>
                                                     </div>
@@ -155,7 +171,7 @@
                                             </td>
                                             <td class="px-4 py-4 text-right text-sm">
                                                 <div class="inline-flex items-center gap-3">
-                                                    <button type="button" class="text-blue-600 hover:text-blue-500" x-on:click="openEdit(order)">Edit</button>
+                                                    <button type="button" class="text-blue-600 hover:text-blue-500" x-show="canEditOrder(order)" x-on:click="openEdit(order)">Edit</button>
                                                     <button type="button" class="text-red-600 hover:text-red-500" x-on:click="deleteOrder(order)">Delete</button>
                                                 </div>
                                             </td>
@@ -189,7 +205,7 @@
                                     <div class="flex items-start justify-between">
                                         <div>
                                             <h2 class="text-lg font-medium text-gray-900" x-text="formMode === 'create' ? 'Create sales order' : 'Edit sales order'"></h2>
-                                            <p class="mt-1 text-sm text-gray-600">Assign the customer and contact for this draft sales order.</p>
+                                            <p class="mt-1 text-sm text-gray-600">Assign the customer and contact for this sales order.</p>
                                         </div>
                                         <button type="button" class="rounded-md text-gray-400 hover:text-gray-500" x-on:click="closeForm()">
                                             <span class="sr-only">Close panel</span>

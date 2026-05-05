@@ -153,6 +153,10 @@ export function mount(rootEl, payload) {
             this.isFormOpen = true;
         },
         openEdit(order) {
+            if (!order || !order.can_edit) {
+                return;
+            }
+
             this.formMode = 'edit';
             this.editingOrderId = order.id;
             this.form = {
@@ -180,6 +184,30 @@ export function mount(rootEl, payload) {
 
             this.orders.splice(existingIndex, 1, order);
             this.syncLineState(order);
+        },
+        canEditOrder(order) {
+            return !!order?.can_edit;
+        },
+        canManageOrderLines(order) {
+            return !!order?.can_manage_lines;
+        },
+        canChangeStatus(order) {
+            return Array.isArray(order?.available_status_transitions) && order.available_status_transitions.length > 0;
+        },
+        applyOrderLifecycleUpdate(orderId, data) {
+            const existingIndex = this.orders.findIndex((entry) => entry.id === orderId);
+
+            if (existingIndex === -1) {
+                return;
+            }
+
+            this.orders.splice(existingIndex, 1, {
+                ...this.orders[existingIndex],
+                status: data.status,
+                can_edit: data.can_edit,
+                can_manage_lines: data.can_manage_lines,
+                available_status_transitions: data.available_status_transitions || [],
+            });
         },
         formatLineMoney(amount, currencyCode) {
             return `${currencyCode} ${amount}`;
@@ -230,7 +258,41 @@ export function mount(rootEl, payload) {
             this.closeForm();
             this.showToast('success', isCreate ? 'Sales order created.' : 'Sales order updated.');
         },
+        async submitStatus(order, status) {
+            if (!order || !order.status_update_url) {
+                return;
+            }
+
+            const response = await fetch(order.status_update_url, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Accept: 'application/json',
+                    'X-CSRF-TOKEN': this.csrfToken,
+                },
+                body: JSON.stringify({ status }),
+            });
+
+            if (response.status === 422) {
+                const data = await response.json();
+                this.showToast('error', data.message || 'Unable to update status.');
+                return;
+            }
+
+            if (!response.ok) {
+                this.showToast('error', 'Unable to update status.');
+                return;
+            }
+
+            const data = await response.json();
+            this.applyOrderLifecycleUpdate(order.id, data.data || {});
+            this.showToast('success', 'Status updated.');
+        },
         async submitLine(order) {
+            if (!this.canManageOrderLines(order)) {
+                return;
+            }
+
             this.ensureLineForm(order.id);
             this.lineErrorsByOrder[order.id] = emptyLineErrors();
             this.lineGeneralErrorsByOrder[order.id] = '';
@@ -269,6 +331,10 @@ export function mount(rootEl, payload) {
             this.showToast('success', 'Line added.');
         },
         async saveLineQuantity(order, line) {
+            if (!this.canManageOrderLines(order)) {
+                return;
+            }
+
             this.lineEditErrorsByLine[line.id] = emptyLineErrors();
 
             const response = await fetch(`${this.lineStoreUrlBase}/${order.id}/lines/${line.id}`, {
@@ -300,6 +366,10 @@ export function mount(rootEl, payload) {
             this.showToast('success', 'Line quantity updated.');
         },
         async deleteLine(order, line) {
+            if (!this.canManageOrderLines(order)) {
+                return;
+            }
+
             const response = await fetch(`${this.lineStoreUrlBase}/${order.id}/lines/${line.id}`, {
                 method: 'DELETE',
                 headers: {

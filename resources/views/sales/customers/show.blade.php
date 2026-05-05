@@ -193,7 +193,7 @@
                         <div class="flex items-start justify-between gap-4">
                             <div>
                                 <h3 class="text-lg font-medium text-gray-900">Orders</h3>
-                                <p class="mt-1 text-sm text-gray-600">Manage draft sales orders for this customer without leaving the detail page.</p>
+                                <p class="mt-1 text-sm text-gray-600">Manage sales orders for this customer without leaving the detail page.</p>
                             </div>
 
                             <button
@@ -218,6 +218,16 @@
                                             </div>
                                             <p class="mt-2 text-sm text-gray-700" x-text="order.contact_name || '—'"></p>
                                             <p class="mt-2 text-xs text-gray-500" x-text="`${order.line_count || 0} line(s) • ${formatOrderLineMoney(order.order_total_amount || '0.000000', order.lines)}`"></p>
+                                            <div class="mt-3 flex flex-wrap gap-2" x-show="canChangeOrderStatus(order)">
+                                                <template x-for="status in order.available_status_transitions" :key="`${order.id}-${status}`">
+                                                    <button
+                                                        type="button"
+                                                        class="inline-flex items-center rounded-md border border-gray-300 bg-white px-2.5 py-1 text-[11px] font-semibold uppercase tracking-widest text-gray-700 hover:bg-gray-50"
+                                                        x-on:click="submitOrderStatus(order, status)"
+                                                        x-text="status"
+                                                    ></button>
+                                                </template>
+                                            </div>
 
                                             <div class="mt-4 space-y-3" x-init="ensureOrderLineForm(order.id)">
                                                 <div class="space-y-2" x-show="(order.lines || []).length > 0">
@@ -229,10 +239,10 @@
                                                                     <p class="mt-1 text-xs text-gray-500" x-text="formatLineMoney(line.unit_price_amount, line.unit_price_currency_code)"></p>
                                                                     <p class="mt-1 text-xs text-gray-500" x-text="`Total: ${formatLineMoney(line.line_total_amount, line.unit_price_currency_code)}`"></p>
                                                                 </div>
-                                                                <button type="button" class="text-red-600 hover:text-red-500" x-on:click="deleteOrderLine(order, line)">Remove</button>
+                                                                <button type="button" class="text-red-600 hover:text-red-500" x-show="canManageOrderLines(order)" x-on:click="deleteOrderLine(order, line)">Remove</button>
                                                             </div>
 
-                                                            <div class="mt-3 flex items-start gap-2">
+                                                            <div class="mt-3 flex items-start gap-2" x-show="canManageOrderLines(order)">
                                                                 <div class="flex-1">
                                                                     <input
                                                                         type="text"
@@ -253,7 +263,7 @@
                                                     <p class="text-xs text-gray-500">No lines yet.</p>
                                                 </div>
 
-                                                <div class="rounded-lg border border-gray-200 bg-white p-3" x-show="orderItems.length > 0">
+                                                <div class="rounded-lg border border-gray-200 bg-white p-3" x-show="orderItems.length > 0 && canManageOrderLines(order)">
                                                     <div class="grid gap-2 sm:grid-cols-[minmax(0,1fr)_140px_auto]">
                                                         <div>
                                                             <select
@@ -283,6 +293,10 @@
                                                     <p class="mt-2 text-xs text-red-600" x-show="orderLineGeneralErrorsByOrder[order.id]" x-text="orderLineGeneralErrorsByOrder[order.id]"></p>
                                                 </div>
 
+                                                <div class="rounded-lg border border-dashed border-gray-300 p-3" x-show="!canManageOrderLines(order)">
+                                                    <p class="text-xs text-gray-500">Line editing is unavailable once an order is completed or cancelled.</p>
+                                                </div>
+
                                                 <div class="rounded-lg border border-dashed border-gray-300 p-3" x-show="orderItems.length === 0">
                                                     <p class="text-xs text-gray-500">Create a sellable item before adding sales order lines.</p>
                                                 </div>
@@ -293,6 +307,7 @@
                                             <button
                                                 type="button"
                                                 class="text-blue-600 hover:text-blue-500"
+                                                x-show="canEditOrder(order)"
                                                 x-on:click="openOrderEdit(order)"
                                             >
                                                 Edit
@@ -311,7 +326,7 @@
                         </div>
 
                         <div class="mt-6 rounded-2xl border border-dashed border-gray-300 p-6 text-center text-sm text-gray-500" x-show="orders.length === 0">
-                            <p>No draft orders for this customer yet.</p>
+                            <p>No orders for this customer yet.</p>
                         </div>
                     </div>
                 </section>
@@ -648,7 +663,7 @@
                                         <div class="flex items-start justify-between">
                                             <div>
                                                 <h2 class="text-lg font-medium text-gray-900" x-text="orderFormMode === 'create' ? 'Add order' : 'Edit order'"></h2>
-                                                <p class="mt-1 text-sm text-gray-600">Manage draft sales orders from the customer detail page.</p>
+                                                <p class="mt-1 text-sm text-gray-600">Manage sales orders from the customer detail page.</p>
                                             </div>
                                             <button type="button" class="rounded-md text-gray-400 hover:text-gray-500" x-on:click="closeOrderForm()">
                                                 <span class="sr-only">Close panel</span>

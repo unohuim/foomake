@@ -358,7 +358,7 @@ export function mount(rootEl, payload) {
             this.isOrderFormOpen = true;
         },
         openOrderEdit(order) {
-            if (!this.canManageOrders) {
+            if (!this.canManageOrders || !order?.can_edit) {
                 return;
             }
 
@@ -391,6 +391,30 @@ export function mount(rootEl, payload) {
 
             this.orders.splice(existingIndex, 1, order);
             this.syncOrderLineState(order);
+        },
+        canEditOrder(order) {
+            return !!order?.can_edit;
+        },
+        canManageOrderLines(order) {
+            return !!order?.can_manage_lines;
+        },
+        canChangeOrderStatus(order) {
+            return Array.isArray(order?.available_status_transitions) && order.available_status_transitions.length > 0;
+        },
+        applyOrderLifecycleUpdate(orderId, data) {
+            const existingIndex = this.orders.findIndex((entry) => entry.id === orderId);
+
+            if (existingIndex === -1) {
+                return;
+            }
+
+            this.orders.splice(existingIndex, 1, {
+                ...this.orders[existingIndex],
+                status: data.status,
+                can_edit: data.can_edit,
+                can_manage_lines: data.can_manage_lines,
+                available_status_transitions: data.available_status_transitions || [],
+            });
         },
         async submitForm() {
             if (this.isSubmitting || !this.canManage) {
@@ -544,8 +568,38 @@ export function mount(rootEl, payload) {
             this.closeOrderForm();
             this.showToast('success', isCreate ? 'Sales order created.' : 'Sales order updated.');
         },
+        async submitOrderStatus(order, status) {
+            if (!order || !order.status_update_url) {
+                return;
+            }
+
+            const response = await fetch(order.status_update_url, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Accept: 'application/json',
+                    'X-CSRF-TOKEN': this.csrfToken,
+                },
+                body: JSON.stringify({ status }),
+            });
+
+            if (response.status === 422) {
+                const data = await response.json();
+                this.showToast('error', data.message || 'Unable to update status.');
+                return;
+            }
+
+            if (!response.ok) {
+                this.showToast('error', 'Unable to update status.');
+                return;
+            }
+
+            const data = await response.json();
+            this.applyOrderLifecycleUpdate(order.id, data.data || {});
+            this.showToast('success', 'Status updated.');
+        },
         async submitOrderLine(order) {
-            if (!this.canManageOrders) {
+            if (!this.canManageOrders || !this.canManageOrderLines(order)) {
                 return;
             }
 
@@ -587,7 +641,7 @@ export function mount(rootEl, payload) {
             this.showToast('success', 'Line added.');
         },
         async saveOrderLineQuantity(order, line) {
-            if (!this.canManageOrders) {
+            if (!this.canManageOrders || !this.canManageOrderLines(order)) {
                 return;
             }
 
@@ -622,7 +676,7 @@ export function mount(rootEl, payload) {
             this.showToast('success', 'Line quantity updated.');
         },
         async deleteOrderLine(order, line) {
-            if (!this.canManageOrders) {
+            if (!this.canManageOrders || !this.canManageOrderLines(order)) {
                 return;
             }
 

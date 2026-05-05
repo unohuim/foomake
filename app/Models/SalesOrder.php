@@ -23,6 +23,9 @@ class SalesOrder extends Model
     use HasTenantScope;
 
     public const STATUS_DRAFT = 'DRAFT';
+    public const STATUS_OPEN = 'OPEN';
+    public const STATUS_COMPLETED = 'COMPLETED';
+    public const STATUS_CANCELLED = 'CANCELLED';
 
     /**
      * @var list<string>
@@ -75,6 +78,90 @@ class SalesOrder extends Model
     {
         return [
             self::STATUS_DRAFT,
+            self::STATUS_OPEN,
+            self::STATUS_COMPLETED,
+            self::STATUS_CANCELLED,
         ];
+    }
+
+    /**
+     * Return statuses that may still be edited.
+     *
+     * @return list<string>
+     */
+    public static function editableStatuses(): array
+    {
+        return [
+            self::STATUS_DRAFT,
+            self::STATUS_OPEN,
+        ];
+    }
+
+    /**
+     * Return terminal statuses.
+     *
+     * @return list<string>
+     */
+    public static function terminalStatuses(): array
+    {
+        return [
+            self::STATUS_COMPLETED,
+            self::STATUS_CANCELLED,
+        ];
+    }
+
+    /**
+     * Return the manual lifecycle transition map.
+     *
+     * @return array<string, list<string>>
+     */
+    public static function transitionMap(): array
+    {
+        return [
+            self::STATUS_DRAFT => [
+                self::STATUS_OPEN,
+                self::STATUS_CANCELLED,
+            ],
+            self::STATUS_OPEN => [
+                self::STATUS_COMPLETED,
+                self::STATUS_CANCELLED,
+            ],
+            self::STATUS_COMPLETED => [],
+            self::STATUS_CANCELLED => [],
+        ];
+    }
+
+    /**
+     * Determine whether header fields may still be edited.
+     */
+    public function isEditable(): bool
+    {
+        return in_array($this->status, self::editableStatuses(), true);
+    }
+
+    /**
+     * Determine whether line mutations are allowed.
+     */
+    public function allowsLineMutations(): bool
+    {
+        return $this->isEditable();
+    }
+
+    /**
+     * Determine whether a target status transition is allowed.
+     */
+    public function canTransitionTo(string $targetStatus): bool
+    {
+        return in_array($targetStatus, $this->availableTransitions(), true);
+    }
+
+    /**
+     * Return available target statuses from the current status.
+     *
+     * @return list<string>
+     */
+    public function availableTransitions(): array
+    {
+        return self::transitionMap()[$this->status] ?? [];
     }
 }

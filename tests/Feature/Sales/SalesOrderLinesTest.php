@@ -297,11 +297,11 @@ it('4. non sellable item cannot be added to a sales order', function () {
     expect($response->json('errors.item_id'))->not->toBe([]);
 });
 
-it('5. line cannot be added to a non draft sales order', function () {
+it('5. line cannot be added to a completed sales order', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
     $customer = ($this->createCustomer)($tenant);
-    $order = ($this->createSalesOrder)($tenant, $customer->id, null, ['status' => 'CONFIRMED']);
+    $order = ($this->createSalesOrder)($tenant, $customer->id, null, ['status' => 'COMPLETED']);
     $uom = ($this->makeUom)($tenant);
     $item = ($this->createItem)($tenant, $uom);
 
@@ -313,7 +313,7 @@ it('5. line cannot be added to a non draft sales order', function () {
             'quantity' => '1.000000',
         ])->assertStatus(422)
         ->assertJson([
-            'message' => 'Only draft sales orders can be edited.',
+            'message' => 'Only draft or open sales orders can be edited.',
         ]);
 });
 
@@ -718,11 +718,11 @@ it('15. quantity edit does not mutate the unit price snapshot', function () {
         ->and((string) ($updatedLine?->unit_price_currency_code ?? ''))->toBe('USD');
 });
 
-it('16. quantity edit is blocked for a non draft sales order', function () {
+it('16. quantity edit is blocked for a completed sales order', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
     $customer = ($this->createCustomer)($tenant);
-    $order = ($this->createSalesOrder)($tenant, $customer->id, null, ['status' => 'CONFIRMED']);
+    $order = ($this->createSalesOrder)($tenant, $customer->id, null, ['status' => 'COMPLETED']);
     $uom = ($this->makeUom)($tenant);
     $item = ($this->createItem)($tenant, $uom);
     $line = ($this->createSalesOrderLine)($tenant, $order->id, $item->id);
@@ -734,7 +734,7 @@ it('16. quantity edit is blocked for a non draft sales order', function () {
             'quantity' => '2.000000',
         ])->assertStatus(422)
         ->assertJson([
-            'message' => 'Only draft sales orders can be edited.',
+            'message' => 'Only draft or open sales orders can be edited.',
         ]);
 });
 
@@ -836,11 +836,11 @@ it('21. line removal works on a draft sales order', function () {
         ->and($response->json('data.order.line_count'))->toBe(0);
 });
 
-it('22. line removal is blocked for a non draft sales order', function () {
+it('22. line removal is blocked for a completed sales order', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
     $customer = ($this->createCustomer)($tenant);
-    $order = ($this->createSalesOrder)($tenant, $customer->id, null, ['status' => 'CONFIRMED']);
+    $order = ($this->createSalesOrder)($tenant, $customer->id, null, ['status' => 'COMPLETED']);
     $uom = ($this->makeUom)($tenant);
     $item = ($this->createItem)($tenant, $uom);
     $line = ($this->createSalesOrderLine)($tenant, $order->id, $item->id);
@@ -851,7 +851,7 @@ it('22. line removal is blocked for a non draft sales order', function () {
         ->deleteJson(route('sales.orders.lines.destroy', [$order->id, $line->id]))
         ->assertStatus(422)
         ->assertJson([
-            'message' => 'Only draft sales orders can be edited.',
+            'message' => 'Only draft or open sales orders can be edited.',
         ]);
 });
 

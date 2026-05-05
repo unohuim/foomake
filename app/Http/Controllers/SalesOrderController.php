@@ -14,7 +14,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Gate;
 
 /**
- * Handle draft sales order CRUD.
+ * Handle sales order CRUD.
  */
 class SalesOrderController extends Controller
 {
@@ -59,7 +59,7 @@ class SalesOrderController extends Controller
     }
 
     /**
-     * Store a new draft sales order.
+     * Store a new sales order.
      */
     public function store(StoreSalesOrderRequest $request): JsonResponse
     {
@@ -84,11 +84,15 @@ class SalesOrderController extends Controller
     }
 
     /**
-     * Update an existing draft sales order.
+     * Update an existing sales order.
      */
     public function update(UpdateSalesOrderRequest $request, SalesOrder $salesOrder): JsonResponse
     {
         Gate::authorize('sales-sales-orders-manage');
+
+        if (! $salesOrder->isEditable()) {
+            return $this->editableOrderResponse();
+        }
 
         $customer = Customer::query()
             ->with('contacts')
@@ -97,7 +101,6 @@ class SalesOrderController extends Controller
         $salesOrder->update([
             'customer_id' => $customer->id,
             'contact_id' => $this->resolveContactId($request, $customer, $salesOrder),
-            'status' => SalesOrder::STATUS_DRAFT,
         ]);
 
         $salesOrder->load(['customer', 'contact', 'lines.item']);
@@ -108,7 +111,7 @@ class SalesOrderController extends Controller
     }
 
     /**
-     * Delete a draft sales order.
+     * Delete a sales order.
      */
     public function destroy(SalesOrder $salesOrder): JsonResponse
     {
@@ -124,7 +127,7 @@ class SalesOrderController extends Controller
     /**
      * Build the sales order response payload.
      *
-     * @return array<string, int|string|null|array<int, array<string, int|string|null>>>
+     * @return array<string, int|string|bool|null|array<int, array<string, int|string|null>>|list<string>>
      */
     public function orderData(SalesOrder $order): array
     {
@@ -148,6 +151,10 @@ class SalesOrderController extends Controller
             'contact_id' => $order->contact_id,
             'contact_name' => $contactName,
             'status' => $order->status,
+            'can_edit' => $order->isEditable(),
+            'can_manage_lines' => $order->allowsLineMutations(),
+            'available_status_transitions' => $order->availableTransitions(),
+            'status_update_url' => route('sales.orders.status.update', $order),
             'lines' => $lines,
             'line_count' => count($lines),
             'order_total_cents' => $orderTotalCents,
@@ -246,5 +253,19 @@ class SalesOrderController extends Controller
         }
 
         return $existingOrder->contact_id;
+    }
+
+    /**
+     * Return the shared non-editable response for terminal sales orders.
+     */
+    private function editableOrderResponse(): JsonResponse
+    {
+        return response()->json([
+            'message' => 'Only draft or open sales orders can be edited.',
+            'errors' => [
+                'customer_id' => [],
+                'contact_id' => [],
+            ],
+        ], 422);
     }
 }

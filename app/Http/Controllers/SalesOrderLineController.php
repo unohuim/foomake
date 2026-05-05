@@ -11,7 +11,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Gate;
 
 /**
- * Handle draft sales order line mutations.
+ * Handle sales order line mutations.
  */
 class SalesOrderLineController extends Controller
 {
@@ -24,8 +24,8 @@ class SalesOrderLineController extends Controller
     {
         Gate::authorize('sales-sales-orders-manage');
 
-        if ($salesOrder->status !== SalesOrder::STATUS_DRAFT) {
-            return $this->draftOnlyResponse();
+        if (! $salesOrder->allowsLineMutations()) {
+            return $this->editableResponse();
         }
 
         $item = Item::query()->findOrFail((int) $request->validated('item_id'));
@@ -70,8 +70,8 @@ class SalesOrderLineController extends Controller
             abort(404);
         }
 
-        if ($salesOrder->status !== SalesOrder::STATUS_DRAFT) {
-            return $this->draftOnlyResponse();
+        if (! $salesOrder->allowsLineMutations()) {
+            return $this->editableResponse();
         }
 
         $quantity = $this->normalizeQuantity((string) $request->validated('quantity'));
@@ -103,8 +103,8 @@ class SalesOrderLineController extends Controller
             abort(404);
         }
 
-        if ($salesOrder->status !== SalesOrder::STATUS_DRAFT) {
-            return $this->draftOnlyResponse();
+        if (! $salesOrder->allowsLineMutations()) {
+            return $this->editableResponse();
         }
 
         $deletedLineId = $line->id;
@@ -123,7 +123,7 @@ class SalesOrderLineController extends Controller
     /**
      * Build the shared sales order payload.
      *
-     * @return array<string, int|string|null|array<int, array<string, int|string|null>>>
+     * @return array<string, int|string|bool|null|array<int, array<string, int|string|null>>|list<string>>
      */
     public function orderData(SalesOrder $order): array
     {
@@ -147,6 +147,10 @@ class SalesOrderLineController extends Controller
             'contact_id' => $order->contact_id,
             'contact_name' => $contactName,
             'status' => $order->status,
+            'can_edit' => $order->isEditable(),
+            'can_manage_lines' => $order->allowsLineMutations(),
+            'available_status_transitions' => $order->availableTransitions(),
+            'status_update_url' => route('sales.orders.status.update', $order),
             'lines' => $lines,
             'line_count' => count($lines),
             'order_total_cents' => $orderTotalCents,
@@ -178,12 +182,12 @@ class SalesOrderLineController extends Controller
     }
 
     /**
-     * Return the shared draft-only mutation response.
+     * Return the shared editable-status mutation response.
      */
-    private function draftOnlyResponse(): JsonResponse
+    private function editableResponse(): JsonResponse
     {
         return response()->json([
-            'message' => 'Only draft sales orders can be edited.',
+            'message' => 'Only draft or open sales orders can be edited.',
             'errors' => [
                 'item_id' => [],
                 'quantity' => [],

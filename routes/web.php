@@ -17,6 +17,7 @@ use App\Http\Controllers\PurchaseOrderStatusController;
 use App\Http\Controllers\RecipeController;
 use App\Http\Controllers\SalesOrderController;
 use App\Http\Controllers\SalesOrderLineController;
+use App\Http\Controllers\SalesOrderStatusController;
 use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\SupplierPurchaseOptionController;
 use App\Http\Controllers\UomCategoryController;
@@ -193,6 +194,8 @@ Route::middleware('auth')->group(function () {
         ->name('sales.orders.store');
     Route::patch('/sales/orders/{salesOrder}', [SalesOrderController::class, 'update'])
         ->name('sales.orders.update');
+    Route::patch('/sales/orders/{salesOrder}/status', [SalesOrderStatusController::class, 'update'])
+        ->name('sales.orders.status.update');
     Route::delete('/sales/orders/{salesOrder}', [SalesOrderController::class, 'destroy'])
         ->name('sales.orders.destroy');
     Route::post('/sales/orders/{salesOrder}/lines', [SalesOrderLineController::class, 'store'])

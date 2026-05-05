@@ -237,7 +237,7 @@ it('3. authorized user can view the sales orders index and receives ajax payload
 
     expect($payload['storeUrl'] ?? null)->toBe(route('sales.orders.store'))
         ->and($payload['updateUrlBase'] ?? null)->toBe(url('/sales/orders'))
-        ->and($payload['statuses'] ?? null)->toBe(['DRAFT']);
+        ->and($payload['statuses'] ?? null)->toBe(['DRAFT', 'OPEN', 'COMPLETED', 'CANCELLED']);
 });
 
 it('3a. sales navigation appears before other domain navigation groups', function () {
@@ -581,13 +581,13 @@ it('17. update can change contact within the same customer', function () {
         ->and((int) ($response->json('data.contact_id') ?? 0))->toBe($replacementContact->id);
 });
 
-it('17a. updating a sales order does not change status away from draft', function () {
+it('17a. updating a sales order does not change status away from its current lifecycle status', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
     $customer = ($this->createCustomer)($tenant);
     $primaryContact = ($this->createContact)($tenant, $customer->id, ['is_primary' => true]);
     $order = ($this->createSalesOrder)($tenant, $customer->id, $primaryContact->id, [
-        'status' => 'DRAFT',
+        'status' => 'OPEN',
     ]);
 
     ($this->grantPermission)($user, 'sales-sales-orders-manage');
@@ -596,14 +596,14 @@ it('17a. updating a sales order does not change status away from draft', functio
         ->patchJson(route('sales.orders.update', $order->id), [
             'customer_id' => $customer->id,
             'contact_id' => $primaryContact->id,
-            'status' => 'OPEN',
+            'status' => 'CANCELLED',
         ])->assertOk()
         ->assertHeader('content-type', 'application/json');
 
     $updatedOrder = ($this->fetchSalesOrder)($order->id);
 
-    expect((string) ($updatedOrder?->status ?? ''))->toBe('DRAFT')
-        ->and((string) ($response->json('data.status') ?? ''))->toBe('DRAFT');
+    expect((string) ($updatedOrder?->status ?? ''))->toBe('OPEN')
+        ->and((string) ($response->json('data.status') ?? ''))->toBe('OPEN');
 });
 
 it('18. update changing customer resets contact to the new customer primary contact when no contact_id is submitted', function () {
