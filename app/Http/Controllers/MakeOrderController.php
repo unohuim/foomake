@@ -36,6 +36,7 @@ class MakeOrderController extends Controller
         $recipes = Recipe::query()
             ->where('tenant_id', $request->user()->tenant_id)
             ->where('is_active', true)
+            ->where('recipe_type', Recipe::TYPE_MANUFACTURING)
             ->with('item.baseUom')
             ->orderBy('id')
             ->get();
@@ -86,6 +87,10 @@ class MakeOrderController extends Controller
             ->with('item')
             ->findOrFail($validated['recipe_id']);
 
+        if ($recipeTypeError = $this->manufacturingRecipeValidationError($recipe)) {
+            return $recipeTypeError;
+        }
+
         if (!$recipe->is_active) {
             return $this->validationError([
                 'recipe_id' => ['Recipe must be active to execute.'],
@@ -130,6 +135,10 @@ class MakeOrderController extends Controller
             ], 422);
         }
 
+        if ($recipeTypeError = $this->manufacturingRecipeValidationError($makeOrderModel->recipe)) {
+            return $recipeTypeError;
+        }
+
         if (!$makeOrderModel->recipe || !$makeOrderModel->recipe->is_active) {
             return $this->validationError([
                 'recipe_id' => ['Recipe must be active to execute.'],
@@ -172,6 +181,12 @@ class MakeOrderController extends Controller
                     ->where('tenant_id', $request->user()->tenant_id)
                     ->with('item')
                     ->findOrFail($makeOrderModel->recipe_id);
+
+                if ($recipeTypeError = $this->manufacturingRecipeValidationError($recipe)) {
+                    return [
+                        'error' => $recipeTypeError,
+                    ];
+                }
 
                 if (!$recipe->is_active) {
                     return [
@@ -239,6 +254,8 @@ class MakeOrderController extends Controller
     {
         return [
             'id' => $recipe->id,
+            'recipe_type' => $recipe->recipe_type,
+            'recipe_type_label' => $recipe->recipeTypeLabel(),
             'name' => $recipe->name,
             'item_id' => $recipe->item_id,
             'item_name' => $recipe->item?->name ?? '—',
@@ -260,6 +277,26 @@ class MakeOrderController extends Controller
             'message' => $message,
             'errors' => $errors,
         ], 422);
+    }
+
+    /**
+     * Validate that a recipe can be used for make orders.
+     */
+    private function manufacturingRecipeValidationError(?Recipe $recipe): ?JsonResponse
+    {
+        if (!$recipe) {
+            return $this->validationError([
+                'recipe_id' => ['Recipe does not exist.'],
+            ], 'Recipe does not exist.');
+        }
+
+        if (!$recipe->isManufacturingType()) {
+            return $this->validationError([
+                'recipe_id' => ['Only manufacturing recipes can be used for make orders.'],
+            ], 'Only manufacturing recipes can be used for make orders.');
+        }
+
+        return null;
     }
 
     /**

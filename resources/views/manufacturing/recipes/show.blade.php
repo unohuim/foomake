@@ -58,10 +58,14 @@
                         @endcan
                     </div>
 
-                    <dl class="grid grid-cols-1 sm:grid-cols-2 gap-6 text-sm">
+                    <dl class="grid grid-cols-1 gap-6 text-sm sm:grid-cols-2">
                         <div>
                             <dt class="text-sm font-medium text-gray-500">{{ __('Recipe Name') }}</dt>
                             <dd class="mt-1 text-gray-900" x-text="recipe.name"></dd>
+                        </div>
+                        <div>
+                            <dt class="text-sm font-medium text-gray-500">{{ __('Type') }}</dt>
+                            <dd class="mt-1 text-gray-900" x-text="recipe.recipe_type_label"></dd>
                         </div>
                         <div>
                             <dt class="text-sm font-medium text-gray-500">{{ __('Name') }}</dt>

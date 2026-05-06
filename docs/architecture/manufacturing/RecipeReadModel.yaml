@@ -4,23 +4,30 @@ location:
   - app/Http/Controllers/RecipeController.php
   - resources/views/manufacturing/recipes/index.blade.php
   - resources/views/manufacturing/recipes/show.blade.php
-purpose: Define the read-only data presented for manufacturing recipes in index and detail views.
+purpose: Define the read-only data presented for recipe index and detail views, including recipe type and eligible output item picker metadata.
 when_to_use:
-  - Rendering manufacturing recipe index and show pages
+  - Rendering recipe index and show pages
   - Adding fields to the recipe read-only UI
+  - Supplying output item candidate metadata to recipe create and edit flows
 when_not_to_use:
   - Recipe creation, editing, or execution flows
   - Inventory ledger or make-order execution screens
 rules:
   - Each recipe read view must display the recipe name.
   - Each recipe read view must display the output item name.
+  - Each recipe read view must display the recipe type label.
   - Each recipe read view must display output quantity per run.
   - The output item base UoM may be displayed when available.
   - The active flag is displayed as a read-only status.
   - Recipe lines list input item, quantity, and UoM when available.
   - Recipe output quantity display uses the output item's base UoM display precision when available.
   - Recipe line quantity display uses each line item's base UoM display precision when available.
+  - Recipe output item candidates are normal items where is_manufacturable is true or is_sellable is true.
+  - Recipe output item candidates must include has_recipe, is_manufacturable, is_sellable, allowed_recipe_types, and uom_display_precision.
+  - Output items with neither is_manufacturable nor is_sellable are excluded from recipe output candidate payloads.
+  - Recipe create form may auto-populate the recipe name from the selected output item name.
   - Make Order recipe selection must identify recipes by recipe name.
+  - Make Order recipe selection must only include manufacturing recipes.
   - Empty states are required when no recipes or lines exist.
 public_interface:
   - manufacturing.recipes.index view contract

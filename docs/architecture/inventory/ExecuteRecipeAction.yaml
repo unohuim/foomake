@@ -10,7 +10,9 @@ when_not_to_use:
   - Inventory adjustments or corrections
   - Costing or planning calculations
 rules:
-  - Recipe must be active and output item manufacturable.
+  - Recipe must be active.
+  - Recipe type must be manufacturing.
+  - Recipe output item must be manufacturable for manufacturing execution.
   - Recipe output_quantity must be greater than zero.
   - Runs must be greater than zero.
   - Inputs are issued and outputs are receipted as stock moves.
@@ -18,6 +20,7 @@ rules:
   - Output stock move quantity is recipe output_quantity multiplied by runs.
   - Quantities are recorded in each item base UoM.
   - Enum-like values must use values defined in docs/ENUMS.md.
+  - Fulfillment recipes are never eligible for Make Orders or recipe execution in this phase.
 public_interface:
   - execute(Recipe $recipe, string $runs)
 example_usage: |

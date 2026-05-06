@@ -40,6 +40,7 @@
                                 <label for="material-name" class="block text-sm font-medium text-gray-700">Name</label>
                                 <input
                                     id="material-name"
+                                    x-ref="createMaterialNameInput"
                                     type="text"
                                     class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
                                     x-model="form.name"

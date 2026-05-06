@@ -106,6 +106,9 @@ export function mount(rootEl, payload) {
             this.isCreateOpen = true;
             this.generalError = '';
             this.errors = emptyErrors();
+            this.$nextTick(() => {
+                this.$refs.createMaterialNameInput?.focus();
+            });
         },
         closeCreate() {
             this.isCreateOpen = false;

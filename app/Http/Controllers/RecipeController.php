@@ -26,36 +26,33 @@ class RecipeController extends Controller
     {
         Gate::authorize('inventory-recipes-view');
 
+        $selectedRecipeType = $this->normalizeRecipeTypeFilter($request->query('recipe_type'));
+
         $recipes = Recipe::query()
             ->with('item.baseUom')
             ->withCount('lines')
+            ->when($selectedRecipeType !== null, function ($query) use ($selectedRecipeType) {
+                $query->where('recipe_type', $selectedRecipeType);
+            })
             ->orderByDesc('updated_at')
             ->get();
 
         $manufacturableItems = Item::query()
-            ->where('is_manufacturable', true)
+            ->where(function ($query) {
+                $query->where('is_manufacturable', true)
+                    ->orWhere('is_sellable', true);
+            })
             ->withCount('recipes')
-            ->with('baseUom')
+            ->with(['baseUom:id,name,symbol,display_precision'])
             ->orderBy('name')
-            ->get(['id', 'name', 'base_uom_id']);
+            ->get(['id', 'name', 'base_uom_id', 'is_manufacturable', 'is_sellable']);
 
         $payload = [
             'recipes' => $recipes->map(function (Recipe $recipe) {
                 return $this->recipePayload($recipe);
             })->all(),
             'manufacturable_items' => $manufacturableItems->map(function (Item $item) {
-                $uomDisplay = $item->baseUom
-                    ? $item->baseUom->name . ' (' . $item->baseUom->symbol . ')'
-                    : '—';
-
-                return [
-                    'id' => $item->id,
-                    'name' => $item->name,
-                    'uom_display' => $uomDisplay,
-                    'display_text' => $item->name . ' ' . $uomDisplay,
-                    'search_text' => strtolower($item->name . ' ' . $uomDisplay),
-                    'has_recipe' => $item->recipes_count > 0,
-                ];
+                return $this->manufacturableItemPayload($item);
             })->all(),
             'store_url' => route('manufacturing.recipes.store'),
             'update_url_base' => url('/manufacturing/recipes'),
@@ -64,10 +61,14 @@ class RecipeController extends Controller
             'navigationStateUrl' => route('navigation.state'),
             'csrf_token' => $request->session()->token(),
             'can_manage' => Gate::allows('inventory-make-orders-manage'),
+            'selected_recipe_type' => $selectedRecipeType ?? '',
+            'recipe_type_options' => $this->recipeTypeOptions(),
         ];
 
         return view('manufacturing.recipes.index', [
             'payload' => $payload,
+            'selectedRecipeType' => $selectedRecipeType,
+            'recipeTypeOptions' => $this->recipeTypeOptions(),
         ]);
     }
 
@@ -86,11 +87,14 @@ class RecipeController extends Controller
         ]);
 
         $manufacturableItems = Item::query()
-            ->where('is_manufacturable', true)
+            ->where(function ($query) {
+                $query->where('is_manufacturable', true)
+                    ->orWhere('is_sellable', true);
+            })
             ->withCount('recipes')
-            ->with('baseUom')
+            ->with(['baseUom:id,name,symbol,display_precision'])
             ->orderBy('name')
-            ->get(['id', 'name', 'base_uom_id']);
+            ->get(['id', 'name', 'base_uom_id', 'is_manufacturable', 'is_sellable']);
 
         $items = Item::query()
             ->with('baseUom')
@@ -107,18 +111,7 @@ class RecipeController extends Controller
                 'has_lines' => $recipe->lines->isNotEmpty(),
             ]),
             'manufacturable_items' => $manufacturableItems->map(function (Item $item) {
-                $uomDisplay = $item->baseUom
-                    ? $item->baseUom->name . ' (' . $item->baseUom->symbol . ')'
-                    : '—';
-
-                return [
-                    'id' => $item->id,
-                    'name' => $item->name,
-                    'uom_display' => $uomDisplay,
-                    'display_text' => $item->name . ' ' . $uomDisplay,
-                    'search_text' => strtolower($item->name . ' ' . $uomDisplay),
-                    'has_recipe' => $item->recipes_count > 0,
-                ];
+                return $this->manufacturableItemPayload($item);
             })->all(),
             'items' => $items->map(function (Item $item) {
                 return [
@@ -136,6 +129,7 @@ class RecipeController extends Controller
             'index_url' => route('manufacturing.recipes.index'),
             'csrf_token' => $request->session()->token(),
             'can_manage' => Gate::allows('inventory-make-orders-manage'),
+            'recipe_type_options' => $this->recipeTypeOptions(),
         ];
 
         return view('manufacturing.recipes.show', [
@@ -156,9 +150,9 @@ class RecipeController extends Controller
                 'required',
                 'integer',
                 Rule::exists('items', 'id')
-                    ->where('tenant_id', $request->user()->tenant_id)
-                    ->where('is_manufacturable', true),
+                    ->where('tenant_id', $request->user()->tenant_id),
             ],
+            'recipe_type' => ['required', 'string', Rule::in(Recipe::allowedRecipeTypes())],
             'name' => ['required', 'string', 'max:255'],
             'output_quantity' => ['required', 'string', 'regex:/^\d+(?:\.\d{1,6})?$/'],
             'is_active' => ['nullable', 'boolean'],
@@ -168,9 +162,22 @@ class RecipeController extends Controller
         $tenantId = $request->user()->tenant_id;
         $isActive = $request->has('is_active') ? $request->boolean('is_active') : true;
         $isDefault = $request->boolean('is_default');
+        $normalizedOutputQuantity = Recipe::normalizeOutputQuantityForType(
+            $validated['recipe_type'],
+            $validated['output_quantity']
+        );
+        $outputItem = Item::query()
+            ->where('tenant_id', $tenantId)
+            ->findOrFail($validated['item_id']);
+
+        if ($eligibilityError = Recipe::recipeTypeEligibilityError($outputItem, $validated['recipe_type'])) {
+            return $this->validationError([
+                'recipe_type' => [$eligibilityError],
+            ], $eligibilityError);
+        }
 
         try {
-            $recipe = DB::transaction(function () use ($tenantId, $validated, $isActive, $isDefault) {
+            $recipe = DB::transaction(function () use ($tenantId, $validated, $isActive, $isDefault, $normalizedOutputQuantity) {
                 if ($isDefault) {
                     Recipe::query()
                         ->where('tenant_id', $tenantId)
@@ -182,8 +189,9 @@ class RecipeController extends Controller
                 return Recipe::query()->create([
                     'tenant_id' => $tenantId,
                     'item_id' => $validated['item_id'],
+                    'recipe_type' => $validated['recipe_type'],
                     'name' => $validated['name'],
-                    'output_quantity' => $validated['output_quantity'],
+                    'output_quantity' => $normalizedOutputQuantity,
                     'is_active' => $isActive,
                     'is_default' => $isDefault,
                 ]);
@@ -212,9 +220,9 @@ class RecipeController extends Controller
                 'required',
                 'integer',
                 Rule::exists('items', 'id')
-                    ->where('tenant_id', $request->user()->tenant_id)
-                    ->where('is_manufacturable', true),
+                    ->where('tenant_id', $request->user()->tenant_id),
             ],
+            'recipe_type' => ['required', 'string', Rule::in(Recipe::allowedRecipeTypes())],
             'name' => ['required', 'string', 'max:255'],
             'output_quantity' => ['required', 'string', 'regex:/^\d+(?:\.\d{1,6})?$/'],
             'is_active' => ['required', 'boolean'],
@@ -223,6 +231,9 @@ class RecipeController extends Controller
 
         $hasLines = $recipe->lines()->exists();
         $itemId = (int) $validated['item_id'];
+        $outputItem = Item::query()
+            ->where('tenant_id', $request->user()->tenant_id)
+            ->findOrFail($itemId);
 
         if ($hasLines && $itemId !== $recipe->item_id) {
             return $this->validationError([
@@ -230,11 +241,21 @@ class RecipeController extends Controller
             ]);
         }
 
+        if ($eligibilityError = Recipe::recipeTypeEligibilityError($outputItem, $validated['recipe_type'])) {
+            return $this->validationError([
+                'recipe_type' => [$eligibilityError],
+            ], $eligibilityError);
+        }
+
         $tenantId = $request->user()->tenant_id;
         $isDefault = $request->has('is_default') ? $request->boolean('is_default') : $recipe->is_default;
+        $normalizedOutputQuantity = Recipe::normalizeOutputQuantityForType(
+            $validated['recipe_type'],
+            $validated['output_quantity']
+        );
 
         try {
-            DB::transaction(function () use ($recipe, $tenantId, $itemId, $request, $isDefault, $validated) {
+            DB::transaction(function () use ($recipe, $tenantId, $itemId, $request, $isDefault, $validated, $normalizedOutputQuantity) {
                 if ($isDefault) {
                     Recipe::query()
                         ->where('tenant_id', $tenantId)
@@ -245,8 +266,9 @@ class RecipeController extends Controller
                 }
 
                 $recipe->item_id = $itemId;
+                $recipe->recipe_type = $validated['recipe_type'];
                 $recipe->name = $validated['name'];
-                $recipe->output_quantity = $validated['output_quantity'];
+                $recipe->output_quantity = $normalizedOutputQuantity;
                 $recipe->is_active = $request->boolean('is_active');
                 $recipe->is_default = $isDefault;
                 $recipe->save();
@@ -390,6 +412,8 @@ class RecipeController extends Controller
         return [
             'id' => $recipe->id,
             'item_id' => $recipe->item_id,
+            'recipe_type' => $recipe->recipe_type,
+            'recipe_type_label' => $recipe->recipeTypeLabel(),
             'name' => $recipe->name,
             'item_name' => $recipe->item?->name ?? '—',
             'output_quantity' => (string) $recipe->output_quantity,
@@ -404,6 +428,47 @@ class RecipeController extends Controller
             'lines_count' => $recipe->lines_count ?? 0,
             'show_url' => route('manufacturing.recipes.show', $recipe),
         ];
+    }
+
+    /**
+     * Build JSON payload for a manufacturable item picker entry.
+     */
+    private function manufacturableItemPayload(Item $item): array
+    {
+        $uomDisplay = $item->baseUom
+            ? $item->baseUom->name . ' (' . $item->baseUom->symbol . ')'
+            : '—';
+
+        return [
+            'id' => $item->id,
+            'name' => $item->name,
+            'uom_display' => $uomDisplay,
+            'display_text' => $item->name . ' ' . $uomDisplay,
+            'search_text' => strtolower($item->name . ' ' . $uomDisplay),
+            'has_recipe' => $item->recipes_count > 0,
+            'is_manufacturable' => (bool) $item->is_manufacturable,
+            'is_sellable' => (bool) $item->is_sellable,
+            'uom_display_precision' => (int) ($item->baseUom?->display_precision ?? 6),
+            'allowed_recipe_types' => $this->allowedRecipeTypesForItem($item),
+        ];
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function allowedRecipeTypesForItem(Item $item): array
+    {
+        $allowedRecipeTypes = [];
+
+        if ($item->is_manufacturable) {
+            $allowedRecipeTypes[] = Recipe::TYPE_MANUFACTURING;
+        }
+
+        if ($item->is_sellable) {
+            $allowedRecipeTypes[] = Recipe::TYPE_FULFILLMENT;
+        }
+
+        return $allowedRecipeTypes;
     }
 
     /**
@@ -432,6 +497,34 @@ class RecipeController extends Controller
     }
 
     /**
+     * Normalize a recipe type filter value.
+     */
+    private function normalizeRecipeTypeFilter(?string $recipeType): ?string
+    {
+        if (!Recipe::isValidRecipeType($recipeType)) {
+            return null;
+        }
+
+        return $recipeType;
+    }
+
+    /**
+     * @return array<int, array<string, string>>
+     */
+    private function recipeTypeOptions(): array
+    {
+        return collect(Recipe::recipeTypeLabels())
+            ->map(function (string $label, string $value): array {
+                return [
+                    'value' => $value,
+                    'label' => $label,
+                ];
+            })
+            ->values()
+            ->all();
+    }
+
+    /**
      * Return a standardized validation error response.
      */
     private function validationError(array $errors, string $message = 'Validation failed.'): JsonResponse
@@ -448,10 +541,11 @@ class RecipeController extends Controller
     private function handleRecipeException(InvalidArgumentException $exception): JsonResponse
     {
         $message = $exception->getMessage();
-
         $field = 'item_id';
 
-        if (str_contains($message, 'active recipe')) {
+        if (str_contains($message, 'Recipe type')) {
+            $field = 'recipe_type';
+        } elseif (str_contains($message, 'active recipe')) {
             $field = 'is_active';
         }
 

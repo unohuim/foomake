@@ -105,3 +105,11 @@ it('includes the shared navigation state refresh url in the materials index payl
 
     expect($payload['navigationStateUrl'] ?? null)->toBe(url('/navigation/state'));
 });
+
+it('focuses the create material name input when the create slide-over opens', function () {
+    $pageSource = file_get_contents(resource_path('js/pages/materials-index.js'));
+    $createSource = file_get_contents(resource_path('views/materials/partials/create-material-slide-over.blade.php'));
+
+    expect($pageSource)->toContain('this.$refs.createMaterialNameInput?.focus();')
+        ->and($createSource)->toContain('x-ref="createMaterialNameInput"');
+});

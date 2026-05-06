@@ -826,7 +826,7 @@ Migrations remain the **sole source of truth**.
 ## recipes
 
 **Tenant-owned:** Yes  
-**Purpose:** Manufacturing recipes
+**Purpose:** Recipe definitions for manufacturing and fulfillment output composition
 
 ### Columns
 
@@ -835,6 +835,7 @@ Migrations remain the **sole source of truth**.
 | id              | bigint        | No       | Primary key               |
 | tenant_id       | bigint        | No       | FK → tenants.id (CASCADE) |
 | item_id         | bigint        | No       | FK → items.id (CASCADE)   |
+| recipe_type     | string        | No       | Allowed values defined in `docs/ENUMS.md` |
 | name            | string        | No       | User-defined recipe name  |
 | output_quantity | decimal(18,6) | No       | Canonical scale           |
 | is_active       | boolean       | No       | Default true              |
@@ -848,8 +849,17 @@ Migrations remain the **sole source of truth**.
 - Unique: `(id, tenant_id)`
 - Unique: `(tenant_id, item_id)` where `is_default = 1` (partial/filtered; driver-specific)
 - Index: `(tenant_id, item_id)`
+- Index: `(tenant_id, recipe_type)`
 - Implicit (FK index): `tenant_id`
 - Implicit (FK index): `item_id`
+
+### Behavioral Notes
+
+- `recipe_type` is required and must use values defined in `docs/ENUMS.md`.
+- Recipe output candidates are normal `items` where `is_manufacturable = true` or `is_sellable = true`.
+- Output items where both flags are false are invalid for recipes.
+- Fulfillment recipes normalize `output_quantity` to `1.000000` on save.
+- Output quantity storage remains canonical scale `6`; UI display precision is derived from the output item base UoM.
 
 ---
 

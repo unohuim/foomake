@@ -21,18 +21,58 @@
             ></div>
         </div>
 
-        <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 space-y-6">
+        <div class="max-w-7xl mx-auto space-y-6 sm:px-6 lg:px-8">
             <div class="flex items-center justify-between">
                 <h3 class="text-lg font-medium text-gray-900">{{ __('All recipes') }}</h3>
                 @can('inventory-make-orders-manage')
                     <button
                         type="button"
-                        class="inline-flex items-center px-4 py-2 bg-blue-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition"
+                        class="inline-flex items-center rounded-md border border-transparent bg-blue-600 px-4 py-2 font-semibold text-xs uppercase tracking-widest text-white transition hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
                         x-on:click="openCreate()"
                     >
                         {{ __('Create Recipe') }}
                     </button>
                 @endcan
+            </div>
+
+            <div class="rounded-lg border border-gray-100 bg-white p-4 shadow-sm">
+                <form method="GET" action="{{ route('manufacturing.recipes.index') }}" class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                    <div>
+                        <label for="recipe_type" class="block text-sm font-medium text-gray-700">{{ __('Type filter') }}</label>
+                        <select
+                            id="recipe_type"
+                            name="recipe_type"
+                            class="mt-1 block w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:w-64"
+                        >
+                            <option value="">{{ __('All Types') }}</option>
+                            @foreach ($recipeTypeOptions as $recipeTypeOption)
+                                <option
+                                    value="{{ $recipeTypeOption['value'] }}"
+                                    @selected($selectedRecipeType === $recipeTypeOption['value'])
+                                >
+                                    {{ __($recipeTypeOption['label']) }}
+                                </option>
+                            @endforeach
+                        </select>
+                    </div>
+
+                    <div class="flex items-center gap-3">
+                        <button
+                            type="submit"
+                            class="inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 font-semibold text-xs uppercase tracking-widest text-gray-700 shadow-sm transition hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                        >
+                            {{ __('Filter') }}
+                        </button>
+                        @if ($selectedRecipeType)
+                            <a
+                                href="{{ route('manufacturing.recipes.index') }}"
+                                class="text-sm text-blue-600 hover:text-blue-500"
+                            >
+                                {{ __('Clear') }}
+                            </a>
+                        @endif
+                    </div>
+                </form>
             </div>
 
             <div x-cloak x-show="recipes.length === 0">
@@ -65,6 +105,7 @@
                                 <thead class="text-left text-gray-500">
                                     <tr class="border-b border-gray-100">
                                         <th class="px-3 py-2 font-medium">{{ __('Recipe Name') }}</th>
+                                        <th class="px-3 py-2 font-medium">{{ __('Type') }}</th>
                                         <th class="px-3 py-2 font-medium">{{ __('Output Item') }}</th>
                                         <th class="px-3 py-2 font-medium">{{ __('Output per Run') }}</th>
                                         <th class="px-3 py-2 font-medium">{{ __('Active') }}</th>
@@ -76,6 +117,7 @@
                                     <template x-for="recipe in recipes" :key="recipe.id">
                                         <tr>
                                             <td class="px-3 py-3 text-gray-900" x-text="recipe.name"></td>
+                                            <td class="px-3 py-3 text-gray-600" x-text="recipe.recipe_type_label"></td>
                                             <td class="px-3 py-3 text-gray-900">
                                                 <a
                                                     class="text-gray-900 hover:text-blue-600"
@@ -94,7 +136,7 @@
                                                     >
                                                         <button
                                                             type="button"
-                                                            class="inline-flex items-center justify-center w-8 h-8 text-gray-500 hover:text-gray-700"
+                                                            class="inline-flex h-8 w-8 items-center justify-center text-gray-500 hover:text-gray-700"
                                                             aria-label="Recipe actions"
                                                             x-on:click="toggleActionMenu($event, recipe.id)"
                                                         >

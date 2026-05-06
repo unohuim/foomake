@@ -44,6 +44,30 @@ Do not introduce new enum values without updating this document.
 
 ## Manufacturing
 
+### Recipe Type
+
+**Name:** Recipe type  
+**Storage location(s):** `recipes.recipe_type` (string column)  
+**Allowed values:**
+
+- `manufacturing`
+- `fulfillment`
+
+**Semantic meaning:**
+
+- `manufacturing`: Recipe is eligible for manufacturing execution and Make Orders when its output item is manufacturable.
+- `fulfillment`: Recipe is reserved for fulfillment-style output composition and is not eligible for Make Orders in this phase.
+
+**Notes:**
+
+- Display labels are `Manufacturing` and `Fulfillment`.
+- Manufacturing recipes require a manufacturable output item.
+- Fulfillment recipes require a sellable output item.
+- An item that is both manufacturable and sellable may use either recipe type.
+- An item that is neither manufacturable nor sellable may not be used as a recipe output item.
+
+---
+
 ### Make Order Status
 
 **Name:** MakeOrder status  

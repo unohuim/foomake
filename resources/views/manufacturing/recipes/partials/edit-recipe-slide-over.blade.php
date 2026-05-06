@@ -18,7 +18,7 @@
                         <div class="flex items-start justify-between">
                             <div>
                                 <h2 class="text-lg font-medium text-gray-900">{{ __('Edit Recipe') }}</h2>
-                                <p class="mt-1 text-sm text-gray-600">{{ __('Update the output item and status.') }}</p>
+                                <p class="mt-1 text-sm text-gray-600">{{ __('Update the output item, recipe type, and status.') }}</p>
                             </div>
                             <button
                                 type="button"
@@ -72,15 +72,36 @@
                             </div>
 
                             <div>
+                                <x-dropdown-select
+                                    class="mt-1"
+                                    x-model="editForm.recipe_type"
+                                    name="recipe_type"
+                                    label="Recipe Type"
+                                    options-expression="availableEditRecipeTypeOptions()"
+                                    placeholder="Select recipe type"
+                                    error-expression="editErrors.recipe_type[0] || ''"
+                                >
+                                    <x-dropdown-option value="manufacturing">Manufacturing</x-dropdown-option>
+                                    <x-dropdown-option value="fulfillment">Fulfillment</x-dropdown-option>
+                                </x-dropdown-select>
+                            </div>
+
+                            <div>
                                 <label for="recipe-edit-output-quantity" class="block text-sm font-medium text-gray-700">{{ __('Output per Run') }}</label>
                                 <input
                                     id="recipe-edit-output-quantity"
                                     type="text"
                                     inputmode="decimal"
                                     class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                                    :disabled="isFulfillmentRecipeType(editForm.recipe_type)"
+                                    :class="isFulfillmentRecipeType(editForm.recipe_type) ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : ''"
                                     placeholder="0.000000"
                                     x-model="editForm.output_quantity"
+                                    x-on:blur="normalizeEditOutputQuantity()"
                                 />
+                                <p class="mt-1 text-xs text-gray-500" x-show="isFulfillmentRecipeType(editForm.recipe_type)">
+                                    {{ __('Fulfillment recipes always produce exactly 1 unit.') }}
+                                </p>
                                 <p class="mt-1 text-sm text-red-600" x-show="editErrors.output_quantity.length" x-text="editErrors.output_quantity[0]"></p>
                             </div>
 

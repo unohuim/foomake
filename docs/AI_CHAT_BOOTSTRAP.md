@@ -1959,6 +1959,43 @@ $recipe = Recipe::query()->findOrFail($id);
 
 ---
 
+### Recipe Output Eligibility
+
+**Name:** Recipe Output Eligibility  
+**Type:** Domain Rule  
+**Location:**  
+- `docs/architecture/manufacturing/RecipeReadModel.yaml`  
+- `docs/architecture/inventory/ExecuteRecipeAction.yaml`  
+- `app/Http/Controllers/RecipeController.php`  
+- `app/Models/Recipe.php`  
+
+**Purpose:**  
+Constrain which normal `items` may be used as recipe outputs and which `recipe_type` values each item supports.
+
+**When to Use:**  
+Recipe creation, recipe updates, recipe output pickers, and manufacturing execution gating.
+
+**When Not to Use:**  
+Generic item listing, purchasing rules, or sales import filtering unrelated to recipes.
+
+**Public Interface:**  
+- `Recipe::recipeTypeEligibilityError(Item $item, ?string $recipeType)`  
+- recipe output candidate payload from `RecipeController`
+
+**Example Usage:**  
+```php
+$error = Recipe::recipeTypeEligibilityError($item, $recipeType);
+```
+
+Notes:
+- Output candidates are normal `items` where `is_manufacturable = true` or `is_sellable = true`.
+- `manufacturing` recipes require `is_manufacturable = true`.
+- `fulfillment` recipes require `is_sellable = true`.
+- Items with both flags may use both recipe types.
+- Items with neither flag are excluded from recipe output pickers and rejected server-side.
+
+---
+
 ### Tenant
 
 **Name:** Tenant  
@@ -3872,6 +3909,30 @@ Do not introduce new enum values without updating this document.
 
 ## Manufacturing
 
+### Recipe Type
+
+**Name:** Recipe type  
+**Storage location(s):** `recipes.recipe_type` (string column)  
+**Allowed values:**
+
+- `manufacturing`
+- `fulfillment`
+
+**Semantic meaning:**
+
+- `manufacturing`: Recipe is eligible for manufacturing execution and Make Orders when its output item is manufacturable.
+- `fulfillment`: Recipe is reserved for fulfillment-style output composition and is not eligible for Make Orders in this phase.
+
+**Notes:**
+
+- Display labels are `Manufacturing` and `Fulfillment`.
+- Manufacturing recipes require a manufacturable output item.
+- Fulfillment recipes require a sellable output item.
+- An item that is both manufacturable and sellable may use either recipe type.
+- An item that is neither manufacturable nor sellable may not be used as a recipe output item.
+
+---
+
 ### Make Order Status
 
 **Name:** MakeOrder status  
@@ -4845,7 +4906,7 @@ Migrations remain the **sole source of truth**.
 ## recipes
 
 **Tenant-owned:** Yes  
-**Purpose:** Manufacturing recipes
+**Purpose:** Recipe definitions for manufacturing and fulfillment output composition
 
 ### Columns
 
@@ -4854,6 +4915,7 @@ Migrations remain the **sole source of truth**.
 | id              | bigint        | No       | Primary key               |
 | tenant_id       | bigint        | No       | FK → tenants.id (CASCADE) |
 | item_id         | bigint        | No       | FK → items.id (CASCADE)   |
+| recipe_type     | string        | No       | Allowed values defined in `docs/ENUMS.md` |
 | name            | string        | No       | User-defined recipe name  |
 | output_quantity | decimal(18,6) | No       | Canonical scale           |
 | is_active       | boolean       | No       | Default true              |
@@ -4867,8 +4929,17 @@ Migrations remain the **sole source of truth**.
 - Unique: `(id, tenant_id)`
 - Unique: `(tenant_id, item_id)` where `is_default = 1` (partial/filtered; driver-specific)
 - Index: `(tenant_id, item_id)`
+- Index: `(tenant_id, recipe_type)`
 - Implicit (FK index): `tenant_id`
 - Implicit (FK index): `item_id`
+
+### Behavioral Notes
+
+- `recipe_type` is required and must use values defined in `docs/ENUMS.md`.
+- Recipe output candidates are normal `items` where `is_manufacturable = true` or `is_sellable = true`.
+- Output items where both flags are false are invalid for recipes.
+- Fulfillment recipes normalize `output_quantity` to `1.000000` on save.
+- Output quantity storage remains canonical scale `6`; UI display precision is derived from the output item base UoM.
 
 ---
 

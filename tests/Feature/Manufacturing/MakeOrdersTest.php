@@ -66,6 +66,7 @@ beforeEach(function () {
         return Recipe::query()->forceCreate([
             'tenant_id' => $tenant->id,
             'item_id' => $outputItem->id,
+            'recipe_type' => 'manufacturing',
             'name' => $name,
             'is_active' => $isActive,
             'output_quantity' => $outputQuantity,

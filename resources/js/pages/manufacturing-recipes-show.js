@@ -4,6 +4,7 @@ export function mount(rootEl, payload) {
     const safePayload = payload || {};
     const emptyRecipeErrors = () => ({
         item_id: [],
+        recipe_type: [],
         name: [],
         output_quantity: [],
         is_active: [],
@@ -17,6 +18,8 @@ export function mount(rootEl, payload) {
         recipe: safePayload.recipe || {
             id: null,
             item_id: '',
+            recipe_type: 'manufacturing',
+            recipe_type_label: 'Manufacturing',
             name: '',
             item_name: '',
             output_quantity: '0.000000',
@@ -35,7 +38,15 @@ export function mount(rootEl, payload) {
         csrfToken: safePayload.csrf_token || '',
         isEditOpen: false,
         isEditSubmitting: false,
-        editForm: { item_id: '', name: '', output_quantity: '', is_active: true },
+        editOnlyWithoutRecipe: true,
+        editForm: {
+            item_id: '',
+            recipe_type: 'manufacturing',
+            name: '',
+            output_quantity: '',
+            is_active: true,
+        },
+        editManufacturingOutputQuantity: '',
         editErrors: emptyRecipeErrors(),
         editGeneralError: '',
         editOutputLocked: false,
@@ -53,6 +64,7 @@ export function mount(rootEl, payload) {
         isLineDeleteOpen: false,
         isLineDeleteSubmitting: false,
         deleteLineError: '',
+        deleteLineId: null,
         deleteLineItemName: '',
         deleteLineUrl: '',
         toast: {
@@ -70,6 +82,7 @@ export function mount(rootEl, payload) {
                 ...emptyRecipeErrors(),
                 ...errors,
                 item_id: Array.isArray(errors.item_id) ? errors.item_id : [],
+                recipe_type: Array.isArray(errors.recipe_type) ? errors.recipe_type : [],
                 name: Array.isArray(errors.name) ? errors.name : [],
                 output_quantity: Array.isArray(errors.output_quantity) ? errors.output_quantity : [],
                 is_active: Array.isArray(errors.is_active) ? errors.is_active : [],
@@ -102,21 +115,164 @@ export function mount(rootEl, payload) {
         },
         resolveItemUom(itemId) {
             const match = this.items.find((item) => String(item.id) === String(itemId));
+
             return match ? match.uom_display : '—';
         },
         lineItemOptions() {
             const outputId = String(this.recipe.item_id || '');
+
             return this.items.filter((item) => String(item.id) !== outputId);
+        },
+        recipeTypeLabel(value) {
+            if (value === 'fulfillment') {
+                return 'Fulfillment';
+            }
+
+            return 'Manufacturing';
+        },
+        allRecipeTypeOptions() {
+            return [
+                { value: 'manufacturing', label: 'Manufacturing' },
+                { value: 'fulfillment', label: 'Fulfillment' },
+            ];
+        },
+        findOutputItem(itemId) {
+            return this.manufacturableItems.find((item) => String(item.id) === String(itemId)) || null;
+        },
+        selectedOutputItemPrecision(itemId) {
+            const outputItem = this.findOutputItem(itemId);
+
+            return Number.isInteger(Number(outputItem?.uom_display_precision))
+                ? Number(outputItem.uom_display_precision)
+                : 6;
+        },
+        normalizeQuantityValue(value, precision) {
+            const normalizedPrecision = Math.max(0, Math.min(6, Number(precision ?? 6)));
+            const parsedValue = Number.parseFloat(String(value ?? '').trim());
+
+            if (Number.isNaN(parsedValue)) {
+                return normalizedPrecision === 0 ? '1' : (1).toFixed(normalizedPrecision);
+            }
+
+            return normalizedPrecision === 0
+                ? String(Math.round(parsedValue))
+                : parsedValue.toFixed(normalizedPrecision);
+        },
+        defaultQuantityForItem(itemId) {
+            return this.normalizeQuantityValue('1', this.selectedOutputItemPrecision(itemId));
+        },
+        recipeTypeOptionsForItem(itemId) {
+            const outputItem = this.findOutputItem(itemId);
+
+            if (!outputItem || !Array.isArray(outputItem.allowed_recipe_types) || outputItem.allowed_recipe_types.length === 0) {
+                return this.allRecipeTypeOptions();
+            }
+
+            return outputItem.allowed_recipe_types.map((recipeType) => ({
+                value: recipeType,
+                label: this.recipeTypeLabel(recipeType),
+            }));
+        },
+        normalizeRecipeTypeSelection(selectedValue, allowedOptions) {
+            if (!Array.isArray(allowedOptions) || allowedOptions.length === 0) {
+                return 'manufacturing';
+            }
+
+            const selectedRecipeType = String(selectedValue || '');
+            const allowedValues = allowedOptions.map((option) => option.value);
+
+            if (allowedValues.includes(selectedRecipeType)) {
+                return selectedRecipeType;
+            }
+
+            if (allowedValues.includes('manufacturing')) {
+                return 'manufacturing';
+            }
+
+            return allowedValues[0];
+        },
+        availableEditRecipeTypeOptions() {
+            return this.recipeTypeOptionsForItem(this.editForm.item_id);
+        },
+        isFulfillmentRecipeType(recipeType) {
+            return String(recipeType || '') === 'fulfillment';
+        },
+        resolvedEditOutputQuantity() {
+            return this.isFulfillmentRecipeType(this.editForm.recipe_type)
+                ? '1.000000'
+                : this.editForm.output_quantity;
+        },
+        editOutputQuantityDisplayValue() {
+            return this.isFulfillmentRecipeType(this.editForm.recipe_type)
+                ? this.defaultQuantityForItem(this.editForm.item_id)
+                : this.editForm.output_quantity;
+        },
+        syncEditOutputQuantity() {
+            if (this.isFulfillmentRecipeType(this.editForm.recipe_type)) {
+                if (this.editForm.output_quantity !== '' && this.editForm.output_quantity !== this.defaultQuantityForItem(this.editForm.item_id)) {
+                    this.editManufacturingOutputQuantity = this.editForm.output_quantity;
+                }
+
+                this.editForm.output_quantity = this.defaultQuantityForItem(this.editForm.item_id);
+                return;
+            }
+
+            const fallbackValue = this.editManufacturingOutputQuantity || this.defaultQuantityForItem(this.editForm.item_id);
+            this.editForm.output_quantity = this.normalizeQuantityValue(
+                fallbackValue,
+                this.selectedOutputItemPrecision(this.editForm.item_id)
+            );
+            this.editManufacturingOutputQuantity = this.editForm.output_quantity;
+        },
+        normalizeEditOutputQuantity() {
+            if (this.isFulfillmentRecipeType(this.editForm.recipe_type)) {
+                this.editForm.output_quantity = this.defaultQuantityForItem(this.editForm.item_id);
+                return;
+            }
+
+            this.editForm.output_quantity = this.normalizeQuantityValue(
+                this.editForm.output_quantity,
+                this.selectedOutputItemPrecision(this.editForm.item_id)
+            );
+            this.editManufacturingOutputQuantity = this.editForm.output_quantity;
+        },
+        syncEditRecipeType() {
+            this.editForm.recipe_type = this.normalizeRecipeTypeSelection(
+                this.editForm.recipe_type,
+                this.availableEditRecipeTypeOptions()
+            );
+            this.syncEditOutputQuantity();
+        },
+        filteredEditItems() {
+            return this.manufacturableItems.filter((item) => {
+                const isSelectedItem = item.id === Number(this.editForm.item_id);
+
+                if (
+                    this.editOnlyWithoutRecipe
+                    && Boolean(item.has_recipe)
+                    && !isSelectedItem
+                ) {
+                    return false;
+                }
+
+                return true;
+            });
         },
         openEditRecipe() {
             this.editErrors = emptyRecipeErrors();
             this.editGeneralError = '';
+            this.editOnlyWithoutRecipe = true;
             this.editForm = {
                 item_id: this.recipe.item_id,
+                recipe_type: this.recipe.recipe_type || 'manufacturing',
                 name: this.recipe.name,
                 output_quantity: this.recipe.output_quantity,
                 is_active: this.recipe.is_active,
             };
+            this.editManufacturingOutputQuantity = this.recipe.recipe_type === 'manufacturing'
+                ? this.recipe.output_quantity
+                : this.defaultQuantityForItem(this.recipe.item_id);
+            this.syncEditRecipeType();
             this.editOutputLocked = Boolean(this.recipe.has_lines);
             this.isEditOpen = true;
         },
@@ -126,6 +282,8 @@ export function mount(rootEl, payload) {
             this.editErrors = emptyRecipeErrors();
             this.editGeneralError = '';
             this.editOutputLocked = false;
+            this.editOnlyWithoutRecipe = true;
+            this.editManufacturingOutputQuantity = '';
         },
         openDeleteRecipe() {
             this.deleteRecipeName = this.recipe.item_name || '';
@@ -175,8 +333,9 @@ export function mount(rootEl, payload) {
                 },
                 body: JSON.stringify({
                     item_id: this.editForm.item_id,
+                    recipe_type: this.editForm.recipe_type,
                     name: this.editForm.name,
-                    output_quantity: this.editForm.output_quantity,
+                    output_quantity: this.resolvedEditOutputQuantity(),
                     is_active: this.editForm.is_active,
                 }),
             });
@@ -234,6 +393,7 @@ export function mount(rootEl, payload) {
             this.isLineEditing = false;
         },
         openDeleteLine(line) {
+            this.deleteLineId = line.id;
             this.deleteLineItemName = line.item_name || '';
             this.deleteLineError = '';
             this.deleteLineUrl = line.delete_url || '';
@@ -243,6 +403,7 @@ export function mount(rootEl, payload) {
             this.isLineDeleteOpen = false;
             this.isLineDeleteSubmitting = false;
             this.deleteLineError = '';
+            this.deleteLineId = null;
             this.deleteLineItemName = '';
             this.deleteLineUrl = '';
         },
@@ -293,9 +454,11 @@ export function mount(rootEl, payload) {
 
             if (this.isLineEditing) {
                 const index = this.lines.findIndex((line) => line.id === data.data.id);
+
                 if (index !== -1) {
                     this.lines.splice(index, 1, data.data);
                 }
+
                 this.showToast('success', 'Line updated.');
             } else {
                 this.lines.push(data.data);
@@ -325,10 +488,19 @@ export function mount(rootEl, payload) {
                 return;
             }
 
-            this.lines = this.lines.filter((line) => line.delete_url !== this.deleteLineUrl);
+            this.lines = this.lines.filter((line) => line.id !== this.deleteLineId);
             this.recipe.has_lines = this.lines.length > 0;
             this.showToast('success', 'Line deleted.');
             this.closeDeleteLine();
+        },
+        init() {
+            this.$watch('editForm.item_id', () => {
+                this.syncEditRecipeType();
+            });
+
+            this.$watch('editForm.recipe_type', () => {
+                this.syncEditOutputQuantity();
+            });
         },
     }));
 }

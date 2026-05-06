@@ -61,6 +61,7 @@ beforeEach(function () {
         return Recipe::query()->forceCreate([
             'tenant_id' => $tenant->id,
             'item_id' => $outputItem->id,
+            'recipe_type' => 'manufacturing',
             'name' => $name,
             'is_active' => $isActive,
             'is_default' => $isDefault,
@@ -104,6 +105,7 @@ test('forbids recipe and line writes without inventory-make-orders-manage permis
     $this->actingAs($user)
         ->postJson(route('manufacturing.recipes.store'), [
             'item_id' => $output->id,
+            'recipe_type' => 'manufacturing',
             'name' => 'Batch A',
             'output_quantity' => '12.500000',
             'is_active' => true,
@@ -114,6 +116,7 @@ test('forbids recipe and line writes without inventory-make-orders-manage permis
     $this->actingAs($user)
         ->patchJson(route('manufacturing.recipes.update', $recipe), [
             'item_id' => $output->id,
+            'recipe_type' => 'manufacturing',
             'name' => 'Batch A',
             'output_quantity' => '12.500000',
             'is_active' => false,
@@ -156,6 +159,7 @@ test('allows recipe and line writes with inventory-make-orders-manage permission
     $createResponse = $this->actingAs($user)
         ->postJson(route('manufacturing.recipes.store'), [
             'item_id' => $output->id,
+            'recipe_type' => 'manufacturing',
             'name' => 'Batch A',
             'output_quantity' => '12.500000',
             'is_active' => true,
@@ -169,6 +173,7 @@ test('allows recipe and line writes with inventory-make-orders-manage permission
     $this->actingAs($user)
         ->patchJson(route('manufacturing.recipes.update', $recipe), [
             'item_id' => $output->id,
+            'recipe_type' => 'manufacturing',
             'name' => 'Batch B',
             'output_quantity' => '24.750000',
             'is_active' => false,
@@ -213,6 +218,7 @@ test('creates recipes with default active flag, default is_default false, and re
     $this->actingAs($user)
         ->postJson(route('manufacturing.recipes.store'), [
             'item_id' => $output->id,
+            'recipe_type' => 'manufacturing',
             'name' => 'Batch A',
             'output_quantity' => '10.000000',
         ])
@@ -225,6 +231,7 @@ test('creates recipes with default active flag, default is_default false, and re
     $this->actingAs($user)
         ->postJson(route('manufacturing.recipes.store'), [
             'item_id' => $nonManufacturable->id,
+            'recipe_type' => 'manufacturing',
             'name' => 'Batch B',
             'output_quantity' => '10.000000',
         ])
@@ -250,6 +257,7 @@ test('prevents changing output item when recipe has lines and returns stable err
     $this->actingAs($user)
         ->patchJson(route('manufacturing.recipes.update', $recipe), [
             'item_id' => $otherOutput->id,
+            'recipe_type' => 'manufacturing',
             'name' => 'Batch B',
             'output_quantity' => '8.000000',
             'is_active' => true,
@@ -278,6 +286,7 @@ test('allows changing output item when recipe has zero lines', function () {
     $this->actingAs($user)
         ->patchJson(route('manufacturing.recipes.update', $recipe), [
             'item_id' => $otherOutput->id,
+            'recipe_type' => 'manufacturing',
             'name' => 'Batch B',
             'output_quantity' => '8.000000',
             'is_active' => true,
@@ -298,6 +307,7 @@ test('recipes schema includes output_quantity and database default preserves sca
     DB::table('recipes')->insert([
         'tenant_id' => $tenant->id,
         'item_id' => $output->id,
+        'recipe_type' => 'manufacturing',
         'name' => 'Simple Recipe',
         'is_active' => true,
         'is_default' => false,
@@ -324,6 +334,7 @@ test('recipe create requires output_quantity', function () {
     $this->actingAs($user)
         ->postJson(route('manufacturing.recipes.store'), [
             'item_id' => $output->id,
+            'recipe_type' => 'manufacturing',
             'is_active' => true,
             'is_default' => false,
         ])
@@ -342,6 +353,7 @@ test('recipe create requires name', function () {
     $this->actingAs($user)
         ->postJson(route('manufacturing.recipes.store'), [
             'item_id' => $output->id,
+            'recipe_type' => 'manufacturing',
             'output_quantity' => '10.000000',
             'is_active' => true,
             'is_default' => false,
@@ -361,6 +373,7 @@ test('recipe create persists exact output_quantity string with canonical scale',
     $response = $this->actingAs($user)
         ->postJson(route('manufacturing.recipes.store'), [
             'item_id' => $output->id,
+            'recipe_type' => 'manufacturing',
             'name' => 'Batch of Patties',
             'output_quantity' => '54.125000',
             'is_active' => true,
@@ -376,6 +389,56 @@ test('recipe create persists exact output_quantity string with canonical scale',
     expect($recipe->output_quantity)->toBe('54.125000');
 });
 
+test('creating manufacturing recipe does not depend on undefined normalized output quantity and stores submitted quantity', function () {
+    $tenant = ($this->makeTenant)('Tenant A');
+    $user = User::factory()->for($tenant)->create();
+    ($this->grantMakeOrdersManage)($user);
+
+    $uom = ($this->makeUom)($tenant);
+    $output = ($this->makeItem)($tenant, $uom, 'Output A', ['is_manufacturable' => true]);
+
+    $response = $this->actingAs($user)
+        ->postJson(route('manufacturing.recipes.store'), [
+            'item_id' => $output->id,
+            'recipe_type' => 'manufacturing',
+            'name' => 'Manufacturing Output',
+            'output_quantity' => '7.250000',
+            'is_active' => true,
+            'is_default' => false,
+        ])
+        ->assertCreated()
+        ->assertJsonPath('data.output_quantity', '7.250000');
+
+    $recipe = Recipe::query()->findOrFail($response->json('data.id'));
+
+    expect($recipe->output_quantity)->toBe('7.250000');
+});
+
+test('fulfillment recipe create stores normalized output quantity of one', function () {
+    $tenant = ($this->makeTenant)('Tenant A');
+    $user = User::factory()->for($tenant)->create();
+    ($this->grantMakeOrdersManage)($user);
+
+    $uom = ($this->makeUom)($tenant);
+    $output = ($this->makeItem)($tenant, $uom, 'Sellable Output', ['is_sellable' => true]);
+
+    $response = $this->actingAs($user)
+        ->postJson(route('manufacturing.recipes.store'), [
+            'item_id' => $output->id,
+            'recipe_type' => 'fulfillment',
+            'name' => 'Fulfillment Output',
+            'output_quantity' => '9.999999',
+            'is_active' => true,
+            'is_default' => false,
+        ])
+        ->assertCreated()
+        ->assertJsonPath('data.output_quantity', '1.000000');
+
+    $recipe = Recipe::query()->findOrFail($response->json('data.id'));
+
+    expect($recipe->output_quantity)->toBe('1.000000');
+});
+
 test('recipe create accepts zero output_quantity for legacy-compatible save flows', function () {
     $tenant = ($this->makeTenant)('Tenant A');
     $user = User::factory()->for($tenant)->create();
@@ -387,6 +450,7 @@ test('recipe create accepts zero output_quantity for legacy-compatible save flow
     $response = $this->actingAs($user)
         ->postJson(route('manufacturing.recipes.store'), [
             'item_id' => $output->id,
+            'recipe_type' => 'manufacturing',
             'name' => 'Legacy Zero Batch',
             'output_quantity' => '0.000000',
             'is_active' => true,
@@ -413,6 +477,7 @@ test('recipe update persists exact output_quantity string with canonical scale',
     $this->actingAs($user)
         ->patchJson(route('manufacturing.recipes.update', $recipe), [
             'item_id' => $output->id,
+            'recipe_type' => 'manufacturing',
             'name' => 'Drum of Patties',
             'output_quantity' => '324.500000',
             'is_active' => true,
@@ -440,6 +505,7 @@ test('recipe update requires name', function () {
     $this->actingAs($user)
         ->patchJson(route('manufacturing.recipes.update', $recipe), [
             'item_id' => $output->id,
+            'recipe_type' => 'manufacturing',
             'output_quantity' => '12.000000',
             'is_active' => true,
             'is_default' => false,
@@ -460,6 +526,7 @@ test('recipe update accepts zero output_quantity for legacy-compatible save flow
     $this->actingAs($user)
         ->patchJson(route('manufacturing.recipes.update', $recipe), [
             'item_id' => $output->id,
+            'recipe_type' => 'manufacturing',
             'name' => 'Zero Output Batch',
             'output_quantity' => '0.000000',
             'is_active' => true,
@@ -484,6 +551,7 @@ test('recipe create validation rejects invalid name payloads', function (?string
 
     $payload = [
         'item_id' => $output->id,
+        'recipe_type' => 'manufacturing',
         'output_quantity' => '10.000000',
         'is_active' => true,
         'is_default' => false,
@@ -514,6 +582,7 @@ test('recipe creation still works for an item without an existing recipe', funct
     $this->actingAs($user)
         ->postJson(route('manufacturing.recipes.store'), [
             'item_id' => $output->id,
+            'recipe_type' => 'manufacturing',
             'name' => 'Fresh Recipe',
             'output_quantity' => '6.000000',
             'is_active' => true,
@@ -536,6 +605,7 @@ test('creating another recipe for an item with an existing recipe still works', 
     $this->actingAs($user)
         ->postJson(route('manufacturing.recipes.store'), [
             'item_id' => $output->id,
+            'recipe_type' => 'manufacturing',
             'name' => 'Second Recipe',
             'output_quantity' => '8.000000',
             'is_active' => true,
@@ -561,6 +631,7 @@ test('recipe output_quantity validation rejects invalid create payloads', functi
 
     $payload = [
         'item_id' => $output->id,
+        'recipe_type' => 'manufacturing',
         'name' => 'Batch A',
         'is_active' => true,
         'is_default' => false,
@@ -595,6 +666,7 @@ test('recipe update validation rejects invalid name payloads', function (string 
     $this->actingAs($user)
         ->patchJson(route('manufacturing.recipes.update', $recipe), [
             'item_id' => $output->id,
+            'recipe_type' => 'manufacturing',
             'name' => $name,
             'output_quantity' => '10.000000',
             'is_active' => true,
@@ -619,6 +691,7 @@ test('recipe output_quantity validation rejects invalid update payloads', functi
     $this->actingAs($user)
         ->patchJson(route('manufacturing.recipes.update', $recipe), [
             'item_id' => $output->id,
+            'recipe_type' => 'manufacturing',
             'name' => 'Batch A',
             'output_quantity' => $outputQuantity,
             'is_active' => true,
@@ -749,6 +822,7 @@ test('returns 404 for cross-tenant recipe and line writes', function () {
     $this->actingAs($userA)
         ->patchJson(route('manufacturing.recipes.update', $recipeB), [
             'item_id' => $outputB->id,
+            'recipe_type' => 'manufacturing',
             'name' => 'Other Tenant Batch',
             'output_quantity' => '1.000000',
             'is_active' => true,
@@ -810,6 +884,7 @@ test('allows multiple recipes for the same output item when names differ', funct
     $this->actingAs($user)
         ->postJson(route('manufacturing.recipes.store'), [
             'item_id' => $output->id,
+            'recipe_type' => 'manufacturing',
             'name' => 'Batch One',
             'output_quantity' => '10.000000',
             'is_active' => true,
@@ -820,6 +895,7 @@ test('allows multiple recipes for the same output item when names differ', funct
     $this->actingAs($user)
         ->postJson(route('manufacturing.recipes.store'), [
             'item_id' => $output->id,
+            'recipe_type' => 'manufacturing',
             'name' => 'Batch Two',
             'output_quantity' => '20.000000',
             'is_active' => true,
@@ -848,6 +924,7 @@ test('is_default: setting a recipe default unsets prior default for same output 
     $this->actingAs($user)
         ->patchJson(route('manufacturing.recipes.update', $recipeB), [
             'item_id' => $output->id,
+            'recipe_type' => 'manufacturing',
             'name' => 'Batch B',
             'output_quantity' => '1.000000',
             'is_active' => true,
@@ -879,6 +956,7 @@ test('is_default: setting default does not affect other output items', function 
     $this->actingAs($user)
         ->patchJson(route('manufacturing.recipes.update', $a2), [
             'item_id' => $outputA->id,
+            'recipe_type' => 'manufacturing',
             'name' => 'Batch A2',
             'output_quantity' => '1.000000',
             'is_active' => true,
@@ -916,6 +994,7 @@ test('is_default: setting default does not affect other tenants', function () {
     $this->actingAs($userA)
         ->patchJson(route('manufacturing.recipes.update', $a2), [
             'item_id' => $outputA->id,
+            'recipe_type' => 'manufacturing',
             'name' => 'Tenant A Batch',
             'output_quantity' => '1.000000',
             'is_active' => true,
@@ -971,6 +1050,7 @@ test('is_default: can set default on create and it unsets prior default for same
     $createResponse = $this->actingAs($user)
         ->postJson(route('manufacturing.recipes.store'), [
             'item_id' => $output->id,
+            'recipe_type' => 'manufacturing',
             'name' => 'Replacement Default',
             'output_quantity' => '1.000000',
             'is_active' => true,

@@ -154,6 +154,43 @@ $recipe = Recipe::query()->findOrFail($id);
 
 ---
 
+### Recipe Output Eligibility
+
+**Name:** Recipe Output Eligibility  
+**Type:** Domain Rule  
+**Location:**  
+- `docs/architecture/manufacturing/RecipeReadModel.yaml`  
+- `docs/architecture/inventory/ExecuteRecipeAction.yaml`  
+- `app/Http/Controllers/RecipeController.php`  
+- `app/Models/Recipe.php`  
+
+**Purpose:**  
+Constrain which normal `items` may be used as recipe outputs and which `recipe_type` values each item supports.
+
+**When to Use:**  
+Recipe creation, recipe updates, recipe output pickers, and manufacturing execution gating.
+
+**When Not to Use:**  
+Generic item listing, purchasing rules, or sales import filtering unrelated to recipes.
+
+**Public Interface:**  
+- `Recipe::recipeTypeEligibilityError(Item $item, ?string $recipeType)`  
+- recipe output candidate payload from `RecipeController`
+
+**Example Usage:**  
+```php
+$error = Recipe::recipeTypeEligibilityError($item, $recipeType);
+```
+
+Notes:
+- Output candidates are normal `items` where `is_manufacturable = true` or `is_sellable = true`.
+- `manufacturing` recipes require `is_manufacturable = true`.
+- `fulfillment` recipes require `is_sellable = true`.
+- Items with both flags may use both recipe types.
+- Items with neither flag are excluded from recipe output pickers and rejected server-side.
+
+---
+
 ### Tenant
 
 **Name:** Tenant  
