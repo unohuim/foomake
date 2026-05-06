@@ -1,8 +1,10 @@
 import './bootstrap';
 
 import Alpine from 'alpinejs';
+import { registerCombobox } from './components/combobox';
 
 window.Alpine = Alpine;
+registerCombobox(Alpine);
 
 // Page module contract: export function mount(rootEl, payload)
 const pageModules = import.meta.glob('./pages/*.js');

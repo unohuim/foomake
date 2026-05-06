@@ -35,18 +35,25 @@ class RecipeController extends Controller
         $manufacturableItems = Item::query()
             ->where('is_manufacturable', true)
             ->withCount('recipes')
+            ->with('baseUom')
             ->orderBy('name')
-            ->get(['id', 'name']);
+            ->get(['id', 'name', 'base_uom_id']);
 
         $payload = [
             'recipes' => $recipes->map(function (Recipe $recipe) {
                 return $this->recipePayload($recipe);
             })->all(),
             'manufacturable_items' => $manufacturableItems->map(function (Item $item) {
+                $uomDisplay = $item->baseUom
+                    ? $item->baseUom->name . ' (' . $item->baseUom->symbol . ')'
+                    : '—';
+
                 return [
                     'id' => $item->id,
                     'name' => $item->name,
-                    'display_text' => $item->name,
+                    'uom_display' => $uomDisplay,
+                    'display_text' => $item->name . ' ' . $uomDisplay,
+                    'search_text' => strtolower($item->name . ' ' . $uomDisplay),
                     'has_recipe' => $item->recipes_count > 0,
                 ];
             })->all(),
@@ -81,8 +88,9 @@ class RecipeController extends Controller
         $manufacturableItems = Item::query()
             ->where('is_manufacturable', true)
             ->withCount('recipes')
+            ->with('baseUom')
             ->orderBy('name')
-            ->get(['id', 'name']);
+            ->get(['id', 'name', 'base_uom_id']);
 
         $items = Item::query()
             ->with('baseUom')
@@ -99,10 +107,16 @@ class RecipeController extends Controller
                 'has_lines' => $recipe->lines->isNotEmpty(),
             ]),
             'manufacturable_items' => $manufacturableItems->map(function (Item $item) {
+                $uomDisplay = $item->baseUom
+                    ? $item->baseUom->name . ' (' . $item->baseUom->symbol . ')'
+                    : '—';
+
                 return [
                     'id' => $item->id,
                     'name' => $item->name,
-                    'display_text' => $item->name,
+                    'uom_display' => $uomDisplay,
+                    'display_text' => $item->name . ' ' . $uomDisplay,
+                    'search_text' => strtolower($item->name . ' ' . $uomDisplay),
                     'has_recipe' => $item->recipes_count > 0,
                 ];
             })->all(),

@@ -47,7 +47,6 @@
                             </div>
 
                             <div>
-                                <label for="recipe-edit-output-item" class="block text-sm font-medium text-gray-700">{{ __('Output Item') }}</label>
                                 <label class="mt-2 flex items-center gap-2 text-sm text-gray-700">
                                     <input
                                         type="checkbox"
@@ -56,34 +55,20 @@
                                     >
                                     {{ __('Only show items without a recipe') }}
                                 </label>
-                                <div class="mt-3">
-                                    <label for="recipe-edit-output-item-search" class="block text-sm font-medium text-gray-700">{{ __('Search output items') }}</label>
-                                    <input
-                                        id="recipe-edit-output-item-search"
-                                        type="text"
-                                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                                        placeholder="Search output items"
-                                        x-model="editItemSearch"
-                                        :disabled="editOutputLocked"
-                                        :class="editOutputLocked ? 'bg-gray-100 cursor-not-allowed' : ''"
-                                    />
-                                </div>
-                                <select
-                                    id="recipe-edit-output-item"
-                                    class="mt-3 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                                <x-combobox
+                                    class="mt-3"
                                     x-model="editForm.item_id"
-                                    :disabled="editOutputLocked"
-                                    :class="editOutputLocked ? 'bg-gray-100 cursor-not-allowed' : ''"
-                                >
-                                    <option value="">{{ __('Select an item') }}</option>
-                                    <template x-for="item in filteredEditItems()" :key="item.id">
-                                        <option x-bind:value="item.id" x-text="item.name"></option>
-                                    </template>
-                                </select>
+                                    name="item_id"
+                                    label="Output Item"
+                                    placeholder="Search output items"
+                                    no-results-text="No items found."
+                                    options-expression="filteredEditItems()"
+                                    error-expression="editErrors.item_id[0] || ''"
+                                    disabled-expression="editOutputLocked"
+                                />
                                 <p class="mt-1 text-sm text-gray-500" x-show="editOutputLocked">
                                     {{ __('Output item is locked because the recipe has lines.') }}
                                 </p>
-                                <p class="mt-1 text-sm text-red-600" x-show="editErrors.item_id.length" x-text="editErrors.item_id[0]"></p>
                             </div>
 
                             <div>

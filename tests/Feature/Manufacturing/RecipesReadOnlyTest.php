@@ -534,8 +534,9 @@ test('recipe create ui includes only show items without a recipe checkbox and de
         ->assertSee('Only show items without a recipe');
 
     $pageModuleSource = File::get(resource_path('js/pages/manufacturing-recipes-index.js'));
+    $createPartialSource = File::get(resource_path('views/manufacturing/recipes/partials/create-recipe-slide-over.blade.php'));
 
-    expect($response->getContent())->toContain('Search output items')
+    expect($createPartialSource)->toContain('<x-combobox')
         ->and($pageModuleSource)->toContain('createOnlyWithoutRecipe: true')
         ->and($pageModuleSource)->toContain('editOnlyWithoutRecipe: true');
 });
@@ -597,19 +598,25 @@ test('recipe picker page module filters items with existing recipes by default a
         ->and($pageModuleSource)->toContain('this.editOnlyWithoutRecipe');
 });
 
-test('recipe picker search contract exists in recipes page module', function () {
-    $pageModuleSource = File::get(resource_path('js/pages/manufacturing-recipes-index.js'));
+test('recipe create ui uses the reusable combobox and no longer renders a native output item select', function () {
+    $createPartialSource = File::get(resource_path('views/manufacturing/recipes/partials/create-recipe-slide-over.blade.php'));
 
-    expect($pageModuleSource)->toContain('createItemSearch')
-        ->and($pageModuleSource)->toContain('editItemSearch')
-        ->and($pageModuleSource)->toContain('normalizedSearch')
-        ->and($pageModuleSource)->toContain('includes(normalizedSearch)');
+    expect($createPartialSource)->toContain('<x-combobox')
+        ->and($createPartialSource)->not->toContain('<select')
+        ->and($createPartialSource)->toContain('name="item_id"');
 });
 
 test('recipe edit picker always keeps the current output item visible even when the no recipe filter is enabled', function () {
     $pageModuleSource = File::get(resource_path('js/pages/manufacturing-recipes-index.js'));
 
     expect($pageModuleSource)->toContain('item.id === Number(this.editForm.item_id)');
+});
+
+test('recipe picker search is handled by the reusable combobox instead of a separate search field and native select pair', function () {
+    $createPartialSource = File::get(resource_path('views/manufacturing/recipes/partials/create-recipe-slide-over.blade.php'));
+
+    expect($createPartialSource)->not->toContain('recipe-output-item-search')
+        ->and($createPartialSource)->not->toContain('<select');
 });
 
 test('recipe output picker remains recipes specific and does not introduce a shared blade component', function () {
