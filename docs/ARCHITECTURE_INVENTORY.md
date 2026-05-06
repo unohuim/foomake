@@ -208,6 +208,48 @@ Gate::authorize('inventory-materials-manage');
 
 ---
 
+## UI
+
+### Reusable Combobox Pattern
+
+**Name:** Reusable Combobox Pattern  
+**Type:** UI Architecture Invariant  
+**Location:**  
+- `docs/architecture/ui/ReusableComboboxPattern.yaml`  
+- `resources/views/components/combobox.blade.php`  
+- `resources/views/components/combo-item.blade.php`  
+- `resources/js/components/combobox.js`  
+
+**Purpose:**  
+Provide a reusable searchable single-select combobox with hidden-input form submission, preserved option metadata, and local keyboard behavior.
+
+**When to Use:**  
+Large option sets that are no longer manageable in a native select and still need standard scalar form submission.
+
+**When Not to Use:**  
+Small native selects, multi-select workflows, or cases where page-specific business rules would have to be hard-coded into the generic component.
+
+**Public Interface:**  
+- `<x-combobox>`  
+- `<x-combo-item>`  
+
+**Example Usage:**  
+```blade
+<x-combobox
+    x-model="createForm.item_id"
+    name="item_id"
+    label="Output Item"
+    options-expression="filteredCreateItems()"
+    error-expression="createErrors.item_id[0] || ''"
+/>
+```
+
+Notes:
+- The combobox is generic; caller-owned page/module state supplies the visible option set.
+- Recipe-specific `has_recipe` filtering remains in the Recipes page module rather than the generic component.
+
+---
+
 ## Sales
 
 ### Customer Contact Primary Invariant

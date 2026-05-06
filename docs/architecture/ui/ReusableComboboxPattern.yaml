@@ -1,0 +1,45 @@
+name: Reusable Combobox Pattern
+type: UI Architecture Invariant
+location:
+  - resources/views/components/combobox.blade.php
+  - resources/views/components/combo-item.blade.php
+  - resources/js/components/combobox.js
+purpose: Define the reusable Blade and Alpine combobox contract for searchable single-select option picking with hidden-input form submission and local keyboard behavior.
+when_to_use:
+  - Replacing a large native select with a searchable single-select control
+  - Building a reusable option picker that must submit a canonical scalar value through a normal HTML form field
+  - Rendering option metadata that should remain available in frontend state for filtering, labels, or contextual descriptions
+when_not_to_use:
+  - Simple low-cardinality selects where native browser select behavior is sufficient
+  - Multi-select workflows
+  - Cases where page-specific business rules would be hard-coded into the generic component instead of supplied through option data
+rules:
+  - The combobox must be exposed through the reusable Blade API <x-combobox> with optional <x-combo-item> children.
+  - The component must render a searchable text input, a dropdown listbox, and a hidden input that carries the submitted field name and selected scalar value.
+  - Search behavior, open state, highlighted option state, and keyboard handling must remain local Alpine state owned by the combobox component.
+  - The component must preserve option metadata in frontend state and must not discard non-display metadata needed by callers.
+  - The component must support option sources supplied either as JSON options data or as slot-based x-combo-item definitions.
+  - Page-specific visibility rules such as recipe-only filtering must remain outside the generic combobox and must be expressed through the option set supplied by the caller.
+  - Search must operate only on the currently supplied visible option set and must not replace caller-owned eligibility filtering.
+  - Keyboard behavior must support ArrowDown highlight advance, ArrowUp highlight reverse, Enter highlighted selection, and Escape close behavior.
+  - Validation errors must render using the existing Blade form error pattern beneath the combobox.
+  - No external combobox package or global JavaScript state may be introduced to implement this pattern.
+public_interface:
+  - docs/architecture/ui/ReusableComboboxPattern.yaml
+  - resources/views/components/combobox.blade.php
+  - resources/views/components/combo-item.blade.php
+  - resources/js/components/combobox.js
+example_usage: |
+  <x-combobox
+      x-model="createForm.item_id"
+      name="item_id"
+      label="Output Item"
+      placeholder="Search output items"
+      no-results-text="No items found."
+      options-expression="filteredCreateItems()"
+      error-expression="createErrors.item_id[0] || ''"
+  />
+
+  <x-combobox name="item_id">
+      <x-combo-item value="11" label="Starter" :meta="['uom_display' => 'Each']" />
+  </x-combobox>

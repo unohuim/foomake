@@ -2013,6 +2013,48 @@ Gate::authorize('inventory-materials-manage');
 
 ---
 
+## UI
+
+### Reusable Combobox Pattern
+
+**Name:** Reusable Combobox Pattern  
+**Type:** UI Architecture Invariant  
+**Location:**  
+- `docs/architecture/ui/ReusableComboboxPattern.yaml`  
+- `resources/views/components/combobox.blade.php`  
+- `resources/views/components/combo-item.blade.php`  
+- `resources/js/components/combobox.js`  
+
+**Purpose:**  
+Provide a reusable searchable single-select combobox with hidden-input form submission, preserved option metadata, and local keyboard behavior.
+
+**When to Use:**  
+Large option sets that are no longer manageable in a native select and still need standard scalar form submission.
+
+**When Not to Use:**  
+Small native selects, multi-select workflows, or cases where page-specific business rules would have to be hard-coded into the generic component.
+
+**Public Interface:**  
+- `<x-combobox>`  
+- `<x-combo-item>`  
+
+**Example Usage:**  
+```blade
+<x-combobox
+    x-model="createForm.item_id"
+    name="item_id"
+    label="Output Item"
+    options-expression="filteredCreateItems()"
+    error-expression="createErrors.item_id[0] || ''"
+/>
+```
+
+Notes:
+- The combobox is generic; caller-owned page/module state supplies the visible option set.
+- Recipe-specific `has_recipe` filtering remains in the Recipes page module rather than the generic component.
+
+---
+
 ## Sales
 
 ### Customer Contact Primary Invariant
@@ -5730,6 +5772,7 @@ use App\Http\Controllers\NavigationStateController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\CustomerContactController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\ProfileConnectorController;
 use App\Http\Controllers\PurchaseOrderController;
 use App\Http\Controllers\PurchaseOrderLineController;
 use App\Http\Controllers\PurchaseOrderReceiptController;
@@ -5932,14 +5975,20 @@ Route::middleware('auth')->group(function () {
 
     Route::get('/sales/products', [SalesProductController::class, 'index'])
         ->name('sales.products.index');
-    Route::post('/sales/products/import-sources/{source}/connect', [SalesProductController::class, 'connect'])
-        ->name('sales.products.import.connect');
     Route::post('/sales/products/import-preview', [SalesProductController::class, 'preview'])
         ->name('sales.products.import.preview');
     Route::post('/sales/products/imports', [SalesProductController::class, 'storeImport'])
         ->name('sales.products.import.store');
 
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
+    Route::get('/profile/connectors', [ProfileConnectorController::class, 'index'])
+        ->name('profile.connectors.index');
+    Route::post('/profile/connectors/woocommerce', [ProfileConnectorController::class, 'storeWooCommerce'])
+        ->name('profile.connectors.woocommerce.store');
+    Route::delete('/profile/connectors/woocommerce', [ProfileConnectorController::class, 'destroyWooCommerce'])
+        ->name('profile.connectors.woocommerce.destroy');
+    Route::post('/sales/products/import-sources/{source}/connect', [ProfileConnectorController::class, 'storeWooCommerce'])
+        ->name('sales.products.import.connect');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 });
@@ -6286,5 +6335,4 @@ After PR3 completion:
 - CRM foundation established
 - Sales orders impact inventory correctly
 - System ready for external integrations
-
 
