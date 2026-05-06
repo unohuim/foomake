@@ -119,7 +119,7 @@
                                     <div class="flex items-start justify-between">
                                         <div>
                                             <h2 class="text-lg font-medium text-gray-900">Import external products</h2>
-                                            <p class="mt-1 text-sm text-gray-600">Prep-only stub flow for source connection, preview, and import.</p>
+                                            <p class="mt-1 text-sm text-gray-600">WooCommerce previews import real external rows while preserving normal item imports.</p>
                                         </div>
                                         <button type="button" class="rounded-md text-gray-400 hover:text-gray-500" x-on:click="closeImportPanel()">
                                             <span class="sr-only">Close panel</span>
@@ -146,17 +146,24 @@
                                         </div>
 
                                         <div class="rounded-lg border border-gray-200 bg-gray-50 p-4" x-show="selectedSource && selectedSourceEnabled() && !sourceConnected()">
-                                            <h3 class="text-sm font-semibold text-gray-900">Connect source</h3>
-                                            <p class="mt-1 text-sm text-gray-600">This temporary prep-only connection state is stored locally for the stub contract.</p>
-                                            <div class="mt-4 flex items-center gap-3">
-                                                <button
-                                                    type="button"
+                                            <h3 class="text-sm font-semibold text-gray-900">Connection required</h3>
+                                            <p class="mt-1 text-sm text-gray-600">
+                                                WooCommerce status:
+                                                <span class="font-medium" x-text="selectedSourceStatusLabel()"></span>.
+                                            </p>
+                                            <p class="mt-2 text-sm text-gray-600" x-show="canManageConnections">
+                                                Manage store credentials from Profile → Connectors before loading a preview.
+                                            </p>
+                                            <p class="mt-2 text-sm text-gray-600" x-show="!canManageConnections">
+                                                Ask an admin to connect WooCommerce from Profile → Connectors before loading a preview.
+                                            </p>
+                                            <div class="mt-4" x-show="canManageConnections && connectorsPageUrl">
+                                                <a
                                                     class="inline-flex items-center rounded-md border border-transparent bg-blue-600 px-4 py-2 text-xs font-semibold uppercase tracking-widest text-white hover:bg-blue-500"
-                                                    x-on:click="connectSelectedSource()"
+                                                    :href="connectorsPageUrl"
                                                 >
-                                                    Connect Source
-                                                </button>
-                                                <span class="text-sm text-red-600" x-text="connectError"></span>
+                                                    Open Connectors
+                                                </a>
                                             </div>
                                         </div>
 
@@ -164,17 +171,21 @@
                                             <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                                                 <div>
                                                     <h3 class="text-sm font-semibold text-gray-900">Preview importable rows</h3>
-                                                    <p class="mt-1 text-sm text-gray-600">Preview returns deterministic sample products for the selected source.</p>
+                                                    <p class="mt-1 text-sm text-gray-600">Preview fetches live WooCommerce products and variations for import.</p>
                                                 </div>
                                                 <button
                                                     type="button"
                                                     class="inline-flex items-center rounded-md border border-transparent bg-blue-600 px-4 py-2 text-xs font-semibold uppercase tracking-widest text-white hover:bg-blue-500"
+                                                    x-bind:disabled="isLoadingPreview"
+                                                    x-bind:class="isLoadingPreview ? 'cursor-not-allowed opacity-60' : ''"
                                                     x-on:click="loadPreview()"
                                                 >
-                                                    Load Preview
+                                                    <span x-show="!isLoadingPreview">Load Preview</span>
+                                                    <span x-show="isLoadingPreview">Loading preview...</span>
                                                 </button>
                                             </div>
                                             <p class="mt-3 text-sm text-red-600" x-text="previewError"></p>
+                                            <p class="mt-2 text-sm text-gray-600" x-show="isLoadingPreview">Loading preview...</p>
                                         </div>
 
                                         <div x-show="previewRows.length > 0">
@@ -186,6 +197,21 @@
                                                 <label class="flex items-center gap-3 text-sm text-gray-700">
                                                     <input type="checkbox" class="rounded border-gray-300 text-blue-600 shadow-sm focus:ring-blue-500" x-model="bulkPurchasable">
                                                     Import all selected as buyable/purchasable
+                                                </label>
+                                            </div>
+
+                                            <div class="mb-4 rounded-lg border border-gray-200 bg-gray-50 p-4">
+                                                <label class="block text-sm font-medium text-gray-700">
+                                                    Bulk base UoM
+                                                    <select
+                                                        class="mt-1 block w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                                                        x-model="bulkBaseUomId"
+                                                    >
+                                                        <option value="">Select bulk UoM</option>
+                                                        <template x-for="uom in uoms" :key="uom.id">
+                                                            <option :value="String(uom.id)" x-text="`${uom.name} (${uom.symbol})`"></option>
+                                                        </template>
+                                                    </select>
                                                 </label>
                                             </div>
 
@@ -210,6 +236,7 @@
                                                                     <p class="font-medium" x-text="row.name"></p>
                                                                     <p class="mt-1 text-xs text-gray-500" x-text="row.sku"></p>
                                                                     <p class="mt-1 text-xs text-gray-500" x-text="row.external_id"></p>
+                                                                    <p class="mt-1 text-xs text-gray-500" x-show="row.price" x-text="`Price: ${row.price}`"></p>
                                                                 </td>
                                                                 <td class="px-4 py-4 text-sm text-gray-700 align-top">
                                                                     <span class="rounded-full px-3 py-1 text-xs font-semibold uppercase" :class="row.is_active ? 'bg-green-50 text-green-700' : 'bg-yellow-50 text-yellow-700'" x-text="row.is_active ? 'Active' : 'Inactive'"></span>

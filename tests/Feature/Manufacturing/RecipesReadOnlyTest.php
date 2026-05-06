@@ -11,6 +11,7 @@ use App\Models\UomCategory;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\File;
 
 uses(RefreshDatabase::class);
 
@@ -519,6 +520,100 @@ test('show payload renders zero quantity with configured precision 3', function 
     $payload = ($this->extractPayload)($response, 'manufacturing-recipes-show-payload');
 
     expect($payload['lines'][0]['quantity_display'] ?? null)->toBe('0.000');
+});
+
+test('recipe create ui includes only show items without a recipe checkbox and defaults it to checked', function () {
+    $tenant = ($this->makeTenant)('Tenant A');
+    $user = User::factory()->for($tenant)->create();
+    ($this->grantInventoryRecipesView)($user);
+    ($this->grantMakeOrdersManage)($user);
+
+    $response = $this->actingAs($user)
+        ->get(route('manufacturing.recipes.index'))
+        ->assertOk()
+        ->assertSee('Only show items without a recipe');
+
+    $pageModuleSource = File::get(resource_path('js/pages/manufacturing-recipes-index.js'));
+
+    expect($response->getContent())->toContain('Search output items')
+        ->and($pageModuleSource)->toContain('createOnlyWithoutRecipe: true')
+        ->and($pageModuleSource)->toContain('editOnlyWithoutRecipe: true');
+});
+
+test('recipe index payload marks items with existing recipes and items without recipes', function () {
+    $tenant = ($this->makeTenant)('Tenant A');
+    $user = User::factory()->for($tenant)->create();
+    ($this->grantInventoryRecipesView)($user);
+    ($this->grantMakeOrdersManage)($user);
+
+    $uom = ($this->makeUom)($tenant);
+    $withRecipe = ($this->makeItem)($tenant, $uom, 'Output With Recipe', true);
+    $withoutRecipe = ($this->makeItem)($tenant, $uom, 'Output Without Recipe', true);
+    ($this->makeRecipe)($tenant, $withRecipe, true, 'Existing Recipe');
+
+    $response = $this->actingAs($user)
+        ->get(route('manufacturing.recipes.index'))
+        ->assertOk();
+
+    $payload = ($this->extractPayload)($response, 'manufacturing-recipes-index-payload');
+    $items = collect($payload['manufacturable_items'] ?? [])->keyBy('id');
+
+    expect($items[$withRecipe->id]['has_recipe'] ?? null)->toBeTrue()
+        ->and($items[$withoutRecipe->id]['has_recipe'] ?? null)->toBeFalse();
+});
+
+test('recipe picker filtering remains tenant isolated when determining whether an item already has a recipe', function () {
+    $tenantA = ($this->makeTenant)('Tenant A');
+    $tenantB = ($this->makeTenant)('Tenant B');
+    $userA = User::factory()->for($tenantA)->create();
+    ($this->grantInventoryRecipesView)($userA);
+    ($this->grantMakeOrdersManage)($userA);
+
+    $uomA = ($this->makeUom)($tenantA);
+    $uomB = ($this->makeUom)($tenantB);
+
+    $tenantAItem = ($this->makeItem)($tenantA, $uomA, 'Shared Output Name', true);
+    $tenantBItem = ($this->makeItem)($tenantB, $uomB, 'Shared Output Name', true);
+
+    ($this->makeRecipe)($tenantB, $tenantBItem, true, 'Tenant B Recipe');
+
+    $response = $this->actingAs($userA)
+        ->get(route('manufacturing.recipes.index'))
+        ->assertOk();
+
+    $payload = ($this->extractPayload)($response, 'manufacturing-recipes-index-payload');
+    $items = collect($payload['manufacturable_items'] ?? [])->keyBy('id');
+
+    expect($items[$tenantAItem->id]['has_recipe'] ?? null)->toBeFalse();
+});
+
+test('recipe picker page module filters items with existing recipes by default and restores them when disabled', function () {
+    $pageModuleSource = File::get(resource_path('js/pages/manufacturing-recipes-index.js'));
+
+    expect($pageModuleSource)->toContain('filteredCreateItems()')
+        ->and($pageModuleSource)->toContain('filteredEditItems()')
+        ->and($pageModuleSource)->toContain('item.has_recipe')
+        ->and($pageModuleSource)->toContain('this.createOnlyWithoutRecipe')
+        ->and($pageModuleSource)->toContain('this.editOnlyWithoutRecipe');
+});
+
+test('recipe picker search contract exists in recipes page module', function () {
+    $pageModuleSource = File::get(resource_path('js/pages/manufacturing-recipes-index.js'));
+
+    expect($pageModuleSource)->toContain('createItemSearch')
+        ->and($pageModuleSource)->toContain('editItemSearch')
+        ->and($pageModuleSource)->toContain('normalizedSearch')
+        ->and($pageModuleSource)->toContain('includes(normalizedSearch)');
+});
+
+test('recipe edit picker always keeps the current output item visible even when the no recipe filter is enabled', function () {
+    $pageModuleSource = File::get(resource_path('js/pages/manufacturing-recipes-index.js'));
+
+    expect($pageModuleSource)->toContain('item.id === Number(this.editForm.item_id)');
+});
+
+test('recipe output picker remains recipes specific and does not introduce a shared blade component', function () {
+    expect(File::exists(resource_path('views/components/recipe-output-item-picker.blade.php')))->toBeFalse();
 });
 
 test('show payload uses line item uom precision instead of output item uom precision', function () {

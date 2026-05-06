@@ -48,15 +48,35 @@
 
                             <div>
                                 <label for="recipe-edit-output-item" class="block text-sm font-medium text-gray-700">{{ __('Output Item') }}</label>
+                                <label class="mt-2 flex items-center gap-2 text-sm text-gray-700">
+                                    <input
+                                        type="checkbox"
+                                        class="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                        x-model="editOnlyWithoutRecipe"
+                                    >
+                                    {{ __('Only show items without a recipe') }}
+                                </label>
+                                <div class="mt-3">
+                                    <label for="recipe-edit-output-item-search" class="block text-sm font-medium text-gray-700">{{ __('Search output items') }}</label>
+                                    <input
+                                        id="recipe-edit-output-item-search"
+                                        type="text"
+                                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                                        placeholder="Search output items"
+                                        x-model="editItemSearch"
+                                        :disabled="editOutputLocked"
+                                        :class="editOutputLocked ? 'bg-gray-100 cursor-not-allowed' : ''"
+                                    />
+                                </div>
                                 <select
                                     id="recipe-edit-output-item"
-                                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                                    class="mt-3 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
                                     x-model="editForm.item_id"
                                     :disabled="editOutputLocked"
                                     :class="editOutputLocked ? 'bg-gray-100 cursor-not-allowed' : ''"
                                 >
                                     <option value="">{{ __('Select an item') }}</option>
-                                    <template x-for="item in manufacturableItems" :key="item.id">
+                                    <template x-for="item in filteredEditItems()" :key="item.id">
                                         <option x-bind:value="item.id" x-text="item.name"></option>
                                     </template>
                                 </select>

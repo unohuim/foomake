@@ -6,6 +6,7 @@ use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\Validator as ValidationValidator;
 use Illuminate\Validation\Rule;
 
 /**
@@ -42,6 +43,11 @@ class ImportExternalProductsRequest extends FormRequest
                 'nullable',
                 'boolean',
             ],
+            'bulk_base_uom_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('uoms', 'id')->where('tenant_id', $this->user()?->tenant_id),
+            ],
             'rows' => [
                 'required',
                 'array',
@@ -63,7 +69,7 @@ class ImportExternalProductsRequest extends FormRequest
                 'max:255',
             ],
             'rows.*.base_uom_id' => [
-                'required',
+                'nullable',
                 'integer',
                 Rule::exists('uoms', 'id')->where('tenant_id', $this->user()?->tenant_id),
             ],
@@ -80,6 +86,36 @@ class ImportExternalProductsRequest extends FormRequest
                 'boolean',
             ],
         ];
+    }
+
+    /**
+     * Configure cross-field validation for bulk/default import behavior.
+     */
+    public function withValidator(ValidationValidator $validator): void
+    {
+        $validator->after(function (ValidationValidator $validator): void {
+            $rows = $this->input('rows', []);
+            $bulkBaseUomId = $this->input('bulk_base_uom_id');
+
+            if (! is_array($rows)) {
+                return;
+            }
+
+            foreach ($rows as $index => $row) {
+                if (! is_array($row)) {
+                    continue;
+                }
+
+                $hasRowBaseUom = array_key_exists('base_uom_id', $row) && $row['base_uom_id'] !== null && $row['base_uom_id'] !== '';
+
+                if (! $hasRowBaseUom && ($bulkBaseUomId === null || $bulkBaseUomId === '')) {
+                    $validator->errors()->add(
+                        "rows.{$index}.base_uom_id",
+                        'A base unit of measure is required for each imported row unless a bulk base unit of measure is selected.'
+                    );
+                }
+            }
+        });
     }
 
     /**

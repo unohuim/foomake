@@ -17,6 +17,7 @@
     $canViewProducts = $user?->can('inventory-products-view') ?? false;
     $canManageProducts = $user?->can('inventory-products-manage') ?? false;
     $canOpenSalesOrders = $navigationEligibility['salesOrdersEnabled'] ?? false;
+    $canManageSystemUsers = $user?->can('system-users-manage') ?? false;
     $canOpenPurchaseOrders = $navigationEligibility['purchaseOrdersEnabled'] ?? false;
     $canViewInventory = $user?->can('inventory-adjustments-view') ?? false;
     $canViewMakeOrders = $user?->can('inventory-make-orders-view') ?? false;
@@ -220,6 +221,12 @@
                     <x-nav-dropdown-link :href="route('profile.edit')" :active="request()->routeIs('profile.edit')">
                         {{ __('Profile') }}
                     </x-nav-dropdown-link>
+
+                    @if ($canManageSystemUsers)
+                        <x-nav-dropdown-link :href="route('profile.connectors.index')" :active="request()->routeIs('profile.connectors.*')">
+                            {{ __('Connectors') }}
+                        </x-nav-dropdown-link>
+                    @endif
 
                     <form method="POST" action="{{ route('logout') }}">
                         @csrf
@@ -441,6 +448,12 @@
             <x-nav-link :href="route('profile.edit')" :active="request()->routeIs('profile.edit')" mobile>
                 {{ __('Profile') }}
             </x-nav-link>
+
+            @if ($canManageSystemUsers)
+                <x-nav-link :href="route('profile.connectors.index')" :active="request()->routeIs('profile.connectors.*')" mobile>
+                    {{ __('Connectors') }}
+                </x-nav-link>
+            @endif
 
             <form method="POST" action="{{ route('logout') }}">
                 @csrf

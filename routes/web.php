@@ -10,6 +10,7 @@ use App\Http\Controllers\NavigationStateController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\CustomerContactController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\ProfileConnectorController;
 use App\Http\Controllers\PurchaseOrderController;
 use App\Http\Controllers\PurchaseOrderLineController;
 use App\Http\Controllers\PurchaseOrderReceiptController;
@@ -212,14 +213,20 @@ Route::middleware('auth')->group(function () {
 
     Route::get('/sales/products', [SalesProductController::class, 'index'])
         ->name('sales.products.index');
-    Route::post('/sales/products/import-sources/{source}/connect', [SalesProductController::class, 'connect'])
-        ->name('sales.products.import.connect');
     Route::post('/sales/products/import-preview', [SalesProductController::class, 'preview'])
         ->name('sales.products.import.preview');
     Route::post('/sales/products/imports', [SalesProductController::class, 'storeImport'])
         ->name('sales.products.import.store');
 
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
+    Route::get('/profile/connectors', [ProfileConnectorController::class, 'index'])
+        ->name('profile.connectors.index');
+    Route::post('/profile/connectors/woocommerce', [ProfileConnectorController::class, 'storeWooCommerce'])
+        ->name('profile.connectors.woocommerce.store');
+    Route::delete('/profile/connectors/woocommerce', [ProfileConnectorController::class, 'destroyWooCommerce'])
+        ->name('profile.connectors.woocommerce.destroy');
+    Route::post('/sales/products/import-sources/{source}/connect', [ProfileConnectorController::class, 'storeWooCommerce'])
+        ->name('sales.products.import.connect');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 });

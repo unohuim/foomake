@@ -503,6 +503,54 @@ test('recipe create validation rejects invalid name payloads', function (?string
     str_repeat('a', 256),
 ]);
 
+test('recipe creation still works for an item without an existing recipe', function () {
+    $tenant = ($this->makeTenant)('Tenant A');
+    $user = User::factory()->for($tenant)->create();
+    ($this->grantMakeOrdersManage)($user);
+
+    $uom = ($this->makeUom)($tenant);
+    $output = ($this->makeItem)($tenant, $uom, 'Fresh Output', ['is_manufacturable' => true]);
+
+    $this->actingAs($user)
+        ->postJson(route('manufacturing.recipes.store'), [
+            'item_id' => $output->id,
+            'name' => 'Fresh Recipe',
+            'output_quantity' => '6.000000',
+            'is_active' => true,
+            'is_default' => false,
+        ])
+        ->assertCreated()
+        ->assertJsonPath('data.item_id', $output->id)
+        ->assertJsonPath('data.name', 'Fresh Recipe');
+});
+
+test('creating another recipe for an item with an existing recipe still works', function () {
+    $tenant = ($this->makeTenant)('Tenant A');
+    $user = User::factory()->for($tenant)->create();
+    ($this->grantMakeOrdersManage)($user);
+
+    $uom = ($this->makeUom)($tenant);
+    $output = ($this->makeItem)($tenant, $uom, 'Repeatable Output', ['is_manufacturable' => true]);
+    ($this->makeRecipe)($tenant, $output, true, false, 'Existing Recipe', '4.000000');
+
+    $this->actingAs($user)
+        ->postJson(route('manufacturing.recipes.store'), [
+            'item_id' => $output->id,
+            'name' => 'Second Recipe',
+            'output_quantity' => '8.000000',
+            'is_active' => true,
+            'is_default' => false,
+        ])
+        ->assertCreated()
+        ->assertJsonPath('data.item_id', $output->id)
+        ->assertJsonPath('data.name', 'Second Recipe');
+
+    expect(Recipe::query()
+        ->where('tenant_id', $tenant->id)
+        ->where('item_id', $output->id)
+        ->count())->toBe(2);
+});
+
 test('recipe output_quantity validation rejects invalid create payloads', function (string|null $outputQuantity) {
     $tenant = ($this->makeTenant)('Tenant A');
     $user = User::factory()->for($tenant)->create();

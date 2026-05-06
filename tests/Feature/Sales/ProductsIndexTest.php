@@ -270,6 +270,23 @@ it('13. renders a slide-over root for the import workflow', function () {
         ->assertSee('aria-modal="true"', false);
 });
 
+it('13a. products import ui includes a preview loading state contract', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermissions)($user, ['inventory-products-view', 'inventory-products-manage']);
+
+    $this->actingAs($user)
+        ->get(route('sales.products.index'))
+        ->assertOk()
+        ->assertSee('Loading preview...');
+
+    $pageModuleSource = file_get_contents(base_path('resources/js/pages/sales-products-index.js'));
+
+    expect($pageModuleSource)->toContain('isLoadingPreview')
+        ->and($pageModuleSource)->toContain('Loading preview...');
+});
+
 it('14. shows sellable items on the products index', function () {
     $tenant = ($this->makeTenant)();
     $uom = ($this->makeUom)($tenant);

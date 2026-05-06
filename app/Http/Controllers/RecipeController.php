@@ -34,6 +34,7 @@ class RecipeController extends Controller
 
         $manufacturableItems = Item::query()
             ->where('is_manufacturable', true)
+            ->withCount('recipes')
             ->orderBy('name')
             ->get(['id', 'name']);
 
@@ -45,6 +46,8 @@ class RecipeController extends Controller
                 return [
                     'id' => $item->id,
                     'name' => $item->name,
+                    'display_text' => $item->name,
+                    'has_recipe' => $item->recipes_count > 0,
                 ];
             })->all(),
             'store_url' => route('manufacturing.recipes.store'),
@@ -77,6 +80,7 @@ class RecipeController extends Controller
 
         $manufacturableItems = Item::query()
             ->where('is_manufacturable', true)
+            ->withCount('recipes')
             ->orderBy('name')
             ->get(['id', 'name']);
 
@@ -98,6 +102,8 @@ class RecipeController extends Controller
                 return [
                     'id' => $item->id,
                     'name' => $item->name,
+                    'display_text' => $item->name,
+                    'has_recipe' => $item->recipes_count > 0,
                 ];
             })->all(),
             'items' => $items->map(function (Item $item) {

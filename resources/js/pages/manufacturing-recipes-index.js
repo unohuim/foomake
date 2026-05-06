@@ -20,11 +20,15 @@ export function mount(rootEl, payload) {
         csrfToken: safePayload.csrf_token || '',
         isCreateOpen: false,
         isCreateSubmitting: false,
+        createOnlyWithoutRecipe: true,
+        createItemSearch: '',
         createForm: { item_id: '', name: '', output_quantity: '', is_active: true },
         createErrors: emptyErrors(),
         createGeneralError: '',
         isEditOpen: false,
         isEditSubmitting: false,
+        editOnlyWithoutRecipe: true,
+        editItemSearch: '',
         editForm: { item_id: '', name: '', output_quantity: '', is_active: true },
         editErrors: emptyErrors(),
         editGeneralError: '',
@@ -75,6 +79,8 @@ export function mount(rootEl, payload) {
         openCreate() {
             this.createErrors = emptyErrors();
             this.createGeneralError = '';
+            this.createOnlyWithoutRecipe = true;
+            this.createItemSearch = '';
             this.createForm = { item_id: '', name: '', output_quantity: '', is_active: true };
             this.isCreateOpen = true;
         },
@@ -83,10 +89,14 @@ export function mount(rootEl, payload) {
             this.isCreateSubmitting = false;
             this.createErrors = emptyErrors();
             this.createGeneralError = '';
+            this.createOnlyWithoutRecipe = true;
+            this.createItemSearch = '';
             this.createForm = { item_id: '', name: '', output_quantity: '', is_active: true };
         },
         openEdit(recipe) {
             this.editRecipeId = recipe.id;
+            this.editOnlyWithoutRecipe = true;
+            this.editItemSearch = '';
             this.editForm = {
                 item_id: recipe.item_id,
                 name: recipe.name,
@@ -105,6 +115,8 @@ export function mount(rootEl, payload) {
             this.editGeneralError = '';
             this.editRecipeId = null;
             this.editOutputLocked = false;
+            this.editOnlyWithoutRecipe = true;
+            this.editItemSearch = '';
         },
         openDelete(recipe) {
             this.deleteRecipeId = recipe.id;
@@ -143,6 +155,44 @@ export function mount(rootEl, payload) {
         },
         isActionMenuOpenFor(recipeId) {
             return this.actionMenuOpen && this.actionMenuRecipeId === recipeId;
+        },
+        normalizedSearch(search) {
+            return String(search || '').trim().toLowerCase();
+        },
+        itemMatchesSearch(item, search) {
+            const normalizedSearch = this.normalizedSearch(search);
+
+            if (normalizedSearch === '') {
+                return true;
+            }
+
+            const haystack = String(item.display_text || item.name || '').toLowerCase();
+
+            return haystack.includes(normalizedSearch);
+        },
+        filteredCreateItems() {
+            return this.manufacturableItems.filter((item) => {
+                if (this.createOnlyWithoutRecipe && item.has_recipe) {
+                    return false;
+                }
+
+                return this.itemMatchesSearch(item, this.createItemSearch);
+            });
+        },
+        filteredEditItems() {
+            const selectedItemId = Number(this.editForm.item_id);
+
+            return this.manufacturableItems.filter((item) => {
+                if (this.editOnlyWithoutRecipe && item.has_recipe && item.id !== Number(this.editForm.item_id)) {
+                    return false;
+                }
+
+                if (item.id === Number(this.editForm.item_id)) {
+                    return this.itemMatchesSearch(item, this.editItemSearch) || selectedItemId === item.id;
+                }
+
+                return this.itemMatchesSearch(item, this.editItemSearch);
+            });
         },
         async submitCreate() {
             this.isCreateSubmitting = true;
