@@ -367,6 +367,41 @@ $completedOrder = $completeSalesOrderAction->execute($salesOrder);
 
 ---
 
+### Sales Products Filtered Item View
+
+**Name:** Sales Products Filtered Item View  
+**Type:** Read Model / Domain Invariant  
+**Location:**  
+- `app/Http/Controllers/SalesProductController.php`  
+- `app/Models/Item.php`  
+- `resources/views/sales/products/index.blade.php`  
+- `routes/web.php`  
+
+**Purpose:**  
+Document that Sales → Products is a sales-facing filtered view of normal tenant-owned items rather than a separate product entity.
+
+**When to Use:**  
+Rendering or importing sales-facing products from ecommerce sources while preserving the shared `Item` identity.
+
+**When Not to Use:**  
+Introducing a separate products table/model or treating imported products as distinct from materials.
+
+**Public Interface:**  
+- `sales.products.index`  
+- `sales.products.import.preview`  
+- `sales.products.import.store`  
+- `Item::query()->where('is_sellable', true)`  
+
+**Example Usage:**  
+```php
+$products = Item::query()
+    ->where('is_sellable', true)
+    ->orderBy('name')
+    ->get();
+```
+
+---
+
 ### Manufacturing Recipes Read-Only Access
 
 **Name:** Manufacturing Recipes Read-Only Access  

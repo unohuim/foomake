@@ -18,6 +18,7 @@ Authority Order (highest to lowest — conflicts resolved by this order):
 10. docs/PR3_ROADMAP.md
 
 ## docs/AI_CHAT_CODEX.md
+
 # AI Chat Bootstrap (READ FIRST)
 
 You are assisting with development on this repository.
@@ -248,7 +249,9 @@ If unsure, **stop immediately and ask**.
   **not global model scopes**
 - The **smallest possible change per PR**
 
+
 ## docs/PR2_ROADMAP.md
+
 # PR2_ROADMAP — UI + Domain Completion (Post-PR-006)
 
 This roadmap defines the **second major phase** of work: completing **Items, Inventory, Suppliers, and Manufacturing**
@@ -1541,7 +1544,9 @@ Introduce a UoM-level display precision field and enforce consistent quantity fo
 - Any changes to storage precision or BCMath scale
 - JavaScript formatting or UI-only overrides per view
 
+
 ## docs/CONVENTIONS.md
+
 # Conventions
 
 This document defines the **mandatory development conventions** for this repository.  
@@ -1795,7 +1800,9 @@ These rules apply to:
 - Unit conversions
 - Any inventory-affecting calculations
 
+
 ## docs/ARCHITECTURE_INVENTORY.md
+
 # Architecture Inventory
 
 This document tracks **reusable abstractions, components, and architectural patterns**
@@ -2161,6 +2168,41 @@ Editable header/line mutations, cancellation flows without inventory impact, or 
 **Example Usage:**  
 ```php
 $completedOrder = $completeSalesOrderAction->execute($salesOrder);
+```
+
+---
+
+### Sales Products Filtered Item View
+
+**Name:** Sales Products Filtered Item View  
+**Type:** Read Model / Domain Invariant  
+**Location:**  
+- `app/Http/Controllers/SalesProductController.php`  
+- `app/Models/Item.php`  
+- `resources/views/sales/products/index.blade.php`  
+- `routes/web.php`  
+
+**Purpose:**  
+Document that Sales → Products is a sales-facing filtered view of normal tenant-owned items rather than a separate product entity.
+
+**When to Use:**  
+Rendering or importing sales-facing products from ecommerce sources while preserving the shared `Item` identity.
+
+**When Not to Use:**  
+Introducing a separate products table/model or treating imported products as distinct from materials.
+
+**Public Interface:**  
+- `sales.products.index`  
+- `sales.products.import.preview`  
+- `sales.products.import.store`  
+- `Item::query()->where('is_sellable', true)`  
+
+**Example Usage:**  
+```php
+$products = Item::query()
+    ->where('is_sellable', true)
+    ->orderBy('name')
+    ->get();
 ```
 
 ---
@@ -3549,7 +3591,9 @@ it('creates a material', function () {
 
 ---
 
+
 ## docs/PERMISSIONS_MATRIX.md
+
 # Permissions Matrix
 
 This document is the source-of-truth for **authorization intent** in this repository.
@@ -3737,7 +3781,9 @@ return [
 ];
 ```
 
+
 ## docs/ENUMS.md
+
 # ENUMS — Canonical Enum Authority
 
 This document defines the canonical, normative enum-like values used throughout the system.
@@ -3926,7 +3972,9 @@ Do not introduce new enum values without updating this document.
 
 No conflicts or ambiguities were found at time of creation based on existing migrations, models, actions, and tests.
 
+
 ## docs/DB_SCHEMA.md
+
 # Database Schema Inventory (DB_SCHEMA)
 
 This document inventories **all database tables and columns** as defined by migrations.
@@ -3956,6 +4004,7 @@ Migrations remain the **sole source of truth**.
 - cache_locks
 - customer_contacts
 - customers
+- external_product_source_connections
 - failed_jobs
 - inventory_counts
 - inventory_count_lines
@@ -4091,6 +4140,32 @@ Migrations remain the **sole source of truth**.
 - Index: `(tenant_id, customer_id)`
 - Implicit (FK index): `tenant_id`
 - Implicit (FK index): `customer_id`
+
+---
+
+## external_product_source_connections
+
+**Tenant-owned:** Yes  
+**Purpose:** Minimal prep-only stored connection state for stubbed external product imports
+
+### Columns
+
+| Name             | Type      | Nullable | Notes                     |
+| ---------------- | --------- | -------- | ------------------------- |
+| id               | bigint    | No       | Primary key               |
+| tenant_id        | bigint    | No       | FK → tenants.id (CASCADE) |
+| source           | string    | No       | Stub source key           |
+| connection_label | string    | Yes      | Optional local label      |
+| is_connected     | boolean   | No       | Default true              |
+| connected_at     | timestamp | Yes      | —                         |
+| created_at       | timestamp | Yes      | —                         |
+| updated_at       | timestamp | Yes      | —                         |
+
+### Keys & Indexes
+
+- PK: `id`
+- Unique: `(tenant_id, source)`
+- Implicit (FK index): `tenant_id`
 
 ---
 
@@ -4348,18 +4423,22 @@ Migrations remain the **sole source of truth**.
 | id                | bigint    | No       | Primary key               |
 | tenant_id         | bigint    | No       | FK → tenants.id (CASCADE) |
 | name              | string    | No       | —                         |
+| base_uom_id       | bigint    | No       | FK → uoms.id              |
+| is_active         | boolean   | No       | Default true              |
 | is_purchasable    | boolean   | No       | Default false             |
 | is_sellable       | boolean   | No       | Default false             |
 | is_manufacturable | boolean   | No       | Default false             |
-| base_uom_id       | bigint    | No       | FK → uoms.id              |
 | default_price_cents | integer | Yes      | Unsigned                  |
 | default_price_currency_code | char(3) | Yes | —                        |
+| external_source   | string    | Yes      | Prep-only external source key |
+| external_id       | string    | Yes      | Prep-only external identity   |
 | created_at        | timestamp | Yes      | —                         |
 | updated_at        | timestamp | Yes      | —                         |
 
 ### Keys & Indexes
 
 - PK: `id`
+- Unique: `(tenant_id, external_source, external_id)`
 - Implicit (FK index): tenant_id
 - Implicit (FK index): base_uom_id
 
@@ -5040,7 +5119,9 @@ Migrations remain the **sole source of truth**.
 
 **End of DB_SCHEMA**
 
+
 ## docs/UI_DESIGN.md
+
 # UI_DESIGN.md — Canonical UI Direction & Constraints
 
 This document defines the **authoritative UI design rules** for this repository.
@@ -5634,7 +5715,9 @@ They are mandatory, not stylistic.
 
 ::contentReference[oaicite:0]{index=0}
 
+
 ## routes/web.php
+
 <?php
 
 use App\Http\Controllers\InventoryController;
@@ -5656,6 +5739,7 @@ use App\Http\Controllers\RecipeController;
 use App\Http\Controllers\SalesOrderController;
 use App\Http\Controllers\SalesOrderLineController;
 use App\Http\Controllers\SalesOrderStatusController;
+use App\Http\Controllers\SalesProductController;
 use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\SupplierPurchaseOptionController;
 use App\Http\Controllers\UomCategoryController;
@@ -5846,6 +5930,15 @@ Route::middleware('auth')->group(function () {
     Route::delete('/sales/orders/{salesOrder}/lines/{line}', [SalesOrderLineController::class, 'destroy'])
         ->name('sales.orders.lines.destroy');
 
+    Route::get('/sales/products', [SalesProductController::class, 'index'])
+        ->name('sales.products.index');
+    Route::post('/sales/products/import-sources/{source}/connect', [SalesProductController::class, 'connect'])
+        ->name('sales.products.import.connect');
+    Route::post('/sales/products/import-preview', [SalesProductController::class, 'preview'])
+        ->name('sales.products.import.preview');
+    Route::post('/sales/products/imports', [SalesProductController::class, 'storeImport'])
+        ->name('sales.products.import.store');
+
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
@@ -5862,7 +5955,9 @@ Route::delete('/manufacturing/uom-conversions/items/{itemConversion}', [UomConve
 
 require __DIR__ . '/auth.php';
 
+
 ## docs/PR3_ROADMAP.md
+
 # PR3_ROADMAP — Sales + CRM Foundations
 
 This roadmap defines the third major phase of work: introducing the **Sales domain (CRM foundations + Sales Orders)**, fully integrated with inventory before any external integrations.
@@ -6140,21 +6235,46 @@ Sales orders must update inventory.
 
 ## DOMAIN 3 — External Integration (Post-Inventory Only)
 
-### PR3-INT-001 — External Hooks (Prep)
+### PR3-INT-001 — External Product Import Prep
 
 **Goal**
-Prepare for Shopify/WooCommerce.
+Prepare the app for ecommerce product imports, starting with WooCommerce, while preserving the invariant that products remain normal items.
 
 **Includes**
 
+- Sales → Products navigation and index
+- `GET /sales/products`
+- Products is a filtered sales-facing view of normal `items` where `is_sellable = true`
+- Imported ecommerce products are created as normal `items`, so they also remain visible on Manufacturing → Materials
+- Item fields:
+    - `is_active`
+    - `external_source`
+    - `external_id`
+- Tenant-scoped uniqueness protection on `(tenant_id, external_source, external_id)`
+- Temporary prep-only stored connection state for stubbed import sources
+- Deterministic local/stubbed import flow:
+    - source selection
+    - WooCommerce available
+    - disabled placeholder sources may appear
+    - connect-source state
+    - preview endpoint with deterministic importable rows
+    - import endpoint that accepts selected preview rows
+    - bulk manufacturable / purchasable defaults
+    - per-row manufacturable / purchasable overrides
 - Fields:
     - external_source
     - external_id
 
 **Out of Scope**
 
+- Real WooCommerce API integration
+- Real connector infrastructure beyond the minimal prep-only stub contract
 - Sync logic
 - Webhooks
+- Order import
+- Customer import
+- Inventory sync
+- Separate products table or model
 
 ---
 
@@ -6166,3 +6286,5 @@ After PR3 completion:
 - CRM foundation established
 - Sales orders impact inventory correctly
 - System ready for external integrations
+
+

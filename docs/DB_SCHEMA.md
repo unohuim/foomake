@@ -27,6 +27,7 @@ Migrations remain the **sole source of truth**.
 - cache_locks
 - customer_contacts
 - customers
+- external_product_source_connections
 - failed_jobs
 - inventory_counts
 - inventory_count_lines
@@ -162,6 +163,32 @@ Migrations remain the **sole source of truth**.
 - Index: `(tenant_id, customer_id)`
 - Implicit (FK index): `tenant_id`
 - Implicit (FK index): `customer_id`
+
+---
+
+## external_product_source_connections
+
+**Tenant-owned:** Yes  
+**Purpose:** Minimal prep-only stored connection state for stubbed external product imports
+
+### Columns
+
+| Name             | Type      | Nullable | Notes                     |
+| ---------------- | --------- | -------- | ------------------------- |
+| id               | bigint    | No       | Primary key               |
+| tenant_id        | bigint    | No       | FK → tenants.id (CASCADE) |
+| source           | string    | No       | Stub source key           |
+| connection_label | string    | Yes      | Optional local label      |
+| is_connected     | boolean   | No       | Default true              |
+| connected_at     | timestamp | Yes      | —                         |
+| created_at       | timestamp | Yes      | —                         |
+| updated_at       | timestamp | Yes      | —                         |
+
+### Keys & Indexes
+
+- PK: `id`
+- Unique: `(tenant_id, source)`
+- Implicit (FK index): `tenant_id`
 
 ---
 
@@ -419,18 +446,22 @@ Migrations remain the **sole source of truth**.
 | id                | bigint    | No       | Primary key               |
 | tenant_id         | bigint    | No       | FK → tenants.id (CASCADE) |
 | name              | string    | No       | —                         |
+| base_uom_id       | bigint    | No       | FK → uoms.id              |
+| is_active         | boolean   | No       | Default true              |
 | is_purchasable    | boolean   | No       | Default false             |
 | is_sellable       | boolean   | No       | Default false             |
 | is_manufacturable | boolean   | No       | Default false             |
-| base_uom_id       | bigint    | No       | FK → uoms.id              |
 | default_price_cents | integer | Yes      | Unsigned                  |
 | default_price_currency_code | char(3) | Yes | —                        |
+| external_source   | string    | Yes      | Prep-only external source key |
+| external_id       | string    | Yes      | Prep-only external identity   |
 | created_at        | timestamp | Yes      | —                         |
 | updated_at        | timestamp | Yes      | —                         |
 
 ### Keys & Indexes
 
 - PK: `id`
+- Unique: `(tenant_id, external_source, external_id)`
 - Implicit (FK index): tenant_id
 - Implicit (FK index): base_uom_id
 

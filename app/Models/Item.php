@@ -23,14 +23,18 @@ class Item extends Model
         'tenant_id',
         'name',
         'base_uom_id',
+        'is_active',
         'is_purchasable',
         'is_sellable',
         'is_manufacturable',
         'default_price_cents',
         'default_price_currency_code',
+        'external_source',
+        'external_id',
     ];
 
     protected $casts = [
+        'is_active' => 'boolean',
         'is_purchasable' => 'boolean',
         'is_sellable' => 'boolean',
         'is_manufacturable' => 'boolean',

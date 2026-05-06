@@ -14,6 +14,8 @@
     $canViewSuppliers = $user?->can('purchasing-suppliers-view') ?? false;
     $canManageCustomers = $user?->can('sales-customers-manage') ?? false;
     $canManageSalesOrders = $user?->can('sales-sales-orders-manage') ?? false;
+    $canViewProducts = $user?->can('inventory-products-view') ?? false;
+    $canManageProducts = $user?->can('inventory-products-manage') ?? false;
     $canOpenSalesOrders = $navigationEligibility['salesOrdersEnabled'] ?? false;
     $canOpenPurchaseOrders = $navigationEligibility['purchaseOrdersEnabled'] ?? false;
     $canViewInventory = $user?->can('inventory-adjustments-view') ?? false;
@@ -24,7 +26,7 @@
     $canViewRecipes = $user?->can('inventory-recipes-view') ?? false;
 
     $showPurchasingNav = $canViewPurchaseOrders || $canViewSuppliers;
-    $showSalesNav = $canManageCustomers || $canManageSalesOrders;
+    $showSalesNav = $canManageCustomers || $canManageSalesOrders || $canViewProducts || $canManageProducts;
     $showManufacturingNav = $canViewInventory
         || $canViewMakeOrders
         || $canViewMaterials
@@ -56,6 +58,12 @@
                                     {{ __('Customers') }}
                                 </x-nav-dropdown-link>
                             @endcan
+
+                            @if ($canViewProducts || $canManageProducts)
+                                <x-nav-dropdown-link :href="route('sales.products.index')" :active="request()->routeIs('sales.products.*')">
+                                    {{ __('Products') }}
+                                </x-nav-dropdown-link>
+                            @endif
 
                             @can('sales-sales-orders-manage')
                                 @if ($canOpenSalesOrders)
@@ -270,6 +278,12 @@
                                 {{ __('Customers') }}
                             </x-nav-dropdown-link>
                         @endcan
+
+                        @if ($canViewProducts || $canManageProducts)
+                            <x-nav-dropdown-link :href="route('sales.products.index')" :active="request()->routeIs('sales.products.*')" mobile>
+                                {{ __('Products') }}
+                            </x-nav-dropdown-link>
+                        @endif
 
                         @can('sales-sales-orders-manage')
                             @if ($canOpenSalesOrders)

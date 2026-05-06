@@ -275,21 +275,46 @@ Sales orders must update inventory.
 
 ## DOMAIN 3 — External Integration (Post-Inventory Only)
 
-### PR3-INT-001 — External Hooks (Prep)
+### PR3-INT-001 — External Product Import Prep
 
 **Goal**
-Prepare for Shopify/WooCommerce.
+Prepare the app for ecommerce product imports, starting with WooCommerce, while preserving the invariant that products remain normal items.
 
 **Includes**
 
+- Sales → Products navigation and index
+- `GET /sales/products`
+- Products is a filtered sales-facing view of normal `items` where `is_sellable = true`
+- Imported ecommerce products are created as normal `items`, so they also remain visible on Manufacturing → Materials
+- Item fields:
+    - `is_active`
+    - `external_source`
+    - `external_id`
+- Tenant-scoped uniqueness protection on `(tenant_id, external_source, external_id)`
+- Temporary prep-only stored connection state for stubbed import sources
+- Deterministic local/stubbed import flow:
+    - source selection
+    - WooCommerce available
+    - disabled placeholder sources may appear
+    - connect-source state
+    - preview endpoint with deterministic importable rows
+    - import endpoint that accepts selected preview rows
+    - bulk manufacturable / purchasable defaults
+    - per-row manufacturable / purchasable overrides
 - Fields:
     - external_source
     - external_id
 
 **Out of Scope**
 
+- Real WooCommerce API integration
+- Real connector infrastructure beyond the minimal prep-only stub contract
 - Sync logic
 - Webhooks
+- Order import
+- Customer import
+- Inventory sync
+- Separate products table or model
 
 ---
 

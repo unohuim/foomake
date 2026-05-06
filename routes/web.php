@@ -19,6 +19,7 @@ use App\Http\Controllers\RecipeController;
 use App\Http\Controllers\SalesOrderController;
 use App\Http\Controllers\SalesOrderLineController;
 use App\Http\Controllers\SalesOrderStatusController;
+use App\Http\Controllers\SalesProductController;
 use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\SupplierPurchaseOptionController;
 use App\Http\Controllers\UomCategoryController;
@@ -208,6 +209,15 @@ Route::middleware('auth')->group(function () {
         ->name('sales.orders.lines.update');
     Route::delete('/sales/orders/{salesOrder}/lines/{line}', [SalesOrderLineController::class, 'destroy'])
         ->name('sales.orders.lines.destroy');
+
+    Route::get('/sales/products', [SalesProductController::class, 'index'])
+        ->name('sales.products.index');
+    Route::post('/sales/products/import-sources/{source}/connect', [SalesProductController::class, 'connect'])
+        ->name('sales.products.import.connect');
+    Route::post('/sales/products/import-preview', [SalesProductController::class, 'preview'])
+        ->name('sales.products.import.preview');
+    Route::post('/sales/products/imports', [SalesProductController::class, 'storeImport'])
+        ->name('sales.products.import.store');
 
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
