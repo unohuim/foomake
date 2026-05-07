@@ -810,7 +810,7 @@ it('27. same source and external id across different tenants is allowed', functi
         ->count())->toBe(2);
 });
 
-it('28. duplicate source and external id within the same tenant is blocked deterministically', function () {
+it('28. duplicate source and external id within the same tenant matches the existing item deterministically', function () {
     $tenant = ($this->makeTenant)();
     $uom = ($this->makeUom)($tenant);
     $user = ($this->makeUser)($tenant);
@@ -832,12 +832,23 @@ it('28. duplicate source and external id within the same tenant is blocked deter
         'source' => 'woocommerce',
         'rows' => [[
             'external_id' => 'dup-4001',
-            'name' => 'Duplicate Product',
+            'name' => 'Updated Product',
             'sku' => 'DUP-4001-B',
             'base_uom_id' => $uom->id,
         ]],
-    ])->assertUnprocessable()
-        ->assertJsonPath('message', 'One or more imported products already exist for this tenant and source.');
+    ])->assertCreated()
+        ->assertJsonPath('data.fulfillment_recipes_not_attempted_existing_item', 1);
+
+    expect(Item::query()
+        ->where('tenant_id', $tenant->id)
+        ->where('external_source', 'woocommerce')
+        ->where('external_id', 'dup-4001')
+        ->count())->toBe(1)
+        ->and(Item::query()
+            ->where('tenant_id', $tenant->id)
+            ->where('external_source', 'woocommerce')
+            ->where('external_id', 'dup-4001')
+            ->value('name'))->toBe('Updated Product');
 });
 
 it('29. transaction failure rolls back the whole import with no partial items persisted', function () {

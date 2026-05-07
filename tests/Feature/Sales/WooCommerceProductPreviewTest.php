@@ -683,7 +683,7 @@ it('25. imported variations store the WooCommerce variation id as external id', 
         ->toBe('2021');
 });
 
-it('26. duplicate source and external id handling still works for WooCommerce imports', function () {
+it('26. duplicate source and external id handling still matches and updates the existing WooCommerce item', function () {
     $tenant = ($this->makeTenant)();
     $uom = ($this->makeUom)($tenant);
     $user = ($this->makeUser)($tenant);
@@ -705,11 +705,23 @@ it('26. duplicate source and external id handling still works for WooCommerce im
         'source' => 'woocommerce',
         'rows' => [[
             'external_id' => '101',
-            'name' => 'Duplicate Simple Tee',
+            'name' => 'Updated Simple Tee',
             'sku' => 'SIMPLE-TEE-2',
             'base_uom_id' => $uom->id,
         ]],
-    ])->assertUnprocessable();
+    ])->assertCreated()
+        ->assertJsonPath('data.fulfillment_recipes_not_attempted_existing_item', 1);
+
+    expect(Item::query()
+        ->where('tenant_id', $tenant->id)
+        ->where('external_source', 'woocommerce')
+        ->where('external_id', '101')
+        ->count())->toBe(1)
+        ->and(Item::query()
+            ->where('tenant_id', $tenant->id)
+            ->where('external_source', 'woocommerce')
+            ->where('external_id', '101')
+            ->value('name'))->toBe('Updated Simple Tee');
 });
 
 it('27. tenant A cannot use tenant B WooCommerce connection', function () {

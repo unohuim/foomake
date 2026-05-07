@@ -35,6 +35,10 @@ class ImportExternalProductsRequest extends FormRequest
                 'string',
                 Rule::in(['woocommerce', 'shopify']),
             ],
+            'create_fulfillment_recipes' => [
+                'nullable',
+                'boolean',
+            ],
             'import_all_as_manufacturable' => [
                 'nullable',
                 'boolean',
@@ -57,6 +61,7 @@ class ImportExternalProductsRequest extends FormRequest
                 'required',
                 'string',
                 'max:255',
+                'distinct',
             ],
             'rows.*.name' => [
                 'required',

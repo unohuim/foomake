@@ -30,6 +30,7 @@ export function mount(rootEl, payload) {
         bulkManufacturable: false,
         bulkPurchasable: false,
         bulkBaseUomId: '',
+        createFulfillmentRecipes: true,
         isLoadingPreview: false,
         loadingPreviewLabel,
         toast: {
@@ -74,6 +75,7 @@ export function mount(rootEl, payload) {
             this.bulkManufacturable = false;
             this.bulkPurchasable = false;
             this.bulkBaseUomId = '';
+            this.createFulfillmentRecipes = true;
         },
         handleSourceChange() {
             this.previewRows = [];
@@ -181,6 +183,7 @@ export function mount(rootEl, payload) {
                 },
                 body: JSON.stringify({
                     source: this.selectedSource,
+                    create_fulfillment_recipes: this.createFulfillmentRecipes,
                     import_all_as_manufacturable: this.bulkManufacturable,
                     import_all_as_purchasable: this.bulkPurchasable,
                     bulk_base_uom_id: this.bulkBaseUomId === '' ? null : Number(this.bulkBaseUomId),

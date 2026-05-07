@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\Integrations\CreateEmptyFulfillmentRecipeForImportedItem;
 use App\Http\Requests\Sales\ImportExternalProductsRequest;
 use App\Http\Requests\Sales\PreviewExternalProductImportRequest;
 use App\Integrations\WooCommerce\WooCommerceException;
@@ -10,8 +11,8 @@ use App\Models\Item;
 use App\Models\Uom;
 use App\Services\WooCommerceProductPreviewService;
 use Illuminate\Contracts\View\View;
-use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Symfony\Component\HttpKernel\Exception\HttpException;
@@ -105,8 +106,10 @@ class SalesProductController extends Controller
     /**
      * Import selected preview rows as normal items.
      */
-    public function storeImport(ImportExternalProductsRequest $request): JsonResponse
-    {
+    public function storeImport(
+        ImportExternalProductsRequest $request,
+        CreateEmptyFulfillmentRecipeForImportedItem $createFulfillmentRecipeAction
+    ): JsonResponse {
         Gate::authorize('inventory-products-manage');
 
         $source = (string) $request->validated('source');
@@ -115,56 +118,123 @@ class SalesProductController extends Controller
             return $this->notConnectedResponse();
         }
 
+        $tenantId = (int) $request->user()->tenant_id;
+        $createFulfillmentRecipes = $request->boolean('create_fulfillment_recipes', true);
+
+        $summary = [
+            'fulfillment_recipes_created' => 0,
+            'fulfillment_recipes_skipped_existing' => 0,
+            'fulfillment_recipes_not_attempted_existing_item' => 0,
+        ];
+
+        /** @var Collection<int, Item> $imported */
         $imported = collect();
 
-        try {
-            DB::transaction(function () use ($request, $source, &$imported): void {
-                $imported = collect($request->validated('rows'))
-                    ->map(function (array $row) use ($request, $source): Item {
-                        $isManufacturable = array_key_exists('is_manufacturable', $row)
-                            ? (bool) $row['is_manufacturable']
-                            : $request->boolean('import_all_as_manufacturable');
-                        $isPurchasable = array_key_exists('is_purchasable', $row)
-                            ? (bool) $row['is_purchasable']
-                            : $request->boolean('import_all_as_purchasable');
-                        $baseUomId = array_key_exists('base_uom_id', $row) && $row['base_uom_id'] !== null
-                            ? (int) $row['base_uom_id']
-                            : (int) $request->validated('bulk_base_uom_id');
+        DB::transaction(function () use (
+            $request,
+            $source,
+            $tenantId,
+            $createFulfillmentRecipes,
+            $createFulfillmentRecipeAction,
+            &$summary,
+            &$imported
+        ): void {
+            $imported = collect($request->validated('rows'))
+                ->map(function (array $row) use (
+                    $request,
+                    $source,
+                    $tenantId,
+                    $createFulfillmentRecipes,
+                    $createFulfillmentRecipeAction,
+                    &$summary
+                ): Item {
+                    $item = $this->createOrUpdateImportedItem(
+                        $request,
+                        $source,
+                        $tenantId,
+                        $row
+                    );
 
-                        return Item::query()->create([
-                            'tenant_id' => $request->user()->tenant_id,
-                            'name' => $row['name'],
-                            'base_uom_id' => $baseUomId,
-                            'is_active' => array_key_exists('is_active', $row) ? (bool) $row['is_active'] : true,
-                            'is_purchasable' => $isPurchasable,
-                            'is_sellable' => true,
-                            'is_manufacturable' => $isManufacturable,
-                            'default_price_cents' => null,
-                            'default_price_currency_code' => null,
-                            'external_source' => $source,
-                            'external_id' => (string) $row['external_id'],
-                        ]);
-                    });
-            });
-        } catch (QueryException $exception) {
-            if ($this->isDuplicateExternalIdentityException($exception)) {
-                return response()->json([
-                    'message' => 'One or more imported products already exist for this tenant and source.',
-                    'errors' => [
-                        'rows' => ['Duplicate source and external_id values are not allowed within the same tenant.'],
-                    ],
-                ], 422);
-            }
+                    if (! $item->wasRecentlyCreated) {
+                        $summary['fulfillment_recipes_not_attempted_existing_item']++;
 
-            throw $exception;
-        }
+                        return $item;
+                    }
+
+                    if (! $createFulfillmentRecipes) {
+                        return $item;
+                    }
+
+                    if ($createFulfillmentRecipeAction->execute($item)) {
+                        $summary['fulfillment_recipes_created']++;
+                    } else {
+                        $summary['fulfillment_recipes_skipped_existing']++;
+                    }
+
+                    return $item;
+                });
+        });
 
         return response()->json([
             'data' => [
                 'imported_count' => $imported->count(),
-                'imported' => $imported->map(fn (Item $item): array => $this->productData($item->load('baseUom')))->values()->all(),
+                'fulfillment_recipes_created' => $summary['fulfillment_recipes_created'],
+                'fulfillment_recipes_skipped_existing' => $summary['fulfillment_recipes_skipped_existing'],
+                'fulfillment_recipes_not_attempted_existing_item' => $summary['fulfillment_recipes_not_attempted_existing_item'],
+                'imported' => $imported
+                    ->map(fn (Item $item): array => $this->productData($item->load('baseUom')))
+                    ->values()
+                    ->all(),
             ],
         ], 201);
+    }
+
+    /**
+     * Create or update an imported item using the external identity as the tenant-scoped match key.
+     *
+     * @param array<string, mixed> $row
+     */
+    private function createOrUpdateImportedItem(
+        ImportExternalProductsRequest $request,
+        string $source,
+        int $tenantId,
+        array $row
+    ): Item {
+        $isManufacturable = array_key_exists('is_manufacturable', $row)
+            ? (bool) $row['is_manufacturable']
+            : $request->boolean('import_all_as_manufacturable');
+        $isPurchasable = array_key_exists('is_purchasable', $row)
+            ? (bool) $row['is_purchasable']
+            : $request->boolean('import_all_as_purchasable');
+        $baseUomId = array_key_exists('base_uom_id', $row) && $row['base_uom_id'] !== null
+            ? (int) $row['base_uom_id']
+            : (int) $request->validated('bulk_base_uom_id');
+
+        $item = Item::query()
+            ->where('tenant_id', $tenantId)
+            ->where('external_source', $source)
+            ->where('external_id', (string) $row['external_id'])
+            ->first();
+
+        if (! $item) {
+            $item = new Item([
+                'tenant_id' => $tenantId,
+                'external_source' => $source,
+                'external_id' => (string) $row['external_id'],
+            ]);
+        }
+
+        $item->name = $row['name'];
+        $item->base_uom_id = $baseUomId;
+        $item->is_active = array_key_exists('is_active', $row) ? (bool) $row['is_active'] : true;
+        $item->is_purchasable = $isPurchasable;
+        $item->is_sellable = true;
+        $item->is_manufacturable = $isManufacturable;
+        $item->default_price_cents = null;
+        $item->default_price_currency_code = null;
+        $item->save();
+
+        return $item;
     }
 
     /**
@@ -266,17 +336,5 @@ class SalesProductController extends Controller
                 'connect_required' => true,
             ],
         ], 422);
-    }
-
-    /**
-     * Detect duplicate external identity violations from the database layer.
-     */
-    private function isDuplicateExternalIdentityException(QueryException $exception): bool
-    {
-        $message = strtolower($exception->getMessage());
-
-        return str_contains($message, 'items_tenant_source_external_unique')
-            || str_contains($message, 'duplicate')
-            || str_contains($message, 'unique');
     }
 }

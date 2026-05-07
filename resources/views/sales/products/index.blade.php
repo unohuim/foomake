@@ -190,6 +190,10 @@
 
                                         <div x-show="previewRows.length > 0">
                                             <div class="mb-4 grid gap-4 rounded-lg border border-gray-200 bg-gray-50 p-4 sm:grid-cols-2">
+                                                <label class="flex items-center gap-3 text-sm text-gray-700 sm:col-span-2">
+                                                    <input type="checkbox" class="rounded border-gray-300 text-blue-600 shadow-sm focus:ring-blue-500" x-model="createFulfillmentRecipes">
+                                                    Create fulfillment recipes
+                                                </label>
                                                 <label class="flex items-center gap-3 text-sm text-gray-700">
                                                     <input type="checkbox" class="rounded border-gray-300 text-blue-600 shadow-sm focus:ring-blue-500" x-model="bulkManufacturable">
                                                     Import all selected as manufacturable
