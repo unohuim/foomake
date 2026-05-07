@@ -245,6 +245,33 @@ Gate::authorize('inventory-materials-manage');
 
 ---
 
+### Workflow Manage Permission (Planned)
+
+**Name:** Workflow Manage Permission  
+**Type:** Planned Authorization Rule  
+**Location:**  
+- `docs/PERMISSIONS_MATRIX.md`  
+- `docs/PR3_ROADMAP.md`  
+
+**Purpose:**  
+Document the planned gate that will control workflow-configuration access under the future `Admin -> Workflows` UI.
+
+**When to Use:**  
+Planned access checks for workflow stage and workflow task-template configuration surfaces.
+
+**When Not to Use:**  
+Assigned-user task completion or existing sales-order lifecycle transitions that retain their current permissions.
+
+**Public Interface:**  
+- `workflow-manage`  
+
+**Example Usage:**  
+```php
+Gate::authorize('workflow-manage');
+```
+
+---
+
 ## UI
 
 ### Reusable Combobox Pattern
@@ -452,6 +479,143 @@ Editable header/line mutations, shipping/completion transitions without inventor
 **Example Usage:**  
 ```php
 $packedOrder = $packSalesOrderAction->execute($salesOrder, $buildSalesOrderIssuePlanAction);
+```
+
+---
+
+### Workflow Domain
+
+**Name:** Workflow Domain  
+**Type:** System-Owned Domain Rule  
+**Location:**  
+- `docs/architecture/workflows/WorkflowDomain.yaml`  
+- `docs/PR3_ROADMAP.md`  
+
+**Purpose:**  
+Define the planned fixed domain layer that scopes tenant-owned workflow stages, workflow task templates, and generated tasks across operational modules.
+
+**When to Use:**  
+Planning domain-general workflow infrastructure for sales first, with purchasing and manufacturing later.
+
+**When Not to Use:**  
+Admin-managed taxonomy creation or product-specific workflow overrides.
+
+**Public Interface:**  
+- `docs/architecture/workflows/WorkflowDomain.yaml`  
+
+**Example Usage:**  
+```text
+sales -> workflow stages -> workflow task templates -> generated tasks
+```
+
+---
+
+### Workflow Stage
+
+**Name:** Workflow Stage  
+**Type:** Tenant-Scoped Domain Rule  
+**Location:**  
+- `docs/architecture/workflows/WorkflowStage.yaml`  
+- `docs/PR3_ROADMAP.md`  
+
+**Purpose:**  
+Define the planned database-backed operational middle-stage abstraction that can be configured per tenant and workflow domain.
+
+**When to Use:**  
+Planning operational stage ordering, activation, and admin CRUD behavior within a workflow domain.
+
+**When Not to Use:**  
+System lifecycle statuses that remain hard-coded domain rules.
+
+**Public Interface:**  
+- `docs/architecture/workflows/WorkflowStage.yaml`  
+- `workflow-manage`  
+
+**Example Usage:**  
+```text
+tenant sales stages: packing -> packed -> shipping
+```
+
+---
+
+### Workflow Task Template
+
+**Name:** Workflow Task Template  
+**Type:** Tenant-Scoped Domain Rule  
+**Location:**  
+- `docs/architecture/workflows/WorkflowTaskTemplate.yaml`  
+- `docs/PR3_ROADMAP.md`  
+
+**Purpose:**  
+Define the planned admin-managed template abstraction used to generate future stage-specific tasks.
+
+**When to Use:**  
+Planning task-definition CRUD, activation, ordering, and assignee defaults for a workflow stage.
+
+**When Not to Use:**  
+Retroactively mutating existing generated tasks or creating ad hoc tasks outside the configured template flow.
+
+**Public Interface:**  
+- `docs/architecture/workflows/WorkflowTaskTemplate.yaml`  
+- `workflow-manage`  
+
+**Example Usage:**  
+```text
+packing stage template: Print packing slip
+```
+
+---
+
+### Task
+
+**Name:** Task  
+**Type:** Tenant-Scoped Generated Record Rule  
+**Location:**  
+- `docs/architecture/workflows/Task.yaml`  
+- `docs/PR3_ROADMAP.md`  
+
+**Purpose:**  
+Define the planned generated task record that snapshots template data against a specific workflow domain record.
+
+**When to Use:**  
+Planning stage-entry task generation, assigned-user completion, and immutable snapshot behavior for future workflow tasks.
+
+**When Not to Use:**  
+General project-management features, comments, due dates, multi-assignee tasks, or task reopening flows.
+
+**Public Interface:**  
+- `docs/architecture/workflows/Task.yaml`  
+
+**Example Usage:**  
+```text
+sales order 42 enters packing -> generate tenant-scoped packing tasks
+```
+
+---
+
+### Sales Order Workflow Task Gating
+
+**Name:** Sales Order Workflow Task Gating  
+**Type:** Planned Domain Rule  
+**Location:**  
+- `docs/architecture/workflows/SalesOrderWorkflowTaskGating.yaml`  
+- `docs/PR3_ROADMAP.md`  
+
+**Purpose:**  
+Define the planned rule that forward sales-order operational transitions are blocked by open current-stage workflow tasks in addition to existing sales-order domain guards.
+
+**When to Use:**  
+Planning the interaction between sales-order stage entry, generated task creation, and forward lifecycle gating.
+
+**When Not to Use:**  
+Draft editing, unrelated task systems, or purchasing/manufacturing task generation before those integrations are implemented.
+
+**Public Interface:**  
+- `docs/architecture/workflows/SalesOrderWorkflowTaskGating.yaml`  
+
+**Example Usage:**  
+```text
+packing -> packed is blocked while current-stage generated tasks remain open
 ```
 
 ---

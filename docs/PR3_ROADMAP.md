@@ -304,26 +304,218 @@ Extend the Sales Order lifecycle with operational statuses.
 
 ---
 
-### PR3-SO-007 — Sales Order Workflow Tasks / Checklists
+### PR3-SO-007 — Domain-General Workflow Stages + Tasks
 
 Status: Planned
 
 **Goal**
-Introduce tenant-level sales order workflow checklist and task definitions.
+Introduce planned domain-general workflow infrastructure for operational stages and generated tasks, with Sales Orders as the first consumer.
 
-**Rules**
+**Planned Scope**
 
-- Add Sales → Settings at the bottom of the Sales menu
-- Sales Settings includes a Workflow section
-- Workflow defines default sales order stages and checklists
-- Each stage can define task definitions required before moving to the next status
-- When a sales order enters a stage, task records are created from that stage’s task definitions
-- Completing a task marks that checklist item complete from the Sales Order view
-- Required tasks must be complete before moving to the next stage
-- Tasks may include assigned user and due date
-- Initial scope is company-level workflow only
-- Product-specific workflow overrides are out of scope for now
-- Do not build a general project-management system
+- This PR is planned as workflow infrastructure, not just a Sales Order checklist UI
+- The design is intended to support:
+    - sales
+    - purchasing
+    - manufacturing
+- Sales Orders are the first planned domain integration
+- Purchase Order and Make Order task generation remain future scope
+
+**Planned Data Model**
+
+- Add a fixed system-owned `workflow_domains` table
+- Planned seeded workflow domain keys:
+    - `sales`
+    - `purchasing`
+    - `manufacturing`
+- Domains are system-owned and not admin-configurable
+- Domains scope workflow stages and workflow task templates
+
+- Add a tenant-scoped `workflow_stages` table
+- Workflow stages belong to:
+    - tenant
+    - workflow domain
+- Stages are operational middle stages only
+- Sales Order system statuses `DRAFT`, `OPEN`, `COMPLETED`, and `CANCELLED` remain non-configurable and are not admin-managed workflow stages
+- Planned seeded default sales operational stage keys remain:
+    - `packing`
+    - `packed`
+    - `shipping`
+- Planned default Sales Order status progression remains:
+    - `DRAFT -> OPEN -> PACKING -> PACKED -> SHIPPING -> COMPLETED`
+
+- Add a tenant-scoped `workflow_task_templates` table
+- Task templates belong to:
+    - tenant
+    - workflow domain
+    - workflow stage
+- Task template fields are planned to include:
+    - `title`
+    - `description`
+    - `sort_order`
+    - `is_active`
+    - `default_assignee_user_id`
+
+- Add a tenant-scoped domain-general `tasks` table
+- Generated task fields are planned to include:
+    - `tenant_id`
+    - `workflow_domain_id`
+    - `domain_record_id`
+    - `workflow_stage_id`
+    - `workflow_task_template_id`
+    - `assigned_to_user_id`
+    - `title`
+    - `description`
+    - `sort_order`
+    - `status`
+    - `completed_at`
+    - `completed_by_user_id`
+
+**Planned Stage Rules**
+
+- Workflow stages are database-backed, not hardcoded
+- Stages have `is_active`
+- Admins can create, edit, deactivate, reactivate, and reorder operational stages within a tenant/domain
+- Duplicate stage keys must be prevented per tenant/domain
+- `DRAFT`, `OPEN`, `COMPLETED`, and `CANCELLED` remain system statuses and cannot be reordered through workflow admin UI
+- Inactive stages are hidden by default
+- The planned admin UI includes a show-inactive toggle
+- Once a stage has been used, it is intended to be soft-disabled rather than hard-deleted
+
+**Planned Task Template Rules**
+
+- Only active task templates generate future tasks
+- Inactive task templates are hidden by default
+- The planned admin UI includes a show-inactive toggle
+- Editing a task template affects future generated tasks only
+- Already-generated tasks remain unchanged
+- Task templates can be reordered within a stage
+- Tasks are always assigned to a user
+- If no assignee is configured, generated tasks default to the first user for that tenant
+
+**Planned Generated Task Rules**
+
+- Task status is planned to remain simple in this PR:
+    - `open`
+    - `completed`
+- Task completion is final in this PR
+- Completed tasks cannot be reopened or uncompleted in this PR
+- Ad hoc task creation remains future scope
+- Generated tasks snapshot template fields at creation time:
+    - `title`
+    - `description`
+    - `sort_order`
+    - `assigned_to_user_id`
+- Current-stage generated tasks are stable after creation
+- Entering a future stage uses the latest active admin configuration at that time
+- Completed tasks remain visible and clearly marked completed
+- Open tasks are removed when an order is cancelled
+- Completed task history remains visible unless a future rule changes that
+- Moving an order backward does not reopen or duplicate prior open tasks
+- Re-entering a stage or repeated transition calls must not duplicate generated tasks
+
+**Planned Sales Order Integration**
+
+- Sales Orders are the first planned consumer of the workflow task system
+- When a Sales Order enters an operational workflow stage, the system should generate tasks from active task templates matching:
+    - tenant
+    - sales workflow domain
+    - entered workflow stage
+- If no active task templates exist for that stage, no tasks are created
+- The system should create at most one generated task per template per Sales Order/stage entry
+- Forward Sales Order lifecycle transitions remain gated by:
+    1. existing Sales Order domain rules such as packing and inventory rules
+    2. completion of current-stage generated tasks
+- If no tasks exist for a stage, workflow task gating does not block the transition
+- Sales Order transitions continue using existing Sales Order manage permissions
+
+**Planned Admin UI**
+
+- Add planned navigation item: `Admin -> Workflows`
+- Access is controlled by planned permission slug `workflow-manage`
+- Admins are intended to receive `workflow-manage` by default
+- The Workflows page is planned to use modern Tailwind + Alpine components
+- No global JavaScript state is permitted
+- The page is planned to include two accordion sections:
+    - `Stages`
+    - `Tasks`
+
+Stages accordion:
+
+- CRUD-style index
+- Create/edit stages
+- Deactivate/reactivate stages
+- Reorder active operational stages
+- Show inactive toggle
+- Domain selector limited to seeded workflow domains
+
+Tasks accordion:
+
+- CRUD-style index
+- Create/edit task templates
+- Deactivate/reactivate task templates
+- Reorder task templates within a stage
+- Show inactive toggle
+- Domain selector
+- Stage selector filtered by selected domain
+- Stage options should reflect newly created stages from the Stages accordion
+- Default assignee selector
+- Title and description fields
+
+**Planned Authorization Rules**
+
+- `workflow-manage` controls access to `Admin -> Workflows` and workflow configuration CRUD
+- Admins are planned to receive `workflow-manage` by default
+- Assigned users may complete their assigned tasks without `workflow-manage`
+- Assigned users do not need Sales Order manage permission solely to complete an assigned task
+- Sales Order lifecycle transitions still require existing Sales Order manage permission
+- Tenant scoping applies to workflow stages, workflow task templates, generated tasks, and any tenant-owned workflow records
+
+**Out of Scope**
+
+- Ad hoc task creation
+- Task comments
+- Task attachments
+- Task due dates
+- Task priorities
+- Reopening completed tasks
+- Multiple assignees per task
+- Product-specific workflows
+- Task notification system
+- Purchase Order task generation
+- Make Order task generation
+- Custom branching workflows
+- Conditional tasks
+- Parallel task groups
+- Full visual workflow builder
+- Customer-facing task views
+- Vendor-facing task views
+
+**Planned Testing Expectations**
+
+- Workflow domain seeding
+- Workflow stage CRUD
+- Workflow stage active/inactive behavior
+- Workflow stage ordering
+- Workflow task template CRUD
+- Workflow task template active/inactive behavior
+- Task generation from active templates
+- No task generation from inactive templates
+- No duplicate task generation
+- Task snapshot behavior
+- Future stages use latest active config
+- Sales Order forward transition blocked by open tasks
+- Sales Order advances once tasks complete
+- No task gate when no tasks exist
+- Cancellation removes open tasks
+- Completed tasks remain visible
+- Assigned user can complete assigned task
+- Completed task stores `completed_at` and `completed_by_user_id`
+- Completed task cannot be reopened
+- `workflow-manage` gates admin configuration
+- Admins receive `workflow-manage`
+- Sales Order transition permission remains unchanged
+- Tenant scoping
 
 ---
 

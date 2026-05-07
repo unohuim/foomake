@@ -1,0 +1,35 @@
+name: Workflow Task Template
+type: Tenant-Scoped Domain Rule
+location:
+  - docs/PR3_ROADMAP.md
+purpose: Define the planned tenant-owned task-template layer that configures which future generated tasks should appear for a workflow stage.
+when_to_use:
+  - Planning workflow-admin task configuration
+  - Planning stage-scoped generated task definitions
+  - Planning future task-generation snapshots
+when_not_to_use:
+  - Ad hoc one-off tasks
+  - Mutating already-generated task records retroactively
+rules:
+  - Workflow task templates are planned to be tenant-owned and tenant-scoped.
+  - Each workflow task template is planned to belong to exactly one workflow domain and one workflow stage.
+  - Workflow task templates are planned to support title, description, sort_order, is_active, and default_assignee_user_id.
+  - Only active templates are intended to generate future tasks.
+  - Editing a template is intended to affect future generated tasks only.
+  - Existing generated tasks are intended to preserve their creation-time snapshots.
+  - Task templates are intended to be reorderable within a stage.
+  - Generated tasks are intended to always resolve to a single assigned user.
+  - If no default assignee is configured, generation is planned to fall back to the tenant's first user.
+public_interface:
+  - docs/PR3_ROADMAP.md
+  - docs/architecture/workflows/WorkflowStage.yaml
+  - docs/architecture/workflows/Task.yaml
+  - workflow-manage
+example_usage: |
+  Planned task template:
+    domain = sales
+    stage = packing
+    title = Print packing slip
+    default_assignee_user_id = 17
+    is_active = true
+

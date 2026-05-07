@@ -18,6 +18,7 @@ This document is the source-of-truth for **authorization intent** in this reposi
 - `system-tenants-manage`
 - `system-users-manage`
 - `system-roles-manage`
+- `workflow-manage` (planned for future Admin → Workflows configuration)
 
 ### Purchasing
 
@@ -79,6 +80,7 @@ Tenant administrator role.
 
 - `system-users-manage`
 - `system-roles-manage`
+- `workflow-manage` (planned)
 - Purchasing: all purchasing permissions
 - Sales: all sales permissions
 - Inventory: all inventory permissions
@@ -159,6 +161,11 @@ Execution-only role.
 - Sales orders use `sales-sales-orders-manage` for `/sales/orders` index/create/update/delete, sales-order line CRUD, and customer detail Orders mini-index CRUD.
 - Customer detail Orders mini-index read access remains under `sales-customers-view`, but its mutations still require `sales-sales-orders-manage`.
 - Sales-order line create, quantity update, and delete mutations do not introduce a separate permission slug.
+- `workflow-manage` is planned to gate the future `Admin -> Workflows` navigation item and workflow configuration CRUD.
+- Admins are planned to receive `workflow-manage` by default when the feature is implemented.
+- Assigned users are planned to complete their own generated workflow tasks without requiring `workflow-manage`.
+- Assigned users are planned not to require `sales-sales-orders-manage` solely to complete an assigned workflow task.
+- Sales-order lifecycle transitions are planned to continue requiring existing Sales Order permissions even after workflow tasks are introduced.
 - Navigation clickability for Sales Orders, Purchase Orders, and Make Orders is not permission-only:
   - permissions and `@can` checks still govern whether the user may see the relevant nav branch
   - backend navigation eligibility decides whether the order item renders as clickable or visible-but-disabled
