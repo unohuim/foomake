@@ -1,41 +1,56 @@
-name: Sales Order Completion Inventory Impact
+name: Sales Order Packing Inventory Impact
 type: Domain Rule
 location:
-  - app/Actions/Sales/CompleteSalesOrderAction.php
+  - app/Actions/Sales/BuildSalesOrderIssuePlanAction.php
+  - app/Actions/Sales/MoveSalesOrderToPackingAction.php
+  - app/Actions/Sales/PackSalesOrderAction.php
+  - app/Actions/Sales/CancelPackedSalesOrderAction.php
   - app/Http/Controllers/SalesOrderStatusController.php
   - app/Models/SalesOrder.php
   - app/Models/SalesOrderLine.php
   - app/Models/StockMove.php
   - resources/views/sales/orders/index.blade.php
   - resources/views/sales/customers/show.blade.php
-purpose: Document the inventory-ledger effects of completing a sales order and the safeguards around posting those issue moves.
+purpose: Document the inventory-ledger effects of packing a sales order and the safeguards around availability checks, issue posting, and reversal moves.
 when_to_use:
-  - Completing an OPEN sales order
-  - Creating stock moves from sales-order lines
-  - Verifying rollback and idempotency expectations for sales-order completion
+  - Moving an OPEN sales order to PACKING
+  - Moving a PACKING sales order to PACKED
+  - Cancelling a PACKED sales order
+  - Verifying rollback and idempotency expectations for sales-order packing
 when_not_to_use:
   - Draft or open sales-order header edits
   - Draft or open sales-order line edits
-  - Fulfillment allocation, shipping, invoicing, or payment workflows
+  - Shipping or completion transitions that have no inventory impact
+  - Invoicing or payment workflows
 rules:
-  - Inventory impact occurs only when a sales order transitions from OPEN to COMPLETED.
-  - Completing a sales order creates exactly one stock move per sales-order line.
-  - Each completion stock move is tenant-scoped and uses the same tenant_id as the sales order and line.
-  - Each completion stock move uses the sales-order line item and that item's base UoM.
-  - Each completion stock move uses type = issue and status = POSTED.
-  - Each completion stock move records the sales-order line quantity as a signed negative canonical scale-6 ledger amount.
-  - Each completion stock move links back to the originating sales-order line with source_type = App\Models\SalesOrderLine and source_id = sales_order_lines.id.
-  - Completing a sales order with zero lines is allowed and creates zero stock moves.
-  - DRAFT to OPEN creates no stock moves.
-  - Any transition to CANCELLED creates no stock moves.
-  - Negative inventory is allowed in V1 and completion does not block on availability.
-  - Sales-order completion and stock-move creation must run in a single database transaction.
-  - If stock-move creation fails, the sales order must remain OPEN and no partial stock moves may persist.
-  - Retrying completion must not create duplicate stock moves for a line that already has completion inventory impact.
+  - Sales order lifecycle statuses are DRAFT, OPEN, PACKING, PACKED, SHIPPING, COMPLETED, and CANCELLED.
+  - OPEN to PACKING validates fulfillment availability only, creates no stock moves, and reserves no inventory.
+  - If any sales-order line cannot be fulfilled during OPEN to PACKING, the order must remain OPEN.
+  - PACKING to PACKED posts inventory issue stock moves in a single database transaction.
+  - If stock-move creation fails during PACKING to PACKED, the sales order must remain PACKING and no partial stock moves may persist.
+  - Normal stocked sales-order lines consume the sold item itself.
+  - Sales-order lines whose sold item has an active fulfillment recipe consume that recipe's component lines.
+  - Fulfillment recipes used for sales orders must have at least one line.
+  - Manufacturing recipes are never used for sales-order fulfillment in this phase.
+  - Each packed stock move is tenant-scoped and uses the same tenant_id as the sales order and line.
+  - Each packed stock move uses the consumed item's base UoM.
+  - Each packed stock move uses type = issue and status = POSTED.
+  - Each packed stock move records a signed negative canonical scale-6 ledger amount.
+  - Each packed stock move links back to the originating sales-order line with source_type = App\Models\SalesOrderLine and source_id = sales_order_lines.id.
+  - PACKED to SHIPPING and SHIPPING to COMPLETED create no stock moves.
+  - OPEN to CANCELLED and PACKING to CANCELLED create no stock moves.
+  - PACKED to CANCELLED appends reversing stock moves and preserves the original issue moves for audit history.
+  - Retrying PACKING to PACKED must not create duplicate stock moves for a line that already has packed inventory impact.
 public_interface:
-  - CompleteSalesOrderAction::execute()
+  - BuildSalesOrderIssuePlanAction::execute()
+  - MoveSalesOrderToPackingAction::execute()
+  - PackSalesOrderAction::execute()
+  - CancelPackedSalesOrderAction::execute()
   - SalesOrder::STATUS_OPEN
+  - SalesOrder::STATUS_PACKING
+  - SalesOrder::STATUS_PACKED
+  - SalesOrder::STATUS_SHIPPING
   - SalesOrder::STATUS_COMPLETED
   - sales.orders.status.update
 example_usage: |
-  $completedOrder = $completeSalesOrderAction->execute($salesOrder);
+  $packedOrder = $packSalesOrderAction->execute($salesOrder, $buildSalesOrderIssuePlanAction);

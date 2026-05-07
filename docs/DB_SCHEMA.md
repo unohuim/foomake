@@ -223,8 +223,11 @@ Migrations remain the **sole source of truth**.
 
 - Sales order headers remain editable only while `status` is `DRAFT` or `OPEN`.
 - `COMPLETED` and `CANCELLED` are terminal.
-- Transitioning from `OPEN` to `COMPLETED` may create one stock move per sales-order line.
-- `DRAFT -> OPEN`, `DRAFT -> CANCELLED`, and `OPEN -> CANCELLED` create no stock moves.
+- `OPEN -> PACKING` checks fulfillment availability only, reserves nothing, and creates no stock moves.
+- `PACKING -> PACKED` posts inventory issue stock moves in a single transaction.
+- `PACKED -> SHIPPING` and `SHIPPING -> COMPLETED` create no stock moves.
+- `OPEN -> CANCELLED` and `PACKING -> CANCELLED` create no stock moves.
+- `PACKED -> CANCELLED` appends reversing stock moves and preserves the original issue moves for audit history.
 
 ---
 

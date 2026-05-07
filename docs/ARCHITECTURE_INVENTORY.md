@@ -414,34 +414,44 @@ $line = SalesOrderLine::query()->create([
 
 ---
 
-### Sales Order Completion Inventory Impact
+### Sales Order Packing Inventory Impact
 
-**Name:** Sales Order Completion Inventory Impact  
+**Name:** Sales Order Packing Inventory Impact  
 **Type:** Domain Rule  
 **Location:**  
-- `docs/architecture/sales/SalesOrderCompletionInventoryImpact.yaml`  
-- `app/Actions/Sales/CompleteSalesOrderAction.php`  
-- `app/Http/Controllers/SalesOrderStatusController.php`  
-- `app/Models/StockMove.php`  
+  - `docs/architecture/sales/SalesOrderCompletionInventoryImpact.yaml`  
+  - `app/Actions/Sales/BuildSalesOrderIssuePlanAction.php`  
+  - `app/Actions/Sales/MoveSalesOrderToPackingAction.php`  
+  - `app/Actions/Sales/PackSalesOrderAction.php`  
+  - `app/Actions/Sales/CancelPackedSalesOrderAction.php`  
+  - `app/Http/Controllers/SalesOrderStatusController.php`  
+  - `app/Models/SalesOrder.php`  
+  - `app/Models/StockMove.php`  
 
 **Purpose:**  
-Document the inventory-ledger effects of `OPEN -> COMPLETED` sales-order transitions and the safeguards around transactional posting.
+Document the inventory-ledger effects of the `OPEN -> PACKING -> PACKED -> SHIPPING -> COMPLETED` sales-order lifecycle, including availability checks, transactional issue posting, and packed-order reversals.
 
 **When to Use:**  
-Completing a sales order, posting issue stock moves from sales-order lines, or validating rollback/idempotency expectations.
+Moving a sales order into packing, posting packed inventory issue moves, or cancelling a packed order with reversal moves.
 
 **When Not to Use:**  
-Editable header/line mutations, cancellation flows without inventory impact, or downstream fulfillment/invoicing/payment behavior.
+Editable header/line mutations, shipping/completion transitions without inventory impact, or downstream invoicing/payment behavior.
 
 **Public Interface:**  
-- `CompleteSalesOrderAction::execute()`  
-- `SalesOrder::STATUS_OPEN`  
-- `SalesOrder::STATUS_COMPLETED`  
-- `sales.orders.status.update`  
+  - `BuildSalesOrderIssuePlanAction::execute()`  
+  - `MoveSalesOrderToPackingAction::execute()`  
+  - `PackSalesOrderAction::execute()`  
+  - `CancelPackedSalesOrderAction::execute()`  
+  - `SalesOrder::STATUS_OPEN`  
+  - `SalesOrder::STATUS_PACKING`  
+  - `SalesOrder::STATUS_PACKED`  
+  - `SalesOrder::STATUS_SHIPPING`  
+  - `SalesOrder::STATUS_COMPLETED`  
+  - `sales.orders.status.update`  
 
 **Example Usage:**  
 ```php
-$completedOrder = $completeSalesOrderAction->execute($salesOrder);
+$packedOrder = $packSalesOrderAction->execute($salesOrder, $buildSalesOrderIssuePlanAction);
 ```
 
 ---

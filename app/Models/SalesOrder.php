@@ -24,6 +24,9 @@ class SalesOrder extends Model
 
     public const STATUS_DRAFT = 'DRAFT';
     public const STATUS_OPEN = 'OPEN';
+    public const STATUS_PACKING = 'PACKING';
+    public const STATUS_PACKED = 'PACKED';
+    public const STATUS_SHIPPING = 'SHIPPING';
     public const STATUS_COMPLETED = 'COMPLETED';
     public const STATUS_CANCELLED = 'CANCELLED';
 
@@ -79,6 +82,9 @@ class SalesOrder extends Model
         return [
             self::STATUS_DRAFT,
             self::STATUS_OPEN,
+            self::STATUS_PACKING,
+            self::STATUS_PACKED,
+            self::STATUS_SHIPPING,
             self::STATUS_COMPLETED,
             self::STATUS_CANCELLED,
         ];
@@ -120,11 +126,21 @@ class SalesOrder extends Model
         return [
             self::STATUS_DRAFT => [
                 self::STATUS_OPEN,
-                self::STATUS_CANCELLED,
             ],
             self::STATUS_OPEN => [
-                self::STATUS_COMPLETED,
+                self::STATUS_PACKING,
                 self::STATUS_CANCELLED,
+            ],
+            self::STATUS_PACKING => [
+                self::STATUS_PACKED,
+                self::STATUS_CANCELLED,
+            ],
+            self::STATUS_PACKED => [
+                self::STATUS_SHIPPING,
+                self::STATUS_CANCELLED,
+            ],
+            self::STATUS_SHIPPING => [
+                self::STATUS_COMPLETED,
             ],
             self::STATUS_COMPLETED => [],
             self::STATUS_CANCELLED => [],

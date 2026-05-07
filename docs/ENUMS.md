@@ -133,6 +133,9 @@ Do not introduce new enum values without updating this document.
 
 - `DRAFT`
 - `OPEN`
+- `PACKING`
+- `PACKED`
+- `SHIPPING`
 - `COMPLETED`
 - `CANCELLED`
 
@@ -140,18 +143,29 @@ Do not introduce new enum values without updating this document.
 
 - `DRAFT`: Sales order is editable. Header fields and sales-order lines may be created, updated, or deleted. No inventory impact exists yet.
 - `OPEN`: Sales order remains editable. Header fields and sales-order lines may still be created, updated, or deleted. No inventory impact exists yet.
-- `COMPLETED`: Terminal state. The order is no longer editable. Transitioning from `OPEN` to `COMPLETED` posts inventory issue stock moves.
+- `PACKING`: Operational packing workflow has started. No stock moves have been posted yet.
+- `PACKED`: Inventory consumption has been posted. The order is ready to move to shipping.
+- `SHIPPING`: Carrier pickup or shipment handoff has occurred. No additional inventory impact occurs in this state.
+- `COMPLETED`: Terminal state. Shipment is confirmed complete. No additional inventory impact occurs in this transition.
 - `CANCELLED`: Terminal state. The order is no longer editable. Cancelling never posts inventory issue stock moves.
 
 **Notes:**
 
 - Allowed transitions are:
     - `DRAFT -> OPEN`
-    - `DRAFT -> CANCELLED`
-    - `OPEN -> COMPLETED`
+    - `OPEN -> PACKING`
     - `OPEN -> CANCELLED`
+    - `PACKING -> PACKED`
+    - `PACKING -> CANCELLED`
+    - `PACKED -> SHIPPING`
+    - `PACKED -> CANCELLED`
+    - `SHIPPING -> COMPLETED`
+    - `SHIPPING` cannot be cancelled in this phase
 - `COMPLETED` and `CANCELLED` are terminal.
 - Sales-order headers and lines may only be mutated while the order is `DRAFT` or `OPEN`.
+- `OPEN -> PACKING` checks availability only and creates no stock moves.
+- `PACKING -> PACKED` posts inventory issue stock moves in a single transaction.
+- Cancelling from `PACKED` appends reversing stock moves and preserves the original audit trail.
 - Older roadmap-era statuses such as `CONFIRMED` and `FULFILLED` are not valid statuses.
 
 ---
@@ -201,7 +215,8 @@ Do not introduce new enum values without updating this document.
 
 **Notes:**
 
-- Sales-order completion inventory impact posts `issue` stock moves with `status = POSTED`.
+- Sales-order packed inventory impact posts `issue` stock moves with `status = POSTED`.
+- Cancelling a packed sales order appends reversing stock moves while preserving the original issue moves.
 - Purchase-receipt and inventory-count posting flows also use `POSTED` when the move is ledger-valid.
 
 ---

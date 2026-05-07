@@ -273,6 +273,60 @@ Sales orders must update inventory.
 
 ---
 
+### PR3-SO-006 — Sales Order Lifecycle: Packing / Packed / Shipping
+
+Status: Implemented
+
+**Goal**
+Extend the Sales Order lifecycle with operational statuses.
+
+**Statuses**
+
+- DRAFT
+- OPEN
+- PACKING
+- PACKED
+- SHIPPING
+- COMPLETED
+- CANCELLED
+
+**Rules**
+
+- `OPEN -> PACKING` starts the packing workflow
+- `PACKING -> PACKED` means packing is complete
+- `PACKED` is the point where fulfillment recipe components are consumed
+- `PACKED -> SHIPPING` means carrier pickup or shipment handoff has occurred
+- `SHIPPING -> COMPLETED` means shipment is confirmed complete
+- Fulfillment recipes determine consumed components
+- Make Orders remain manufacturing-only
+- Do not add custom stages in this PR
+- Do not add full task management in this PR unless explicitly scoped later
+
+---
+
+### PR3-SO-007 — Sales Order Workflow Tasks / Checklists
+
+Status: Planned
+
+**Goal**
+Introduce tenant-level sales order workflow checklist and task definitions.
+
+**Rules**
+
+- Add Sales → Settings at the bottom of the Sales menu
+- Sales Settings includes a Workflow section
+- Workflow defines default sales order stages and checklists
+- Each stage can define task definitions required before moving to the next status
+- When a sales order enters a stage, task records are created from that stage’s task definitions
+- Completing a task marks that checklist item complete from the Sales Order view
+- Required tasks must be complete before moving to the next stage
+- Tasks may include assigned user and due date
+- Initial scope is company-level workflow only
+- Product-specific workflow overrides are out of scope for now
+- Do not build a general project-management system
+
+---
+
 ## DOMAIN 3 — External Integration (Post-Inventory Only)
 
 ### PR3-INT-001 — External Product Import Prep
@@ -315,6 +369,29 @@ Prepare the app for ecommerce product imports, starting with WooCommerce, while 
 - Customer import
 - Inventory sync
 - Separate products table or model
+
+---
+
+### PR3-INT-003 — Ecommerce Import → Empty Fulfillment Recipes
+
+Status: Planned
+
+**Goal**
+When ecommerce products are imported, optionally auto-create empty fulfillment recipes for each imported sellable item.
+
+**Rules**
+
+- Imported ecommerce products remain normal Items
+- Ecommerce imports still set `is_sellable = true`
+- Create an empty recipe with `recipe_type = fulfillment`
+- Output item is the imported product item
+- Recipe name defaults to the imported item display name
+- `output_quantity = 1.000000`
+- No recipe lines are created
+- Recipe is treated as incomplete until lines are added
+- This must be optional during import, likely default checked
+- Do not create manufacturing recipes from ecommerce import
+- Do not introduce fulfillment execution behavior in this PR
 
 ---
 

@@ -237,7 +237,7 @@ it('3. authorized user can view the sales orders index and receives ajax payload
 
     expect($payload['storeUrl'] ?? null)->toBe(route('sales.orders.store'))
         ->and($payload['updateUrlBase'] ?? null)->toBe(url('/sales/orders'))
-        ->and($payload['statuses'] ?? null)->toBe(['DRAFT', 'OPEN', 'COMPLETED', 'CANCELLED']);
+        ->and($payload['statuses'] ?? null)->toBe(['DRAFT', 'OPEN', 'PACKING', 'PACKED', 'SHIPPING', 'COMPLETED', 'CANCELLED']);
 });
 
 it('3a. sales navigation appears before other domain navigation groups', function () {

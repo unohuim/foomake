@@ -2,13 +2,14 @@
 
 declare(strict_types=1);
 
-use App\Models\Item;
 use App\Models\Permission;
 use App\Models\Role;
+use App\Models\SalesOrder;
 use App\Models\Tenant;
 use App\Models\Uom;
 use App\Models\UomCategory;
 use App\Models\User;
+use App\Models\Item;
 use Illuminate\Support\Facades\DB;
 
 beforeEach(function () {
@@ -16,8 +17,6 @@ beforeEach(function () {
     $this->userCounter = 1;
     $this->roleCounter = 1;
     $this->customerCounter = 1;
-    $this->contactCounter = 1;
-    $this->orderCounter = 1;
     $this->uomCounter = 1;
     $this->itemCounter = 1;
 
@@ -48,7 +47,7 @@ beforeEach(function () {
 
     $this->grantPermission = function (User $user, string $slug): void {
         $permission = Permission::query()->firstOrCreate(['slug' => $slug]);
-        $role = Role::query()->create(['name' => 'role-lifecycle-' . $this->roleCounter]);
+        $role = Role::query()->create(['name' => 'sales-order-lifecycle-role-' . $this->roleCounter]);
 
         $this->roleCounter++;
 
@@ -82,47 +81,21 @@ beforeEach(function () {
         return DB::table('customers')->where('id', $customerId)->first();
     };
 
-    $this->createContact = function (Tenant $tenant, int $customerId, array $attributes = []): object {
-        $contactId = DB::table('customer_contacts')->insertGetId(array_merge([
-            'tenant_id' => $tenant->id,
-            'customer_id' => $customerId,
-            'first_name' => 'Contact',
-            'last_name' => (string) $this->contactCounter,
-            'email' => 'lifecycle-contact' . $this->contactCounter . '@example.test',
-            'phone' => '555-100' . $this->contactCounter,
-            'role' => 'Buyer',
-            'is_primary' => false,
-            'created_at' => now(),
-            'updated_at' => now(),
-        ], $attributes));
-
-        $this->contactCounter++;
-
-        return DB::table('customer_contacts')->where('id', $contactId)->first();
-    };
-
     $this->createSalesOrder = function (
         Tenant $tenant,
         int $customerId,
-        ?int $contactId = null,
         array $attributes = []
-    ): object {
-        $orderId = DB::table('sales_orders')->insertGetId(array_merge([
+    ): SalesOrder {
+        return SalesOrder::query()->create(array_merge([
             'tenant_id' => $tenant->id,
             'customer_id' => $customerId,
-            'contact_id' => $contactId,
-            'status' => 'DRAFT',
-            'created_at' => now(),
-            'updated_at' => now(),
+            'contact_id' => null,
+            'status' => SalesOrder::STATUS_DRAFT,
         ], $attributes));
-
-        $this->orderCounter++;
-
-        return DB::table('sales_orders')->where('id', $orderId)->first();
     };
 
     $this->makeUom = function (Tenant $tenant, array $attributes = []): Uom {
-        $symbol = $attributes['symbol'] ?? 'SOLC-UOM-' . $this->uomCounter;
+        $symbol = $attributes['symbol'] ?? 'SOL-UOM-' . $this->uomCounter;
         $existing = Uom::query()
             ->where('tenant_id', $tenant->id)
             ->where('symbol', $symbol)
@@ -134,13 +107,13 @@ beforeEach(function () {
 
         $category = UomCategory::query()->create([
             'tenant_id' => $tenant->id,
-            'name' => $attributes['category_name'] ?? 'SOLC Category ' . $this->uomCounter,
+            'name' => $attributes['category_name'] ?? 'Lifecycle Category ' . $this->uomCounter,
         ]);
 
         $uom = Uom::query()->create([
             'tenant_id' => $tenant->id,
             'uom_category_id' => $category->id,
-            'name' => $attributes['name'] ?? 'SOLC UOM ' . $this->uomCounter,
+            'name' => $attributes['name'] ?? 'Lifecycle UOM ' . $this->uomCounter,
             'symbol' => $symbol,
         ]);
 
@@ -154,6 +127,7 @@ beforeEach(function () {
             'tenant_id' => $tenant->id,
             'name' => 'Item ' . $this->itemCounter,
             'base_uom_id' => $uom->id,
+            'is_active' => true,
             'is_purchasable' => false,
             'is_sellable' => true,
             'is_manufacturable' => false,
@@ -166,16 +140,11 @@ beforeEach(function () {
         return $item;
     };
 
-    $this->createSalesOrderLine = function (
-        Tenant $tenant,
-        int $salesOrderId,
-        int $itemId,
-        array $attributes = []
-    ): object {
-        $lineId = DB::table('sales_order_lines')->insertGetId(array_merge([
+    $this->createLine = function (Tenant $tenant, SalesOrder $order, Item $item, array $attributes = []): void {
+        DB::table('sales_order_lines')->insert(array_merge([
             'tenant_id' => $tenant->id,
-            'sales_order_id' => $salesOrderId,
-            'item_id' => $itemId,
+            'sales_order_id' => $order->id,
+            'item_id' => $item->id,
             'quantity' => '1.000000',
             'unit_price_cents' => 1000,
             'unit_price_currency_code' => 'USD',
@@ -183,762 +152,470 @@ beforeEach(function () {
             'created_at' => now(),
             'updated_at' => now(),
         ], $attributes));
-
-        return DB::table('sales_order_lines')->where('id', $lineId)->first();
     };
 
-    $this->fetchSalesOrder = function (int $orderId): ?object {
-        return DB::table('sales_orders')->where('id', $orderId)->first();
+    $this->createReceipt = function (Tenant $tenant, Item $item, string $quantity): void {
+        DB::table('stock_moves')->insert([
+            'tenant_id' => $tenant->id,
+            'item_id' => $item->id,
+            'uom_id' => $item->base_uom_id,
+            'quantity' => bcadd($quantity, '0', 6),
+            'type' => 'receipt',
+            'status' => 'POSTED',
+            'source_type' => null,
+            'source_id' => null,
+            'created_at' => now(),
+        ]);
     };
 
-    $this->countStockMovesForTenant = function (Tenant $tenant): int {
-        return DB::table('stock_moves')->where('tenant_id', $tenant->id)->count();
+    $this->fetchOrder = fn (SalesOrder $order): SalesOrder => SalesOrder::query()->findOrFail($order->id);
+
+    $this->extractPayload = function ($response, string $payloadId): array {
+        $html = $response->getContent();
+        $pattern = '/<script type="application\\/json" id="' . preg_quote($payloadId, '/') . '">\\s*(.*?)\\s*<\\/script>/s';
+
+        preg_match($pattern, $html, $matches);
+
+        $payload = json_decode($matches[1] ?? '[]', true);
+
+        return is_array($payload) ? $payload : [];
     };
 
-    $this->assertStatusValidationErrors = function ($response): void {
-        $response->assertJsonStructure([
+    $this->transitionOrder = function (User $user, SalesOrder $order, string $status) {
+        return $this->actingAs($user)->patchJson(route('sales.orders.status.update', $order), [
+            'status' => $status,
+        ]);
+    };
+});
+
+it('1. draft to open still works', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $customer = ($this->createCustomer)($tenant);
+    $order = ($this->createSalesOrder)($tenant, $customer->id);
+    ($this->grantPermission)($user, 'sales-sales-orders-manage');
+
+    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_OPEN)
+        ->assertOk()
+        ->assertJsonPath('data.status', SalesOrder::STATUS_OPEN);
+});
+
+it('2. open to packing works', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $customer = ($this->createCustomer)($tenant);
+    $uom = ($this->makeUom)($tenant);
+    $item = ($this->createItem)($tenant, $uom);
+    $order = ($this->createSalesOrder)($tenant, $customer->id, ['status' => SalesOrder::STATUS_OPEN]);
+    ($this->createLine)($tenant, $order, $item);
+    ($this->createReceipt)($tenant, $item, '1.000000');
+    ($this->grantPermission)($user, 'sales-sales-orders-manage');
+
+    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKING)
+        ->assertOk()
+        ->assertJsonPath('data.status', SalesOrder::STATUS_PACKING);
+});
+
+it('3. packing to packed works', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $customer = ($this->createCustomer)($tenant);
+    $uom = ($this->makeUom)($tenant);
+    $item = ($this->createItem)($tenant, $uom);
+    $order = ($this->createSalesOrder)($tenant, $customer->id, ['status' => SalesOrder::STATUS_OPEN]);
+    ($this->createLine)($tenant, $order, $item);
+    ($this->createReceipt)($tenant, $item, '1.000000');
+    ($this->grantPermission)($user, 'sales-sales-orders-manage');
+
+    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKING)->assertOk();
+    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKED)
+        ->assertOk()
+        ->assertJsonPath('data.status', SalesOrder::STATUS_PACKED);
+});
+
+it('4. packed to shipping works', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $customer = ($this->createCustomer)($tenant);
+    $order = ($this->createSalesOrder)($tenant, $customer->id, ['status' => SalesOrder::STATUS_PACKED]);
+    ($this->grantPermission)($user, 'sales-sales-orders-manage');
+
+    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_SHIPPING)
+        ->assertOk()
+        ->assertJsonPath('data.status', SalesOrder::STATUS_SHIPPING);
+});
+
+it('5. shipping to completed works', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $customer = ($this->createCustomer)($tenant);
+    $order = ($this->createSalesOrder)($tenant, $customer->id, ['status' => SalesOrder::STATUS_SHIPPING]);
+    ($this->grantPermission)($user, 'sales-sales-orders-manage');
+
+    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_COMPLETED)
+        ->assertOk()
+        ->assertJsonPath('data.status', SalesOrder::STATUS_COMPLETED);
+});
+
+it('6. open to packed is rejected', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $customer = ($this->createCustomer)($tenant);
+    $order = ($this->createSalesOrder)($tenant, $customer->id, ['status' => SalesOrder::STATUS_OPEN]);
+    ($this->grantPermission)($user, 'sales-sales-orders-manage');
+
+    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKED)
+        ->assertStatus(422)
+        ->assertJsonPath('errors.status.0', 'Status transition is not allowed.');
+});
+
+it('7. open to shipping is rejected', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $customer = ($this->createCustomer)($tenant);
+    $order = ($this->createSalesOrder)($tenant, $customer->id, ['status' => SalesOrder::STATUS_OPEN]);
+    ($this->grantPermission)($user, 'sales-sales-orders-manage');
+
+    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_SHIPPING)->assertStatus(422);
+});
+
+it('8. packing to shipping is rejected', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $customer = ($this->createCustomer)($tenant);
+    $order = ($this->createSalesOrder)($tenant, $customer->id, ['status' => SalesOrder::STATUS_PACKING]);
+    ($this->grantPermission)($user, 'sales-sales-orders-manage');
+
+    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_SHIPPING)->assertStatus(422);
+});
+
+it('9. packed to completed is rejected', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $customer = ($this->createCustomer)($tenant);
+    $order = ($this->createSalesOrder)($tenant, $customer->id, ['status' => SalesOrder::STATUS_PACKED]);
+    ($this->grantPermission)($user, 'sales-sales-orders-manage');
+
+    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_COMPLETED)->assertStatus(422);
+});
+
+it('10. completed is terminal', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $customer = ($this->createCustomer)($tenant);
+    $order = ($this->createSalesOrder)($tenant, $customer->id, ['status' => SalesOrder::STATUS_COMPLETED]);
+    ($this->grantPermission)($user, 'sales-sales-orders-manage');
+
+    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_CANCELLED)->assertStatus(422);
+});
+
+it('11. cancelled is terminal', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $customer = ($this->createCustomer)($tenant);
+    $order = ($this->createSalesOrder)($tenant, $customer->id, ['status' => SalesOrder::STATUS_CANCELLED]);
+    ($this->grantPermission)($user, 'sales-sales-orders-manage');
+
+    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_OPEN)->assertStatus(422);
+});
+
+it('31. packed to shipping is manual with no extra payload requirements', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $customer = ($this->createCustomer)($tenant);
+    $order = ($this->createSalesOrder)($tenant, $customer->id, ['status' => SalesOrder::STATUS_PACKED]);
+    ($this->grantPermission)($user, 'sales-sales-orders-manage');
+
+    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_SHIPPING)
+        ->assertOk()
+        ->assertJsonPath('data.status', SalesOrder::STATUS_SHIPPING);
+});
+
+it('32. shipping to completed is manual with no extra payload requirements', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $customer = ($this->createCustomer)($tenant);
+    $order = ($this->createSalesOrder)($tenant, $customer->id, ['status' => SalesOrder::STATUS_SHIPPING]);
+    ($this->grantPermission)($user, 'sales-sales-orders-manage');
+
+    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_COMPLETED)
+        ->assertOk()
+        ->assertJsonPath('data.status', SalesOrder::STATUS_COMPLETED);
+});
+
+it('35. shipping cannot be cancelled in this pr', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $customer = ($this->createCustomer)($tenant);
+    $order = ($this->createSalesOrder)($tenant, $customer->id, ['status' => SalesOrder::STATUS_SHIPPING]);
+    ($this->grantPermission)($user, 'sales-sales-orders-manage');
+
+    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_CANCELLED)->assertStatus(422);
+});
+
+it('36. open to cancelled works', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $customer = ($this->createCustomer)($tenant);
+    $order = ($this->createSalesOrder)($tenant, $customer->id, ['status' => SalesOrder::STATUS_OPEN]);
+    ($this->grantPermission)($user, 'sales-sales-orders-manage');
+
+    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_CANCELLED)
+        ->assertOk()
+        ->assertJsonPath('data.status', SalesOrder::STATUS_CANCELLED);
+});
+
+it('37. packing to cancelled works', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $customer = ($this->createCustomer)($tenant);
+    $order = ($this->createSalesOrder)($tenant, $customer->id, ['status' => SalesOrder::STATUS_PACKING]);
+    ($this->grantPermission)($user, 'sales-sales-orders-manage');
+
+    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_CANCELLED)
+        ->assertOk()
+        ->assertJsonPath('data.status', SalesOrder::STATUS_CANCELLED);
+});
+
+it('38. packed to cancelled works', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $customer = ($this->createCustomer)($tenant);
+    $order = ($this->createSalesOrder)($tenant, $customer->id, ['status' => SalesOrder::STATUS_PACKED]);
+    ($this->grantPermission)($user, 'sales-sales-orders-manage');
+
+    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_CANCELLED)
+        ->assertOk()
+        ->assertJsonPath('data.status', SalesOrder::STATUS_CANCELLED);
+});
+
+it('40. cancellation from shipping is blocked', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $customer = ($this->createCustomer)($tenant);
+    $order = ($this->createSalesOrder)($tenant, $customer->id, ['status' => SalesOrder::STATUS_SHIPPING]);
+    ($this->grantPermission)($user, 'sales-sales-orders-manage');
+
+    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_CANCELLED)->assertStatus(422);
+});
+
+it('41. cancellation from completed is blocked', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $customer = ($this->createCustomer)($tenant);
+    $order = ($this->createSalesOrder)($tenant, $customer->id, ['status' => SalesOrder::STATUS_COMPLETED]);
+    ($this->grantPermission)($user, 'sales-sales-orders-manage');
+
+    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_CANCELLED)->assertStatus(422);
+});
+
+it('45. sales order manage permission allows lifecycle transitions', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $customer = ($this->createCustomer)($tenant);
+    $order = ($this->createSalesOrder)($tenant, $customer->id);
+    ($this->grantPermission)($user, 'sales-sales-orders-manage');
+
+    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_OPEN)->assertOk();
+});
+
+it('46. unauthorized user cannot transition lifecycle statuses', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $customer = ($this->createCustomer)($tenant);
+    $order = ($this->createSalesOrder)($tenant, $customer->id);
+
+    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_OPEN)->assertForbidden();
+});
+
+it('47. unauthenticated user cannot transition lifecycle statuses', function () {
+    $tenant = ($this->makeTenant)();
+    $customer = ($this->createCustomer)($tenant);
+    $order = ($this->createSalesOrder)($tenant, $customer->id);
+
+    $this->patchJson(route('sales.orders.status.update', $order), [
+        'status' => SalesOrder::STATUS_OPEN,
+    ])->assertUnauthorized();
+});
+
+it('48. no new permission is required for lifecycle transitions', function () {
+    $permissionSlugs = Permission::query()->pluck('slug')->all();
+
+    expect($permissionSlugs)->not->toContain('sales-sales-orders-pack')
+        ->and($permissionSlugs)->not->toContain('sales-sales-orders-ship')
+        ->and($permissionSlugs)->not->toContain('sales-sales-orders-complete');
+});
+
+it('49. sales order view payload exposes only valid next lifecycle buttons', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $customer = ($this->createCustomer)($tenant);
+    $draft = ($this->createSalesOrder)($tenant, $customer->id, ['status' => SalesOrder::STATUS_DRAFT]);
+    $open = ($this->createSalesOrder)($tenant, $customer->id, ['status' => SalesOrder::STATUS_OPEN]);
+    $packing = ($this->createSalesOrder)($tenant, $customer->id, ['status' => SalesOrder::STATUS_PACKING]);
+    $packed = ($this->createSalesOrder)($tenant, $customer->id, ['status' => SalesOrder::STATUS_PACKED]);
+    $shipping = ($this->createSalesOrder)($tenant, $customer->id, ['status' => SalesOrder::STATUS_SHIPPING]);
+    ($this->grantPermission)($user, 'sales-sales-orders-manage');
+
+    $response = $this->actingAs($user)->get(route('sales.orders.index'))->assertOk();
+    $payload = ($this->extractPayload)($response, 'sales-orders-index-payload');
+    $orders = collect($payload['orders'] ?? [])->keyBy('id');
+
+    expect($orders[$draft->id]['available_status_transitions'] ?? null)->toBe([SalesOrder::STATUS_OPEN])
+        ->and($orders[$open->id]['available_status_transitions'] ?? null)->toBe([SalesOrder::STATUS_PACKING, SalesOrder::STATUS_CANCELLED])
+        ->and($orders[$packing->id]['available_status_transitions'] ?? null)->toBe([SalesOrder::STATUS_PACKED, SalesOrder::STATUS_CANCELLED])
+        ->and($orders[$packed->id]['available_status_transitions'] ?? null)->toBe([SalesOrder::STATUS_SHIPPING, SalesOrder::STATUS_CANCELLED])
+        ->and($orders[$shipping->id]['available_status_transitions'] ?? null)->toBe([SalesOrder::STATUS_COMPLETED]);
+});
+
+it('50. open shows move to packing', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $customer = ($this->createCustomer)($tenant);
+    $order = ($this->createSalesOrder)($tenant, $customer->id, ['status' => SalesOrder::STATUS_OPEN]);
+    ($this->grantPermission)($user, 'sales-sales-orders-manage');
+
+    $response = $this->actingAs($user)->get(route('sales.orders.index'))->assertOk();
+    $payload = ($this->extractPayload)($response, 'sales-orders-index-payload');
+    $orderPayload = collect($payload['orders'] ?? [])->firstWhere('id', $order->id);
+
+    expect($orderPayload['available_status_transitions'] ?? [])->toContain(SalesOrder::STATUS_PACKING);
+});
+
+it('51. packing shows move to packed', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $customer = ($this->createCustomer)($tenant);
+    $order = ($this->createSalesOrder)($tenant, $customer->id, ['status' => SalesOrder::STATUS_PACKING]);
+    ($this->grantPermission)($user, 'sales-sales-orders-manage');
+
+    $response = $this->actingAs($user)->get(route('sales.orders.index'))->assertOk();
+    $payload = ($this->extractPayload)($response, 'sales-orders-index-payload');
+    $orderPayload = collect($payload['orders'] ?? [])->firstWhere('id', $order->id);
+
+    expect($orderPayload['available_status_transitions'] ?? [])->toContain(SalesOrder::STATUS_PACKED);
+});
+
+it('52. packed shows move to shipping', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $customer = ($this->createCustomer)($tenant);
+    $order = ($this->createSalesOrder)($tenant, $customer->id, ['status' => SalesOrder::STATUS_PACKED]);
+    ($this->grantPermission)($user, 'sales-sales-orders-manage');
+
+    $response = $this->actingAs($user)->get(route('sales.orders.index'))->assertOk();
+    $payload = ($this->extractPayload)($response, 'sales-orders-index-payload');
+    $orderPayload = collect($payload['orders'] ?? [])->firstWhere('id', $order->id);
+
+    expect($orderPayload['available_status_transitions'] ?? [])->toContain(SalesOrder::STATUS_SHIPPING);
+});
+
+it('53. shipping shows move to completed', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $customer = ($this->createCustomer)($tenant);
+    $order = ($this->createSalesOrder)($tenant, $customer->id, ['status' => SalesOrder::STATUS_SHIPPING]);
+    ($this->grantPermission)($user, 'sales-sales-orders-manage');
+
+    $response = $this->actingAs($user)->get(route('sales.orders.index'))->assertOk();
+    $payload = ($this->extractPayload)($response, 'sales-orders-index-payload');
+    $orderPayload = collect($payload['orders'] ?? [])->firstWhere('id', $order->id);
+
+    expect($orderPayload['available_status_transitions'] ?? [])->toContain(SalesOrder::STATUS_COMPLETED);
+});
+
+it('54. cancel action appears only where allowed', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $customer = ($this->createCustomer)($tenant);
+    $open = ($this->createSalesOrder)($tenant, $customer->id, ['status' => SalesOrder::STATUS_OPEN]);
+    $packing = ($this->createSalesOrder)($tenant, $customer->id, ['status' => SalesOrder::STATUS_PACKING]);
+    $packed = ($this->createSalesOrder)($tenant, $customer->id, ['status' => SalesOrder::STATUS_PACKED]);
+    $shipping = ($this->createSalesOrder)($tenant, $customer->id, ['status' => SalesOrder::STATUS_SHIPPING]);
+    ($this->grantPermission)($user, 'sales-sales-orders-manage');
+
+    $response = $this->actingAs($user)->get(route('sales.orders.index'))->assertOk();
+    $payload = ($this->extractPayload)($response, 'sales-orders-index-payload');
+    $orders = collect($payload['orders'] ?? [])->keyBy('id');
+
+    expect($orders[$open->id]['available_status_transitions'] ?? [])->toContain(SalesOrder::STATUS_CANCELLED)
+        ->and($orders[$packing->id]['available_status_transitions'] ?? [])->toContain(SalesOrder::STATUS_CANCELLED)
+        ->and($orders[$packed->id]['available_status_transitions'] ?? [])->toContain(SalesOrder::STATUS_CANCELLED)
+        ->and($orders[$shipping->id]['available_status_transitions'] ?? [])->not->toContain(SalesOrder::STATUS_CANCELLED);
+});
+
+it('55. blocked transitions return clear json user facing errors', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $customer = ($this->createCustomer)($tenant);
+    $order = ($this->createSalesOrder)($tenant, $customer->id, ['status' => SalesOrder::STATUS_OPEN]);
+    ($this->grantPermission)($user, 'sales-sales-orders-manage');
+
+    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_SHIPPING)
+        ->assertStatus(422)
+        ->assertJson([
+            'message' => 'Status transition is not allowed.',
+        ])
+        ->assertJsonStructure([
             'message',
             'errors' => [
                 'status',
             ],
         ]);
-
-        expect($response->json('errors.status'))->toBeArray();
-    };
-
-    $this->assertOrderValidationErrors = function ($response): void {
-        $response->assertJsonStructure([
-            'message',
-            'errors' => [
-                'customer_id',
-                'contact_id',
-            ],
-        ]);
-
-        expect($response->json('errors.customer_id'))->toBeArray()
-            ->and($response->json('errors.contact_id'))->toBeArray();
-    };
-
-    $this->assertLineValidationErrors = function ($response): void {
-        $response->assertJsonStructure([
-            'message',
-            'errors' => [
-                'item_id',
-                'quantity',
-            ],
-        ]);
-
-        expect($response->json('errors.item_id'))->toBeArray()
-            ->and($response->json('errors.quantity'))->toBeArray();
-    };
 });
 
-it('1. sales order may be created with draft status by default', function () {
+it('56. existing sales order create edit behavior still works', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
-    $customer = ($this->createCustomer)($tenant);
-
+    $customer = ($this->createCustomer)($tenant, ['name' => 'Original']);
+    $replacementCustomer = ($this->createCustomer)($tenant, ['name' => 'Replacement']);
     ($this->grantPermission)($user, 'sales-sales-orders-manage');
 
-    $response = $this->actingAs($user)
+    $createResponse = $this->actingAs($user)
         ->postJson(route('sales.orders.store'), [
             'customer_id' => $customer->id,
         ])->assertCreated();
 
-    $order = ($this->fetchSalesOrder)((int) $response->json('data.id'));
+    $order = SalesOrder::query()->findOrFail((int) $createResponse->json('data.id'));
 
-    expect($order?->status)->toBe('DRAFT');
-});
-
-it('2. allowed statuses include draft open completed and cancelled', function () {
-    $tenant = ($this->makeTenant)();
-    $user = ($this->makeUser)($tenant);
-    $customer = ($this->createCustomer)($tenant);
-
-    ($this->grantPermission)($user, 'sales-sales-orders-manage');
-
-    $response = $this->actingAs($user)
-        ->get(route('sales.orders.index'))
-        ->assertOk();
-
-    preg_match('/<script type="application\\/json" id="sales-orders-index-payload">\\s*(.*?)\\s*<\\/script>/s', $response->getContent(), $matches);
-    $payload = json_decode($matches[1] ?? '[]', true);
-
-    expect($payload['statuses'] ?? null)->toBe([
-        'DRAFT',
-        'OPEN',
-        'COMPLETED',
-        'CANCELLED',
-    ]);
-});
-
-it('3. invalid statuses are rejected', function () {
-    $tenant = ($this->makeTenant)();
-    $user = ($this->makeUser)($tenant);
-    $customer = ($this->createCustomer)($tenant);
-    $order = ($this->createSalesOrder)($tenant, $customer->id);
-
-    ($this->grantPermission)($user, 'sales-sales-orders-manage');
-
-    $response = $this->actingAs($user)
-        ->patchJson(route('sales.orders.status.update', $order->id), [
-            'status' => 'INVALID',
-        ])->assertStatus(422);
-
-    ($this->assertStatusValidationErrors)($response);
-});
-
-it('4. old roadmap statuses confirmed and fulfilled are rejected', function () {
-    $tenant = ($this->makeTenant)();
-    $user = ($this->makeUser)($tenant);
-    $customer = ($this->createCustomer)($tenant);
-    $order = ($this->createSalesOrder)($tenant, $customer->id);
-
-    ($this->grantPermission)($user, 'sales-sales-orders-manage');
-
-    $confirmedResponse = $this->actingAs($user)
-        ->patchJson(route('sales.orders.status.update', $order->id), [
-            'status' => 'CONFIRMED',
-        ])->assertStatus(422);
-
-    ($this->assertStatusValidationErrors)($confirmedResponse);
-
-    $fulfilledResponse = $this->actingAs($user)
-        ->patchJson(route('sales.orders.status.update', $order->id), [
-            'status' => 'FULFILLED',
-        ])->assertStatus(422);
-
-    ($this->assertStatusValidationErrors)($fulfilledResponse);
-});
-
-it('5. authorized user can change draft to open', function () {
-    $tenant = ($this->makeTenant)();
-    $user = ($this->makeUser)($tenant);
-    $customer = ($this->createCustomer)($tenant);
-    $order = ($this->createSalesOrder)($tenant, $customer->id);
-
-    ($this->grantPermission)($user, 'sales-sales-orders-manage');
-
-    $response = $this->actingAs($user)
-        ->patchJson(route('sales.orders.status.update', $order->id), [
-            'status' => 'OPEN',
+    $this->actingAs($user)
+        ->patchJson(route('sales.orders.update', $order), [
+            'customer_id' => $replacementCustomer->id,
         ])->assertOk();
 
-    expect($response->json('data.status'))->toBe('OPEN')
-        ->and(($this->fetchSalesOrder)($order->id)?->status)->toBe('OPEN');
+    expect($order->fresh()->customer_id)->toBe($replacementCustomer->id);
 });
 
-it('6. authorized user can change draft to cancelled', function () {
+it('57. existing sales order line behavior still works', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
     $customer = ($this->createCustomer)($tenant);
-    $order = ($this->createSalesOrder)($tenant, $customer->id);
-
-    ($this->grantPermission)($user, 'sales-sales-orders-manage');
-
-    $this->actingAs($user)
-        ->patchJson(route('sales.orders.status.update', $order->id), [
-            'status' => 'CANCELLED',
-        ])->assertOk()
-        ->assertJsonPath('data.status', 'CANCELLED');
-
-    expect(($this->fetchSalesOrder)($order->id)?->status)->toBe('CANCELLED');
-});
-
-it('7. authorized user can change open to completed', function () {
-    $tenant = ($this->makeTenant)();
-    $user = ($this->makeUser)($tenant);
-    $customer = ($this->createCustomer)($tenant);
-    $order = ($this->createSalesOrder)($tenant, $customer->id, null, ['status' => 'OPEN']);
-
-    ($this->grantPermission)($user, 'sales-sales-orders-manage');
-
-    $this->actingAs($user)
-        ->patchJson(route('sales.orders.status.update', $order->id), [
-            'status' => 'COMPLETED',
-        ])->assertOk()
-        ->assertJsonPath('data.status', 'COMPLETED');
-
-    expect(($this->fetchSalesOrder)($order->id)?->status)->toBe('COMPLETED');
-});
-
-it('8. authorized user can change open to cancelled', function () {
-    $tenant = ($this->makeTenant)();
-    $user = ($this->makeUser)($tenant);
-    $customer = ($this->createCustomer)($tenant);
-    $order = ($this->createSalesOrder)($tenant, $customer->id, null, ['status' => 'OPEN']);
-
-    ($this->grantPermission)($user, 'sales-sales-orders-manage');
-
-    $this->actingAs($user)
-        ->patchJson(route('sales.orders.status.update', $order->id), [
-            'status' => 'CANCELLED',
-        ])->assertOk()
-        ->assertJsonPath('data.status', 'CANCELLED');
-
-    expect(($this->fetchSalesOrder)($order->id)?->status)->toBe('CANCELLED');
-});
-
-it('9. draft cannot change directly to completed', function () {
-    $tenant = ($this->makeTenant)();
-    $user = ($this->makeUser)($tenant);
-    $customer = ($this->createCustomer)($tenant);
-    $order = ($this->createSalesOrder)($tenant, $customer->id);
-
-    ($this->grantPermission)($user, 'sales-sales-orders-manage');
-
-    $response = $this->actingAs($user)
-        ->patchJson(route('sales.orders.status.update', $order->id), [
-            'status' => 'COMPLETED',
-        ])->assertStatus(422);
-
-    ($this->assertStatusValidationErrors)($response);
-    expect(($this->fetchSalesOrder)($order->id)?->status)->toBe('DRAFT');
-});
-
-it('10. open cannot change back to draft', function () {
-    $tenant = ($this->makeTenant)();
-    $user = ($this->makeUser)($tenant);
-    $customer = ($this->createCustomer)($tenant);
-    $order = ($this->createSalesOrder)($tenant, $customer->id, null, ['status' => 'OPEN']);
-
-    ($this->grantPermission)($user, 'sales-sales-orders-manage');
-
-    $response = $this->actingAs($user)
-        ->patchJson(route('sales.orders.status.update', $order->id), [
-            'status' => 'DRAFT',
-        ])->assertStatus(422);
-
-    ($this->assertStatusValidationErrors)($response);
-    expect(($this->fetchSalesOrder)($order->id)?->status)->toBe('OPEN');
-});
-
-it('11. completed cannot change to draft', function () {
-    $tenant = ($this->makeTenant)();
-    $user = ($this->makeUser)($tenant);
-    $customer = ($this->createCustomer)($tenant);
-    $order = ($this->createSalesOrder)($tenant, $customer->id, null, ['status' => 'COMPLETED']);
-
-    ($this->grantPermission)($user, 'sales-sales-orders-manage');
-
-    $response = $this->actingAs($user)
-        ->patchJson(route('sales.orders.status.update', $order->id), [
-            'status' => 'DRAFT',
-        ])->assertStatus(422);
-
-    ($this->assertStatusValidationErrors)($response);
-});
-
-it('12. completed cannot change to open', function () {
-    $tenant = ($this->makeTenant)();
-    $user = ($this->makeUser)($tenant);
-    $customer = ($this->createCustomer)($tenant);
-    $order = ($this->createSalesOrder)($tenant, $customer->id, null, ['status' => 'COMPLETED']);
-
-    ($this->grantPermission)($user, 'sales-sales-orders-manage');
-
-    $response = $this->actingAs($user)
-        ->patchJson(route('sales.orders.status.update', $order->id), [
-            'status' => 'OPEN',
-        ])->assertStatus(422);
-
-    ($this->assertStatusValidationErrors)($response);
-});
-
-it('13. completed cannot change to cancelled', function () {
-    $tenant = ($this->makeTenant)();
-    $user = ($this->makeUser)($tenant);
-    $customer = ($this->createCustomer)($tenant);
-    $order = ($this->createSalesOrder)($tenant, $customer->id, null, ['status' => 'COMPLETED']);
-
-    ($this->grantPermission)($user, 'sales-sales-orders-manage');
-
-    $response = $this->actingAs($user)
-        ->patchJson(route('sales.orders.status.update', $order->id), [
-            'status' => 'CANCELLED',
-        ])->assertStatus(422);
-
-    ($this->assertStatusValidationErrors)($response);
-});
-
-it('14. cancelled cannot change to draft', function () {
-    $tenant = ($this->makeTenant)();
-    $user = ($this->makeUser)($tenant);
-    $customer = ($this->createCustomer)($tenant);
-    $order = ($this->createSalesOrder)($tenant, $customer->id, null, ['status' => 'CANCELLED']);
-
-    ($this->grantPermission)($user, 'sales-sales-orders-manage');
-
-    $response = $this->actingAs($user)
-        ->patchJson(route('sales.orders.status.update', $order->id), [
-            'status' => 'DRAFT',
-        ])->assertStatus(422);
-
-    ($this->assertStatusValidationErrors)($response);
-});
-
-it('15. cancelled cannot change to open', function () {
-    $tenant = ($this->makeTenant)();
-    $user = ($this->makeUser)($tenant);
-    $customer = ($this->createCustomer)($tenant);
-    $order = ($this->createSalesOrder)($tenant, $customer->id, null, ['status' => 'CANCELLED']);
-
-    ($this->grantPermission)($user, 'sales-sales-orders-manage');
-
-    $response = $this->actingAs($user)
-        ->patchJson(route('sales.orders.status.update', $order->id), [
-            'status' => 'OPEN',
-        ])->assertStatus(422);
-
-    ($this->assertStatusValidationErrors)($response);
-});
-
-it('16. cancelled cannot change to completed', function () {
-    $tenant = ($this->makeTenant)();
-    $user = ($this->makeUser)($tenant);
-    $customer = ($this->createCustomer)($tenant);
-    $order = ($this->createSalesOrder)($tenant, $customer->id, null, ['status' => 'CANCELLED']);
-
-    ($this->grantPermission)($user, 'sales-sales-orders-manage');
-
-    $response = $this->actingAs($user)
-        ->patchJson(route('sales.orders.status.update', $order->id), [
-            'status' => 'COMPLETED',
-        ])->assertStatus(422);
-
-    ($this->assertStatusValidationErrors)($response);
-});
-
-it('17. unauthorized user cannot change sales order status', function () {
-    $tenant = ($this->makeTenant)();
-    $user = ($this->makeUser)($tenant);
-    $customer = ($this->createCustomer)($tenant);
-    $order = ($this->createSalesOrder)($tenant, $customer->id);
-
-    $this->actingAs($user)
-        ->patchJson(route('sales.orders.status.update', $order->id), [
-            'status' => 'OPEN',
-        ])->assertForbidden();
-});
-
-it('18. cross tenant user cannot change another tenants sales order status', function () {
-    $tenant = ($this->makeTenant)();
-    $otherTenant = ($this->makeTenant)();
-    $user = ($this->makeUser)($tenant);
-    $otherCustomer = ($this->createCustomer)($otherTenant);
-    $otherOrder = ($this->createSalesOrder)($otherTenant, $otherCustomer->id);
-
-    ($this->grantPermission)($user, 'sales-sales-orders-manage');
-
-    $this->actingAs($user)
-        ->patchJson(route('sales.orders.status.update', $otherOrder->id), [
-            'status' => 'OPEN',
-        ])->assertNotFound();
-});
-
-it('19. valid status change returns json success and does not redirect', function () {
-    $tenant = ($this->makeTenant)();
-    $user = ($this->makeUser)($tenant);
-    $customer = ($this->createCustomer)($tenant);
-    $order = ($this->createSalesOrder)($tenant, $customer->id);
-
-    ($this->grantPermission)($user, 'sales-sales-orders-manage');
-
-    $this->actingAs($user)
-        ->patchJson(route('sales.orders.status.update', $order->id), [
-            'status' => 'OPEN',
-        ])->assertOk()
-        ->assertHeader('content-type', 'application/json');
-});
-
-it('20. invalid status change returns json error validation response', function () {
-    $tenant = ($this->makeTenant)();
-    $user = ($this->makeUser)($tenant);
-    $customer = ($this->createCustomer)($tenant);
-    $order = ($this->createSalesOrder)($tenant, $customer->id);
-
-    ($this->grantPermission)($user, 'sales-sales-orders-manage');
-
-    $response = $this->actingAs($user)
-        ->patchJson(route('sales.orders.status.update', $order->id), [
-            'status' => 'COMPLETED',
-        ])->assertStatus(422)
-        ->assertHeader('content-type', 'application/json');
-
-    ($this->assertStatusValidationErrors)($response);
-});
-
-it('21. sales order header can still be edited while draft', function () {
-    $tenant = ($this->makeTenant)();
-    $user = ($this->makeUser)($tenant);
-    $customer = ($this->createCustomer)($tenant);
-    $newCustomer = ($this->createCustomer)($tenant, ['name' => 'Updated Customer']);
-    $order = ($this->createSalesOrder)($tenant, $customer->id);
-
-    ($this->grantPermission)($user, 'sales-sales-orders-manage');
-
-    $this->actingAs($user)
-        ->patchJson(route('sales.orders.update', $order->id), [
-            'customer_id' => $newCustomer->id,
-        ])->assertOk()
-        ->assertJsonPath('data.customer_id', $newCustomer->id);
-});
-
-it('22. sales order header can still be edited while open', function () {
-    $tenant = ($this->makeTenant)();
-    $user = ($this->makeUser)($tenant);
-    $customer = ($this->createCustomer)($tenant);
-    $contact = ($this->createContact)($tenant, $customer->id, ['is_primary' => true]);
-    $replacementContact = ($this->createContact)($tenant, $customer->id, ['first_name' => 'Replacement']);
-    $order = ($this->createSalesOrder)($tenant, $customer->id, $contact->id, ['status' => 'OPEN']);
-
-    ($this->grantPermission)($user, 'sales-sales-orders-manage');
-
-    $this->actingAs($user)
-        ->patchJson(route('sales.orders.update', $order->id), [
-            'customer_id' => $customer->id,
-            'contact_id' => $replacementContact->id,
-        ])->assertOk()
-        ->assertJsonPath('data.contact_id', $replacementContact->id);
-});
-
-it('23. sales order header cannot be edited while completed', function () {
-    $tenant = ($this->makeTenant)();
-    $user = ($this->makeUser)($tenant);
-    $customer = ($this->createCustomer)($tenant);
-    $newCustomer = ($this->createCustomer)($tenant);
-    $order = ($this->createSalesOrder)($tenant, $customer->id, null, ['status' => 'COMPLETED']);
-
-    ($this->grantPermission)($user, 'sales-sales-orders-manage');
-
-    $response = $this->actingAs($user)
-        ->patchJson(route('sales.orders.update', $order->id), [
-            'customer_id' => $newCustomer->id,
-        ])->assertStatus(422);
-
-    ($this->assertOrderValidationErrors)($response);
-    expect(($this->fetchSalesOrder)($order->id)?->customer_id)->toBe($customer->id);
-});
-
-it('24. sales order header cannot be edited while cancelled', function () {
-    $tenant = ($this->makeTenant)();
-    $user = ($this->makeUser)($tenant);
-    $customer = ($this->createCustomer)($tenant);
-    $newCustomer = ($this->createCustomer)($tenant);
-    $order = ($this->createSalesOrder)($tenant, $customer->id, null, ['status' => 'CANCELLED']);
-
-    ($this->grantPermission)($user, 'sales-sales-orders-manage');
-
-    $response = $this->actingAs($user)
-        ->patchJson(route('sales.orders.update', $order->id), [
-            'customer_id' => $newCustomer->id,
-        ])->assertStatus(422);
-
-    ($this->assertOrderValidationErrors)($response);
-    expect(($this->fetchSalesOrder)($order->id)?->customer_id)->toBe($customer->id);
-});
-
-it('25. sales order lines can be added while draft', function () {
-    $tenant = ($this->makeTenant)();
-    $user = ($this->makeUser)($tenant);
-    $customer = ($this->createCustomer)($tenant);
-    $order = ($this->createSalesOrder)($tenant, $customer->id);
     $uom = ($this->makeUom)($tenant);
-    $item = ($this->createItem)($tenant, $uom);
-
+    $item = ($this->createItem)($tenant, $uom, ['name' => 'Sellable']);
+    $order = ($this->createSalesOrder)($tenant, $customer->id);
     ($this->grantPermission)($user, 'sales-sales-orders-manage');
 
-    $this->actingAs($user)
-        ->postJson(route('sales.orders.lines.store', $order->id), [
+    $response = $this->actingAs($user)
+        ->postJson(route('sales.orders.lines.store', $order), [
             'item_id' => $item->id,
-            'quantity' => '1.000000',
+            'quantity' => '2.000000',
         ])->assertCreated();
 
-    expect(DB::table('sales_order_lines')->where('sales_order_id', $order->id)->count())->toBe(1);
+    expect($response->json('data.line.item_name'))->toBe('Sellable')
+        ->and($response->json('data.line.quantity'))->toBe('2.000000');
 });
 
-it('26. sales order lines can be added while open', function () {
-    $tenant = ($this->makeTenant)();
-    $user = ($this->makeUser)($tenant);
-    $customer = ($this->createCustomer)($tenant);
-    $order = ($this->createSalesOrder)($tenant, $customer->id, null, ['status' => 'OPEN']);
-    $uom = ($this->makeUom)($tenant);
-    $item = ($this->createItem)($tenant, $uom);
+it('59. future quantity display is not introduced', function () {
+    $source = file_get_contents(base_path('resources/views/sales/orders/index.blade.php'));
 
-    ($this->grantPermission)($user, 'sales-sales-orders-manage');
-
-    $this->actingAs($user)
-        ->postJson(route('sales.orders.lines.store', $order->id), [
-            'item_id' => $item->id,
-            'quantity' => '1.000000',
-        ])->assertCreated();
-
-    expect(DB::table('sales_order_lines')->where('sales_order_id', $order->id)->count())->toBe(1);
+    expect($source)->not->toContain('Future quantity')
+        ->and($source)->not->toContain('future_quantity');
 });
 
-it('27. sales order lines cannot be added while completed', function () {
-    $tenant = ($this->makeTenant)();
-    $user = ($this->makeUser)($tenant);
-    $customer = ($this->createCustomer)($tenant);
-    $order = ($this->createSalesOrder)($tenant, $customer->id, null, ['status' => 'COMPLETED']);
-    $uom = ($this->makeUom)($tenant);
-    $item = ($this->createItem)($tenant, $uom);
+it('60. task checklist system is not introduced', function () {
+    $source = file_get_contents(base_path('resources/views/sales/orders/index.blade.php'));
 
-    ($this->grantPermission)($user, 'sales-sales-orders-manage');
-
-    $response = $this->actingAs($user)
-        ->postJson(route('sales.orders.lines.store', $order->id), [
-            'item_id' => $item->id,
-            'quantity' => '1.000000',
-        ])->assertStatus(422);
-
-    ($this->assertLineValidationErrors)($response);
-    expect(DB::table('sales_order_lines')->where('sales_order_id', $order->id)->count())->toBe(0);
-});
-
-it('28. sales order lines cannot be added while cancelled', function () {
-    $tenant = ($this->makeTenant)();
-    $user = ($this->makeUser)($tenant);
-    $customer = ($this->createCustomer)($tenant);
-    $order = ($this->createSalesOrder)($tenant, $customer->id, null, ['status' => 'CANCELLED']);
-    $uom = ($this->makeUom)($tenant);
-    $item = ($this->createItem)($tenant, $uom);
-
-    ($this->grantPermission)($user, 'sales-sales-orders-manage');
-
-    $response = $this->actingAs($user)
-        ->postJson(route('sales.orders.lines.store', $order->id), [
-            'item_id' => $item->id,
-            'quantity' => '1.000000',
-        ])->assertStatus(422);
-
-    ($this->assertLineValidationErrors)($response);
-    expect(DB::table('sales_order_lines')->where('sales_order_id', $order->id)->count())->toBe(0);
-});
-
-it('29. sales order line quantity can be updated while draft', function () {
-    $tenant = ($this->makeTenant)();
-    $user = ($this->makeUser)($tenant);
-    $customer = ($this->createCustomer)($tenant);
-    $order = ($this->createSalesOrder)($tenant, $customer->id);
-    $uom = ($this->makeUom)($tenant);
-    $item = ($this->createItem)($tenant, $uom);
-    $line = ($this->createSalesOrderLine)($tenant, $order->id, $item->id);
-
-    ($this->grantPermission)($user, 'sales-sales-orders-manage');
-
-    $this->actingAs($user)
-        ->patchJson(route('sales.orders.lines.update', [$order->id, $line->id]), [
-            'quantity' => '3.000000',
-        ])->assertOk()
-        ->assertJsonPath('data.line.quantity', '3.000000');
-});
-
-it('30. sales order line quantity can be updated while open', function () {
-    $tenant = ($this->makeTenant)();
-    $user = ($this->makeUser)($tenant);
-    $customer = ($this->createCustomer)($tenant);
-    $order = ($this->createSalesOrder)($tenant, $customer->id, null, ['status' => 'OPEN']);
-    $uom = ($this->makeUom)($tenant);
-    $item = ($this->createItem)($tenant, $uom);
-    $line = ($this->createSalesOrderLine)($tenant, $order->id, $item->id);
-
-    ($this->grantPermission)($user, 'sales-sales-orders-manage');
-
-    $this->actingAs($user)
-        ->patchJson(route('sales.orders.lines.update', [$order->id, $line->id]), [
-            'quantity' => '3.000000',
-        ])->assertOk()
-        ->assertJsonPath('data.line.quantity', '3.000000');
-});
-
-it('31. sales order line quantity cannot be updated while completed', function () {
-    $tenant = ($this->makeTenant)();
-    $user = ($this->makeUser)($tenant);
-    $customer = ($this->createCustomer)($tenant);
-    $order = ($this->createSalesOrder)($tenant, $customer->id, null, ['status' => 'COMPLETED']);
-    $uom = ($this->makeUom)($tenant);
-    $item = ($this->createItem)($tenant, $uom);
-    $line = ($this->createSalesOrderLine)($tenant, $order->id, $item->id);
-
-    ($this->grantPermission)($user, 'sales-sales-orders-manage');
-
-    $response = $this->actingAs($user)
-        ->patchJson(route('sales.orders.lines.update', [$order->id, $line->id]), [
-            'quantity' => '3.000000',
-        ])->assertStatus(422);
-
-    ($this->assertLineValidationErrors)($response);
-});
-
-it('32. sales order line quantity cannot be updated while cancelled', function () {
-    $tenant = ($this->makeTenant)();
-    $user = ($this->makeUser)($tenant);
-    $customer = ($this->createCustomer)($tenant);
-    $order = ($this->createSalesOrder)($tenant, $customer->id, null, ['status' => 'CANCELLED']);
-    $uom = ($this->makeUom)($tenant);
-    $item = ($this->createItem)($tenant, $uom);
-    $line = ($this->createSalesOrderLine)($tenant, $order->id, $item->id);
-
-    ($this->grantPermission)($user, 'sales-sales-orders-manage');
-
-    $response = $this->actingAs($user)
-        ->patchJson(route('sales.orders.lines.update', [$order->id, $line->id]), [
-            'quantity' => '3.000000',
-        ])->assertStatus(422);
-
-    ($this->assertLineValidationErrors)($response);
-});
-
-it('33. sales order lines can be deleted while draft', function () {
-    $tenant = ($this->makeTenant)();
-    $user = ($this->makeUser)($tenant);
-    $customer = ($this->createCustomer)($tenant);
-    $order = ($this->createSalesOrder)($tenant, $customer->id);
-    $uom = ($this->makeUom)($tenant);
-    $item = ($this->createItem)($tenant, $uom);
-    $line = ($this->createSalesOrderLine)($tenant, $order->id, $item->id);
-
-    ($this->grantPermission)($user, 'sales-sales-orders-manage');
-
-    $this->actingAs($user)
-        ->deleteJson(route('sales.orders.lines.destroy', [$order->id, $line->id]))
-        ->assertOk();
-
-    expect(DB::table('sales_order_lines')->where('id', $line->id)->exists())->toBeFalse();
-});
-
-it('34. sales order lines can be deleted while open', function () {
-    $tenant = ($this->makeTenant)();
-    $user = ($this->makeUser)($tenant);
-    $customer = ($this->createCustomer)($tenant);
-    $order = ($this->createSalesOrder)($tenant, $customer->id, null, ['status' => 'OPEN']);
-    $uom = ($this->makeUom)($tenant);
-    $item = ($this->createItem)($tenant, $uom);
-    $line = ($this->createSalesOrderLine)($tenant, $order->id, $item->id);
-
-    ($this->grantPermission)($user, 'sales-sales-orders-manage');
-
-    $this->actingAs($user)
-        ->deleteJson(route('sales.orders.lines.destroy', [$order->id, $line->id]))
-        ->assertOk();
-
-    expect(DB::table('sales_order_lines')->where('id', $line->id)->exists())->toBeFalse();
-});
-
-it('35. sales order lines cannot be deleted while completed', function () {
-    $tenant = ($this->makeTenant)();
-    $user = ($this->makeUser)($tenant);
-    $customer = ($this->createCustomer)($tenant);
-    $order = ($this->createSalesOrder)($tenant, $customer->id, null, ['status' => 'COMPLETED']);
-    $uom = ($this->makeUom)($tenant);
-    $item = ($this->createItem)($tenant, $uom);
-    $line = ($this->createSalesOrderLine)($tenant, $order->id, $item->id);
-
-    ($this->grantPermission)($user, 'sales-sales-orders-manage');
-
-    $response = $this->actingAs($user)
-        ->deleteJson(route('sales.orders.lines.destroy', [$order->id, $line->id]))
-        ->assertStatus(422);
-
-    ($this->assertLineValidationErrors)($response);
-    expect(DB::table('sales_order_lines')->where('id', $line->id)->exists())->toBeTrue();
-});
-
-it('36. sales order lines cannot be deleted while cancelled', function () {
-    $tenant = ($this->makeTenant)();
-    $user = ($this->makeUser)($tenant);
-    $customer = ($this->createCustomer)($tenant);
-    $order = ($this->createSalesOrder)($tenant, $customer->id, null, ['status' => 'CANCELLED']);
-    $uom = ($this->makeUom)($tenant);
-    $item = ($this->createItem)($tenant, $uom);
-    $line = ($this->createSalesOrderLine)($tenant, $order->id, $item->id);
-
-    ($this->grantPermission)($user, 'sales-sales-orders-manage');
-
-    $response = $this->actingAs($user)
-        ->deleteJson(route('sales.orders.lines.destroy', [$order->id, $line->id]))
-        ->assertStatus(422);
-
-    ($this->assertLineValidationErrors)($response);
-    expect(DB::table('sales_order_lines')->where('id', $line->id)->exists())->toBeTrue();
-});
-
-it('37. status changes create no stock moves', function () {
-    $tenant = ($this->makeTenant)();
-    $user = ($this->makeUser)($tenant);
-    $customer = ($this->createCustomer)($tenant);
-    $order = ($this->createSalesOrder)($tenant, $customer->id);
-
-    ($this->grantPermission)($user, 'sales-sales-orders-manage');
-
-    expect(($this->countStockMovesForTenant)($tenant))->toBe(0);
-
-    $this->actingAs($user)
-        ->patchJson(route('sales.orders.status.update', $order->id), [
-            'status' => 'OPEN',
-        ])->assertOk();
-
-    expect(($this->countStockMovesForTenant)($tenant))->toBe(0);
-});
-
-it('38. completing a zero line sales order creates no stock moves', function () {
-    $tenant = ($this->makeTenant)();
-    $user = ($this->makeUser)($tenant);
-    $customer = ($this->createCustomer)($tenant);
-    $order = ($this->createSalesOrder)($tenant, $customer->id, null, ['status' => 'OPEN']);
-
-    ($this->grantPermission)($user, 'sales-sales-orders-manage');
-
-    $this->actingAs($user)
-        ->patchJson(route('sales.orders.status.update', $order->id), [
-            'status' => 'COMPLETED',
-        ])->assertOk();
-
-    expect(($this->countStockMovesForTenant)($tenant))->toBe(0);
-});
-
-it('39. cancelling a sales order creates no stock moves', function () {
-    $tenant = ($this->makeTenant)();
-    $user = ($this->makeUser)($tenant);
-    $customer = ($this->createCustomer)($tenant);
-    $order = ($this->createSalesOrder)($tenant, $customer->id, null, ['status' => 'OPEN']);
-
-    ($this->grantPermission)($user, 'sales-sales-orders-manage');
-
-    $this->actingAs($user)
-        ->patchJson(route('sales.orders.status.update', $order->id), [
-            'status' => 'CANCELLED',
-        ])->assertOk();
-
-    expect(($this->countStockMovesForTenant)($tenant))->toBe(0);
-});
-
-it('40. status only lifecycle does not require inventory availability', function () {
-    $tenant = ($this->makeTenant)();
-    $user = ($this->makeUser)($tenant);
-    $customer = ($this->createCustomer)($tenant);
-    $order = ($this->createSalesOrder)($tenant, $customer->id, null, ['status' => 'OPEN']);
-    $uom = ($this->makeUom)($tenant);
-    $item = ($this->createItem)($tenant, $uom, [
-        'name' => 'Sellable Item Without Stock',
-        'default_price_cents' => 2500,
-    ]);
-
-    ($this->createSalesOrderLine)($tenant, $order->id, $item->id, [
-        'quantity' => '5.000000',
-        'unit_price_cents' => 2500,
-        'line_total_cents' => '12500.000000',
-    ]);
-
-    ($this->grantPermission)($user, 'sales-sales-orders-manage');
-
-    $this->actingAs($user)
-        ->patchJson(route('sales.orders.status.update', $order->id), [
-            'status' => 'COMPLETED',
-        ])->assertOk()
-        ->assertJsonPath('data.status', 'COMPLETED');
-
-    expect(($this->fetchSalesOrder)($order->id)?->status)->toBe('COMPLETED')
-        ->and(($this->countStockMovesForTenant)($tenant))->toBe(1);
+    expect($source)->not->toContain('Checklist')
+        ->and($source)->not->toContain('task definitions')
+        ->and($source)->not->toContain('workflow tasks');
 });

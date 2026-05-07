@@ -2,7 +2,10 @@
 
 namespace App\Http\Controllers;
 
-use App\Actions\Sales\CompleteSalesOrderAction;
+use App\Actions\Sales\BuildSalesOrderIssuePlanAction;
+use App\Actions\Sales\CancelPackedSalesOrderAction;
+use App\Actions\Sales\MoveSalesOrderToPackingAction;
+use App\Actions\Sales\PackSalesOrderAction;
 use App\Http\Requests\Sales\UpdateSalesOrderStatusRequest;
 use App\Models\SalesOrder;
 use DomainException;
@@ -20,7 +23,10 @@ class SalesOrderStatusController extends Controller
     public function update(
         UpdateSalesOrderStatusRequest $request,
         SalesOrder $salesOrder,
-        CompleteSalesOrderAction $completeSalesOrderAction
+        BuildSalesOrderIssuePlanAction $buildPlanAction,
+        MoveSalesOrderToPackingAction $moveToPackingAction,
+        PackSalesOrderAction $packSalesOrderAction,
+        CancelPackedSalesOrderAction $cancelPackedSalesOrderAction
     ): JsonResponse {
         Gate::authorize('sales-sales-orders-manage');
 
@@ -36,12 +42,14 @@ class SalesOrderStatusController extends Controller
         }
 
         try {
-            if ($targetStatus === SalesOrder::STATUS_COMPLETED) {
-                $salesOrder = $completeSalesOrderAction->execute($salesOrder);
-            } else {
-                $salesOrder->forceFill(['status' => $targetStatus])->save();
-                $salesOrder->refresh();
-            }
+            $salesOrder = match ($targetStatus) {
+                SalesOrder::STATUS_PACKING => $moveToPackingAction->execute($salesOrder, $buildPlanAction),
+                SalesOrder::STATUS_PACKED => $packSalesOrderAction->execute($salesOrder, $buildPlanAction),
+                SalesOrder::STATUS_CANCELLED => $salesOrder->status === SalesOrder::STATUS_PACKED
+                    ? $cancelPackedSalesOrderAction->execute($salesOrder)
+                    : $this->transitionWithoutInventory($salesOrder, $targetStatus),
+                default => $this->transitionWithoutInventory($salesOrder, $targetStatus),
+            };
         } catch (DomainException $exception) {
             return response()->json([
                 'message' => $exception->getMessage(),
@@ -60,5 +68,15 @@ class SalesOrderStatusController extends Controller
                 'can_manage_lines' => $salesOrder->allowsLineMutations(),
             ],
         ]);
+    }
+
+    /**
+     * Persist a non-inventory lifecycle transition.
+     */
+    private function transitionWithoutInventory(SalesOrder $salesOrder, string $targetStatus): SalesOrder
+    {
+        $salesOrder->forceFill(['status' => $targetStatus])->save();
+
+        return $salesOrder->fresh();
     }
 }
