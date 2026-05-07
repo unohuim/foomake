@@ -18,7 +18,6 @@ Authority Order (highest to lowest — conflicts resolved by this order):
 10. docs/PR3_ROADMAP.md
 
 ## docs/AI_CHAT_CODEX.md
-
 # AI Chat Bootstrap (READ FIRST)
 
 You are assisting with development on this repository.
@@ -249,9 +248,7 @@ If unsure, **stop immediately and ask**.
   **not global model scopes**
 - The **smallest possible change per PR**
 
-
 ## docs/PR2_ROADMAP.md
-
 # PR2_ROADMAP — UI + Domain Completion (Post-PR-006)
 
 This roadmap defines the **second major phase** of work: completing **Items, Inventory, Suppliers, and Manufacturing**
@@ -1544,9 +1541,7 @@ Introduce a UoM-level display precision field and enforce consistent quantity fo
 - Any changes to storage precision or BCMath scale
 - JavaScript formatting or UI-only overrides per view
 
-
 ## docs/CONVENTIONS.md
-
 # Conventions
 
 This document defines the **mandatory development conventions** for this repository.  
@@ -1800,9 +1795,7 @@ These rules apply to:
 - Unit conversions
 - Any inventory-affecting calculations
 
-
 ## docs/ARCHITECTURE_INVENTORY.md
-
 # Architecture Inventory
 
 This document tracks **reusable abstractions, components, and architectural patterns**
@@ -2219,34 +2212,44 @@ $line = SalesOrderLine::query()->create([
 
 ---
 
-### Sales Order Completion Inventory Impact
+### Sales Order Packing Inventory Impact
 
-**Name:** Sales Order Completion Inventory Impact  
+**Name:** Sales Order Packing Inventory Impact  
 **Type:** Domain Rule  
 **Location:**  
-- `docs/architecture/sales/SalesOrderCompletionInventoryImpact.yaml`  
-- `app/Actions/Sales/CompleteSalesOrderAction.php`  
-- `app/Http/Controllers/SalesOrderStatusController.php`  
-- `app/Models/StockMove.php`  
+  - `docs/architecture/sales/SalesOrderCompletionInventoryImpact.yaml`  
+  - `app/Actions/Sales/BuildSalesOrderIssuePlanAction.php`  
+  - `app/Actions/Sales/MoveSalesOrderToPackingAction.php`  
+  - `app/Actions/Sales/PackSalesOrderAction.php`  
+  - `app/Actions/Sales/CancelPackedSalesOrderAction.php`  
+  - `app/Http/Controllers/SalesOrderStatusController.php`  
+  - `app/Models/SalesOrder.php`  
+  - `app/Models/StockMove.php`  
 
 **Purpose:**  
-Document the inventory-ledger effects of `OPEN -> COMPLETED` sales-order transitions and the safeguards around transactional posting.
+Document the inventory-ledger effects of the `OPEN -> PACKING -> PACKED -> SHIPPING -> COMPLETED` sales-order lifecycle, including availability checks, transactional issue posting, and packed-order reversals.
 
 **When to Use:**  
-Completing a sales order, posting issue stock moves from sales-order lines, or validating rollback/idempotency expectations.
+Moving a sales order into packing, posting packed inventory issue moves, or cancelling a packed order with reversal moves.
 
 **When Not to Use:**  
-Editable header/line mutations, cancellation flows without inventory impact, or downstream fulfillment/invoicing/payment behavior.
+Editable header/line mutations, shipping/completion transitions without inventory impact, or downstream invoicing/payment behavior.
 
 **Public Interface:**  
-- `CompleteSalesOrderAction::execute()`  
-- `SalesOrder::STATUS_OPEN`  
-- `SalesOrder::STATUS_COMPLETED`  
-- `sales.orders.status.update`  
+  - `BuildSalesOrderIssuePlanAction::execute()`  
+  - `MoveSalesOrderToPackingAction::execute()`  
+  - `PackSalesOrderAction::execute()`  
+  - `CancelPackedSalesOrderAction::execute()`  
+  - `SalesOrder::STATUS_OPEN`  
+  - `SalesOrder::STATUS_PACKING`  
+  - `SalesOrder::STATUS_PACKED`  
+  - `SalesOrder::STATUS_SHIPPING`  
+  - `SalesOrder::STATUS_COMPLETED`  
+  - `sales.orders.status.update`  
 
 **Example Usage:**  
 ```php
-$completedOrder = $completeSalesOrderAction->execute($salesOrder);
+$packedOrder = $packSalesOrderAction->execute($salesOrder, $buildSalesOrderIssuePlanAction);
 ```
 
 ---
@@ -3670,9 +3673,7 @@ it('creates a material', function () {
 
 ---
 
-
 ## docs/PERMISSIONS_MATRIX.md
-
 # Permissions Matrix
 
 This document is the source-of-truth for **authorization intent** in this repository.
@@ -3860,9 +3861,7 @@ return [
 ];
 ```
 
-
 ## docs/ENUMS.md
-
 # ENUMS — Canonical Enum Authority
 
 This document defines the canonical, normative enum-like values used throughout the system.
@@ -3998,6 +3997,9 @@ Do not introduce new enum values without updating this document.
 
 - `DRAFT`
 - `OPEN`
+- `PACKING`
+- `PACKED`
+- `SHIPPING`
 - `COMPLETED`
 - `CANCELLED`
 
@@ -4005,18 +4007,29 @@ Do not introduce new enum values without updating this document.
 
 - `DRAFT`: Sales order is editable. Header fields and sales-order lines may be created, updated, or deleted. No inventory impact exists yet.
 - `OPEN`: Sales order remains editable. Header fields and sales-order lines may still be created, updated, or deleted. No inventory impact exists yet.
-- `COMPLETED`: Terminal state. The order is no longer editable. Transitioning from `OPEN` to `COMPLETED` posts inventory issue stock moves.
+- `PACKING`: Operational packing workflow has started. No stock moves have been posted yet.
+- `PACKED`: Inventory consumption has been posted. The order is ready to move to shipping.
+- `SHIPPING`: Carrier pickup or shipment handoff has occurred. No additional inventory impact occurs in this state.
+- `COMPLETED`: Terminal state. Shipment is confirmed complete. No additional inventory impact occurs in this transition.
 - `CANCELLED`: Terminal state. The order is no longer editable. Cancelling never posts inventory issue stock moves.
 
 **Notes:**
 
 - Allowed transitions are:
     - `DRAFT -> OPEN`
-    - `DRAFT -> CANCELLED`
-    - `OPEN -> COMPLETED`
+    - `OPEN -> PACKING`
     - `OPEN -> CANCELLED`
+    - `PACKING -> PACKED`
+    - `PACKING -> CANCELLED`
+    - `PACKED -> SHIPPING`
+    - `PACKED -> CANCELLED`
+    - `SHIPPING -> COMPLETED`
+    - `SHIPPING` cannot be cancelled in this phase
 - `COMPLETED` and `CANCELLED` are terminal.
 - Sales-order headers and lines may only be mutated while the order is `DRAFT` or `OPEN`.
+- `OPEN -> PACKING` checks availability only and creates no stock moves.
+- `PACKING -> PACKED` posts inventory issue stock moves in a single transaction.
+- Cancelling from `PACKED` appends reversing stock moves and preserves the original audit trail.
 - Older roadmap-era statuses such as `CONFIRMED` and `FULFILLED` are not valid statuses.
 
 ---
@@ -4066,7 +4079,8 @@ Do not introduce new enum values without updating this document.
 
 **Notes:**
 
-- Sales-order completion inventory impact posts `issue` stock moves with `status = POSTED`.
+- Sales-order packed inventory impact posts `issue` stock moves with `status = POSTED`.
+- Cancelling a packed sales order appends reversing stock moves while preserving the original issue moves.
 - Purchase-receipt and inventory-count posting flows also use `POSTED` when the move is ledger-valid.
 
 ---
@@ -4075,9 +4089,7 @@ Do not introduce new enum values without updating this document.
 
 No conflicts or ambiguities were found at time of creation based on existing migrations, models, actions, and tests.
 
-
 ## docs/DB_SCHEMA.md
-
 # Database Schema Inventory (DB_SCHEMA)
 
 This document inventories **all database tables and columns** as defined by migrations.
@@ -4303,8 +4315,11 @@ Migrations remain the **sole source of truth**.
 
 - Sales order headers remain editable only while `status` is `DRAFT` or `OPEN`.
 - `COMPLETED` and `CANCELLED` are terminal.
-- Transitioning from `OPEN` to `COMPLETED` may create one stock move per sales-order line.
-- `DRAFT -> OPEN`, `DRAFT -> CANCELLED`, and `OPEN -> CANCELLED` create no stock moves.
+- `OPEN -> PACKING` checks fulfillment availability only, reserves nothing, and creates no stock moves.
+- `PACKING -> PACKED` posts inventory issue stock moves in a single transaction.
+- `PACKED -> SHIPPING` and `SHIPPING -> COMPLETED` create no stock moves.
+- `OPEN -> CANCELLED` and `PACKING -> CANCELLED` create no stock moves.
+- `PACKED -> CANCELLED` appends reversing stock moves and preserves the original issue moves for audit history.
 
 ---
 
@@ -5232,9 +5247,7 @@ Migrations remain the **sole source of truth**.
 
 **End of DB_SCHEMA**
 
-
 ## docs/UI_DESIGN.md
-
 # UI_DESIGN.md — Canonical UI Direction & Constraints
 
 This document defines the **authoritative UI design rules** for this repository.
@@ -5828,9 +5841,7 @@ They are mandatory, not stylistic.
 
 ::contentReference[oaicite:0]{index=0}
 
-
 ## routes/web.php
-
 <?php
 
 use App\Http\Controllers\InventoryController;
@@ -6075,9 +6086,7 @@ Route::delete('/manufacturing/uom-conversions/items/{itemConversion}', [UomConve
 
 require __DIR__ . '/auth.php';
 
-
 ## docs/PR3_ROADMAP.md
-
 # PR3_ROADMAP — Sales + CRM Foundations
 
 This roadmap defines the third major phase of work: introducing the **Sales domain (CRM foundations + Sales Orders)**, fully integrated with inventory before any external integrations.
@@ -6353,6 +6362,60 @@ Sales orders must update inventory.
 
 ---
 
+### PR3-SO-006 — Sales Order Lifecycle: Packing / Packed / Shipping
+
+Status: Implemented
+
+**Goal**
+Extend the Sales Order lifecycle with operational statuses.
+
+**Statuses**
+
+- DRAFT
+- OPEN
+- PACKING
+- PACKED
+- SHIPPING
+- COMPLETED
+- CANCELLED
+
+**Rules**
+
+- `OPEN -> PACKING` starts the packing workflow
+- `PACKING -> PACKED` means packing is complete
+- `PACKED` is the point where fulfillment recipe components are consumed
+- `PACKED -> SHIPPING` means carrier pickup or shipment handoff has occurred
+- `SHIPPING -> COMPLETED` means shipment is confirmed complete
+- Fulfillment recipes determine consumed components
+- Make Orders remain manufacturing-only
+- Do not add custom stages in this PR
+- Do not add full task management in this PR unless explicitly scoped later
+
+---
+
+### PR3-SO-007 — Sales Order Workflow Tasks / Checklists
+
+Status: Planned
+
+**Goal**
+Introduce tenant-level sales order workflow checklist and task definitions.
+
+**Rules**
+
+- Add Sales → Settings at the bottom of the Sales menu
+- Sales Settings includes a Workflow section
+- Workflow defines default sales order stages and checklists
+- Each stage can define task definitions required before moving to the next status
+- When a sales order enters a stage, task records are created from that stage’s task definitions
+- Completing a task marks that checklist item complete from the Sales Order view
+- Required tasks must be complete before moving to the next stage
+- Tasks may include assigned user and due date
+- Initial scope is company-level workflow only
+- Product-specific workflow overrides are out of scope for now
+- Do not build a general project-management system
+
+---
+
 ## DOMAIN 3 — External Integration (Post-Inventory Only)
 
 ### PR3-INT-001 — External Product Import Prep
@@ -6398,6 +6461,29 @@ Prepare the app for ecommerce product imports, starting with WooCommerce, while 
 
 ---
 
+### PR3-INT-003 — Ecommerce Import → Empty Fulfillment Recipes
+
+Status: Planned
+
+**Goal**
+When ecommerce products are imported, optionally auto-create empty fulfillment recipes for each imported sellable item.
+
+**Rules**
+
+- Imported ecommerce products remain normal Items
+- Ecommerce imports still set `is_sellable = true`
+- Create an empty recipe with `recipe_type = fulfillment`
+- Output item is the imported product item
+- Recipe name defaults to the imported item display name
+- `output_quantity = 1.000000`
+- No recipe lines are created
+- Recipe is treated as incomplete until lines are added
+- This must be optional during import, likely default checked
+- Do not create manufacturing recipes from ecommerce import
+- Do not introduce fulfillment execution behavior in this PR
+
+---
+
 ## End State
 
 After PR3 completion:
@@ -6406,4 +6492,3 @@ After PR3 completion:
 - CRM foundation established
 - Sales orders impact inventory correctly
 - System ready for external integrations
-
