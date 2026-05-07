@@ -117,37 +117,6 @@ class SalesOrder extends Model
     }
 
     /**
-     * Return the manual lifecycle transition map.
-     *
-     * @return array<string, list<string>>
-     */
-    public static function transitionMap(): array
-    {
-        return [
-            self::STATUS_DRAFT => [
-                self::STATUS_OPEN,
-            ],
-            self::STATUS_OPEN => [
-                self::STATUS_PACKING,
-                self::STATUS_CANCELLED,
-            ],
-            self::STATUS_PACKING => [
-                self::STATUS_PACKED,
-                self::STATUS_CANCELLED,
-            ],
-            self::STATUS_PACKED => [
-                self::STATUS_SHIPPING,
-                self::STATUS_CANCELLED,
-            ],
-            self::STATUS_SHIPPING => [
-                self::STATUS_COMPLETED,
-            ],
-            self::STATUS_COMPLETED => [],
-            self::STATUS_CANCELLED => [],
-        ];
-    }
-
-    /**
      * Determine whether header fields may still be edited.
      */
     public function isEditable(): bool
@@ -178,6 +147,32 @@ class SalesOrder extends Model
      */
     public function availableTransitions(): array
     {
-        return self::transitionMap()[$this->status] ?? [];
+        if ($this->status === self::STATUS_DRAFT) {
+            return [self::STATUS_OPEN];
+        }
+
+        if (in_array($this->status, self::terminalStatuses(), true)) {
+            return [];
+        }
+
+        $resolver = app(\App\Actions\Workflows\ResolveSalesWorkflowStageAction::class);
+
+        if ($this->status === self::STATUS_OPEN) {
+            $firstStage = $resolver->firstActiveStage($this);
+
+            if (! $firstStage) {
+                return [self::STATUS_COMPLETED, self::STATUS_CANCELLED];
+            }
+
+            return [$resolver->statusForStage($firstStage), self::STATUS_CANCELLED];
+        }
+
+        $nextStage = $resolver->nextActiveStage($this);
+
+        if ($nextStage) {
+            return [$resolver->statusForStage($nextStage), self::STATUS_CANCELLED];
+        }
+
+        return [self::STATUS_COMPLETED];
     }
 }

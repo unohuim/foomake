@@ -207,6 +207,31 @@ export function mount(rootEl, payload) {
                 can_edit: data.can_edit,
                 can_manage_lines: data.can_manage_lines,
                 available_status_transitions: data.available_status_transitions || [],
+                current_stage_tasks: data.current_stage_tasks || [],
+            });
+        },
+        updateTaskInOrder(orderId, taskData) {
+            const order = this.orders.find((entry) => entry.id === orderId);
+
+            if (!order) {
+                return;
+            }
+
+            const tasks = Array.isArray(order.current_stage_tasks) ? [...order.current_stage_tasks] : [];
+            const existingIndex = tasks.findIndex((entry) => entry.id === taskData.id);
+
+            if (existingIndex === -1) {
+                tasks.push(taskData);
+            } else {
+                tasks.splice(existingIndex, 1, taskData);
+            }
+
+            order.current_stage_tasks = tasks.sort((left, right) => {
+                if (Number(left.sort_order || 0) === Number(right.sort_order || 0)) {
+                    return Number(left.id || 0) - Number(right.id || 0);
+                }
+
+                return Number(left.sort_order || 0) - Number(right.sort_order || 0);
             });
         },
         formatLineMoney(amount, currencyCode) {
@@ -287,6 +312,28 @@ export function mount(rootEl, payload) {
             const data = await response.json();
             this.applyOrderLifecycleUpdate(order.id, data.data || {});
             this.showToast('success', 'Status updated.');
+        },
+        async completeTask(order, task) {
+            if (!order || !task || !task.complete_url || !task.can_complete) {
+                return;
+            }
+
+            const response = await fetch(task.complete_url, {
+                method: 'PATCH',
+                headers: {
+                    Accept: 'application/json',
+                    'X-CSRF-TOKEN': this.csrfToken,
+                },
+            });
+
+            if (!response.ok) {
+                this.showToast('error', 'Unable to complete task.');
+                return;
+            }
+
+            const data = await response.json();
+            this.updateTaskInOrder(order.id, data.data || {});
+            this.showToast('success', 'Task completed.');
         },
         async submitLine(order) {
             if (!this.canManageOrderLines(order)) {

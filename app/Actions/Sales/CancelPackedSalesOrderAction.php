@@ -2,6 +2,7 @@
 
 namespace App\Actions\Sales;
 
+use App\Actions\Workflows\DeleteOpenSalesOrderTasksAction;
 use App\Models\SalesOrder;
 use App\Models\SalesOrderLine;
 use App\Models\StockMove;
@@ -20,9 +21,11 @@ class CancelPackedSalesOrderAction
      *
      * @throws DomainException
      */
-    public function execute(SalesOrder $salesOrder): SalesOrder
-    {
-        return DB::transaction(function () use ($salesOrder): SalesOrder {
+    public function execute(
+        SalesOrder $salesOrder,
+        DeleteOpenSalesOrderTasksAction $deleteOpenSalesOrderTasksAction
+    ): SalesOrder {
+        return DB::transaction(function () use ($salesOrder, $deleteOpenSalesOrderTasksAction): SalesOrder {
             $lockedOrder = SalesOrder::query()
                 ->whereKey($salesOrder->id)
                 ->lockForUpdate()
@@ -58,6 +61,8 @@ class CancelPackedSalesOrderAction
             $lockedOrder->forceFill([
                 'status' => SalesOrder::STATUS_CANCELLED,
             ])->save();
+
+            $deleteOpenSalesOrderTasksAction->execute($lockedOrder);
 
             return $lockedOrder->fresh();
         });

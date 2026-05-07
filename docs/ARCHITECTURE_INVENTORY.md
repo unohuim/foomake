@@ -245,19 +245,19 @@ Gate::authorize('inventory-materials-manage');
 
 ---
 
-### Workflow Manage Permission (Planned)
+### Workflow Manage Permission
 
 **Name:** Workflow Manage Permission  
-**Type:** Planned Authorization Rule  
+**Type:** Authorization Rule  
 **Location:**  
 - `docs/PERMISSIONS_MATRIX.md`  
 - `docs/PR3_ROADMAP.md`  
 
 **Purpose:**  
-Document the planned gate that will control workflow-configuration access under the future `Admin -> Workflows` UI.
+Document the gate that controls workflow-configuration access under `Admin -> Workflows`.
 
 **When to Use:**  
-Planned access checks for workflow stage and workflow task-template configuration surfaces.
+Workflow stage and workflow task-template configuration surfaces.
 
 **When Not to Use:**  
 Assigned-user task completion or existing sales-order lifecycle transitions that retain their current permissions.
@@ -456,7 +456,7 @@ $line = SalesOrderLine::query()->create([
   - `app/Models/StockMove.php`  
 
 **Purpose:**  
-Document the inventory-ledger effects of the `OPEN -> PACKING -> PACKED -> SHIPPING -> COMPLETED` sales-order lifecycle, including availability checks, transactional issue posting, and packed-order reversals.
+Document the inventory-ledger effects of Sales Order operational-stage progression, including availability checks, transactional issue posting, and packed-order reversals under the seeded default sales workflow.
 
 **When to Use:**  
 Moving a sales order into packing, posting packed inventory issue moves, or cancelling a packed order with reversal moves.
@@ -492,10 +492,10 @@ $packedOrder = $packSalesOrderAction->execute($salesOrder, $buildSalesOrderIssue
 - `docs/PR3_ROADMAP.md`  
 
 **Purpose:**  
-Define the planned fixed domain layer that scopes tenant-owned workflow stages, workflow task templates, and generated tasks across operational modules.
+Define the fixed domain layer that scopes tenant-owned workflow stages, workflow task templates, and generated tasks across operational modules.
 
 **When to Use:**  
-Planning domain-general workflow infrastructure for sales first, with purchasing and manufacturing later.
+Domain-general workflow infrastructure for sales first, with purchasing and manufacturing later.
 
 **When Not to Use:**  
 Admin-managed taxonomy creation or product-specific workflow overrides.
@@ -519,10 +519,10 @@ sales -> workflow stages -> workflow task templates -> generated tasks
 - `docs/PR3_ROADMAP.md`  
 
 **Purpose:**  
-Define the planned database-backed operational middle-stage abstraction that can be configured per tenant and workflow domain.
+Define the database-backed operational middle-stage abstraction that can be configured per tenant and workflow domain.
 
 **When to Use:**  
-Planning operational stage ordering, activation, and admin CRUD behavior within a workflow domain.
+Operational stage ordering, activation, and admin CRUD behavior within a workflow domain.
 
 **When Not to Use:**  
 System lifecycle statuses that remain hard-coded domain rules.
@@ -533,7 +533,7 @@ System lifecycle statuses that remain hard-coded domain rules.
 
 **Example Usage:**  
 ```text
-tenant sales stages: packing -> packed -> shipping
+tenant sales stages ordered by sort_order
 ```
 
 ---
@@ -547,10 +547,10 @@ tenant sales stages: packing -> packed -> shipping
 - `docs/PR3_ROADMAP.md`  
 
 **Purpose:**  
-Define the planned admin-managed template abstraction used to generate future stage-specific tasks.
+Define the admin-managed template abstraction used to generate stage-specific tasks.
 
 **When to Use:**  
-Planning task-definition CRUD, activation, ordering, and assignee defaults for a workflow stage.
+Task-definition CRUD, activation, ordering, and assignee defaults for a workflow stage.
 
 **When Not to Use:**  
 Retroactively mutating existing generated tasks or creating ad hoc tasks outside the configured template flow.
@@ -575,10 +575,10 @@ packing stage template: Print packing slip
 - `docs/PR3_ROADMAP.md`  
 
 **Purpose:**  
-Define the planned generated task record that snapshots template data against a specific workflow domain record.
+Define the generated task record that snapshots template data against a specific workflow domain record.
 
 **When to Use:**  
-Planning stage-entry task generation, assigned-user completion, and immutable snapshot behavior for future workflow tasks.
+Stage-entry task generation, assigned-user completion, and immutable snapshot behavior for workflow tasks.
 
 **When Not to Use:**  
 General project-management features, comments, due dates, multi-assignee tasks, or task reopening flows.
@@ -588,7 +588,7 @@ General project-management features, comments, due dates, multi-assignee tasks, 
 
 **Example Usage:**  
 ```text
-sales order 42 enters packing -> generate tenant-scoped packing tasks
+sales order 42 enters current stage -> generate tenant-scoped stage tasks
 ```
 
 ---
@@ -596,16 +596,16 @@ sales order 42 enters packing -> generate tenant-scoped packing tasks
 ### Sales Order Workflow Task Gating
 
 **Name:** Sales Order Workflow Task Gating  
-**Type:** Planned Domain Rule  
+**Type:** Domain Rule  
 **Location:**  
 - `docs/architecture/workflows/SalesOrderWorkflowTaskGating.yaml`  
 - `docs/PR3_ROADMAP.md`  
 
 **Purpose:**  
-Define the planned rule that forward sales-order operational transitions are blocked by open current-stage workflow tasks in addition to existing sales-order domain guards.
+Define the rule that forward sales-order operational transitions are blocked by open current-stage workflow tasks in addition to existing sales-order domain guards.
 
 **When to Use:**  
-Planning the interaction between sales-order stage entry, generated task creation, and forward lifecycle gating.
+The interaction between sales-order stage entry, generated task creation, and forward lifecycle gating.
 
 **When Not to Use:**  
 Draft editing, unrelated task systems, or purchasing/manufacturing task generation before those integrations are implemented.
@@ -615,7 +615,7 @@ Draft editing, unrelated task systems, or purchasing/manufacturing task generati
 
 **Example Usage:**  
 ```text
-packing -> packed is blocked while current-stage generated tasks remain open
+current operational stage -> next stage is blocked while current-stage generated tasks remain open
 ```
 
 ---

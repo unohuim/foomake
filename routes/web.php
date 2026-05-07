@@ -23,9 +23,13 @@ use App\Http\Controllers\SalesOrderStatusController;
 use App\Http\Controllers\SalesProductController;
 use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\SupplierPurchaseOptionController;
+use App\Http\Controllers\TaskCompletionController;
 use App\Http\Controllers\UomCategoryController;
 use App\Http\Controllers\UomConversionController;
 use App\Http\Controllers\UomController;
+use App\Http\Controllers\WorkflowController;
+use App\Http\Controllers\WorkflowStageController;
+use App\Http\Controllers\WorkflowTaskTemplateController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -217,6 +221,23 @@ Route::middleware('auth')->group(function () {
         ->name('sales.products.import.preview');
     Route::post('/sales/products/imports', [SalesProductController::class, 'storeImport'])
         ->name('sales.products.import.store');
+
+    Route::get('/admin/workflows', [WorkflowController::class, 'index'])
+        ->name('admin.workflows.index');
+    Route::post('/admin/workflows/stages', [WorkflowStageController::class, 'store'])
+        ->name('admin.workflows.stages.store');
+    Route::patch('/admin/workflows/stages/{workflowStage}', [WorkflowStageController::class, 'update'])
+        ->name('admin.workflows.stages.update');
+    Route::post('/admin/workflows/stages/reorder', [WorkflowStageController::class, 'reorder'])
+        ->name('admin.workflows.stages.reorder');
+    Route::post('/admin/workflows/task-templates', [WorkflowTaskTemplateController::class, 'store'])
+        ->name('admin.workflows.task-templates.store');
+    Route::patch('/admin/workflows/task-templates/{workflowTaskTemplate}', [WorkflowTaskTemplateController::class, 'update'])
+        ->name('admin.workflows.task-templates.update');
+    Route::post('/admin/workflows/task-templates/reorder', [WorkflowTaskTemplateController::class, 'reorder'])
+        ->name('admin.workflows.task-templates.reorder');
+    Route::patch('/tasks/{task}/complete', [TaskCompletionController::class, 'update'])
+        ->name('tasks.complete');
 
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::get('/profile/connectors', [ProfileConnectorController::class, 'index'])

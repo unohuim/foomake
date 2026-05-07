@@ -2,7 +2,15 @@ You are assisting with project documentation.
 
 Create (or overwrite if it exists) the file: docs/AI_CHAT_BOOTSTRAP.md
 
-Purpose: This single file consolidates **all core authoritative documents and the main routes file** required to bootstrap an LLM chat session (e.g. Grok, ChatGPT, Codex CLI, etc.) so the human doesn't have to paste multiple separate files every time.
+Purpose: This single file consolidates the core project bootstrap documents required to align future LLM chat sessions with the repository's current authoritative context.
+
+Do not generate summaries.
+Do not paraphrase.
+Do not omit lines.
+Do not alter formatting.
+Do not strip code blocks, tables, comments, use statements, routes, YAML, or markdown structure.
+
+The generated file must preserve source documents verbatim.
 
 Content structure:
 
@@ -14,7 +22,9 @@ This file is the single source to paste at the beginning of new LLM chats for fu
 
 Paste the entire content (or as much as context allows) when starting a session.
 
-Authority Order (highest to lowest — conflicts resolved by this order):
+2. After that header, include the required source files in this order.
+
+Core authority/bootstrap order:
 
 1. docs/AI_CHAT_CODEX.md
 2. docs/PR2_ROADMAP.md
@@ -24,19 +34,73 @@ Authority Order (highest to lowest — conflicts resolved by this order):
 6. docs/ENUMS.md
 7. docs/DB_SCHEMA.md
 8. docs/UI_DESIGN.md
-9. routes/web.php (main web routes — included here for complete bootstrap context)
+9. routes/web.php
 10. docs/PR3_ROADMAP.md
 
-Then, for each item in the above order, add a level-2 header exactly like this:
+Required architecture context after the core authority/bootstrap list:
+
+11. docs/architecture/README.yaml
+
+Important authority note:
+
+- Preserve the repository's documented authority order.
+- Do not claim that docs/architecture/\*_/_.yaml outrank higher-authority files unless the repository explicitly says so.
+- Include the architecture README and architecture YAML files as required architecture context for future sessions.
+- docs/PR3_ROADMAP.md is required context and must not be treated as optional or secondary.
+
+3. For each included source file, add a level-2 header exactly like this:
 
 ## docs/AI_CHAT_CODEX.md
 
-(or ## routes/web.php for the last one)
+Follow that header immediately with the full original file contents.
 
-Followed immediately by the **full, verbatim content** of that file/document.
+Do not add commentary between the header and the file contents.
 
-Do NOT summarize, shorten, paraphrase, omit lines, or change formatting — copy the entire original text exactly as it exists in the repository.
+4. Verbatim-copy rules:
 
-- For Markdown files: preserve all headers, tables, lists, code blocks.
-- For PHP files (routes/web.php): include the full code with all use statements, Route:: definitions, middleware groups, and comments — exactly as written.
-- If any file does not yet exist (e.g., docs/AI_CHAT_CODEX.md), insert a placeholder comment under its header like:
+- Copy each included source file exactly as it exists in the repository.
+- Preserve all Markdown formatting, tables, code fences, comments, spacing, and blank lines.
+- Preserve all PHP use statements, route definitions, middleware groups, closures, and comments in routes/web.php exactly as written.
+- Preserve all YAML formatting exactly as written.
+- Do not normalize whitespace.
+- Do not reorder file contents internally.
+
+5. Missing-file behavior:
+
+If any expected file does not exist, still include its level-2 header and then place this exact placeholder comment immediately below it:
+
+<!-- File not found in repository at generation time. -->
+
+Do not fail the whole consolidation because one expected file is missing.
+
+6. Architecture glob behavior:
+
+7. Output shape requirement:
+
+The generated docs/AI_CHAT_BOOTSTRAP.md file must be a pure concatenation of:
+
+- the required bootstrap header block
+- then repeated sections of:
+    - level-2 header with exact path
+    - full verbatim file contents or the missing-file placeholder comment
+
+8. Regeneration discipline:
+
+Regenerate docs/AI_CHAT_BOOTSTRAP.md whenever any included source document changes, including:
+
+- docs/AI_CHAT_CODEX.md
+- docs/PR2_ROADMAP.md
+- docs/CONVENTIONS.md
+- docs/ARCHITECTURE_INVENTORY.md
+- docs/PERMISSIONS_MATRIX.md
+- docs/ENUMS.md
+- docs/DB_SCHEMA.md
+- docs/UI_DESIGN.md
+- routes/web.php
+- docs/PR3_ROADMAP.md
+- docs/architecture/README.yaml
+
+9. Do not summarize the repository.
+
+The goal is not to create a shortened overview.
+The goal is to create a consolidated bootstrap file containing the exact source texts future LLM sessions need for accurate intake.

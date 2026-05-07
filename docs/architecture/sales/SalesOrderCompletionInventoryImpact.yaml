@@ -13,8 +13,8 @@ location:
   - resources/views/sales/customers/show.blade.php
 purpose: Document the inventory-ledger effects of packing a sales order and the safeguards around availability checks, issue posting, and reversal moves.
 when_to_use:
-  - Moving an OPEN sales order to PACKING
-  - Moving a PACKING sales order to PACKED
+  - Moving an OPEN sales order into the first active operational sales workflow stage when that stage is the seeded packing stage
+  - Moving a PACKING sales order to PACKED under the seeded default sales workflow
   - Cancelling a PACKED sales order
   - Verifying rollback and idempotency expectations for sales-order packing
 when_not_to_use:
@@ -23,11 +23,12 @@ when_not_to_use:
   - Shipping or completion transitions that have no inventory impact
   - Invoicing or payment workflows
 rules:
-  - Sales order lifecycle statuses are DRAFT, OPEN, PACKING, PACKED, SHIPPING, COMPLETED, and CANCELLED.
-  - OPEN to PACKING validates fulfillment availability only, creates no stock moves, and reserves no inventory.
-  - If any sales-order line cannot be fulfilled during OPEN to PACKING, the order must remain OPEN.
-  - PACKING to PACKED posts inventory issue stock moves in a single database transaction.
-  - If stock-move creation fails during PACKING to PACKED, the sales order must remain PACKING and no partial stock moves may persist.
+  - Sales orders keep DRAFT, OPEN, COMPLETED, and CANCELLED as system statuses and use tenant-scoped active sales workflow stages for operational middle stages.
+  - New tenants are seeded by default with packing, packed, and shipping operational stages, but runtime ordering is database-backed.
+  - Entering the seeded packing stage from OPEN validates fulfillment availability only, creates no stock moves, and reserves no inventory.
+  - If any sales-order line cannot be fulfilled before entering the first operational stage, the order must remain OPEN.
+  - Moving from the seeded packing stage to the seeded packed stage posts inventory issue stock moves in a single database transaction.
+  - If stock-move creation fails during packing to packed, the sales order must remain in the current stage and no partial stock moves may persist.
   - Normal stocked sales-order lines consume the sold item itself.
   - Sales-order lines whose sold item has an active fulfillment recipe consume that recipe's component lines.
   - Fulfillment recipes used for sales orders must have at least one line.
@@ -37,10 +38,10 @@ rules:
   - Each packed stock move uses type = issue and status = POSTED.
   - Each packed stock move records a signed negative canonical scale-6 ledger amount.
   - Each packed stock move links back to the originating sales-order line with source_type = App\Models\SalesOrderLine and source_id = sales_order_lines.id.
-  - PACKED to SHIPPING and SHIPPING to COMPLETED create no stock moves.
-  - OPEN to CANCELLED and PACKING to CANCELLED create no stock moves.
-  - PACKED to CANCELLED appends reversing stock moves and preserves the original issue moves for audit history.
-  - Retrying PACKING to PACKED must not create duplicate stock moves for a line that already has packed inventory impact.
+  - Moving from the seeded packed stage to the seeded shipping stage and from the final operational stage to COMPLETED creates no stock moves.
+  - OPEN to CANCELLED and cancellation before packed inventory posting create no stock moves.
+  - Cancelling from the seeded packed stage appends reversing stock moves and preserves the original issue moves for audit history.
+  - Retrying the packing to packed transition must not create duplicate stock moves for a line that already has packed inventory impact.
 public_interface:
   - BuildSalesOrderIssuePlanAction::execute()
   - MoveSalesOrderToPackingAction::execute()

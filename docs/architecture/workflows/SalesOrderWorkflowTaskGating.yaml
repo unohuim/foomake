@@ -1,32 +1,33 @@
 name: Sales Order Workflow Task Gating
-type: Planned Domain Rule
+type: Domain Rule
 location:
-  - docs/PR3_ROADMAP.md
   - docs/architecture/sales/SalesOrderCompletionInventoryImpact.yaml
-purpose: Define the planned interaction between sales-order operational stage transitions and generated workflow-task completion.
+  - docs/PR3_ROADMAP.md
+purpose: Define the interaction between sales-order operational stage transitions and generated workflow-task completion.
 when_to_use:
-  - Planning sales-order forward transitions through operational workflow stages
-  - Planning generated task creation on sales-order stage entry
-  - Planning separation between sales-order lifecycle authorization and task completion authorization
+  - Sales-order forward transitions through operational workflow stages
+  - Generated task creation on sales-order stage entry
+  - Separation between sales-order lifecycle authorization and task completion authorization
 when_not_to_use:
   - Draft sales-order header or line editing
   - Purchase-order or make-order task generation before those integrations are approved
 rules:
-  - Sales Orders are the first planned consumer of the workflow task system.
-  - Entering an operational sales stage is intended to generate tasks from active templates that match the tenant, workflow domain, and entered stage.
-  - If no active templates exist for a stage, no tasks are intended to be generated.
-  - Forward sales-order transitions are intended to remain subject to existing sales-order domain guards in addition to current-stage open-task completion.
-  - If the current stage has no generated tasks, workflow task gating is intended not to block the transition.
-  - Assigned users are intended to complete their assigned tasks without requiring sales-sales-orders-manage solely for task completion.
-  - Sales-order lifecycle transitions are intended to continue requiring existing sales-order manage permissions.
-  - Cancelling a sales order is intended to remove open generated tasks while preserving completed task history.
+  - Sales Orders are the first runtime consumer of the workflow task system.
+  - Entering an operational sales stage generates tasks from active templates that match the tenant, workflow domain, and entered stage.
+  - Task generation happens only after the underlying stage transition succeeds.
+  - If no active templates exist for a stage, no tasks are generated.
+  - Forward sales-order transitions remain subject to existing sales-order domain guards in addition to current-stage open-task completion.
+  - If the current stage has no generated tasks, workflow task gating does not block the transition.
+  - Assigned users may complete their assigned tasks without requiring sales-sales-orders-manage solely for task completion.
+  - Sales-order lifecycle transitions continue requiring existing sales-order manage permissions.
+  - Cancelling a sales order removes open generated tasks while preserving completed task history.
 public_interface:
-  - docs/PR3_ROADMAP.md
+  - AssertSalesOrderStageTasksCompletedAction::execute()
+  - GenerateSalesOrderWorkflowTasksAction::execute()
   - docs/architecture/workflows/Task.yaml
   - docs/PERMISSIONS_MATRIX.md
 example_usage: |
-  Planned packing transition:
+  Packing transition:
     sales order enters packing
     generate packing tasks from active sales templates
     block packing -> packed until current-stage tasks are completed
-

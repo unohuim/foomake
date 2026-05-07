@@ -4,18 +4,6 @@ This file is the single source to paste at the beginning of new LLM chats for fu
 
 Paste the entire content (or as much as context allows) when starting a session.
 
-Authority Order (highest to lowest — conflicts resolved by this order):
-
-1. docs/AI_CHAT_CODEX.md
-2. docs/PR2_ROADMAP.md
-3. docs/CONVENTIONS.md
-4. docs/ARCHITECTURE_INVENTORY.md
-5. docs/PERMISSIONS_MATRIX.md
-6. docs/ENUMS.md
-7. docs/DB_SCHEMA.md
-8. docs/UI_DESIGN.md
-9. routes/web.php (main web routes — included here for complete bootstrap context)
-10. docs/PR3_ROADMAP.md
 
 ## docs/AI_CHAT_CODEX.md
 # AI Chat Bootstrap (READ FIRST)
@@ -247,6 +235,7 @@ If unsure, **stop immediately and ask**.
 - “Unauthenticated = no access” enforced via routes/gates,
   **not global model scopes**
 - The **smallest possible change per PR**
+
 
 ## docs/PR2_ROADMAP.md
 # PR2_ROADMAP — UI + Domain Completion (Post-PR-006)
@@ -1541,6 +1530,7 @@ Introduce a UoM-level display precision field and enforce consistent quantity fo
 - Any changes to storage precision or BCMath scale
 - JavaScript formatting or UI-only overrides per view
 
+
 ## docs/CONVENTIONS.md
 # Conventions
 
@@ -1795,6 +1785,7 @@ These rules apply to:
 - Unit conversions
 - Any inventory-affecting calculations
 
+
 ## docs/ARCHITECTURE_INVENTORY.md
 # Architecture Inventory
 
@@ -2043,6 +2034,33 @@ Gate::authorize('inventory-materials-manage');
 
 ---
 
+### Workflow Manage Permission
+
+**Name:** Workflow Manage Permission  
+**Type:** Authorization Rule  
+**Location:**  
+- `docs/PERMISSIONS_MATRIX.md`  
+- `docs/PR3_ROADMAP.md`  
+
+**Purpose:**  
+Document the gate that controls workflow-configuration access under `Admin -> Workflows`.
+
+**When to Use:**  
+Workflow stage and workflow task-template configuration surfaces.
+
+**When Not to Use:**  
+Assigned-user task completion or existing sales-order lifecycle transitions that retain their current permissions.
+
+**Public Interface:**  
+- `workflow-manage`  
+
+**Example Usage:**  
+```php
+Gate::authorize('workflow-manage');
+```
+
+---
+
 ## UI
 
 ### Reusable Combobox Pattern
@@ -2227,7 +2245,7 @@ $line = SalesOrderLine::query()->create([
   - `app/Models/StockMove.php`  
 
 **Purpose:**  
-Document the inventory-ledger effects of the `OPEN -> PACKING -> PACKED -> SHIPPING -> COMPLETED` sales-order lifecycle, including availability checks, transactional issue posting, and packed-order reversals.
+Document the inventory-ledger effects of Sales Order operational-stage progression, including availability checks, transactional issue posting, and packed-order reversals under the seeded default sales workflow.
 
 **When to Use:**  
 Moving a sales order into packing, posting packed inventory issue moves, or cancelling a packed order with reversal moves.
@@ -2250,6 +2268,143 @@ Editable header/line mutations, shipping/completion transitions without inventor
 **Example Usage:**  
 ```php
 $packedOrder = $packSalesOrderAction->execute($salesOrder, $buildSalesOrderIssuePlanAction);
+```
+
+---
+
+### Workflow Domain
+
+**Name:** Workflow Domain  
+**Type:** System-Owned Domain Rule  
+**Location:**  
+- `docs/architecture/workflows/WorkflowDomain.yaml`  
+- `docs/PR3_ROADMAP.md`  
+
+**Purpose:**  
+Define the fixed domain layer that scopes tenant-owned workflow stages, workflow task templates, and generated tasks across operational modules.
+
+**When to Use:**  
+Domain-general workflow infrastructure for sales first, with purchasing and manufacturing later.
+
+**When Not to Use:**  
+Admin-managed taxonomy creation or product-specific workflow overrides.
+
+**Public Interface:**  
+- `docs/architecture/workflows/WorkflowDomain.yaml`  
+
+**Example Usage:**  
+```text
+sales -> workflow stages -> workflow task templates -> generated tasks
+```
+
+---
+
+### Workflow Stage
+
+**Name:** Workflow Stage  
+**Type:** Tenant-Scoped Domain Rule  
+**Location:**  
+- `docs/architecture/workflows/WorkflowStage.yaml`  
+- `docs/PR3_ROADMAP.md`  
+
+**Purpose:**  
+Define the database-backed operational middle-stage abstraction that can be configured per tenant and workflow domain.
+
+**When to Use:**  
+Operational stage ordering, activation, and admin CRUD behavior within a workflow domain.
+
+**When Not to Use:**  
+System lifecycle statuses that remain hard-coded domain rules.
+
+**Public Interface:**  
+- `docs/architecture/workflows/WorkflowStage.yaml`  
+- `workflow-manage`  
+
+**Example Usage:**  
+```text
+tenant sales stages ordered by sort_order
+```
+
+---
+
+### Workflow Task Template
+
+**Name:** Workflow Task Template  
+**Type:** Tenant-Scoped Domain Rule  
+**Location:**  
+- `docs/architecture/workflows/WorkflowTaskTemplate.yaml`  
+- `docs/PR3_ROADMAP.md`  
+
+**Purpose:**  
+Define the admin-managed template abstraction used to generate stage-specific tasks.
+
+**When to Use:**  
+Task-definition CRUD, activation, ordering, and assignee defaults for a workflow stage.
+
+**When Not to Use:**  
+Retroactively mutating existing generated tasks or creating ad hoc tasks outside the configured template flow.
+
+**Public Interface:**  
+- `docs/architecture/workflows/WorkflowTaskTemplate.yaml`  
+- `workflow-manage`  
+
+**Example Usage:**  
+```text
+packing stage template: Print packing slip
+```
+
+---
+
+### Task
+
+**Name:** Task  
+**Type:** Tenant-Scoped Generated Record Rule  
+**Location:**  
+- `docs/architecture/workflows/Task.yaml`  
+- `docs/PR3_ROADMAP.md`  
+
+**Purpose:**  
+Define the generated task record that snapshots template data against a specific workflow domain record.
+
+**When to Use:**  
+Stage-entry task generation, assigned-user completion, and immutable snapshot behavior for workflow tasks.
+
+**When Not to Use:**  
+General project-management features, comments, due dates, multi-assignee tasks, or task reopening flows.
+
+**Public Interface:**  
+- `docs/architecture/workflows/Task.yaml`  
+
+**Example Usage:**  
+```text
+sales order 42 enters current stage -> generate tenant-scoped stage tasks
+```
+
+---
+
+### Sales Order Workflow Task Gating
+
+**Name:** Sales Order Workflow Task Gating  
+**Type:** Domain Rule  
+**Location:**  
+- `docs/architecture/workflows/SalesOrderWorkflowTaskGating.yaml`  
+- `docs/PR3_ROADMAP.md`  
+
+**Purpose:**  
+Define the rule that forward sales-order operational transitions are blocked by open current-stage workflow tasks in addition to existing sales-order domain guards.
+
+**When to Use:**  
+The interaction between sales-order stage entry, generated task creation, and forward lifecycle gating.
+
+**When Not to Use:**  
+Draft editing, unrelated task systems, or purchasing/manufacturing task generation before those integrations are implemented.
+
+**Public Interface:**  
+- `docs/architecture/workflows/SalesOrderWorkflowTaskGating.yaml`  
+
+**Example Usage:**  
+```text
+current operational stage -> next stage is blocked while current-stage generated tasks remain open
 ```
 
 ---
@@ -3673,6 +3828,7 @@ it('creates a material', function () {
 
 ---
 
+
 ## docs/PERMISSIONS_MATRIX.md
 # Permissions Matrix
 
@@ -3694,6 +3850,7 @@ This document is the source-of-truth for **authorization intent** in this reposi
 - `system-tenants-manage`
 - `system-users-manage`
 - `system-roles-manage`
+- `workflow-manage`
 
 ### Purchasing
 
@@ -3755,6 +3912,7 @@ Tenant administrator role.
 
 - `system-users-manage`
 - `system-roles-manage`
+- `workflow-manage`
 - Purchasing: all purchasing permissions
 - Sales: all sales permissions
 - Inventory: all inventory permissions
@@ -3835,6 +3993,11 @@ Execution-only role.
 - Sales orders use `sales-sales-orders-manage` for `/sales/orders` index/create/update/delete, sales-order line CRUD, and customer detail Orders mini-index CRUD.
 - Customer detail Orders mini-index read access remains under `sales-customers-view`, but its mutations still require `sales-sales-orders-manage`.
 - Sales-order line create, quantity update, and delete mutations do not introduce a separate permission slug.
+- `workflow-manage` gates the `Admin -> Workflows` navigation item and workflow configuration CRUD.
+- Admins receive `workflow-manage` by default.
+- Assigned users may complete their own generated workflow tasks without requiring `workflow-manage`.
+- Assigned users do not require `sales-sales-orders-manage` solely to complete an assigned workflow task.
+- Sales-order lifecycle transitions continue requiring existing Sales Order permissions even after workflow tasks are introduced.
 - Navigation clickability for Sales Orders, Purchase Orders, and Make Orders is not permission-only:
   - permissions and `@can` checks still govern whether the user may see the relevant nav branch
   - backend navigation eligibility decides whether the order item renders as clickable or visible-but-disabled
@@ -3860,6 +4023,7 @@ return [
     App\Providers\AuthServiceProvider::class,
 ];
 ```
+
 
 ## docs/ENUMS.md
 # ENUMS — Canonical Enum Authority
@@ -3993,44 +4157,70 @@ Do not introduce new enum values without updating this document.
 
 **Name:** SalesOrder status  
 **Storage location(s):** `sales_orders.status` (string column)  
-**Allowed values:**
+**Fixed system values:**
 
 - `DRAFT`
 - `OPEN`
-- `PACKING`
-- `PACKED`
-- `SHIPPING`
 - `COMPLETED`
 - `CANCELLED`
+
+**Operational workflow-stage-backed values:**
+
+- Uppercase form of each active tenant `workflow_stages.key` in the `sales` workflow domain
+- New tenants are seeded by default with:
+    - `PACKING`
+    - `PACKED`
+    - `SHIPPING`
 
 **Semantic meaning:**
 
 - `DRAFT`: Sales order is editable. Header fields and sales-order lines may be created, updated, or deleted. No inventory impact exists yet.
 - `OPEN`: Sales order remains editable. Header fields and sales-order lines may still be created, updated, or deleted. No inventory impact exists yet.
-- `PACKING`: Operational packing workflow has started. No stock moves have been posted yet.
-- `PACKED`: Inventory consumption has been posted. The order is ready to move to shipping.
-- `SHIPPING`: Carrier pickup or shipment handoff has occurred. No additional inventory impact occurs in this state.
 - `COMPLETED`: Terminal state. Shipment is confirmed complete. No additional inventory impact occurs in this transition.
 - `CANCELLED`: Terminal state. The order is no longer editable. Cancelling never posts inventory issue stock moves.
 
+**Seeded default operational values:**
+
+- `PACKING`: Default seeded sales workflow stage where operational packing begins. No stock moves have been posted yet.
+- `PACKED`: Default seeded sales workflow stage where inventory consumption has been posted.
+- `SHIPPING`: Default seeded sales workflow stage where carrier pickup or shipment handoff has occurred.
+
 **Notes:**
 
-- Allowed transitions are:
+- `DRAFT`, `OPEN`, `COMPLETED`, and `CANCELLED` are system-owned values and are not admin-configurable workflow stages.
+- Operational stage values are database-backed rather than hardcoded. Runtime transitions use the active tenant `sales` workflow stages ordered by `sort_order`.
+- Transition shape is:
     - `DRAFT -> OPEN`
-    - `OPEN -> PACKING`
-    - `OPEN -> CANCELLED`
-    - `PACKING -> PACKED`
-    - `PACKING -> CANCELLED`
-    - `PACKED -> SHIPPING`
-    - `PACKED -> CANCELLED`
-    - `SHIPPING -> COMPLETED`
-    - `SHIPPING` cannot be cancelled in this phase
+    - `OPEN -> first active sales workflow stage`
+    - active workflow stages advance in database order
+    - final active workflow stage -> `COMPLETED`
+- Orders may still branch to `CANCELLED` where allowed by the current sales-order rules.
 - `COMPLETED` and `CANCELLED` are terminal.
 - Sales-order headers and lines may only be mutated while the order is `DRAFT` or `OPEN`.
-- `OPEN -> PACKING` checks availability only and creates no stock moves.
-- `PACKING -> PACKED` posts inventory issue stock moves in a single transaction.
+- Availability checks still apply before entering the first operational stage.
+- Under the seeded default sales workflow, `OPEN -> PACKING` checks availability only and creates no stock moves.
+- Under the seeded default sales workflow, `PACKING -> PACKED` posts inventory issue stock moves in a single transaction.
 - Cancelling from `PACKED` appends reversing stock moves and preserves the original audit trail.
 - Older roadmap-era statuses such as `CONFIRMED` and `FULFILLED` are not valid statuses.
+
+### Task Status
+
+**Name:** Task status  
+**Storage location(s):** `tasks.status` (string column)  
+**Allowed values:**
+
+- `open`
+- `completed`
+
+**Semantic meaning:**
+
+- `open`: Generated task is outstanding and may still block a forward transition for its current workflow stage.
+- `completed`: Generated task has been completed and remains visible as history.
+
+**Notes:**
+
+- Task completion is final in this PR slice.
+- Completed tasks cannot be reopened or uncompleted.
 
 ---
 
@@ -4089,6 +4279,7 @@ Do not introduce new enum values without updating this document.
 
 No conflicts or ambiguities were found at time of creation based on existing migrations, models, actions, and tests.
 
+
 ## docs/DB_SCHEMA.md
 # Database Schema Inventory (DB_SCHEMA)
 
@@ -4145,10 +4336,14 @@ Migrations remain the **sole source of truth**.
 - stock_moves
 - suppliers
 - tenants
+- tasks
 - uom_categories
 - uom_conversions
 - uoms
 - users
+- workflow_domains
+- workflow_stages
+- workflow_task_templates
 
 ---
 
@@ -4315,11 +4510,14 @@ Migrations remain the **sole source of truth**.
 
 - Sales order headers remain editable only while `status` is `DRAFT` or `OPEN`.
 - `COMPLETED` and `CANCELLED` are terminal.
-- `OPEN -> PACKING` checks fulfillment availability only, reserves nothing, and creates no stock moves.
-- `PACKING -> PACKED` posts inventory issue stock moves in a single transaction.
-- `PACKED -> SHIPPING` and `SHIPPING -> COMPLETED` create no stock moves.
-- `OPEN -> CANCELLED` and `PACKING -> CANCELLED` create no stock moves.
-- `PACKED -> CANCELLED` appends reversing stock moves and preserves the original issue moves for audit history.
+- `DRAFT`, `OPEN`, `COMPLETED`, and `CANCELLED` are system statuses.
+- Operational middle stages are derived from active tenant `workflow_stages` rows in the `sales` workflow domain and are persisted as uppercase stage keys in `sales_orders.status`.
+- New tenants are seeded by default with `packing`, `packed`, and `shipping`, but runtime stage order is database-backed by `sort_order`.
+- Entering the first operational stage checks fulfillment availability, reserves nothing, and creates no stock moves.
+- Moving from the seeded `packing` stage to the seeded `packed` stage posts inventory issue stock moves in a single transaction.
+- Later operational stages and the final operational-stage-to-`COMPLETED` transition create no stock moves.
+- Cancellation before packed inventory posting creates no stock moves.
+- Cancelling from the seeded `packed` stage appends reversing stock moves and preserves the original issue moves for audit history.
 
 ---
 
@@ -4355,7 +4553,136 @@ Migrations remain the **sole source of truth**.
 ### Behavioral Notes
 
 - Sales order line mutations are allowed only while the parent sales order is `DRAFT` or `OPEN`.
-- On `OPEN -> COMPLETED`, each line may generate exactly one posted `stock_moves` ledger entry with `source_type = App\Models\SalesOrderLine` and `source_id = sales_order_lines.id`.
+- On the seeded `packing -> packed` transition, each line may generate exactly one posted `stock_moves` ledger entry with `source_type = App\Models\SalesOrderLine` and `source_id = sales_order_lines.id`.
+
+---
+
+## workflow_domains
+
+**Tenant-owned:** No  
+**Purpose:** Fixed system-owned workflow-domain records used to scope workflow stages, task templates, and generated tasks
+
+### Columns
+
+| Name       | Type      | Nullable | Notes       |
+| ---------- | --------- | -------- | ----------- |
+| id         | bigint    | No       | Primary key |
+| key        | string    | No       | Unique canonical domain key |
+| name       | string    | No       | Display name |
+| sort_order | unsignedInteger | No | Stable UI/runtime ordering |
+| created_at | timestamp | Yes      | —           |
+| updated_at | timestamp | Yes      | —           |
+
+### Keys & Indexes
+
+- PK: `id`
+- Unique: `key`
+
+---
+
+## workflow_stages
+
+**Tenant-owned:** Yes  
+**Purpose:** Tenant-scoped operational workflow stages within a fixed workflow domain
+
+### Columns
+
+| Name              | Type      | Nullable | Notes                               |
+| ----------------- | --------- | -------- | ----------------------------------- |
+| id                | bigint    | No       | Primary key                         |
+| tenant_id         | bigint    | No       | FK → tenants.id (CASCADE)           |
+| workflow_domain_id | bigint   | No       | FK → workflow_domains.id (CASCADE)  |
+| key               | string    | No       | Tenant/domain-scoped operational key |
+| name              | string    | No       | Display name                        |
+| description       | text      | Yes      | —                                   |
+| sort_order        | unsignedInteger | No | Runtime order within domain         |
+| is_active         | boolean   | No       | Default true                        |
+| created_at        | timestamp | Yes      | —                                   |
+| updated_at        | timestamp | Yes      | —                                   |
+
+### Keys & Indexes
+
+- PK: `id`
+- Unique: `(tenant_id, workflow_domain_id, key)` (`wfs_tenant_domain_key_uniq`)
+- Index: `(tenant_id, workflow_domain_id, is_active)` (`wfs_tenant_domain_active_idx`)
+- Index: `(tenant_id, workflow_domain_id, sort_order)` (`wfs_tenant_domain_sort_idx`)
+- Implicit (FK index): `tenant_id`
+- Implicit (FK index): `workflow_domain_id`
+
+---
+
+## workflow_task_templates
+
+**Tenant-owned:** Yes  
+**Purpose:** Tenant-scoped task-template configuration for workflow-stage task generation
+
+### Columns
+
+| Name                    | Type      | Nullable | Notes                                    |
+| ----------------------- | --------- | -------- | ---------------------------------------- |
+| id                      | bigint    | No       | Primary key                              |
+| tenant_id               | bigint    | No       | FK → tenants.id (CASCADE)                |
+| workflow_domain_id      | bigint    | No       | FK → workflow_domains.id (CASCADE)       |
+| workflow_stage_id       | bigint    | No       | FK → workflow_stages.id (CASCADE)        |
+| title                   | string    | No       | Snapshotted into generated task          |
+| description             | text      | Yes      | Snapshotted into generated task          |
+| sort_order              | unsignedInteger | No | Runtime order within stage               |
+| is_active               | boolean   | No       | Default true                             |
+| default_assignee_user_id | bigint   | Yes      | FK → users.id (SET NULL)                 |
+| created_at              | timestamp | Yes      | —                                        |
+| updated_at              | timestamp | Yes      | —                                        |
+
+### Keys & Indexes
+
+- PK: `id`
+- Index: `(tenant_id, workflow_stage_id, is_active)` (`wft_tenant_stage_active_idx`)
+- Index: `(tenant_id, workflow_domain_id, workflow_stage_id)` (`wft_tenant_domain_stage_idx`)
+- Index: `(tenant_id, workflow_domain_id)` (`wft_tenant_domain_key_idx`)
+- Implicit (FK index): `tenant_id`
+- Implicit (FK index): `workflow_domain_id`
+- Implicit (FK index): `workflow_stage_id`
+- Implicit (FK index): `default_assignee_user_id`
+
+---
+
+## tasks
+
+**Tenant-owned:** Yes  
+**Purpose:** Tenant-scoped generated workflow tasks snapshotting task-template data against a domain record
+
+### Columns
+
+| Name                      | Type      | Nullable | Notes                                   |
+| ------------------------- | --------- | -------- | --------------------------------------- |
+| id                        | bigint    | No       | Primary key                             |
+| tenant_id                 | bigint    | No       | FK → tenants.id (CASCADE)               |
+| workflow_domain_id        | bigint    | No       | FK → workflow_domains.id (CASCADE)      |
+| domain_record_id          | unsignedBigInteger | No | Domain-specific record identifier      |
+| workflow_stage_id         | bigint    | No       | FK → workflow_stages.id (CASCADE)       |
+| workflow_task_template_id | bigint    | Yes      | FK → workflow_task_templates.id (SET NULL) |
+| assigned_to_user_id       | bigint    | No       | FK → users.id (CASCADE)                 |
+| title                     | string    | No       | Snapshot of template title              |
+| description               | text      | Yes      | Snapshot of template description        |
+| sort_order                | unsignedInteger | No | Snapshot of template sort order         |
+| status                    | string    | No       | Defaults to `open`                      |
+| completed_at              | timestamp | Yes      | —                                       |
+| completed_by_user_id      | bigint    | Yes      | FK → users.id (SET NULL)                |
+| created_at                | timestamp | Yes      | —                                       |
+| updated_at                | timestamp | Yes      | —                                       |
+
+### Keys & Indexes
+
+- PK: `id`
+- Unique: `(tenant_id, workflow_domain_id, domain_record_id, workflow_stage_id, workflow_task_template_id)` (`tasks_generated_template_unique`)
+- Index: `(tenant_id, workflow_domain_id, domain_record_id)` (`tasks_tenant_domain_record_idx`)
+- Index: `(tenant_id, workflow_stage_id, status)` (`tasks_tenant_stage_status_idx`)
+- Index: `(tenant_id, assigned_to_user_id, status)` (`tasks_tenant_assignee_status_idx`)
+- Implicit (FK index): `tenant_id`
+- Implicit (FK index): `workflow_domain_id`
+- Implicit (FK index): `workflow_stage_id`
+- Implicit (FK index): `workflow_task_template_id`
+- Implicit (FK index): `assigned_to_user_id`
+- Implicit (FK index): `completed_by_user_id`
 
 ---
 
@@ -5247,6 +5574,7 @@ Migrations remain the **sole source of truth**.
 
 **End of DB_SCHEMA**
 
+
 ## docs/UI_DESIGN.md
 # UI_DESIGN.md — Canonical UI Direction & Constraints
 
@@ -5841,6 +6169,7 @@ They are mandatory, not stylistic.
 
 ::contentReference[oaicite:0]{index=0}
 
+
 ## routes/web.php
 <?php
 
@@ -5867,9 +6196,13 @@ use App\Http\Controllers\SalesOrderStatusController;
 use App\Http\Controllers\SalesProductController;
 use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\SupplierPurchaseOptionController;
+use App\Http\Controllers\TaskCompletionController;
 use App\Http\Controllers\UomCategoryController;
 use App\Http\Controllers\UomConversionController;
 use App\Http\Controllers\UomController;
+use App\Http\Controllers\WorkflowController;
+use App\Http\Controllers\WorkflowStageController;
+use App\Http\Controllers\WorkflowTaskTemplateController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -6062,6 +6395,23 @@ Route::middleware('auth')->group(function () {
     Route::post('/sales/products/imports', [SalesProductController::class, 'storeImport'])
         ->name('sales.products.import.store');
 
+    Route::get('/admin/workflows', [WorkflowController::class, 'index'])
+        ->name('admin.workflows.index');
+    Route::post('/admin/workflows/stages', [WorkflowStageController::class, 'store'])
+        ->name('admin.workflows.stages.store');
+    Route::patch('/admin/workflows/stages/{workflowStage}', [WorkflowStageController::class, 'update'])
+        ->name('admin.workflows.stages.update');
+    Route::post('/admin/workflows/stages/reorder', [WorkflowStageController::class, 'reorder'])
+        ->name('admin.workflows.stages.reorder');
+    Route::post('/admin/workflows/task-templates', [WorkflowTaskTemplateController::class, 'store'])
+        ->name('admin.workflows.task-templates.store');
+    Route::patch('/admin/workflows/task-templates/{workflowTaskTemplate}', [WorkflowTaskTemplateController::class, 'update'])
+        ->name('admin.workflows.task-templates.update');
+    Route::post('/admin/workflows/task-templates/reorder', [WorkflowTaskTemplateController::class, 'reorder'])
+        ->name('admin.workflows.task-templates.reorder');
+    Route::patch('/tasks/{task}/complete', [TaskCompletionController::class, 'update'])
+        ->name('tasks.complete');
+
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::get('/profile/connectors', [ProfileConnectorController::class, 'index'])
         ->name('profile.connectors.index');
@@ -6085,6 +6435,7 @@ Route::delete('/manufacturing/uom-conversions/items/{itemConversion}', [UomConve
     ->name('manufacturing.uom-conversions.items.destroy');
 
 require __DIR__ . '/auth.php';
+
 
 ## docs/PR3_ROADMAP.md
 # PR3_ROADMAP — Sales + CRM Foundations
@@ -6307,7 +6658,7 @@ Ensure immutable pricing at line creation.
 Status: Implemented
 
 **Goal**
-Introduce lifecycle without inventory impact yet.
+Introduce the initial lifecycle slice without inventory impact yet.
 
 **Statuses**
 
@@ -6329,6 +6680,7 @@ Introduce lifecycle without inventory impact yet.
 - Lifecycle status changes return JSON and do not redirect
 - `DRAFT -> OPEN` and any cancellation transition create no stock moves
 - Older roadmap-era statuses `CONFIRMED` and `FULFILLED` are not valid
+- This historical slice was later extended by PR3-SO-006 and PR3-SO-007; current operational stages are now database-backed rather than permanently hardcoded in this initial lifecycle shape
 
 ---
 
@@ -6359,6 +6711,7 @@ Sales orders must update inventory.
 - `CANCELLED` creates no stock moves
 - Retrying completion must not create duplicate stock moves
 - If stock move creation fails, the order must remain `OPEN` and no partial stock moves may persist
+- This historical slice was later replaced by the packed-stage inventory posting model introduced by PR3-SO-006 and retained under PR3-SO-007
 
 ---
 
@@ -6390,29 +6743,238 @@ Extend the Sales Order lifecycle with operational statuses.
 - Make Orders remain manufacturing-only
 - Do not add custom stages in this PR
 - Do not add full task management in this PR unless explicitly scoped later
+- PR3-SO-007 later keeps `packing`, `packed`, and `shipping` as seeded defaults but moves operational stage ordering into tenant-scoped workflow stages backed by the database
 
 ---
 
-### PR3-SO-007 — Sales Order Workflow Tasks / Checklists
+### PR3-SO-007 — Domain-General Workflow Stages + Tasks
 
-Status: Planned
+Status: Implemented
 
 **Goal**
-Introduce tenant-level sales order workflow checklist and task definitions.
+Introduce domain-general workflow infrastructure for operational stages and generated tasks, with Sales Orders as the first consumer.
 
-**Rules**
+**Implemented Scope**
 
-- Add Sales → Settings at the bottom of the Sales menu
-- Sales Settings includes a Workflow section
-- Workflow defines default sales order stages and checklists
-- Each stage can define task definitions required before moving to the next status
-- When a sales order enters a stage, task records are created from that stage’s task definitions
-- Completing a task marks that checklist item complete from the Sales Order view
-- Required tasks must be complete before moving to the next stage
-- Tasks may include assigned user and due date
-- Initial scope is company-level workflow only
-- Product-specific workflow overrides are out of scope for now
-- Do not build a general project-management system
+- This PR implements workflow infrastructure, not just a Sales Order checklist UI
+- The design supports:
+    - sales
+    - purchasing
+    - manufacturing
+- Sales Orders are the first runtime domain integration
+- Purchase Order and Make Order task generation remain future scope
+
+**Implemented Data Model**
+
+- Fixed system-owned `workflow_domains` table
+- Seeded workflow domain keys:
+    - `sales`
+    - `purchasing`
+    - `manufacturing`
+- Domains are system-owned and not admin-configurable
+- Domains scope workflow stages and workflow task templates
+- Workflow domains are seeded deterministically with stable `sort_order`
+
+- Tenant-scoped `workflow_stages` table
+- Workflow stages belong to:
+    - tenant
+    - workflow domain
+- Stages are operational middle stages only
+- Sales Order system statuses `DRAFT`, `OPEN`, `COMPLETED`, and `CANCELLED` remain non-configurable and are not admin-managed workflow stages
+- Seeded default sales operational stage keys are:
+    - `packing`
+    - `packed`
+    - `shipping`
+- These seeded sales stages are defaults only, not a permanently hardcoded lifecycle
+- Future Sales Order operational-stage order is resolved from the tenant's active `sales` workflow stages ordered by `sort_order`
+- `DRAFT -> OPEN` remains system-owned
+- `OPEN` advances to the first active sales workflow stage
+- Active sales workflow stages advance in database order
+- The final active sales workflow stage advances to `COMPLETED`
+- `CANCELLED` remains a terminal branch under the existing cancellation rules
+
+- Tenant-scoped `workflow_task_templates` table
+- Task templates belong to:
+    - tenant
+    - workflow domain
+    - workflow stage
+- Task template fields include:
+    - `title`
+    - `description`
+    - `sort_order`
+    - `is_active`
+    - `default_assignee_user_id`
+
+- Tenant-scoped domain-general `tasks` table
+- Generated task fields include:
+    - `tenant_id`
+    - `workflow_domain_id`
+    - `domain_record_id`
+    - `workflow_stage_id`
+    - `workflow_task_template_id`
+    - `assigned_to_user_id`
+    - `title`
+    - `description`
+    - `sort_order`
+    - `status`
+    - `completed_at`
+    - `completed_by_user_id`
+
+**Implemented Stage Rules**
+
+- Workflow stages are database-backed, not hardcoded
+- Stages have `is_active`
+- Admins can create, edit, deactivate, reactivate, and reorder operational stages within a tenant/domain
+- Duplicate stage keys must be prevented per tenant/domain
+- The same stage key may exist in different workflow domains
+- `DRAFT`, `OPEN`, `COMPLETED`, and `CANCELLED` remain system statuses and cannot be reordered through workflow admin UI
+- Inactive stages are hidden by default
+- The admin UI includes a show-inactive toggle
+- Default sales stages are seeded idempotently per tenant and do not duplicate existing `packing`, `packed`, or `shipping` rows
+- Runtime Sales Order stage resolution must use active sales workflow stages from the database rather than a hardcoded `packing -> packed -> shipping` fallback
+
+**Implemented Task Template Rules**
+
+- Only active task templates generate future tasks
+- Inactive task templates are hidden by default
+- The admin UI includes a show-inactive toggle
+- Editing a task template affects future generated tasks only
+- Already-generated tasks remain unchanged
+- Task templates can be reordered within a stage
+- Tasks are always assigned to a user
+- If no assignee is configured, generated tasks default to the first user for that tenant
+
+**Implemented Generated Task Rules**
+
+- Task status remains simple in this PR:
+    - `open`
+    - `completed`
+- Task completion is final in this PR
+- Completed tasks cannot be reopened or uncompleted in this PR
+- Ad hoc task creation remains future scope
+- Generated tasks snapshot template fields at creation time:
+    - `title`
+    - `description`
+    - `sort_order`
+    - `assigned_to_user_id`
+- Current-stage generated tasks are stable after creation
+- Entering a future stage uses the latest active admin configuration at that time
+- Completed tasks remain visible and clearly marked completed
+- Open tasks are removed when an order is cancelled
+- Completed task history remains visible unless a future rule changes that
+- Moving an order backward does not reopen or duplicate prior open tasks
+- Re-entering a stage or repeated transition calls must not duplicate generated tasks
+
+**Implemented Sales Order Integration**
+
+- Sales Orders are the first runtime consumer of the workflow task system
+- When a Sales Order enters an operational workflow stage, the system generates tasks from active task templates matching:
+    - tenant
+    - sales workflow domain
+    - entered workflow stage
+- If no active task templates exist for that stage, no tasks are created
+- The system creates at most one generated task per template per Sales Order/stage entry
+- Task generation happens only after the underlying stage transition succeeds
+- `OPEN -> first active sales workflow stage` runs existing fulfillment availability checks before generating tasks
+- Inventory consumption still occurs at `packing -> packed` when those seeded default stages exist in the tenant workflow
+- `packed -> shipping` task generation occurs only after the successful stage transition
+- Forward Sales Order lifecycle transitions remain gated by:
+    1. existing Sales Order domain rules such as packing and inventory rules
+    2. completion of current-stage generated tasks
+- If no tasks exist for a stage, workflow task gating does not block the transition
+- Sales Order transitions continue using existing Sales Order manage permissions
+
+**Implemented Admin UI**
+
+- Navigation item: `Admin -> Workflows`
+- Access is controlled by permission slug `workflow-manage`
+- Admins receive `workflow-manage` by default
+- The Workflows page uses Tailwind + Alpine components
+- No global JavaScript state is permitted
+- The page includes two accordion sections:
+    - `Stages`
+    - `Tasks`
+
+Stages accordion:
+
+- CRUD-style index
+- Create/edit stages
+- Deactivate/reactivate stages
+- Reorder active operational stages
+- Show inactive toggle
+- Domain selector limited to seeded workflow domains
+
+Tasks accordion:
+
+- CRUD-style index
+- Create/edit task templates
+- Deactivate/reactivate task templates
+- Reorder task templates within a stage
+- Show inactive toggle
+- Domain selector
+- Stage selector filtered by selected domain
+- Stage options should reflect newly created stages from the Stages accordion
+- Default assignee selector
+- Title and description fields
+
+**Implemented Authorization Rules**
+
+- `workflow-manage` controls access to `Admin -> Workflows` and workflow configuration CRUD
+- Admins receive `workflow-manage` by default
+- Assigned users may complete their assigned tasks without `workflow-manage`
+- Assigned users do not need Sales Order manage permission solely to complete an assigned task
+- Sales Order lifecycle transitions still require existing Sales Order manage permission
+- Tenant scoping applies to workflow stages, workflow task templates, generated tasks, and any tenant-owned workflow records
+
+**Out of Scope**
+
+- Ad hoc task creation
+- Task comments
+- Task attachments
+- Task due dates
+- Task priorities
+- Reopening completed tasks
+- Multiple assignees per task
+- Product-specific workflows
+- Task notification system
+- Purchase Order task generation
+- Make Order task generation
+- Custom branching workflows
+- Conditional tasks
+- Parallel task groups
+- Full visual workflow builder
+- Customer-facing task views
+- Vendor-facing task views
+
+**Implemented Test Coverage Expectations**
+
+- Workflow domain seeding
+- Workflow stage CRUD
+- Workflow stage active/inactive behavior
+- Workflow stage ordering
+- New active sales stages change future Sales Order transition order
+- Deactivating a sales stage removes it from future Sales Order transition order
+- Reordering active sales stages changes future Sales Order transition order
+- Seeded `packing`, `packed`, and `shipping` stages are defaults only and do not override database-backed runtime ordering
+- Workflow task template CRUD
+- Workflow task template active/inactive behavior
+- Task generation from active templates
+- No task generation from inactive templates
+- No duplicate task generation
+- Task snapshot behavior
+- Future stages use latest active config
+- Sales Order forward transition blocked by open tasks
+- Sales Order advances once tasks complete
+- No task gate when no tasks exist
+- Cancellation removes open tasks
+- Completed tasks remain visible
+- Assigned user can complete assigned task
+- Completed task stores `completed_at` and `completed_by_user_id`
+- Completed task cannot be reopened
+- `workflow-manage` gates admin configuration
+- Admins receive `workflow-manage`
+- Sales Order transition permission remains unchanged
+- Tenant scoping
 
 ---
 
@@ -6492,3 +7054,96 @@ After PR3 completion:
 - CRM foundation established
 - Sales orders impact inventory correctly
 - System ready for external integrations
+
+
+## docs/architecture/README.yaml
+name: Architecture Documentation System
+type: Architectural Documentation Standard
+location:
+  - docs/architecture/
+purpose: Define a strict, reviewable, and machine-readable system for documenting architectural invariants and reusable patterns.
+when_to_use:
+  - Documenting any architectural concept, invariant, or reusable pattern
+  - Replacing or extending the former ARCHITECTURE_INVENTORY.md
+when_not_to_use:
+  - Documenting implementation details
+  - Explaining step-by-step workflows or tutorials
+rules:
+  - Architecture documentation is authoritative and describes invariants, not implementations.
+  - Each architectural concept must be documented in exactly one YAML file.
+  - Files must be grouped by domain directory.
+  - Enum values remain canonical in docs/ENUMS.md and must not be duplicated.
+  - UI constraints remain canonical in docs/UI_DESIGN.md.
+  - Conflicts resolve in order: CONVENTIONS.md, ENUMS.md, architecture YAML, then code.
+  - All architecture YAML files must follow the canonical schema and key order.
+  - All schema keys are mandatory; empty sections are forbidden.
+  - Key order is fixed and must not be changed.
+  - Lists must be explicit YAML lists.
+  - No prose or commentary is allowed outside the schema.
+  - PRs violating schema or invariants must be rejected.
+public_interface:
+  - docs/architecture/**.yaml
+  - docs/architecture/README.yaml
+example_usage: |
+  docs/architecture/
+  ├── tenancy/
+  │   └── TenantScopeTrait.yaml
+  ├── inventory/
+  │   └── StockMove.yaml
+  ├── ui/
+  │   └── SlideOverFormPattern.yaml
+  └── README.md
+
+schema:
+  required_keys:
+    - name
+    - type
+    - location
+    - purpose
+    - when_to_use
+    - when_not_to_use
+    - rules
+    - public_interface
+    - example_usage
+  key_order:
+    - name
+    - type
+    - location
+    - purpose
+    - when_to_use
+    - when_not_to_use
+    - rules
+    - public_interface
+    - example_usage
+
+implicit_invariants:
+  inventory_uom_purchasing:
+    - Quantities are strings, never floats.
+    - All quantity math uses BCMath.
+    - Canonical scale is 6.
+    - Tenant boundary enforced when authenticated.
+  tenancy:
+    - Single database architecture.
+    - tenant_id is authoritative.
+    - No tenant scoping on auth identity models.
+    - Tenant scope is a no-op when unauthenticated.
+  authorization:
+    - Authorization enforced via Laravel Gates.
+    - Permission slugs are canonical.
+    - UI visibility is not a source of truth.
+  ui:
+    - Blade and Alpine only.
+    - No global JavaScript state.
+    - AJAX-first CRUD.
+    - Breeze-aligned layout.
+
+writing_guidelines:
+  good_entries:
+    - Short and precise.
+    - Enforces invariants.
+    - Easy to diff and review.
+    - Avoids duplication of implicit invariants.
+  bad_entries:
+    - Restates global or implicit rules.
+    - Includes implementation trivia.
+    - Contains prose outside the schema.

@@ -2,11 +2,13 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\Workflows\ResolveSalesWorkflowStageAction;
 use App\Models\Customer;
 use App\Models\CustomerContact;
 use App\Models\Item;
 use App\Models\SalesOrder;
 use App\Models\SalesOrderLine;
+use App\Models\Task;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -264,6 +266,7 @@ class CustomerController extends Controller
             'line_count' => count($lines),
             'order_total_cents' => $orderTotalCents,
             'order_total_amount' => bcdiv($orderTotalCents, '100', self::SCALE),
+            'current_stage_tasks' => $this->currentStageTasksData($order),
         ];
     }
 
@@ -423,5 +426,61 @@ class CustomerController extends Controller
         }
 
         return implode(', ', $parts);
+    }
+
+    /**
+     * Build the current-stage workflow tasks payload.
+     *
+     * @return array<int, array<string, int|string|bool|null>>
+     */
+    private function currentStageTasksData(SalesOrder $order): array
+    {
+        $stage = app(ResolveSalesWorkflowStageAction::class)->currentStageForStatus($order);
+
+        if (! $stage) {
+            return [];
+        }
+
+        $viewerUserId = auth()->id();
+
+        return Task::query()
+            ->with(['assignedTo', 'completedBy'])
+            ->where('workflow_domain_id', $stage->workflow_domain_id)
+            ->where('domain_record_id', $order->id)
+            ->where('workflow_stage_id', $stage->id)
+            ->orderBy('sort_order')
+            ->orderBy('id')
+            ->get()
+            ->map(fn (Task $task): array => $this->taskData($task, $viewerUserId))
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Build workflow task payload data.
+     *
+     * @return array<string, int|string|bool|null>
+     */
+    private function taskData(Task $task, ?int $viewerUserId): array
+    {
+        return [
+            'id' => $task->id,
+            'workflow_stage_id' => $task->workflow_stage_id,
+            'workflow_task_template_id' => $task->workflow_task_template_id,
+            'assigned_to_user_id' => $task->assigned_to_user_id,
+            'assigned_to_user_name' => $task->assignedTo?->name,
+            'title' => $task->title,
+            'description' => $task->description,
+            'sort_order' => $task->sort_order,
+            'status' => $task->status,
+            'is_completed' => $task->isCompleted(),
+            'can_complete' => ! $task->isCompleted()
+                && $viewerUserId !== null
+                && (int) $task->assigned_to_user_id === (int) $viewerUserId,
+            'completed_at' => $task->completed_at?->toISOString(),
+            'completed_by_user_id' => $task->completed_by_user_id,
+            'completed_by_user_name' => $task->completedBy?->name,
+            'complete_url' => route('tasks.complete', $task),
+        ];
     }
 }

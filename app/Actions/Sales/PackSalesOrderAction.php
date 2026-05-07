@@ -2,6 +2,8 @@
 
 namespace App\Actions\Sales;
 
+use App\Actions\Workflows\AssertSalesOrderStageTasksCompletedAction;
+use App\Actions\Workflows\GenerateSalesOrderWorkflowTasksAction;
 use App\Models\SalesOrder;
 use App\Models\StockMove;
 use DomainException;
@@ -17,16 +19,33 @@ class PackSalesOrderAction
      *
      * @throws DomainException
      */
-    public function execute(SalesOrder $salesOrder, BuildSalesOrderIssuePlanAction $buildPlanAction): SalesOrder
-    {
-        return DB::transaction(function () use ($salesOrder, $buildPlanAction): SalesOrder {
+    public function execute(
+        SalesOrder $salesOrder,
+        BuildSalesOrderIssuePlanAction $buildPlanAction,
+        AssertSalesOrderStageTasksCompletedAction $assertStageTasksCompletedAction,
+        GenerateSalesOrderWorkflowTasksAction $generateWorkflowTasksAction,
+        string $targetStatus,
+        string $targetStageKey
+    ): SalesOrder {
+        return DB::transaction(function () use (
+            $salesOrder,
+            $buildPlanAction,
+            $assertStageTasksCompletedAction,
+            $generateWorkflowTasksAction,
+            $targetStatus,
+            $targetStageKey
+        ): SalesOrder {
             $lockedOrder = SalesOrder::query()
                 ->whereKey($salesOrder->id)
                 ->lockForUpdate()
                 ->firstOrFail();
 
-            if ($lockedOrder->status !== SalesOrder::STATUS_PACKING) {
+            if (! $lockedOrder->canTransitionTo($targetStatus)) {
                 throw new DomainException('Status transition is not allowed.');
+            }
+
+            if ($lockedOrder->status !== SalesOrder::STATUS_OPEN) {
+                $assertStageTasksCompletedAction->execute($lockedOrder);
             }
 
             $plan = $buildPlanAction->execute($lockedOrder);
@@ -36,11 +55,12 @@ class PackSalesOrderAction
             }
 
             $lockedOrder->forceFill([
-                'status' => SalesOrder::STATUS_PACKED,
+                'status' => $targetStatus,
             ])->save();
+
+            $generateWorkflowTasksAction->execute($lockedOrder, $targetStageKey);
 
             return $lockedOrder->fresh();
         });
     }
 }
-

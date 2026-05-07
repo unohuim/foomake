@@ -1,35 +1,40 @@
 name: Task
 type: Tenant-Scoped Generated Record Rule
 location:
+  - app/Actions/Tasks/CompleteTaskAction.php
+  - app/Actions/Workflows/GenerateSalesOrderWorkflowTasksAction.php
+  - app/Models/Task.php
+  - database/migrations/2026_05_07_000004_create_tasks_table.php
   - docs/PR3_ROADMAP.md
-purpose: Define the planned domain-general generated task record used to snapshot workflow task-template data against an operational domain record.
+purpose: Define the domain-general generated task record used to snapshot workflow task-template data against an operational domain record.
 when_to_use:
-  - Planning generated task creation on workflow-stage entry
-  - Planning assigned-user task completion behavior
-  - Planning snapshot persistence independent of later template edits
+  - Generated task creation on workflow-stage entry
+  - Assigned-user task completion behavior
+  - Snapshot persistence independent of later template edits
 when_not_to_use:
   - Project-management features outside the operational workflow scope
   - Reopening, branching, comments, attachments, or multi-assignee task systems
 rules:
-  - Tasks are planned to be tenant-owned and tenant-scoped.
-  - Tasks are planned to belong to one workflow domain, one workflow stage, and one originating workflow task template.
-  - Tasks are planned to reference one domain record through a domain-specific record identifier.
-  - Tasks are planned to snapshot title, description, sort_order, and assigned user at creation time.
-  - Task status values are planned in docs/PR3_ROADMAP.md and should be added to docs/ENUMS.md in the implementation PR rather than duplicated here as canonical values.
-  - Task completion is intended to be final in this PR scope.
-  - Completed tasks are intended to remain visible.
-  - Already-generated tasks are intended to remain unchanged when templates are edited later.
+  - Tasks are tenant-owned and tenant-scoped.
+  - Tasks belong to one workflow domain, one workflow stage, and one originating workflow task template.
+  - Tasks reference one domain record through a domain-specific record identifier.
+  - Tasks snapshot title, description, sort_order, and assigned user at creation time.
+  - Task status values are canonical in docs/ENUMS.md.
+  - Task completion is final in this PR scope.
+  - Completed tasks remain visible.
+  - Already-generated tasks remain unchanged when templates are edited later.
   - Re-entering a stage or retrying a transition must not create duplicate generated tasks for the same template and stage-entry slice.
 public_interface:
-  - docs/PR3_ROADMAP.md
+  - CompleteTaskAction::execute()
+  - GenerateSalesOrderWorkflowTasksAction::execute()
+  - Task::query()
   - docs/architecture/workflows/WorkflowTaskTemplate.yaml
   - docs/architecture/workflows/SalesOrderWorkflowTaskGating.yaml
 example_usage: |
-  Planned generated task snapshot:
+  Generated task snapshot:
     domain = sales
     domain_record_id = sales_order_id
     stage = packing
     template = Print packing slip
     assigned_to_user_id = 17
     status = open
-

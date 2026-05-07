@@ -1,29 +1,34 @@
 name: Workflow Domain
 type: System-Owned Domain Rule
 location:
+  - app/Actions/Workflows/EnsureWorkflowDomainsSeededAction.php
+  - app/Models/WorkflowDomain.php
+  - database/migrations/2026_05_07_000001_create_workflow_domains_table.php
+  - database/seeders/WorkflowDomainSeeder.php
   - docs/PR3_ROADMAP.md
-purpose: Define the planned fixed workflow-domain layer used to scope reusable workflow stages and generated tasks across operational domains.
+purpose: Define the fixed workflow-domain layer used to scope reusable workflow stages and generated tasks across operational domains.
 when_to_use:
-  - Planning tenant-owned workflow stages
-  - Planning workflow task-template scoping
-  - Planning domain-general task generation for operational records
+  - Resolving tenant-owned workflow stages
+  - Resolving workflow task-template scoping
+  - Supporting domain-general task generation for operational records
 when_not_to_use:
   - Admin-managed taxonomy creation
   - Product-specific or ad hoc workflow customization
 rules:
-  - Workflow domains are planned as fixed system-owned records.
-  - Workflow domains are planned to scope workflow stages and workflow task templates.
+  - Workflow domains are fixed system-owned records.
+  - Workflow domains scope workflow stages and workflow task templates.
   - Admin users are not intended to create, edit, or delete workflow domains.
-  - Sales is the first planned consumer, but the abstraction is intended to support purchasing and manufacturing later.
-  - Canonical domain keys are planned documentation in docs/PR3_ROADMAP.md until runtime implementation exists.
+  - Canonical workflow-domain keys are sales, purchasing, and manufacturing.
+  - Workflow domains must be seeded deterministically and idempotently.
+  - Sales is the first runtime consumer, but the abstraction supports purchasing and manufacturing later.
 public_interface:
-  - docs/PR3_ROADMAP.md
+  - EnsureWorkflowDomainsSeededAction::execute()
+  - WorkflowDomain::query()
   - docs/architecture/workflows/WorkflowStage.yaml
   - docs/architecture/workflows/WorkflowTaskTemplate.yaml
   - docs/architecture/workflows/Task.yaml
 example_usage: |
-  Planned workflow domain usage:
+  Workflow domain usage:
     domain = system-owned sales
     stages = tenant-scoped operational stages for that domain
     templates = tenant-scoped task templates for that domain
-

@@ -129,44 +129,70 @@ Do not introduce new enum values without updating this document.
 
 **Name:** SalesOrder status  
 **Storage location(s):** `sales_orders.status` (string column)  
-**Allowed values:**
+**Fixed system values:**
 
 - `DRAFT`
 - `OPEN`
-- `PACKING`
-- `PACKED`
-- `SHIPPING`
 - `COMPLETED`
 - `CANCELLED`
+
+**Operational workflow-stage-backed values:**
+
+- Uppercase form of each active tenant `workflow_stages.key` in the `sales` workflow domain
+- New tenants are seeded by default with:
+    - `PACKING`
+    - `PACKED`
+    - `SHIPPING`
 
 **Semantic meaning:**
 
 - `DRAFT`: Sales order is editable. Header fields and sales-order lines may be created, updated, or deleted. No inventory impact exists yet.
 - `OPEN`: Sales order remains editable. Header fields and sales-order lines may still be created, updated, or deleted. No inventory impact exists yet.
-- `PACKING`: Operational packing workflow has started. No stock moves have been posted yet.
-- `PACKED`: Inventory consumption has been posted. The order is ready to move to shipping.
-- `SHIPPING`: Carrier pickup or shipment handoff has occurred. No additional inventory impact occurs in this state.
 - `COMPLETED`: Terminal state. Shipment is confirmed complete. No additional inventory impact occurs in this transition.
 - `CANCELLED`: Terminal state. The order is no longer editable. Cancelling never posts inventory issue stock moves.
 
+**Seeded default operational values:**
+
+- `PACKING`: Default seeded sales workflow stage where operational packing begins. No stock moves have been posted yet.
+- `PACKED`: Default seeded sales workflow stage where inventory consumption has been posted.
+- `SHIPPING`: Default seeded sales workflow stage where carrier pickup or shipment handoff has occurred.
+
 **Notes:**
 
-- Allowed transitions are:
+- `DRAFT`, `OPEN`, `COMPLETED`, and `CANCELLED` are system-owned values and are not admin-configurable workflow stages.
+- Operational stage values are database-backed rather than hardcoded. Runtime transitions use the active tenant `sales` workflow stages ordered by `sort_order`.
+- Transition shape is:
     - `DRAFT -> OPEN`
-    - `OPEN -> PACKING`
-    - `OPEN -> CANCELLED`
-    - `PACKING -> PACKED`
-    - `PACKING -> CANCELLED`
-    - `PACKED -> SHIPPING`
-    - `PACKED -> CANCELLED`
-    - `SHIPPING -> COMPLETED`
-    - `SHIPPING` cannot be cancelled in this phase
+    - `OPEN -> first active sales workflow stage`
+    - active workflow stages advance in database order
+    - final active workflow stage -> `COMPLETED`
+- Orders may still branch to `CANCELLED` where allowed by the current sales-order rules.
 - `COMPLETED` and `CANCELLED` are terminal.
 - Sales-order headers and lines may only be mutated while the order is `DRAFT` or `OPEN`.
-- `OPEN -> PACKING` checks availability only and creates no stock moves.
-- `PACKING -> PACKED` posts inventory issue stock moves in a single transaction.
+- Availability checks still apply before entering the first operational stage.
+- Under the seeded default sales workflow, `OPEN -> PACKING` checks availability only and creates no stock moves.
+- Under the seeded default sales workflow, `PACKING -> PACKED` posts inventory issue stock moves in a single transaction.
 - Cancelling from `PACKED` appends reversing stock moves and preserves the original audit trail.
 - Older roadmap-era statuses such as `CONFIRMED` and `FULFILLED` are not valid statuses.
+
+### Task Status
+
+**Name:** Task status  
+**Storage location(s):** `tasks.status` (string column)  
+**Allowed values:**
+
+- `open`
+- `completed`
+
+**Semantic meaning:**
+
+- `open`: Generated task is outstanding and may still block a forward transition for its current workflow stage.
+- `completed`: Generated task has been completed and remains visible as history.
+
+**Notes:**
+
+- Task completion is final in this PR slice.
+- Completed tasks cannot be reopened or uncompleted.
 
 ---
 

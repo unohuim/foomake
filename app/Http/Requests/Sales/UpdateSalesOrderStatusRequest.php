@@ -2,11 +2,9 @@
 
 namespace App\Http\Requests\Sales;
 
-use App\Models\SalesOrder;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Http\Exceptions\HttpResponseException;
-use Illuminate\Validation\Rule;
 
 /**
  * Validate sales order lifecycle status update requests.
@@ -24,7 +22,7 @@ class UpdateSalesOrderStatusRequest extends FormRequest
     /**
      * Get the validation rules that apply to the request.
      *
-     * @return array<string, list<string|\Illuminate\Contracts\Validation\ValidationRule|Rule>>
+     * @return array<string, list<string>>
      */
     public function rules(): array
     {
@@ -32,7 +30,7 @@ class UpdateSalesOrderStatusRequest extends FormRequest
             'status' => [
                 'required',
                 'string',
-                Rule::in(SalesOrder::statuses()),
+                'max:255',
             ],
         ];
     }

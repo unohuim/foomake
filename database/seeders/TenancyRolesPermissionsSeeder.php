@@ -23,6 +23,7 @@ class TenancyRolesPermissionsSeeder extends Seeder
             'system-tenants-manage',
             'system-users-manage',
             'system-roles-manage',
+            'workflow-manage',
         ];
 
         $purchasingPermissions = [

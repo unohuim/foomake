@@ -612,10 +612,9 @@ it('59. future quantity display is not introduced', function () {
         ->and($source)->not->toContain('future_quantity');
 });
 
-it('60. task checklist system is not introduced', function () {
+it('60. task checklist system is introduced on the sales orders page', function () {
     $source = file_get_contents(base_path('resources/views/sales/orders/index.blade.php'));
 
-    expect($source)->not->toContain('Checklist')
-        ->and($source)->not->toContain('task definitions')
-        ->and($source)->not->toContain('workflow tasks');
+    expect($source)->toContain('Checklist')
+        ->and($source)->toContain('current_stage_tasks');
 });

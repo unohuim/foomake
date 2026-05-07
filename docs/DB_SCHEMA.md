@@ -53,10 +53,14 @@ Migrations remain the **sole source of truth**.
 - stock_moves
 - suppliers
 - tenants
+- tasks
 - uom_categories
 - uom_conversions
 - uoms
 - users
+- workflow_domains
+- workflow_stages
+- workflow_task_templates
 
 ---
 
@@ -223,11 +227,14 @@ Migrations remain the **sole source of truth**.
 
 - Sales order headers remain editable only while `status` is `DRAFT` or `OPEN`.
 - `COMPLETED` and `CANCELLED` are terminal.
-- `OPEN -> PACKING` checks fulfillment availability only, reserves nothing, and creates no stock moves.
-- `PACKING -> PACKED` posts inventory issue stock moves in a single transaction.
-- `PACKED -> SHIPPING` and `SHIPPING -> COMPLETED` create no stock moves.
-- `OPEN -> CANCELLED` and `PACKING -> CANCELLED` create no stock moves.
-- `PACKED -> CANCELLED` appends reversing stock moves and preserves the original issue moves for audit history.
+- `DRAFT`, `OPEN`, `COMPLETED`, and `CANCELLED` are system statuses.
+- Operational middle stages are derived from active tenant `workflow_stages` rows in the `sales` workflow domain and are persisted as uppercase stage keys in `sales_orders.status`.
+- New tenants are seeded by default with `packing`, `packed`, and `shipping`, but runtime stage order is database-backed by `sort_order`.
+- Entering the first operational stage checks fulfillment availability, reserves nothing, and creates no stock moves.
+- Moving from the seeded `packing` stage to the seeded `packed` stage posts inventory issue stock moves in a single transaction.
+- Later operational stages and the final operational-stage-to-`COMPLETED` transition create no stock moves.
+- Cancellation before packed inventory posting creates no stock moves.
+- Cancelling from the seeded `packed` stage appends reversing stock moves and preserves the original issue moves for audit history.
 
 ---
 
@@ -263,7 +270,136 @@ Migrations remain the **sole source of truth**.
 ### Behavioral Notes
 
 - Sales order line mutations are allowed only while the parent sales order is `DRAFT` or `OPEN`.
-- On `OPEN -> COMPLETED`, each line may generate exactly one posted `stock_moves` ledger entry with `source_type = App\Models\SalesOrderLine` and `source_id = sales_order_lines.id`.
+- On the seeded `packing -> packed` transition, each line may generate exactly one posted `stock_moves` ledger entry with `source_type = App\Models\SalesOrderLine` and `source_id = sales_order_lines.id`.
+
+---
+
+## workflow_domains
+
+**Tenant-owned:** No  
+**Purpose:** Fixed system-owned workflow-domain records used to scope workflow stages, task templates, and generated tasks
+
+### Columns
+
+| Name       | Type      | Nullable | Notes       |
+| ---------- | --------- | -------- | ----------- |
+| id         | bigint    | No       | Primary key |
+| key        | string    | No       | Unique canonical domain key |
+| name       | string    | No       | Display name |
+| sort_order | unsignedInteger | No | Stable UI/runtime ordering |
+| created_at | timestamp | Yes      | —           |
+| updated_at | timestamp | Yes      | —           |
+
+### Keys & Indexes
+
+- PK: `id`
+- Unique: `key`
+
+---
+
+## workflow_stages
+
+**Tenant-owned:** Yes  
+**Purpose:** Tenant-scoped operational workflow stages within a fixed workflow domain
+
+### Columns
+
+| Name              | Type      | Nullable | Notes                               |
+| ----------------- | --------- | -------- | ----------------------------------- |
+| id                | bigint    | No       | Primary key                         |
+| tenant_id         | bigint    | No       | FK → tenants.id (CASCADE)           |
+| workflow_domain_id | bigint   | No       | FK → workflow_domains.id (CASCADE)  |
+| key               | string    | No       | Tenant/domain-scoped operational key |
+| name              | string    | No       | Display name                        |
+| description       | text      | Yes      | —                                   |
+| sort_order        | unsignedInteger | No | Runtime order within domain         |
+| is_active         | boolean   | No       | Default true                        |
+| created_at        | timestamp | Yes      | —                                   |
+| updated_at        | timestamp | Yes      | —                                   |
+
+### Keys & Indexes
+
+- PK: `id`
+- Unique: `(tenant_id, workflow_domain_id, key)` (`wfs_tenant_domain_key_uniq`)
+- Index: `(tenant_id, workflow_domain_id, is_active)` (`wfs_tenant_domain_active_idx`)
+- Index: `(tenant_id, workflow_domain_id, sort_order)` (`wfs_tenant_domain_sort_idx`)
+- Implicit (FK index): `tenant_id`
+- Implicit (FK index): `workflow_domain_id`
+
+---
+
+## workflow_task_templates
+
+**Tenant-owned:** Yes  
+**Purpose:** Tenant-scoped task-template configuration for workflow-stage task generation
+
+### Columns
+
+| Name                    | Type      | Nullable | Notes                                    |
+| ----------------------- | --------- | -------- | ---------------------------------------- |
+| id                      | bigint    | No       | Primary key                              |
+| tenant_id               | bigint    | No       | FK → tenants.id (CASCADE)                |
+| workflow_domain_id      | bigint    | No       | FK → workflow_domains.id (CASCADE)       |
+| workflow_stage_id       | bigint    | No       | FK → workflow_stages.id (CASCADE)        |
+| title                   | string    | No       | Snapshotted into generated task          |
+| description             | text      | Yes      | Snapshotted into generated task          |
+| sort_order              | unsignedInteger | No | Runtime order within stage               |
+| is_active               | boolean   | No       | Default true                             |
+| default_assignee_user_id | bigint   | Yes      | FK → users.id (SET NULL)                 |
+| created_at              | timestamp | Yes      | —                                        |
+| updated_at              | timestamp | Yes      | —                                        |
+
+### Keys & Indexes
+
+- PK: `id`
+- Index: `(tenant_id, workflow_stage_id, is_active)` (`wft_tenant_stage_active_idx`)
+- Index: `(tenant_id, workflow_domain_id, workflow_stage_id)` (`wft_tenant_domain_stage_idx`)
+- Index: `(tenant_id, workflow_domain_id)` (`wft_tenant_domain_key_idx`)
+- Implicit (FK index): `tenant_id`
+- Implicit (FK index): `workflow_domain_id`
+- Implicit (FK index): `workflow_stage_id`
+- Implicit (FK index): `default_assignee_user_id`
+
+---
+
+## tasks
+
+**Tenant-owned:** Yes  
+**Purpose:** Tenant-scoped generated workflow tasks snapshotting task-template data against a domain record
+
+### Columns
+
+| Name                      | Type      | Nullable | Notes                                   |
+| ------------------------- | --------- | -------- | --------------------------------------- |
+| id                        | bigint    | No       | Primary key                             |
+| tenant_id                 | bigint    | No       | FK → tenants.id (CASCADE)               |
+| workflow_domain_id        | bigint    | No       | FK → workflow_domains.id (CASCADE)      |
+| domain_record_id          | unsignedBigInteger | No | Domain-specific record identifier      |
+| workflow_stage_id         | bigint    | No       | FK → workflow_stages.id (CASCADE)       |
+| workflow_task_template_id | bigint    | Yes      | FK → workflow_task_templates.id (SET NULL) |
+| assigned_to_user_id       | bigint    | No       | FK → users.id (CASCADE)                 |
+| title                     | string    | No       | Snapshot of template title              |
+| description               | text      | Yes      | Snapshot of template description        |
+| sort_order                | unsignedInteger | No | Snapshot of template sort order         |
+| status                    | string    | No       | Defaults to `open`                      |
+| completed_at              | timestamp | Yes      | —                                       |
+| completed_by_user_id      | bigint    | Yes      | FK → users.id (SET NULL)                |
+| created_at                | timestamp | Yes      | —                                       |
+| updated_at                | timestamp | Yes      | —                                       |
+
+### Keys & Indexes
+
+- PK: `id`
+- Unique: `(tenant_id, workflow_domain_id, domain_record_id, workflow_stage_id, workflow_task_template_id)` (`tasks_generated_template_unique`)
+- Index: `(tenant_id, workflow_domain_id, domain_record_id)` (`tasks_tenant_domain_record_idx`)
+- Index: `(tenant_id, workflow_stage_id, status)` (`tasks_tenant_stage_status_idx`)
+- Index: `(tenant_id, assigned_to_user_id, status)` (`tasks_tenant_assignee_status_idx`)
+- Implicit (FK index): `tenant_id`
+- Implicit (FK index): `workflow_domain_id`
+- Implicit (FK index): `workflow_stage_id`
+- Implicit (FK index): `workflow_task_template_id`
+- Implicit (FK index): `assigned_to_user_id`
+- Implicit (FK index): `completed_by_user_id`
 
 ---
 

@@ -1,35 +1,44 @@
 name: Workflow Stage
 type: Tenant-Scoped Domain Rule
 location:
+  - app/Actions/Workflows/ResolveSalesWorkflowStageAction.php
+  - app/Actions/Workflows/SeedDefaultWorkflowStagesForTenantAction.php
+  - app/Models/WorkflowStage.php
+  - database/migrations/2026_05_07_000002_create_workflow_stages_table.php
+  - database/seeders/WorkflowStageSeeder.php
   - docs/PR3_ROADMAP.md
-purpose: Define the planned tenant-scoped operational stage layer that sits inside a workflow domain and drives future task generation and lifecycle gating.
+purpose: Define the tenant-scoped operational stage layer that sits inside a workflow domain and drives task generation and lifecycle gating.
 when_to_use:
-  - Planning configurable operational middle stages for a tenant/domain
-  - Planning stage ordering, activation, and admin CRUD behavior
-  - Planning stage-scoped task-template generation
+  - Configurable operational middle stages for a tenant/domain
+  - Stage ordering, activation, and admin CRUD behavior
+  - Stage-scoped task-template generation
 when_not_to_use:
   - System lifecycle statuses that remain hard rules
   - Branching workflow engines or conditional orchestration
 rules:
-  - Workflow stages are planned to be tenant-owned and tenant-scoped.
-  - Workflow stages are planned to belong to exactly one workflow domain.
-  - Workflow stages are planned to be database-backed rather than hardcoded.
+  - Workflow stages are tenant-owned and tenant-scoped.
+  - Workflow stages belong to exactly one workflow domain.
+  - Workflow stages are database-backed rather than hardcoded.
   - Workflow stages represent operational middle stages only, not every lifecycle status.
   - A stage key must be unique within its tenant and workflow domain.
-  - Stages are planned to support active and inactive state.
-  - Admin users are intended to create, edit, deactivate, reactivate, and reorder operational stages within the tenant/domain scope.
-  - Stages that have been used are intended to be soft-disabled rather than hard-deleted.
+  - The same stage key may exist in different workflow domains.
+  - Stages support active and inactive state.
+  - Admin users may create, edit, deactivate, reactivate, and reorder operational stages within the tenant/domain scope.
+  - Default sales workflow stages are seeded idempotently per tenant as packing, packed, and shipping.
+  - Sales-order runtime ordering must use the active sales workflow stages ordered by sort_order.
   - Sales-order statuses that remain system-owned are documented in docs/PR3_ROADMAP.md and docs/ENUMS.md rather than duplicated here.
 public_interface:
-  - docs/PR3_ROADMAP.md
+  - ResolveSalesWorkflowStageAction::activeStages()
+  - ResolveSalesWorkflowStageAction::firstActiveStage()
+  - ResolveSalesWorkflowStageAction::nextActiveStage()
+  - SeedDefaultWorkflowStagesForTenantAction::execute()
   - docs/architecture/workflows/WorkflowDomain.yaml
   - docs/architecture/workflows/WorkflowTaskTemplate.yaml
   - workflow-manage
 example_usage: |
-  Planned sales stage configuration:
+  Sales stage configuration:
     tenant = current tenant
     domain = sales
     stage = packing
     is_active = true
     sort_order = 10
-

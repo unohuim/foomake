@@ -18,6 +18,7 @@
     $canManageProducts = $user?->can('inventory-products-manage') ?? false;
     $canOpenSalesOrders = $navigationEligibility['salesOrdersEnabled'] ?? false;
     $canManageSystemUsers = $user?->can('system-users-manage') ?? false;
+    $canManageWorkflows = $user?->can('workflow-manage') ?? false;
     $canOpenPurchaseOrders = $navigationEligibility['purchaseOrdersEnabled'] ?? false;
     $canViewInventory = $user?->can('inventory-adjustments-view') ?? false;
     $canViewMakeOrders = $user?->can('inventory-make-orders-view') ?? false;
@@ -33,6 +34,7 @@
         || $canViewMaterials
         || $canManageMaterials
         || $canViewRecipes;
+    $showAdminNav = $canManageWorkflows;
 @endphp
 
 <nav x-data="{ open: false }" class="border-b border-slate-800 bg-slate-950 shadow-lg shadow-slate-950/20">
@@ -203,6 +205,22 @@
 
                                 <x-nav-dropdown-link :href="route('materials.uom-categories.index')" :active="request()->routeIs('materials.uom-categories.*')">
                                     {{ __('UoM Categories') }}
+                                </x-nav-dropdown-link>
+                            @endcan
+                        </x-slot>
+                    </x-nav-dropdown>
+                @endif
+
+                @if ($showAdminNav)
+                    <x-nav-dropdown :active="request()->routeIs('admin.workflows.*')" align="left" data-nav-dropdown-trigger="admin">
+                        <x-slot name="trigger">
+                            {{ __('Admin') }}
+                        </x-slot>
+
+                        <x-slot name="content">
+                            @can('workflow-manage')
+                                <x-nav-dropdown-link :href="route('admin.workflows.index')" :active="request()->routeIs('admin.workflows.*')">
+                                    {{ __('Workflows') }}
                                 </x-nav-dropdown-link>
                             @endcan
                         </x-slot>
@@ -432,6 +450,22 @@
 
                             <x-nav-dropdown-link :href="route('materials.uom-categories.index')" :active="request()->routeIs('materials.uom-categories.*')" mobile>
                                 {{ __('UoM Categories') }}
+                            </x-nav-dropdown-link>
+                        @endcan
+                    </x-slot>
+                </x-nav-dropdown>
+            @endif
+
+            @if ($showAdminNav)
+                <x-nav-dropdown :active="request()->routeIs('admin.workflows.*')" mobile panel-id="mobile-nav-admin" data-nav-mobile-group="admin">
+                    <x-slot name="trigger">
+                        {{ __('Admin') }}
+                    </x-slot>
+
+                    <x-slot name="content">
+                        @can('workflow-manage')
+                            <x-nav-dropdown-link :href="route('admin.workflows.index')" :active="request()->routeIs('admin.workflows.*')" mobile>
+                                {{ __('Workflows') }}
                             </x-nav-dropdown-link>
                         @endcan
                     </x-slot>

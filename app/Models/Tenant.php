@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Actions\Workflows\EnsureWorkflowDomainsSeededAction;
+use App\Actions\Workflows\SeedDefaultWorkflowStagesForTenantAction;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -29,5 +31,16 @@ class Tenant extends Model
     public function users(): HasMany
     {
         return $this->hasMany(User::class);
+    }
+
+    /**
+     * Boot the tenant model hooks.
+     */
+    protected static function booted(): void
+    {
+        static::created(function (Tenant $tenant): void {
+            app(EnsureWorkflowDomainsSeededAction::class)->execute();
+            app(SeedDefaultWorkflowStagesForTenantAction::class)->execute($tenant);
+        });
     }
 }

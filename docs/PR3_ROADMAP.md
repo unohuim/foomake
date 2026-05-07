@@ -218,7 +218,7 @@ Ensure immutable pricing at line creation.
 Status: Implemented
 
 **Goal**
-Introduce lifecycle without inventory impact yet.
+Introduce the initial lifecycle slice without inventory impact yet.
 
 **Statuses**
 
@@ -240,6 +240,7 @@ Introduce lifecycle without inventory impact yet.
 - Lifecycle status changes return JSON and do not redirect
 - `DRAFT -> OPEN` and any cancellation transition create no stock moves
 - Older roadmap-era statuses `CONFIRMED` and `FULFILLED` are not valid
+- This historical slice was later extended by PR3-SO-006 and PR3-SO-007; current operational stages are now database-backed rather than permanently hardcoded in this initial lifecycle shape
 
 ---
 
@@ -270,6 +271,7 @@ Sales orders must update inventory.
 - `CANCELLED` creates no stock moves
 - Retrying completion must not create duplicate stock moves
 - If stock move creation fails, the order must remain `OPEN` and no partial stock moves may persist
+- This historical slice was later replaced by the packed-stage inventory posting model introduced by PR3-SO-006 and retained under PR3-SO-007
 
 ---
 
@@ -301,63 +303,70 @@ Extend the Sales Order lifecycle with operational statuses.
 - Make Orders remain manufacturing-only
 - Do not add custom stages in this PR
 - Do not add full task management in this PR unless explicitly scoped later
+- PR3-SO-007 later keeps `packing`, `packed`, and `shipping` as seeded defaults but moves operational stage ordering into tenant-scoped workflow stages backed by the database
 
 ---
 
 ### PR3-SO-007 — Domain-General Workflow Stages + Tasks
 
-Status: Planned
+Status: Implemented
 
 **Goal**
-Introduce planned domain-general workflow infrastructure for operational stages and generated tasks, with Sales Orders as the first consumer.
+Introduce domain-general workflow infrastructure for operational stages and generated tasks, with Sales Orders as the first consumer.
 
-**Planned Scope**
+**Implemented Scope**
 
-- This PR is planned as workflow infrastructure, not just a Sales Order checklist UI
-- The design is intended to support:
+- This PR implements workflow infrastructure, not just a Sales Order checklist UI
+- The design supports:
     - sales
     - purchasing
     - manufacturing
-- Sales Orders are the first planned domain integration
+- Sales Orders are the first runtime domain integration
 - Purchase Order and Make Order task generation remain future scope
 
-**Planned Data Model**
+**Implemented Data Model**
 
-- Add a fixed system-owned `workflow_domains` table
-- Planned seeded workflow domain keys:
+- Fixed system-owned `workflow_domains` table
+- Seeded workflow domain keys:
     - `sales`
     - `purchasing`
     - `manufacturing`
 - Domains are system-owned and not admin-configurable
 - Domains scope workflow stages and workflow task templates
+- Workflow domains are seeded deterministically with stable `sort_order`
 
-- Add a tenant-scoped `workflow_stages` table
+- Tenant-scoped `workflow_stages` table
 - Workflow stages belong to:
     - tenant
     - workflow domain
 - Stages are operational middle stages only
 - Sales Order system statuses `DRAFT`, `OPEN`, `COMPLETED`, and `CANCELLED` remain non-configurable and are not admin-managed workflow stages
-- Planned seeded default sales operational stage keys remain:
+- Seeded default sales operational stage keys are:
     - `packing`
     - `packed`
     - `shipping`
-- Planned default Sales Order status progression remains:
-    - `DRAFT -> OPEN -> PACKING -> PACKED -> SHIPPING -> COMPLETED`
+- These seeded sales stages are defaults only, not a permanently hardcoded lifecycle
+- Future Sales Order operational-stage order is resolved from the tenant's active `sales` workflow stages ordered by `sort_order`
+- `DRAFT -> OPEN` remains system-owned
+- `OPEN` advances to the first active sales workflow stage
+- Active sales workflow stages advance in database order
+- The final active sales workflow stage advances to `COMPLETED`
+- `CANCELLED` remains a terminal branch under the existing cancellation rules
 
-- Add a tenant-scoped `workflow_task_templates` table
+- Tenant-scoped `workflow_task_templates` table
 - Task templates belong to:
     - tenant
     - workflow domain
     - workflow stage
-- Task template fields are planned to include:
+- Task template fields include:
     - `title`
     - `description`
     - `sort_order`
     - `is_active`
     - `default_assignee_user_id`
 
-- Add a tenant-scoped domain-general `tasks` table
-- Generated task fields are planned to include:
+- Tenant-scoped domain-general `tasks` table
+- Generated task fields include:
     - `tenant_id`
     - `workflow_domain_id`
     - `domain_record_id`
@@ -371,31 +380,33 @@ Introduce planned domain-general workflow infrastructure for operational stages 
     - `completed_at`
     - `completed_by_user_id`
 
-**Planned Stage Rules**
+**Implemented Stage Rules**
 
 - Workflow stages are database-backed, not hardcoded
 - Stages have `is_active`
 - Admins can create, edit, deactivate, reactivate, and reorder operational stages within a tenant/domain
 - Duplicate stage keys must be prevented per tenant/domain
+- The same stage key may exist in different workflow domains
 - `DRAFT`, `OPEN`, `COMPLETED`, and `CANCELLED` remain system statuses and cannot be reordered through workflow admin UI
 - Inactive stages are hidden by default
-- The planned admin UI includes a show-inactive toggle
-- Once a stage has been used, it is intended to be soft-disabled rather than hard-deleted
+- The admin UI includes a show-inactive toggle
+- Default sales stages are seeded idempotently per tenant and do not duplicate existing `packing`, `packed`, or `shipping` rows
+- Runtime Sales Order stage resolution must use active sales workflow stages from the database rather than a hardcoded `packing -> packed -> shipping` fallback
 
-**Planned Task Template Rules**
+**Implemented Task Template Rules**
 
 - Only active task templates generate future tasks
 - Inactive task templates are hidden by default
-- The planned admin UI includes a show-inactive toggle
+- The admin UI includes a show-inactive toggle
 - Editing a task template affects future generated tasks only
 - Already-generated tasks remain unchanged
 - Task templates can be reordered within a stage
 - Tasks are always assigned to a user
 - If no assignee is configured, generated tasks default to the first user for that tenant
 
-**Planned Generated Task Rules**
+**Implemented Generated Task Rules**
 
-- Task status is planned to remain simple in this PR:
+- Task status remains simple in this PR:
     - `open`
     - `completed`
 - Task completion is final in this PR
@@ -414,29 +425,33 @@ Introduce planned domain-general workflow infrastructure for operational stages 
 - Moving an order backward does not reopen or duplicate prior open tasks
 - Re-entering a stage or repeated transition calls must not duplicate generated tasks
 
-**Planned Sales Order Integration**
+**Implemented Sales Order Integration**
 
-- Sales Orders are the first planned consumer of the workflow task system
-- When a Sales Order enters an operational workflow stage, the system should generate tasks from active task templates matching:
+- Sales Orders are the first runtime consumer of the workflow task system
+- When a Sales Order enters an operational workflow stage, the system generates tasks from active task templates matching:
     - tenant
     - sales workflow domain
     - entered workflow stage
 - If no active task templates exist for that stage, no tasks are created
-- The system should create at most one generated task per template per Sales Order/stage entry
+- The system creates at most one generated task per template per Sales Order/stage entry
+- Task generation happens only after the underlying stage transition succeeds
+- `OPEN -> first active sales workflow stage` runs existing fulfillment availability checks before generating tasks
+- Inventory consumption still occurs at `packing -> packed` when those seeded default stages exist in the tenant workflow
+- `packed -> shipping` task generation occurs only after the successful stage transition
 - Forward Sales Order lifecycle transitions remain gated by:
     1. existing Sales Order domain rules such as packing and inventory rules
     2. completion of current-stage generated tasks
 - If no tasks exist for a stage, workflow task gating does not block the transition
 - Sales Order transitions continue using existing Sales Order manage permissions
 
-**Planned Admin UI**
+**Implemented Admin UI**
 
-- Add planned navigation item: `Admin -> Workflows`
-- Access is controlled by planned permission slug `workflow-manage`
-- Admins are intended to receive `workflow-manage` by default
-- The Workflows page is planned to use modern Tailwind + Alpine components
+- Navigation item: `Admin -> Workflows`
+- Access is controlled by permission slug `workflow-manage`
+- Admins receive `workflow-manage` by default
+- The Workflows page uses Tailwind + Alpine components
 - No global JavaScript state is permitted
-- The page is planned to include two accordion sections:
+- The page includes two accordion sections:
     - `Stages`
     - `Tasks`
 
@@ -462,10 +477,10 @@ Tasks accordion:
 - Default assignee selector
 - Title and description fields
 
-**Planned Authorization Rules**
+**Implemented Authorization Rules**
 
 - `workflow-manage` controls access to `Admin -> Workflows` and workflow configuration CRUD
-- Admins are planned to receive `workflow-manage` by default
+- Admins receive `workflow-manage` by default
 - Assigned users may complete their assigned tasks without `workflow-manage`
 - Assigned users do not need Sales Order manage permission solely to complete an assigned task
 - Sales Order lifecycle transitions still require existing Sales Order manage permission
@@ -491,12 +506,16 @@ Tasks accordion:
 - Customer-facing task views
 - Vendor-facing task views
 
-**Planned Testing Expectations**
+**Implemented Test Coverage Expectations**
 
 - Workflow domain seeding
 - Workflow stage CRUD
 - Workflow stage active/inactive behavior
 - Workflow stage ordering
+- New active sales stages change future Sales Order transition order
+- Deactivating a sales stage removes it from future Sales Order transition order
+- Reordering active sales stages changes future Sales Order transition order
+- Seeded `packing`, `packed`, and `shipping` stages are defaults only and do not override database-backed runtime ordering
 - Workflow task template CRUD
 - Workflow task template active/inactive behavior
 - Task generation from active templates
