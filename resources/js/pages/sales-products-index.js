@@ -90,6 +90,26 @@ export function mount(rootEl, payload) {
 
             return params;
         },
+        productBaseUomLabel(product) {
+            const baseUom = product?.base_uom || {};
+
+            if (baseUom.name && baseUom.symbol) {
+                return `${baseUom.name} (${baseUom.symbol})`;
+            }
+
+            return baseUom.name || baseUom.symbol || '—';
+        },
+        formattedProductPrice(product) {
+            if (product?.price && product?.currency) {
+                return `${product.currency} ${product.price}`;
+            }
+
+            if (product?.price) {
+                return product.price;
+            }
+
+            return '—';
+        },
         showToast(type, message) {
             this.toast.type = type;
             this.toast.message = message;

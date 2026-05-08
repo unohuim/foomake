@@ -36,16 +36,12 @@ Core authority/bootstrap order:
 8. docs/UI_DESIGN.md
 9. routes/web.php
 10. docs/PR3_ROADMAP.md
-
-Required architecture context after the core authority/bootstrap list:
-
-11. docs/architecture/README.yaml
+11. docs/BACKLOG.md
 
 Important authority note:
 
 - Preserve the repository's documented authority order.
 - Do not claim that docs/architecture/\*_/_.yaml outrank higher-authority files unless the repository explicitly says so.
-- Include the architecture README and architecture YAML files as required architecture context for future sessions.
 - docs/PR3_ROADMAP.md is required context and must not be treated as optional or secondary.
 
 3. For each included source file, add a level-2 header exactly like this:
@@ -98,7 +94,7 @@ Regenerate docs/AI_CHAT_BOOTSTRAP.md whenever any included source document chang
 - docs/UI_DESIGN.md
 - routes/web.php
 - docs/PR3_ROADMAP.md
-- docs/architecture/README.yaml
+- docs/BACKLOG.md
 
 9. Do not summarize the repository.
 

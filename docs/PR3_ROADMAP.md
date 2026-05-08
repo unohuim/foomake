@@ -590,7 +590,7 @@ Prepare the app for ecommerce product imports, starting with WooCommerce, while 
 Status: Implemented
 
 **Goal**
-Convert Sales → Products into a Blade page shell backed by a modular desktop JavaScript list/search/sort experience using a tenant-scoped JSON endpoint, while preserving the invariant that products remain normal `items` where `is_sellable = true`.
+Convert Sales → Products into a Blade page shell backed by modular JavaScript list/search/sort experiences for desktop and mobile using a tenant-scoped JSON endpoint, while preserving the invariant that products remain normal `items` where `is_sellable = true`.
 
 **Includes**
 
@@ -602,7 +602,12 @@ Convert Sales → Products into a Blade page shell backed by a modular desktop J
     - sticky search/header rows
     - price column
     - row actions affordance
-- Mobile placeholder text only: `view not designed yet`
+- Mobile JavaScript products card list with:
+    - search
+    - card layout
+    - shared JSON list contract
+    - row actions affordance
+    - fixed search/action area with scrolling records list
 - Existing page-level Products heading retained
 - Existing Materials-style create slide-over reused only as minimally required for add-product flow
 - Existing sales products permissions preserved

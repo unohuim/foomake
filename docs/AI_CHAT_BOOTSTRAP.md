@@ -6,6 +6,7 @@ Paste the entire content (or as much as context allows) when starting a session.
 
 
 ## docs/AI_CHAT_CODEX.md
+
 # AI Chat Bootstrap (READ FIRST)
 
 You are assisting with development on this repository.
@@ -238,6 +239,7 @@ If unsure, **stop immediately and ask**.
 
 
 ## docs/PR2_ROADMAP.md
+
 # PR2_ROADMAP — UI + Domain Completion (Post-PR-006)
 
 This roadmap defines the **second major phase** of work: completing **Items, Inventory, Suppliers, and Manufacturing**
@@ -1532,6 +1534,7 @@ Introduce a UoM-level display precision field and enforce consistent quantity fo
 
 
 ## docs/CONVENTIONS.md
+
 # Conventions
 
 This document defines the **mandatory development conventions** for this repository.  
@@ -1787,6 +1790,7 @@ These rules apply to:
 
 
 ## docs/ARCHITECTURE_INVENTORY.md
+
 # Architecture Inventory
 
 This document tracks **reusable abstractions, components, and architectural patterns**
@@ -2420,19 +2424,26 @@ current operational stage -> next stage is blocked while current-stage generated
 - `routes/web.php`  
 
 **Purpose:**  
-Document that Sales → Products is a sales-facing filtered view of normal tenant-owned items rather than a separate product entity.
+Document that Sales → Products is a sales-facing filtered view of normal tenant-owned items rather than a separate product entity, exposed as a Blade shell with JSON-backed desktop and mobile page-module list views.
 
 **When to Use:**  
-Rendering or importing sales-facing products from ecommerce sources while preserving the shared `Item` identity.
+Rendering, listing, searching, sorting, creating, or importing sales-facing products while preserving the shared `Item` identity.
 
 **When Not to Use:**  
 Introducing a separate products table/model or treating imported products as distinct from materials.
 
 **Public Interface:**  
 - `sales.products.index`  
+- `sales.products.list`  
+- `sales.products.store`  
 - `sales.products.import.preview`  
 - `sales.products.import.store`  
 - `Item::query()->where('is_sellable', true)`  
+
+**Notes:**  
+- `/sales/products` remains the user-facing page route and renders the Blade shell.  
+- Desktop table rows and mobile cards are sourced from the same JSON list endpoint rather than Blade-rendered records.  
+- This slice does not introduce product update/delete endpoints or a separate product entity.  
 
 **Example Usage:**  
 ```php
@@ -3830,6 +3841,7 @@ it('creates a material', function () {
 
 
 ## docs/PERMISSIONS_MATRIX.md
+
 # Permissions Matrix
 
 This document is the source-of-truth for **authorization intent** in this repository.
@@ -4026,6 +4038,7 @@ return [
 
 
 ## docs/ENUMS.md
+
 # ENUMS — Canonical Enum Authority
 
 This document defines the canonical, normative enum-like values used throughout the system.
@@ -4281,6 +4294,7 @@ No conflicts or ambiguities were found at time of creation based on existing mig
 
 
 ## docs/DB_SCHEMA.md
+
 # Database Schema Inventory (DB_SCHEMA)
 
 This document inventories **all database tables and columns** as defined by migrations.
@@ -5576,6 +5590,7 @@ Migrations remain the **sole source of truth**.
 
 
 ## docs/UI_DESIGN.md
+
 # UI_DESIGN.md — Canonical UI Direction & Constraints
 
 This document defines the **authoritative UI design rules** for this repository.
@@ -6171,6 +6186,7 @@ They are mandatory, not stylistic.
 
 
 ## routes/web.php
+
 <?php
 
 use App\Http\Controllers\InventoryController;
@@ -6390,6 +6406,10 @@ Route::middleware('auth')->group(function () {
 
     Route::get('/sales/products', [SalesProductController::class, 'index'])
         ->name('sales.products.index');
+    Route::get('/sales/products/list', [SalesProductController::class, 'list'])
+        ->name('sales.products.list');
+    Route::post('/sales/products', [SalesProductController::class, 'store'])
+        ->name('sales.products.store');
     Route::post('/sales/products/import-preview', [SalesProductController::class, 'preview'])
         ->name('sales.products.import.preview');
     Route::post('/sales/products/imports', [SalesProductController::class, 'storeImport'])
@@ -6438,6 +6458,7 @@ require __DIR__ . '/auth.php';
 
 
 ## docs/PR3_ROADMAP.md
+
 # PR3_ROADMAP — Sales + CRM Foundations
 
 This roadmap defines the third major phase of work: introducing the **Sales domain (CRM foundations + Sales Orders)**, fully integrated with inventory before any external integrations.
@@ -6982,6 +7003,8 @@ Tasks accordion:
 
 ### PR3-INT-001 — External Product Import Prep
 
+Status: Implemented
+
 **Goal**
 Prepare the app for ecommerce product imports, starting with WooCommerce, while preserving the invariant that products remain normal items.
 
@@ -7023,6 +7046,65 @@ Prepare the app for ecommerce product imports, starting with WooCommerce, while 
 
 ---
 
+### PR3-INT-002 — Sales Products Blade Shell + JSON List
+
+Status: Implemented
+
+**Goal**
+Convert Sales → Products into a Blade page shell backed by modular JavaScript list/search/sort experiences for desktop and mobile using a tenant-scoped JSON endpoint, while preserving the invariant that products remain normal `items` where `is_sellable = true`.
+
+**Includes**
+
+- `GET /sales/products` Blade page shell
+- `GET /sales/products/list` JSON list endpoint
+- Desktop JavaScript products list with:
+    - search
+    - single-column sorting
+    - sticky search/header rows
+    - price column
+    - row actions affordance
+- Mobile JavaScript products card list with:
+    - search
+    - card layout
+    - shared JSON list contract
+    - row actions affordance
+    - fixed search/action area with scrolling records list
+- Existing page-level Products heading retained
+- Existing Materials-style create slide-over reused only as minimally required for add-product flow
+- Existing sales products permissions preserved
+- JSON response contract for list rows:
+    - `id`
+    - `name`
+    - `base_uom`
+    - `price`
+    - `currency`
+    - `image_url`
+
+**Out of Scope**
+
+- Update/delete product endpoints
+- Schema changes
+- New permission slugs
+- External image integration
+- Real WooCommerce product-image pulling
+
+**Goal**
+Move Sales → Products to a Blade shell with a page-module desktop list backed by a JSON endpoint.
+
+**Includes**
+
+- Keep `GET /sales/products` as the user-facing page
+- Add `GET /sales/products/list` JSON read model for sellable items
+- Products remain normal `items` filtered by `is_sellable = true`
+- Blade remains the source of truth for layout, navigation, and page shell
+- Desktop list/search/sort behavior is handled by the page module
+- Mobile view intentionally renders a placeholder only
+- Add New Product reuses the existing create slide-over pattern with the minimum required backend support
+- No schema changes
+- No new permission slugs
+
+---
+
 ### PR3-INT-003 — Ecommerce Import → Empty Fulfillment Recipes
 
 Status: Planned
@@ -7056,94 +7138,374 @@ After PR3 completion:
 - System ready for external integrations
 
 
-## docs/architecture/README.yaml
-name: Architecture Documentation System
-type: Architectural Documentation Standard
-location:
-  - docs/architecture/
-purpose: Define a strict, reviewable, and machine-readable system for documenting architectural invariants and reusable patterns.
-when_to_use:
-  - Documenting any architectural concept, invariant, or reusable pattern
-  - Replacing or extending the former ARCHITECTURE_INVENTORY.md
-when_not_to_use:
-  - Documenting implementation details
-  - Explaining step-by-step workflows or tutorials
-rules:
-  - Architecture documentation is authoritative and describes invariants, not implementations.
-  - Each architectural concept must be documented in exactly one YAML file.
-  - Files must be grouped by domain directory.
-  - Enum values remain canonical in docs/ENUMS.md and must not be duplicated.
-  - UI constraints remain canonical in docs/UI_DESIGN.md.
-  - Conflicts resolve in order: CONVENTIONS.md, ENUMS.md, architecture YAML, then code.
-  - All architecture YAML files must follow the canonical schema and key order.
-  - All schema keys are mandatory; empty sections are forbidden.
-  - Key order is fixed and must not be changed.
-  - Lists must be explicit YAML lists.
-  - No prose or commentary is allowed outside the schema.
-  - PRs violating schema or invariants must be rejected.
-public_interface:
-  - docs/architecture/**.yaml
-  - docs/architecture/README.yaml
-example_usage: |
-  docs/architecture/
-  ├── tenancy/
-  │   └── TenantScopeTrait.yaml
-  ├── inventory/
-  │   └── StockMove.yaml
-  ├── ui/
-  │   └── SlideOverFormPattern.yaml
-  └── README.md
+## docs/BACKLOG.md
 
-schema:
-  required_keys:
-    - name
-    - type
-    - location
-    - purpose
-    - when_to_use
-    - when_not_to_use
-    - rules
-    - public_interface
-    - example_usage
-  key_order:
-    - name
-    - type
-    - location
-    - purpose
-    - when_to_use
-    - when_not_to_use
-    - rules
-    - public_interface
-    - example_usage
+# BACKLOG
 
-implicit_invariants:
-  inventory_uom_purchasing:
-    - Quantities are strings, never floats.
-    - All quantity math uses BCMath.
-    - Canonical scale is 6.
-    - Tenant boundary enforced when authenticated.
-  tenancy:
-    - Single database architecture.
-    - tenant_id is authoritative.
-    - No tenant scoping on auth identity models.
-    - Tenant scope is a no-op when unauthenticated.
-  authorization:
-    - Authorization enforced via Laravel Gates.
-    - Permission slugs are canonical.
-    - UI visibility is not a source of truth.
-  ui:
-    - Blade and Alpine only.
-    - No global JavaScript state.
-    - AJAX-first CRUD.
-    - Breeze-aligned layout.
+This backlog captures outstanding product capabilities identified from competitive feature review and QuickBooks Online integration planning.
 
-writing_guidelines:
-  good_entries:
-    - Short and precise.
-    - Enforces invariants.
-    - Easy to diff and review.
-    - Avoids duplication of implicit invariants.
-  bad_entries:
-    - Restates global or implicit rules.
-    - Includes implementation trivia.
-    - Contains prose outside the schema.
+These items are not committed PR scope unless explicitly selected and approved.
+
+---
+
+## Priority Themes
+
+1. Traceability and compliance
+2. Warehouse execution
+3. Barcode and label workflows
+4. Forecasting and replenishment
+5. Production planning depth
+6. Costing and accounting depth
+7. Document generation
+8. Integrations, starting with QuickBooks Online
+
+---
+
+## 1. Traceability: Lot, Batch, Serial, and Expiry Tracking
+
+### Problem
+
+Food manufacturers need to trace which raw materials went into which finished goods, and where those finished goods were sold or shipped.
+
+### Why It Matters
+
+Traceability supports recalls, expiry control, customer trust, retail readiness, and compliance expectations.
+
+### Desired Capability
+
+- Lot/batch tracking for purchased materials
+- Lot/batch tracking for manufactured finished goods
+- Expiry dates
+- Supplier lot references
+- Customer shipment traceability
+- Recall lookup: input lot → finished batches → customers/orders
+- Finished batch genealogy
+
+### Candidate PRs
+
+- TRACE-001 — Lot Model + Tenant-Scoped Lot Records
+- TRACE-002 — Receiving Creates/Assigns Lots
+- TRACE-003 — Make Orders Consume Input Lots and Produce Output Lots
+- TRACE-004 — Sales Orders Ship Specific Lots
+- TRACE-005 — Recall Traceability Report
+
+### Out of Scope Until Approved
+
+- Regulatory certification workflows
+- Automated recall notifications
+- GS1 compliance
+
+---
+
+## 2. Warehouse Management: Locations, Bins, and Freezers
+
+### Problem
+
+A single on-hand quantity is not enough once inventory exists across multiple freezers, shelves, rooms, warehouses, or production areas.
+
+### Why It Matters
+
+Location-aware inventory prevents stock confusion, supports picking accuracy, and makes physical operations easier to manage.
+
+### Desired Capability
+
+- Warehouse/location records
+- Bin/freezer/shelf records
+- Inventory by item + location
+- Receiving into a location
+- Moving stock between locations
+- Picking stock from a location
+- Location-aware inventory counts
+
+### Candidate PRs
+
+- WH-001 — Locations and Bins Foundation
+- WH-002 — Receive Purchase Order Lines Into Location
+- WH-003 — Internal Stock Transfers
+- WH-004 — Location-Aware Inventory Counts
+- WH-005 — Sales Picking From Location
+
+### Out of Scope Until Approved
+
+- Mobile warehouse app
+- Wave picking
+- Advanced fulfillment routing
+
+---
+
+## 3. Barcode Scanning and Label Printing
+
+### Problem
+
+Manual entry becomes slow and error-prone as inventory, receiving, picking, and production volume increases.
+
+### Why It Matters
+
+Barcode workflows reduce mistakes, speed up receiving and picking, and make warehouse work easier for non-technical operators.
+
+### Desired Capability
+
+- Barcode value storage on items, lots, locations, and orders
+- Scan-to-receive
+- Scan-to-pick
+- Scan-to-count
+- Printable item labels
+- Printable lot labels
+- Printable location/bin labels
+
+### Candidate PRs
+
+- BAR-001 — Barcode Fields and Lookup Service
+- BAR-002 — Label Template Foundation
+- BAR-003 — Print Item and Lot Labels
+- BAR-004 — Scan-to-Receive Workflow
+- BAR-005 — Scan-to-Count Workflow
+
+### Out of Scope Until Approved
+
+- Dedicated mobile app
+- Hardware-specific scanner integrations
+- GS1 barcode generation
+
+---
+
+## 4. Forecasting, Replenishment, and Shortage Planning
+
+### Problem
+
+The system tracks operational truth, but users also need to know what to buy or make next.
+
+### Why It Matters
+
+Forecasting and replenishment prevent stockouts, reduce overproduction, and create the core planning value expected from an MRP system.
+
+### Desired Capability
+
+- Current availability report
+- Shortage report
+- Reorder points
+- Preferred supplier per material
+- Suggested purchase quantities
+- Suggested make orders
+- Demand from sales orders
+- Demand from forecasted sales
+- Time-phased material requirements
+
+### Candidate PRs
+
+- PLAN-001 — Availability and Shortage Report
+- PLAN-002 — Reorder Points and Preferred Suppliers
+- PLAN-003 — Suggested Purchase Orders
+- PLAN-004 — Suggested Make Orders
+- PLAN-005 — Forecast Demand Inputs
+- PLAN-006 — Time-Phased MRP Planning
+
+### Out of Scope Until Approved
+
+- Machine-learning forecasting
+- Auto-generated purchase orders without user approval
+- Capacity-aware planning
+
+---
+
+## 5. Production Planning: Routing, Scheduling, and Capacity
+
+### Problem
+
+Recipes define what materials are required, but not how production flows through equipment, labour, time, or constrained work centers.
+
+### Why It Matters
+
+Scheduling helps answer what should be made today, where bottlenecks exist, and whether production capacity can satisfy demand.
+
+### Desired Capability
+
+- Production steps/routing
+- Work centers
+- Standard run time per step
+- Setup time
+- Labour requirements
+- Production calendar
+- Scheduled make orders
+- Capacity visibility
+- Simple production queue
+
+### Candidate PRs
+
+- PROD-001 — Work Centers Foundation
+- PROD-002 — Recipe Routing Steps
+- PROD-003 — Make Order Scheduling Fields
+- PROD-004 — Production Calendar View
+- PROD-005 — Capacity Conflict Warnings
+
+### Out of Scope Until Approved
+
+- Full finite-capacity scheduling engine
+- Drag-and-drop Gantt chart
+- Maintenance planning
+- Subcontracting
+
+---
+
+## 6. Costing and Accounting Depth
+
+### Problem
+
+The system tracks inventory movement and pricing snapshots, but deeper financial views are needed for product margin, valuation, and accounting confidence.
+
+### Why It Matters
+
+Manufacturers need to understand true product cost, gross margin, inventory value, and financial impact before scaling.
+
+### Desired Capability
+
+- Product cost rollups from recipes
+- Actual cost from purchase order receipts
+- Inventory valuation
+- COGS calculation
+- Gross margin reporting
+- WIP visibility
+- FIFO or weighted-average costing decision
+- Labour and overhead cost layers
+
+### Candidate PRs
+
+- COST-001 — Costing Method Decision Record
+- COST-002 — Recipe Standard Cost Rollup
+- COST-003 — Receipt-Based Actual Material Cost
+- COST-004 — Inventory Valuation Report
+- COST-005 — Sales Margin Report
+- COST-006 — WIP Cost Tracking
+
+### Out of Scope Until Approved
+
+- Full general ledger
+- Payroll costing
+- Tax filing
+
+---
+
+## 7. Document Generation: PDFs, Templates, and Labels
+
+### Problem
+
+Manufacturing businesses still rely on documents for suppliers, customers, warehouse work, and compliance records.
+
+### Why It Matters
+
+Printable documents are often required for purchase orders, invoices, packing slips, receiving records, production sheets, and labels.
+
+### Desired Capability
+
+- Purchase order PDFs
+- Sales order PDFs
+- Invoice PDFs
+- Packing slips
+- Receiving documents
+- Production batch sheets
+- Inventory count sheets
+- Label templates
+- Email-ready document attachments
+
+### Candidate PRs
+
+- DOC-001 — PDF Rendering Foundation
+- DOC-002 — Purchase Order PDF
+- DOC-003 — Sales Order and Invoice PDF
+- DOC-004 — Packing Slip PDF
+- DOC-005 — Production Batch Sheet PDF
+- DOC-006 — Label Template System
+
+### Out of Scope Until Approved
+
+- Full visual template editor
+- E-signatures
+- Customer portal document sharing
+
+---
+
+## 8. QuickBooks Online Integration
+
+### Problem
+
+The MRP system manages operational truth, but accounting systems need clean financial records without duplicate manual entry.
+
+### Why It Matters
+
+QuickBooks Online integration reduces admin work, improves bookkeeping accuracy, and makes the product easier to adopt for small manufacturers.
+
+### Desired Capability
+
+- OAuth connection to QuickBooks Online
+- Tenant-level QBO connection settings
+- Customer sync
+- Supplier/vendor sync
+- Item/product sync
+- Invoice push
+- Bill or purchase transaction push
+- Payment status pull or webhook sync
+- Chart of accounts mapping
+- Sync logs and failure visibility
+- Idempotent retry behavior
+
+### Candidate PRs
+
+- QBO-001 — QBO App Connection and OAuth
+- QBO-002 — QBO Mapping Tables and Sync Log
+- QBO-003 — Customer and Supplier Sync
+- QBO-004 — Item/Product Sync
+- QBO-005 — Invoice Push to QBO
+- QBO-006 — Purchase Order / Bill Push to QBO
+- QBO-007 — Payment Status Sync
+- QBO-008 — Sync Error Dashboard
+
+### Core Decisions Required
+
+- Is this system the operational source of truth?
+- Is QBO the financial source of truth?
+- Should inventory be tracked in QBO or only in this system?
+- Should received purchase orders create QBO bills?
+- Should sales orders create QBO invoices immediately or only after shipment/completion?
+- Should QBO edits be pulled back, blocked, or treated as accounting-only changes?
+
+### Out of Scope Until Approved
+
+- Payroll
+- Tax filing
+- Full accounting ledger replacement
+- Multi-currency accounting automation beyond explicit mapped transactions
+
+---
+
+## Suggested Sequencing
+
+### Near-Term Commercial Gaps
+
+1. QBO-001 — QBO App Connection and OAuth
+2. DOC-001 — PDF Rendering Foundation
+3. TRACE-001 — Lot Model + Tenant-Scoped Lot Records
+4. WH-001 — Locations and Bins Foundation
+
+### Mid-Term Operational Depth
+
+1. BAR-001 — Barcode Fields and Lookup Service
+2. PLAN-001 — Availability and Shortage Report
+3. COST-001 — Costing Method Decision Record
+4. PROD-001 — Work Centers Foundation
+
+### Later Competitive Parity
+
+1. Time-phased MRP planning
+2. Full traceability reporting
+3. Capacity planning
+4. Inventory valuation
+5. QBO invoice/bill/payment automation
+
+---
+
+## Notes
+
+- These backlog items should be converted into approved PR scopes before implementation.
+- Each PR should remain small, test-first, and tenant-safe.
+- Documentation updates should only happen when explicitly required and approved.
+- Any reusable abstraction introduced by these PRs must be recorded in the architecture inventory when applicable.

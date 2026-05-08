@@ -22,8 +22,113 @@
         </div>
 
         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
-            <div class="md:hidden rounded-lg border border-gray-100 bg-white p-6 shadow-sm">
-                <p class="text-sm text-gray-600">view not designed yet</p>
+            <div class="md:hidden" data-products-mobile>
+                <div class="rounded-lg border border-gray-100 bg-white shadow-sm">
+                    <div class="sticky top-0 z-10 border-b border-gray-100 bg-white p-4">
+                        <div class="flex items-center gap-3">
+                            <div class="relative flex-1">
+                                <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">
+                                    <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="m21 21-4.35-4.35m0 0A7.95 7.95 0 1 0 5.4 5.4a7.95 7.95 0 0 0 11.25 11.25Z" />
+                                    </svg>
+                                </div>
+                                <input
+                                    type="search"
+                                    class="block w-full rounded-md border-gray-300 pl-10 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                                    placeholder="Search products"
+                                    x-model="search"
+                                    x-on:input.debounce.200ms="handleSearchInput()"
+                                />
+                                <div
+                                    class="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 transition-opacity duration-150"
+                                    :class="isLoadingList ? 'opacity-100' : 'opacity-0'"
+                                    aria-hidden="true"
+                                >
+                                    <svg class="h-4 w-4 animate-pulse" xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 24 24">
+                                        <circle cx="12" cy="12" r="3" />
+                                    </svg>
+                                </div>
+                            </div>
+
+                            @if ($payload['canManageImports'])
+                                <button
+                                    type="button"
+                                    class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-gray-300 text-gray-600 transition hover:bg-gray-50 hover:text-gray-900"
+                                    title="Import Products"
+                                    aria-label="Import Products"
+                                    x-on:click="openImportPanel()"
+                                >
+                                    <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 16.5V4.5m0 12 4.5-4.5M12 16.5l-4.5-4.5M3.75 19.5h16.5" />
+                                    </svg>
+                                </button>
+                            @endif
+
+                            @if ($payload['canManageProducts'])
+                                <button
+                                    type="button"
+                                    class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-gray-300 text-gray-600 transition hover:bg-gray-50 hover:text-gray-900"
+                                    title="Add New Product"
+                                    aria-label="Add New Product"
+                                    x-on:click="openCreatePanel()"
+                                >
+                                    <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                                    </svg>
+                                </button>
+                            @endif
+                        </div>
+                    </div>
+
+                    <div class="max-h-[36rem] overflow-y-auto p-4">
+                        <div class="space-y-3 transition-opacity duration-150" :class="isLoadingList ? 'opacity-80' : 'opacity-100'">
+                            <div
+                                x-show="!isLoadingList && products.length === 0"
+                                class="rounded-lg border border-dashed border-gray-200 bg-white px-4 py-10 text-center text-sm text-gray-500"
+                            >
+                                No products found.
+                            </div>
+
+                            <template x-for="product in products" :key="`mobile-${product.id}`">
+                                <div class="rounded-lg border border-gray-100 bg-white p-4 shadow-sm">
+                                    <div class="flex items-start gap-3">
+                                        <template x-if="product.image_url">
+                                            <img
+                                                :src="product.image_url"
+                                                alt=""
+                                                class="h-14 w-14 rounded-md object-cover"
+                                            >
+                                        </template>
+                                        <template x-if="!product.image_url">
+                                            <div class="h-14 w-14 rounded-md bg-gray-100"></div>
+                                        </template>
+
+                                        <div class="min-w-0 flex-1">
+                                            <div class="flex items-start justify-between gap-3">
+                                                <div class="min-w-0">
+                                                    <p class="truncate text-sm font-medium text-gray-900" x-text="product.name"></p>
+                                                    <p class="mt-1 text-sm text-gray-600" x-text="productBaseUomLabel(product)"></p>
+                                                </div>
+
+                                                <button
+                                                    type="button"
+                                                    class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-gray-500 transition hover:bg-gray-100 hover:text-gray-700"
+                                                    aria-label="Product actions"
+                                                >
+                                                    <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 6.75a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Zm0 6a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Zm0 6a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Z" />
+                                                    </svg>
+                                                </button>
+                                            </div>
+
+                                            <p class="mt-3 text-sm text-gray-700" x-text="formattedProductPrice(product)"></p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <div class="hidden md:block" data-products-desktop>
@@ -158,13 +263,10 @@
                                             </div>
                                         </td>
                                         <td class="px-6 py-4 text-sm text-gray-700">
-                                            <span x-text="product.base_uom.name || '—'"></span>
-                                            <span x-show="product.base_uom.symbol" x-text="`(${product.base_uom.symbol})`"></span>
+                                            <span x-text="productBaseUomLabel(product)"></span>
                                         </td>
                                         <td class="px-6 py-4 text-sm text-gray-700">
-                                            <span x-show="product.price && product.currency" x-text="`${product.currency} ${product.price}`"></span>
-                                            <span x-show="product.price && !product.currency" x-text="product.price"></span>
-                                            <span x-show="!product.price">—</span>
+                                            <span x-text="formattedProductPrice(product)"></span>
                                         </td>
                                         <td class="px-6 py-4 text-right text-sm">
                                             <button

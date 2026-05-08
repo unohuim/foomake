@@ -277,7 +277,7 @@ it('13. page includes the desktop container contract', function () {
         ->assertSee('data-products-desktop', false);
 });
 
-it('14. page includes the mobile placeholder text', function () {
+it('14. page includes the mobile container contract', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
 
@@ -286,10 +286,10 @@ it('14. page includes the mobile placeholder text', function () {
     $this->actingAs($user)
         ->get(route('sales.products.index'))
         ->assertOk()
-        ->assertSee('view not designed yet');
+        ->assertSee('data-products-mobile', false);
 });
 
-it('15. products heading remains on the page', function () {
+it('15. old mobile placeholder text is removed from the page', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
 
@@ -298,10 +298,23 @@ it('15. products heading remains on the page', function () {
     $this->actingAs($user)
         ->get(route('sales.products.index'))
         ->assertOk()
-        ->assertSee('Products');
+        ->assertDontSee('view not designed yet');
 });
 
-it('16. old explanatory copy is removed from the page shell', function () {
+it('16. products heading remains on the page and renders once', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermission)($user, 'inventory-products-view');
+
+    $this->actingAs($user)
+        ->get(route('sales.products.index'))
+        ->assertOk()
+        ->assertSeeText('Products')
+        ->assertDontSeeText('Products are the sales-facing view of normal sellable items.');
+});
+
+it('17. old explanatory copy is removed from the page shell', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
 
@@ -313,7 +326,7 @@ it('16. old explanatory copy is removed from the page shell', function () {
         ->assertDontSee('Products are the sales-facing view of normal sellable items.');
 });
 
-it('17. old flags table column is removed from the page shell', function () {
+it('18. old flags table column is removed from the page shell', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
 
@@ -325,7 +338,7 @@ it('17. old flags table column is removed from the page shell', function () {
         ->assertDontSee('<th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Flags</th>', false);
 });
 
-it('18. page does not render blade product table rows as the source of truth', function () {
+it('19. page does not render blade product table rows as the source of truth', function () {
     $tenant = ($this->makeTenant)();
     $uom = ($this->makeUom)($tenant);
     $user = ($this->makeUser)($tenant);
@@ -342,7 +355,7 @@ it('18. page does not render blade product table rows as the source of truth', f
         ->assertDontSee('Shell Hidden Product');
 });
 
-it('19. renders the import button for users who can manage product imports', function () {
+it('20. renders the import button for users who can manage product imports', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
 
@@ -354,7 +367,7 @@ it('19. renders the import button for users who can manage product imports', fun
         ->assertSee('Import Products');
 });
 
-it('20. hides the import button for view-only users', function () {
+it('21. hides the import button for view-only users', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
 
@@ -366,7 +379,7 @@ it('20. hides the import button for view-only users', function () {
         ->assertDontSee('Import Products');
 });
 
-it('21. renders a slide-over root for the import workflow', function () {
+it('22. renders a slide-over root for the import workflow', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
 
@@ -379,7 +392,7 @@ it('21. renders a slide-over root for the import workflow', function () {
         ->assertSee('aria-modal="true"', false);
 });
 
-it('22. products import ui includes a preview loading state contract', function () {
+it('23. products import ui includes a preview loading state contract', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
 
@@ -396,7 +409,7 @@ it('22. products import ui includes a preview loading state contract', function 
         ->and($pageModuleSource)->toContain('Loading preview...');
 });
 
-it('23. imported ecommerce items still appear on manufacturing materials because they are normal items', function () {
+it('24. imported ecommerce items still appear on manufacturing materials because they are normal items', function () {
     $tenant = ($this->makeTenant)();
     $uom = ($this->makeUom)($tenant);
     $user = ($this->makeUser)($tenant);
@@ -416,10 +429,10 @@ it('23. imported ecommerce items still appear on manufacturing materials because
         ->assertSee('Shared Item Product');
 });
 
-it('24. protects the invariant that no separate products table exists', function () {
+it('25. protects the invariant that no separate products table exists', function () {
     expect(Schema::hasTable('products'))->toBeFalse();
 });
 
-it('25. protects the invariant that no dedicated Product model exists', function () {
+it('26. protects the invariant that no dedicated Product model exists', function () {
     expect(file_exists(app_path('Models/Product.php')))->toBeFalse();
 });
