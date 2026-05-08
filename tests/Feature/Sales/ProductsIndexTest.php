@@ -186,7 +186,7 @@ it('7. keeps the sales navigation visible for a products-only user', function ()
         ->assertSee('data-nav-dropdown-trigger="sales"', false);
 });
 
-it('8. products index payload includes ajax endpoints and navigation state url', function () {
+it('8. page payload includes the list endpoint and import endpoints', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
 
@@ -199,13 +199,32 @@ it('8. products index payload includes ajax endpoints and navigation state url',
 
     $payload = ($this->extractPayload)($response, 'sales-products-index-payload');
 
-    expect($payload['previewUrl'] ?? null)->toBe(route('sales.products.import.preview'))
+    expect($payload['listUrl'] ?? null)->toBe(route('sales.products.list'))
+        ->and($payload['previewUrl'] ?? null)->toBe(route('sales.products.import.preview'))
         ->and($payload['importUrl'] ?? null)->toBe(route('sales.products.import.store'))
         ->and($payload['connectUrlBase'] ?? null)->toBe(url('/sales/products/import-sources'))
         ->and($payload['navigationStateUrl'] ?? null)->toBe(route('navigation.state'));
 });
 
-it('9. products index payload includes WooCommerce as an enabled source', function () {
+it('9. page payload does not embed products records as the source of truth', function () {
+    $tenant = ($this->makeTenant)();
+    $uom = ($this->makeUom)($tenant);
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermissions)($user, ['inventory-products-view', 'inventory-products-manage']);
+    ($this->makeItem)($tenant, $uom, [
+        'name' => 'Payload Hidden Product',
+        'is_sellable' => true,
+    ]);
+
+    $response = $this->actingAs($user)->get(route('sales.products.index'));
+    $payload = ($this->extractPayload)($response, 'sales-products-index-payload');
+
+    expect($payload)->not->toHaveKey('products')
+        ->and($payload['listUrl'] ?? null)->toBeString();
+});
+
+it('10. page payload still includes WooCommerce as an enabled source', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
 
@@ -219,7 +238,7 @@ it('9. products index payload includes WooCommerce as an enabled source', functi
         ->and($wooCommerce['enabled'] ?? null)->toBeTrue();
 });
 
-it('10. products index payload may include disabled placeholder sources', function () {
+it('11. page payload may include disabled placeholder sources', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
 
@@ -233,7 +252,97 @@ it('10. products index payload may include disabled placeholder sources', functi
         ->and($shopify['enabled'] ?? null)->toBeFalse();
 });
 
-it('11. renders the import button for users who can manage product imports', function () {
+it('12. page includes the js mount element', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermission)($user, 'inventory-products-view');
+
+    $this->actingAs($user)
+        ->get(route('sales.products.index'))
+        ->assertOk()
+        ->assertSee('data-page="sales-products-index"', false)
+        ->assertSee('data-payload="sales-products-index-payload"', false);
+});
+
+it('13. page includes the desktop container contract', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermission)($user, 'inventory-products-view');
+
+    $this->actingAs($user)
+        ->get(route('sales.products.index'))
+        ->assertOk()
+        ->assertSee('data-products-desktop', false);
+});
+
+it('14. page includes the mobile placeholder text', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermission)($user, 'inventory-products-view');
+
+    $this->actingAs($user)
+        ->get(route('sales.products.index'))
+        ->assertOk()
+        ->assertSee('view not designed yet');
+});
+
+it('15. products heading remains on the page', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermission)($user, 'inventory-products-view');
+
+    $this->actingAs($user)
+        ->get(route('sales.products.index'))
+        ->assertOk()
+        ->assertSee('Products');
+});
+
+it('16. old explanatory copy is removed from the page shell', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermission)($user, 'inventory-products-view');
+
+    $this->actingAs($user)
+        ->get(route('sales.products.index'))
+        ->assertOk()
+        ->assertDontSee('Products are the sales-facing view of normal sellable items.');
+});
+
+it('17. old flags table column is removed from the page shell', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermission)($user, 'inventory-products-view');
+
+    $this->actingAs($user)
+        ->get(route('sales.products.index'))
+        ->assertOk()
+        ->assertDontSee('<th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Flags</th>', false);
+});
+
+it('18. page does not render blade product table rows as the source of truth', function () {
+    $tenant = ($this->makeTenant)();
+    $uom = ($this->makeUom)($tenant);
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermission)($user, 'inventory-products-view');
+    ($this->makeItem)($tenant, $uom, [
+        'name' => 'Shell Hidden Product',
+        'is_sellable' => true,
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('sales.products.index'))
+        ->assertOk()
+        ->assertDontSee('Shell Hidden Product');
+});
+
+it('19. renders the import button for users who can manage product imports', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
 
@@ -245,7 +354,7 @@ it('11. renders the import button for users who can manage product imports', fun
         ->assertSee('Import Products');
 });
 
-it('12. hides the import button for view-only users', function () {
+it('20. hides the import button for view-only users', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
 
@@ -257,7 +366,7 @@ it('12. hides the import button for view-only users', function () {
         ->assertDontSee('Import Products');
 });
 
-it('13. renders a slide-over root for the import workflow', function () {
+it('21. renders a slide-over root for the import workflow', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
 
@@ -270,7 +379,7 @@ it('13. renders a slide-over root for the import workflow', function () {
         ->assertSee('aria-modal="true"', false);
 });
 
-it('13a. products import ui includes a preview loading state contract', function () {
+it('22. products import ui includes a preview loading state contract', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
 
@@ -287,144 +396,7 @@ it('13a. products import ui includes a preview loading state contract', function
         ->and($pageModuleSource)->toContain('Loading preview...');
 });
 
-it('14. shows sellable items on the products index', function () {
-    $tenant = ($this->makeTenant)();
-    $uom = ($this->makeUom)($tenant);
-    $user = ($this->makeUser)($tenant);
-
-    ($this->grantPermission)($user, 'inventory-products-view');
-    ($this->makeItem)($tenant, $uom, [
-        'name' => 'Visible Sellable Item',
-        'is_sellable' => true,
-    ]);
-
-    $this->actingAs($user)
-        ->get(route('sales.products.index'))
-        ->assertOk()
-        ->assertSee('Visible Sellable Item');
-});
-
-it('15. hides non-sellable items from the products index', function () {
-    $tenant = ($this->makeTenant)();
-    $uom = ($this->makeUom)($tenant);
-    $user = ($this->makeUser)($tenant);
-
-    ($this->grantPermission)($user, 'inventory-products-view');
-    ($this->makeItem)($tenant, $uom, [
-        'name' => 'Hidden Non Sellable Item',
-        'is_sellable' => false,
-    ]);
-
-    $this->actingAs($user)
-        ->get(route('sales.products.index'))
-        ->assertOk()
-        ->assertDontSee('Hidden Non Sellable Item');
-});
-
-it('16. enforces tenant isolation on the products index', function () {
-    $tenant = ($this->makeTenant)('Current Tenant');
-    $otherTenant = ($this->makeTenant)('Other Tenant');
-    $tenantUom = ($this->makeUom)($tenant);
-    $otherUom = ($this->makeUom)($otherTenant);
-    $user = ($this->makeUser)($tenant);
-
-    ($this->grantPermission)($user, 'inventory-products-view');
-
-    ($this->makeItem)($tenant, $tenantUom, [
-        'name' => 'Tenant Product',
-        'is_sellable' => true,
-    ]);
-    ($this->makeItem)($otherTenant, $otherUom, [
-        'name' => 'Other Tenant Product',
-        'is_sellable' => true,
-    ]);
-
-    $this->actingAs($user)
-        ->get(route('sales.products.index'))
-        ->assertOk()
-        ->assertSee('Tenant Product')
-        ->assertDontSee('Other Tenant Product');
-});
-
-it('17. keeps inactive sellable items visible on the products index', function () {
-    $tenant = ($this->makeTenant)();
-    $uom = ($this->makeUom)($tenant);
-    $user = ($this->makeUser)($tenant);
-
-    ($this->grantPermission)($user, 'inventory-products-view');
-    ($this->makeItem)($tenant, $uom, [
-        'name' => 'Inactive Sellable Product',
-        'is_sellable' => true,
-        'is_active' => false,
-    ]);
-
-    $this->actingAs($user)
-        ->get(route('sales.products.index'))
-        ->assertOk()
-        ->assertSee('Inactive Sellable Product');
-});
-
-it('18. shows inactive status for inactive sellable items', function () {
-    $tenant = ($this->makeTenant)();
-    $uom = ($this->makeUom)($tenant);
-    $user = ($this->makeUser)($tenant);
-
-    ($this->grantPermission)($user, 'inventory-products-view');
-    ($this->makeItem)($tenant, $uom, [
-        'name' => 'Inactive Status Product',
-        'is_sellable' => true,
-        'is_active' => false,
-    ]);
-
-    $this->actingAs($user)
-        ->get(route('sales.products.index'))
-        ->assertOk()
-        ->assertSee('Inactive')
-        ->assertSee('Inactive Status Product');
-});
-
-it('19. shows active status for active sellable items', function () {
-    $tenant = ($this->makeTenant)();
-    $uom = ($this->makeUom)($tenant);
-    $user = ($this->makeUser)($tenant);
-
-    ($this->grantPermission)($user, 'inventory-products-view');
-    ($this->makeItem)($tenant, $uom, [
-        'name' => 'Active Status Product',
-        'is_sellable' => true,
-        'is_active' => true,
-    ]);
-
-    $this->actingAs($user)
-        ->get(route('sales.products.index'))
-        ->assertOk()
-        ->assertSee('Active')
-        ->assertSee('Active Status Product');
-});
-
-it('20. imported ecommerce items remain normal items and appear on the products index', function () {
-    $tenant = ($this->makeTenant)();
-    $uom = ($this->makeUom)($tenant);
-    $user = ($this->makeUser)($tenant);
-
-    ($this->grantPermission)($user, 'inventory-products-view');
-
-    $item = ($this->makeItem)($tenant, $uom, [
-        'name' => 'Imported Woo Product',
-        'is_sellable' => true,
-        'external_source' => 'woocommerce',
-        'external_id' => 'woo-1001',
-    ]);
-
-    expect($item)->toBeInstanceOf(Item::class);
-
-    $this->actingAs($user)
-        ->get(route('sales.products.index'))
-        ->assertOk()
-        ->assertSee('Imported Woo Product');
-});
-
-it('21. imported ecommerce items still appear on manufacturing materials because they are normal items', function () {
+it('23. imported ecommerce items still appear on manufacturing materials because they are normal items', function () {
     $tenant = ($this->makeTenant)();
     $uom = ($this->makeUom)($tenant);
     $user = ($this->makeUser)($tenant);
@@ -444,10 +416,10 @@ it('21. imported ecommerce items still appear on manufacturing materials because
         ->assertSee('Shared Item Product');
 });
 
-it('22. protects the invariant that no separate products table exists', function () {
+it('24. protects the invariant that no separate products table exists', function () {
     expect(Schema::hasTable('products'))->toBeFalse();
 });
 
-it('23. protects the invariant that no dedicated Product model exists', function () {
+it('25. protects the invariant that no dedicated Product model exists', function () {
     expect(file_exists(app_path('Models/Product.php')))->toBeFalse();
 });

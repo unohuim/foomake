@@ -22,76 +22,299 @@
         </div>
 
         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
-            <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                    <h3 class="text-lg font-medium text-gray-900">Sellable products</h3>
-                    <p class="mt-1 text-sm text-gray-600">Products are the sales-facing view of normal sellable items.</p>
-                </div>
-
-                @if ($payload['canManageImports'])
-                    <button
-                        type="button"
-                        class="inline-flex items-center justify-center rounded-md border border-transparent bg-blue-600 px-4 py-2 text-xs font-semibold uppercase tracking-widest text-white hover:bg-blue-500"
-                        x-on:click="openImportPanel()"
-                    >
-                        Import Products
-                    </button>
-                @endif
+            <div class="md:hidden rounded-lg border border-gray-100 bg-white p-6 shadow-sm">
+                <p class="text-sm text-gray-600">view not designed yet</p>
             </div>
 
-            <div class="mt-8" x-cloak x-show="products.length === 0">
+            <div class="hidden md:block" data-products-desktop>
                 <div class="rounded-lg border border-gray-100 bg-white shadow-sm">
-                    <div class="p-6">
-                        <h3 class="text-lg font-medium text-gray-900">No products yet</h3>
-                        <p class="mt-2 text-sm text-gray-600">Sellable items will appear here once they exist or are imported.</p>
+                    <div class="max-h-[36rem] overflow-y-auto">
+                        <div class="sticky top-0 z-20 border-b border-gray-100 bg-white px-6 py-4">
+                            <div class="flex items-center gap-3">
+                                <div class="relative flex-1">
+                                    <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">
+                                        <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="m21 21-4.35-4.35m0 0A7.95 7.95 0 1 0 5.4 5.4a7.95 7.95 0 0 0 11.25 11.25Z" />
+                                        </svg>
+                                    </div>
+                                    <input
+                                        type="search"
+                                        class="block w-full rounded-md border-gray-300 pl-10 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                                        placeholder="Search products"
+                                        x-model="search"
+                                        x-on:input.debounce.200ms="handleSearchInput()"
+                                    />
+                                    <div
+                                        class="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 transition-opacity duration-150"
+                                        :class="isLoadingList ? 'opacity-100' : 'opacity-0'"
+                                        aria-hidden="true"
+                                    >
+                                        <svg class="h-4 w-4 animate-pulse" xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 24 24">
+                                            <circle cx="12" cy="12" r="3" />
+                                        </svg>
+                                    </div>
+                                </div>
+
+                                @if ($payload['canManageImports'])
+                                    <button
+                                        type="button"
+                                        class="inline-flex h-10 w-10 items-center justify-center rounded-md border border-gray-300 text-gray-600 transition hover:bg-gray-50 hover:text-gray-900"
+                                        title="Import Products"
+                                        aria-label="Import Products"
+                                        x-on:click="openImportPanel()"
+                                    >
+                                        <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 16.5V4.5m0 12 4.5-4.5M12 16.5l-4.5-4.5M3.75 19.5h16.5" />
+                                        </svg>
+                                    </button>
+                                @endif
+
+                                @if ($payload['canManageProducts'])
+                                    <button
+                                        type="button"
+                                        class="inline-flex h-10 w-10 items-center justify-center rounded-md border border-gray-300 text-gray-600 transition hover:bg-gray-50 hover:text-gray-900"
+                                        title="Add New Product"
+                                        aria-label="Add New Product"
+                                        x-on:click="openCreatePanel()"
+                                    >
+                                        <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                                        </svg>
+                                    </button>
+                                @endif
+                            </div>
+                        </div>
+
+                        <table class="min-w-full divide-y divide-gray-100">
+                            <thead class="sticky top-[73px] z-10 bg-white">
+                                <tr>
+                                    <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                                        <button type="button" class="inline-flex items-center gap-2 text-left" x-on:click="toggleSort('name')">
+                                            <span>Name</span>
+                                            <span x-show="sort.column === 'name'">
+                                                <svg x-show="sort.direction === 'desc'" class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 13.5 12 21m0 0-7.5-7.5M12 21V3" />
+                                                </svg>
+                                                <svg x-show="sort.direction === 'asc'" class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 10.5 12 3m0 0 7.5 7.5M12 3v18" />
+                                                </svg>
+                                            </span>
+                                        </button>
+                                    </th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                                        <button type="button" class="inline-flex items-center gap-2 text-left" x-on:click="toggleSort('base_uom')">
+                                            <span>Base UoM</span>
+                                            <span x-show="sort.column === 'base_uom'">
+                                                <svg x-show="sort.direction === 'desc'" class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 13.5 12 21m0 0-7.5-7.5M12 21V3" />
+                                                </svg>
+                                                <svg x-show="sort.direction === 'asc'" class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 10.5 12 3m0 0 7.5 7.5M12 3v18" />
+                                                </svg>
+                                            </span>
+                                        </button>
+                                    </th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                                        <button type="button" class="inline-flex items-center gap-2 text-left" x-on:click="toggleSort('price')">
+                                            <span>Price</span>
+                                            <span x-show="sort.column === 'price'">
+                                                <svg x-show="sort.direction === 'desc'" class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 13.5 12 21m0 0-7.5-7.5M12 21V3" />
+                                                </svg>
+                                                <svg x-show="sort.direction === 'asc'" class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 10.5 12 3m0 0 7.5 7.5M12 3v18" />
+                                                </svg>
+                                            </span>
+                                        </button>
+                                    </th>
+                                    <th class="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">
+                                        <span class="sr-only">Actions</span>
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody
+                                class="divide-y divide-gray-100 bg-white transition-opacity duration-150"
+                                :class="isLoadingList ? 'opacity-80' : 'opacity-100'"
+                            >
+                                <tr x-show="!isLoadingList && products.length === 0">
+                                    <td colspan="4" class="px-6 py-10 text-center text-sm text-gray-500">No products found.</td>
+                                </tr>
+
+                                <template x-for="product in products" :key="product.id">
+                                    <tr class="transition hover:bg-gray-50">
+                                        <td class="px-6 py-4 text-sm text-gray-900">
+                                            <div class="flex items-center gap-3">
+                                                <template x-if="product.image_url">
+                                                    <img
+                                                        :src="product.image_url"
+                                                        alt=""
+                                                        class="h-10 w-10 rounded-md object-cover"
+                                                    >
+                                                </template>
+                                                <template x-if="!product.image_url">
+                                                    <div class="h-10 w-10 rounded-md bg-gray-100"></div>
+                                                </template>
+                                                <span class="font-medium" x-text="product.name"></span>
+                                            </div>
+                                        </td>
+                                        <td class="px-6 py-4 text-sm text-gray-700">
+                                            <span x-text="product.base_uom.name || '—'"></span>
+                                            <span x-show="product.base_uom.symbol" x-text="`(${product.base_uom.symbol})`"></span>
+                                        </td>
+                                        <td class="px-6 py-4 text-sm text-gray-700">
+                                            <span x-show="product.price && product.currency" x-text="`${product.currency} ${product.price}`"></span>
+                                            <span x-show="product.price && !product.currency" x-text="product.price"></span>
+                                            <span x-show="!product.price">—</span>
+                                        </td>
+                                        <td class="px-6 py-4 text-right text-sm">
+                                            <button
+                                                type="button"
+                                                class="ml-auto inline-flex h-8 w-8 items-center justify-center rounded-md text-gray-500 transition hover:bg-gray-100 hover:text-gray-700"
+                                                aria-label="Product actions"
+                                            >
+                                                <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 6.75a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Zm0 6a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Zm0 6a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Z" />
+                                                </svg>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </div>
 
-            <div class="mt-6" x-show="products.length > 0">
-                <div class="rounded-lg border border-gray-100 bg-white shadow-sm">
-                    <div class="p-6">
-                        <div class="overflow-x-auto">
-                            <table class="min-w-full divide-y divide-gray-100">
-                                <thead>
-                                    <tr>
-                                        <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Name</th>
-                                        <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Status</th>
-                                        <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Base UoM</th>
-                                        <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Flags</th>
-                                        <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">External</th>
-                                    </tr>
-                                </thead>
-                                <tbody class="divide-y divide-gray-100">
-                                    <template x-for="product in products" :key="product.id">
-                                        <tr>
-                                            <td class="px-4 py-4 text-sm text-gray-900" x-text="product.name"></td>
-                                            <td class="px-4 py-4 text-sm">
-                                                <span
-                                                    class="rounded-full px-3 py-1 text-xs font-semibold uppercase"
-                                                    :class="product.is_active ? 'bg-green-50 text-green-700' : 'bg-yellow-50 text-yellow-700'"
-                                                    x-text="product.status_label"
-                                                ></span>
-                                            </td>
-                                            <td class="px-4 py-4 text-sm text-gray-700">
-                                                <span x-text="product.base_uom_name || '—'"></span>
-                                                <span x-show="product.base_uom_symbol" x-text="`(${product.base_uom_symbol})`"></span>
-                                            </td>
-                                            <td class="px-4 py-4 text-sm text-gray-700">
-                                                <div class="flex flex-wrap gap-2 text-xs text-gray-600">
-                                                    <span class="rounded-full bg-gray-100 px-2 py-1">Sellable</span>
-                                                    <span class="rounded-full bg-gray-100 px-2 py-1" x-show="product.is_manufacturable">Manufacturable</span>
-                                                    <span class="rounded-full bg-gray-100 px-2 py-1" x-show="product.is_purchasable">Purchasable</span>
+            <div
+                class="fixed inset-0 z-50 overflow-hidden"
+                x-show="isCreatePanelOpen"
+                x-cloak
+                role="dialog"
+                aria-modal="true"
+            >
+                <div class="absolute inset-0 overflow-hidden">
+                    <div
+                        class="absolute inset-0 bg-gray-500 bg-opacity-25 transition-opacity"
+                        x-show="isCreatePanelOpen"
+                        x-on:click="closeCreatePanel()"
+                    ></div>
+
+                    <div class="pointer-events-none fixed inset-y-0 right-0 flex max-w-full pl-10">
+                        <div class="pointer-events-auto w-screen max-w-md">
+                            <form class="flex h-full flex-col bg-white shadow-xl" x-on:submit.prevent="submitCreate()">
+                                <div class="flex-1 overflow-y-auto p-6">
+                                    <div class="flex items-start justify-between">
+                                        <div>
+                                            <h2 class="text-lg font-medium text-gray-900">Add New Product</h2>
+                                            <p class="mt-1 text-sm text-gray-600">Create a new sellable product item for this tenant.</p>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            class="text-gray-400 hover:text-gray-500"
+                                            x-on:click="closeCreatePanel()"
+                                        >
+                                            <span class="sr-only">Close panel</span>
+                                            ✕
+                                        </button>
+                                    </div>
+
+                                    <div class="mt-6" x-show="createGeneralError">
+                                        <div class="rounded-md bg-red-50 p-3 text-sm text-red-700" x-text="createGeneralError"></div>
+                                    </div>
+
+                                    <div class="mt-6 space-y-5">
+                                        <div>
+                                            <label for="product-name" class="block text-sm font-medium text-gray-700">Name</label>
+                                            <input
+                                                id="product-name"
+                                                x-ref="createProductNameInput"
+                                                type="text"
+                                                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                                                x-model="createForm.name"
+                                            />
+                                            <p class="mt-1 text-sm text-red-600" x-show="createErrors.name" x-text="createErrors.name[0]"></p>
+                                        </div>
+
+                                        <div>
+                                            <label for="product-base-uom" class="block text-sm font-medium text-gray-700">Base Unit of Measure</label>
+                                            <select
+                                                id="product-base-uom"
+                                                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                                                x-model="createForm.base_uom_id"
+                                            >
+                                                <option value="">Select a unit</option>
+                                                <template x-for="uom in uoms" :key="uom.id">
+                                                    <option :value="String(uom.id)" x-text="`${uom.name} (${uom.symbol})`"></option>
+                                                </template>
+                                            </select>
+                                            <p class="mt-1 text-sm text-red-600" x-show="createErrors.base_uom_id" x-text="createErrors.base_uom_id[0]"></p>
+                                        </div>
+
+                                        <div>
+                                            <p class="text-sm font-medium text-gray-700">Planning price</p>
+                                            <div class="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                                                <div class="sm:col-span-2">
+                                                    <label for="product-default-price-amount" class="block text-xs font-medium text-gray-600">Amount</label>
+                                                    <input
+                                                        id="product-default-price-amount"
+                                                        type="text"
+                                                        inputmode="decimal"
+                                                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                                                        x-model="createForm.default_price_amount"
+                                                    />
+                                                    <p class="mt-1 text-sm text-red-600" x-show="createErrors.default_price_amount" x-text="createErrors.default_price_amount[0]"></p>
                                                 </div>
-                                            </td>
-                                            <td class="px-4 py-4 text-sm text-gray-700">
-                                                <span x-show="product.external_source && product.external_id" x-text="`${product.external_source}:${product.external_id}`"></span>
-                                                <span x-show="!product.external_source || !product.external_id">—</span>
-                                            </td>
-                                        </tr>
-                                    </template>
-                                </tbody>
-                            </table>
+                                                <div>
+                                                    <label class="block text-xs font-medium text-gray-600">Currency</label>
+                                                    <input
+                                                        type="text"
+                                                        class="mt-1 block w-full rounded-md border-gray-200 bg-gray-50 text-gray-600 shadow-sm sm:text-sm"
+                                                        x-bind:value="tenantCurrency"
+                                                        disabled
+                                                    />
+                                                    <p class="mt-1 text-sm text-red-600" x-show="createErrors.default_price_currency_code" x-text="createErrors.default_price_currency_code[0]"></p>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div>
+                                            <p class="text-sm font-medium text-gray-700">Flags</p>
+                                            <div class="mt-3 space-y-2">
+                                                <label class="flex items-center gap-2 text-sm text-gray-700">
+                                                    <input type="checkbox" class="rounded border-gray-300 text-blue-600 focus:ring-blue-500" checked disabled>
+                                                    Sellable
+                                                </label>
+                                                <label class="flex items-center gap-2 text-sm text-gray-700">
+                                                    <input type="checkbox" class="rounded border-gray-300 text-blue-600 focus:ring-blue-500" x-model="createForm.is_purchasable">
+                                                    Purchasable
+                                                </label>
+                                                <label class="flex items-center gap-2 text-sm text-gray-700">
+                                                    <input type="checkbox" class="rounded border-gray-300 text-blue-600 focus:ring-blue-500" x-model="createForm.is_manufacturable">
+                                                    Manufacturable
+                                                </label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="flex justify-end gap-3 border-t border-gray-100 bg-white px-6 py-4">
+                                    <button
+                                        type="button"
+                                        class="inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-widest text-gray-700 shadow-sm transition hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                                        x-on:click="closeCreatePanel()"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        class="inline-flex items-center rounded-md border border-transparent bg-blue-600 px-4 py-2 text-xs font-semibold uppercase tracking-widest text-white transition hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                                        :disabled="isCreateSubmitting"
+                                        :class="isCreateSubmitting ? 'opacity-50 cursor-not-allowed' : ''"
+                                    >
+                                        Add Product
+                                    </button>
+                                </div>
+                            </form>
                         </div>
                     </div>
                 </div>

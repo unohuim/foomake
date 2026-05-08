@@ -3,8 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Actions\Integrations\CreateEmptyFulfillmentRecipeForImportedItem;
+use App\Http\Requests\Sales\ListSalesProductsRequest;
 use App\Http\Requests\Sales\ImportExternalProductsRequest;
 use App\Http\Requests\Sales\PreviewExternalProductImportRequest;
+use App\Http\Requests\Sales\StoreSalesProductRequest;
 use App\Integrations\WooCommerce\WooCommerceException;
 use App\Models\ExternalProductSourceConnection;
 use App\Models\Item;
@@ -15,6 +17,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Str;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
 /**
@@ -32,22 +35,20 @@ class SalesProductController extends Controller
         /** @var \App\Models\User $user */
         $user = auth()->user();
 
-        $products = Item::query()
-            ->with('baseUom')
-            ->where('is_sellable', true)
-            ->orderBy('name')
-            ->get();
         $uoms = Uom::query()->orderBy('name')->get();
+        $tenantCurrency = $user?->tenant?->currency_code ?: (string) config('app.currency_code', 'USD');
 
         $payload = [
-            'products' => $products->map(fn (Item $item): array => $this->productData($item))->values()->all(),
             'uoms' => $uoms->map(fn (Uom $uom): array => [
                 'id' => $uom->id,
                 'name' => $uom->name,
                 'symbol' => $uom->symbol,
             ])->values()->all(),
             'sources' => $this->availableSourcesForTenant((int) $user->tenant_id),
+            'listUrl' => route('sales.products.list'),
+            'storeUrl' => route('sales.products.store'),
             'canManageImports' => Gate::allows('inventory-products-manage'),
+            'canManageProducts' => Gate::allows('inventory-products-manage'),
             'canManageConnections' => Gate::allows('system-users-manage'),
             'connectorsPageUrl' => Gate::allows('system-users-manage')
                 ? route('profile.connectors.index')
@@ -57,11 +58,95 @@ class SalesProductController extends Controller
             'importUrl' => route('sales.products.import.store'),
             'navigationStateUrl' => route('navigation.state'),
             'csrfToken' => csrf_token(),
+            'tenantCurrency' => Str::upper($tenantCurrency),
         ];
 
         return view('sales.products.index', [
             'payload' => $payload,
         ]);
+    }
+
+    /**
+     * Return the Sales Products list read model for the page module.
+     */
+    public function list(ListSalesProductsRequest $request): JsonResponse
+    {
+        $this->authorizeIndex();
+
+        $validated = $request->validated();
+        $search = trim((string) ($validated['search'] ?? ''));
+        $sortColumn = (string) ($validated['sort'] ?? 'name');
+        $direction = (string) ($validated['direction'] ?? 'desc');
+        $allowedSortColumns = ['name', 'price', 'base_uom'];
+
+        $query = Item::query()
+            ->with('baseUom')
+            ->where('is_sellable', true);
+
+        if ($search !== '') {
+            $query->where('items.name', 'like', '%' . $search . '%');
+        }
+
+        match ($sortColumn) {
+            'price' => $query->orderBy('items.default_price_cents', $direction)->orderBy('items.name'),
+            'base_uom' => $query
+                ->leftJoin('uoms', 'uoms.id', '=', 'items.base_uom_id')
+                ->select('items.*')
+                ->orderBy('uoms.name', $direction)
+                ->orderBy('items.name'),
+            default => $query->orderBy('items.name', $direction),
+        };
+
+        $products = $query->get();
+
+        return response()->json([
+            'data' => $products
+                ->map(fn (Item $item): array => $this->productListData($item))
+                ->values()
+                ->all(),
+            'meta' => [
+                'search' => $search,
+                'sort' => [
+                    'column' => $sortColumn,
+                    'direction' => $direction,
+                ],
+                'allowed_sort_columns' => $allowedSortColumns,
+                'total' => $products->count(),
+            ],
+        ]);
+    }
+
+    /**
+     * Store a new product from the Sales Products create slide-over.
+     */
+    public function store(StoreSalesProductRequest $request): JsonResponse
+    {
+        $payload = $request->all();
+
+        if (array_key_exists('default_price_amount', $payload) && $payload['default_price_amount'] === '') {
+            $request->merge(['default_price_amount' => null]);
+        }
+
+        if (array_key_exists('default_price_currency_code', $payload) && $payload['default_price_currency_code'] === '') {
+            $request->merge(['default_price_currency_code' => null]);
+        }
+
+        $validated = $request->validated();
+        $defaultPriceData = $this->resolveDefaultPriceData($request);
+
+        $item = Item::query()->create(array_merge([
+            'tenant_id' => $request->user()->tenant_id,
+            'name' => $validated['name'],
+            'base_uom_id' => (int) $validated['base_uom_id'],
+            'is_purchasable' => $request->boolean('is_purchasable'),
+            'is_sellable' => true,
+            'is_manufacturable' => $request->boolean('is_manufacturable'),
+            'is_active' => true,
+        ], $defaultPriceData));
+
+        return response()->json([
+            'data' => $this->productListData($item->load('baseUom')),
+        ], 201);
     }
 
     /**
@@ -272,6 +357,27 @@ class SalesProductController extends Controller
     }
 
     /**
+     * Build the JSON list row for the Sales Products desktop view.
+     *
+     * @return array<string, mixed>
+     */
+    private function productListData(Item $item): array
+    {
+        return [
+            'id' => $item->id,
+            'name' => $item->name,
+            'base_uom' => [
+                'id' => $item->baseUom?->id,
+                'name' => $item->baseUom?->name,
+                'symbol' => $item->baseUom?->symbol,
+            ],
+            'price' => $this->formatCentsToAmount($item->default_price_cents),
+            'currency' => $item->default_price_currency_code,
+            'image_url' => null,
+        ];
+    }
+
+    /**
      * Return the available import sources and their tenant-scoped connection status.
      *
      * @return array<int, array<string, mixed>>
@@ -336,5 +442,59 @@ class SalesProductController extends Controller
                 'connect_required' => true,
             ],
         ], 422);
+    }
+
+    /**
+     * Normalize a numeric amount string to integer cents without float casting.
+     */
+    private function normalizeAmountToCents(string $amount): int
+    {
+        if (str_contains($amount, '.')) {
+            [$whole, $decimal] = explode('.', $amount, 2);
+            $decimal = str_pad(substr($decimal, 0, 2), 2, '0');
+
+            return (((int) $whole) * 100) + ((int) $decimal);
+        }
+
+        return ((int) $amount) * 100;
+    }
+
+    /**
+     * Resolve default price payload for a newly created product.
+     *
+     * @return array<string, int|string|null>
+     */
+    private function resolveDefaultPriceData(StoreSalesProductRequest $request): array
+    {
+        $amountValue = $request->input('default_price_amount');
+        $currencyValue = $request->input('default_price_currency_code');
+
+        if ($amountValue === null || $amountValue === '') {
+            return [
+                'default_price_cents' => null,
+                'default_price_currency_code' => null,
+            ];
+        }
+
+        $currencyCode = $currencyValue
+            ? Str::upper((string) $currencyValue)
+            : Str::upper((string) ($request->user()?->tenant?->currency_code ?: config('app.currency_code', 'USD')));
+
+        return [
+            'default_price_cents' => $this->normalizeAmountToCents((string) $amountValue),
+            'default_price_currency_code' => $currencyCode,
+        ];
+    }
+
+    /**
+     * Format cents into a decimal amount string.
+     */
+    private function formatCentsToAmount(?int $cents): ?string
+    {
+        if ($cents === null) {
+            return null;
+        }
+
+        return sprintf('%d.%02d', intdiv($cents, 100), $cents % 100);
     }
 }

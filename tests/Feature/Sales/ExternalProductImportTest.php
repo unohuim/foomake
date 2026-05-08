@@ -880,7 +880,7 @@ it('29. transaction failure rolls back the whole import with no partial items pe
     expect(Item::query()->whereIn('name', ['Txn Product A', 'Txn Product B'])->count())->toBe(0);
 });
 
-it('30. imported products appear on the sales products index after import', function () {
+it('30. imported products appear on the sales products list endpoint after import', function () {
     $tenant = ($this->makeTenant)();
     $uom = ($this->makeUom)($tenant);
     $user = ($this->makeUser)($tenant);
@@ -899,9 +899,9 @@ it('30. imported products appear on the sales products index after import', func
     ])->assertCreated();
 
     $this->actingAs($user)
-        ->get(route('sales.products.index'))
+        ->getJson(route('sales.products.list'))
         ->assertOk()
-        ->assertSee('Visible Imported Sales Product');
+        ->assertJsonPath('data.0.name', 'Visible Imported Sales Product');
 });
 
 it('31. imported products appear on the manufacturing materials index after import', function () {

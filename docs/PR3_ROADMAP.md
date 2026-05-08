@@ -542,6 +542,8 @@ Tasks accordion:
 
 ### PR3-INT-001 — External Product Import Prep
 
+Status: Implemented
+
 **Goal**
 Prepare the app for ecommerce product imports, starting with WooCommerce, while preserving the invariant that products remain normal items.
 
@@ -580,6 +582,60 @@ Prepare the app for ecommerce product imports, starting with WooCommerce, while 
 - Customer import
 - Inventory sync
 - Separate products table or model
+
+---
+
+### PR3-INT-002 — Sales Products Blade Shell + JSON List
+
+Status: Implemented
+
+**Goal**
+Convert Sales → Products into a Blade page shell backed by a modular desktop JavaScript list/search/sort experience using a tenant-scoped JSON endpoint, while preserving the invariant that products remain normal `items` where `is_sellable = true`.
+
+**Includes**
+
+- `GET /sales/products` Blade page shell
+- `GET /sales/products/list` JSON list endpoint
+- Desktop JavaScript products list with:
+    - search
+    - single-column sorting
+    - sticky search/header rows
+    - price column
+    - row actions affordance
+- Mobile placeholder text only: `view not designed yet`
+- Existing page-level Products heading retained
+- Existing Materials-style create slide-over reused only as minimally required for add-product flow
+- Existing sales products permissions preserved
+- JSON response contract for list rows:
+    - `id`
+    - `name`
+    - `base_uom`
+    - `price`
+    - `currency`
+    - `image_url`
+
+**Out of Scope**
+
+- Update/delete product endpoints
+- Schema changes
+- New permission slugs
+- External image integration
+- Real WooCommerce product-image pulling
+
+**Goal**
+Move Sales → Products to a Blade shell with a page-module desktop list backed by a JSON endpoint.
+
+**Includes**
+
+- Keep `GET /sales/products` as the user-facing page
+- Add `GET /sales/products/list` JSON read model for sellable items
+- Products remain normal `items` filtered by `is_sellable = true`
+- Blade remains the source of truth for layout, navigation, and page shell
+- Desktop list/search/sort behavior is handled by the page module
+- Mobile view intentionally renders a placeholder only
+- Add New Product reuses the existing create slide-over pattern with the minimum required backend support
+- No schema changes
+- No new permission slugs
 
 ---
 

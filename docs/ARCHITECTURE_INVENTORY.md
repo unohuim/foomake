@@ -631,19 +631,27 @@ current operational stage -> next stage is blocked while current-stage generated
 - `routes/web.php`  
 
 **Purpose:**  
-Document that Sales → Products is a sales-facing filtered view of normal tenant-owned items rather than a separate product entity.
+Document that Sales → Products is a sales-facing filtered view of normal tenant-owned items rather than a separate product entity, exposed as a Blade shell with a JSON-backed desktop list.
 
 **When to Use:**  
-Rendering or importing sales-facing products from ecommerce sources while preserving the shared `Item` identity.
+Rendering, listing, searching, sorting, creating, or importing sales-facing products while preserving the shared `Item` identity.
 
 **When Not to Use:**  
 Introducing a separate products table/model or treating imported products as distinct from materials.
 
 **Public Interface:**  
 - `sales.products.index`  
+- `sales.products.list`  
+- `sales.products.store`  
 - `sales.products.import.preview`  
 - `sales.products.import.store`  
 - `Item::query()->where('is_sellable', true)`  
+
+**Notes:**  
+- `/sales/products` remains the user-facing page route and renders the Blade shell.  
+- Desktop records are sourced from the JSON list endpoint rather than Blade-rendered table rows.  
+- Mobile currently renders a placeholder only.  
+- This slice does not introduce product update/delete endpoints or a separate product entity.  
 
 **Example Usage:**  
 ```php

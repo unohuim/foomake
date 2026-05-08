@@ -9,17 +9,48 @@ export function mount(rootEl, payload) {
         source: [],
     });
 
+    const emptyCreateErrors = () => ({
+        name: [],
+        base_uom_id: [],
+        default_price_amount: [],
+        default_price_currency_code: [],
+    });
+    const allowedSortColumns = ['name', 'base_uom', 'price'];
+    const allowedSortDirections = ['asc', 'desc'];
+
     Alpine.data('salesProductsIndex', () => ({
-        products: safePayload.products || [],
+        products: [],
         uoms: safePayload.uoms || [],
         sources: safePayload.sources || [],
-        canManageImports: Boolean(safePayload.canManageImports),
-        canManageConnections: Boolean(safePayload.canManageConnections),
-        connectorsPageUrl: safePayload.connectorsPageUrl || '',
+        listUrl: safePayload.listUrl || '',
+        storeUrl: safePayload.storeUrl || '',
         previewUrl: safePayload.previewUrl || '',
         importUrl: safePayload.importUrl || '',
         navigationStateUrl: safePayload.navigationStateUrl || '',
         csrfToken: safePayload.csrfToken || '',
+        tenantCurrency: safePayload.tenantCurrency || '',
+        canManageImports: Boolean(safePayload.canManageImports),
+        canManageProducts: Boolean(safePayload.canManageProducts),
+        canManageConnections: Boolean(safePayload.canManageConnections),
+        connectorsPageUrl: safePayload.connectorsPageUrl || '',
+        isLoadingList: false,
+        listError: '',
+        search: '',
+        sort: {
+            column: 'name',
+            direction: 'desc',
+        },
+        isCreatePanelOpen: false,
+        isCreateSubmitting: false,
+        createGeneralError: '',
+        createErrors: emptyCreateErrors(),
+        createForm: {
+            name: '',
+            base_uom_id: '',
+            is_purchasable: false,
+            is_manufacturable: false,
+            default_price_amount: '',
+        },
         isImportPanelOpen: false,
         selectedSource: '',
         previewRows: [],
@@ -39,6 +70,26 @@ export function mount(rootEl, payload) {
             type: 'success',
             timeoutId: null,
         },
+        init() {
+            this.fetchProducts();
+        },
+        buildListQueryParams() {
+            const params = new URLSearchParams();
+            const search = typeof this.search === 'string' ? this.search.trim() : '';
+            const sortColumn = allowedSortColumns.includes(this.sort?.column) ? this.sort.column : null;
+            const sortDirection = allowedSortDirections.includes(this.sort?.direction) ? this.sort.direction : null;
+
+            if (search !== '') {
+                params.set('search', search);
+            }
+
+            if (sortColumn && sortDirection) {
+                params.set('sort', sortColumn);
+                params.set('direction', sortDirection);
+            }
+
+            return params;
+        },
         showToast(type, message) {
             this.toast.type = type;
             this.toast.message = message;
@@ -51,6 +102,141 @@ export function mount(rootEl, payload) {
             this.toast.timeoutId = setTimeout(() => {
                 this.toast.visible = false;
             }, 2500);
+        },
+        async fetchProducts() {
+            this.isLoadingList = true;
+            this.listError = '';
+
+            try {
+                const params = this.buildListQueryParams();
+                const queryString = params.toString();
+                const requestUrl = queryString === '' ? this.listUrl : `${this.listUrl}?${queryString}`;
+                const response = await fetch(requestUrl, {
+                    headers: {
+                        Accept: 'application/json',
+                    },
+                });
+
+                if (response.status === 422) {
+                    const data = await response.json();
+                    this.listError = data.message || 'Unable to load products.';
+                    this.showToast('error', this.listError);
+                    return;
+                }
+
+                if (!response.ok) {
+                    this.listError = 'Unable to load products.';
+                    this.showToast('error', this.listError);
+                    return;
+                }
+
+                const data = await response.json();
+                this.products = Array.isArray(data.data) ? data.data : [];
+
+                if (data.meta?.sort) {
+                    this.sort = {
+                        column: data.meta.sort.column || this.sort.column,
+                        direction: data.meta.sort.direction || this.sort.direction,
+                    };
+                }
+            } catch (error) {
+                this.listError = 'Unable to load products.';
+                this.showToast('error', this.listError);
+            } finally {
+                this.isLoadingList = false;
+            }
+        },
+        handleSearchInput() {
+            this.fetchProducts();
+        },
+        toggleSort(column) {
+            if (this.sort.column !== column) {
+                this.sort = {
+                    column,
+                    direction: 'desc',
+                };
+            } else {
+                this.sort.direction = this.sort.direction === 'desc' ? 'asc' : 'desc';
+            }
+
+            this.fetchProducts();
+        },
+        normalizeCreateErrors(errors) {
+            if (!errors || typeof errors !== 'object') {
+                return emptyCreateErrors();
+            }
+
+            return {
+                ...emptyCreateErrors(),
+                ...errors,
+                name: Array.isArray(errors.name) ? errors.name : [],
+                base_uom_id: Array.isArray(errors.base_uom_id) ? errors.base_uom_id : [],
+                default_price_amount: Array.isArray(errors.default_price_amount) ? errors.default_price_amount : [],
+                default_price_currency_code: Array.isArray(errors.default_price_currency_code)
+                    ? errors.default_price_currency_code
+                    : [],
+            };
+        },
+        openCreatePanel() {
+            if (!this.canManageProducts) {
+                return;
+            }
+
+            this.isCreatePanelOpen = true;
+            this.createGeneralError = '';
+            this.createErrors = emptyCreateErrors();
+            this.$nextTick(() => {
+                this.$refs.createProductNameInput?.focus();
+            });
+        },
+        closeCreatePanel() {
+            this.isCreatePanelOpen = false;
+            this.isCreateSubmitting = false;
+            this.createGeneralError = '';
+            this.createErrors = emptyCreateErrors();
+            this.resetCreateForm();
+        },
+        resetCreateForm() {
+            this.createForm = {
+                name: '',
+                base_uom_id: '',
+                is_purchasable: false,
+                is_manufacturable: false,
+                default_price_amount: '',
+            };
+        },
+        async submitCreate() {
+            this.isCreateSubmitting = true;
+            this.createGeneralError = '';
+            this.createErrors = emptyCreateErrors();
+
+            const response = await fetch(this.storeUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Accept: 'application/json',
+                    'X-CSRF-TOKEN': this.csrfToken,
+                },
+                body: JSON.stringify(this.createForm),
+            });
+
+            if (response.status === 422) {
+                const data = await response.json();
+                this.createErrors = this.normalizeCreateErrors(data.errors);
+                this.isCreateSubmitting = false;
+                return;
+            }
+
+            if (!response.ok) {
+                this.createGeneralError = 'Something went wrong. Please try again.';
+                this.isCreateSubmitting = false;
+                return;
+            }
+
+            await this.fetchProducts();
+            await refreshNavigationState(this.navigationStateUrl);
+            this.showToast('success', 'Product created.');
+            this.closeCreatePanel();
         },
         openImportPanel() {
             if (!this.canManageImports) {
@@ -203,8 +389,7 @@ export function mount(rootEl, payload) {
                 return;
             }
 
-            const data = await response.json();
-            this.products = [...(data.data?.imported || []), ...this.products];
+            await this.fetchProducts();
             await refreshNavigationState(this.navigationStateUrl);
             this.showToast('success', 'Products imported.');
             this.closeImportPanel();

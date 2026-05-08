@@ -217,6 +217,10 @@ Route::middleware('auth')->group(function () {
 
     Route::get('/sales/products', [SalesProductController::class, 'index'])
         ->name('sales.products.index');
+    Route::get('/sales/products/list', [SalesProductController::class, 'list'])
+        ->name('sales.products.list');
+    Route::post('/sales/products', [SalesProductController::class, 'store'])
+        ->name('sales.products.store');
     Route::post('/sales/products/import-preview', [SalesProductController::class, 'preview'])
         ->name('sales.products.import.preview');
     Route::post('/sales/products/imports', [SalesProductController::class, 'storeImport'])
