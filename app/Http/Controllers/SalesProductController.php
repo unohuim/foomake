@@ -37,6 +37,7 @@ class SalesProductController extends Controller
 
         $uoms = Uom::query()->orderBy('name')->get();
         $tenantCurrency = $user?->tenant?->currency_code ?: (string) config('app.currency_code', 'USD');
+        $crudConfig = $this->productsCrudConfig();
 
         $payload = [
             'uoms' => $uoms->map(fn (Uom $uom): array => [
@@ -45,8 +46,8 @@ class SalesProductController extends Controller
                 'symbol' => $uom->symbol,
             ])->values()->all(),
             'sources' => $this->availableSourcesForTenant((int) $user->tenant_id),
-            'listUrl' => route('sales.products.list'),
-            'storeUrl' => route('sales.products.store'),
+            'listUrl' => $crudConfig['endpoints']['list'],
+            'storeUrl' => $crudConfig['endpoints']['create'],
             'canManageImports' => Gate::allows('inventory-products-manage'),
             'canManageProducts' => Gate::allows('inventory-products-manage'),
             'canManageConnections' => Gate::allows('system-users-manage'),
@@ -54,14 +55,15 @@ class SalesProductController extends Controller
                 ? route('profile.connectors.index')
                 : null,
             'connectUrlBase' => url('/sales/products/import-sources'),
-            'previewUrl' => route('sales.products.import.preview'),
-            'importUrl' => route('sales.products.import.store'),
+            'previewUrl' => $crudConfig['endpoints']['importPreview'],
+            'importUrl' => $crudConfig['endpoints']['importStore'],
             'navigationStateUrl' => route('navigation.state'),
             'csrfToken' => csrf_token(),
             'tenantCurrency' => Str::upper($tenantCurrency),
         ];
 
         return view('sales.products.index', [
+            'crudConfig' => $crudConfig,
             'payload' => $payload,
         ]);
     }
@@ -74,10 +76,11 @@ class SalesProductController extends Controller
         $this->authorizeIndex();
 
         $validated = $request->validated();
+        $crudConfig = $this->productsCrudConfig();
         $search = trim((string) ($validated['search'] ?? ''));
         $sortColumn = (string) ($validated['sort'] ?? 'name');
         $direction = (string) ($validated['direction'] ?? 'desc');
-        $allowedSortColumns = ['name', 'price', 'base_uom'];
+        $allowedSortColumns = $crudConfig['sortable'];
 
         $query = Item::query()
             ->with('baseUom')
@@ -374,6 +377,30 @@ class SalesProductController extends Controller
             'price' => $this->formatCentsToAmount($item->default_price_cents),
             'currency' => $item->default_price_currency_code,
             'image_url' => null,
+        ];
+    }
+
+    /**
+     * Return the shared CRUD config for the Sales Products page module.
+     *
+     * @return array<string, mixed>
+     */
+    private function productsCrudConfig(): array
+    {
+        return [
+            'endpoints' => [
+                'list' => route('sales.products.list'),
+                'create' => route('sales.products.store'),
+                'importPreview' => route('sales.products.import.preview'),
+                'importStore' => route('sales.products.import.store'),
+            ],
+            'columns' => ['name', 'base_uom', 'price'],
+            'headers' => [
+                'name' => 'Name',
+                'base_uom' => 'Base UoM',
+                'price' => 'Price',
+            ],
+            'sortable' => ['name', 'base_uom', 'price'],
         ];
     }
 

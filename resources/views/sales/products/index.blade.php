@@ -11,6 +11,7 @@
         class="py-12"
         data-page="sales-products-index"
         data-payload="sales-products-index-payload"
+        data-crud-config='@json($crudConfig)'
         x-data="salesProductsIndex"
     >
         <div class="fixed top-6 right-6 z-50" x-show="toast.visible">
@@ -193,45 +194,26 @@
                         <table class="min-w-full divide-y divide-gray-100">
                             <thead class="sticky top-[73px] z-10 bg-white">
                                 <tr>
-                                    <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
-                                        <button type="button" class="inline-flex items-center gap-2 text-left" x-on:click="toggleSort('name')">
-                                            <span>Name</span>
-                                            <span x-show="sort.column === 'name'">
-                                                <svg x-show="sort.direction === 'desc'" class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 13.5 12 21m0 0-7.5-7.5M12 21V3" />
-                                                </svg>
-                                                <svg x-show="sort.direction === 'asc'" class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 10.5 12 3m0 0 7.5 7.5M12 3v18" />
-                                                </svg>
-                                            </span>
-                                        </button>
-                                    </th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
-                                        <button type="button" class="inline-flex items-center gap-2 text-left" x-on:click="toggleSort('base_uom')">
-                                            <span>Base UoM</span>
-                                            <span x-show="sort.column === 'base_uom'">
-                                                <svg x-show="sort.direction === 'desc'" class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 13.5 12 21m0 0-7.5-7.5M12 21V3" />
-                                                </svg>
-                                                <svg x-show="sort.direction === 'asc'" class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 10.5 12 3m0 0 7.5 7.5M12 3v18" />
-                                                </svg>
-                                            </span>
-                                        </button>
-                                    </th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
-                                        <button type="button" class="inline-flex items-center gap-2 text-left" x-on:click="toggleSort('price')">
-                                            <span>Price</span>
-                                            <span x-show="sort.column === 'price'">
-                                                <svg x-show="sort.direction === 'desc'" class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 13.5 12 21m0 0-7.5-7.5M12 21V3" />
-                                                </svg>
-                                                <svg x-show="sort.direction === 'asc'" class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 10.5 12 3m0 0 7.5 7.5M12 3v18" />
-                                                </svg>
-                                            </span>
-                                        </button>
-                                    </th>
+                                    <template x-for="column in columns" :key="`header-${column}`">
+                                        <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                                            <template x-if="isSortableColumn(column)">
+                                                <button type="button" class="inline-flex items-center gap-2 text-left" x-on:click="toggleSort(column)">
+                                                    <span x-text="columnHeader(column)"></span>
+                                                    <span x-show="sort.column === column">
+                                                        <svg x-show="sort.direction === 'desc'" class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 13.5 12 21m0 0-7.5-7.5M12 21V3" />
+                                                        </svg>
+                                                        <svg x-show="sort.direction === 'asc'" class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 10.5 12 3m0 0 7.5 7.5M12 3v18" />
+                                                        </svg>
+                                                    </span>
+                                                </button>
+                                            </template>
+                                            <template x-if="!isSortableColumn(column)">
+                                                <span x-text="columnHeader(column)"></span>
+                                            </template>
+                                        </th>
+                                    </template>
                                     <th class="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">
                                         <span class="sr-only">Actions</span>
                                     </th>
@@ -247,27 +229,28 @@
 
                                 <template x-for="product in products" :key="product.id">
                                     <tr class="transition hover:bg-gray-50">
-                                        <td class="px-6 py-4 text-sm text-gray-900">
-                                            <div class="flex items-center gap-3">
-                                                <template x-if="product.image_url">
-                                                    <img
-                                                        :src="product.image_url"
-                                                        alt=""
-                                                        class="h-10 w-10 rounded-md object-cover"
-                                                    >
+                                        <template x-for="column in columns" :key="`cell-${product.id}-${column}`">
+                                            <td class="px-6 py-4 text-sm text-gray-700">
+                                                <template x-if="column === 'name'">
+                                                    <div class="flex items-center gap-3 text-gray-900">
+                                                        <template x-if="product.image_url">
+                                                            <img
+                                                                :src="product.image_url"
+                                                                alt=""
+                                                                class="h-10 w-10 rounded-md object-cover"
+                                                            >
+                                                        </template>
+                                                        <template x-if="!product.image_url">
+                                                            <div class="h-10 w-10 rounded-md bg-gray-100"></div>
+                                                        </template>
+                                                        <span class="font-medium" x-text="productCellText(product, column)"></span>
+                                                    </div>
                                                 </template>
-                                                <template x-if="!product.image_url">
-                                                    <div class="h-10 w-10 rounded-md bg-gray-100"></div>
+                                                <template x-if="column !== 'name'">
+                                                    <span x-text="productCellText(product, column)"></span>
                                                 </template>
-                                                <span class="font-medium" x-text="product.name"></span>
-                                            </div>
-                                        </td>
-                                        <td class="px-6 py-4 text-sm text-gray-700">
-                                            <span x-text="productBaseUomLabel(product)"></span>
-                                        </td>
-                                        <td class="px-6 py-4 text-sm text-gray-700">
-                                            <span x-text="formattedProductPrice(product)"></span>
-                                        </td>
+                                            </td>
+                                        </template>
                                         <td class="px-6 py-4 text-right text-sm">
                                             <button
                                                 type="button"

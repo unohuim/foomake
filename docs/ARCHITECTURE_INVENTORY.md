@@ -2015,6 +2015,44 @@ Vendor or generated views excluded from repository checks, plus Breeze/shared la
 
 ---
 
+### Configured CRUD Page Module Pattern
+
+**Name:** Configured CRUD Page Module Pattern  
+**Type:** UI Architectural Pattern  
+**Location:**  
+- `docs/architecture/ui/ConfiguredCrudPageModulePattern.yaml`  
+- `resources/js/lib/crud-config.js`  
+- `resources/js/lib/generic-crud.js`  
+- `resources/js/pages/sales-products-index.js`  
+- `resources/views/sales/products/index.blade.php`
+
+**Purpose:**  
+Centralize reusable fetch-based CRUD mechanics behind a server-generated config contract while keeping page-specific UI state inside the page module.
+
+**When to Use:**  
+Interactive Blade CRUD pages that share list/create/sort mechanics but need different routes, columns, or headers.
+
+**When Not to Use:**  
+Static pages, or domain workflows that exceed generic CRUD concerns.
+
+**Public Interface:**  
+- `docs/architecture/ui/ConfiguredCrudPageModulePattern.yaml`  
+- `data-crud-config`  
+- `resources/js/lib/crud-config.js`  
+- `resources/js/lib/generic-crud.js`
+
+**Example Usage:**  
+```blade
+<div
+    data-page="sales-products-index"
+    data-payload="sales-products-index-payload"
+    data-crud-config='@json($crudConfig)'
+    x-data="salesProductsIndex"
+></div>
+```
+
+---
+
 ## Testing
 
 ### Pest Testing Framework

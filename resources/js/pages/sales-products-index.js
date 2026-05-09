@@ -1,8 +1,11 @@
+import { parseCrudConfig } from '../lib/crud-config';
+import { createGenericCrud } from '../lib/generic-crud';
 import { refreshNavigationState } from '../navigation/refresh-navigation-state';
 
 export function mount(rootEl, payload) {
     const Alpine = window.Alpine;
     const safePayload = payload || {};
+    const crud = createGenericCrud(parseCrudConfig(rootEl));
     const loadingPreviewLabel = 'Loading preview...';
 
     const emptyErrors = () => ({
@@ -15,17 +18,16 @@ export function mount(rootEl, payload) {
         default_price_amount: [],
         default_price_currency_code: [],
     });
-    const allowedSortColumns = ['name', 'base_uom', 'price'];
-    const allowedSortDirections = ['asc', 'desc'];
 
     Alpine.data('salesProductsIndex', () => ({
+        crud,
+        endpoints: crud.endpoints || {},
+        columns: Array.isArray(crud.columns) ? crud.columns : [],
+        headers: crud.headers || {},
+        sortable: Array.isArray(crud.sortable) ? crud.sortable : [],
         products: [],
         uoms: safePayload.uoms || [],
         sources: safePayload.sources || [],
-        listUrl: safePayload.listUrl || '',
-        storeUrl: safePayload.storeUrl || '',
-        previewUrl: safePayload.previewUrl || '',
-        importUrl: safePayload.importUrl || '',
         navigationStateUrl: safePayload.navigationStateUrl || '',
         csrfToken: safePayload.csrfToken || '',
         tenantCurrency: safePayload.tenantCurrency || '',
@@ -73,22 +75,11 @@ export function mount(rootEl, payload) {
         init() {
             this.fetchProducts();
         },
-        buildListQueryParams() {
-            const params = new URLSearchParams();
-            const search = typeof this.search === 'string' ? this.search.trim() : '';
-            const sortColumn = allowedSortColumns.includes(this.sort?.column) ? this.sort.column : null;
-            const sortDirection = allowedSortDirections.includes(this.sort?.direction) ? this.sort.direction : null;
-
-            if (search !== '') {
-                params.set('search', search);
-            }
-
-            if (sortColumn && sortDirection) {
-                params.set('sort', sortColumn);
-                params.set('direction', sortDirection);
-            }
-
-            return params;
+        columnHeader(column) {
+            return this.headers[column] || column;
+        },
+        isSortableColumn(column) {
+            return this.sortable.includes(column);
         },
         productBaseUomLabel(product) {
             const baseUom = product?.base_uom || {};
@@ -110,6 +101,18 @@ export function mount(rootEl, payload) {
 
             return '—';
         },
+        productCellText(product, column) {
+            switch (column) {
+            case 'name':
+                return product?.name || '—';
+            case 'base_uom':
+                return this.productBaseUomLabel(product);
+            case 'price':
+                return this.formattedProductPrice(product);
+            default:
+                return '—';
+            }
+        },
         showToast(type, message) {
             this.toast.type = type;
             this.toast.message = message;
@@ -124,61 +127,50 @@ export function mount(rootEl, payload) {
             }, 2500);
         },
         async fetchProducts() {
-            this.isLoadingList = true;
-            this.listError = '';
+            if (!this.endpoints.list) {
+                this.products = [];
+                return;
+            }
 
-            try {
-                const params = this.buildListQueryParams();
-                const queryString = params.toString();
-                const requestUrl = queryString === '' ? this.listUrl : `${this.listUrl}?${queryString}`;
-                const response = await fetch(requestUrl, {
-                    headers: {
-                        Accept: 'application/json',
-                    },
-                });
-
-                if (response.status === 422) {
-                    const data = await response.json();
+            await this.crud.fetchList({
+                search: this.search,
+                sort: this.sort,
+                onStart: () => {
+                    this.isLoadingList = true;
+                    this.listError = '';
+                },
+                onValidationError: (data) => {
                     this.listError = data.message || 'Unable to load products.';
                     this.showToast('error', this.listError);
-                    return;
-                }
-
-                if (!response.ok) {
+                },
+                onError: () => {
                     this.listError = 'Unable to load products.';
                     this.showToast('error', this.listError);
-                    return;
-                }
+                },
+                onSuccess: (data) => {
+                    this.products = Array.isArray(data.data) ? data.data : [];
 
-                const data = await response.json();
-                this.products = Array.isArray(data.data) ? data.data : [];
-
-                if (data.meta?.sort) {
-                    this.sort = {
-                        column: data.meta.sort.column || this.sort.column,
-                        direction: data.meta.sort.direction || this.sort.direction,
-                    };
-                }
-            } catch (error) {
-                this.listError = 'Unable to load products.';
-                this.showToast('error', this.listError);
-            } finally {
-                this.isLoadingList = false;
-            }
+                    if (data.meta?.sort) {
+                        this.sort = {
+                            column: data.meta.sort.column || this.sort.column,
+                            direction: data.meta.sort.direction || this.sort.direction,
+                        };
+                    }
+                },
+                onFinally: () => {
+                    this.isLoadingList = false;
+                },
+            });
         },
         handleSearchInput() {
             this.fetchProducts();
         },
         toggleSort(column) {
-            if (this.sort.column !== column) {
-                this.sort = {
-                    column,
-                    direction: 'desc',
-                };
-            } else {
-                this.sort.direction = this.sort.direction === 'desc' ? 'asc' : 'desc';
+            if (!this.isSortableColumn(column)) {
+                return;
             }
 
+            this.sort = this.crud.nextSort(this.sort, column);
             this.fetchProducts();
         },
         normalizeCreateErrors(errors) {
@@ -226,37 +218,35 @@ export function mount(rootEl, payload) {
             };
         },
         async submitCreate() {
-            this.isCreateSubmitting = true;
-            this.createGeneralError = '';
-            this.createErrors = emptyCreateErrors();
-
-            const response = await fetch(this.storeUrl, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Accept: 'application/json',
-                    'X-CSRF-TOKEN': this.csrfToken,
-                },
-                body: JSON.stringify(this.createForm),
-            });
-
-            if (response.status === 422) {
-                const data = await response.json();
-                this.createErrors = this.normalizeCreateErrors(data.errors);
-                this.isCreateSubmitting = false;
-                return;
-            }
-
-            if (!response.ok) {
+            if (!this.endpoints.create) {
                 this.createGeneralError = 'Something went wrong. Please try again.';
                 this.isCreateSubmitting = false;
                 return;
             }
 
-            await this.fetchProducts();
-            await refreshNavigationState(this.navigationStateUrl);
-            this.showToast('success', 'Product created.');
-            this.closeCreatePanel();
+            this.isCreateSubmitting = true;
+            this.createGeneralError = '';
+            this.createErrors = emptyCreateErrors();
+
+            await this.crud.submitCreate({
+                body: this.createForm,
+                csrfToken: this.csrfToken,
+                onValidationError: (data) => {
+                    this.createErrors = this.normalizeCreateErrors(data.errors);
+                },
+                onError: () => {
+                    this.createGeneralError = 'Something went wrong. Please try again.';
+                },
+                onSuccess: async () => {
+                    await this.fetchProducts();
+                    await refreshNavigationState(this.navigationStateUrl);
+                    this.showToast('success', 'Product created.');
+                    this.closeCreatePanel();
+                },
+                onFinally: () => {
+                    this.isCreateSubmitting = false;
+                },
+            });
         },
         openImportPanel() {
             if (!this.canManageImports) {
@@ -310,13 +300,18 @@ export function mount(rootEl, payload) {
             return Array.isArray(errors) && errors.length > 0 ? errors[0] : '';
         },
         async loadPreview() {
+            if (!this.endpoints.importPreview) {
+                this.previewError = 'Unable to load preview.';
+                return;
+            }
+
             this.previewError = '';
             this.importError = '';
             this.importValidationErrors = {};
             this.isLoadingPreview = true;
 
             try {
-                const response = await fetch(this.previewUrl, {
+                const response = await fetch(this.endpoints.importPreview, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -355,6 +350,11 @@ export function mount(rootEl, payload) {
             }
         },
         async submitImport() {
+            if (!this.endpoints.importStore) {
+                this.importError = 'Unable to import products.';
+                return;
+            }
+
             this.importError = '';
             this.importValidationErrors = {};
 
@@ -380,7 +380,7 @@ export function mount(rootEl, payload) {
                     return payload;
                 });
 
-            const response = await fetch(this.importUrl, {
+            const response = await fetch(this.endpoints.importStore, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

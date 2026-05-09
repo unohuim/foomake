@@ -1,0 +1,61 @@
+name: Configured CRUD Page Module Pattern
+type: UI Architectural Pattern
+location:
+  - app/Http/Controllers/SalesProductController.php
+  - resources/views/sales/products/index.blade.php
+  - resources/js/lib/crud-config.js
+  - resources/js/lib/generic-crud.js
+  - resources/js/pages/sales-products-index.js
+purpose: Define a reusable, server-configured CRUD page-module pattern where Blade emits route and column metadata and a stateless shared JavaScript module consumes that config for list, create, import-preview, import-store, and sorting behavior.
+when_to_use:
+  - Migrating an interactive CRUD page to a shared page-module pattern without introducing client-owned routing or global state
+  - Reusing the same list, create, and sort mechanics across multiple Blade pages with different endpoints or columns
+  - Keeping page-specific UX behavior outside the generic CRUD helper while centralizing the common fetch-based contract
+when_not_to_use:
+  - Pages whose behavior is fully static
+  - Workflows that require multi-step orchestration or domain-specific state transitions beyond generic CRUD concerns
+  - Pages that cannot express their list, create, import, and sortable-column contract from server-generated Blade data
+rules:
+  - Blade must render the CRUD contract on the page root via data-crud-config.
+  - The CRUD config must be valid JSON and must be server-generated in Blade.
+  - The CRUD config must include endpoints.list, endpoints.create, endpoints.importPreview, endpoints.importStore, columns, headers, and sortable.
+  - sortable values must reference only configured column keys.
+  - Shared CRUD helpers must remain stateless and must not introduce global JavaScript state.
+  - Shared CRUD helpers may handle list query construction, fetch, create submission, and sort toggling.
+  - Page-specific behavior such as import panel state, row mapping, toasts, and surrounding UX remains in the page module.
+  - Missing or invalid CRUD config must fail safely without breaking initial page load.
+  - Backend routes remain authoritative and must not be hardcoded in shared JavaScript.
+public_interface:
+  - docs/architecture/ui/ConfiguredCrudPageModulePattern.yaml
+  - data-crud-config
+  - resources/js/lib/crud-config.js
+  - resources/js/lib/generic-crud.js
+example_usage: |
+  Controller:
+    $crudConfig = [
+        'endpoints' => [
+            'list' => route('sales.products.list'),
+            'create' => route('sales.products.store'),
+            'importPreview' => route('sales.products.import.preview'),
+            'importStore' => route('sales.products.import.store'),
+        ],
+        'columns' => ['name', 'base_uom', 'price'],
+        'headers' => [
+            'name' => 'Name',
+            'base_uom' => 'Base UoM',
+            'price' => 'Price',
+        ],
+        'sortable' => ['name', 'base_uom', 'price'],
+    ];
+
+  Blade:
+    <div
+        data-page="sales-products-index"
+        data-payload="sales-products-index-payload"
+        data-crud-config='@json($crudConfig)'
+        x-data="salesProductsIndex"
+    ></div>
+
+  Page module:
+    const crud = createGenericCrud(parseCrudConfig(rootEl));
+    await crud.fetchList({ search, sort, onSuccess });
