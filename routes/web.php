@@ -181,6 +181,12 @@ Route::middleware('auth')->group(function () {
 
     Route::get('/sales/customers', [CustomerController::class, 'index'])
         ->name('sales.customers.index');
+    Route::get('/sales/customers/list', [CustomerController::class, 'list'])
+        ->name('sales.customers.list');
+    Route::post('/sales/customers/import-preview', [CustomerController::class, 'previewImport'])
+        ->name('sales.customers.import.preview');
+    Route::post('/sales/customers/imports', [CustomerController::class, 'storeImport'])
+        ->name('sales.customers.import.store');
     Route::get('/sales/customers/{customer}', [CustomerController::class, 'show'])
         ->name('sales.customers.show');
     Route::post('/sales/customers', [CustomerController::class, 'store'])
@@ -221,6 +227,8 @@ Route::middleware('auth')->group(function () {
         ->name('sales.products.list');
     Route::post('/sales/products', [SalesProductController::class, 'store'])
         ->name('sales.products.store');
+    Route::patch('/sales/products/{item}', [SalesProductController::class, 'update'])
+        ->name('sales.products.update');
     Route::post('/sales/products/import-preview', [SalesProductController::class, 'preview'])
         ->name('sales.products.import.preview');
     Route::post('/sales/products/imports', [SalesProductController::class, 'storeImport'])

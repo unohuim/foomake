@@ -408,7 +408,7 @@ it('20. navigation shows Sales to Customers only when authorized', function () {
         ->assertSee(route('sales.customers.index'), false);
 });
 
-it('20a. index shows name address and actions columns only', function () {
+it('20a. index shows name email address and actions columns only', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
     ($this->grantPermission)($user, 'sales-customers-manage');
@@ -418,14 +418,25 @@ it('20a. index shows name address and actions columns only', function () {
         'notes' => 'Index should not show this note',
     ]);
 
-    ($this->getIndex)($user)
+    $response = ($this->getIndex)($user)
         ->assertOk()
-        ->assertSee('Name')
-        ->assertSee('Address')
-        ->assertSee('Actions')
-        ->assertDontSee('Status')
-        ->assertDontSee('Notes')
+        ->assertSee('data-crud-config=', false)
         ->assertDontSee('Index should not show this note');
+
+    preg_match("/data-crud-config='([^']+)'/", $response->getContent(), $matches);
+
+    expect($matches)->toHaveKey(1);
+
+    $config = json_decode(html_entity_decode($matches[1], ENT_QUOTES), true);
+
+    expect($config['headers'] ?? [])->toBe([
+        'name' => 'Name',
+        'email' => 'Email',
+        'address_summary' => 'Address',
+    ])
+        ->and($config['columns'] ?? [])->toBe(['name', 'email', 'address_summary'])
+        ->and(array_key_exists('status', $config['headers'] ?? []))->toBeFalse()
+        ->and(array_key_exists('notes', $config['headers'] ?? []))->toBeFalse();
 });
 
 it('21. validation errors return 422 JSON', function () {

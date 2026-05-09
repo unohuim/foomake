@@ -631,7 +631,7 @@ current operational stage -> next stage is blocked while current-stage generated
 - `routes/web.php`  
 
 **Purpose:**  
-Document that Sales → Products is a sales-facing filtered view of normal tenant-owned items rather than a separate product entity, exposed as a Blade shell with JSON-backed desktop and mobile page-module list views.
+Document that Sales → Products is a sales-facing filtered view of normal tenant-owned items rather than a separate product entity, exposed as a mount-only Blade shell with a shared JSON-configured CRUD renderer.
 
 **When to Use:**  
 Rendering, listing, searching, sorting, creating, or importing sales-facing products while preserving the shared `Item` identity.
@@ -2023,14 +2023,17 @@ Vendor or generated views excluded from repository checks, plus Breeze/shared la
 - `docs/architecture/ui/ConfiguredCrudPageModulePattern.yaml`  
 - `resources/js/lib/crud-config.js`  
 - `resources/js/lib/generic-crud.js`  
+- `resources/js/lib/crud-page.js`  
 - `resources/js/pages/sales-products-index.js`  
+- `resources/js/pages/sales-customers-index.js`  
 - `resources/views/sales/products/index.blade.php`
+- `resources/views/sales/customers/index.blade.php`
 
 **Purpose:**  
-Centralize reusable fetch-based CRUD mechanics behind a server-generated config contract while keeping page-specific UI state inside the page module.
+Centralize a shared config-driven CRUD renderer behind a server-generated contract while keeping Blade index pages mount-only and page-specific slideouts, validation state, and callbacks inside each page module.
 
 **When to Use:**  
-Interactive Blade CRUD pages that share list/create/sort mechanics but need different routes, columns, or headers.
+Interactive Blade CRUD pages that share toolbar, list rendering, sticky layout, action menus, and list/create/import/sort mechanics but need different routes, columns, row display rules, or page-specific callbacks. All future CRUD index pages should use this abstraction unless a separately approved architecture entry says otherwise.
 
 **When Not to Use:**  
 Static pages, or domain workflows that exceed generic CRUD concerns.
@@ -2040,6 +2043,11 @@ Static pages, or domain workflows that exceed generic CRUD concerns.
 - `data-crud-config`  
 - `resources/js/lib/crud-config.js`  
 - `resources/js/lib/generic-crud.js`
+- `resources/js/lib/crud-page.js`
+
+**Current Reference Implementations:**  
+- Sales Products  
+- Sales Customers
 
 **Example Usage:**  
 ```blade
@@ -2048,7 +2056,9 @@ Static pages, or domain workflows that exceed generic CRUD concerns.
     data-payload="sales-products-index-payload"
     data-crud-config='@json($crudConfig)'
     x-data="salesProductsIndex"
-></div>
+>
+    <div data-crud-root></div>
+</div>
 ```
 
 ---

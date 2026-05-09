@@ -265,7 +265,7 @@ it('12. page includes the js mount element', function () {
         ->assertSee('data-payload="sales-products-index-payload"', false);
 });
 
-it('13. page includes the desktop container contract', function () {
+it('13. page includes the shared crud mount root contract', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
 
@@ -274,10 +274,10 @@ it('13. page includes the desktop container contract', function () {
     $this->actingAs($user)
         ->get(route('sales.products.index'))
         ->assertOk()
-        ->assertSee('data-products-desktop', false);
+        ->assertSee('data-crud-root', false);
 });
 
-it('14. page includes the mobile container contract', function () {
+it('14. page does not render old blade owned desktop or mobile containers', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
 
@@ -286,7 +286,8 @@ it('14. page includes the mobile container contract', function () {
     $this->actingAs($user)
         ->get(route('sales.products.index'))
         ->assertOk()
-        ->assertSee('data-products-mobile', false);
+        ->assertDontSee('data-products-mobile', false)
+        ->assertDontSee('data-products-desktop', false);
 });
 
 it('15. old mobile placeholder text is removed from the page', function () {
@@ -355,28 +356,43 @@ it('19. page does not render blade product table rows as the source of truth', f
         ->assertDontSee('Shell Hidden Product');
 });
 
-it('20. renders the import button for users who can manage product imports', function () {
+it('20. crud config enables import actions for users who can manage product imports', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
 
     ($this->grantPermissions)($user, ['inventory-products-view', 'inventory-products-manage']);
 
-    $this->actingAs($user)
+    $response = $this->actingAs($user)
         ->get(route('sales.products.index'))
-        ->assertOk()
-        ->assertSee('Import Products');
+        ->assertOk();
+
+    preg_match("/data-crud-config='([^']+)'/", $response->getContent(), $matches);
+
+    expect($matches)->toHaveKey(1);
+
+    $config = json_decode(html_entity_decode($matches[1], ENT_QUOTES), true);
+
+    expect($config['permissions']['showImport'] ?? null)->toBeTrue()
+        ->and($config['labels']['importTitle'] ?? null)->toBe('Import Products');
 });
 
-it('21. hides the import button for view-only users', function () {
+it('21. crud config disables import actions for view only users', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
 
     ($this->grantPermission)($user, 'inventory-products-view');
 
-    $this->actingAs($user)
+    $response = $this->actingAs($user)
         ->get(route('sales.products.index'))
-        ->assertOk()
-        ->assertDontSee('Import Products');
+        ->assertOk();
+
+    preg_match("/data-crud-config='([^']+)'/", $response->getContent(), $matches);
+
+    expect($matches)->toHaveKey(1);
+
+    $config = json_decode(html_entity_decode($matches[1], ENT_QUOTES), true);
+
+    expect($config['permissions']['showImport'] ?? null)->toBeFalse();
 });
 
 it('22. renders a slide-over root for the import workflow', function () {

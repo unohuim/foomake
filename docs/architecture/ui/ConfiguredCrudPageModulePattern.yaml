@@ -2,27 +2,37 @@ name: Configured CRUD Page Module Pattern
 type: UI Architectural Pattern
 location:
   - app/Http/Controllers/SalesProductController.php
+  - app/Http/Controllers/CustomerController.php
   - resources/views/sales/products/index.blade.php
+  - resources/views/sales/customers/index.blade.php
   - resources/js/lib/crud-config.js
   - resources/js/lib/generic-crud.js
+  - resources/js/lib/crud-page.js
   - resources/js/pages/sales-products-index.js
-purpose: Define a reusable, server-configured CRUD page-module pattern where Blade emits route and column metadata and a stateless shared JavaScript module consumes that config for list, create, import-preview, import-store, and sorting behavior.
+  - resources/js/pages/sales-customers-index.js
+purpose: Define a reusable, server-configured CRUD page-module pattern where Blade is a mount-only shell, controllers emit a typed CRUD config, and a shared JavaScript renderer owns the CRUD UI while page modules keep resource-specific slideouts and action handlers.
 when_to_use:
-  - Migrating an interactive CRUD page to a shared page-module pattern without introducing client-owned routing or global state
-  - Reusing the same list, create, and sort mechanics across multiple Blade pages with different endpoints or columns
-  - Keeping page-specific UX behavior outside the generic CRUD helper while centralizing the common fetch-based contract
+  - Building any new interactive CRUD index page after the Products and Customers migrations
+  - Migrating an interactive CRUD page to a shared mount-only page-module pattern without introducing client-owned routing or global state
+  - Reusing the same toolbar, list rendering, action menu, create/import triggers, and sort mechanics across multiple Blade pages with different resource contracts
+  - Keeping page-specific slideouts, validation UX, and callback behavior outside the shared CRUD renderer while centralizing the common config-driven shell
 when_not_to_use:
   - Pages whose behavior is fully static
   - Workflows that require multi-step orchestration or domain-specific state transitions beyond generic CRUD concerns
-  - Pages that cannot express their list, create, import, and sortable-column contract from server-generated Blade data
+  - Pages that cannot express their list, create, import, sortable-column, row-display, and action contract from server-generated Blade data
 rules:
+  - Future CRUD index pages must use this shared generic CRUD renderer abstraction unless an approved architecture entry explicitly documents why they cannot.
   - Blade must render the CRUD contract on the page root via data-crud-config.
+  - Blade index shells must remain mount-only for CRUD UI concerns and may not render toolbar markup, record tables, record cards, empty states, or row action cells directly.
   - The CRUD config must be valid JSON and must be server-generated in Blade.
-  - The CRUD config must include endpoints.list, endpoints.create, endpoints.importPreview, endpoints.importStore, columns, headers, and sortable.
+  - The CRUD config must include resource, endpoints.list, endpoints.create, endpoints.importPreview, endpoints.importStore, columns, headers, sortable, labels, permissions, rowDisplay, mobileCard, and actions.
   - sortable values must reference only configured column keys.
   - Shared CRUD helpers must remain stateless and must not introduce global JavaScript state.
-  - Shared CRUD helpers may handle list query construction, fetch, create submission, and sort toggling.
-  - Page-specific behavior such as import panel state, row mapping, toasts, and surrounding UX remains in the page module.
+  - The shared CRUD renderer owns toolbar layout, search input, create/import buttons, sticky desktop headers, record table/cards, empty states, and the vertical-dots action menu.
+  - The records/list area is the only scrollable region for CRUD list rendering; toolbar chrome remains outside that scroll container.
+  - Shared CRUD helpers may handle config parsing, list query construction, fetch, create submission, sort toggling, and config-driven shell rendering.
+  - Page-specific behavior such as create/edit/import panel state, row-to-form mapping, toasts, validation UX, and action callbacks remains in the page module.
+  - Products and Customers are the current reference implementations for this pattern.
   - Missing or invalid CRUD config must fail safely without breaking initial page load.
   - Backend routes remain authoritative and must not be hardcoded in shared JavaScript.
 public_interface:
@@ -30,9 +40,11 @@ public_interface:
   - data-crud-config
   - resources/js/lib/crud-config.js
   - resources/js/lib/generic-crud.js
+  - resources/js/lib/crud-page.js
 example_usage: |
   Controller:
     $crudConfig = [
+        'resource' => 'products',
         'endpoints' => [
             'list' => route('sales.products.list'),
             'create' => route('sales.products.store'),
@@ -46,6 +58,35 @@ example_usage: |
             'price' => 'Price',
         ],
         'sortable' => ['name', 'base_uom', 'price'],
+        'labels' => [
+            'searchPlaceholder' => 'Search products',
+            'importTitle' => 'Import Products',
+            'importAriaLabel' => 'Import Products',
+            'createTitle' => 'Add New Product',
+            'createAriaLabel' => 'Add New Product',
+            'emptyState' => 'No products found.',
+            'actionsAriaLabel' => 'Product actions',
+        ],
+        'permissions' => [
+            'showImport' => true,
+            'showCreate' => true,
+        ],
+        'rowDisplay' => [
+            'columns' => [
+                'name' => ['kind' => 'product-name'],
+                'base_uom' => ['kind' => 'text'],
+                'price' => ['kind' => 'text'],
+            ],
+        ],
+        'mobileCard' => [
+            'mediaExpression' => 'record.image_url',
+            'titleExpression' => 'record.name || "—"',
+            'subtitleExpression' => 'productBaseUomLabel(record)',
+            'bodyExpression' => 'formattedProductPrice(record)',
+        ],
+        'actions' => [
+            ['id' => 'edit', 'label' => 'Edit', 'tone' => 'default'],
+        ],
     ];
 
   Blade:
@@ -54,8 +95,17 @@ example_usage: |
         data-payload="sales-products-index-payload"
         data-crud-config='@json($crudConfig)'
         x-data="salesProductsIndex"
-    ></div>
+    >
+        <div data-crud-root></div>
+    </div>
 
   Page module:
     const crud = createGenericCrud(parseCrudConfig(rootEl));
-    await crud.fetchList({ search, sort, onSuccess });
+    mountCrudRenderer(rootEl.querySelector('[data-crud-root]'), {
+        ...crud,
+        state: { records: 'products', loading: 'isLoadingList', error: 'listError', search: 'search', sort: 'sort' },
+        handlers: { searchInput: 'handleSearchInput()', toggleSort: 'toggleSort(column)', create: 'openCreatePanel()', import: 'openImportPanel()' },
+        rowDisplay: { ...crud.rowDisplay, cellTextExpression: 'productCellText(record, column)' },
+        mobileCard: { ...crud.mobileCard },
+        actions: [{ id: 'edit', label: 'Edit', tone: 'default', handler: 'openEdit(record)' }],
+    });

@@ -103,6 +103,14 @@ class Customer extends Model
     }
 
     /**
+     * Get the external customer mappings for the customer.
+     */
+    public function externalMappings(): HasMany
+    {
+        return $this->hasMany(ExternalCustomerMapping::class);
+    }
+
+    /**
      * Return the valid customer statuses.
      *
      * @return list<string>

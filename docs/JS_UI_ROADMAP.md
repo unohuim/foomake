@@ -110,6 +110,12 @@ enabling safe Alpine usage today and low-risk framework swaps later.
 **Rules**
 
 - Apply all constraints from PR-X-00 → PR-X-03 consistently across each migrated page.
+- Future CRUD index pages must use the shared generic CRUD JS renderer rather than rendering toolbar, table/list, mobile cards, headers, rows, empty states, or action menus directly in Blade.
+- Blade CRUD index shells should only mount the page, pass payload/config JSON, and keep page-specific forms or slideouts.
+- Shared CRUD JS owns toolbar, search, create/import buttons, desktop table/list, mobile cards, headers, sortable headers, rows, empty states, and action dots/dropdowns.
+- Page modules own resource-specific handlers, import workflows, and form/slideout state.
+- Resource-specific CRUD details must flow through config: endpoints, columns, headers, sortable fields, mobile card config, row display config, action definitions, and permission/state flags.
+- Sales Products and Sales Customers are the current reference implementations.
 
 ---
 

@@ -48,6 +48,7 @@ class SalesProductController extends Controller
             'sources' => $this->availableSourcesForTenant((int) $user->tenant_id),
             'listUrl' => $crudConfig['endpoints']['list'],
             'storeUrl' => $crudConfig['endpoints']['create'],
+            'updateUrlBase' => url('/sales/products'),
             'canManageImports' => Gate::allows('inventory-products-manage'),
             'canManageProducts' => Gate::allows('inventory-products-manage'),
             'canManageConnections' => Gate::allows('system-users-manage'),
@@ -124,15 +125,7 @@ class SalesProductController extends Controller
      */
     public function store(StoreSalesProductRequest $request): JsonResponse
     {
-        $payload = $request->all();
-
-        if (array_key_exists('default_price_amount', $payload) && $payload['default_price_amount'] === '') {
-            $request->merge(['default_price_amount' => null]);
-        }
-
-        if (array_key_exists('default_price_currency_code', $payload) && $payload['default_price_currency_code'] === '') {
-            $request->merge(['default_price_currency_code' => null]);
-        }
+        $this->normalizePriceInput($request);
 
         $validated = $request->validated();
         $defaultPriceData = $this->resolveDefaultPriceData($request);
@@ -150,6 +143,33 @@ class SalesProductController extends Controller
         return response()->json([
             'data' => $this->productListData($item->load('baseUom')),
         ], 201);
+    }
+
+    /**
+     * Update an existing sellable product from the Sales Products slide-over.
+     */
+    public function update(StoreSalesProductRequest $request, Item $item): JsonResponse
+    {
+        if (! $item->is_sellable) {
+            throw new HttpException(404);
+        }
+
+        $this->normalizePriceInput($request);
+
+        $validated = $request->validated();
+        $defaultPriceData = $this->resolveDefaultPriceData($request);
+
+        $item->update(array_merge([
+            'name' => $validated['name'],
+            'base_uom_id' => (int) $validated['base_uom_id'],
+            'is_purchasable' => $request->boolean('is_purchasable'),
+            'is_sellable' => true,
+            'is_manufacturable' => $request->boolean('is_manufacturable'),
+        ], $defaultPriceData));
+
+        return response()->json([
+            'data' => $this->productListData($item->fresh('baseUom')),
+        ]);
     }
 
     /**
@@ -377,6 +397,8 @@ class SalesProductController extends Controller
             'price' => $this->formatCentsToAmount($item->default_price_cents),
             'currency' => $item->default_price_currency_code,
             'image_url' => null,
+            'is_purchasable' => $item->is_purchasable,
+            'is_manufacturable' => $item->is_manufacturable,
         ];
     }
 
@@ -388,6 +410,7 @@ class SalesProductController extends Controller
     private function productsCrudConfig(): array
     {
         return [
+            'resource' => 'products',
             'endpoints' => [
                 'list' => route('sales.products.list'),
                 'create' => route('sales.products.store'),
@@ -401,7 +424,56 @@ class SalesProductController extends Controller
                 'price' => 'Price',
             ],
             'sortable' => ['name', 'base_uom', 'price'],
+            'labels' => [
+                'searchPlaceholder' => 'Search products',
+                'importTitle' => 'Import Products',
+                'importAriaLabel' => 'Import Products',
+                'createTitle' => 'Add New Product',
+                'createAriaLabel' => 'Add New Product',
+                'emptyState' => 'No products found.',
+                'actionsAriaLabel' => 'Product actions',
+            ],
+            'permissions' => [
+                'showImport' => Gate::allows('inventory-products-manage'),
+                'showCreate' => Gate::allows('inventory-products-manage'),
+            ],
+            'rowDisplay' => [
+                'columns' => [
+                    'name' => ['kind' => 'product-name'],
+                    'base_uom' => ['kind' => 'text'],
+                    'price' => ['kind' => 'text'],
+                ],
+            ],
+            'mobileCard' => [
+                'mediaExpression' => 'record.image_url',
+                'titleExpression' => 'record.name || "—"',
+                'subtitleExpression' => 'productBaseUomLabel(record)',
+                'bodyExpression' => 'formattedProductPrice(record)',
+            ],
+            'actions' => [
+                [
+                    'id' => 'edit',
+                    'label' => 'Edit',
+                    'tone' => 'default',
+                ],
+            ],
         ];
+    }
+
+    /**
+     * Normalize nullable price inputs before validation.
+     */
+    private function normalizePriceInput(StoreSalesProductRequest $request): void
+    {
+        $payload = $request->all();
+
+        if (array_key_exists('default_price_amount', $payload) && $payload['default_price_amount'] === '') {
+            $request->merge(['default_price_amount' => null]);
+        }
+
+        if (array_key_exists('default_price_currency_code', $payload) && $payload['default_price_currency_code'] === '') {
+            $request->merge(['default_price_currency_code' => null]);
+        }
     }
 
     /**

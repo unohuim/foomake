@@ -158,6 +158,10 @@ beforeEach(function () {
         return $request->getJson(route('sales.products.list', $query));
     };
 
+    $this->updateProduct = function (User $user, Item $item, array $payload = []) {
+        return $this->actingAs($user)->patchJson(route('sales.products.update', $item), $payload);
+    };
+
     Http::fake([
         'https://store.example.test/wp-json/wc/v3/products/202/variations?*' => Http::response([
             [
@@ -564,4 +568,176 @@ it('24. existing products sorting behavior is preserved for configured sortable 
     ($this->listProducts)($user, ['sort' => 'price', 'direction' => 'asc'])
         ->assertOk()
         ->assertJsonPath('data.0.price', '1.00');
+});
+
+it('25. products blade contains no crud toolbar table card or action markup', function () {
+    $productsBlade = file_get_contents(base_path('resources/views/sales/products/index.blade.php'));
+
+    expect($productsBlade)->toContain('data-crud-root')
+        ->and($productsBlade)->not->toContain('<x-sales.crud-toolbar')
+        ->and($productsBlade)->not->toContain('<x-sales.crud-action-cell')
+        ->and($productsBlade)->not->toContain('data-products-mobile')
+        ->and($productsBlade)->not->toContain('data-products-desktop')
+        ->and($productsBlade)->not->toContain('No products found.')
+        ->and($productsBlade)->not->toContain('x-for="product in products"')
+        ->and($productsBlade)->not->toContain('toggleSort(column)');
+});
+
+it('26. both sales pages mount the shared crud js renderer', function () {
+    $productsBlade = file_get_contents(base_path('resources/views/sales/products/index.blade.php'));
+    $customersBlade = file_get_contents(base_path('resources/views/sales/customers/index.blade.php'));
+    $productsScript = file_get_contents(base_path('resources/js/pages/sales-products-index.js'));
+    $customersScript = file_get_contents(base_path('resources/js/pages/sales-customers-index.js'));
+
+    expect($productsBlade)->toContain('data-crud-root')
+        ->and($customersBlade)->toContain('data-crud-root')
+        ->and($productsScript)->toContain("import { mountCrudRenderer } from '../lib/crud-page';")
+        ->and($customersScript)->toContain("import { mountCrudRenderer } from '../lib/crud-page';")
+        ->and($productsScript)->toContain('mountCrudRenderer(')
+        ->and($customersScript)->toContain('mountCrudRenderer(');
+});
+
+it('27. products crud config includes the shared renderer contract', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermissions)($user, ['inventory-products-view', 'inventory-products-manage']);
+
+    $config = ($this->extractCrudConfig)(
+        $this->actingAs($user)->get(route('sales.products.index'))
+    );
+
+    expect($config['resource'] ?? null)->toBe('products')
+        ->and($config['rowDisplay'] ?? null)->toBeArray()
+        ->and($config['mobileCard'] ?? null)->toBeArray()
+        ->and($config['actions'] ?? null)->toBeArray()
+        ->and($config['permissions'] ?? null)->toBeArray();
+});
+
+it('28. shared crud renderer owns the toolbar list cards empty state and action menu contracts', function () {
+    $rendererSource = file_get_contents(base_path('resources/js/lib/crud-page.js'));
+
+    expect($rendererSource)->toContain('data-crud-toolbar-mobile')
+        ->and($rendererSource)->toContain('data-crud-toolbar-desktop')
+        ->and($rendererSource)->toContain('data-crud-table')
+        ->and($rendererSource)->toContain('data-crud-mobile-cards')
+        ->and($rendererSource)->toContain('data-crud-records-scroll')
+        ->and($rendererSource)->toContain('data-crud-empty-state')
+        ->and($rendererSource)->toContain('data-crud-action-cell')
+        ->and($rendererSource)->toContain('data-crud-action-trigger')
+        ->and($rendererSource)->toContain('data-crud-action-menu');
+});
+
+it('29. toolbar remains outside and above the scrolling list container', function () {
+    $rendererSource = file_get_contents(base_path('resources/js/lib/crud-page.js'));
+
+    expect($rendererSource)->toContain('data-crud-toolbar-desktop')
+        ->and($rendererSource)->toContain('data-crud-records-scroll')
+        ->and($rendererSource)->toContain('class="max-h-[36rem] overflow-y-auto" data-crud-records-scroll');
+});
+
+it('30. desktop headers remain sticky beneath the toolbar', function () {
+    $rendererSource = file_get_contents(base_path('resources/js/lib/crud-page.js'));
+
+    expect($rendererSource)->toContain('<thead class="sticky top-0 z-10 bg-white">');
+});
+
+it('31. products config exposes the edit row action', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermissions)($user, ['inventory-products-view', 'inventory-products-manage']);
+
+    $config = ($this->extractCrudConfig)(
+        $this->actingAs($user)->get(route('sales.products.index'))
+    );
+
+    expect($config['actions'] ?? [])->toBe([
+        ['id' => 'edit', 'label' => 'Edit', 'tone' => 'default'],
+    ]);
+});
+
+it('32. products vertical dots render the shared dropdown menu contract', function () {
+    $rendererSource = file_get_contents(base_path('resources/js/lib/crud-page.js'));
+
+    expect($rendererSource)->toContain('data-crud-action-trigger')
+        ->and($rendererSource)->toContain('data-crud-action-menu')
+        ->and($rendererSource)->toContain("x-bind:aria-expanded=\"open ? 'true' : 'false'\"")
+        ->and($rendererSource)->toContain('x-on:click="open = !open"');
+});
+
+it('33. products page module maps the edit action id to the product edit handler', function () {
+    $source = file_get_contents(base_path('resources/js/pages/sales-products-index.js'));
+
+    expect($source)->toContain("action.id === 'edit'")
+        ->and($source)->toContain('openEdit(record)');
+});
+
+it('34. products edit action opens the edit slideout', function () {
+    $source = file_get_contents(base_path('resources/js/pages/sales-products-index.js'));
+
+    expect($source)->toContain("this.panelMode = 'edit';")
+        ->and($source)->toContain('this.editingProductId = product.id;')
+        ->and($source)->toContain('this.isCreatePanelOpen = true;');
+});
+
+it('35. products edit slideout is populated from the selected row data', function () {
+    $source = file_get_contents(base_path('resources/js/pages/sales-products-index.js'));
+    $blade = file_get_contents(base_path('resources/views/sales/products/index.blade.php'));
+
+    expect($source)->toContain('const productToForm = (product) => ({')
+        ->and($blade)->toContain("x-text=\"panelMode === 'create' ? 'Add New Product' : 'Edit Product'\"")
+        ->and($blade)->toContain("x-model=\"createForm.name\"")
+        ->and($blade)->toContain("x-model=\"createForm.base_uom_id\"")
+        ->and($blade)->toContain("x-model=\"createForm.default_price_amount\"");
+
+    expect((bool) preg_match("/name:\\s*product\\??\\.name\\s*\\|\\|\\s*''/", $source))->toBeTrue()
+        ->and((bool) preg_match("/base_uom_id:\\s*product\\??\\.base_uom\\??\\.id\\s*\\?\\s*String\\(product\\.base_uom\\.id\\)\\s*:\\s*''/", $source))->toBeTrue()
+        ->and((bool) preg_match("/default_price_amount:\\s*product\\??\\.price\\s*\\|\\|\\s*''/", $source))->toBeTrue();
+});
+
+it('36. products edit submit updates the product', function () {
+    $tenant = ($this->makeTenant)();
+    $uom = ($this->makeUom)($tenant);
+    $replacementUom = ($this->makeUom)($tenant);
+    $user = ($this->makeUser)($tenant);
+    $item = ($this->makeItem)($tenant, $uom, [
+        'name' => 'Editable Product',
+        'is_sellable' => true,
+        'is_purchasable' => false,
+        'is_manufacturable' => false,
+        'default_price_cents' => 1234,
+        'default_price_currency_code' => 'USD',
+    ]);
+
+    ($this->grantPermission)($user, 'inventory-products-manage');
+
+    ($this->updateProduct)($user, $item, [
+        'name' => 'Updated Product',
+        'base_uom_id' => $replacementUom->id,
+        'is_purchasable' => true,
+        'is_manufacturable' => true,
+        'default_price_amount' => '45.67',
+    ])->assertOk()
+        ->assertJsonPath('data.name', 'Updated Product')
+        ->assertJsonPath('data.base_uom.id', $replacementUom->id)
+        ->assertJsonPath('data.base_uom.name', $replacementUom->name)
+        ->assertJsonPath('data.price', '45.67');
+
+    $item->refresh();
+
+    expect($item->name)->toBe('Updated Product')
+        ->and($item->base_uom_id)->toBe($replacementUom->id)
+        ->and($item->is_purchasable)->toBeTrue()
+        ->and($item->is_manufacturable)->toBeTrue()
+        ->and($item->default_price_cents)->toBe(4567);
+});
+
+it('37. products create and import behavior remain preserved while edit support exists', function () {
+    $source = file_get_contents(base_path('resources/js/pages/sales-products-index.js'));
+
+    expect($source)->toContain('openCreatePanel()')
+        ->and($source)->toContain('openImportPanel()')
+        ->and($source)->toContain('submitCreate()')
+        ->and($source)->toContain('submitImport()');
 });

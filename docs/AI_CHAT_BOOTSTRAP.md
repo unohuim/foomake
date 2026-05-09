@@ -4,9 +4,7 @@ This file is the single source to paste at the beginning of new LLM chats for fu
 
 Paste the entire content (or as much as context allows) when starting a session.
 
-
 ## docs/AI_CHAT_CODEX.md
-
 # AI Chat Bootstrap (READ FIRST)
 
 You are assisting with development on this repository.
@@ -237,9 +235,7 @@ If unsure, **stop immediately and ask**.
   **not global model scopes**
 - The **smallest possible change per PR**
 
-
 ## docs/PR2_ROADMAP.md
-
 # PR2_ROADMAP — UI + Domain Completion (Post-PR-006)
 
 This roadmap defines the **second major phase** of work: completing **Items, Inventory, Suppliers, and Manufacturing**
@@ -1532,9 +1528,7 @@ Introduce a UoM-level display precision field and enforce consistent quantity fo
 - Any changes to storage precision or BCMath scale
 - JavaScript formatting or UI-only overrides per view
 
-
 ## docs/CONVENTIONS.md
-
 # Conventions
 
 This document defines the **mandatory development conventions** for this repository.  
@@ -1788,9 +1782,7 @@ These rules apply to:
 - Unit conversions
 - Any inventory-affecting calculations
 
-
 ## docs/ARCHITECTURE_INVENTORY.md
-
 # Architecture Inventory
 
 This document tracks **reusable abstractions, components, and architectural patterns**
@@ -2424,7 +2416,7 @@ current operational stage -> next stage is blocked while current-stage generated
 - `routes/web.php`  
 
 **Purpose:**  
-Document that Sales → Products is a sales-facing filtered view of normal tenant-owned items rather than a separate product entity, exposed as a Blade shell with JSON-backed desktop and mobile page-module list views.
+Document that Sales → Products is a sales-facing filtered view of normal tenant-owned items rather than a separate product entity, exposed as a mount-only Blade shell with a shared JSON-configured CRUD renderer.
 
 **When to Use:**  
 Rendering, listing, searching, sorting, creating, or importing sales-facing products while preserving the shared `Item` identity.
@@ -3808,6 +3800,54 @@ Vendor or generated views excluded from repository checks, plus Breeze/shared la
 
 ---
 
+### Configured CRUD Page Module Pattern
+
+**Name:** Configured CRUD Page Module Pattern  
+**Type:** UI Architectural Pattern  
+**Location:**  
+- `docs/architecture/ui/ConfiguredCrudPageModulePattern.yaml`  
+- `resources/js/lib/crud-config.js`  
+- `resources/js/lib/generic-crud.js`  
+- `resources/js/lib/crud-page.js`  
+- `resources/js/pages/sales-products-index.js`  
+- `resources/js/pages/sales-customers-index.js`  
+- `resources/views/sales/products/index.blade.php`
+- `resources/views/sales/customers/index.blade.php`
+
+**Purpose:**  
+Centralize a shared config-driven CRUD renderer behind a server-generated contract while keeping Blade index pages mount-only and page-specific slideouts, validation state, and callbacks inside each page module.
+
+**When to Use:**  
+Interactive Blade CRUD pages that share toolbar, list rendering, sticky layout, action menus, and list/create/import/sort mechanics but need different routes, columns, row display rules, or page-specific callbacks. All future CRUD index pages should use this abstraction unless a separately approved architecture entry says otherwise.
+
+**When Not to Use:**  
+Static pages, or domain workflows that exceed generic CRUD concerns.
+
+**Public Interface:**  
+- `docs/architecture/ui/ConfiguredCrudPageModulePattern.yaml`  
+- `data-crud-config`  
+- `resources/js/lib/crud-config.js`  
+- `resources/js/lib/generic-crud.js`
+- `resources/js/lib/crud-page.js`
+
+**Current Reference Implementations:**  
+- Sales Products  
+- Sales Customers
+
+**Example Usage:**  
+```blade
+<div
+    data-page="sales-products-index"
+    data-payload="sales-products-index-payload"
+    data-crud-config='@json($crudConfig)'
+    x-data="salesProductsIndex"
+>
+    <div data-crud-root></div>
+</div>
+```
+
+---
+
 ## Testing
 
 ### Pest Testing Framework
@@ -3839,9 +3879,7 @@ it('creates a material', function () {
 
 ---
 
-
 ## docs/PERMISSIONS_MATRIX.md
-
 # Permissions Matrix
 
 This document is the source-of-truth for **authorization intent** in this repository.
@@ -4036,9 +4074,7 @@ return [
 ];
 ```
 
-
 ## docs/ENUMS.md
-
 # ENUMS — Canonical Enum Authority
 
 This document defines the canonical, normative enum-like values used throughout the system.
@@ -4292,9 +4328,7 @@ Do not introduce new enum values without updating this document.
 
 No conflicts or ambiguities were found at time of creation based on existing migrations, models, actions, and tests.
 
-
 ## docs/DB_SCHEMA.md
-
 # Database Schema Inventory (DB_SCHEMA)
 
 This document inventories **all database tables and columns** as defined by migrations.
@@ -5588,9 +5622,7 @@ Migrations remain the **sole source of truth**.
 
 **End of DB_SCHEMA**
 
-
 ## docs/UI_DESIGN.md
-
 # UI_DESIGN.md — Canonical UI Direction & Constraints
 
 This document defines the **authoritative UI design rules** for this repository.
@@ -6184,9 +6216,7 @@ They are mandatory, not stylistic.
 
 ::contentReference[oaicite:0]{index=0}
 
-
 ## routes/web.php
-
 <?php
 
 use App\Http\Controllers\InventoryController;
@@ -6370,6 +6400,12 @@ Route::middleware('auth')->group(function () {
 
     Route::get('/sales/customers', [CustomerController::class, 'index'])
         ->name('sales.customers.index');
+    Route::get('/sales/customers/list', [CustomerController::class, 'list'])
+        ->name('sales.customers.list');
+    Route::post('/sales/customers/import-preview', [CustomerController::class, 'previewImport'])
+        ->name('sales.customers.import.preview');
+    Route::post('/sales/customers/imports', [CustomerController::class, 'storeImport'])
+        ->name('sales.customers.import.store');
     Route::get('/sales/customers/{customer}', [CustomerController::class, 'show'])
         ->name('sales.customers.show');
     Route::post('/sales/customers', [CustomerController::class, 'store'])
@@ -6410,6 +6446,8 @@ Route::middleware('auth')->group(function () {
         ->name('sales.products.list');
     Route::post('/sales/products', [SalesProductController::class, 'store'])
         ->name('sales.products.store');
+    Route::patch('/sales/products/{item}', [SalesProductController::class, 'update'])
+        ->name('sales.products.update');
     Route::post('/sales/products/import-preview', [SalesProductController::class, 'preview'])
         ->name('sales.products.import.preview');
     Route::post('/sales/products/imports', [SalesProductController::class, 'storeImport'])
@@ -6456,9 +6494,7 @@ Route::delete('/manufacturing/uom-conversions/items/{itemConversion}', [UomConve
 
 require __DIR__ . '/auth.php';
 
-
 ## docs/PR3_ROADMAP.md
-
 # PR3_ROADMAP — Sales + CRM Foundations
 
 This roadmap defines the third major phase of work: introducing the **Sales domain (CRM foundations + Sales Orders)**, fully integrated with inventory before any external integrations.
@@ -7137,9 +7173,7 @@ After PR3 completion:
 - Sales orders impact inventory correctly
 - System ready for external integrations
 
-
 ## docs/BACKLOG.md
-
 # BACKLOG
 
 This backlog captures outstanding product capabilities identified from competitive feature review and QuickBooks Online integration planning.

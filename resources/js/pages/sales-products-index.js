@@ -1,4 +1,5 @@
 import { parseCrudConfig } from '../lib/crud-config';
+import { mountCrudRenderer } from '../lib/crud-page';
 import { createGenericCrud } from '../lib/generic-crud';
 import { refreshNavigationState } from '../navigation/refresh-navigation-state';
 
@@ -7,6 +8,46 @@ export function mount(rootEl, payload) {
     const safePayload = payload || {};
     const crud = createGenericCrud(parseCrudConfig(rootEl));
     const loadingPreviewLabel = 'Loading preview...';
+    const crudRootEl = rootEl.querySelector('[data-crud-root]');
+    const productToForm = (product) => ({
+        name: product?.name || '',
+        base_uom_id: product?.base_uom?.id ? String(product.base_uom.id) : '',
+        is_purchasable: Boolean(product?.is_purchasable),
+        is_manufacturable: Boolean(product?.is_manufacturable),
+        default_price_amount: product?.price || '',
+    });
+    const actionDefinitions = (Array.isArray(crud.actions) ? crud.actions : []).map((action) => ({
+        ...action,
+        handler: action.id === 'edit' ? 'openEdit(record)' : '',
+    }));
+    const rendererConfig = {
+        ...crud,
+        createHandler: 'openCreatePanel()',
+        importHandler: 'openImportPanel()',
+        state: {
+            records: 'products',
+            loading: 'isLoadingList',
+            error: 'listError',
+            search: 'search',
+            sort: 'sort',
+        },
+        handlers: {
+            searchInput: 'handleSearchInput()',
+            toggleSort: 'toggleSort(column)',
+            create: 'openCreatePanel()',
+            import: 'openImportPanel()',
+        },
+        rowDisplay: {
+            ...crud.rowDisplay,
+            cellTextExpression: 'productCellText(record, column)',
+        },
+        mobileCard: {
+            ...crud.mobileCard,
+        },
+        actions: actionDefinitions,
+    };
+
+    mountCrudRenderer(crudRootEl, rendererConfig);
 
     const emptyErrors = () => ({
         source: [],
@@ -28,6 +69,7 @@ export function mount(rootEl, payload) {
         products: [],
         uoms: safePayload.uoms || [],
         sources: safePayload.sources || [],
+        updateUrlBase: safePayload.updateUrlBase || '',
         navigationStateUrl: safePayload.navigationStateUrl || '',
         csrfToken: safePayload.csrfToken || '',
         tenantCurrency: safePayload.tenantCurrency || '',
@@ -43,6 +85,8 @@ export function mount(rootEl, payload) {
             direction: 'desc',
         },
         isCreatePanelOpen: false,
+        panelMode: 'create',
+        editingProductId: null,
         isCreateSubmitting: false,
         createGeneralError: '',
         createErrors: emptyCreateErrors(),
@@ -194,15 +238,35 @@ export function mount(rootEl, payload) {
                 return;
             }
 
+            this.panelMode = 'create';
+            this.editingProductId = null;
             this.isCreatePanelOpen = true;
             this.createGeneralError = '';
             this.createErrors = emptyCreateErrors();
+            this.resetCreateForm();
+            this.$nextTick(() => {
+                this.$refs.createProductNameInput?.focus();
+            });
+        },
+        openEdit(product) {
+            if (!this.canManageProducts) {
+                return;
+            }
+
+            this.panelMode = 'edit';
+            this.editingProductId = product.id;
+            this.createForm = productToForm(product);
+            this.createGeneralError = '';
+            this.createErrors = emptyCreateErrors();
+            this.isCreatePanelOpen = true;
             this.$nextTick(() => {
                 this.$refs.createProductNameInput?.focus();
             });
         },
         closeCreatePanel() {
             this.isCreatePanelOpen = false;
+            this.panelMode = 'create';
+            this.editingProductId = null;
             this.isCreateSubmitting = false;
             this.createGeneralError = '';
             this.createErrors = emptyCreateErrors();
@@ -218,7 +282,15 @@ export function mount(rootEl, payload) {
             };
         },
         async submitCreate() {
-            if (!this.endpoints.create) {
+            const isEdit = this.panelMode === 'edit';
+
+            if (!isEdit && !this.endpoints.create) {
+                this.createGeneralError = 'Something went wrong. Please try again.';
+                this.isCreateSubmitting = false;
+                return;
+            }
+
+            if (isEdit && !this.updateUrlBase) {
                 this.createGeneralError = 'Something went wrong. Please try again.';
                 this.isCreateSubmitting = false;
                 return;
@@ -227,6 +299,38 @@ export function mount(rootEl, payload) {
             this.isCreateSubmitting = true;
             this.createGeneralError = '';
             this.createErrors = emptyCreateErrors();
+
+            if (isEdit) {
+                const response = await fetch(`${this.updateUrlBase}/${this.editingProductId}`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        Accept: 'application/json',
+                        'X-CSRF-TOKEN': this.csrfToken,
+                    },
+                    body: JSON.stringify(this.createForm),
+                });
+
+                if (response.status === 422) {
+                    const data = await response.json();
+                    this.createErrors = this.normalizeCreateErrors(data.errors);
+                    this.createGeneralError = data.message || 'The given data was invalid.';
+                    this.isCreateSubmitting = false;
+                    return;
+                }
+
+                if (!response.ok) {
+                    this.createGeneralError = 'Something went wrong. Please try again.';
+                    this.isCreateSubmitting = false;
+                    return;
+                }
+
+                await this.fetchProducts();
+                await refreshNavigationState(this.navigationStateUrl);
+                this.showToast('success', 'Product updated.');
+                this.closeCreatePanel();
+                return;
+            }
 
             await this.crud.submitCreate({
                 body: this.createForm,
