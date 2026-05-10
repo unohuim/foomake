@@ -28,9 +28,7 @@ class TenantObserver
      */
     public function created(Tenant $tenant): void
     {
-        logger()->info('TenantObserver@created fired before ', ['tenant_id' => $tenant->id]);
         // Observer ensures defaults are cloned for all tenant creation paths (registration, seeders, factories).
         $this->cloner->cloneForTenant($tenant);
-        logger()->info('TenantObserver@created fired after', ['tenant_id' => $tenant->id]);
     }
 }

@@ -741,3 +741,142 @@ it('37. products create and import behavior remain preserved while edit support 
         ->and($source)->toContain('submitCreate()')
         ->and($source)->toContain('submitImport()');
 });
+
+it('38. crud config includes the export endpoint', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermissions)($user, ['inventory-products-view', 'inventory-products-manage']);
+
+    $config = ($this->extractCrudConfig)(
+        $this->actingAs($user)->get(route('sales.products.index'))
+    );
+
+    expect($config['endpoints']['export'] ?? null)->toBe(route('sales.products.export'));
+});
+
+it('39. crud config includes export labels for the shared toolbar', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermissions)($user, ['inventory-products-view', 'inventory-products-manage']);
+
+    $config = ($this->extractCrudConfig)(
+        $this->actingAs($user)->get(route('sales.products.index'))
+    );
+
+    expect($config['labels']['exportTitle'] ?? null)->toBe('Export Products')
+        ->and($config['labels']['exportAriaLabel'] ?? null)->toBe('Export Products');
+});
+
+it('40. toolbar order is search export import add in the shared renderer', function () {
+    $rendererSource = file_get_contents(base_path('resources/js/lib/crud-page.js'));
+
+    $searchPosition = strpos($rendererSource, 'data-crud-toolbar-search');
+    $exportPosition = strpos($rendererSource, 'data-crud-toolbar-export-button');
+    $importPosition = strpos($rendererSource, 'data-crud-toolbar-import-button');
+    $createPosition = strpos($rendererSource, 'data-crud-toolbar-create-button');
+
+    expect($searchPosition)->not->toBeFalse()
+        ->and($exportPosition)->not->toBeFalse()
+        ->and($importPosition)->not->toBeFalse()
+        ->and($createPosition)->not->toBeFalse()
+        ->and($searchPosition < $exportPosition)->toBeTrue()
+        ->and($exportPosition < $importPosition)->toBeTrue()
+        ->and($importPosition < $createPosition)->toBeTrue();
+});
+
+it('41. import button uses the arrow up tray heroicon path', function () {
+    $rendererSource = file_get_contents(base_path('resources/js/lib/crud-page.js'));
+
+    expect($rendererSource)->toContain('data-crud-toolbar-import-button')
+        ->and($rendererSource)->toContain('M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5')
+        ->and($rendererSource)->toContain('M16.5 12 12 7.5m0 0L7.5 12m4.5-4.5V16.5');
+});
+
+it('42. export button uses the arrow down on square heroicon path', function () {
+    $rendererSource = file_get_contents(base_path('resources/js/lib/crud-page.js'));
+
+    expect($rendererSource)->toContain('data-crud-toolbar-export-button')
+        ->and($rendererSource)->toContain('M9 8.25H7.5A2.25 2.25 0 0 0 5.25 10.5v9')
+        ->and($rendererSource)->toContain('M12 15V3m0 12 3.75-3.75M12 15l-3.75-3.75');
+});
+
+it('43. import slide over label is ecommerce store and includes upload file section', function () {
+    $blade = file_get_contents(base_path('resources/views/sales/products/index.blade.php'));
+    $source = file_get_contents(base_path('resources/js/pages/sales-products-index.js'));
+
+    expect($blade)->toContain('Ecommerce Store')
+        ->and($blade)->toContain('Upload File')
+        ->and($blade)->toContain('type="file"')
+        ->and($blade)->toContain('accept=".csv,text/csv"')
+        ->and($blade)->not->toContain('>Source<')
+        ->and($blade)->toContain('x-show="isFileUploadMode()"')
+        ->and($blade)->toContain("x-show=\"selectedSource && !isFileUploadMode() && selectedSourceEnabled() && !sourceConnected()\"")
+        ->and($blade)->toContain("x-show=\"selectedSource && !isFileUploadMode() && selectedSourceEnabled() && sourceConnected()\"")
+        ->and($source)->toContain('handleLocalFileChange(event)')
+        ->and($source)->toContain('parseLocalCsv(text)')
+        ->and($source)->toContain('parseCsvRows(text)')
+        ->and($source)->toContain('csvBooleanOrNull(value)')
+        ->and($source)->toContain('selected: true')
+        ->and($source)->toContain("return this.selectedSource === 'file-upload';")
+        ->and($source)->toContain('return this.isFileUploadMode() ? null : this.selectedSource;')
+        ->and($source)->toContain('source: importSource')
+        ->and($source)->toContain('is_local_file_import: this.hasLocalFileRows')
+        ->and($source)->toContain('buildImportRowPayload(row, importSource)')
+        ->and($source)->toContain('setManufacturableOverride(row)')
+        ->and($source)->toContain('setPurchasableOverride(row)')
+        ->and($source)->toContain("source: 'file-upload'")
+        ->and($blade)->toContain('rowProductErrors(index)')
+        ->and($blade)->toContain('row.duplicate_reason')
+        ->and($blade)->toContain("row.is_duplicate ? 'Duplicate' :");
+});
+
+it('44. products page renders an export slide over root', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermission)($user, 'inventory-products-view');
+
+    $this->actingAs($user)
+        ->get(route('sales.products.index'))
+        ->assertOk()
+        ->assertSee('data-products-export-panel', false);
+});
+
+it('45. export slide over includes current filters and all records options', function () {
+    $blade = file_get_contents(base_path('resources/views/sales/products/index.blade.php'));
+
+    expect($blade)->toContain('Current filters and sort')
+        ->and($blade)->toContain('All records')
+        ->and($blade)->toContain('CSV');
+});
+
+it('46. import export slide over js is reusable and config driven', function () {
+    $source = file_get_contents(base_path('resources/js/pages/sales-products-index.js'));
+
+    expect($source)->toContain('slideOvers:')
+        ->and($source)->toContain("import: {")
+        ->and($source)->toContain("export: {")
+        ->and($source)->toContain('openSlideOver(')
+        ->and($source)->toContain('closeSlideOver(');
+});
+
+it('47. products payload includes file upload as an explicit import mode', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermissions)($user, ['inventory-products-view', 'inventory-products-manage']);
+
+    $payload = ($this->extractPayload)(
+        $this->actingAs($user)->get(route('sales.products.index')),
+        'sales-products-index-payload'
+    );
+
+    expect(collect($payload['sources'] ?? [])->firstWhere('value', 'file-upload'))
+        ->toMatchArray([
+            'value' => 'file-upload',
+            'label' => 'File Upload',
+            'enabled' => true,
+        ]);
+});

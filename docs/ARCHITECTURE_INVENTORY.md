@@ -191,6 +191,46 @@ Notes:
 
 ---
 
+### Item External Import Identity
+
+**Name:** Item External Import Identity  
+**Type:** Domain Import Rule  
+**Location:**  
+- `docs/architecture/inventory/Item.yaml`  
+- `app/Http/Controllers/SalesProductController.php`  
+- `app/Http/Requests/Sales/ImportExternalProductsRequest.php`
+
+**Purpose:**  
+Define how imported products use tenant-scoped external identity for duplicate preview, existing-item matching, and fulfillment-safe ecommerce imports.
+
+**When to Use:**  
+Sales product preview/import flows that read or write `external_source` and `external_id`.
+
+**When Not to Use:**  
+Internal items without an external identity, or generic item CRUD unrelated to import behavior.
+
+**Public Interface:**  
+- `external_source`  
+- `external_id`  
+- preview duplicate metadata on import rows  
+- fulfillment import summary field `fulfillment_recipes_not_attempted_existing_item`
+
+**Example Usage:**  
+```php
+$existing = Item::query()
+    ->where('tenant_id', $tenantId)
+    ->whereRaw('LOWER(TRIM(external_source)) = ?', ['woocommerce'])
+    ->whereRaw('TRIM(external_id) = ?', ['101'])
+    ->first();
+```
+
+Notes:
+- Duplicate identity is tenant-scoped normalized `external_source` plus exact trimmed `external_id`.
+- Preview rows may be marked duplicate and excluded from default selection before import.
+- Ecommerce imports may update an existing matched item and still return the existing fulfillment import summary contract rather than failing the whole request.
+
+---
+
 ### Tenant
 
 **Name:** Tenant  
@@ -273,6 +313,59 @@ Gate::authorize('workflow-manage');
 ---
 
 ## UI
+
+### Configured CRUD Page Module Pattern
+
+**Name:** Configured CRUD Page Module Pattern  
+**Type:** UI Architectural Pattern  
+**Location:**  
+- `docs/architecture/ui/ConfiguredCrudPageModulePattern.yaml`  
+- `resources/js/lib/crud-config.js`  
+- `resources/js/lib/crud-page.js`  
+- `resources/js/pages/sales-products-index.js`  
+- `resources/js/pages/sales-customers-index.js`
+
+**Purpose:**  
+Provide a shared config-driven CRUD page shell where toolbar actions, list rendering, and common AJAX behavior are owned by a reusable renderer rather than resource-specific Blade markup.
+
+**When to Use:**  
+Interactive CRUD index pages that can express their list, toolbar actions, and row rendering contract through server-generated config.
+
+**When Not to Use:**  
+Static pages or workflows that cannot fit the shared CRUD action and rendering contract.
+
+**Public Interface:**  
+- `data-crud-config`  
+- `endpoints.list`  
+- `endpoints.create`  
+- `endpoints.importPreview`  
+- `endpoints.importStore`  
+- `endpoints.export` when export is enabled  
+- `permissions.showImport`  
+- `permissions.showExport`  
+- `permissions.showCreate`
+
+**Example Usage:**  
+```php
+$crudConfig = [
+    'resource' => 'products',
+    'endpoints' => [
+        'list' => route('sales.products.list'),
+        'export' => route('sales.products.export'),
+        'create' => route('sales.products.store'),
+        'importPreview' => route('sales.products.import.preview'),
+        'importStore' => route('sales.products.import.store'),
+    ],
+    'permissions' => [
+        'showExport' => true,
+        'showImport' => true,
+        'showCreate' => true,
+    ],
+];
+```
+
+Notes:
+- Shared toolbar actions such as `Export`, `Import`, and `Add` must be driven by CRUD config and rendered by the shared CRUD page module, not hardcoded per resource in Blade.
 
 ### Reusable Combobox Pattern
 

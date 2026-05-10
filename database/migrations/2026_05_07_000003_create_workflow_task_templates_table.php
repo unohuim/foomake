@@ -23,7 +23,7 @@ return new class extends Migration
             $table->foreignId('default_assignee_user_id')->nullable()->constrained('users')->nullOnDelete();
             $table->timestamps();
 
-            $table->index(['tenant_id', 'workflow_stage_id', 'is_active'], 'wft_tenant_stage_active_idx');
+            $table->index(['tenant_id', 'workflow_stage_id', 'is_active'], 'wtt_tenant_stage_active_idx');
             $table->index(['tenant_id', 'workflow_domain_id', 'workflow_stage_id'], 'wft_tenant_domain_stage_idx');
             $table->index(['tenant_id', 'workflow_domain_id'], 'wft_tenant_domain_key_idx');
         });
@@ -34,6 +34,10 @@ return new class extends Migration
      */
     public function down(): void
     {
+        Schema::table('workflow_task_templates', function (Blueprint $table): void {
+            $table->dropIndex('wtt_tenant_stage_active_idx');
+        });
+
         Schema::dropIfExists('workflow_task_templates');
     }
 };

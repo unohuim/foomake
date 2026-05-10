@@ -28,6 +28,7 @@ class ListSalesProductsRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'scope' => ['nullable', 'string', Rule::in(['current', 'all'])],
             'search' => ['nullable', 'string', 'max:255'],
             'sort' => ['nullable', 'string', Rule::in(['name', 'price', 'base_uom'])],
             'direction' => ['nullable', 'string', Rule::in(['asc', 'desc'])],

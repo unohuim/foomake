@@ -793,6 +793,8 @@ class CustomerController extends Controller
             'sortable' => ['name', 'email'],
             'labels' => [
                 'searchPlaceholder' => 'Search customers',
+                'exportTitle' => 'Export Customers',
+                'exportAriaLabel' => 'Export Customers',
                 'importTitle' => 'Import Customers',
                 'importAriaLabel' => 'Import Customers',
                 'createTitle' => 'Add New Customer',
@@ -801,6 +803,7 @@ class CustomerController extends Controller
                 'actionsAriaLabel' => 'Customer actions',
             ],
             'permissions' => [
+                'showExport' => Gate::allows('sales-customers-manage'),
                 'showImport' => Gate::allows('system-users-manage'),
                 'showCreate' => Gate::allows('sales-customers-manage'),
             ],

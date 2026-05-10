@@ -162,7 +162,7 @@
 
             <div
                 class="fixed inset-0 z-50 overflow-hidden"
-                x-show="isImportPanelOpen"
+                x-show="slideOvers.import.open"
                 x-cloak
                 role="dialog"
                 aria-modal="true"
@@ -171,7 +171,7 @@
                 <div class="absolute inset-0 overflow-hidden">
                     <div
                         class="absolute inset-0 bg-gray-500 bg-opacity-25 transition-opacity"
-                        x-show="isImportPanelOpen"
+                        x-show="slideOvers.import.open"
                         x-on:click="closeImportPanel()"
                     ></div>
 
@@ -181,7 +181,7 @@
                                 <div class="flex-1 overflow-y-auto p-6">
                                     <div class="flex items-start justify-between">
                                         <div>
-                                            <h2 class="text-lg font-medium text-gray-900">Import external products</h2>
+                                            <h2 class="text-lg font-medium text-gray-900" x-text="slideOverTitle('import')"></h2>
                                             <p class="mt-1 text-sm text-gray-600">WooCommerce previews import real external rows while preserving normal item imports.</p>
                                         </div>
                                         <button type="button" class="rounded-md text-gray-400 hover:text-gray-500" x-on:click="closeImportPanel()">
@@ -193,7 +193,7 @@
                                     <div class="mt-6 space-y-6">
                                         <div>
                                             <label class="block text-sm font-medium text-gray-700">
-                                                Source
+                                                Ecommerce Store
                                                 <select
                                                     class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                                                     x-model="selectedSource"
@@ -208,7 +208,35 @@
                                             <p class="mt-1 text-sm text-red-600" x-text="errors.source[0]"></p>
                                         </div>
 
-                                        <div class="rounded-lg border border-gray-200 bg-gray-50 p-4" x-show="selectedSource && selectedSourceEnabled() && !sourceConnected()">
+                                        <div class="rounded-lg border border-dashed border-gray-300 bg-gray-50 p-4" x-show="isFileUploadMode()">
+                                            <div class="flex items-start gap-3">
+                                                <svg class="h-5 w-5 shrink-0 text-gray-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5" />
+                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 12 12 7.5m0 0L7.5 12m4.5-4.5V16.5" />
+                                                </svg>
+                                                <div class="min-w-0">
+                                                    <h3 class="text-sm font-semibold text-gray-900">Upload File</h3>
+                                                    <p class="mt-1 text-sm text-gray-600">CSV upload will use the exported products template. Ecommerce preview remains available below.</p>
+                                                </div>
+                                            </div>
+                                            <div class="mt-4">
+                                                <label class="block text-sm font-medium text-gray-700" for="products-import-file">
+                                                    CSV File
+                                                </label>
+                                                <input
+                                                    id="products-import-file"
+                                                    x-ref="importFileInput"
+                                                    type="file"
+                                                    accept=".csv,text/csv"
+                                                    class="mt-1 block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500"
+                                                    x-on:change="handleLocalFileChange($event)"
+                                                />
+                                                <p class="mt-2 text-xs text-gray-500" x-show="selectedFileName" x-text="selectedFileName"></p>
+                                                <p class="mt-1 text-sm text-red-600" x-text="errors.file[0]"></p>
+                                            </div>
+                                        </div>
+
+                                        <div class="rounded-lg border border-gray-200 bg-gray-50 p-4" x-show="selectedSource && !isFileUploadMode() && selectedSourceEnabled() && !sourceConnected()">
                                             <h3 class="text-sm font-semibold text-gray-900">Connection required</h3>
                                             <p class="mt-1 text-sm text-gray-600">
                                                 WooCommerce status:
@@ -230,7 +258,7 @@
                                             </div>
                                         </div>
 
-                                        <div class="rounded-lg border border-gray-200 bg-gray-50 p-4" x-show="selectedSource && selectedSourceEnabled() && sourceConnected()">
+                                        <div class="rounded-lg border border-gray-200 bg-gray-50 p-4" x-show="selectedSource && !isFileUploadMode() && selectedSourceEnabled() && sourceConnected()">
                                             <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                                                 <div>
                                                     <h3 class="text-sm font-semibold text-gray-900">Preview importable rows</h3>
@@ -297,16 +325,25 @@
                                                         <template x-for="(row, index) in previewRows" :key="row.external_id">
                                                             <tr>
                                                                 <td class="px-4 py-4 align-top">
-                                                                    <input type="checkbox" class="rounded border-gray-300 text-blue-600 shadow-sm focus:ring-blue-500" x-model="row.selected">
+                                                                    <input type="checkbox" class="rounded border-gray-300 text-blue-600 shadow-sm focus:ring-blue-500" x-model="row.selected" x-bind:disabled="row.is_duplicate">
                                                                 </td>
                                                                 <td class="px-4 py-4 text-sm text-gray-900 align-top">
                                                                     <p class="font-medium" x-text="row.name"></p>
                                                                     <p class="mt-1 text-xs text-gray-500" x-text="row.sku"></p>
                                                                     <p class="mt-1 text-xs text-gray-500" x-text="row.external_id"></p>
+                                                                    <p class="mt-1 text-xs text-gray-500" x-show="row.external_source" x-text="`Source: ${row.external_source}`"></p>
                                                                     <p class="mt-1 text-xs text-gray-500" x-show="row.price" x-text="`Price: ${row.price}`"></p>
+                                                                    <p class="mt-2 text-xs text-red-600" x-show="row.is_duplicate" x-text="row.duplicate_reason"></p>
+                                                                    <template x-if="rowHasProductErrors(index)">
+                                                                        <div class="mt-2 space-y-1">
+                                                                            <template x-for="message in rowProductErrors(index)" :key="message">
+                                                                                <p class="text-xs text-red-600" x-text="message"></p>
+                                                                            </template>
+                                                                        </div>
+                                                                    </template>
                                                                 </td>
                                                                 <td class="px-4 py-4 text-sm text-gray-700 align-top">
-                                                                    <span class="rounded-full px-3 py-1 text-xs font-semibold uppercase" :class="row.is_active ? 'bg-green-50 text-green-700' : 'bg-yellow-50 text-yellow-700'" x-text="row.is_active ? 'Active' : 'Inactive'"></span>
+                                                                    <span class="rounded-full px-3 py-1 text-xs font-semibold uppercase" :class="row.is_duplicate ? 'bg-red-50 text-red-700' : (row.is_active ? 'bg-green-50 text-green-700' : 'bg-yellow-50 text-yellow-700')" x-text="row.is_duplicate ? 'Duplicate' : (row.is_active ? 'Active' : 'Inactive')"></span>
                                                                     <p class="mt-2 text-xs text-gray-500">Sellable on import</p>
                                                                 </td>
                                                                 <td class="px-4 py-4 text-sm text-gray-700 align-top">
@@ -323,11 +360,11 @@
                                                                 </td>
                                                                 <td class="px-4 py-4 text-sm text-gray-700 align-top">
                                                                     <label class="flex items-center gap-2 text-sm">
-                                                                        <input type="checkbox" class="rounded border-gray-300 text-blue-600 shadow-sm focus:ring-blue-500" x-model="row.is_manufacturable">
+                                                                        <input type="checkbox" class="rounded border-gray-300 text-blue-600 shadow-sm focus:ring-blue-500" x-model="row.is_manufacturable" x-on:change="setManufacturableOverride(row)">
                                                                         Manufacturable
                                                                     </label>
                                                                     <label class="mt-2 flex items-center gap-2 text-sm">
-                                                                        <input type="checkbox" class="rounded border-gray-300 text-blue-600 shadow-sm focus:ring-blue-500" x-model="row.is_purchasable">
+                                                                        <input type="checkbox" class="rounded border-gray-300 text-blue-600 shadow-sm focus:ring-blue-500" x-model="row.is_purchasable" x-on:change="setPurchasableOverride(row)">
                                                                         Purchasable
                                                                     </label>
                                                                 </td>
@@ -357,6 +394,88 @@
                                         x-on:click="submitImport()"
                                     >
                                         Import Selected
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div
+                class="fixed inset-0 z-50 overflow-hidden"
+                x-show="slideOvers.export.open"
+                x-cloak
+                role="dialog"
+                aria-modal="true"
+                data-products-export-panel
+            >
+                <div class="absolute inset-0 overflow-hidden">
+                    <div
+                        class="absolute inset-0 bg-gray-500 bg-opacity-25 transition-opacity"
+                        x-show="slideOvers.export.open"
+                        x-on:click="closeExportPanel()"
+                    ></div>
+
+                    <div class="pointer-events-none fixed inset-y-0 right-0 flex max-w-full pl-10">
+                        <div class="pointer-events-auto w-screen max-w-md">
+                            <div class="flex h-full flex-col bg-white shadow-xl">
+                                <div class="flex-1 overflow-y-auto p-6">
+                                    <div class="flex items-start justify-between">
+                                        <div>
+                                            <h2 class="text-lg font-medium text-gray-900" x-text="slideOverTitle('export')"></h2>
+                                            <p class="mt-1 text-sm text-gray-600">Export products as CSV using the same import-relevant field set.</p>
+                                        </div>
+                                        <button type="button" class="rounded-md text-gray-400 hover:text-gray-500" x-on:click="closeExportPanel()">
+                                            <span class="sr-only">Close panel</span>
+                                            ✕
+                                        </button>
+                                    </div>
+
+                                    <div class="mt-6 space-y-4">
+                                        <div class="rounded-lg border border-gray-200 bg-gray-50 p-4">
+                                            <h3 class="text-sm font-semibold text-gray-900">Format</h3>
+                                            <p class="mt-1 text-sm text-gray-600">CSV</p>
+                                        </div>
+
+                                        <fieldset class="space-y-3">
+                                            <legend class="text-sm font-medium text-gray-700">Export Scope</legend>
+
+                                            <label class="flex items-start gap-3 rounded-lg border border-gray-200 p-4 text-sm text-gray-700">
+                                                <input type="radio" class="mt-0.5 border-gray-300 text-blue-600 focus:ring-blue-500" value="current" x-model="exportScope">
+                                                <div>
+                                                    <p class="font-medium text-gray-900">Current filters and sort</p>
+                                                    <p class="mt-1 text-gray-600">Uses the current search text and sort order from the products list.</p>
+                                                </div>
+                                            </label>
+
+                                            <label class="flex items-start gap-3 rounded-lg border border-gray-200 p-4 text-sm text-gray-700">
+                                                <input type="radio" class="mt-0.5 border-gray-300 text-blue-600 focus:ring-blue-500" value="all" x-model="exportScope">
+                                                <div>
+                                                    <p class="font-medium text-gray-900">All records</p>
+                                                    <p class="mt-1 text-gray-600">Exports every sellable product in the current tenant.</p>
+                                                </div>
+                                            </label>
+                                        </fieldset>
+
+                                        <p class="text-sm text-red-600" x-text="exportError"></p>
+                                    </div>
+                                </div>
+
+                                <div class="flex shrink-0 justify-end gap-3 border-t border-gray-200 px-6 py-4">
+                                    <button
+                                        type="button"
+                                        class="inline-flex items-center rounded-md border border-gray-300 px-4 py-2 text-xs font-semibold uppercase tracking-widest text-gray-700 hover:bg-gray-50"
+                                        x-on:click="closeExportPanel()"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        type="button"
+                                        class="inline-flex items-center rounded-md border border-transparent bg-blue-600 px-4 py-2 text-xs font-semibold uppercase tracking-widest text-white hover:bg-blue-500"
+                                        x-on:click="submitExport()"
+                                    >
+                                        Export CSV
                                     </button>
                                 </div>
                             </div>

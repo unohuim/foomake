@@ -1031,3 +1031,33 @@ it('35. customers action dropdown still works through configured actions', funct
         ->and($rendererSource)->toContain('data-crud-action-menu')
         ->and($rendererSource)->toContain('data-crud-action-item-${escapeHtml(action.id)}');
 });
+
+it('36. customers crud config can enable export through shared labels and permissions only', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermissions)($user, ['sales-customers-manage', 'system-users-manage']);
+
+    $config = ($this->extractCrudConfig)(($this->getCustomersIndex)($user));
+
+    expect($config['labels']['exportTitle'] ?? null)->toBe('Export Customers')
+        ->and($config['labels']['exportAriaLabel'] ?? null)->toBe('Export Customers')
+        ->and($config['permissions']['showExport'] ?? null)->toBeTrue();
+});
+
+it('37. customers page module wires export through the shared crud renderer contract', function () {
+    $customersScript = file_get_contents(base_path('resources/js/pages/sales-customers-index.js'));
+
+    expect($customersScript)->toContain("exportHandler: 'handleExportUnavailable()'")
+        ->and($customersScript)->toContain("export: 'handleExportUnavailable()'")
+        ->and($customersScript)->toContain('handleExportUnavailable() {');
+});
+
+it('38. shared crud renderer owns the customers export toolbar button markup', function () {
+    $rendererSource = file_get_contents(base_path('resources/js/lib/crud-page.js'));
+    $customersBlade = file_get_contents(base_path('resources/views/sales/customers/index.blade.php'));
+
+    expect($rendererSource)->toContain('data-crud-toolbar-export-button')
+        ->and($customersBlade)->not->toContain('data-crud-toolbar-export-button')
+        ->and($customersBlade)->not->toContain('Export Customers');
+});

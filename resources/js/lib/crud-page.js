@@ -39,6 +39,8 @@ const normalizeRendererConfig = (config) => {
         sortable: Array.isArray(config.sortable) ? config.sortable : [],
         labels: {
             searchPlaceholder: sanitizeExpression(labels.searchPlaceholder, 'Search'),
+            exportTitle: sanitizeExpression(labels.exportTitle, 'Export'),
+            exportAriaLabel: sanitizeExpression(labels.exportAriaLabel, 'Export'),
             importTitle: sanitizeExpression(labels.importTitle, 'Import'),
             importAriaLabel: sanitizeExpression(labels.importAriaLabel, 'Import'),
             createTitle: sanitizeExpression(labels.createTitle, 'Create'),
@@ -47,6 +49,7 @@ const normalizeRendererConfig = (config) => {
             actionsAriaLabel: sanitizeExpression(labels.actionsAriaLabel, 'Actions'),
         },
         permissions: {
+            showExport: Boolean(permissions.showExport),
             showImport: Boolean(permissions.showImport),
             showCreate: Boolean(permissions.showCreate),
         },
@@ -60,6 +63,7 @@ const normalizeRendererConfig = (config) => {
         handlers: {
             searchInput: sanitizeExpression(handlers.searchInput, 'handleSearchInput()'),
             toggleSort: sanitizeExpression(handlers.toggleSort, 'toggleSort(column)'),
+            export: sanitizeExpression(handlers.export),
             create: sanitizeExpression(handlers.create),
             import: sanitizeExpression(handlers.import),
         },
@@ -127,6 +131,22 @@ const renderToolbar = (config, variant) => {
                         </div>
                     </div>
 
+                    ${config.permissions.showExport ? `
+                        <button
+                            type="button"
+                            class="${buttonClasses}"
+                            title="${escapeHtml(config.labels.exportTitle)}"
+                            aria-label="${escapeHtml(config.labels.exportAriaLabel)}"
+                            data-crud-toolbar-export-button
+                            x-on:click="${config.handlers.export}"
+                        >
+                            <svg class="h-5 w-5 shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M9 8.25H7.5A2.25 2.25 0 0 0 5.25 10.5v9A2.25 2.25 0 0 0 7.5 21.75h9A2.25 2.25 0 0 0 18.75 19.5v-9A2.25 2.25 0 0 0 16.5 8.25H15" />
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 15V3m0 12 3.75-3.75M12 15l-3.75-3.75" />
+                            </svg>
+                        </button>
+                    ` : ''}
+
                     ${config.permissions.showImport ? `
                         <button
                             type="button"
@@ -136,8 +156,9 @@ const renderToolbar = (config, variant) => {
                             data-crud-toolbar-import-button
                             x-on:click="${config.handlers.import}"
                         >
-                            <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 16.5V4.5m0 12 4.5-4.5M12 16.5l-4.5-4.5M3.75 19.5h16.5" />
+                            <svg class="h-5 w-5 shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5" />
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 12 12 7.5m0 0L7.5 12m4.5-4.5V16.5" />
                             </svg>
                         </button>
                     ` : ''}

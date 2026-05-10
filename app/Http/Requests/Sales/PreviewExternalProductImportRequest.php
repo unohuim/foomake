@@ -31,7 +31,52 @@ class PreviewExternalProductImportRequest extends FormRequest
             'source' => [
                 'required',
                 'string',
-                Rule::in(['woocommerce', 'shopify']),
+                Rule::in(['woocommerce', 'shopify', 'file-upload']),
+            ],
+            'rows' => [
+                'nullable',
+                'array',
+            ],
+            'rows.*.external_id' => [
+                'required_if:source,file-upload',
+                'nullable',
+                'string',
+                'max:255',
+            ],
+            'rows.*.external_source' => [
+                'nullable',
+                'string',
+                'max:255',
+            ],
+            'rows.*.name' => [
+                'required_if:source,file-upload',
+                'nullable',
+                'string',
+                'max:255',
+            ],
+            'rows.*.sku' => [
+                'nullable',
+                'string',
+                'max:255',
+            ],
+            'rows.*.base_uom_id' => [
+                'nullable',
+            ],
+            'rows.*.is_active' => [
+                'nullable',
+                'boolean',
+            ],
+            'rows.*.is_sellable' => [
+                'nullable',
+                'boolean',
+            ],
+            'rows.*.is_manufacturable' => [
+                'nullable',
+                'boolean',
+            ],
+            'rows.*.is_purchasable' => [
+                'nullable',
+                'boolean',
             ],
         ];
     }

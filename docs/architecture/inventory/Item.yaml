@@ -16,6 +16,10 @@ rules:
   - Inventory is derived and not stored on the items table.
   - Planning price is stored as integer cents in default_price_cents with an uppercase 3-letter default_price_currency_code.
   - Temporary external product identities may be stored on items through external_source and external_id.
+  - Product import duplicate identity is tenant-scoped and based on normalized external_source plus exact trimmed external_id when both are present.
+  - Product import preview may annotate rows as duplicates before import, and duplicate preview rows are intended to be excluded from default selection.
+  - Ecommerce product imports may match an existing item by tenant-scoped normalized external_source plus external_id and update that item instead of creating a duplicate.
+  - Existing-item ecommerce imports must preserve the import summary contract used by fulfillment-recipe creation flows and must not create duplicate items or duplicate fulfillment recipes.
 public_interface:
   - stockMoves()
   - onHandQuantity()

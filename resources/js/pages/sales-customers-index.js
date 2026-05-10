@@ -15,6 +15,7 @@ export function mount(rootEl, payload) {
     const rendererConfig = {
         ...crud,
         createHandler: 'openCreatePanel()',
+        exportHandler: 'handleExportUnavailable()',
         importHandler: 'openImportPanel()',
         state: {
             records: 'customers',
@@ -26,6 +27,7 @@ export function mount(rootEl, payload) {
         handlers: {
             searchInput: 'handleSearchInput()',
             toggleSort: 'toggleSort(column)',
+            export: 'handleExportUnavailable()',
             create: 'openCreatePanel()',
             import: 'openImportPanel()',
         },
@@ -242,6 +244,9 @@ export function mount(rootEl, payload) {
         },
         openCreatePanel() {
             this.openCreate();
+        },
+        handleExportUnavailable() {
+            return;
         },
         openEdit(customer) {
             this.formMode = 'edit';

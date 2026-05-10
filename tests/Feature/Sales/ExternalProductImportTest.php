@@ -302,12 +302,15 @@ it('12. preview rows include the importable product shape needed by the slide-ov
 
     expect($row)->toMatchArray([
         'external_id' => '1001',
+        'external_source' => 'woocommerce',
         'sku' => 'WC-PREVIEW-1001',
         'name' => 'Woo Preview Product 1001',
         'is_active' => true,
         'is_sellable' => true,
         'is_manufacturable' => false,
         'is_purchasable' => false,
+        'is_duplicate' => false,
+        'selected' => true,
     ]);
 });
 
@@ -810,7 +813,7 @@ it('27. same source and external id across different tenants is allowed', functi
         ->count())->toBe(2);
 });
 
-it('28. duplicate source and external id within the same tenant matches the existing item deterministically', function () {
+it('28. duplicate WooCommerce imports within the same tenant update the existing item without creating a duplicate', function () {
     $tenant = ($this->makeTenant)();
     $uom = ($this->makeUom)($tenant);
     $user = ($this->makeUser)($tenant);

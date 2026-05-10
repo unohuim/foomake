@@ -225,6 +225,8 @@ Route::middleware('auth')->group(function () {
         ->name('sales.products.index');
     Route::get('/sales/products/list', [SalesProductController::class, 'list'])
         ->name('sales.products.list');
+    Route::get('/sales/products/export', [SalesProductController::class, 'export'])
+        ->name('sales.products.export');
     Route::post('/sales/products', [SalesProductController::class, 'store'])
         ->name('sales.products.store');
     Route::patch('/sales/products/{item}', [SalesProductController::class, 'update'])

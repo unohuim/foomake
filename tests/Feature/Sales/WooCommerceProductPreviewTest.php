@@ -542,6 +542,43 @@ it('19. preview rows remain compatible with the import endpoint', function () {
     ])->assertCreated();
 });
 
+it('19a. woo preview flags existing external source and external id duplicates for the current tenant', function () {
+    $tenant = ($this->makeTenant)();
+    $uom = ($this->makeUom)($tenant);
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermission)($user, 'inventory-products-manage');
+    ($this->storeWooConnection)($tenant);
+    ($this->fakeWooPreviewResponses)();
+
+    Item::query()->create([
+        'tenant_id' => $tenant->id,
+        'name' => 'Existing Woo Duplicate',
+        'base_uom_id' => $uom->id,
+        'is_active' => true,
+        'is_purchasable' => false,
+        'is_sellable' => true,
+        'is_manufacturable' => false,
+        'default_price_cents' => null,
+        'default_price_currency_code' => null,
+        'external_source' => 'woocommerce',
+        'external_id' => '101',
+    ]);
+
+    $previewRows = ($this->previewWoo)($user)->assertOk()->json('data.rows');
+    $duplicate = collect($previewRows)->firstWhere('external_id', '101');
+    $nonDuplicate = collect($previewRows)->firstWhere('external_id', '2021');
+
+    expect($duplicate)->not->toBeNull()
+        ->and($duplicate['external_source'] ?? null)->toBe('woocommerce')
+        ->and($duplicate['is_duplicate'] ?? null)->toBeTrue()
+        ->and($duplicate['selected'] ?? null)->toBeFalse()
+        ->and($duplicate['duplicate_reason'] ?? null)
+            ->toBe('A product with the same external source and external ID already exists.')
+        ->and($nonDuplicate['is_duplicate'] ?? null)->toBeFalse()
+        ->and($nonDuplicate['selected'] ?? null)->toBeTrue();
+});
+
 it('20. importing preview rows creates normal items', function () {
     $tenant = ($this->makeTenant)();
     $uom = ($this->makeUom)($tenant);
@@ -683,7 +720,7 @@ it('25. imported variations store the WooCommerce variation id as external id', 
         ->toBe('2021');
 });
 
-it('26. duplicate source and external id handling still matches and updates the existing WooCommerce item', function () {
+it('26. duplicate WooCommerce submissions update the existing item without creating a duplicate', function () {
     $tenant = ($this->makeTenant)();
     $uom = ($this->makeUom)($tenant);
     $user = ($this->makeUser)($tenant);

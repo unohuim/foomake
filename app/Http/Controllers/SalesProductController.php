@@ -12,12 +12,14 @@ use App\Models\ExternalProductSourceConnection;
 use App\Models\Item;
 use App\Models\Uom;
 use App\Services\WooCommerceProductPreviewService;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
 /**
@@ -45,7 +47,16 @@ class SalesProductController extends Controller
                 'name' => $uom->name,
                 'symbol' => $uom->symbol,
             ])->values()->all(),
-            'sources' => $this->availableSourcesForTenant((int) $user->tenant_id),
+            'sources' => array_merge([
+                [
+                    'value' => 'file-upload',
+                    'label' => 'File Upload',
+                    'enabled' => true,
+                    'connected' => false,
+                    'status' => 'local',
+                    'status_label' => 'Local file',
+                ],
+            ], $this->availableSourcesForTenant((int) $user->tenant_id)),
             'listUrl' => $crudConfig['endpoints']['list'],
             'storeUrl' => $crudConfig['endpoints']['create'],
             'updateUrlBase' => url('/sales/products'),
@@ -82,26 +93,7 @@ class SalesProductController extends Controller
         $sortColumn = (string) ($validated['sort'] ?? 'name');
         $direction = (string) ($validated['direction'] ?? 'desc');
         $allowedSortColumns = $crudConfig['sortable'];
-
-        $query = Item::query()
-            ->with('baseUom')
-            ->where('is_sellable', true);
-
-        if ($search !== '') {
-            $query->where('items.name', 'like', '%' . $search . '%');
-        }
-
-        match ($sortColumn) {
-            'price' => $query->orderBy('items.default_price_cents', $direction)->orderBy('items.name'),
-            'base_uom' => $query
-                ->leftJoin('uoms', 'uoms.id', '=', 'items.base_uom_id')
-                ->select('items.*')
-                ->orderBy('uoms.name', $direction)
-                ->orderBy('items.name'),
-            default => $query->orderBy('items.name', $direction),
-        };
-
-        $products = $query->get();
+        $products = $this->productsQuery($search, $sortColumn, $direction)->get();
 
         return response()->json([
             'data' => $products
@@ -117,6 +109,46 @@ class SalesProductController extends Controller
                 'allowed_sort_columns' => $allowedSortColumns,
                 'total' => $products->count(),
             ],
+        ]);
+    }
+
+    /**
+     * Download a CSV export for sales products.
+     */
+    public function export(ListSalesProductsRequest $request): StreamedResponse
+    {
+        $this->authorizeIndex();
+
+        $validated = $request->validated();
+        $scope = (string) ($validated['scope'] ?? 'current');
+        $search = $scope === 'all'
+            ? ''
+            : trim((string) ($validated['search'] ?? ''));
+        $sortColumn = $scope === 'all'
+            ? 'name'
+            : (string) ($validated['sort'] ?? 'name');
+        $direction = $scope === 'all'
+            ? 'desc'
+            : (string) ($validated['direction'] ?? 'desc');
+        $products = $this->productsQuery($search, $sortColumn, $direction)->get();
+
+        return response()->streamDownload(function () use ($products): void {
+            $handle = fopen('php://output', 'wb');
+
+            if ($handle === false) {
+                return;
+            }
+
+            fputcsv($handle, $this->productExportHeaders());
+
+            foreach ($products as $product) {
+                fputcsv($handle, $this->productExportRow($product));
+            }
+
+            fclose($handle);
+        }, 'products-export.csv', [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => 'attachment; filename=products-export.csv',
         ]);
     }
 
@@ -182,7 +214,23 @@ class SalesProductController extends Controller
         Gate::authorize('inventory-products-manage');
 
         $source = (string) $request->validated('source');
-        $connection = $this->connectedSourceForTenant((int) $request->user()->tenant_id, $source);
+        $tenantId = (int) $request->user()->tenant_id;
+
+        if ($source === 'file-upload') {
+            return response()->json([
+                'data' => [
+                    'source' => $source,
+                    'is_connected' => false,
+                    'rows' => $this->annotateDuplicatePreviewRows(
+                        $tenantId,
+                        $request->validated('rows', []),
+                        null
+                    ),
+                ],
+            ]);
+        }
+
+        $connection = $this->connectedSourceForTenant($tenantId, $source);
 
         if (! $connection) {
             return $this->notConnectedResponse();
@@ -206,7 +254,7 @@ class SalesProductController extends Controller
             'data' => [
                 'source' => $source,
                 'is_connected' => true,
-                'rows' => $rows,
+                'rows' => $this->annotateDuplicatePreviewRows($tenantId, $rows, $source),
             ],
         ]);
     }
@@ -220,9 +268,10 @@ class SalesProductController extends Controller
     ): JsonResponse {
         Gate::authorize('inventory-products-manage');
 
-        $source = (string) $request->validated('source');
+        $source = $request->validated('source');
+        $isLocalFileImport = $request->boolean('is_local_file_import');
 
-        if (! $this->connectedSourceForTenant((int) $request->user()->tenant_id, $source)) {
+        if (! $isLocalFileImport && ! $this->connectedSourceForTenant((int) $request->user()->tenant_id, (string) $source)) {
             return $this->notConnectedResponse();
         }
 
@@ -304,7 +353,7 @@ class SalesProductController extends Controller
      */
     private function createOrUpdateImportedItem(
         ImportExternalProductsRequest $request,
-        string $source,
+        ?string $source,
         int $tenantId,
         array $row
     ): Item {
@@ -317,20 +366,14 @@ class SalesProductController extends Controller
         $baseUomId = array_key_exists('base_uom_id', $row) && $row['base_uom_id'] !== null
             ? (int) $row['base_uom_id']
             : (int) $request->validated('bulk_base_uom_id');
-
-        $item = Item::query()
-            ->where('tenant_id', $tenantId)
-            ->where('external_source', $source)
-            ->where('external_id', (string) $row['external_id'])
-            ->first();
-
-        if (! $item) {
-            $item = new Item([
+        $resolvedExternalSource = $this->resolvedRowExternalSource($source, $row);
+        $resolvedExternalId = $this->normalizedExternalId($row['external_id'] ?? null) ?? '';
+        $item = $this->findExistingImportedItem($tenantId, $resolvedExternalSource, $resolvedExternalId)
+            ?? new Item([
                 'tenant_id' => $tenantId,
-                'external_source' => $source,
-                'external_id' => (string) $row['external_id'],
+                'external_source' => $resolvedExternalSource,
+                'external_id' => $resolvedExternalId,
             ]);
-        }
 
         $item->name = $row['name'];
         $item->base_uom_id = $baseUomId;
@@ -343,6 +386,109 @@ class SalesProductController extends Controller
         $item->save();
 
         return $item;
+    }
+
+    /**
+     * Find an existing tenant-scoped imported item by normalized external identity.
+     */
+    private function findExistingImportedItem(int $tenantId, ?string $externalSource, string $externalId): ?Item
+    {
+        if ($externalSource === null || $externalId === '') {
+            return null;
+        }
+
+        return Item::query()
+            ->where('tenant_id', $tenantId)
+            ->whereRaw('LOWER(TRIM(external_source)) = ?', [$externalSource])
+            ->whereRaw('TRIM(external_id) = ?', [$externalId])
+            ->first();
+    }
+
+    /**
+     * Annotate preview rows with tenant-scoped duplicate metadata.
+     *
+     * @param  array<int, array<string, mixed>>  $rows
+     * @return array<int, array<string, mixed>>
+     */
+    private function annotateDuplicatePreviewRows(int $tenantId, array $rows, ?string $defaultSource): array
+    {
+        $duplicateKeys = collect($rows)
+            ->map(function (array $row) use ($defaultSource): ?string {
+                $externalSource = $this->resolvedRowExternalSource($defaultSource, $row);
+                $externalId = $this->normalizedExternalId($row['external_id'] ?? null);
+
+                if ($externalSource === null || $externalId === null) {
+                    return null;
+                }
+
+                return $externalSource . '|' . $externalId;
+            })
+            ->filter()
+            ->unique()
+            ->values();
+
+        $existingKeys = Item::query()
+            ->where('tenant_id', $tenantId)
+            ->whereNotNull('external_source')
+            ->whereNotNull('external_id')
+            ->get(['external_source', 'external_id'])
+            ->map(fn (Item $item): string => $this->normalizedExternalSource($item->external_source) . '|' . $this->normalizedExternalId($item->external_id))
+            ->filter(fn (?string $key): bool => $key !== null && $duplicateKeys->contains($key))
+            ->flip();
+
+        return array_values(array_map(function (array $row) use ($defaultSource, $existingKeys): array {
+            $externalSource = $this->resolvedRowExternalSource($defaultSource, $row);
+            $externalId = $this->normalizedExternalId($row['external_id'] ?? null);
+            $duplicateKey = $externalSource !== null && $externalId !== null
+                ? $externalSource . '|' . $externalId
+                : null;
+            $isDuplicate = $duplicateKey !== null && $existingKeys->has($duplicateKey);
+
+            return array_merge($row, [
+                'external_source' => $externalSource,
+                'is_duplicate' => $isDuplicate,
+                'duplicate_reason' => $isDuplicate
+                    ? 'A product with the same external source and external ID already exists.'
+                    : '',
+                'selected' => ! $isDuplicate,
+            ]);
+        }, $rows));
+    }
+
+    /**
+     * Resolve the normalized external source for a preview or import row.
+     *
+     * @param  array<string, mixed>  $row
+     */
+    private function resolvedRowExternalSource(?string $defaultSource, array $row): ?string
+    {
+        $rowSource = $this->normalizedExternalSource($row['external_source'] ?? null);
+
+        if ($rowSource !== null) {
+            return $rowSource;
+        }
+
+        return $this->normalizedExternalSource($defaultSource);
+    }
+
+    /**
+     * Normalize an external source value for exact duplicate matching.
+     */
+    private function normalizedExternalSource(mixed $value): ?string
+    {
+        $normalized = mb_strtolower(trim((string) ($value ?? '')));
+
+        return $normalized === '' ? null : $normalized;
+    }
+
+    /**
+     * Normalize an external ID value for exact duplicate matching.
+     */
+    private function normalizedExternalId(mixed $value): ?string
+    {
+        $normalized = trim((string) ($value ?? ''));
+
+        return $normalized === '' ? null : $normalized;
     }
 
     /**
@@ -413,6 +559,7 @@ class SalesProductController extends Controller
             'resource' => 'products',
             'endpoints' => [
                 'list' => route('sales.products.list'),
+                'export' => route('sales.products.export'),
                 'create' => route('sales.products.store'),
                 'importPreview' => route('sales.products.import.preview'),
                 'importStore' => route('sales.products.import.store'),
@@ -426,6 +573,8 @@ class SalesProductController extends Controller
             'sortable' => ['name', 'base_uom', 'price'],
             'labels' => [
                 'searchPlaceholder' => 'Search products',
+                'exportTitle' => 'Export Products',
+                'exportAriaLabel' => 'Export Products',
                 'importTitle' => 'Import Products',
                 'importAriaLabel' => 'Import Products',
                 'createTitle' => 'Add New Product',
@@ -434,6 +583,7 @@ class SalesProductController extends Controller
                 'actionsAriaLabel' => 'Product actions',
             ],
             'permissions' => [
+                'showExport' => Gate::allows('inventory-products-view') || Gate::allows('inventory-products-manage'),
                 'showImport' => Gate::allows('inventory-products-manage'),
                 'showCreate' => Gate::allows('inventory-products-manage'),
             ],
@@ -457,6 +607,72 @@ class SalesProductController extends Controller
                     'tone' => 'default',
                 ],
             ],
+        ];
+    }
+
+    /**
+     * Build the tenant-scoped sales products query used by list and export.
+     */
+    private function productsQuery(string $search, string $sortColumn, string $direction): Builder
+    {
+        $query = Item::query()
+            ->with('baseUom')
+            ->where('is_sellable', true);
+
+        if ($search !== '') {
+            $query->where('items.name', 'like', '%' . $search . '%');
+        }
+
+        match ($sortColumn) {
+            'price' => $query->orderBy('items.default_price_cents', $direction)->orderBy('items.name'),
+            'base_uom' => $query
+                ->leftJoin('uoms', 'uoms.id', '=', 'items.base_uom_id')
+                ->select('items.*')
+                ->orderBy('uoms.name', $direction)
+                ->orderBy('items.name'),
+            default => $query->orderBy('items.name', $direction),
+        };
+
+        return $query;
+    }
+
+    /**
+     * Return the CSV header row for product exports.
+     *
+     * @return array<int, string>
+     */
+    private function productExportHeaders(): array
+    {
+        return [
+            'name',
+            'base_uom_id',
+            'is_active',
+            'is_purchasable',
+            'is_manufacturable',
+            'default_price_amount',
+            'default_price_currency_code',
+            'external_source',
+            'external_id',
+        ];
+    }
+
+    /**
+     * Return the CSV export row for a product.
+     *
+     * @return array<int, string>
+     */
+    private function productExportRow(Item $item): array
+    {
+        return [
+            $item->name,
+            (string) $item->base_uom_id,
+            $item->is_active ? '1' : '0',
+            $item->is_purchasable ? '1' : '0',
+            $item->is_manufacturable ? '1' : '0',
+            $this->formatCentsToAmount($item->default_price_cents) ?? '',
+            $item->default_price_currency_code ?? '',
+            $item->external_source ?? '',
+            $item->external_id ?? '',
         ];
     }
 

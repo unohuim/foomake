@@ -14,23 +14,25 @@ purpose: Define a reusable, server-configured CRUD page-module pattern where Bla
 when_to_use:
   - Building any new interactive CRUD index page after the Products and Customers migrations
   - Migrating an interactive CRUD page to a shared mount-only page-module pattern without introducing client-owned routing or global state
-  - Reusing the same toolbar, list rendering, action menu, create/import triggers, and sort mechanics across multiple Blade pages with different resource contracts
+  - Reusing the same toolbar, list rendering, action menu, create/import/export triggers, and sort mechanics across multiple Blade pages with different resource contracts
   - Keeping page-specific slideouts, validation UX, and callback behavior outside the shared CRUD renderer while centralizing the common config-driven shell
 when_not_to_use:
   - Pages whose behavior is fully static
   - Workflows that require multi-step orchestration or domain-specific state transitions beyond generic CRUD concerns
-  - Pages that cannot express their list, create, import, sortable-column, row-display, and action contract from server-generated Blade data
+  - Pages that cannot express their list, create, import, export, sortable-column, row-display, and action contract from server-generated Blade data
 rules:
   - Future CRUD index pages must use this shared generic CRUD renderer abstraction unless an approved architecture entry explicitly documents why they cannot.
   - Blade must render the CRUD contract on the page root via data-crud-config.
   - Blade index shells must remain mount-only for CRUD UI concerns and may not render toolbar markup, record tables, record cards, empty states, or row action cells directly.
   - The CRUD config must be valid JSON and must be server-generated in Blade.
   - The CRUD config must include resource, endpoints.list, endpoints.create, endpoints.importPreview, endpoints.importStore, columns, headers, sortable, labels, permissions, rowDisplay, mobileCard, and actions.
+  - Resources that expose export through the shared toolbar must also provide endpoints.export plus labels and permissions for the export action.
   - sortable values must reference only configured column keys.
   - Shared CRUD helpers must remain stateless and must not introduce global JavaScript state.
-  - The shared CRUD renderer owns toolbar layout, search input, create/import buttons, sticky desktop headers, record table/cards, empty states, and the vertical-dots action menu.
+  - The shared CRUD renderer owns toolbar layout, search input, create/import/export buttons, sticky desktop headers, record table/cards, empty states, and the vertical-dots action menu.
+  - Toolbar actions must be config-driven; resource pages must not hardcode product-only or customer-only toolbar buttons in Blade.
   - The records/list area is the only scrollable region for CRUD list rendering; toolbar chrome remains outside that scroll container.
-  - Shared CRUD helpers may handle config parsing, list query construction, fetch, create submission, sort toggling, and config-driven shell rendering.
+  - Shared CRUD helpers may handle config parsing, list query construction, fetch, create submission, export trigger wiring, sort toggling, and config-driven shell rendering.
   - Page-specific behavior such as create/edit/import panel state, row-to-form mapping, toasts, validation UX, and action callbacks remains in the page module.
   - Products and Customers are the current reference implementations for this pattern.
   - Missing or invalid CRUD config must fail safely without breaking initial page load.
@@ -47,6 +49,7 @@ example_usage: |
         'resource' => 'products',
         'endpoints' => [
             'list' => route('sales.products.list'),
+            'export' => route('sales.products.export'),
             'create' => route('sales.products.store'),
             'importPreview' => route('sales.products.import.preview'),
             'importStore' => route('sales.products.import.store'),
@@ -60,6 +63,8 @@ example_usage: |
         'sortable' => ['name', 'base_uom', 'price'],
         'labels' => [
             'searchPlaceholder' => 'Search products',
+            'exportTitle' => 'Export Products',
+            'exportAriaLabel' => 'Export Products',
             'importTitle' => 'Import Products',
             'importAriaLabel' => 'Import Products',
             'createTitle' => 'Add New Product',
@@ -68,6 +73,7 @@ example_usage: |
             'actionsAriaLabel' => 'Product actions',
         ],
         'permissions' => [
+            'showExport' => true,
             'showImport' => true,
             'showCreate' => true,
         ],
@@ -104,7 +110,7 @@ example_usage: |
     mountCrudRenderer(rootEl.querySelector('[data-crud-root]'), {
         ...crud,
         state: { records: 'products', loading: 'isLoadingList', error: 'listError', search: 'search', sort: 'sort' },
-        handlers: { searchInput: 'handleSearchInput()', toggleSort: 'toggleSort(column)', create: 'openCreatePanel()', import: 'openImportPanel()' },
+        handlers: { searchInput: 'handleSearchInput()', toggleSort: 'toggleSort(column)', create: 'openCreatePanel()', import: 'openImportPanel()', export: 'openExportPanel()' },
         rowDisplay: { ...crud.rowDisplay, cellTextExpression: 'productCellText(record, column)' },
         mobileCard: { ...crud.mobileCard },
         actions: [{ id: 'edit', label: 'Edit', tone: 'default', handler: 'openEdit(record)' }],

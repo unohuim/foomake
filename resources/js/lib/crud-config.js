@@ -50,6 +50,7 @@ export function normalizeCrudConfig(config) {
     return {
         endpoints: {
             list: typeof rawEndpoints.list === 'string' && rawEndpoints.list.trim() !== '' ? rawEndpoints.list : '',
+            export: typeof rawEndpoints.export === 'string' && rawEndpoints.export.trim() !== '' ? rawEndpoints.export : '',
             create: typeof rawEndpoints.create === 'string' && rawEndpoints.create.trim() !== '' ? rawEndpoints.create : '',
             importPreview: typeof rawEndpoints.importPreview === 'string' && rawEndpoints.importPreview.trim() !== ''
                 ? rawEndpoints.importPreview
@@ -64,6 +65,8 @@ export function normalizeCrudConfig(config) {
         resource: sanitizeLabel(config.resource),
         labels: {
             searchPlaceholder: sanitizeLabel(rawLabels.searchPlaceholder, 'Search'),
+            exportTitle: sanitizeLabel(rawLabels.exportTitle, 'Export'),
+            exportAriaLabel: sanitizeLabel(rawLabels.exportAriaLabel, 'Export'),
             importTitle: sanitizeLabel(rawLabels.importTitle, 'Import'),
             importAriaLabel: sanitizeLabel(rawLabels.importAriaLabel, 'Import'),
             createTitle: sanitizeLabel(rawLabels.createTitle, 'Create'),
@@ -72,6 +75,7 @@ export function normalizeCrudConfig(config) {
             actionsAriaLabel: sanitizeLabel(rawLabels.actionsAriaLabel, 'Actions'),
         },
         permissions: {
+            showExport: Boolean(rawPermissions.showExport),
             showImport: Boolean(rawPermissions.showImport),
             showCreate: Boolean(rawPermissions.showCreate),
         },
