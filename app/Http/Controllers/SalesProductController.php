@@ -596,7 +596,7 @@ class SalesProductController extends Controller
             ],
             'mobileCard' => [
                 'mediaExpression' => 'record.image_url',
-                'titleExpression' => 'record.name || "—"',
+                'titleExpression' => "record.name || '—'",
                 'subtitleExpression' => 'productBaseUomLabel(record)',
                 'bodyExpression' => 'formattedProductPrice(record)',
             ],

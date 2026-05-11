@@ -93,7 +93,7 @@ export function normalizeCrudConfig(config) {
         },
         mobileCard: {
             mediaExpression: sanitizeLabel(rawMobileCard.mediaExpression),
-            titleExpression: sanitizeLabel(rawMobileCard.titleExpression, 'record.name || "—"'),
+            titleExpression: sanitizeLabel(rawMobileCard.titleExpression, "record.name || '—'"),
             subtitleExpression: sanitizeLabel(rawMobileCard.subtitleExpression),
             bodyExpression: sanitizeLabel(rawMobileCard.bodyExpression),
         },

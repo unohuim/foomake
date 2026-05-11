@@ -24,14 +24,18 @@ rules:
   - Future CRUD index pages must use this shared generic CRUD renderer abstraction unless an approved architecture entry explicitly documents why they cannot.
   - Blade must render the CRUD contract on the page root via data-crud-config.
   - Blade index shells must remain mount-only for CRUD UI concerns and may not render toolbar markup, record tables, record cards, empty states, or row action cells directly.
+  - Blade index shells that use the shared CRUD renderer must provide a bounded height container so the CRUD module can fill the available viewport area without making the whole page the list scroller.
+  - data-crud-root must fill the available page-shell height and preserve min-height propagation so the shared renderer can size its internal records pane correctly.
   - The CRUD config must be valid JSON and must be server-generated in Blade.
   - The CRUD config must include resource, endpoints.list, endpoints.create, endpoints.importPreview, endpoints.importStore, columns, headers, sortable, labels, permissions, rowDisplay, mobileCard, and actions.
   - Resources that expose export through the shared toolbar must also provide endpoints.export plus labels and permissions for the export action.
   - sortable values must reference only configured column keys.
   - Shared CRUD helpers must remain stateless and must not introduce global JavaScript state.
   - The shared CRUD renderer owns toolbar layout, search input, create/import/export buttons, sticky desktop headers, record table/cards, empty states, and the vertical-dots action menu.
+  - The shared CRUD renderer shell must use h-full and min-h-0-compatible layout rules so the records pane inherits usable height from the bounded Blade shell.
   - Toolbar actions must be config-driven; resource pages must not hardcode product-only or customer-only toolbar buttons in Blade.
   - The records/list area is the only scrollable region for CRUD list rendering; toolbar chrome remains outside that scroll container.
+  - Desktop and mobile variants must follow the same scroll-containment contract: toolbar and page header chrome remain fixed in the component shell while only the records/results pane scrolls.
   - Shared CRUD helpers may handle config parsing, list query construction, fetch, create submission, export trigger wiring, sort toggling, and config-driven shell rendering.
   - Page-specific behavior such as create/edit/import panel state, row-to-form mapping, toasts, validation UX, and action callbacks remains in the page module.
   - Products and Customers are the current reference implementations for this pattern.
@@ -86,7 +90,7 @@ example_usage: |
         ],
         'mobileCard' => [
             'mediaExpression' => 'record.image_url',
-            'titleExpression' => 'record.name || "—"',
+            'titleExpression' => "record.name || '—'",
             'subtitleExpression' => 'productBaseUomLabel(record)',
             'bodyExpression' => 'formattedProductPrice(record)',
         ],
@@ -97,12 +101,15 @@ example_usage: |
 
   Blade:
     <div
+        class="flex h-[calc(100vh-8rem)] min-h-0 flex-col overflow-hidden"
         data-page="sales-products-index"
         data-payload="sales-products-index-payload"
         data-crud-config='@json($crudConfig)'
         x-data="salesProductsIndex"
     >
-        <div data-crud-root></div>
+        <div class="mx-auto flex h-full min-h-0 w-full max-w-7xl flex-1 flex-col overflow-hidden sm:px-6 lg:px-8">
+            <div class="flex h-full min-h-0 flex-1 flex-col" data-crud-root></div>
+        </div>
     </div>
 
   Page module:

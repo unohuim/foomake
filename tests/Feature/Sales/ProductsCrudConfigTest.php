@@ -583,6 +583,15 @@ it('25. products blade contains no crud toolbar table card or action markup', fu
         ->and($productsBlade)->not->toContain('toggleSort(column)');
 });
 
+it('25a. products page shell is height bounded and removes the large gray gap wrapper', function () {
+    $productsBlade = file_get_contents(base_path('resources/views/sales/products/index.blade.php'));
+
+    expect($productsBlade)->toContain('class="flex h-[calc(100vh-8rem)] min-h-0 flex-col overflow-hidden"')
+        ->and($productsBlade)->toContain('class="mx-auto flex h-full min-h-0 w-full max-w-7xl flex-1 flex-col overflow-hidden sm:px-6 lg:px-8"')
+        ->and($productsBlade)->toContain('class="flex h-full min-h-0 flex-1 flex-col" data-crud-root')
+        ->and($productsBlade)->not->toContain('class="py-12"');
+});
+
 it('26. both sales pages mount the shared crud js renderer', function () {
     $productsBlade = file_get_contents(base_path('resources/views/sales/products/index.blade.php'));
     $customersBlade = file_get_contents(base_path('resources/views/sales/customers/index.blade.php'));
@@ -610,6 +619,7 @@ it('27. products crud config includes the shared renderer contract', function ()
     expect($config['resource'] ?? null)->toBe('products')
         ->and($config['rowDisplay'] ?? null)->toBeArray()
         ->and($config['mobileCard'] ?? null)->toBeArray()
+        ->and($config['mobileCard']['titleExpression'] ?? null)->toBe("record.name || '—'")
         ->and($config['actions'] ?? null)->toBeArray()
         ->and($config['permissions'] ?? null)->toBeArray();
 });
@@ -625,7 +635,22 @@ it('28. shared crud renderer owns the toolbar list cards empty state and action 
         ->and($rendererSource)->toContain('data-crud-empty-state')
         ->and($rendererSource)->toContain('data-crud-action-cell')
         ->and($rendererSource)->toContain('data-crud-action-trigger')
-        ->and($rendererSource)->toContain('data-crud-action-menu');
+        ->and($rendererSource)->toContain('data-crud-action-menu')
+        ->and($rendererSource)->toContain('class="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-gray-100 bg-white shadow-sm" data-crud-renderer');
+});
+
+it('28a. shared crud mobile renderer keeps the primary label visible on mobile', function () {
+    $rendererSource = file_get_contents(base_path('resources/js/lib/crud-page.js'));
+
+    expect($rendererSource)->toContain('<div class="h-full min-h-0 md:hidden" data-crud-mobile-cards>')
+        ->and($rendererSource)->toContain('class="flex h-full min-h-0 flex-col"')
+        ->and($rendererSource)->toContain('class="min-h-0 flex-1 overflow-y-auto p-4" data-crud-records-scroll')
+        ->and($rendererSource)->toContain('${renderToolbar(config, \'mobile\')}')
+        ->and($rendererSource)->toContain('class="min-w-0 flex flex-1 flex-col"')
+        ->and($rendererSource)->toContain('class="flex min-w-0 items-start gap-3"')
+        ->and($rendererSource)->toContain('class="min-w-0 flex-1 overflow-hidden"')
+        ->and($rendererSource)->toContain('class="block truncate text-sm font-medium text-gray-900"')
+        ->and($rendererSource)->toContain("renderActionCell(config, 'ml-auto shrink-0')");
 });
 
 it('29. toolbar remains outside and above the scrolling list container', function () {
@@ -633,13 +658,21 @@ it('29. toolbar remains outside and above the scrolling list container', functio
 
     expect($rendererSource)->toContain('data-crud-toolbar-desktop')
         ->and($rendererSource)->toContain('data-crud-records-scroll')
-        ->and($rendererSource)->toContain('class="max-h-[36rem] overflow-y-auto" data-crud-records-scroll');
+        ->and($rendererSource)->toContain('class="hidden h-full min-h-0 md:block"')
+        ->and($rendererSource)->toContain('border-b border-gray-100 bg-white')
+        ->and($rendererSource)->toContain('px-6 py-4')
+        ->and($rendererSource)->toContain('class="flex h-full min-h-0 flex-col"')
+        ->and($rendererSource)->toContain('class="min-h-0 flex-1 overflow-y-auto" data-crud-records-scroll');
 });
 
 it('30. desktop headers remain sticky beneath the toolbar', function () {
     $rendererSource = file_get_contents(base_path('resources/js/lib/crud-page.js'));
 
-    expect($rendererSource)->toContain('<thead class="sticky top-0 z-10 bg-white">');
+    expect($rendererSource)->toContain('<thead class="bg-white">')
+        ->and($rendererSource)->toContain("        ? 'border-b border-gray-100 bg-white p-4'")
+        ->and($rendererSource)->toContain("        : 'border-b border-gray-100 bg-white px-6 py-4';")
+        ->and($rendererSource)->toContain('class="sticky top-0 z-10 bg-white px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500"')
+        ->and($rendererSource)->toContain('class="sticky top-0 z-10 bg-white px-6 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500"');
 });
 
 it('31. products config exposes the edit row action', function () {
@@ -802,34 +835,45 @@ it('42. export button uses the arrow down on square heroicon path', function () 
         ->and($rendererSource)->toContain('M12 15V3m0 12 3.75-3.75M12 15l-3.75-3.75');
 });
 
-it('43. import slide over label is ecommerce store and includes upload file section', function () {
+it('43. import slide over label is ecommerce store and includes hidden file upload mode', function () {
     $blade = file_get_contents(base_path('resources/views/sales/products/index.blade.php'));
     $source = file_get_contents(base_path('resources/js/pages/sales-products-index.js'));
 
     expect($blade)->toContain('Ecommerce Store')
-        ->and($blade)->toContain('Upload File')
+        ->and($blade)->toContain('data-products-import-file-input')
         ->and($blade)->toContain('type="file"')
         ->and($blade)->toContain('accept=".csv,text/csv"')
+        ->and($blade)->toContain('class="sr-only"')
+        ->and($blade)->toContain('x-text="sourceOptionLabel(source)"')
         ->and($blade)->not->toContain('>Source<')
-        ->and($blade)->toContain('x-show="isFileUploadMode()"')
+        ->and($blade)->not->toContain('Choose File')
         ->and($blade)->toContain("x-show=\"selectedSource && !isFileUploadMode() && selectedSourceEnabled() && !sourceConnected()\"")
-        ->and($blade)->toContain("x-show=\"selectedSource && !isFileUploadMode() && selectedSourceEnabled() && sourceConnected()\"")
+        ->and($blade)->toContain('data-products-import-empty-state')
         ->and($source)->toContain('handleLocalFileChange(event)')
         ->and($source)->toContain('parseLocalCsv(text)')
         ->and($source)->toContain('parseCsvRows(text)')
         ->and($source)->toContain('csvBooleanOrNull(value)')
         ->and($source)->toContain('selected: true')
         ->and($source)->toContain("return this.selectedSource === 'file-upload';")
-        ->and($source)->toContain('return this.isFileUploadMode() ? null : this.selectedSource;')
+        ->and($source)->toContain("return this.selectedSource.startsWith('file-upload-cached:');")
+        ->and($source)->toContain('cachedFileSources: []')
+        ->and($source)->toContain('nextCachedFileSourceId: 1')
+        ->and($source)->toContain('return this.isFileUploadMode() || this.isCachedFileSource() ? null : this.selectedSource;')
+        ->and($source)->toContain('sourceOptionLabel(source)')
+        ->and($source)->toContain('openImportFilePicker()')
+        ->and($source)->toContain('this.$refs.importFileInput?.click();')
+        ->and($source)->toContain('restoreCachedFilePreview()')
+        ->and($source)->toContain('cacheCurrentFilePreviewRows(rows)')
         ->and($source)->toContain('source: importSource')
         ->and($source)->toContain('is_local_file_import: this.hasLocalFileRows')
         ->and($source)->toContain('buildImportRowPayload(row, importSource)')
-        ->and($source)->toContain('setManufacturableOverride(row)')
-        ->and($source)->toContain('setPurchasableOverride(row)')
         ->and($source)->toContain("source: 'file-upload'")
         ->and($blade)->toContain('rowProductErrors(index)')
-        ->and($blade)->toContain('row.duplicate_reason')
-        ->and($blade)->toContain("row.is_duplicate ? 'Duplicate' :");
+        ->and($blade)->toContain('data-products-import-preview-card')
+        ->and($blade)->toContain('data-products-import-preview-search')
+        ->and($blade)->toContain('data-products-import-show-duplicates')
+        ->and($blade)->toContain('<template x-for="fileSource in cachedFileSources" :key="fileSource.value">')
+        ->and($source)->toContain("loadingMessage: 'Loading file preview...'");
 });
 
 it('44. products page renders an export slide over root', function () {

@@ -5,6 +5,7 @@ This file is the single source to paste at the beginning of new LLM chats for fu
 Paste the entire content (or as much as context allows) when starting a session.
 
 ## docs/AI_CHAT_CODEX.md
+
 # AI Chat Bootstrap (READ FIRST)
 
 You are assisting with development on this repository.
@@ -236,6 +237,7 @@ If unsure, **stop immediately and ask**.
 - The **smallest possible change per PR**
 
 ## docs/PR2_ROADMAP.md
+
 # PR2_ROADMAP — UI + Domain Completion (Post-PR-006)
 
 This roadmap defines the **second major phase** of work: completing **Items, Inventory, Suppliers, and Manufacturing**
@@ -1529,6 +1531,7 @@ Introduce a UoM-level display precision field and enforce consistent quantity fo
 - JavaScript formatting or UI-only overrides per view
 
 ## docs/CONVENTIONS.md
+
 # Conventions
 
 This document defines the **mandatory development conventions** for this repository.  
@@ -1783,6 +1786,7 @@ These rules apply to:
 - Any inventory-affecting calculations
 
 ## docs/ARCHITECTURE_INVENTORY.md
+
 # Architecture Inventory
 
 This document tracks **reusable abstractions, components, and architectural patterns**
@@ -1976,6 +1980,46 @@ Notes:
 
 ---
 
+### Item External Import Identity
+
+**Name:** Item External Import Identity  
+**Type:** Domain Import Rule  
+**Location:**  
+- `docs/architecture/inventory/Item.yaml`  
+- `app/Http/Controllers/SalesProductController.php`  
+- `app/Http/Requests/Sales/ImportExternalProductsRequest.php`
+
+**Purpose:**  
+Define how imported products use tenant-scoped external identity for duplicate preview, existing-item matching, and fulfillment-safe ecommerce imports.
+
+**When to Use:**  
+Sales product preview/import flows that read or write `external_source` and `external_id`.
+
+**When Not to Use:**  
+Internal items without an external identity, or generic item CRUD unrelated to import behavior.
+
+**Public Interface:**  
+- `external_source`  
+- `external_id`  
+- preview duplicate metadata on import rows  
+- fulfillment import summary field `fulfillment_recipes_not_attempted_existing_item`
+
+**Example Usage:**  
+```php
+$existing = Item::query()
+    ->where('tenant_id', $tenantId)
+    ->whereRaw('LOWER(TRIM(external_source)) = ?', ['woocommerce'])
+    ->whereRaw('TRIM(external_id) = ?', ['101'])
+    ->first();
+```
+
+Notes:
+- Duplicate identity is tenant-scoped normalized `external_source` plus exact trimmed `external_id`.
+- Preview rows may be marked duplicate and excluded from default selection before import.
+- Ecommerce imports may update an existing matched item and still return the existing fulfillment import summary contract rather than failing the whole request.
+
+---
+
 ### Tenant
 
 **Name:** Tenant  
@@ -2058,6 +2102,59 @@ Gate::authorize('workflow-manage');
 ---
 
 ## UI
+
+### Configured CRUD Page Module Pattern
+
+**Name:** Configured CRUD Page Module Pattern  
+**Type:** UI Architectural Pattern  
+**Location:**  
+- `docs/architecture/ui/ConfiguredCrudPageModulePattern.yaml`  
+- `resources/js/lib/crud-config.js`  
+- `resources/js/lib/crud-page.js`  
+- `resources/js/pages/sales-products-index.js`  
+- `resources/js/pages/sales-customers-index.js`
+
+**Purpose:**  
+Provide a shared config-driven CRUD page shell where toolbar actions, list rendering, and common AJAX behavior are owned by a reusable renderer rather than resource-specific Blade markup.
+
+**When to Use:**  
+Interactive CRUD index pages that can express their list, toolbar actions, and row rendering contract through server-generated config.
+
+**When Not to Use:**  
+Static pages or workflows that cannot fit the shared CRUD action and rendering contract.
+
+**Public Interface:**  
+- `data-crud-config`  
+- `endpoints.list`  
+- `endpoints.create`  
+- `endpoints.importPreview`  
+- `endpoints.importStore`  
+- `endpoints.export` when export is enabled  
+- `permissions.showImport`  
+- `permissions.showExport`  
+- `permissions.showCreate`
+
+**Example Usage:**  
+```php
+$crudConfig = [
+    'resource' => 'products',
+    'endpoints' => [
+        'list' => route('sales.products.list'),
+        'export' => route('sales.products.export'),
+        'create' => route('sales.products.store'),
+        'importPreview' => route('sales.products.import.preview'),
+        'importStore' => route('sales.products.import.store'),
+    ],
+    'permissions' => [
+        'showExport' => true,
+        'showImport' => true,
+        'showCreate' => true,
+    ],
+];
+```
+
+Notes:
+- Shared toolbar actions such as `Export`, `Import`, and `Add` must be driven by CRUD config and rendered by the shared CRUD page module, not hardcoded per resource in Blade.
 
 ### Reusable Combobox Pattern
 
@@ -3427,6 +3524,51 @@ Confirmations or single-field actions.
 
 ---
 
+### Import Slide-Over Preview Pattern
+
+**Name:** Import Slide-Over Preview Pattern  
+**Type:** UI Pattern  
+**Location:**  
+- `docs/architecture/ui/ImportSlideOverPreviewPattern.yaml`  
+- `resources/views/sales/products/index.blade.php`  
+- `resources/js/pages/sales-products-index.js`  
+
+**Purpose:**  
+Provide a reusable import slide-over pattern where preview loads automatically from the chosen source, bulk options and preview records use accordions, and the preview list stays card-based and page-scoped.
+
+**When to Use:**  
+Preview-first import slide-overs that combine source selection, duplicate-aware row visibility, and per-row overrides without leaving the current page.
+
+**When Not to Use:**  
+One-step uploads with no preview, or workflows that require global JavaScript state or client-owned import authority.
+
+**Public Interface:**  
+- `data-products-import-bulk-options-accordion`  
+- `data-products-import-preview-records-accordion`  
+- `data-products-import-preview-search`  
+- `data-products-import-show-duplicates`  
+- `data-products-import-preview-scroll`  
+
+**Example Usage:**  
+```blade
+<button type="button" data-products-import-preview-records-accordion>
+    Preview Records
+</button>
+
+<div data-products-import-preview-scroll>
+    <article x-show="rowVisibleInPreview(row)">
+        <p class="truncate" x-text="row.name"></p>
+    </article>
+</div>
+```
+
+Notes:
+- Bulk Import Options defaults collapsed while Preview Records accordion defaults open.
+- Preview records render as responsive cards; duplicate rows remain in DOM state and are hidden by default until explicitly shown.
+- The preview records area is the only scrollable region inside the slide-over.
+
+---
+
 ### Row Actions Dropdown Pattern
 
 **Name:** Row Actions Dropdown Pattern  
@@ -3834,15 +3976,25 @@ Static pages, or domain workflows that exceed generic CRUD concerns.
 - Sales Products  
 - Sales Customers
 
+**Key Rules:**  
+- Blade index shells remain mount-only for CRUD concerns and must provide a bounded viewport-height container for the shared CRUD module.  
+- `data-crud-root` must fill the available bounded height with `h-full` / `min-h-0`-compatible layout so the shared renderer can size its records pane correctly.  
+- The shared CRUD renderer owns toolbar layout, search input, create/import/export buttons, sticky desktop headers, record table/cards, empty states, and row action menus.  
+- Toolbar and page chrome remain outside the records scroller; the records/results area is the only scrollable region for CRUD list rendering.  
+- Desktop and mobile variants follow the same scroll-containment contract: header/toolbar stays fixed in the component shell while only records scroll.  
+
 **Example Usage:**  
 ```blade
 <div
+    class="flex h-[calc(100vh-8rem)] min-h-0 flex-col overflow-hidden"
     data-page="sales-products-index"
     data-payload="sales-products-index-payload"
     data-crud-config='@json($crudConfig)'
     x-data="salesProductsIndex"
 >
-    <div data-crud-root></div>
+    <div class="mx-auto flex h-full min-h-0 w-full max-w-7xl flex-1 flex-col overflow-hidden sm:px-6 lg:px-8">
+        <div class="flex h-full min-h-0 flex-1 flex-col" data-crud-root></div>
+    </div>
 </div>
 ```
 
@@ -3880,6 +4032,7 @@ it('creates a material', function () {
 ---
 
 ## docs/PERMISSIONS_MATRIX.md
+
 # Permissions Matrix
 
 This document is the source-of-truth for **authorization intent** in this repository.
@@ -4075,6 +4228,7 @@ return [
 ```
 
 ## docs/ENUMS.md
+
 # ENUMS — Canonical Enum Authority
 
 This document defines the canonical, normative enum-like values used throughout the system.
@@ -4329,6 +4483,7 @@ Do not introduce new enum values without updating this document.
 No conflicts or ambiguities were found at time of creation based on existing migrations, models, actions, and tests.
 
 ## docs/DB_SCHEMA.md
+
 # Database Schema Inventory (DB_SCHEMA)
 
 This document inventories **all database tables and columns** as defined by migrations.
@@ -5623,6 +5778,7 @@ Migrations remain the **sole source of truth**.
 **End of DB_SCHEMA**
 
 ## docs/UI_DESIGN.md
+
 # UI_DESIGN.md — Canonical UI Direction & Constraints
 
 This document defines the **authoritative UI design rules** for this repository.
@@ -6217,6 +6373,7 @@ They are mandatory, not stylistic.
 ::contentReference[oaicite:0]{index=0}
 
 ## routes/web.php
+
 <?php
 
 use App\Http\Controllers\InventoryController;
@@ -6444,6 +6601,8 @@ Route::middleware('auth')->group(function () {
         ->name('sales.products.index');
     Route::get('/sales/products/list', [SalesProductController::class, 'list'])
         ->name('sales.products.list');
+    Route::get('/sales/products/export', [SalesProductController::class, 'export'])
+        ->name('sales.products.export');
     Route::post('/sales/products', [SalesProductController::class, 'store'])
         ->name('sales.products.store');
     Route::patch('/sales/products/{item}', [SalesProductController::class, 'update'])
@@ -6495,6 +6654,7 @@ Route::delete('/manufacturing/uom-conversions/items/{itemConversion}', [UomConve
 require __DIR__ . '/auth.php';
 
 ## docs/PR3_ROADMAP.md
+
 # PR3_ROADMAP — Sales + CRM Foundations
 
 This roadmap defines the third major phase of work: introducing the **Sales domain (CRM foundations + Sales Orders)**, fully integrated with inventory before any external integrations.
@@ -7174,6 +7334,7 @@ After PR3 completion:
 - System ready for external integrations
 
 ## docs/BACKLOG.md
+
 # BACKLOG
 
 This backlog captures outstanding product capabilities identified from competitive feature review and QuickBooks Online integration planning.

@@ -818,9 +818,9 @@ class CustomerController extends Controller
                 ],
             ],
             'mobileCard' => [
-                'titleExpression' => 'record.name || "—"',
-                'subtitleExpression' => 'record.email || "—"',
-                'bodyExpression' => 'record.address_summary || "—"',
+                'titleExpression' => "record.name || '—'",
+                'subtitleExpression' => "record.email || '—'",
+                'bodyExpression' => "record.address_summary || '—'",
             ],
             'actions' => [
                 [

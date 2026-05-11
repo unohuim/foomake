@@ -73,7 +73,7 @@ const normalizeRendererConfig = (config) => {
         },
         mobileCard: {
             mediaExpression: sanitizeExpression(mobileCard.mediaExpression),
-            titleExpression: sanitizeExpression(mobileCard.titleExpression, 'record.name || "—"'),
+            titleExpression: sanitizeExpression(mobileCard.titleExpression, "record.name || '—'"),
             subtitleExpression: sanitizeExpression(mobileCard.subtitleExpression),
             bodyExpression: sanitizeExpression(mobileCard.bodyExpression),
         },
@@ -94,90 +94,87 @@ const sortIconsMarkup = (sortExpression) => `
 
 const renderToolbar = (config, variant) => {
     const isMobile = variant === 'mobile';
-    const wrapperClasses = isMobile ? 'md:hidden' : 'hidden md:block';
     const toolbarClasses = isMobile
-        ? 'sticky top-0 z-10 border-b border-gray-100 bg-white p-4'
-        : 'sticky top-0 z-20 border-b border-gray-100 bg-white px-6 py-4';
+        ? 'border-b border-gray-100 bg-white p-4'
+        : 'border-b border-gray-100 bg-white px-6 py-4';
     const buttonClasses = isMobile
         ? 'inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-gray-300 text-gray-600 transition hover:bg-gray-50 hover:text-gray-900'
         : 'inline-flex h-10 w-10 items-center justify-center rounded-md border border-gray-300 text-gray-600 transition hover:bg-gray-50 hover:text-gray-900';
 
     return `
-        <div class="${wrapperClasses}" ${isMobile ? 'data-crud-toolbar-mobile' : 'data-crud-toolbar-desktop'}>
-            <div class="${toolbarClasses}">
-                <div class="flex items-center gap-3" data-crud-toolbar>
-                    <div class="relative flex-1" data-crud-toolbar-search>
-                        <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">
-                            <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="m21 21-4.35-4.35m0 0A7.95 7.95 0 1 0 5.4 5.4a7.95 7.95 0 0 0 11.25 11.25Z" />
-                            </svg>
-                        </div>
-                        <input
-                            type="search"
-                            class="block w-full rounded-md border-gray-300 pl-10 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                            placeholder="${escapeHtml(config.labels.searchPlaceholder)}"
-                            aria-label="${escapeHtml(config.labels.searchPlaceholder)}"
-                            x-model="${config.state.search}"
-                            x-on:input.debounce.200ms="${config.handlers.searchInput}"
-                        />
-                        <div
-                            class="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 transition-opacity duration-150"
-                            :class="${config.state.loading} ? 'opacity-100' : 'opacity-0'"
-                            aria-hidden="true"
-                        >
-                            <svg class="h-4 w-4 animate-pulse" xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 24 24">
-                                <circle cx="12" cy="12" r="3" />
-                            </svg>
-                        </div>
+        <div class="${toolbarClasses}" ${isMobile ? 'data-crud-toolbar-mobile' : 'data-crud-toolbar-desktop'}>
+            <div class="flex items-center gap-3" data-crud-toolbar>
+                <div class="relative flex-1" data-crud-toolbar-search>
+                    <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">
+                        <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="m21 21-4.35-4.35m0 0A7.95 7.95 0 1 0 5.4 5.4a7.95 7.95 0 0 0 11.25 11.25Z" />
+                        </svg>
                     </div>
-
-                    ${config.permissions.showExport ? `
-                        <button
-                            type="button"
-                            class="${buttonClasses}"
-                            title="${escapeHtml(config.labels.exportTitle)}"
-                            aria-label="${escapeHtml(config.labels.exportAriaLabel)}"
-                            data-crud-toolbar-export-button
-                            x-on:click="${config.handlers.export}"
-                        >
-                            <svg class="h-5 w-5 shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M9 8.25H7.5A2.25 2.25 0 0 0 5.25 10.5v9A2.25 2.25 0 0 0 7.5 21.75h9A2.25 2.25 0 0 0 18.75 19.5v-9A2.25 2.25 0 0 0 16.5 8.25H15" />
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 15V3m0 12 3.75-3.75M12 15l-3.75-3.75" />
-                            </svg>
-                        </button>
-                    ` : ''}
-
-                    ${config.permissions.showImport ? `
-                        <button
-                            type="button"
-                            class="${buttonClasses}"
-                            title="${escapeHtml(config.labels.importTitle)}"
-                            aria-label="${escapeHtml(config.labels.importAriaLabel)}"
-                            data-crud-toolbar-import-button
-                            x-on:click="${config.handlers.import}"
-                        >
-                            <svg class="h-5 w-5 shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5" />
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 12 12 7.5m0 0L7.5 12m4.5-4.5V16.5" />
-                            </svg>
-                        </button>
-                    ` : ''}
-
-                    ${config.permissions.showCreate ? `
-                        <button
-                            type="button"
-                            class="${buttonClasses}"
-                            title="${escapeHtml(config.labels.createTitle)}"
-                            aria-label="${escapeHtml(config.labels.createAriaLabel)}"
-                            data-crud-toolbar-create-button
-                            x-on:click="${config.handlers.create}"
-                        >
-                            <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-                            </svg>
-                        </button>
-                    ` : ''}
+                    <input
+                        type="search"
+                        class="block w-full rounded-md border-gray-300 pl-10 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                        placeholder="${escapeHtml(config.labels.searchPlaceholder)}"
+                        aria-label="${escapeHtml(config.labels.searchPlaceholder)}"
+                        x-model="${config.state.search}"
+                        x-on:input.debounce.200ms="${config.handlers.searchInput}"
+                    />
+                    <div
+                        class="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 transition-opacity duration-150"
+                        :class="${config.state.loading} ? 'opacity-100' : 'opacity-0'"
+                        aria-hidden="true"
+                    >
+                        <svg class="h-4 w-4 animate-pulse" xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 24 24">
+                            <circle cx="12" cy="12" r="3" />
+                        </svg>
+                    </div>
                 </div>
+
+                ${config.permissions.showExport ? `
+                    <button
+                        type="button"
+                        class="${buttonClasses}"
+                        title="${escapeHtml(config.labels.exportTitle)}"
+                        aria-label="${escapeHtml(config.labels.exportAriaLabel)}"
+                        data-crud-toolbar-export-button
+                        x-on:click="${config.handlers.export}"
+                    >
+                        <svg class="h-5 w-5 shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M9 8.25H7.5A2.25 2.25 0 0 0 5.25 10.5v9A2.25 2.25 0 0 0 7.5 21.75h9A2.25 2.25 0 0 0 18.75 19.5v-9A2.25 2.25 0 0 0 16.5 8.25H15" />
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 15V3m0 12 3.75-3.75M12 15l-3.75-3.75" />
+                        </svg>
+                    </button>
+                ` : ''}
+
+                ${config.permissions.showImport ? `
+                    <button
+                        type="button"
+                        class="${buttonClasses}"
+                        title="${escapeHtml(config.labels.importTitle)}"
+                        aria-label="${escapeHtml(config.labels.importAriaLabel)}"
+                        data-crud-toolbar-import-button
+                        x-on:click="${config.handlers.import}"
+                    >
+                        <svg class="h-5 w-5 shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5" />
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 12 12 7.5m0 0L7.5 12m4.5-4.5V16.5" />
+                        </svg>
+                    </button>
+                ` : ''}
+
+                ${config.permissions.showCreate ? `
+                    <button
+                        type="button"
+                        class="${buttonClasses}"
+                        title="${escapeHtml(config.labels.createTitle)}"
+                        aria-label="${escapeHtml(config.labels.createAriaLabel)}"
+                        data-crud-toolbar-create-button
+                        x-on:click="${config.handlers.create}"
+                    >
+                        <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                        </svg>
+                    </button>
+                ` : ''}
             </div>
         </div>
     `;
@@ -229,14 +226,15 @@ const renderDesktopTable = (config) => {
     const columnsMarkup = config.columns.map((column) => renderCellContent(config, column)).join('');
 
     return `
-        <div class="hidden md:block">
-            ${renderToolbar(config, 'desktop')}
-            <div class="max-h-[36rem] overflow-y-auto" data-crud-records-scroll>
+        <div class="hidden h-full min-h-0 md:block">
+            <div class="flex h-full min-h-0 flex-col">
+                ${renderToolbar(config, 'desktop')}
+                <div class="min-h-0 flex-1 overflow-y-auto" data-crud-records-scroll>
                 <table class="min-w-full divide-y divide-gray-100" data-crud-table>
-                    <thead class="sticky top-0 z-10 bg-white">
+                    <thead class="bg-white">
                         <tr>
                             <template x-for="column in columns" :key="\`header-\${column}\`">
-                                <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                                <th class="sticky top-0 z-10 bg-white px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
                                     <template x-if="isSortableColumn(column)">
                                         <button type="button" class="inline-flex items-center gap-2 text-left" x-on:click="${config.handlers.toggleSort}">
                                             <span x-text="columnHeader(column)"></span>
@@ -248,7 +246,7 @@ const renderDesktopTable = (config) => {
                                     </template>
                                 </th>
                             </template>
-                            <th class="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">
+                            <th class="sticky top-0 z-10 bg-white px-6 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">
                                 <span class="sr-only">Actions</span>
                             </th>
                         </tr>
@@ -275,6 +273,7 @@ const renderDesktopTable = (config) => {
                         </template>
                     </tbody>
                 </table>
+                </div>
             </div>
         </div>
     `;
@@ -349,10 +348,10 @@ const renderMobileCards = (config) => {
     const bodyExpression = config.mobileCard.bodyExpression;
 
     return `
-        <div class="md:hidden" data-crud-mobile-cards>
-            ${renderToolbar(config, 'mobile')}
-
-            <div class="max-h-[36rem] overflow-y-auto p-4" data-crud-records-scroll>
+        <div class="h-full min-h-0 md:hidden" data-crud-mobile-cards>
+            <div class="flex h-full min-h-0 flex-col">
+                ${renderToolbar(config, 'mobile')}
+                <div class="min-h-0 flex-1 overflow-y-auto p-4" data-crud-records-scroll>
                 <div class="space-y-3 transition-opacity duration-150" :class="${config.state.loading} ? 'opacity-80' : 'opacity-100'">
                     <div
                         x-show="!${config.state.loading} && ${config.state.records}.length === 0"
@@ -378,14 +377,14 @@ const renderMobileCards = (config) => {
                                     </template>
                                 ` : ''}
 
-                                <div class="min-w-0 flex-1">
-                                    <div class="flex items-start justify-between gap-3">
-                                        <div class="min-w-0">
-                                            <p class="truncate text-sm font-medium text-gray-900" x-text="${config.mobileCard.titleExpression}"></p>
+                                <div class="min-w-0 flex flex-1 flex-col">
+                                    <div class="flex min-w-0 items-start gap-3">
+                                        <div class="min-w-0 flex-1 overflow-hidden">
+                                            <p class="block truncate text-sm font-medium text-gray-900" x-text="${config.mobileCard.titleExpression}"></p>
                                             ${subtitleExpression !== '' ? `<p class="mt-1 text-sm text-gray-600" x-text="${subtitleExpression}"></p>` : ''}
                                         </div>
 
-                                        ${renderActionCell(config)}
+                                        ${renderActionCell(config, 'ml-auto shrink-0')}
                                     </div>
 
                                     ${bodyExpression !== '' ? `<p class="mt-3 text-sm text-gray-700" x-text="${bodyExpression}"></p>` : ''}
@@ -393,6 +392,7 @@ const renderMobileCards = (config) => {
                             </div>
                         </div>
                     </template>
+                </div>
                 </div>
             </div>
         </div>
@@ -407,7 +407,7 @@ export function mountCrudRenderer(targetEl, config) {
     const normalized = normalizeRendererConfig(config);
 
     targetEl.innerHTML = `
-        <div class="rounded-lg border border-gray-100 bg-white shadow-sm" data-crud-renderer>
+        <div class="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-gray-100 bg-white shadow-sm" data-crud-renderer>
             <div class="border-b border-gray-100 px-6 py-4">
                 <p class="text-sm text-red-600" x-show="${normalized.state.error}" x-text="${normalized.state.error}"></p>
             </div>

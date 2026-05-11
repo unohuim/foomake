@@ -1,0 +1,52 @@
+name: Import Slide-Over Preview Pattern
+type: UI Pattern
+location:
+  - resources/views/sales/products/index.blade.php
+  - resources/js/pages/sales-products-index.js
+purpose: Define a reusable import slide-over pattern that auto-preview loads rows from the selected source, keeps bulk options and preview records in accordions, and preserves page-scoped preview selection behavior without changing backend import authority.
+when_to_use:
+  - Building a page-scoped import slide-over that previews external or file-backed records before submit
+  - Reusing an import workflow that needs local source selection, duplicate-aware preview visibility, and record-level overrides in the same panel
+  - Migrating an import panel away from a manual preview trigger while keeping server-side preview and import contracts unchanged
+when_not_to_use:
+  - Simple file uploads that do not preview rows before submit
+  - Import flows that require global JavaScript state, client-owned routing, or server-side selection authority to move into the browser
+  - Static confirm dialogs or one-step actions with no preview list
+rules:
+  - Preview loading must auto-start when a connected external source is selected or when a valid local file has been read.
+  - The slide-over must not require a manual Load Preview button.
+  - Bulk options and preview records must render as separate accordions, with bulk options default collapsed and preview records default open.
+  - Preview rows must render as responsive cards rather than a table.
+  - Preview row selection, search text, duplicate visibility, and row override state must remain page-scoped local state.
+  - duplicate rows must remain in DOM state and selection state even when hidden from view.
+  - Duplicate rows must be visually hidden by default and revealed only when the duplicate-visibility control is enabled.
+  - Mass-select behavior must operate only on currently visible non-duplicate rows unless an approved architecture entry documents otherwise.
+  - The preview records container is the only scrollable region inside the import slide-over; header, source controls, and bulk options remain fixed in place within the panel.
+  - Preview filtering and visibility controls must not change backend preview payloads or import domain behavior.
+  - Validation and import authority remain owned by backend preview and import endpoints.
+  - No global JavaScript state may be introduced to implement this pattern.
+public_interface:
+  - docs/architecture/ui/ImportSlideOverPreviewPattern.yaml
+  - data-products-import-bulk-options-accordion
+  - data-products-import-preview-records-accordion
+  - data-products-import-preview-search
+  - data-products-import-show-duplicates
+  - data-products-import-preview-scroll
+example_usage: |
+  <div class="flex min-h-0 flex-1 flex-col rounded-lg border border-gray-200 bg-white">
+      <button type="button" data-products-import-preview-records-accordion>
+          Preview Records
+      </button>
+
+      <div class="flex min-h-0 flex-1 flex-col" x-show="previewRecordsAccordionOpen">
+          <input type="search" x-model="previewSearch" data-products-import-preview-search />
+
+          <div class="h-full overflow-y-auto" data-products-import-preview-scroll>
+              <template x-for="row in previewRows" :key="row.external_id">
+                  <article x-show="rowVisibleInPreview(row)">
+                      <span x-text="previewStatusLabel(row)"></span>
+                  </article>
+              </template>
+          </div>
+      </div>
+  </div>

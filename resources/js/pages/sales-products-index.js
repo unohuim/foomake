@@ -140,12 +140,19 @@ export function mount(rootEl, payload) {
         importValidationErrors: {},
         hasLocalFileRows: false,
         selectedFileName: '',
+        cachedFileSources: [],
+        nextCachedFileSourceId: 1,
+        previewSearch: '',
+        showDuplicateRows: false,
+        bulkOptionsAccordionOpen: false,
+        previewRecordsAccordionOpen: true,
         bulkManufacturable: false,
         bulkPurchasable: false,
         bulkBaseUomId: '',
         createFulfillmentRecipes: true,
         isLoadingPreview: false,
         loadingPreviewLabel,
+        previewLoadingMessage: loadingPreviewLabel,
         exportScope: 'current',
         exportError: '',
         toast: {
@@ -434,11 +441,19 @@ export function mount(rootEl, payload) {
             this.importValidationErrors = {};
             this.hasLocalFileRows = false;
             this.selectedFileName = '';
+            this.cachedFileSources = [];
+            this.nextCachedFileSourceId = 1;
+            this.previewSearch = '';
+            this.showDuplicateRows = false;
+            this.bulkOptionsAccordionOpen = false;
+            this.previewRecordsAccordionOpen = true;
             this.isLoadingPreview = false;
+            this.previewLoadingMessage = loadingPreviewLabel;
             this.bulkManufacturable = false;
             this.bulkPurchasable = false;
             this.bulkBaseUomId = '';
             this.createFulfillmentRecipes = true;
+            this.clearImportFileInput();
         },
         resetExportState() {
             this.exportScope = 'current';
@@ -451,14 +466,91 @@ export function mount(rootEl, payload) {
             this.importError = '';
             this.importValidationErrors = {};
             this.hasLocalFileRows = false;
-            this.selectedFileName = '';
             this.isLoadingPreview = false;
+            this.previewLoadingMessage = loadingPreviewLabel;
+            this.previewSearch = '';
+            this.showDuplicateRows = false;
+
+            if (!this.selectedSource) {
+                return;
+            }
+
+            if (this.isFileUploadMode()) {
+                this.openImportFilePicker();
+                return;
+            }
+
+            if (this.isCachedFileSource()) {
+                this.restoreCachedFilePreview();
+                return;
+            }
+
+            if (!this.selectedSourceEnabled() || !this.sourceConnected()) {
+                return;
+            }
+
+            this.loadPreview({
+                source: this.selectedSource,
+                loadingMessage: 'Loading WooCommerce preview...',
+            });
         },
         isFileUploadMode() {
             return this.selectedSource === 'file-upload';
         },
+        isCachedFileSource() {
+            return this.selectedSource.startsWith('file-upload-cached:');
+        },
         importSourceValue() {
-            return this.isFileUploadMode() ? null : this.selectedSource;
+            return this.isFileUploadMode() || this.isCachedFileSource() ? null : this.selectedSource;
+        },
+        clearImportFileInput() {
+            if (this.$refs.importFileInput) {
+                this.$refs.importFileInput.value = '';
+            }
+        },
+        openImportFilePicker() {
+            this.$nextTick(() => {
+                this.clearImportFileInput();
+                this.$refs.importFileInput?.click();
+            });
+        },
+        sourceOptionLabel(source) {
+            return source?.label || '';
+        },
+        currentCachedFileSource() {
+            if (!this.isCachedFileSource()) {
+                return null;
+            }
+
+            return this.cachedFileSources.find((fileSource) => fileSource.value === this.selectedSource) || null;
+        },
+        restoreCachedFilePreview() {
+            const fileSource = this.currentCachedFileSource();
+
+            if (!fileSource) {
+                this.selectedSource = '';
+                return;
+            }
+
+            this.selectedFileName = fileSource.label;
+            this.previewRows = fileSource.rows.map((row) => normalizePreviewRow({
+                ...row,
+            }));
+            this.hasLocalFileRows = this.previewRows.length > 0;
+        },
+        cacheCurrentFilePreviewRows(rows) {
+            const normalizedRows = rows.map((row) => ({
+                ...row,
+            }));
+            const value = `file-upload-cached:${this.nextCachedFileSourceId}`;
+
+            this.nextCachedFileSourceId += 1;
+            this.cachedFileSources.push({
+                value,
+                label: this.selectedFileName,
+                rows: normalizedRows,
+            });
+            this.selectedSource = value;
         },
         async handleLocalFileChange(event) {
             const file = event?.target?.files?.[0];
@@ -469,13 +561,17 @@ export function mount(rootEl, payload) {
             this.importValidationErrors = {};
             this.previewRows = [];
             this.hasLocalFileRows = false;
-            this.selectedFileName = '';
 
             if (!file) {
+                if (this.cachedFileSources.length === 0) {
+                    this.selectedSource = '';
+                }
+
                 return;
             }
 
             this.selectedFileName = file.name || '';
+            this.selectedSource = 'file-upload';
 
             if (!file.name.toLowerCase().endsWith('.csv')) {
                 this.errors.file = ['Please choose a CSV file.'];
@@ -494,37 +590,15 @@ export function mount(rootEl, payload) {
                 if (!this.endpoints.importPreview) {
                     this.previewRows = parsedRows.map((row) => normalizePreviewRow(row));
                     this.hasLocalFileRows = true;
+                    this.cacheCurrentFilePreviewRows(this.previewRows);
                     return;
                 }
 
-                const response = await fetch(this.endpoints.importPreview, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        Accept: 'application/json',
-                        'X-CSRF-TOKEN': this.csrfToken,
-                    },
-                    body: JSON.stringify({
-                        source: 'file-upload',
-                        rows: parsedRows,
-                    }),
+                await this.loadPreview({
+                    source: 'file-upload',
+                    rows: parsedRows,
+                    loadingMessage: 'Loading file preview...',
                 });
-
-                if (response.status === 422) {
-                    const data = await response.json();
-                    this.errors.file = [data.message || 'The selected CSV file could not be previewed.'];
-                    this.importValidationErrors = data.errors || {};
-                    return;
-                }
-
-                if (!response.ok) {
-                    this.errors.file = ['The selected CSV file could not be previewed.'];
-                    return;
-                }
-
-                const data = await response.json();
-                this.previewRows = (data.data?.rows || []).map((row) => normalizePreviewRow(row));
-                this.hasLocalFileRows = true;
             } catch (error) {
                 this.errors.file = ['The selected CSV file could not be read.'];
             }
@@ -689,6 +763,9 @@ export function mount(rootEl, payload) {
         selectedSourceStatusLabel() {
             return this.selectedSourceMeta()?.status_label || '';
         },
+        hasSelectedImportSource() {
+            return this.selectedSource !== '';
+        },
         rowError(index, field) {
             const key = `rows.${index}.${field}`;
             const errors = this.importValidationErrors[key];
@@ -701,7 +778,6 @@ export function mount(rootEl, payload) {
         rowProductErrors(index) {
             return [
                 this.rowError(index, 'name'),
-                this.rowError(index, 'external_id'),
             ].filter((value) => value !== '');
         },
         rowHasProductErrors(index) {
@@ -748,7 +824,99 @@ export function mount(rootEl, payload) {
                 is_purchasable: this.resolvedRowPurchasable(row),
             };
         },
-        async loadPreview() {
+        previewStatusLabel(row) {
+            if (row.is_duplicate) {
+                return 'Duplicate';
+            }
+
+            return row.is_active ? 'Active' : 'Inactive';
+        },
+        duplicateRowCount() {
+            return this.previewRows.filter((row) => row.is_duplicate).length;
+        },
+        previewSearchText(row) {
+            return [
+                row.name,
+                row.sku,
+                row.external_id,
+                row.external_source,
+                row.price,
+                this.previewStatusLabel(row),
+            ]
+                .filter((value) => String(value || '').trim() !== '')
+                .join(' ')
+                .toLowerCase();
+        },
+        rowMatchesPreviewSearch(row) {
+            const search = this.previewSearch.trim().toLowerCase();
+
+            if (search === '') {
+                return true;
+            }
+
+            return this.previewSearchText(row).includes(search);
+        },
+        rowVisibleInPreview(row) {
+            if (!this.rowMatchesPreviewSearch(row)) {
+                return false;
+            }
+
+            if (!this.showDuplicateRows && row.is_duplicate) {
+                return false;
+            }
+
+            return true;
+        },
+        visibleSelectablePreviewRows() {
+            return this.previewRows.filter((row) => this.rowVisibleInPreview(row) && !row.is_duplicate);
+        },
+        visiblePreviewRowsCount() {
+            return this.previewRows.filter((row) => this.rowVisibleInPreview(row)).length;
+        },
+        hasVisiblePreviewRows() {
+            return this.visiblePreviewRowsCount() > 0;
+        },
+        allVisibleSelectableRowsSelected() {
+            const rows = this.visibleSelectablePreviewRows();
+
+            return rows.length > 0 && rows.every((row) => row.selected);
+        },
+        toggleVisibleRowSelection(event) {
+            const shouldSelect = Boolean(event?.target?.checked);
+
+            this.visibleSelectablePreviewRows().forEach((row) => {
+                row.selected = shouldSelect;
+            });
+        },
+        selectedPreviewRows() {
+            return this.previewRows.filter((row) => row.selected);
+        },
+        selectedVisiblePreviewRows() {
+            return this.previewRows.filter((row) => row.selected && this.rowVisibleInPreview(row));
+        },
+        previewEmptyStateTitle() {
+            if (this.previewRows.length === 0) {
+                return 'No preview records found';
+            }
+
+            return 'No visible preview records';
+        },
+        previewEmptyStateMessage() {
+            if (this.previewRows.length === 0) {
+                return 'No importable products were returned for the selected source.';
+            }
+
+            if (!this.showDuplicateRows && this.duplicateRowCount() > 0) {
+                return 'All preview rows are currently hidden as duplicates. Enable Show Duplicates to review them.';
+            }
+
+            return 'Adjust the current filters to show matching preview records.';
+        },
+        async loadPreview(options = {}) {
+            const previewSource = options.source || this.selectedSource;
+            const previewRows = Array.isArray(options.rows) ? options.rows : null;
+            const loadingMessage = options.loadingMessage || loadingPreviewLabel;
+
             if (!this.endpoints.importPreview) {
                 this.previewError = 'Unable to load preview.';
                 return;
@@ -758,6 +926,10 @@ export function mount(rootEl, payload) {
             this.importError = '';
             this.importValidationErrors = {};
             this.isLoadingPreview = true;
+            this.previewLoadingMessage = loadingMessage;
+            this.previewSearch = '';
+            this.showDuplicateRows = false;
+            this.previewRows = [];
 
             try {
                 const response = await fetch(this.endpoints.importPreview, {
@@ -768,33 +940,58 @@ export function mount(rootEl, payload) {
                         'X-CSRF-TOKEN': this.csrfToken,
                     },
                     body: JSON.stringify({
-                        source: this.selectedSource,
+                        source: previewSource,
+                        rows: previewRows,
                     }),
                 });
 
                 if (response.status === 422) {
                     const data = await response.json();
-                    this.previewError = data.message || 'Unable to load preview.';
-                    this.errors.source = Array.isArray(data.errors?.source) ? data.errors.source : [];
+                    const errorMessage = data.message || 'Unable to load preview.';
+
+                    if (previewSource === 'file-upload') {
+                        this.errors.file = [errorMessage];
+                    } else {
+                        this.previewError = errorMessage;
+                        this.errors.source = Array.isArray(data.errors?.source) ? data.errors.source : [];
+                    }
+
                     return;
                 }
 
                 if (!response.ok) {
-                    this.previewError = 'Unable to load preview.';
+                    if (previewSource === 'file-upload') {
+                        this.errors.file = ['The selected CSV file could not be previewed.'];
+                    } else {
+                        this.previewError = 'Unable to load preview.';
+                    }
+
                     return;
                 }
 
                 const data = await response.json();
                 this.previewRows = (data.data?.rows || []).map((row) => normalizePreviewRow({
                     ...row,
-                    external_source: this.importSourceValue() || '',
+                    external_source: previewSource === 'file-upload'
+                        ? (row.external_source || '')
+                        : (previewSource || ''),
                     is_manufacturable: null,
                     is_purchasable: null,
                 }));
+                this.hasLocalFileRows = previewSource === 'file-upload';
+
+                if (previewSource === 'file-upload') {
+                    this.cacheCurrentFilePreviewRows(this.previewRows);
+                }
             } catch (error) {
-                this.previewError = 'Unable to load preview.';
+                if (previewSource === 'file-upload') {
+                    this.errors.file = ['The selected CSV file could not be previewed.'];
+                } else {
+                    this.previewError = 'Unable to load preview.';
+                }
             } finally {
                 this.isLoadingPreview = false;
+                this.previewLoadingMessage = loadingPreviewLabel;
             }
         },
         async submitImport() {
@@ -808,8 +1005,7 @@ export function mount(rootEl, payload) {
             this.errors = emptyErrors();
             const importSource = this.importSourceValue();
 
-            const rows = this.previewRows
-                .filter((row) => row.selected)
+            const rows = this.selectedVisiblePreviewRows()
                 .map((row) => this.buildImportRowPayload(row, importSource));
 
             const response = await fetch(this.endpoints.importStore, {

@@ -1735,6 +1735,51 @@ Confirmations or single-field actions.
 
 ---
 
+### Import Slide-Over Preview Pattern
+
+**Name:** Import Slide-Over Preview Pattern  
+**Type:** UI Pattern  
+**Location:**  
+- `docs/architecture/ui/ImportSlideOverPreviewPattern.yaml`  
+- `resources/views/sales/products/index.blade.php`  
+- `resources/js/pages/sales-products-index.js`  
+
+**Purpose:**  
+Provide a reusable import slide-over pattern where preview loads automatically from the chosen source, bulk options and preview records use accordions, and the preview list stays card-based and page-scoped.
+
+**When to Use:**  
+Preview-first import slide-overs that combine source selection, duplicate-aware row visibility, and per-row overrides without leaving the current page.
+
+**When Not to Use:**  
+One-step uploads with no preview, or workflows that require global JavaScript state or client-owned import authority.
+
+**Public Interface:**  
+- `data-products-import-bulk-options-accordion`  
+- `data-products-import-preview-records-accordion`  
+- `data-products-import-preview-search`  
+- `data-products-import-show-duplicates`  
+- `data-products-import-preview-scroll`  
+
+**Example Usage:**  
+```blade
+<button type="button" data-products-import-preview-records-accordion>
+    Preview Records
+</button>
+
+<div data-products-import-preview-scroll>
+    <article x-show="rowVisibleInPreview(row)">
+        <p class="truncate" x-text="row.name"></p>
+    </article>
+</div>
+```
+
+Notes:
+- Bulk Import Options defaults collapsed while Preview Records accordion defaults open.
+- Preview records render as responsive cards; duplicate rows remain in DOM state and are hidden by default until explicitly shown.
+- The preview records area is the only scrollable region inside the slide-over.
+
+---
+
 ### Row Actions Dropdown Pattern
 
 **Name:** Row Actions Dropdown Pattern  
@@ -2142,15 +2187,25 @@ Static pages, or domain workflows that exceed generic CRUD concerns.
 - Sales Products  
 - Sales Customers
 
+**Key Rules:**  
+- Blade index shells remain mount-only for CRUD concerns and must provide a bounded viewport-height container for the shared CRUD module.  
+- `data-crud-root` must fill the available bounded height with `h-full` / `min-h-0`-compatible layout so the shared renderer can size its records pane correctly.  
+- The shared CRUD renderer owns toolbar layout, search input, create/import/export buttons, sticky desktop headers, record table/cards, empty states, and row action menus.  
+- Toolbar and page chrome remain outside the records scroller; the records/results area is the only scrollable region for CRUD list rendering.  
+- Desktop and mobile variants follow the same scroll-containment contract: header/toolbar stays fixed in the component shell while only records scroll.  
+
 **Example Usage:**  
 ```blade
 <div
+    class="flex h-[calc(100vh-8rem)] min-h-0 flex-col overflow-hidden"
     data-page="sales-products-index"
     data-payload="sales-products-index-payload"
     data-crud-config='@json($crudConfig)'
     x-data="salesProductsIndex"
 >
-    <div data-crud-root></div>
+    <div class="mx-auto flex h-full min-h-0 w-full max-w-7xl flex-1 flex-col overflow-hidden sm:px-6 lg:px-8">
+        <div class="flex h-full min-h-0 flex-1 flex-col" data-crud-root></div>
+    </div>
 </div>
 ```
 
