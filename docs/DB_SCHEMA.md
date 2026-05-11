@@ -590,8 +590,9 @@ Migrations remain the **sole source of truth**.
 | is_purchasable    | boolean   | No       | Default false             |
 | is_sellable       | boolean   | No       | Default false             |
 | is_manufacturable | boolean   | No       | Default false             |
-| default_price_cents | integer | Yes      | Unsigned                  |
+| default_price_cents | integer | Yes      | Minor currency units      |
 | default_price_currency_code | char(3) | Yes | —                        |
+| image_url         | string    | Yes      | Remote image URL only; no local image storage |
 | external_source   | string    | Yes      | Prep-only external source key |
 | external_id       | string    | Yes      | Prep-only external identity   |
 | created_at        | timestamp | Yes      | —                         |

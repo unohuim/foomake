@@ -29,6 +29,7 @@ class Item extends Model
         'is_manufacturable',
         'default_price_cents',
         'default_price_currency_code',
+        'image_url',
         'external_source',
         'external_id',
     ];

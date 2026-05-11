@@ -85,6 +85,14 @@ export function mount(rootEl, payload) {
         ...row,
         selected: row.selected !== false,
         sku: row.sku || '',
+        default_price_cents: Object.prototype.hasOwnProperty.call(row, 'default_price_cents')
+            ? row.default_price_cents
+            : null,
+        image_url: Object.prototype.hasOwnProperty.call(row, 'image_url')
+            && typeof row.image_url === 'string'
+            && row.image_url.trim() !== ''
+            ? row.image_url
+            : null,
         external_source: row.external_source || '',
         base_uom_id: row.base_uom_id ? String(row.base_uom_id) : '',
         is_sellable: row.is_sellable !== false,
@@ -648,6 +656,8 @@ export function mount(rootEl, payload) {
                         name: record.name,
                         sku: '',
                         price: record.default_price_amount,
+                        default_price_cents: null,
+                        image_url: null,
                         is_active: this.csvBoolean(record.is_active, true),
                         is_sellable: true,
                         selected: true,
@@ -778,6 +788,7 @@ export function mount(rootEl, payload) {
         rowProductErrors(index) {
             return [
                 this.rowError(index, 'name'),
+                this.rowError(index, 'base_uom_id'),
             ].filter((value) => value !== '');
         },
         rowHasProductErrors(index) {
@@ -817,6 +828,12 @@ export function mount(rootEl, payload) {
                 external_source: row.external_source || importSource,
                 name: row.name,
                 sku: row.sku,
+                default_price_cents: Object.prototype.hasOwnProperty.call(row, 'default_price_cents')
+                    ? row.default_price_cents
+                    : null,
+                image_url: Object.prototype.hasOwnProperty.call(row, 'image_url')
+                    ? row.image_url
+                    : null,
                 base_uom_id: row.base_uom_id === '' ? null : Number(row.base_uom_id),
                 is_active: Boolean(row.is_active),
                 is_sellable: true,
@@ -1028,9 +1045,7 @@ export function mount(rootEl, payload) {
 
             if (response.status === 422) {
                 const data = await response.json();
-                this.importError = Object.keys(data.errors || {}).length === 0
-                    ? (data.message || 'Unable to import products.')
-                    : '';
+                this.importError = data.message || 'Unable to import products.';
                 this.importValidationErrors = data.errors || {};
                 this.errors.source = Array.isArray(data.errors?.source) ? data.errors.source : [];
                 return;

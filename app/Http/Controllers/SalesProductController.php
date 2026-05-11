@@ -381,8 +381,19 @@ class SalesProductController extends Controller
         $item->is_purchasable = $isPurchasable;
         $item->is_sellable = true;
         $item->is_manufacturable = $isManufacturable;
-        $item->default_price_cents = null;
-        $item->default_price_currency_code = null;
+
+        if (array_key_exists('default_price_cents', $row)) {
+            $defaultPriceCents = $this->resolvedImportedDefaultPriceCents($row);
+            $item->default_price_cents = $defaultPriceCents;
+            $item->default_price_currency_code = $defaultPriceCents === null
+                ? null
+                : $this->tenantCurrencyCodeForUser($request->user());
+        }
+
+        if (array_key_exists('image_url', $row)) {
+            $item->image_url = $this->resolvedImportedImageUrl($row);
+        }
+
         $item->save();
 
         return $item;
@@ -542,7 +553,7 @@ class SalesProductController extends Controller
             ],
             'price' => $this->formatCentsToAmount($item->default_price_cents),
             'currency' => $item->default_price_currency_code,
-            'image_url' => null,
+            'image_url' => $item->image_url,
             'is_purchasable' => $item->is_purchasable,
             'is_manufacturable' => $item->is_manufacturable,
         ];
@@ -772,6 +783,40 @@ class SalesProductController extends Controller
         }
 
         return ((int) $amount) * 100;
+    }
+
+    /**
+     * Resolve the imported default price cents from a row payload.
+     *
+     * @param  array<string, mixed>  $row
+     */
+    private function resolvedImportedDefaultPriceCents(array $row): ?int
+    {
+        if (! array_key_exists('default_price_cents', $row) || $row['default_price_cents'] === null || $row['default_price_cents'] === '') {
+            return null;
+        }
+
+        return (int) $row['default_price_cents'];
+    }
+
+    /**
+     * Resolve the imported image URL from a row payload.
+     *
+     * @param  array<string, mixed>  $row
+     */
+    private function resolvedImportedImageUrl(array $row): ?string
+    {
+        $imageUrl = trim((string) ($row['image_url'] ?? ''));
+
+        return $imageUrl === '' ? null : $imageUrl;
+    }
+
+    /**
+     * Resolve the tenant currency code used for imported planning prices.
+     */
+    private function tenantCurrencyCodeForUser(?\App\Models\User $user): string
+    {
+        return Str::upper((string) ($user?->tenant?->currency_code ?: config('app.currency_code', 'USD')));
     }
 
     /**

@@ -29,6 +29,9 @@ beforeEach(function () {
                 'status' => 'publish',
                 'sku' => 'WC-VARIATION-2001',
                 'price' => '19.95',
+                'prices' => [
+                    'price' => '1995',
+                ],
                 'attributes' => [
                     ['name' => 'Size', 'option' => 'Large'],
                 ],
@@ -42,6 +45,13 @@ beforeEach(function () {
                 'status' => 'publish',
                 'sku' => 'WC-PREVIEW-1001',
                 'price' => '12.50',
+                'prices' => [
+                    'price' => '1250',
+                ],
+                'images' => [
+                    ['src' => 'https://cdn.example.test/external/woo-preview-1001-primary.jpg'],
+                    ['src' => 'https://cdn.example.test/external/woo-preview-1001-secondary.jpg'],
+                ],
             ],
             [
                 'id' => 2000,
@@ -50,6 +60,9 @@ beforeEach(function () {
                 'status' => 'publish',
                 'sku' => 'WC-VARIABLE-2000',
                 'price' => '',
+                'prices' => [
+                    'price' => '',
+                ],
             ],
             [
                 'id' => 1003,
@@ -58,6 +71,9 @@ beforeEach(function () {
                 'status' => 'draft',
                 'sku' => 'WC-PREVIEW-1003',
                 'price' => '8.00',
+                'prices' => [
+                    'price' => '800',
+                ],
             ],
         ], 200),
     ]);
@@ -305,6 +321,9 @@ it('12. preview rows include the importable product shape needed by the slide-ov
         'external_source' => 'woocommerce',
         'sku' => 'WC-PREVIEW-1001',
         'name' => 'Woo Preview Product 1001',
+        'price' => '12.50',
+        'default_price_cents' => 1250,
+        'image_url' => 'https://cdn.example.test/external/woo-preview-1001-primary.jpg',
         'is_active' => true,
         'is_sellable' => true,
         'is_manufacturable' => false,
@@ -312,6 +331,22 @@ it('12. preview rows include the importable product shape needed by the slide-ov
         'is_duplicate' => false,
         'selected' => true,
     ]);
+});
+
+it('12a. preview rows safely expose null image url while preserving normalized cents when Woo data is present', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermission)($user, 'inventory-products-manage');
+    ($this->connectSource)($user);
+
+    $response = ($this->previewSource)($user)->assertOk();
+    $row = collect($response->json('data.rows'))->firstWhere('external_id', '2001');
+
+    expect(array_key_exists('default_price_cents', $row))->toBeTrue()
+        ->and(array_key_exists('image_url', $row))->toBeTrue()
+        ->and($row['image_url'])->toBeNull()
+        ->and($row['default_price_cents'] ?? null)->toBe(1995);
 });
 
 it('13. import rejects invalid sources', function () {
@@ -422,6 +457,26 @@ it('16b. authorized import requests with empty rows return 422', function () {
         'rows' => [],
     ])->assertUnprocessable()
         ->assertJsonValidationErrors(['rows']);
+});
+
+it('16c. import rejects invalid default price cents values according to the existing validation pattern', function () {
+    $tenant = ($this->makeTenant)();
+    $uom = ($this->makeUom)($tenant);
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermission)($user, 'inventory-products-manage');
+    ($this->connectSource)($user);
+
+    ($this->importRows)($user, [
+        'source' => 'woocommerce',
+        'rows' => [[
+            'external_id' => 'bad-price-1006',
+            'name' => 'Bad Price Product',
+            'base_uom_id' => $uom->id,
+            'default_price_cents' => '12.3x',
+        ]],
+    ])->assertUnprocessable()
+        ->assertJsonValidationErrors(['rows.0.default_price_cents']);
 });
 
 it('17. import creates a normal items row for each imported product', function () {
@@ -854,6 +909,141 @@ it('28. duplicate WooCommerce imports within the same tenant update the existing
             ->value('name'))->toBe('Updated Product');
 });
 
+it('28a. existing matched WooCommerce items update price without creating a duplicate', function () {
+    $tenant = ($this->makeTenant)();
+    $uom = ($this->makeUom)($tenant);
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermission)($user, 'inventory-products-manage');
+    ($this->connectSource)($user);
+
+    ($this->makeItem)($tenant, $uom, [
+        'name' => 'Priced Existing Product',
+        'is_sellable' => true,
+        'default_price_cents' => 500,
+        'default_price_currency_code' => 'USD',
+        'image_url' => 'https://cdn.example.test/original-price-test-image.jpg',
+        'external_source' => 'woocommerce',
+        'external_id' => 'dup-price-4002',
+    ]);
+
+    ($this->importRows)($user, [
+        'source' => 'woocommerce',
+        'rows' => [[
+            'external_id' => 'dup-price-4002',
+            'name' => 'Priced Existing Product Updated',
+            'sku' => 'DUP-PRICE-4002',
+            'default_price_cents' => 2599,
+            'base_uom_id' => $uom->id,
+        ]],
+    ])->assertCreated()
+        ->assertJsonPath('data.fulfillment_recipes_not_attempted_existing_item', 1);
+
+    expect(Item::query()
+        ->where('tenant_id', $tenant->id)
+        ->where('external_source', 'woocommerce')
+        ->where('external_id', 'dup-price-4002')
+        ->count())->toBe(1)
+        ->and(Item::query()
+            ->where('tenant_id', $tenant->id)
+            ->where('external_source', 'woocommerce')
+            ->where('external_id', 'dup-price-4002')
+            ->value('default_price_cents'))->toBe(2599)
+        ->and(Item::query()
+            ->where('tenant_id', $tenant->id)
+            ->where('external_source', 'woocommerce')
+            ->where('external_id', 'dup-price-4002')
+            ->value('image_url'))->toBe('https://cdn.example.test/original-price-test-image.jpg');
+});
+
+it('28b. existing matched WooCommerce items update image url without creating a duplicate', function () {
+    $tenant = ($this->makeTenant)();
+    $uom = ($this->makeUom)($tenant);
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermission)($user, 'inventory-products-manage');
+    ($this->connectSource)($user);
+
+    ($this->makeItem)($tenant, $uom, [
+        'name' => 'Imaged Existing Product',
+        'is_sellable' => true,
+        'default_price_cents' => 1550,
+        'default_price_currency_code' => 'USD',
+        'image_url' => 'https://cdn.example.test/old-image.jpg',
+        'external_source' => 'woocommerce',
+        'external_id' => 'dup-image-4003',
+    ]);
+
+    ($this->importRows)($user, [
+        'source' => 'woocommerce',
+        'rows' => [[
+            'external_id' => 'dup-image-4003',
+            'name' => 'Imaged Existing Product Updated',
+            'sku' => 'DUP-IMAGE-4003',
+            'image_url' => 'https://cdn.example.test/new-image.jpg',
+            'base_uom_id' => $uom->id,
+        ]],
+    ])->assertCreated()
+        ->assertJsonPath('data.fulfillment_recipes_not_attempted_existing_item', 1);
+
+    expect(Item::query()
+        ->where('tenant_id', $tenant->id)
+        ->where('external_source', 'woocommerce')
+        ->where('external_id', 'dup-image-4003')
+        ->count())->toBe(1)
+        ->and(Item::query()
+            ->where('tenant_id', $tenant->id)
+            ->where('external_source', 'woocommerce')
+            ->where('external_id', 'dup-image-4003')
+            ->value('image_url'))->toBe('https://cdn.example.test/new-image.jpg')
+        ->and(Item::query()
+            ->where('tenant_id', $tenant->id)
+            ->where('external_source', 'woocommerce')
+            ->where('external_id', 'dup-image-4003')
+            ->value('default_price_cents'))->toBe(1550);
+});
+
+it('28c. existing matched WooCommerce items update price and image url together without creating a duplicate', function () {
+    $tenant = ($this->makeTenant)();
+    $uom = ($this->makeUom)($tenant);
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermission)($user, 'inventory-products-manage');
+    ($this->connectSource)($user);
+
+    ($this->makeItem)($tenant, $uom, [
+        'name' => 'Fully Existing Product',
+        'is_sellable' => true,
+        'default_price_cents' => 100,
+        'default_price_currency_code' => 'USD',
+        'image_url' => 'https://cdn.example.test/old-full.jpg',
+        'external_source' => 'woocommerce',
+        'external_id' => 'dup-full-4004',
+    ]);
+
+    ($this->importRows)($user, [
+        'source' => 'woocommerce',
+        'rows' => [[
+            'external_id' => 'dup-full-4004',
+            'name' => 'Fully Existing Product Updated',
+            'sku' => 'DUP-FULL-4004',
+            'default_price_cents' => 4499,
+            'image_url' => 'https://cdn.example.test/new-full.jpg',
+            'base_uom_id' => $uom->id,
+        ]],
+    ])->assertCreated()
+        ->assertJsonPath('data.fulfillment_recipes_not_attempted_existing_item', 1);
+
+    $item = Item::query()
+        ->where('tenant_id', $tenant->id)
+        ->where('external_source', 'woocommerce')
+        ->where('external_id', 'dup-full-4004')
+        ->firstOrFail();
+
+    expect($item->default_price_cents)->toBe(4499)
+        ->and($item->image_url)->toBe('https://cdn.example.test/new-full.jpg');
+});
+
 it('29. transaction failure rolls back the whole import with no partial items persisted', function () {
     $tenant = ($this->makeTenant)();
     $uom = ($this->makeUom)($tenant);
@@ -933,4 +1123,16 @@ it('31. imported products appear on the manufacturing materials index after impo
 
 it('32. protects the invariant that no separate products table is introduced for imports', function () {
     expect(Schema::hasTable('products'))->toBeFalse();
+});
+
+it('33. items schema includes image url after the import schema extension', function () {
+    expect(Schema::hasColumn('items', 'image_url'))->toBeTrue();
+});
+
+it('34. items image url column is nullable', function () {
+    $columns = collect(DB::select("PRAGMA table_info('items')"));
+    $imageUrlColumn = $columns->firstWhere('name', 'image_url');
+
+    expect($imageUrlColumn)->not->toBeNull()
+        ->and((int) ($imageUrlColumn->notnull ?? 1))->toBe(0);
 });

@@ -79,6 +79,17 @@ class ImportExternalProductsRequest extends FormRequest
                 'string',
                 'max:255',
             ],
+            'rows.*.default_price_cents' => [
+                'nullable',
+                'integer',
+                'min:0',
+            ],
+            'rows.*.image_url' => [
+                'nullable',
+                'string',
+                'url',
+                'max:2048',
+            ],
             'rows.*.external_source' => [
                 'nullable',
                 'string',

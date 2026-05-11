@@ -7,7 +7,7 @@ use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
 
 /**
- * Perform raw WooCommerce REST API requests.
+ * Perform WooCommerce verification and preview requests.
  */
 class WooCommerceClient
 {
@@ -144,4 +144,5 @@ class WooCommerceClient
             ->acceptJson()
             ->withBasicAuth($consumerKey, $consumerSecret);
     }
+
 }

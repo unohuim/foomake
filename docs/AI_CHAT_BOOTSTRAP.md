@@ -5,7 +5,6 @@ This file is the single source to paste at the beginning of new LLM chats for fu
 Paste the entire content (or as much as context allows) when starting a session.
 
 ## docs/AI_CHAT_CODEX.md
-
 # AI Chat Bootstrap (READ FIRST)
 
 You are assisting with development on this repository.
@@ -237,7 +236,6 @@ If unsure, **stop immediately and ask**.
 - The **smallest possible change per PR**
 
 ## docs/PR2_ROADMAP.md
-
 # PR2_ROADMAP — UI + Domain Completion (Post-PR-006)
 
 This roadmap defines the **second major phase** of work: completing **Items, Inventory, Suppliers, and Manufacturing**
@@ -1531,7 +1529,6 @@ Introduce a UoM-level display precision field and enforce consistent quantity fo
 - JavaScript formatting or UI-only overrides per view
 
 ## docs/CONVENTIONS.md
-
 # Conventions
 
 This document defines the **mandatory development conventions** for this repository.  
@@ -1786,7 +1783,6 @@ These rules apply to:
 - Any inventory-affecting calculations
 
 ## docs/ARCHITECTURE_INVENTORY.md
-
 # Architecture Inventory
 
 This document tracks **reusable abstractions, components, and architectural patterns**
@@ -4032,7 +4028,6 @@ it('creates a material', function () {
 ---
 
 ## docs/PERMISSIONS_MATRIX.md
-
 # Permissions Matrix
 
 This document is the source-of-truth for **authorization intent** in this repository.
@@ -4228,7 +4223,6 @@ return [
 ```
 
 ## docs/ENUMS.md
-
 # ENUMS — Canonical Enum Authority
 
 This document defines the canonical, normative enum-like values used throughout the system.
@@ -4483,7 +4477,6 @@ Do not introduce new enum values without updating this document.
 No conflicts or ambiguities were found at time of creation based on existing migrations, models, actions, and tests.
 
 ## docs/DB_SCHEMA.md
-
 # Database Schema Inventory (DB_SCHEMA)
 
 This document inventories **all database tables and columns** as defined by migrations.
@@ -5076,8 +5069,9 @@ Migrations remain the **sole source of truth**.
 | is_purchasable    | boolean   | No       | Default false             |
 | is_sellable       | boolean   | No       | Default false             |
 | is_manufacturable | boolean   | No       | Default false             |
-| default_price_cents | integer | Yes      | Unsigned                  |
+| default_price_cents | integer | Yes      | Minor currency units      |
 | default_price_currency_code | char(3) | Yes | —                        |
+| image_url         | string    | Yes      | Remote image URL only; no local image storage |
 | external_source   | string    | Yes      | Prep-only external source key |
 | external_id       | string    | Yes      | Prep-only external identity   |
 | created_at        | timestamp | Yes      | —                         |
@@ -5778,7 +5772,6 @@ Migrations remain the **sole source of truth**.
 **End of DB_SCHEMA**
 
 ## docs/UI_DESIGN.md
-
 # UI_DESIGN.md — Canonical UI Direction & Constraints
 
 This document defines the **authoritative UI design rules** for this repository.
@@ -6373,7 +6366,6 @@ They are mandatory, not stylistic.
 ::contentReference[oaicite:0]{index=0}
 
 ## routes/web.php
-
 <?php
 
 use App\Http\Controllers\InventoryController;
@@ -6654,7 +6646,6 @@ Route::delete('/manufacturing/uom-conversions/items/{itemConversion}', [UomConve
 require __DIR__ . '/auth.php';
 
 ## docs/PR3_ROADMAP.md
-
 # PR3_ROADMAP — Sales + CRM Foundations
 
 This roadmap defines the third major phase of work: introducing the **Sales domain (CRM foundations + Sales Orders)**, fully integrated with inventory before any external integrations.
@@ -7334,7 +7325,6 @@ After PR3 completion:
 - System ready for external integrations
 
 ## docs/BACKLOG.md
-
 # BACKLOG
 
 This backlog captures outstanding product capabilities identified from competitive feature review and QuickBooks Online integration planning.

@@ -126,9 +126,15 @@ beforeEach(function () {
                     'status' => 'publish',
                     'sku' => 'HOODIE-BLACK-M',
                     'price' => '34.95',
+                    'prices' => [
+                        'price' => '3495',
+                    ],
                     'attributes' => [
                         ['name' => 'Color', 'option' => 'Black'],
                         ['name' => 'Size', 'option' => 'M'],
+                    ],
+                    'image' => [
+                        'src' => 'https://cdn.example.test/products/hoodie-black-m.jpg',
                     ],
                 ],
                 [
@@ -136,10 +142,14 @@ beforeEach(function () {
                     'status' => 'private',
                     'sku' => 'HOODIE-BLACK-L',
                     'price' => '35.95',
+                    'prices' => [
+                        'price' => '3595',
+                    ],
                     'attributes' => [
                         ['name' => 'Color', 'option' => 'Black'],
                         ['name' => 'Size', 'option' => 'L'],
                     ],
+                    'image' => [],
                 ],
             ], 200),
             'https://store.example.test/wp-json/wc/v3/products?*' => Http::response([
@@ -150,6 +160,13 @@ beforeEach(function () {
                     'status' => 'publish',
                     'sku' => 'SIMPLE-TEE',
                     'price' => '12.50',
+                    'prices' => [
+                        'price' => '1250',
+                    ],
+                    'images' => [
+                        ['src' => 'https://cdn.example.test/products/simple-tee-primary.jpg'],
+                        ['src' => 'https://cdn.example.test/products/simple-tee-secondary.jpg'],
+                    ],
                 ],
                 [
                     'id' => 202,
@@ -158,6 +175,10 @@ beforeEach(function () {
                     'status' => 'publish',
                     'sku' => 'HOODIE-PARENT',
                     'price' => '',
+                    'prices' => [
+                        'price' => '',
+                    ],
+                    'images' => [],
                 ],
                 [
                     'id' => 303,
@@ -166,6 +187,9 @@ beforeEach(function () {
                     'status' => 'draft',
                     'sku' => 'ARCHIVED-MUG',
                     'price' => '8.00',
+                    'prices' => [
+                        'price' => '800',
+                    ],
                 ],
             ], 200),
         ]);
@@ -302,7 +326,9 @@ it('7. preview calls the WooCommerce API through the client abstraction', functi
 
     app()->instance(WooCommerceClient::class, $client);
 
-    ($this->previewWoo)($user)->assertOk();
+    ($this->previewWoo)($user)
+        ->assertOk()
+        ->assertJsonPath('data.rows.0.default_price_cents', 700);
 
     expect($state->called)->toBeTrue();
 });
@@ -342,7 +368,8 @@ it('8. the WooCommerce client can be replaced in tests', function () {
 
     ($this->previewWoo)($user)
         ->assertOk()
-        ->assertJsonPath('data.rows.0.external_id', '777');
+        ->assertJsonPath('data.rows.0.external_id', '777')
+        ->assertJsonPath('data.rows.0.default_price_cents', 1000);
 });
 
 it('9. simple WooCommerce products become preview rows', function () {
@@ -430,7 +457,171 @@ it('13. WooCommerce prices map into preview rows', function () {
     expect($simple['price'] ?? null)->toBe('12.50');
 });
 
-it('14. WooCommerce sku maps into preview rows', function () {
+it('14. WooCommerce preview rows include external id name price and image url', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermission)($user, 'inventory-products-manage');
+    ($this->storeWooConnection)($tenant);
+    ($this->fakeWooPreviewResponses)();
+
+    $response = ($this->previewWoo)($user)->assertOk();
+    $simple = collect($response->json('data.rows'))->firstWhere('external_id', '101');
+
+    expect($simple)->toMatchArray([
+        'external_id' => '101',
+        'name' => 'Simple Tee',
+        'price' => '12.50',
+        'image_url' => 'https://cdn.example.test/products/simple-tee-primary.jpg',
+    ]);
+});
+
+it('15. WooCommerce preview converts price to default price cents', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermission)($user, 'inventory-products-manage');
+    ($this->storeWooConnection)($tenant);
+    ($this->fakeWooPreviewResponses)();
+
+    $response = ($this->previewWoo)($user)->assertOk();
+    $simple = collect($response->json('data.rows'))->firstWhere('external_id', '101');
+
+    expect($simple['default_price_cents'] ?? null)->toBe(1250);
+});
+
+it('16. WooCommerce preview handles missing price safely', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermission)($user, 'inventory-products-manage');
+    ($this->storeWooConnection)($tenant);
+
+    Http::fake([
+        'https://store.example.test/wp-json/wc/v3/products?*' => Http::response([
+            [
+                'id' => 901,
+                'name' => 'Missing Price Product',
+                'type' => 'simple',
+                'status' => 'publish',
+                'sku' => 'MISS-PRICE-901',
+            ],
+        ], 200),
+    ]);
+
+    $response = ($this->previewWoo)($user)->assertOk();
+    $row = $response->json('data.rows.0');
+
+    expect(array_key_exists('default_price_cents', $row))->toBeTrue()
+        ->and($row['price'] ?? null)->toBe('')
+        ->and($row['default_price_cents'] ?? null)->toBeNull();
+});
+
+it('17. WooCommerce preview handles blank price safely', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermission)($user, 'inventory-products-manage');
+    ($this->storeWooConnection)($tenant);
+    
+    Http::fake([
+        'https://store.example.test/wp-json/wc/v3/products?*' => Http::response([
+            [
+                'id' => 903,
+                'name' => 'Blank Price Product',
+                'type' => 'simple',
+                'status' => 'publish',
+                'sku' => 'BLANK-PRICE-903',
+                'price' => '',
+                'prices' => [
+                    'price' => '',
+                ],
+            ],
+        ], 200),
+    ]);
+
+    $response = ($this->previewWoo)($user)->assertOk();
+    $row = $response->json('data.rows.0');
+
+    expect($row['price'] ?? null)->toBe('')
+        ->and($row['default_price_cents'] ?? null)->toBeNull();
+});
+
+it('18. WooCommerce preview safely ignores invalid price formats', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermission)($user, 'inventory-products-manage');
+    ($this->storeWooConnection)($tenant);
+
+    Http::fake([
+        'https://store.example.test/wp-json/wc/v3/products?*' => Http::response([
+            [
+                'id' => 902,
+                'name' => 'Invalid Price Product',
+                'type' => 'simple',
+                'status' => 'publish',
+                'sku' => 'BAD-PRICE-902',
+                'price' => '12.3x',
+                'prices' => [
+                    'price' => '12.3x',
+                ],
+            ],
+        ], 200),
+    ]);
+
+    $response = ($this->previewWoo)($user)->assertOk();
+    $row = $response->json('data.rows.0');
+
+    expect($row['price'] ?? null)->toBe('12.3x')
+        ->and($row['default_price_cents'] ?? null)->toBeNull();
+});
+
+it('19. WooCommerce preview handles missing image safely', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermission)($user, 'inventory-products-manage');
+    ($this->storeWooConnection)($tenant);
+    ($this->fakeWooPreviewResponses)();
+
+    $response = ($this->previewWoo)($user)->assertOk();
+    $row = collect($response->json('data.rows'))->firstWhere('external_id', '303');
+
+    expect(array_key_exists('image_url', $row))->toBeTrue()
+        ->and($row['image_url'])->toBeNull();
+});
+
+it('20. WooCommerce preview handles blank image arrays safely', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermission)($user, 'inventory-products-manage');
+    ($this->storeWooConnection)($tenant);
+    ($this->fakeWooPreviewResponses)();
+
+    $response = ($this->previewWoo)($user)->assertOk();
+    $row = collect($response->json('data.rows'))->firstWhere('external_id', '2022');
+
+    expect(array_key_exists('image_url', $row))->toBeTrue()
+        ->and($row['image_url'])->toBeNull();
+});
+
+it('21. WooCommerce preview selects the first image url when multiple images exist', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermission)($user, 'inventory-products-manage');
+    ($this->storeWooConnection)($tenant);
+    ($this->fakeWooPreviewResponses)();
+
+    $response = ($this->previewWoo)($user)->assertOk();
+    $row = collect($response->json('data.rows'))->firstWhere('external_id', '101');
+
+    expect($row['image_url'] ?? null)->toBe('https://cdn.example.test/products/simple-tee-primary.jpg');
+});
+
+it('22. WooCommerce sku maps into preview rows', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
 
@@ -444,7 +635,7 @@ it('14. WooCommerce sku maps into preview rows', function () {
     expect($simple['sku'] ?? null)->toBe('SIMPLE-TEE');
 });
 
-it('15. WooCommerce names map into preview rows', function () {
+it('23. WooCommerce names map into preview rows', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
 
@@ -458,7 +649,7 @@ it('15. WooCommerce names map into preview rows', function () {
     expect($simple['name'] ?? null)->toBe('Simple Tee');
 });
 
-it('16. variation attributes are normalized into deterministic preview metadata', function () {
+it('24. variation attributes are normalized into deterministic preview metadata', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
 
@@ -475,7 +666,7 @@ it('16. variation attributes are normalized into deterministic preview metadata'
         ->and($variation['variation_attributes'] ?? null)->toBeArray();
 });
 
-it('17. malformed WooCommerce responses return a safe JSON error', function () {
+it('25. malformed WooCommerce responses return a safe JSON error', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
 
@@ -496,7 +687,7 @@ it('17. malformed WooCommerce responses return a safe JSON error', function () {
         ->and($response->getContent())->not->toContain('cs_valid_readonly_secret');
 });
 
-it('18. unreachable WooCommerce stores return a safe JSON error', function () {
+it('26. unreachable WooCommerce stores return a safe JSON error', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
 
@@ -512,7 +703,7 @@ it('18. unreachable WooCommerce stores return a safe JSON error', function () {
         ->assertJsonValidationErrors(['source']);
 });
 
-it('19. preview rows remain compatible with the import endpoint', function () {
+it('27. preview rows remain compatible with the import endpoint', function () {
     $tenant = ($this->makeTenant)();
     $uom = ($this->makeUom)($tenant);
     $user = ($this->makeUser)($tenant);
@@ -528,6 +719,8 @@ it('19. preview rows remain compatible with the import endpoint', function () {
             'external_id' => $row['external_id'],
             'name' => $row['name'],
             'sku' => $row['sku'],
+            'default_price_cents' => $row['default_price_cents'] ?? null,
+            'image_url' => $row['image_url'] ?? null,
             'base_uom_id' => $uom->id,
             'is_active' => $row['is_active'],
             'is_manufacturable' => false,
@@ -542,7 +735,7 @@ it('19. preview rows remain compatible with the import endpoint', function () {
     ])->assertCreated();
 });
 
-it('19a. woo preview flags existing external source and external id duplicates for the current tenant', function () {
+it('28. woo preview flags existing external source and external id duplicates for the current tenant', function () {
     $tenant = ($this->makeTenant)();
     $uom = ($this->makeUom)($tenant);
     $user = ($this->makeUser)($tenant);
@@ -579,7 +772,7 @@ it('19a. woo preview flags existing external source and external id duplicates f
         ->and($nonDuplicate['selected'] ?? null)->toBeTrue();
 });
 
-it('20. importing preview rows creates normal items', function () {
+it('29. importing preview rows creates normal items', function () {
     $tenant = ($this->makeTenant)();
     $uom = ($this->makeUom)($tenant);
     $user = ($this->makeUser)($tenant);
@@ -605,7 +798,7 @@ it('20. importing preview rows creates normal items', function () {
     expect(Item::query()->where('external_source', 'woocommerce')->exists())->toBeTrue();
 });
 
-it('21. imported preview rows always set is sellable to true', function () {
+it('30. imported preview rows always set is sellable to true', function () {
     $tenant = ($this->makeTenant)();
     $uom = ($this->makeUom)($tenant);
     $user = ($this->makeUser)($tenant);
@@ -631,7 +824,64 @@ it('21. imported preview rows always set is sellable to true', function () {
     expect(Item::query()->where('external_id', '101')->value('is_sellable'))->toBeTrue();
 });
 
-it('22. imported simple products store external source woocommerce', function () {
+it('31. imported preview rows persist default price cents', function () {
+    $tenant = ($this->makeTenant)();
+    $uom = ($this->makeUom)($tenant);
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermission)($user, 'inventory-products-manage');
+    ($this->storeWooConnection)($tenant);
+    ($this->fakeWooPreviewResponses)();
+
+    $preview = ($this->previewWoo)($user)->assertOk()->json('data.rows');
+    $simple = collect($preview)->firstWhere('external_id', '101');
+
+    ($this->importRows)($user, [
+        'source' => 'woocommerce',
+        'rows' => [[
+            'external_id' => $simple['external_id'],
+            'name' => $simple['name'],
+            'sku' => $simple['sku'],
+            'default_price_cents' => $simple['default_price_cents'],
+            'image_url' => $simple['image_url'],
+            'base_uom_id' => $uom->id,
+            'is_active' => $simple['is_active'],
+        ]],
+    ])->assertCreated();
+
+    expect(Item::query()->where('external_id', '101')->value('default_price_cents'))->toBe(1250);
+});
+
+it('32. imported preview rows persist image url', function () {
+    $tenant = ($this->makeTenant)();
+    $uom = ($this->makeUom)($tenant);
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermission)($user, 'inventory-products-manage');
+    ($this->storeWooConnection)($tenant);
+    ($this->fakeWooPreviewResponses)();
+
+    $preview = ($this->previewWoo)($user)->assertOk()->json('data.rows');
+    $simple = collect($preview)->firstWhere('external_id', '101');
+
+    ($this->importRows)($user, [
+        'source' => 'woocommerce',
+        'rows' => [[
+            'external_id' => $simple['external_id'],
+            'name' => $simple['name'],
+            'sku' => $simple['sku'],
+            'default_price_cents' => $simple['default_price_cents'],
+            'image_url' => $simple['image_url'],
+            'base_uom_id' => $uom->id,
+            'is_active' => $simple['is_active'],
+        ]],
+    ])->assertCreated();
+
+    expect(Item::query()->where('external_id', '101')->value('image_url'))
+        ->toBe('https://cdn.example.test/products/simple-tee-primary.jpg');
+});
+
+it('33. imported simple products store external source woocommerce', function () {
     $tenant = ($this->makeTenant)();
     $uom = ($this->makeUom)($tenant);
     $user = ($this->makeUser)($tenant);
@@ -653,7 +903,7 @@ it('22. imported simple products store external source woocommerce', function ()
     expect(Item::query()->where('external_id', '101')->value('external_source'))->toBe('woocommerce');
 });
 
-it('23. imported simple products store the WooCommerce product id as external id', function () {
+it('34. imported simple products store the WooCommerce product id as external id', function () {
     $tenant = ($this->makeTenant)();
     $uom = ($this->makeUom)($tenant);
     $user = ($this->makeUser)($tenant);
@@ -675,7 +925,7 @@ it('23. imported simple products store the WooCommerce product id as external id
     expect(Item::query()->where('name', 'Simple Tee')->value('external_id'))->toBe('101');
 });
 
-it('24. imported variations store external source woocommerce', function () {
+it('35. imported variations store external source woocommerce', function () {
     $tenant = ($this->makeTenant)();
     $uom = ($this->makeUom)($tenant);
     $user = ($this->makeUser)($tenant);
@@ -697,7 +947,7 @@ it('24. imported variations store external source woocommerce', function () {
     expect(Item::query()->where('external_id', '2021')->value('external_source'))->toBe('woocommerce');
 });
 
-it('25. imported variations store the WooCommerce variation id as external id', function () {
+it('36. imported variations store the WooCommerce variation id as external id', function () {
     $tenant = ($this->makeTenant)();
     $uom = ($this->makeUom)($tenant);
     $user = ($this->makeUser)($tenant);
@@ -720,7 +970,7 @@ it('25. imported variations store the WooCommerce variation id as external id', 
         ->toBe('2021');
 });
 
-it('26. duplicate WooCommerce submissions update the existing item without creating a duplicate', function () {
+it('37. duplicate WooCommerce submissions update the existing item without creating a duplicate', function () {
     $tenant = ($this->makeTenant)();
     $uom = ($this->makeUom)($tenant);
     $user = ($this->makeUser)($tenant);
@@ -761,7 +1011,7 @@ it('26. duplicate WooCommerce submissions update the existing item without creat
             ->value('name'))->toBe('Updated Simple Tee');
 });
 
-it('27. tenant A cannot use tenant B WooCommerce connection', function () {
+it('38. tenant A cannot use tenant B WooCommerce connection', function () {
     $tenantA = ($this->makeTenant)('Tenant A');
     $tenantB = ($this->makeTenant)('Tenant B');
     $userA = ($this->makeUser)($tenantA);
@@ -772,7 +1022,7 @@ it('27. tenant A cannot use tenant B WooCommerce connection', function () {
     ($this->previewWoo)($userA)->assertUnprocessable();
 });
 
-it('28. tenant A products payload does not expose tenant B connection state', function () {
+it('39. tenant A products payload does not expose tenant B connection state', function () {
     $tenantA = ($this->makeTenant)('Tenant A');
     $tenantB = ($this->makeTenant)('Tenant B');
     $userA = ($this->makeUser)($tenantA);
@@ -790,7 +1040,7 @@ it('28. tenant A products payload does not expose tenant B connection state', fu
     expect($wooSource['connected'] ?? null)->toBeFalse();
 });
 
-it('29. the same WooCommerce product id can exist across tenants', function () {
+it('40. the same WooCommerce product id can exist across tenants', function () {
     $tenantA = ($this->makeTenant)('Tenant A');
     $tenantB = ($this->makeTenant)('Tenant B');
     $uomA = ($this->makeUom)($tenantA);
@@ -829,7 +1079,7 @@ it('29. the same WooCommerce product id can exist across tenants', function () {
         ->count())->toBe(2);
 });
 
-it('30. reconnect and disconnect affect only the authenticated tenant', function () {
+it('41. reconnect and disconnect affect only the authenticated tenant', function () {
     $tenantA = ($this->makeTenant)('Tenant A');
     $tenantB = ($this->makeTenant)('Tenant B');
 
@@ -856,7 +1106,7 @@ it('30. reconnect and disconnect affect only the authenticated tenant', function
             ->value('status'))->toBe('connected');
 });
 
-it('31. preview responses never return credentials or secrets', function () {
+it('42. preview responses never return credentials or secrets', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
 

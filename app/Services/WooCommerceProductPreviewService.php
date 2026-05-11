@@ -84,11 +84,13 @@ class WooCommerceProductPreviewService
      */
     private function normalizeSimpleProduct(array $product): array
     {
-        return [
+        return array_merge($this->basePreviewRow(), [
             'external_id' => (string) $product['id'],
             'sku' => (string) ($product['sku'] ?? ''),
             'name' => (string) $product['name'],
             'price' => (string) ($product['price'] ?? ''),
+            'default_price_cents' => $this->resolvePriceCents($product),
+            'image_url' => $this->resolvePrimaryImageUrl($product['images'] ?? null),
             'is_active' => $this->isPublished($product['status'] ?? null),
             'is_sellable' => true,
             'is_manufacturable' => false,
@@ -96,7 +98,7 @@ class WooCommerceProductPreviewService
             'base_uom_id' => null,
             'product_type' => 'simple',
             'variation_attributes' => [],
-        ];
+        ]);
     }
 
     /**
@@ -127,11 +129,13 @@ class WooCommerceProductPreviewService
             $name .= ' - ' . $suffix;
         }
 
-        return [
+        return array_merge($this->basePreviewRow(), [
             'external_id' => (string) $variation['id'],
             'sku' => (string) ($variation['sku'] ?? ''),
             'name' => $name,
             'price' => (string) ($variation['price'] ?? ''),
+            'default_price_cents' => $this->resolvePriceCents($variation),
+            'image_url' => $this->resolveVariationImageUrl($variation),
             'is_active' => $this->isPublished($variation['status'] ?? null),
             'is_sellable' => true,
             'is_manufacturable' => false,
@@ -141,6 +145,20 @@ class WooCommerceProductPreviewService
             'parent_external_id' => (string) $parent['id'],
             'parent_name' => (string) $parent['name'],
             'variation_attributes' => $attributes->all(),
+        ]);
+    }
+
+    /**
+     * Return the shared preview-row nullable field contract.
+     *
+     * @return array<string, mixed>
+     */
+    private function basePreviewRow(): array
+    {
+        return [
+            'price' => '',
+            'default_price_cents' => null,
+            'image_url' => null,
         ];
     }
 
@@ -150,5 +168,110 @@ class WooCommerceProductPreviewService
     private function isPublished(mixed $status): bool
     {
         return $status === 'publish';
+    }
+
+    /**
+     * Resolve WooCommerce price data from Store API or wc/v3 Admin REST payloads.
+     */
+    private function resolvePriceCents(array $product): ?int
+    {
+        $storeApiPrice = $this->normalizeStoreApiPriceToCents($product['prices'] ?? null);
+
+        if ($storeApiPrice !== null) {
+            return $storeApiPrice;
+        }
+
+        return $this->normalizeDecimalPriceToCents($product['price'] ?? null);
+    }
+
+    /**
+     * Normalize a WooCommerce Store API smallest-unit price to integer cents.
+     */
+    private function normalizeStoreApiPriceToCents(mixed $prices): ?int
+    {
+        if (! is_array($prices)) {
+            return null;
+        }
+
+        $rawPrice = $prices['price'] ?? null;
+
+        if (is_int($rawPrice)) {
+            return $rawPrice >= 0 ? $rawPrice : null;
+        }
+
+        $normalized = trim((string) ($rawPrice ?? ''));
+
+        if ($normalized === '' || ! preg_match('/^\d+$/', $normalized)) {
+            return null;
+        }
+
+        return (int) $normalized;
+    }
+
+    /**
+     * Normalize a WooCommerce decimal price string to integer cents without float math.
+     */
+    private function normalizeDecimalPriceToCents(mixed $price): ?int
+    {
+        $normalized = trim((string) ($price ?? ''));
+
+        if ($normalized === '' || ! preg_match('/^\d+(?:\.\d{1,2})?$/', $normalized)) {
+            return null;
+        }
+
+        if (! str_contains($normalized, '.')) {
+            return ((int) $normalized) * 100;
+        }
+
+        [$whole, $decimal] = explode('.', $normalized, 2);
+        $decimal = str_pad(substr($decimal, 0, 2), 2, '0');
+
+        return (((int) $whole) * 100) + ((int) $decimal);
+    }
+
+    /**
+     * Resolve the first available WooCommerce image URL from a product images array.
+     */
+    private function resolvePrimaryImageUrl(mixed $images): ?string
+    {
+        if (! is_array($images)) {
+            return null;
+        }
+
+        foreach ($images as $image) {
+            if (! is_array($image)) {
+                continue;
+            }
+
+            $src = trim((string) ($image['src'] ?? ''));
+
+            if ($src !== '') {
+                return $src;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Resolve a variation image URL from Store API or wc/v3 payloads.
+     */
+    private function resolveVariationImageUrl(array $variation): ?string
+    {
+        $imagesUrl = $this->resolvePrimaryImageUrl($variation['images'] ?? null);
+
+        if ($imagesUrl !== null) {
+            return $imagesUrl;
+        }
+
+        $image = $variation['image'] ?? null;
+
+        if (! is_array($image)) {
+            return null;
+        }
+
+        $src = trim((string) ($image['src'] ?? ''));
+
+        return $src === '' ? null : $src;
     }
 }
