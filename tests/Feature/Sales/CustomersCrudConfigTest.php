@@ -66,10 +66,12 @@ beforeEach(function () {
 
     $this->createCustomer = function (Tenant $tenant, array $attributes = []): object {
         static $customerCounter = 1;
+        $status = $attributes['status'] ?? 'active';
 
         $customerId = DB::table('customers')->insertGetId(array_merge([
             'tenant_id' => $tenant->id,
             'name' => 'Customers Crud Customer ' . $customerCounter,
+            'is_active' => $status === 'active',
             'status' => 'active',
             'notes' => null,
             'address_line_1' => null,
@@ -148,6 +150,34 @@ beforeEach(function () {
         expect(json_last_error())->toBe(JSON_ERROR_NONE);
 
         return is_array($config) ? $config : [];
+    };
+
+    $this->extractImportConfig = function ($response): array {
+        preg_match("/data-import-config='([^']+)'/", $response->getContent(), $matches);
+
+        expect($matches)->toHaveKey(1);
+
+        $config = json_decode(html_entity_decode($matches[1], ENT_QUOTES), true);
+
+        expect(json_last_error())->toBe(JSON_ERROR_NONE);
+
+        return is_array($config) ? $config : [];
+    };
+
+    $this->extractPayload = function ($response, string $payloadId): array {
+        preg_match(
+            '/<script[^>]+id="' . preg_quote($payloadId, '/') . '"[^>]*>(.*?)<\\/script>/s',
+            $response->getContent(),
+            $matches
+        );
+
+        expect($matches)->toHaveKey(1);
+
+        $payload = json_decode(html_entity_decode($matches[1], ENT_QUOTES), true);
+
+        expect(json_last_error())->toBe(JSON_ERROR_NONE);
+
+        return is_array($payload) ? $payload : [];
     };
 
     $this->getCustomersIndex = function (User $user) {
@@ -352,7 +382,7 @@ it('12. import slideout contract exists', function () {
     ($this->getCustomersIndex)($user)
         ->assertOk()
         ->assertSee('Import Customers')
-        ->assertSee('data-customers-import-panel', false);
+        ->assertSee('data-import-config=', false);
 });
 
 it('13. woo customer preview requires woo admin permission', function () {
@@ -391,6 +421,14 @@ it('15. preview uses existing woo connection', function () {
             'last_name' => 'Buyer',
             'username' => 'avery-buyer',
             'billing' => [
+                'address_1' => '90 Billing Avenue',
+                'address_2' => '',
+                'city' => 'New York',
+                'state' => 'NY',
+                'postcode' => '10001',
+                'country' => 'US',
+            ],
+            'shipping' => [
                 'address_1' => '123 King Street West',
                 'address_2' => '',
                 'city' => 'Toronto',
@@ -437,6 +475,14 @@ it('17. preview returns woo customer rows', function () {
             'last_name' => 'Preview',
             'username' => 'preview-user',
             'billing' => [
+                'address_1' => '10 Billing Plaza',
+                'address_2' => '',
+                'city' => 'New York',
+                'state' => 'NY',
+                'postcode' => '10002',
+                'country' => 'US',
+            ],
+            'shipping' => [
                 'address_1' => '50 Queen Street',
                 'address_2' => 'Suite 2',
                 'city' => 'Toronto',
@@ -451,7 +497,112 @@ it('17. preview returns woo customer rows', function () {
         ->assertOk()
         ->assertJsonPath('data.rows.0.external_id', '202')
         ->assertJsonPath('data.rows.0.email', 'preview@example.test')
-        ->assertJsonPath('data.rows.0.name', 'Parker Preview');
+        ->assertJsonPath('data.rows.0.name', 'Parker Preview')
+        ->assertJsonPath('data.rows.0.city', 'Toronto')
+        ->assertJsonPath('data.rows.0.is_active', true);
+});
+
+it('17a. file upload preview returns submitted customer rows without requiring a connection', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermissions)($user, ['sales-customers-manage', 'system-users-manage']);
+
+    ($this->previewImport)($user, [
+        'source' => 'file-upload',
+        'rows' => [
+            [
+                'external_id' => 'file-1-customer',
+                'name' => 'Local File Customer',
+                'email' => 'local@example.test',
+                'city' => 'Toronto',
+                'is_active' => true,
+            ],
+        ],
+    ])->assertOk()
+        ->assertJsonPath('data.source', 'file-upload')
+        ->assertJsonPath('data.is_connected', false)
+        ->assertJsonPath('data.rows.0.name', 'Local File Customer')
+        ->assertJsonPath('data.rows.0.city', 'Toronto');
+});
+
+it('17b. customers preview flags duplicate woo rows before import', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $customer = ($this->createCustomer)($tenant, [
+        'name' => 'Existing Duplicate Customer',
+    ]);
+
+    DB::table('external_customer_mappings')->insert([
+        'tenant_id' => $tenant->id,
+        'customer_id' => $customer->id,
+        'source' => 'woocommerce',
+        'external_customer_id' => '801',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    ($this->grantPermissions)($user, ['sales-customers-manage', 'system-users-manage']);
+    ($this->connectWooCommerce)($tenant);
+    ($this->fakeWooCustomers)([
+        [
+            'id' => 801,
+            'email' => 'duplicate@example.test',
+            'first_name' => 'Duplicate',
+            'last_name' => 'Customer',
+            'username' => 'duplicate-customer',
+            'shipping' => [
+                'address_1' => '123 King Street West',
+                'address_2' => '',
+                'city' => 'Toronto',
+                'state' => 'ON',
+                'postcode' => 'M5V 1J2',
+                'country' => 'CA',
+            ],
+        ],
+    ]);
+
+    ($this->previewImport)($user)
+        ->assertOk()
+        ->assertJsonPath('data.rows.0.external_source', 'woocommerce')
+        ->assertJsonPath('data.rows.0.is_duplicate', true)
+        ->assertJsonPath('data.rows.0.selected', false)
+        ->assertJsonPath('data.rows.0.duplicate_reason', 'A customer with the same external source and external ID already exists.');
+});
+
+it('17c. customers file preview flags duplicate rows before import', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $customer = ($this->createCustomer)($tenant, [
+        'name' => 'Existing File Duplicate Customer',
+    ]);
+
+    DB::table('external_customer_mappings')->insert([
+        'tenant_id' => $tenant->id,
+        'customer_id' => $customer->id,
+        'source' => 'woocommerce',
+        'external_customer_id' => 'file-duplicate-1',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    ($this->grantPermissions)($user, ['sales-customers-manage', 'system-users-manage']);
+
+    ($this->previewImport)($user, [
+        'source' => 'file-upload',
+        'rows' => [
+            [
+                'external_id' => 'file-duplicate-1',
+                'external_source' => 'woocommerce',
+                'name' => 'File Duplicate Customer',
+                'email' => 'file-duplicate@example.test',
+                'city' => 'Toronto',
+                'is_active' => true,
+            ],
+        ],
+    ])->assertOk()
+        ->assertJsonPath('data.rows.0.is_duplicate', true)
+        ->assertJsonPath('data.rows.0.selected', false);
 });
 
 it('18. import creates new customers', function () {
@@ -482,6 +633,7 @@ it('18. import creates new customers', function () {
     $this->assertDatabaseHas('customers', [
         'tenant_id' => $tenant->id,
         'name' => 'Avery Buyer',
+        'is_active' => 1,
     ]);
 
     $customerId = (int) DB::table('customers')
@@ -500,7 +652,104 @@ it('18. import creates new customers', function () {
     ]);
 });
 
-it('19. import matches existing customers by woo mapping', function () {
+it('18a. file upload import can create customers without an external connection', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermissions)($user, ['sales-customers-manage', 'system-users-manage']);
+
+    ($this->storeImport)($user, [
+        'source' => null,
+        'is_local_file_import' => true,
+        'rows' => [
+            [
+                'external_id' => 'file-1-customer',
+                'name' => 'CSV Customer',
+                'email' => 'csv@example.test',
+                'phone' => '555-0151',
+                'city' => 'Toronto',
+                'country_code' => 'CA',
+                'is_active' => true,
+            ],
+        ],
+    ])->assertCreated()
+        ->assertJsonPath('data.imported_count', 1);
+
+    $this->assertDatabaseHas('customers', [
+        'tenant_id' => $tenant->id,
+        'name' => 'CSV Customer',
+        'is_active' => 1,
+        'status' => 'active',
+    ]);
+});
+
+it('18b. duplicate customer preview rows are rejected if submitted anyway', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $customer = ($this->createCustomer)($tenant, [
+        'name' => 'Prevent Duplicate Customer',
+    ]);
+
+    DB::table('external_customer_mappings')->insert([
+        'tenant_id' => $tenant->id,
+        'customer_id' => $customer->id,
+        'source' => 'woocommerce',
+        'external_customer_id' => '811',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    ($this->grantPermissions)($user, ['sales-customers-manage', 'system-users-manage']);
+    ($this->connectWooCommerce)($tenant);
+
+    ($this->storeImport)($user, [
+        'source' => 'woocommerce',
+        'rows' => [
+            [
+                'external_id' => '811',
+                'external_source' => 'woocommerce',
+                'name' => 'Prevent Duplicate Customer',
+                'email' => 'prevent-duplicate@example.test',
+            ],
+        ],
+    ])->assertStatus(422)
+        ->assertJsonValidationErrors(['rows.0.external_id']);
+});
+
+it('18c. duplicate customer file rows are rejected if submitted anyway', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $customer = ($this->createCustomer)($tenant, [
+        'name' => 'Prevent File Duplicate Customer',
+    ]);
+
+    DB::table('external_customer_mappings')->insert([
+        'tenant_id' => $tenant->id,
+        'customer_id' => $customer->id,
+        'source' => 'woocommerce',
+        'external_customer_id' => 'file-duplicate-2',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    ($this->grantPermissions)($user, ['sales-customers-manage', 'system-users-manage']);
+
+    ($this->storeImport)($user, [
+        'source' => null,
+        'is_local_file_import' => true,
+        'rows' => [
+            [
+                'external_id' => 'file-duplicate-2',
+                'external_source' => 'woocommerce',
+                'name' => 'Prevent File Duplicate Customer',
+                'email' => 'prevent-file-duplicate@example.test',
+            ],
+        ],
+    ])->assertStatus(422)
+        ->assertJsonValidationErrors(['rows.0.external_id']);
+});
+
+it('19. import rejects existing customers by woo mapping as duplicate preview rows', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
     $customer = ($this->createCustomer)($tenant, [
@@ -524,12 +773,13 @@ it('19. import matches existing customers by woo mapping', function () {
         'rows' => [
             [
                 'external_id' => '401',
+                'external_source' => 'woocommerce',
                 'name' => 'Mapped Customer Updated',
                 'email' => 'mapped@example.test',
             ],
         ],
-    ])->assertCreated()
-        ->assertJsonPath('data.imported_count', 1);
+    ])->assertStatus(422)
+        ->assertJsonValidationErrors(['rows.0.external_id']);
 
     expect(DB::table('customers')->where('tenant_id', $tenant->id)->count())->toBe(1);
 });
@@ -714,7 +964,8 @@ it('22. import does not duplicate customers', function () {
     ];
 
     ($this->storeImport)($user, $payload)->assertCreated();
-    ($this->storeImport)($user, $payload)->assertCreated();
+    ($this->storeImport)($user, $payload)->assertStatus(422)
+        ->assertJsonValidationErrors(['rows.0.external_id']);
 
     expect(DB::table('customers')->where('tenant_id', $tenant->id)->count())->toBe(1);
 });
@@ -786,7 +1037,7 @@ it('22c. manual customer creation does not auto create a contact', function () {
     expect(DB::table('customer_contacts')->where('customer_id', $customerId)->count())->toBe(0);
 });
 
-it('22d. re importing the same woo customer does not duplicate contacts', function () {
+it('22d. re importing the same woo customer is rejected before duplicating contacts', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
 
@@ -806,7 +1057,8 @@ it('22d. re importing the same woo customer does not duplicate contacts', functi
     ];
 
     ($this->storeImport)($user, $payload)->assertCreated();
-    ($this->storeImport)($user, $payload)->assertCreated();
+    ($this->storeImport)($user, $payload)->assertStatus(422)
+        ->assertJsonValidationErrors(['rows.0.external_id']);
 
     $customerId = (int) DB::table('customers')
         ->where('tenant_id', $tenant->id)
@@ -940,7 +1192,232 @@ it('28. customers blade contains no crud toolbar table card or action markup', f
         ->and($customersBlade)->not->toContain('toggleSort(column)');
 });
 
-it('29. customers crud config includes the shared renderer contract', function () {
+it('29. customers page root exposes a dedicated import config contract', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermissions)($user, ['sales-customers-manage', 'system-users-manage']);
+
+    $response = ($this->getCustomersIndex)($user)
+        ->assertOk()
+        ->assertSee('data-import-config=', false);
+
+    $config = ($this->extractImportConfig)($response);
+
+    expect($config['resource'] ?? null)->toBe('customers')
+        ->and($config['endpoints']['preview'] ?? null)->toBe(route('sales.customers.import.preview'))
+        ->and($config['endpoints']['store'] ?? null)->toBe(route('sales.customers.import.store'));
+});
+
+it('30. customers import endpoints are exposed through data import config instead of inline page js', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermissions)($user, ['sales-customers-manage', 'system-users-manage']);
+
+    $response = ($this->getCustomersIndex)($user);
+    $config = ($this->extractImportConfig)($response);
+    $customersScript = file_get_contents(base_path('resources/js/pages/sales-customers-index.js'));
+
+    expect($config['endpoints']['preview'] ?? null)->toBe(route('sales.customers.import.preview'))
+        ->and($config['endpoints']['store'] ?? null)->toBe(route('sales.customers.import.store'))
+        ->and($customersScript)->not->toContain('previewUrl')
+        ->and($customersScript)->not->toContain('importUrl');
+});
+
+it('31. customers import config includes customer specific labels and source contract', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermissions)($user, ['sales-customers-manage', 'system-users-manage']);
+
+    $config = ($this->extractImportConfig)(($this->getCustomersIndex)($user));
+
+    expect($config['labels']['title'] ?? null)->toBe('Import Customers')
+        ->and($config['labels']['source'] ?? null)->toBe('Source')
+        ->and($config['labels']['submit'] ?? null)->toBe('Import Selected')
+        ->and($config['labels']['loadingPreviewFile'] ?? null)->toBe('Loading file preview...')
+        ->and(collect($config['sources'] ?? [])->pluck('value')->all())->toContain('woocommerce');
+});
+
+it('31a. customers import config includes file upload as a shared source option', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermissions)($user, ['sales-customers-manage', 'system-users-manage']);
+
+    $config = ($this->extractImportConfig)(($this->getCustomersIndex)($user));
+
+    expect(collect($config['sources'] ?? [])->firstWhere('value', 'file-upload'))
+        ->toMatchArray([
+            'value' => 'file-upload',
+            'label' => 'File Upload',
+            'enabled' => true,
+        ]);
+});
+
+it('31b. customers blade uses the shared hidden file input and cached file source rendering', function () {
+    $customersBlade = file_get_contents(base_path('resources/views/sales/customers/index.blade.php'));
+
+    expect($customersBlade)->toContain('x-ref="importFileInput"')
+        ->and($customersBlade)->toContain('type="file"')
+        ->and($customersBlade)->toContain('accept=".csv,text/csv"')
+        ->and($customersBlade)->toContain('x-on:change="handleLocalFileChange($event)"')
+        ->and($customersBlade)->toContain('<template x-for="fileSource in cachedFileSources" :key="fileSource.value">')
+        ->and($customersBlade)->toContain('x-text="errors.file[0]"');
+});
+
+it('31c. shared import module keeps uploaded filenames available as cached source labels for the current session', function () {
+    $importModuleSource = file_get_contents(base_path('resources/js/lib/import-module.js'));
+
+    expect($importModuleSource)->toContain('selectedFileName: \'\'')
+        ->and($importModuleSource)->toContain('cachedFileSources: []')
+        ->and($importModuleSource)->toContain('this.selectedFileName = file.name || \'\';')
+        ->and($importModuleSource)->toContain('label: this.selectedFileName')
+        ->and($importModuleSource)->toContain('this.selectedSource = value;')
+        ->and($importModuleSource)->toContain('this.selectedFileName = fileSource.label;');
+});
+
+it('31d. import module source no longer uses optional chaining assignment patterns', function () {
+    $importModuleSource = file_get_contents(base_path('resources/js/lib/import-module.js'));
+
+    expect($importModuleSource)->not->toContain('?.');
+});
+
+it('32. customers blade no longer contains the old custom import slide over markup', function () {
+    $customersBlade = file_get_contents(base_path('resources/views/sales/customers/index.blade.php'));
+
+    expect($customersBlade)->not->toContain('data-customers-import-panel')
+        ->and($customersBlade)->not->toContain('Load Preview')
+        ->and($customersBlade)->not->toContain('Confirm Import')
+        ->and($customersBlade)->not->toContain('x-text="importPreviewError"')
+        ->and($customersBlade)->not->toContain('x-text="importErrors.source[0]"');
+});
+
+it('32a. shared import preview no longer defaults missing active state to inactive', function () {
+    $importModuleSource = file_get_contents(base_path('resources/js/lib/import-module.js'));
+
+    expect($importModuleSource)->toContain("Object.prototype.hasOwnProperty.call(row, 'is_active')")
+        ->and($importModuleSource)->toContain('has_active_state:')
+        ->and($importModuleSource)->toContain('if (!this.rowHasActiveState(row)) {')
+        ->and($importModuleSource)->not->toContain("return row.is_active ? 'Active' : 'Inactive';");
+});
+
+it('32b. customers import preview rows use the shared compact row contract', function () {
+    $customersBlade = file_get_contents(base_path('resources/views/sales/customers/index.blade.php'));
+    $importModuleSource = file_get_contents(base_path('resources/js/lib/import-module.js'));
+
+    expect($customersBlade)->toContain('x-text="previewPrimaryLabel(row)"')
+        ->and($customersBlade)->toContain('x-text="previewSecondaryLabel(row)"')
+        ->and($customersBlade)->not->toContain('tracking-wide text-gray-500">Email')
+        ->and($customersBlade)->not->toContain('tracking-wide text-gray-500">Phone')
+        ->and($customersBlade)->not->toContain('tracking-wide text-gray-500">Address')
+        ->and($importModuleSource)->toContain('previewPrimaryLabel(row)')
+        ->and($importModuleSource)->toContain('previewSecondaryLabel(row)')
+        ->and($importModuleSource)->toContain('rowHasSecondaryLabel(row)');
+});
+
+it('32c. woo customer preview uses shipping city and address fields', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermissions)($user, ['sales-customers-manage', 'system-users-manage']);
+    ($this->connectWooCommerce)($tenant);
+    ($this->fakeWooCustomers)([
+        [
+            'id' => 203,
+            'email' => 'shipping@example.test',
+            'first_name' => 'Shipping',
+            'last_name' => 'Preview',
+            'username' => 'shipping-preview',
+            'billing' => [
+                'address_1' => '50 Billing Street',
+                'address_2' => 'Suite 2',
+                'city' => 'New York',
+                'state' => 'NY',
+                'postcode' => '10001',
+                'country' => 'US',
+            ],
+            'shipping' => [
+                'address_1' => '123 King Street West',
+                'address_2' => 'Suite 400',
+                'city' => 'Toronto',
+                'state' => 'ON',
+                'postcode' => 'M5V 1J2',
+                'country' => 'CA',
+            ],
+        ],
+    ]);
+
+    ($this->previewImport)($user)
+        ->assertOk()
+        ->assertJsonPath('data.rows.0.address_line_1', '123 King Street West')
+        ->assertJsonPath('data.rows.0.city', 'Toronto')
+        ->assertJsonPath('data.rows.0.region', 'ON')
+        ->assertJsonPath('data.rows.0.country_code', 'CA');
+});
+
+it('32d. woo customer preview does not fall back to billing city when shipping city is absent', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermissions)($user, ['sales-customers-manage', 'system-users-manage']);
+    ($this->connectWooCommerce)($tenant);
+    ($this->fakeWooCustomers)([
+        [
+            'id' => 204,
+            'email' => 'no-ship-city@example.test',
+            'first_name' => 'NoShip',
+            'last_name' => 'City',
+            'username' => 'no-ship-city',
+            'billing' => [
+                'address_1' => '90 Billing Avenue',
+                'city' => 'New York',
+                'state' => 'NY',
+                'postcode' => '10002',
+                'country' => 'US',
+            ],
+            'shipping' => [
+                'address_1' => '789 Ship To Road',
+                'address_2' => '',
+                'city' => '',
+                'state' => 'ON',
+                'postcode' => 'M4B 1B3',
+                'country' => 'CA',
+            ],
+        ],
+    ]);
+
+    ($this->previewImport)($user)
+        ->assertOk()
+        ->assertJsonPath('data.rows.0.address_line_1', '789 Ship To Road')
+        ->assertJsonPath('data.rows.0.city', '')
+        ->assertJsonMissing(['city' => 'New York']);
+});
+
+it('32e. customers import config hides duplicates by default like products', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermissions)($user, ['sales-customers-manage', 'system-users-manage']);
+
+    $config = ($this->extractImportConfig)(($this->getCustomersIndex)($user));
+
+    expect($config['rowBehavior']['hideDuplicatesByDefault'] ?? null)->toBeTrue()
+        ->and($config['rowBehavior']['selectVisibleNonDuplicateRowsOnly'] ?? null)->toBeTrue()
+        ->and($config['rowBehavior']['submitSelectedVisibleRowsOnly'] ?? null)->toBeTrue();
+});
+
+it('33. customers blade uses the bounded height mount shell pattern', function () {
+    $customersBlade = file_get_contents(base_path('resources/views/sales/customers/index.blade.php'));
+
+    expect($customersBlade)->toContain('flex h-[calc(100vh-8rem)] min-h-0 flex-col overflow-hidden')
+        ->and($customersBlade)->toContain('mx-auto flex h-full min-h-0 w-full max-w-7xl flex-1 flex-col overflow-hidden sm:px-6 lg:px-8')
+        ->and($customersBlade)->toContain('flex h-full min-h-0 flex-1 flex-col')
+        ->and($customersBlade)->toContain('data-crud-root');
+});
+
+it('34. customers crud config includes the shared renderer contract', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
 
@@ -955,7 +1432,7 @@ it('29. customers crud config includes the shared renderer contract', function (
         ->and($config['permissions'] ?? null)->toBeArray();
 });
 
-it('30. products and customers render identical toolbar and action contracts through the shared renderer', function () {
+it('35. products and customers render identical toolbar and action contracts through the shared renderer', function () {
     $rendererSource = file_get_contents(base_path('resources/js/lib/crud-page.js'));
     $productsScript = file_get_contents(base_path('resources/js/pages/sales-products-index.js'));
     $customersScript = file_get_contents(base_path('resources/js/pages/sales-customers-index.js'));
@@ -969,7 +1446,7 @@ it('30. products and customers render identical toolbar and action contracts thr
         ->and($customersScript)->toContain('mountCrudRenderer(');
 });
 
-it('31. customer action menu still exposes edit and archive behavior through configured actions', function () {
+it('36. customer action menu still exposes edit and archive behavior through configured actions', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
 
@@ -988,31 +1465,47 @@ it('31. customer action menu still exposes edit and archive behavior through con
         ->and($customersScript)->toContain('archive(record)');
 });
 
-it('32. customer import preview button loading contract prevents duplicate requests', function () {
-    $customersBlade = file_get_contents(base_path('resources/views/sales/customers/index.blade.php'));
+it('37. customers page module imports and parses the shared import config', function () {
     $customersScript = file_get_contents(base_path('resources/js/pages/sales-customers-index.js'));
 
-    expect($customersBlade)->toContain('x-bind:disabled="isLoadingPreview"')
-        ->and($customersBlade)->toContain("x-on:click=\"loadPreview()\"")
-        ->and($customersScript)->toContain('if (this.isLoadingPreview) {')
-        ->and($customersScript)->toContain('return;')
-        ->and($customersScript)->toContain('this.isLoadingPreview = true;')
-        ->and($customersScript)->toContain('this.isLoadingPreview = false;');
+    expect($customersScript)->toContain("import { parseImportConfig } from '../lib/import-config';")
+        ->and($customersScript)->toContain('const importConfig = parseImportConfig(rootEl);');
 });
 
-it('33. customer import preview errors render in the slideout without requiring retry', function () {
-    $customersBlade = file_get_contents(base_path('resources/views/sales/customers/index.blade.php'));
+it('38. customers page module delegates import behavior to the shared import module', function () {
     $customersScript = file_get_contents(base_path('resources/js/pages/sales-customers-index.js'));
 
-    expect($customersBlade)->toContain('x-text="importPreviewError"')
-        ->and($customersBlade)->toContain('x-text="importErrors.source[0]"')
-        ->and($customersScript)->toContain('const parseJsonResponse = async (response) => {')
-        ->and($customersScript)->toContain('this.importPreviewError =')
-        ->and($customersScript)->toContain('this.importErrors.source =')
-        ->and($customersScript)->toContain('await parseJsonResponse(response)');
+    expect($customersScript)->toContain("import { createImportModule } from '../lib/import-module';")
+        ->and($customersScript)->toContain('const importModule = createImportModule({')
+        ->and($customersScript)->toContain('config: importConfig,');
 });
 
-it('34. import and create buttons still open page specific panels through configured callbacks', function () {
+it('39. customers page module no longer owns inline import state and preview handlers', function () {
+    $customersScript = file_get_contents(base_path('resources/js/pages/sales-customers-index.js'));
+
+    expect($customersScript)->not->toContain('isImportPanelOpen:')
+        ->and($customersScript)->not->toContain('previewRows:')
+        ->and($customersScript)->not->toContain('importPreviewError:')
+        ->and($customersScript)->not->toContain('handleSourceChange() {')
+        ->and($customersScript)->not->toContain('async loadPreview() {')
+        ->and($customersScript)->not->toContain('async submitImport() {');
+});
+
+it('40. customers index payload no longer embeds customer records as source of truth', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermissions)($user, ['sales-customers-manage', 'system-users-manage']);
+    ($this->createCustomer)($tenant, ['name' => 'Payload Hidden Customer']);
+
+    $response = ($this->getCustomersIndex)($user);
+    $payload = ($this->extractPayload)($response, 'sales-customers-index-payload');
+
+    expect($payload)->not->toHaveKey('customers')
+        ->and($payload['storeUrl'] ?? null)->toBe(route('sales.customers.store'));
+});
+
+it('41. import and create buttons still open page specific panels through configured callbacks', function () {
     $productsScript = file_get_contents(base_path('resources/js/pages/sales-products-index.js'));
     $customersScript = file_get_contents(base_path('resources/js/pages/sales-customers-index.js'));
 
@@ -1022,7 +1515,7 @@ it('34. import and create buttons still open page specific panels through config
         ->and($customersScript)->toContain("importHandler: 'openImportPanel()'");
 });
 
-it('35. customers action dropdown still works through configured actions', function () {
+it('42. customers action dropdown still works through configured actions', function () {
     $customersScript = file_get_contents(base_path('resources/js/pages/sales-customers-index.js'));
     $rendererSource = file_get_contents(base_path('resources/js/lib/crud-page.js'));
 
@@ -1032,7 +1525,7 @@ it('35. customers action dropdown still works through configured actions', funct
         ->and($rendererSource)->toContain('data-crud-action-item-${escapeHtml(action.id)}');
 });
 
-it('36. customers crud config can enable export through shared labels and permissions only', function () {
+it('43. customers crud config does not advertise export while no customer export route exists', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
 
@@ -1042,18 +1535,18 @@ it('36. customers crud config can enable export through shared labels and permis
 
     expect($config['labels']['exportTitle'] ?? null)->toBe('Export Customers')
         ->and($config['labels']['exportAriaLabel'] ?? null)->toBe('Export Customers')
-        ->and($config['permissions']['showExport'] ?? null)->toBeTrue();
+        ->and($config['permissions']['showExport'] ?? null)->toBeFalse();
 });
 
-it('37. customers page module wires export through the shared crud renderer contract', function () {
+it('44. customers page module no longer wires the fake export handler', function () {
     $customersScript = file_get_contents(base_path('resources/js/pages/sales-customers-index.js'));
 
-    expect($customersScript)->toContain("exportHandler: 'handleExportUnavailable()'")
-        ->and($customersScript)->toContain("export: 'handleExportUnavailable()'")
-        ->and($customersScript)->toContain('handleExportUnavailable() {');
+    expect($customersScript)->not->toContain("exportHandler: 'handleExportUnavailable()'")
+        ->and($customersScript)->not->toContain("export: 'handleExportUnavailable()'")
+        ->and($customersScript)->not->toContain('handleExportUnavailable() {');
 });
 
-it('38. shared crud renderer owns the customers export toolbar button markup', function () {
+it('45. shared crud renderer still owns the optional export toolbar markup', function () {
     $rendererSource = file_get_contents(base_path('resources/js/lib/crud-page.js'));
     $customersBlade = file_get_contents(base_path('resources/views/sales/customers/index.blade.php'));
 

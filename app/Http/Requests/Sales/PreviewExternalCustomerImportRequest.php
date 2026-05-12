@@ -32,7 +32,73 @@ class PreviewExternalCustomerImportRequest extends FormRequest
             'source' => [
                 'required',
                 'string',
-                Rule::in(['woocommerce', 'shopify']),
+                Rule::in(['woocommerce', 'shopify', 'file-upload']),
+            ],
+            'rows' => [
+                'nullable',
+                'array',
+            ],
+            'rows.*.external_id' => [
+                'required_if:source,file-upload',
+                'nullable',
+                'string',
+                'max:255',
+            ],
+            'rows.*.external_source' => [
+                'nullable',
+                'string',
+                'max:255',
+            ],
+            'rows.*.name' => [
+                'required_if:source,file-upload',
+                'nullable',
+                'string',
+                'max:255',
+            ],
+            'rows.*.email' => [
+                'nullable',
+                'email',
+                'max:255',
+            ],
+            'rows.*.phone' => [
+                'nullable',
+                'string',
+                'max:255',
+            ],
+            'rows.*.address_line_1' => [
+                'nullable',
+                'string',
+                'max:255',
+            ],
+            'rows.*.address_line_2' => [
+                'nullable',
+                'string',
+                'max:255',
+            ],
+            'rows.*.city' => [
+                'nullable',
+                'string',
+                'max:255',
+            ],
+            'rows.*.region' => [
+                'nullable',
+                'string',
+                'max:255',
+            ],
+            'rows.*.postal_code' => [
+                'nullable',
+                'string',
+                'max:255',
+            ],
+            'rows.*.country_code' => [
+                'nullable',
+                'string',
+                'size:2',
+                'alpha:ascii',
+            ],
+            'rows.*.is_active' => [
+                'nullable',
+                'boolean',
             ],
         ];
     }

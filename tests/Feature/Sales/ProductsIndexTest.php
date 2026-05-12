@@ -422,7 +422,7 @@ it('23. products import ui includes a preview loading state contract', function 
     $importModuleSource = file_get_contents(base_path('resources/js/lib/import-module.js'));
 
     expect($importModuleSource)->toContain('isLoadingPreview')
-        ->and($importModuleSource)->toContain("config.labels?.loadingPreviewDefault || 'Loading preview...'")
+        ->and($importModuleSource)->toContain("const loadingPreviewLabel = labels.loadingPreviewDefault || 'Loading preview...';")
         ->and($importModuleSource)->toContain('previewLoadingMessage');
 });
 

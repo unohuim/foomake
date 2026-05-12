@@ -111,9 +111,9 @@ export function normalizeImportConfig(config) {
             ),
         },
         rowBehavior: {
-            hideDuplicatesByDefault: Boolean(rawRowBehavior.hideDuplicatesByDefault),
+            hideDuplicatesByDefault: sanitizeBoolean(rawRowBehavior.hideDuplicatesByDefault, true),
             selectVisibleNonDuplicateRowsOnly: Boolean(rawRowBehavior.selectVisibleNonDuplicateRowsOnly),
-            submitSelectedVisibleRowsOnly: Boolean(rawRowBehavior.submitSelectedVisibleRowsOnly),
+            submitSelectedVisibleRowsOnly: sanitizeBoolean(rawRowBehavior.submitSelectedVisibleRowsOnly, true),
             duplicateFlagField: sanitizeLabel(rawRowBehavior.duplicateFlagField, 'is_duplicate'),
             selectionField: sanitizeLabel(rawRowBehavior.selectionField, 'selected'),
         },

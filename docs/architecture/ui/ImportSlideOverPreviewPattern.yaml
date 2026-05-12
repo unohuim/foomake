@@ -23,11 +23,19 @@ rules:
   - The slide-over must not require a manual Load Preview button.
   - Bulk options and preview records must render as separate accordions, with bulk options default collapsed and preview records default open.
   - Preview rows must render as responsive cards rather than a table.
+  - Resource import preview rows must use a compact default presentation of approximately 1 cm row height.
+  - The preview card primary label must be the truncated resource name/title.
+  - Secondary preview context should be city when the preview row provides one.
+  - Thick multi-line preview cards are not allowed for the default resource preview state.
   - Preview row selection, search text, duplicate visibility, and row override state must remain page-scoped local state.
   - duplicate rows must remain in DOM state and selection state even when hidden from view.
   - Duplicate rows must be visually hidden by default and revealed only when the duplicate-visibility control is enabled.
+  - Duplicate preview rows must initialize unselected by default when the backend flags them as duplicates.
   - Mass-select behavior must operate only on currently visible non-duplicate rows unless an approved architecture entry documents otherwise.
+  - Import submission must exclude hidden duplicate rows by default when the shared row-behavior contract keeps visible-row submission enabled.
   - Shared import state may normalize bulk option defaults such as create_fulfillment_recipes from the server-generated import config rather than hardcoding resource-specific defaults in the page module.
+  - Shared import state must not coerce a missing preview-row is_active field into an inactive visual state.
+  - When a preview row does not provide an active-state field, the default compact preview must omit active/inactive status presentation rather than infer inactivity.
   - Loading labels for default, file-upload, and external previews must come from the public import contract or its safe fallbacks.
   - The preview records container is the only scrollable region inside the import slide-over; header, source controls, and bulk options remain fixed in place within the panel.
   - Preview filtering and visibility controls must not change backend preview payloads or import domain behavior.

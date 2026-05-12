@@ -114,6 +114,7 @@ Migrations remain the **sole source of truth**.
 | id         | bigint    | No       | Primary key               |
 | tenant_id  | bigint    | No       | FK → tenants.id (CASCADE) |
 | name       | string    | No       | —                         |
+| is_active  | boolean   | No       | Default true              |
 | status     | string    | No       | Defaults to `active`      |
 | notes      | text      | Yes      | —                         |
 | address_line_1 | string | Yes      | —                         |

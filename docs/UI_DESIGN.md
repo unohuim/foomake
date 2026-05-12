@@ -149,6 +149,14 @@ The UI should feel:
 - Vertical “⋮” actions menu on the far right
 - Row click ≠ edit (explicit actions only)
 
+### Import Preview Rows
+
+- Resource import preview rows must be compact and approximately 1 cm tall in their default state
+- The primary label must be the resource name/title and must truncate safely
+- Secondary context should be city when available
+- Avoid thick multi-line preview cards for resource imports
+- Row expansion from validation errors is allowed only when errors are actually present
+
 ---
 
 ## Empty States

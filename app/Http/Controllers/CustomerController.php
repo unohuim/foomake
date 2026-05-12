@@ -38,32 +38,22 @@ class CustomerController extends Controller
     {
         Gate::authorize('sales-customers-manage');
 
-        $customers = Customer::query()
-            ->with('primaryContact')
-            ->where('status', Customer::STATUS_ACTIVE)
-            ->orderBy('name')
-            ->get();
         $crudConfig = $this->customersCrudConfig();
-        $canManageImports = Gate::allows('system-users-manage');
+        /** @var \App\Models\User $user */
+        $user = auth()->user();
+        $importConfig = $this->customersImportConfig($user);
 
         $payload = [
-            'customers' => $customers->map(fn (Customer $customer) => $this->customerIndexData($customer))->values()->all(),
             'storeUrl' => $crudConfig['endpoints']['create'],
             'updateUrlBase' => url('/sales/customers'),
             'navigationStateUrl' => route('navigation.state'),
             'csrfToken' => csrf_token(),
             'statuses' => Customer::statuses(),
-            'sources' => $this->availableSourcesForTenant((int) auth()->user()->tenant_id),
-            'canManageImports' => $canManageImports,
-            'canManageConnections' => $canManageImports,
-            'connectorsPageUrl' => $canManageImports ? route('profile.connectors.index') : null,
-            'previewUrl' => $crudConfig['endpoints']['importPreview'],
-            'importUrl' => $crudConfig['endpoints']['importStore'],
         ];
 
         return view('sales.customers.index', [
             'crudConfig' => $crudConfig,
-            'customers' => $customers,
+            'importConfig' => $importConfig,
             'payload' => $payload,
         ]);
     }
@@ -138,6 +128,21 @@ class CustomerController extends Controller
         WooCommerceCustomerPreviewService $previewService
     ): JsonResponse {
         $source = (string) $request->validated('source');
+
+        if ($source === 'file-upload') {
+            return response()->json([
+                'data' => [
+                    'source' => $source,
+                    'is_connected' => false,
+                    'rows' => $this->annotateDuplicatePreviewRows(
+                        (int) $request->user()->tenant_id,
+                        $request->validated('rows', []),
+                        null
+                    ),
+                ],
+            ]);
+        }
+
         $connection = $this->connectedSourceForTenant((int) $request->user()->tenant_id, $source);
 
         if (! $connection) {
@@ -162,7 +167,11 @@ class CustomerController extends Controller
             'data' => [
                 'source' => $source,
                 'is_connected' => true,
-                'rows' => $rows,
+                'rows' => $this->annotateDuplicatePreviewRows(
+                    (int) $request->user()->tenant_id,
+                    $rows,
+                    $source
+                ),
             ],
         ]);
     }
@@ -172,9 +181,13 @@ class CustomerController extends Controller
      */
     public function storeImport(ImportExternalCustomersRequest $request): JsonResponse
     {
-        $source = (string) $request->validated('source');
+        $isLocalFileImport = $request->boolean('is_local_file_import');
+        $sourceValue = $request->validated('source');
+        $source = is_string($sourceValue) && trim($sourceValue) !== ''
+            ? trim($sourceValue)
+            : null;
 
-        if (! $this->connectedSourceForTenant((int) $request->user()->tenant_id, $source)) {
+        if (! $isLocalFileImport && ! $this->connectedSourceForTenant((int) $request->user()->tenant_id, (string) $source)) {
             return $this->notConnectedResponse();
         }
 
@@ -265,6 +278,7 @@ class CustomerController extends Controller
         $customer = Customer::query()->create(array_merge($this->addressAttributes($validated), [
             'tenant_id' => $request->user()->tenant_id,
             'name' => $validated['name'],
+            'is_active' => $this->activeFlagForStatus($validated['status'] ?? Customer::STATUS_ACTIVE),
             'status' => $validated['status'] ?? Customer::STATUS_ACTIVE,
             'notes' => $validated['notes'] ?? null,
         ]));
@@ -285,6 +299,7 @@ class CustomerController extends Controller
 
         $customer->update(array_merge($this->addressAttributes($validated), [
             'name' => $validated['name'],
+            'is_active' => $this->activeFlagForStatus($validated['status']),
             'status' => $validated['status'],
             'notes' => $validated['notes'] ?? null,
         ]));
@@ -302,6 +317,7 @@ class CustomerController extends Controller
         Gate::authorize('sales-customers-manage');
 
         $customer->update([
+            'is_active' => false,
             'status' => Customer::STATUS_ARCHIVED,
         ]);
 
@@ -314,7 +330,7 @@ class CustomerController extends Controller
     /**
      * Build the customer response payload.
      *
-     * @return array<string, int|string|null>
+     * @return array<string, int|string|bool|null>
      */
     private function customerData(Customer $customer): array
     {
@@ -322,6 +338,7 @@ class CustomerController extends Controller
             'id' => $customer->id,
             'name' => $customer->name,
             'email' => $customer->primaryContact?->email,
+            'is_active' => $customer->is_active,
             'status' => $customer->status,
             'notes' => $customer->notes,
             'address_line_1' => $customer->address_line_1,
@@ -343,7 +360,7 @@ class CustomerController extends Controller
     /**
      * Build the customer index payload.
      *
-     * @return array<string, int|string|null>
+     * @return array<string, int|string|bool|null>
      */
     private function customerIndexData(Customer $customer): array
     {
@@ -351,6 +368,7 @@ class CustomerController extends Controller
             'id' => $customer->id,
             'name' => $customer->name,
             'email' => $customer->primaryContact?->email,
+            'is_active' => $customer->is_active,
             'status' => $customer->status,
             'notes' => null,
             'address_line_1' => $customer->address_line_1,
@@ -374,15 +392,19 @@ class CustomerController extends Controller
      *
      * @param  array<string, mixed>  $row
      */
-    private function createOrMatchImportedCustomer(int $tenantId, string $source, array $row): Customer
+    private function createOrMatchImportedCustomer(int $tenantId, ?string $source, array $row): Customer
     {
         $externalId = (string) $row['external_id'];
+        $isActive = $this->importedCustomerIsActive($row);
+        $mapping = null;
 
-        $mapping = ExternalCustomerMapping::query()
-            ->where('tenant_id', $tenantId)
-            ->where('source', $source)
-            ->where('external_customer_id', $externalId)
-            ->first();
+        if ($source !== null && $source !== '') {
+            $mapping = ExternalCustomerMapping::query()
+                ->where('tenant_id', $tenantId)
+                ->where('source', $source)
+                ->where('external_customer_id', $externalId)
+                ->first();
+        }
 
         $customer = $mapping?->customer;
 
@@ -396,28 +418,89 @@ class CustomerController extends Controller
                 [
                     'tenant_id' => $tenantId,
                     'name' => (string) $row['name'],
-                    'status' => Customer::STATUS_ACTIVE,
+                    'is_active' => $isActive,
+                    'status' => $isActive ? Customer::STATUS_ACTIVE : Customer::STATUS_INACTIVE,
                     'notes' => null,
                 ]
             ));
         }
 
-        ExternalCustomerMapping::query()->updateOrCreate(
-            [
-                'tenant_id' => $tenantId,
-                'source' => $source,
-                'external_customer_id' => $externalId,
-            ],
-            [
-                'customer_id' => $customer->id,
-            ]
-        );
+        if ($source !== null && $source !== '') {
+            ExternalCustomerMapping::query()->updateOrCreate(
+                [
+                    'tenant_id' => $tenantId,
+                    'source' => $source,
+                    'external_customer_id' => $externalId,
+                ],
+                [
+                    'customer_id' => $customer->id,
+                ]
+            );
+        }
 
         if ($source === ExternalProductSourceConnection::SOURCE_WOOCOMMERCE) {
             $this->syncWooImportedPrimaryContact($customer, $row);
         }
 
         return $customer;
+    }
+
+    /**
+     * Annotate preview rows with tenant-scoped duplicate metadata.
+     *
+     * @param  array<int, array<string, mixed>>  $rows
+     * @return array<int, array<string, mixed>>
+     */
+    private function annotateDuplicatePreviewRows(int $tenantId, array $rows, ?string $defaultSource): array
+    {
+        $duplicateKeys = collect($rows)
+            ->map(function (array $row) use ($defaultSource): ?string {
+                $externalSource = $this->resolvedCustomerRowExternalSource($defaultSource, $row);
+                $externalId = $this->normalizedExternalCustomerId($row['external_id'] ?? null);
+
+                if ($externalSource === null || $externalId === null) {
+                    return null;
+                }
+
+                return $externalSource . '|' . $externalId;
+            })
+            ->filter()
+            ->unique()
+            ->values();
+
+        $existingKeys = ExternalCustomerMapping::query()
+            ->where('tenant_id', $tenantId)
+            ->get(['source', 'external_customer_id'])
+            ->map(function (ExternalCustomerMapping $mapping): ?string {
+                $externalSource = $this->normalizedExternalCustomerSource($mapping->source);
+                $externalId = $this->normalizedExternalCustomerId($mapping->external_customer_id);
+
+                if ($externalSource === null || $externalId === null) {
+                    return null;
+                }
+
+                return $externalSource . '|' . $externalId;
+            })
+            ->filter(fn (?string $key): bool => $key !== null && $duplicateKeys->contains($key))
+            ->flip();
+
+        return array_values(array_map(function (array $row) use ($defaultSource, $existingKeys): array {
+            $externalSource = $this->resolvedCustomerRowExternalSource($defaultSource, $row);
+            $externalId = $this->normalizedExternalCustomerId($row['external_id'] ?? null);
+            $duplicateKey = $externalSource !== null && $externalId !== null
+                ? $externalSource . '|' . $externalId
+                : null;
+            $isDuplicate = $duplicateKey !== null && $existingKeys->has($duplicateKey);
+
+            return array_merge($row, [
+                'external_source' => $externalSource,
+                'is_duplicate' => $isDuplicate,
+                'duplicate_reason' => $isDuplicate
+                    ? 'A customer with the same external source and external ID already exists.'
+                    : '',
+                'selected' => ! $isDuplicate,
+            ]);
+        }, $rows));
     }
 
     /**
@@ -549,6 +632,28 @@ class CustomerController extends Controller
     }
 
     /**
+     * Resolve the boolean active flag from a customer lifecycle status.
+     */
+    private function activeFlagForStatus(string $status): bool
+    {
+        return $status === Customer::STATUS_ACTIVE;
+    }
+
+    /**
+     * Resolve the imported customer active flag from a preview row.
+     *
+     * @param  array<string, mixed>  $row
+     */
+    private function importedCustomerIsActive(array $row): bool
+    {
+        if (! array_key_exists('is_active', $row)) {
+            return true;
+        }
+
+        return (bool) $row['is_active'];
+    }
+
+    /**
      * Normalize nullable imported strings.
      */
     private function nullableString(mixed $value): ?string
@@ -558,6 +663,42 @@ class CustomerController extends Controller
         }
 
         $normalized = trim($value);
+
+        return $normalized === '' ? null : $normalized;
+    }
+
+    /**
+     * Resolve the normalized external source for a customer preview or import row.
+     *
+     * @param  array<string, mixed>  $row
+     */
+    private function resolvedCustomerRowExternalSource(?string $defaultSource, array $row): ?string
+    {
+        $rowSource = $this->normalizedExternalCustomerSource($row['external_source'] ?? null);
+
+        if ($rowSource !== null) {
+            return $rowSource;
+        }
+
+        return $this->normalizedExternalCustomerSource($defaultSource);
+    }
+
+    /**
+     * Normalize an external source value for exact duplicate matching.
+     */
+    private function normalizedExternalCustomerSource(mixed $value): ?string
+    {
+        $normalized = mb_strtolower(trim((string) ($value ?? '')));
+
+        return $normalized === '' ? null : $normalized;
+    }
+
+    /**
+     * Normalize an external ID value for exact duplicate matching.
+     */
+    private function normalizedExternalCustomerId(mixed $value): ?string
+    {
+        $normalized = trim((string) ($value ?? ''));
 
         return $normalized === '' ? null : $normalized;
     }
@@ -803,7 +944,7 @@ class CustomerController extends Controller
                 'actionsAriaLabel' => 'Customer actions',
             ],
             'permissions' => [
-                'showExport' => Gate::allows('sales-customers-manage'),
+                'showExport' => false,
                 'showImport' => Gate::allows('system-users-manage'),
                 'showCreate' => Gate::allows('sales-customers-manage'),
             ],
@@ -853,6 +994,14 @@ class CustomerController extends Controller
 
         return [
             [
+                'value' => 'file-upload',
+                'label' => 'File Upload',
+                'enabled' => true,
+                'connected' => false,
+                'status' => 'local',
+                'status_label' => 'Local file',
+            ],
+            [
                 'value' => ExternalProductSourceConnection::SOURCE_WOOCOMMERCE,
                 'label' => 'WooCommerce',
                 'enabled' => true,
@@ -867,6 +1016,48 @@ class CustomerController extends Controller
                 'connected' => false,
                 'status' => 'placeholder',
                 'status_label' => 'Coming soon',
+            ],
+        ];
+    }
+
+    /**
+     * Build the shared import config for the Sales Customers page module.
+     *
+     * @return array<string, mixed>
+     */
+    private function customersImportConfig(\App\Models\User $user): array
+    {
+        $canManageImports = Gate::allows('system-users-manage');
+
+        return [
+            'resource' => 'customers',
+            'endpoints' => [
+                'preview' => route('sales.customers.import.preview'),
+                'store' => route('sales.customers.import.store'),
+            ],
+            'labels' => [
+                'title' => 'Import Customers',
+                'source' => 'Source',
+                'submit' => 'Import Selected',
+                'previewSearch' => 'Search preview records',
+                'loadingPreviewDefault' => 'Loading preview...',
+                'loadingPreviewFile' => 'Loading file preview...',
+                'loadingPreviewExternal' => 'Loading WooCommerce preview...',
+            ],
+            'permissions' => [
+                'canManageImports' => $canManageImports,
+                'canManageConnections' => $canManageImports,
+            ],
+            'connectorsPageUrl' => $canManageImports ? route('profile.connectors.index') : null,
+            'sources' => $this->availableSourcesForTenant((int) $user->tenant_id),
+            'uoms' => [],
+            'bulkOptions' => [],
+            'rowBehavior' => [
+                'hideDuplicatesByDefault' => true,
+                'selectVisibleNonDuplicateRowsOnly' => true,
+                'submitSelectedVisibleRowsOnly' => true,
+                'duplicateFlagField' => 'is_duplicate',
+                'selectionField' => 'selected',
             ],
         ];
     }

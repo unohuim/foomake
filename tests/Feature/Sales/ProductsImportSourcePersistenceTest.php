@@ -100,7 +100,7 @@ it('8. the file picker flow clears the native input before click', function () {
     expect($this->importModuleSource)
         ->toContain('clearImportFileInput()')
         ->and($this->importModuleSource)->toContain('this.clearImportFileInput();')
-        ->and($this->importModuleSource)->toContain('this.$refs.importFileInput?.click();');
+        ->and($this->importModuleSource)->toContain('this.$refs.importFileInput.click();');
 });
 
 it('9. loaded files are stored through cache current file preview rows', function () {
@@ -168,7 +168,7 @@ it('19. switching to woocommerce does not clear cached file sources in handle so
     expect($handleSourceBlock)
         ->not->toContain('this.cachedFileSources = [];')
         ->and($handleSourceBlock)->not->toContain('this.nextCachedFileSourceId = 1;')
-        ->and($this->importModuleSource)->toContain("config.labels?.loadingPreviewExternal || 'Loading WooCommerce preview...'")
+        ->and($this->importModuleSource)->toContain("const loadingExternalPreviewLabel = labels.loadingPreviewExternal || 'Loading WooCommerce preview...';")
         ->and($handleSourceBlock)->toContain('loadingMessage: loadingExternalPreviewLabel');
 });
 

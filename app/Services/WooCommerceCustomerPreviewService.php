@@ -47,6 +47,7 @@ class WooCommerceCustomerPreviewService
         }
 
         $billing = is_array($customer['billing'] ?? null) ? $customer['billing'] : [];
+        $shipping = is_array($customer['shipping'] ?? null) ? $customer['shipping'] : [];
         $firstName = trim((string) ($customer['first_name'] ?? ''));
         $lastName = trim((string) ($customer['last_name'] ?? ''));
         $name = trim($firstName . ' ' . $lastName);
@@ -72,12 +73,13 @@ class WooCommerceCustomerPreviewService
             'name' => $name,
             'email' => (string) ($customer['email'] ?? ''),
             'phone' => (string) ($billing['phone'] ?? ''),
-            'address_line_1' => (string) ($billing['address_1'] ?? ''),
-            'address_line_2' => (string) ($billing['address_2'] ?? ''),
-            'city' => (string) ($billing['city'] ?? ''),
-            'region' => (string) ($billing['state'] ?? ''),
-            'postal_code' => (string) ($billing['postcode'] ?? ''),
-            'country_code' => (string) ($billing['country'] ?? ''),
+            'is_active' => true,
+            'address_line_1' => (string) ($shipping['address_1'] ?? ''),
+            'address_line_2' => (string) ($shipping['address_2'] ?? ''),
+            'city' => (string) ($shipping['city'] ?? ''),
+            'region' => (string) ($shipping['state'] ?? ''),
+            'postal_code' => (string) ($shipping['postcode'] ?? ''),
+            'country_code' => (string) ($shipping['country'] ?? ''),
         ];
     }
 }

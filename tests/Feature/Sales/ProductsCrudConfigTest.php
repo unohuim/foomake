@@ -875,7 +875,7 @@ it('43. import slide over label is ecommerce store and includes hidden file uplo
         ->and($source)->toContain('return this.isFileUploadMode() || this.isCachedFileSource() ? null : this.selectedSource;')
         ->and($source)->toContain('sourceOptionLabel(source)')
         ->and($source)->toContain('openImportFilePicker()')
-        ->and($source)->toContain('this.$refs.importFileInput?.click();')
+        ->and($source)->toContain('this.$refs.importFileInput.click();')
         ->and($source)->toContain('restoreCachedFilePreview()')
         ->and($source)->toContain('cacheCurrentFilePreviewRows(rows)')
         ->and($source)->toContain('source: importSource')
@@ -893,7 +893,7 @@ it('43. import slide over label is ecommerce store and includes hidden file uplo
         ->and($blade)->toContain('data-products-import-preview-search')
         ->and($blade)->toContain('data-products-import-show-duplicates')
         ->and($blade)->toContain('<template x-for="fileSource in cachedFileSources" :key="fileSource.value">')
-        ->and($source)->toContain("config.labels?.loadingPreviewFile || 'Loading file preview...'")
+        ->and($source)->toContain("const loadingFilePreviewLabel = labels.loadingPreviewFile || 'Loading file preview...';")
         ->and($source)->toContain('loadingMessage: loadingFilePreviewLabel');
 });
 

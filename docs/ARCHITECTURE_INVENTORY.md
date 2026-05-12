@@ -1748,7 +1748,7 @@ Confirmations or single-field actions.
 - `resources/js/pages/sales-products-index.js`  
 
 **Purpose:**  
-Provide a reusable config-driven import slide-over pattern where preview loads automatically from the chosen source, bulk options and preview records use accordions, and the preview list stays card-based and page-scoped.
+Provide a reusable config-driven import slide-over pattern where preview loads automatically from the chosen source, bulk options and preview records use accordions, and the preview list stays card-based, compact, and page-scoped.
 
 **When to Use:**  
 Preview-first import slide-overs that combine source selection, duplicate-aware row visibility, per-row overrides, and resource-specific endpoints without leaving the current page.
@@ -1781,7 +1781,12 @@ One-step uploads with no preview, or workflows that require global JavaScript st
 
 Notes:
 - Bulk Import Options defaults collapsed while Preview Records accordion defaults open.
-- Preview records render as responsive cards; duplicate rows remain in DOM state and are hidden by default until explicitly shown.
+- Preview records render as responsive compact cards; the default row content is a truncated resource name/title plus city when available.
+- Missing preview-row active state must not be rendered as inactive by default.
+- duplicate rows remain in DOM state
+- Duplicate rows remain in DOM state and are hidden by default until explicitly shown.
+- Duplicate preview rows initialize unselected by default.
+- Visible-row selection and default submit behavior exclude hidden duplicate rows.
 - Loading labels and bulk option defaults are provided through the server-generated import config rather than hardcoded in the page module.
 - The preview records area is the only scrollable region inside the slide-over.
 

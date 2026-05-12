@@ -15,6 +15,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property int $id
  * @property int $tenant_id
  * @property string $name
+ * @property bool $is_active
  * @property string $status
  * @property string|null $notes
  * @property string|null $address_line_1
@@ -44,6 +45,7 @@ class Customer extends Model
     protected $fillable = [
         'tenant_id',
         'name',
+        'is_active',
         'status',
         'notes',
         'address_line_1',
@@ -63,6 +65,7 @@ class Customer extends Model
      * @var array<string, string>
      */
     protected $casts = [
+        'is_active' => 'boolean',
         'latitude' => 'decimal:7',
         'longitude' => 'decimal:7',
     ];

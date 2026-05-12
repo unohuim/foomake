@@ -3,20 +3,33 @@ import { normalizeImportConfig } from './import-config';
 export function createImportModule(options = {}) {
     const config = normalizeImportConfig(options.config || options);
     const callbacks = options.callbacks && typeof options.callbacks === 'object' ? options.callbacks : {};
+    const endpointConfig = config.endpoints && typeof config.endpoints === 'object' ? config.endpoints : {};
+    const labels = config.labels && typeof config.labels === 'object' ? config.labels : {};
     const endpoints = {
-        importPreview: config.endpoints?.preview || '',
-        importStore: config.endpoints?.store || '',
+        importPreview: endpointConfig.preview || '',
+        importStore: endpointConfig.store || '',
     };
-    const loadingPreviewLabel = config.labels?.loadingPreviewDefault || 'Loading preview...';
-    const loadingFilePreviewLabel = config.labels?.loadingPreviewFile || 'Loading file preview...';
-    const loadingExternalPreviewLabel = config.labels?.loadingPreviewExternal || 'Loading WooCommerce preview...';
+    const loadingPreviewLabel = labels.loadingPreviewDefault || 'Loading preview...';
+    const loadingFilePreviewLabel = labels.loadingPreviewFile || 'Loading file preview...';
+    const loadingExternalPreviewLabel = labels.loadingPreviewExternal || 'Loading WooCommerce preview...';
+    const rowBehavior = config.rowBehavior || {};
     const bulkOptions = config.bulkOptions || {};
-    const createFulfillmentRecipesDefault = bulkOptions.create_fulfillment_recipes?.default !== false;
+    const recipeOption = bulkOptions.create_fulfillment_recipes && typeof bulkOptions.create_fulfillment_recipes === 'object'
+        ? bulkOptions.create_fulfillment_recipes
+        : {};
+    const hideDuplicatesByDefault = rowBehavior.hideDuplicatesByDefault === true;
+    const selectVisibleNonDuplicateRowsOnly = rowBehavior.selectVisibleNonDuplicateRowsOnly === true;
+    const submitSelectedVisibleRowsOnly = rowBehavior.submitSelectedVisibleRowsOnly !== false;
+    const createFulfillmentRecipesDefault = recipeOption.default !== false;
     const manufacturableOption = bulkOptions.import_all_as_manufacturable || {};
     const purchasableOption = bulkOptions.import_all_as_purchasable || {};
     const bulkManufacturableDefault = manufacturableOption.default === true;
     const bulkPurchasableDefault = purchasableOption.default === true;
-    const bulkBaseUomIdDefault = bulkOptions.bulk_base_uom_id?.default || '';
+    const bulkBaseUomOption = bulkOptions.bulk_base_uom_id && typeof bulkOptions.bulk_base_uom_id === 'object'
+        ? bulkOptions.bulk_base_uom_id
+        : {};
+    const bulkBaseUomIdDefault = bulkBaseUomOption.default || '';
+    const localCsvParser = typeof callbacks.parseLocalCsv === 'function' ? callbacks.parseLocalCsv : null;
 
     const emptyErrors = () => ({
         source: [],
@@ -38,7 +51,10 @@ export function createImportModule(options = {}) {
         external_source: row.external_source || '',
         base_uom_id: row.base_uom_id ? String(row.base_uom_id) : '',
         is_sellable: row.is_sellable !== false,
-        is_active: Boolean(row.is_active),
+        has_active_state: Object.prototype.hasOwnProperty.call(row, 'is_active'),
+        is_active: Object.prototype.hasOwnProperty.call(row, 'is_active')
+            ? Boolean(row.is_active)
+            : null,
         is_manufacturable: row.is_manufacturable === null || row.is_manufacturable === undefined
             ? null
             : Boolean(row.is_manufacturable),
@@ -61,7 +77,7 @@ export function createImportModule(options = {}) {
         cachedFileSources: [],
         nextCachedFileSourceId: 1,
         previewSearch: '',
-        showDuplicateRows: false,
+        showDuplicateRows: !hideDuplicatesByDefault,
         bulkOptionsAccordionOpen: false,
         previewRecordsAccordionOpen: true,
         bulkManufacturable: bulkManufacturableDefault,
@@ -83,14 +99,14 @@ export function createImportModule(options = {}) {
                 return;
             }
 
-            if (this.slideOvers?.import) {
+            if (this.slideOvers && this.slideOvers.import) {
                 this.slideOvers.import.open = true;
             }
         },
         closeImportPanel() {
             if (typeof this.closeSlideOver === 'function') {
                 this.closeSlideOver('import');
-            } else if (this.slideOvers?.import) {
+            } else if (this.slideOvers && this.slideOvers.import) {
                 this.slideOvers.import.open = false;
             }
 
@@ -108,7 +124,7 @@ export function createImportModule(options = {}) {
             this.cachedFileSources = [];
             this.nextCachedFileSourceId = 1;
             this.previewSearch = '';
-            this.showDuplicateRows = false;
+            this.showDuplicateRows = !hideDuplicatesByDefault;
             this.bulkOptionsAccordionOpen = false;
             this.previewRecordsAccordionOpen = true;
             this.isLoadingPreview = false;
@@ -129,7 +145,7 @@ export function createImportModule(options = {}) {
             this.isLoadingPreview = false;
             this.previewLoadingMessage = loadingPreviewLabel;
             this.previewSearch = '';
-            this.showDuplicateRows = false;
+            this.showDuplicateRows = !hideDuplicatesByDefault;
 
             if (!this.selectedSource) {
                 return;
@@ -171,11 +187,17 @@ export function createImportModule(options = {}) {
         openImportFilePicker() {
             this.$nextTick(() => {
                 this.clearImportFileInput();
-                this.$refs.importFileInput?.click();
+                if (this.$refs && this.$refs.importFileInput && typeof this.$refs.importFileInput.click === 'function') {
+                    this.$refs.importFileInput.click();
+                }
             });
         },
         sourceOptionLabel(source) {
-            return source?.label || '';
+            if (!source || typeof source !== 'object') {
+                return '';
+            }
+
+            return source.label || '';
         },
         currentCachedFileSource() {
             if (!this.isCachedFileSource()) {
@@ -213,7 +235,9 @@ export function createImportModule(options = {}) {
             this.selectedSource = value;
         },
         async handleLocalFileChange(event) {
-            const file = event?.target?.files?.[0];
+            const target = event && event.target && typeof event.target === 'object' ? event.target : null;
+            const files = target && Array.isArray(target.files) === false ? target.files : null;
+            const file = files && files[0] ? files[0] : null;
 
             this.errors = emptyErrors();
             this.previewError = '';
@@ -240,10 +264,16 @@ export function createImportModule(options = {}) {
 
             try {
                 const text = await file.text();
-                const parsedRows = this.parseLocalCsv(text);
+                const parsedRowsResult = localCsvParser
+                    ? localCsvParser(text, this)
+                    : this.parseLocalCsv(text);
+                const parsedRows = Array.isArray(parsedRowsResult) ? parsedRowsResult : [];
 
                 if (parsedRows.length === 0) {
-                    this.errors.file = ['The selected CSV file does not contain any product rows.'];
+                    if (!Array.isArray(this.errors.file) || this.errors.file.length === 0) {
+                        this.errors.file = ['The selected CSV file does not contain any product rows.'];
+                    }
+
                     return;
                 }
 
@@ -413,17 +443,23 @@ export function createImportModule(options = {}) {
                 return true;
             }
 
-            return Boolean(this.selectedSourceMeta()?.enabled);
+            const sourceMeta = this.selectedSourceMeta();
+
+            return Boolean(sourceMeta && sourceMeta.enabled);
         },
         sourceConnected() {
             if (this.isFileUploadMode()) {
                 return false;
             }
 
-            return Boolean(this.selectedSourceMeta()?.connected);
+            const sourceMeta = this.selectedSourceMeta();
+
+            return Boolean(sourceMeta && sourceMeta.connected);
         },
         selectedSourceStatusLabel() {
-            return this.selectedSourceMeta()?.status_label || '';
+            const sourceMeta = this.selectedSourceMeta();
+
+            return sourceMeta && sourceMeta.status_label ? sourceMeta.status_label : '';
         },
         hasSelectedImportSource() {
             return this.selectedSource !== '';
@@ -487,30 +523,63 @@ export function createImportModule(options = {}) {
                     ? row.image_url
                     : null,
                 base_uom_id: row.base_uom_id === '' ? null : Number(row.base_uom_id),
-                is_active: Boolean(row.is_active),
+                is_active: this.rowHasActiveState(row) ? this.rowIsActive(row) : null,
                 is_sellable: true,
                 is_manufacturable: this.resolvedRowManufacturable(row),
                 is_purchasable: this.resolvedRowPurchasable(row),
             };
         },
+        previewPrimaryLabel(row) {
+            if (!row || typeof row !== 'object') {
+                return '—';
+            }
+
+            return row.name || row.title || row.sku || row.external_id || '—';
+        },
+        previewSecondaryLabel(row) {
+            if (!row || typeof row !== 'object') {
+                return '';
+            }
+
+            return typeof row.city === 'string' && row.city.trim() !== '' ? row.city.trim() : '';
+        },
+        rowHasSecondaryLabel(row) {
+            return this.previewSecondaryLabel(row) !== '';
+        },
+        rowHasActiveState(row) {
+            return Boolean(row && typeof row === 'object' && row.has_active_state === true);
+        },
+        rowIsActive(row) {
+            return Boolean(row && typeof row === 'object' && row.is_active === true);
+        },
         previewStatusLabel(row) {
-            if (row.is_duplicate) {
+            if (this.rowIsDuplicate(row)) {
                 return 'Duplicate';
             }
 
-            return row.is_active ? 'Active' : 'Inactive';
+            if (!this.rowHasActiveState(row)) {
+                return '';
+            }
+
+            return this.rowIsActive(row) ? 'Active' : 'Inactive';
+        },
+        rowIsDuplicate(row) {
+            return Boolean(row && typeof row === 'object' && row.is_duplicate);
+        },
+        rowSelectionDisabled(row) {
+            return selectVisibleNonDuplicateRowsOnly && this.rowIsDuplicate(row);
         },
         duplicateRowCount() {
-            return this.previewRows.filter((row) => row.is_duplicate).length;
+            return this.previewRows.filter((row) => this.rowIsDuplicate(row)).length;
         },
         previewSearchText(row) {
             return [
-                row.name,
+                this.previewPrimaryLabel(row),
+                this.previewSecondaryLabel(row),
                 row.sku,
                 row.external_id,
                 row.external_source,
                 row.price,
-                this.previewStatusLabel(row),
             ]
                 .filter((value) => String(value || '').trim() !== '')
                 .join(' ')
@@ -530,14 +599,14 @@ export function createImportModule(options = {}) {
                 return false;
             }
 
-            if (!this.showDuplicateRows && row.is_duplicate) {
+            if (!this.showDuplicateRows && this.rowIsDuplicate(row)) {
                 return false;
             }
 
             return true;
         },
         visibleSelectablePreviewRows() {
-            return this.previewRows.filter((row) => this.rowVisibleInPreview(row) && !row.is_duplicate);
+            return this.previewRows.filter((row) => this.rowVisibleInPreview(row) && !this.rowSelectionDisabled(row));
         },
         visiblePreviewRowsCount() {
             return this.previewRows.filter((row) => this.rowVisibleInPreview(row)).length;
@@ -551,7 +620,8 @@ export function createImportModule(options = {}) {
             return rows.length > 0 && rows.every((row) => row.selected);
         },
         toggleVisibleRowSelection(event) {
-            const shouldSelect = Boolean(event?.target?.checked);
+            const target = event && event.target && typeof event.target === 'object' ? event.target : null;
+            const shouldSelect = Boolean(target && target.checked);
 
             this.visibleSelectablePreviewRows().forEach((row) => {
                 row.selected = shouldSelect;
@@ -561,7 +631,13 @@ export function createImportModule(options = {}) {
             return this.previewRows.filter((row) => row.selected);
         },
         selectedVisiblePreviewRows() {
-            return this.previewRows.filter((row) => row.selected && this.rowVisibleInPreview(row));
+            const rows = this.previewRows.filter((row) => row.selected);
+
+            if (!submitSelectedVisibleRowsOnly) {
+                return rows;
+            }
+
+            return rows.filter((row) => this.rowVisibleInPreview(row));
         },
         previewEmptyStateTitle() {
             if (this.previewRows.length === 0) {
@@ -597,7 +673,7 @@ export function createImportModule(options = {}) {
             this.isLoadingPreview = true;
             this.previewLoadingMessage = loadingMessage;
             this.previewSearch = '';
-            this.showDuplicateRows = false;
+            this.showDuplicateRows = !hideDuplicatesByDefault;
             this.previewRows = [];
 
             try {
@@ -622,7 +698,9 @@ export function createImportModule(options = {}) {
                         this.errors.file = [errorMessage];
                     } else {
                         this.previewError = errorMessage;
-                        this.errors.source = Array.isArray(data.errors?.source) ? data.errors.source : [];
+                        const responseErrors = data && data.errors && typeof data.errors === 'object' ? data.errors : {};
+
+                        this.errors.source = Array.isArray(responseErrors.source) ? responseErrors.source : [];
                     }
 
                     return;
@@ -639,7 +717,10 @@ export function createImportModule(options = {}) {
                 }
 
                 const data = await response.json();
-                this.previewRows = (data.data?.rows || []).map((row) => normalizePreviewRow({
+                const responseData = data && data.data && typeof data.data === 'object' ? data.data : {};
+                const responseRows = Array.isArray(responseData.rows) ? responseData.rows : [];
+
+                this.previewRows = responseRows.map((row) => normalizePreviewRow({
                     ...row,
                     external_source: previewSource === 'file-upload'
                         ? (row.external_source || '')
@@ -699,7 +780,7 @@ export function createImportModule(options = {}) {
                 const data = await response.json();
                 this.importError = data.message || 'Unable to import products.';
                 this.importValidationErrors = data.errors || {};
-                this.errors.source = Array.isArray(data.errors?.source) ? data.errors.source : [];
+                this.errors.source = Array.isArray(data.errors && data.errors.source) ? data.errors.source : [];
                 return;
             }
 

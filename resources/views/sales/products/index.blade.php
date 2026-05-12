@@ -401,11 +401,13 @@
                                                                 data-products-import-preview-card
                                                             >
                                                                 <div class="flex min-h-10 items-center gap-3">
-                                                                    <input type="checkbox" class="shrink-0 rounded border-gray-300 text-blue-600 shadow-sm focus:ring-blue-500" x-model="row.selected" x-bind:disabled="row.is_duplicate">
+                                                                    <input type="checkbox" class="shrink-0 rounded border-gray-300 text-blue-600 shadow-sm focus:ring-blue-500" x-model="row.selected" x-bind:disabled="rowSelectionDisabled(row)">
                                                                     <div class="min-w-0 flex-1 overflow-hidden">
-                                                                        <p class="block truncate text-sm font-medium text-gray-900" x-bind:title="row.name" x-text="row.name"></p>
+                                                                        <div class="flex min-w-0 items-center justify-between gap-3">
+                                                                            <p class="block truncate text-sm font-medium text-gray-900" x-bind:title="previewPrimaryLabel(row)" x-text="previewPrimaryLabel(row)"></p>
+                                                                            <p class="shrink-0 truncate text-xs text-gray-500" x-show="rowHasSecondaryLabel(row)" x-text="previewSecondaryLabel(row)"></p>
+                                                                        </div>
                                                                     </div>
-                                                                    <span class="shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase leading-none" :class="row.is_duplicate ? 'bg-red-50 text-red-700' : (row.is_active ? 'bg-green-50 text-green-700' : 'bg-yellow-50 text-yellow-700')" x-text="previewStatusLabel(row)"></span>
                                                                 </div>
                                                                 <template x-if="rowHasProductErrors(index)">
                                                                     <div class="mt-2 space-y-1">

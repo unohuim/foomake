@@ -5,7 +5,6 @@ This file is the single source to paste at the beginning of new LLM chats for fu
 Paste the entire content (or as much as context allows) when starting a session.
 
 ## docs/AI_CHAT_CODEX.md
-
 # AI Chat Bootstrap (READ FIRST)
 
 You are assisting with development on this repository.
@@ -236,9 +235,7 @@ If unsure, **stop immediately and ask**.
   **not global model scopes**
 - The **smallest possible change per PR**
 
-
 ## docs/PR2_ROADMAP.md
-
 # PR2_ROADMAP — UI + Domain Completion (Post-PR-006)
 
 This roadmap defines the **second major phase** of work: completing **Items, Inventory, Suppliers, and Manufacturing**
@@ -1531,9 +1528,7 @@ Introduce a UoM-level display precision field and enforce consistent quantity fo
 - Any changes to storage precision or BCMath scale
 - JavaScript formatting or UI-only overrides per view
 
-
 ## docs/CONVENTIONS.md
-
 # Conventions
 
 This document defines the **mandatory development conventions** for this repository.  
@@ -1787,9 +1782,7 @@ These rules apply to:
 - Unit conversions
 - Any inventory-affecting calculations
 
-
 ## docs/ARCHITECTURE_INVENTORY.md
-
 # Architecture Inventory
 
 This document tracks **reusable abstractions, components, and architectural patterns**
@@ -3540,7 +3533,7 @@ Confirmations or single-field actions.
 - `resources/js/pages/sales-products-index.js`  
 
 **Purpose:**  
-Provide a reusable config-driven import slide-over pattern where preview loads automatically from the chosen source, bulk options and preview records use accordions, and the preview list stays card-based and page-scoped.
+Provide a reusable config-driven import slide-over pattern where preview loads automatically from the chosen source, bulk options and preview records use accordions, and the preview list stays card-based, compact, and page-scoped.
 
 **When to Use:**  
 Preview-first import slide-overs that combine source selection, duplicate-aware row visibility, per-row overrides, and resource-specific endpoints without leaving the current page.
@@ -3573,7 +3566,12 @@ One-step uploads with no preview, or workflows that require global JavaScript st
 
 Notes:
 - Bulk Import Options defaults collapsed while Preview Records accordion defaults open.
-- Preview records render as responsive cards; duplicate rows remain in DOM state and are hidden by default until explicitly shown.
+- Preview records render as responsive compact cards; the default row content is a truncated resource name/title plus city when available.
+- Missing preview-row active state must not be rendered as inactive by default.
+- duplicate rows remain in DOM state
+- Duplicate rows remain in DOM state and are hidden by default until explicitly shown.
+- Duplicate preview rows initialize unselected by default.
+- Visible-row selection and default submit behavior exclude hidden duplicate rows.
 - Loading labels and bulk option defaults are provided through the server-generated import config rather than hardcoded in the page module.
 - The preview records area is the only scrollable region inside the slide-over.
 
@@ -4050,9 +4048,7 @@ it('creates a material', function () {
 
 ---
 
-
 ## docs/PERMISSIONS_MATRIX.md
-
 # Permissions Matrix
 
 This document is the source-of-truth for **authorization intent** in this repository.
@@ -4247,9 +4243,7 @@ return [
 ];
 ```
 
-
 ## docs/ENUMS.md
-
 # ENUMS — Canonical Enum Authority
 
 This document defines the canonical, normative enum-like values used throughout the system.
@@ -4503,9 +4497,7 @@ Do not introduce new enum values without updating this document.
 
 No conflicts or ambiguities were found at time of creation based on existing migrations, models, actions, and tests.
 
-
 ## docs/DB_SCHEMA.md
-
 # Database Schema Inventory (DB_SCHEMA)
 
 This document inventories **all database tables and columns** as defined by migrations.
@@ -4622,6 +4614,7 @@ Migrations remain the **sole source of truth**.
 | id         | bigint    | No       | Primary key               |
 | tenant_id  | bigint    | No       | FK → tenants.id (CASCADE) |
 | name       | string    | No       | —                         |
+| is_active  | boolean   | No       | Default true              |
 | status     | string    | No       | Defaults to `active`      |
 | notes      | text      | Yes      | —                         |
 | address_line_1 | string | Yes      | —                         |
@@ -5800,9 +5793,7 @@ Migrations remain the **sole source of truth**.
 
 **End of DB_SCHEMA**
 
-
 ## docs/UI_DESIGN.md
-
 # UI_DESIGN.md — Canonical UI Direction & Constraints
 
 This document defines the **authoritative UI design rules** for this repository.
@@ -5953,6 +5944,14 @@ The UI should feel:
 - Subtle dividers only when necessary
 - Vertical “⋮” actions menu on the far right
 - Row click ≠ edit (explicit actions only)
+
+### Import Preview Rows
+
+- Resource import preview rows must be compact and approximately 1 cm tall in their default state
+- The primary label must be the resource name/title and must truncate safely
+- Secondary context should be city when available
+- Avoid thick multi-line preview cards for resource imports
+- Row expansion from validation errors is allowed only when errors are actually present
 
 ---
 
@@ -6396,9 +6395,7 @@ They are mandatory, not stylistic.
 
 ::contentReference[oaicite:0]{index=0}
 
-
 ## routes/web.php
-
 <?php
 
 use App\Http\Controllers\InventoryController;
@@ -6678,9 +6675,7 @@ Route::delete('/manufacturing/uom-conversions/items/{itemConversion}', [UomConve
 
 require __DIR__ . '/auth.php';
 
-
 ## docs/PR3_ROADMAP.md
-
 # PR3_ROADMAP — Sales + CRM Foundations
 
 This roadmap defines the third major phase of work: introducing the **Sales domain (CRM foundations + Sales Orders)**, fully integrated with inventory before any external integrations.
@@ -7359,9 +7354,7 @@ After PR3 completion:
 - Sales orders impact inventory correctly
 - System ready for external integrations
 
-
 ## docs/BACKLOG.md
-
 # BACKLOG
 
 This backlog captures outstanding product capabilities identified from competitive feature review and QuickBooks Online integration planning.
@@ -7731,5 +7724,3 @@ QuickBooks Online integration reduces admin work, improves bookkeeping accuracy,
 - Each PR should remain small, test-first, and tenant-safe.
 - Documentation updates should only happen when explicitly required and approved.
 - Any reusable abstraction introduced by these PRs must be recorded in the architecture inventory when applicable.
-
-

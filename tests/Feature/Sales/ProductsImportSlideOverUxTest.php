@@ -93,7 +93,7 @@ it('6. woo commerce source selection auto loads preview in the shared import mod
     expect($this->importModuleSource)
         ->toContain('handleSourceChange()')
         ->and($this->importModuleSource)->toContain('this.loadPreview({')
-        ->and($this->importModuleSource)->toContain("config.labels?.loadingPreviewExternal || 'Loading WooCommerce preview...'")
+        ->and($this->importModuleSource)->toContain("const loadingExternalPreviewLabel = labels.loadingPreviewExternal || 'Loading WooCommerce preview...';")
         ->and($this->importModuleSource)->toContain('loadingMessage: loadingExternalPreviewLabel');
 });
 
@@ -102,16 +102,21 @@ it('7. file selection auto loads preview after the file is read', function () {
         ->toContain('async handleLocalFileChange(event)')
         ->and($this->importModuleSource)->toContain('const text = await file.text();')
         ->and($this->importModuleSource)->toContain("source: 'file-upload'")
-        ->and($this->importModuleSource)->toContain("config.labels?.loadingPreviewFile || 'Loading file preview...'")
+        ->and($this->importModuleSource)->toContain("const loadingFilePreviewLabel = labels.loadingPreviewFile || 'Loading file preview...';")
         ->and($this->importModuleSource)->toContain('loadingMessage: loadingFilePreviewLabel');
 });
 
 it('8. selecting file upload auto opens the hidden file picker', function () {
     expect($this->importModuleSource)
         ->toContain('openImportFilePicker()')
-        ->and($this->importModuleSource)->toContain('this.$refs.importFileInput?.click();')
+        ->and($this->importModuleSource)->toContain('this.$refs.importFileInput.click();')
         ->and($this->importModuleSource)->toContain('if (this.isFileUploadMode()) {')
         ->and($this->importModuleSource)->toContain('this.openImportFilePicker();');
+});
+
+it('8a. shared import module source avoids optional chaining assignment syntax', function () {
+    expect($this->importModuleSource)
+        ->not->toContain('?.');
 });
 
 it('9. a selected file becomes a separate cached source option that can restore preview rows', function () {
@@ -156,25 +161,52 @@ it('14. import preview accordion defaults open in the shared import module', fun
 it('15. preview uses cards instead of a table', function () {
     expect($this->bladeSource)
         ->toContain('data-products-import-preview-card')
+        ->and($this->bladeSource)->toContain('x-text="previewPrimaryLabel(row)"')
+        ->and($this->bladeSource)->toContain('x-text="previewSecondaryLabel(row)"')
         ->and($this->bladeSource)->not->toContain('<table class="min-w-full divide-y divide-gray-100">');
 });
 
-it('16. preview cards still show status labels', function () {
+it('16. shared import module keeps active-state support without forcing a visible status badge', function () {
     expect($this->bladeSource)
-        ->toContain('x-text="previewStatusLabel(row)"')
-        ->and($this->importModuleSource)->toContain("return 'Duplicate';")
-        ->and($this->importModuleSource)->toContain("return row.is_active ? 'Active' : 'Inactive';");
+        ->not->toContain('x-text="previewStatusLabel(row)"')
+        ->and($this->importModuleSource)->toContain('rowHasActiveState(row)')
+        ->and($this->importModuleSource)->toContain('rowIsActive(row)')
+        ->and($this->importModuleSource)->toContain("if (!this.rowHasActiveState(row)) {");
 });
 
-it('17. show duplicates defaults off in the shared import module', function () {
-    expect($this->importModuleSource)->toContain('showDuplicateRows: false');
+it('17. products duplicate visibility defaults come from the public import config contract', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermissions)($user, ['inventory-products-view', 'inventory-products-manage']);
+
+    $response = $this->actingAs($user)
+        ->get(route('sales.products.index'))
+        ->assertOk();
+
+    preg_match("/data-import-config='([^']+)'/", $response->getContent(), $matches);
+
+    expect($matches)->toHaveKey(1);
+
+    $config = json_decode(html_entity_decode($matches[1], ENT_QUOTES), true);
+
+    expect($config['rowBehavior']['hideDuplicatesByDefault'] ?? null)->toBeTrue()
+        ->and($this->importModuleSource)->toContain('const hideDuplicatesByDefault = rowBehavior.hideDuplicatesByDefault === true;')
+        ->and($this->importModuleSource)->toContain('showDuplicateRows: !hideDuplicatesByDefault');
+});
+
+it('17a. shared import module defaults duplicate visibility off unless config overrides it', function () {
+    expect($this->importModuleSource)
+        ->toContain('const hideDuplicatesByDefault = rowBehavior.hideDuplicatesByDefault === true;')
+        ->and($this->importModuleSource)->toContain('showDuplicateRows: !hideDuplicatesByDefault')
+        ->and($this->importModuleSource)->toContain('this.showDuplicateRows = !hideDuplicatesByDefault;');
 });
 
 it('18. duplicate rows are visually hidden instead of being removed from state', function () {
     expect($this->bladeSource)
         ->toContain('x-show="rowVisibleInPreview(row)"')
         ->and($this->bladeSource)->toContain('x-bind:aria-hidden="rowVisibleInPreview(row) ? \'false\' : \'true\'"')
-        ->and($this->importModuleSource)->toContain('if (!this.showDuplicateRows && row.is_duplicate) {');
+        ->and($this->importModuleSource)->toContain('if (!this.showDuplicateRows && this.rowIsDuplicate(row)) {');
 });
 
 it('19. only the preview records area is scrollable', function () {
@@ -190,13 +222,14 @@ it('20. select all still excludes duplicate rows by default', function () {
         ->toContain('data-products-import-select-visible')
         ->and($this->bladeSource)->toContain('Select All')
         ->and($this->importModuleSource)->toContain('visibleSelectablePreviewRows()')
-        ->and($this->importModuleSource)->toContain('this.rowVisibleInPreview(row) && !row.is_duplicate');
+        ->and($this->importModuleSource)->toContain('this.rowVisibleInPreview(row) && !this.rowSelectionDisabled(row)');
 });
 
-it('21. import selected submits only the currently selected visible rows', function () {
+it('21. products submit-selected behavior remains config-driven for visible rows only', function () {
     expect($this->importModuleSource)
         ->toContain('selectedVisiblePreviewRows()')
-        ->and($this->importModuleSource)->toContain('return this.previewRows.filter((row) => row.selected && this.rowVisibleInPreview(row));')
+        ->and($this->importModuleSource)->toContain('const submitSelectedVisibleRowsOnly = rowBehavior.submitSelectedVisibleRowsOnly !== false;')
+        ->and($this->importModuleSource)->toContain('if (!submitSelectedVisibleRowsOnly) {')
         ->and($this->importModuleSource)->toContain('const rows = this.selectedVisiblePreviewRows()');
 });
 

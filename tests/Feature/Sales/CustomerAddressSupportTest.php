@@ -69,10 +69,12 @@ beforeEach(function () {
 
     $this->createCustomer = function (Tenant $tenant, array $attributes = []): object {
         static $customerCounter = 1;
+        $status = $attributes['status'] ?? 'active';
 
         $customerId = DB::table('customers')->insertGetId(array_merge([
             'tenant_id' => $tenant->id,
             'name' => 'Customer ' . $customerCounter,
+            'is_active' => $status === 'active',
             'status' => 'active',
             'notes' => null,
             'address_line_1' => null,
@@ -471,7 +473,7 @@ it('18. detail view displays address fields', function () {
         ->assertSee('CA');
 });
 
-it('19. index payload includes address summary when customer has an address', function () {
+it('19. customer list endpoint includes address summary when customer has an address', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
     ($this->grantPermission)($user, 'sales-customers-manage');
@@ -485,10 +487,15 @@ it('19. index payload includes address summary when customer has an address', fu
 
     ($this->getIndex)($user)
         ->assertOk()
-        ->assertSee('123 King Street West, Toronto, ON M5V 1J2, CA');
+        ->assertDontSee('123 King Street West, Toronto, ON M5V 1J2, CA');
+
+    $this->actingAs($user)
+        ->getJson(route('sales.customers.list'))
+        ->assertOk()
+        ->assertJsonPath('data.0.address_summary', '123 King Street West, Toronto, ON M5V 1J2, CA');
 });
 
-it('19a. inactive customer address summary is not shown on index', function () {
+it('19a. inactive customer address summary is not returned by the customer list endpoint', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
     ($this->grantPermission)($user, 'sales-customers-manage');
@@ -505,6 +512,12 @@ it('19a. inactive customer address summary is not shown on index', function () {
         ->assertOk()
         ->assertDontSee('Inactive Indexed Address Customer')
         ->assertDontSee('987 Queen Street West, Toronto, ON M6J 1H1, CA');
+
+    $this->actingAs($user)
+        ->getJson(route('sales.customers.list'))
+        ->assertOk()
+        ->assertJsonMissing(['name' => 'Inactive Indexed Address Customer'])
+        ->assertJsonMissing(['address_summary' => '987 Queen Street West, Toronto, ON M6J 1H1, CA']);
 });
 
 it('20. other-tenant customer address is inaccessible', function () {

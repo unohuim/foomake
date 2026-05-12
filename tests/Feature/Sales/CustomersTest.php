@@ -59,10 +59,12 @@ beforeEach(function () {
 
     $this->createCustomer = function (Tenant $tenant, array $attributes = []): object {
         static $customerCounter = 1;
+        $status = $attributes['status'] ?? 'active';
 
         $customerId = DB::table('customers')->insertGetId(array_merge([
             'tenant_id' => $tenant->id,
             'name' => 'Customer ' . $customerCounter,
+            'is_active' => $status === 'active',
             'status' => 'active',
             'notes' => null,
             'created_at' => now(),
@@ -92,6 +94,20 @@ beforeEach(function () {
 
     $this->deleteDestroy = function (User $user, int $customerId) {
         return $this->actingAs($user)->deleteJson(route('sales.customers.destroy', $customerId));
+    };
+
+    $this->extractPayload = function ($response, string $payloadId): array {
+        preg_match(
+            '/<script[^>]+id="' . preg_quote($payloadId, '/') . '"[^>]*>(.*?)<\\/script>/s',
+            $response->getContent(),
+            $matches
+        );
+
+        expect($matches)->toHaveKey(1);
+
+        $payload = json_decode(html_entity_decode($matches[1], ENT_QUOTES), true);
+
+        return is_array($payload) ? $payload : [];
     };
 });
 
@@ -140,12 +156,14 @@ it('5. customer can be created via AJAX', function () {
 
     $response->assertCreated()
         ->assertJsonPath('data.name', 'Northwind Foods')
+        ->assertJsonPath('data.is_active', false)
         ->assertJsonPath('data.status', 'inactive')
         ->assertJsonPath('data.notes', 'Primary CRM account');
 
     $this->assertDatabaseHas('customers', [
         'tenant_id' => $tenant->id,
         'name' => 'Northwind Foods',
+        'is_active' => 0,
         'status' => 'inactive',
         'notes' => 'Primary CRM account',
     ]);
@@ -179,6 +197,25 @@ it('7. status defaults correctly on create', function () {
         'tenant_id' => $tenant->id,
         'name' => 'Default Status Customer',
         'status' => 'active',
+    ]);
+});
+
+it('7a. is_active defaults true on create', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    ($this->grantPermission)($user, 'sales-customers-manage');
+
+    $response = ($this->postStore)($user, [
+        'name' => 'Default Active Customer',
+    ]);
+
+    $response->assertCreated()
+        ->assertJsonPath('data.is_active', true);
+
+    $this->assertDatabaseHas('customers', [
+        'tenant_id' => $tenant->id,
+        'name' => 'Default Active Customer',
+        'is_active' => 1,
     ]);
 });
 
@@ -249,11 +286,53 @@ it('11. other-tenant customers are not visible in index', function () {
 
     ($this->getIndex)($user)
         ->assertOk()
-        ->assertSee('Visible Customer')
+        ->assertDontSee('Visible Customer')
         ->assertDontSee('Hidden Customer');
+
+    $this->actingAs($user)
+        ->getJson(route('sales.customers.list'))
+        ->assertOk()
+        ->assertJsonPath('data.0.name', 'Visible Customer')
+        ->assertJsonMissing(['name' => 'Hidden Customer']);
 });
 
-it('11a. inactive customers are not visible in index', function () {
+it('11a. index payload no longer embeds customers records', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    ($this->grantPermission)($user, 'sales-customers-manage');
+
+    ($this->createCustomer)($tenant, ['name' => 'Payload Hidden Customer']);
+
+    $response = ($this->getIndex)($user)
+        ->assertOk()
+        ->assertSee('sales-customers-index-payload', false);
+
+    $payload = ($this->extractPayload)($response, 'sales-customers-index-payload');
+
+    expect($payload)->not->toHaveKey('customers')
+        ->and($payload['storeUrl'] ?? null)->toBe(route('sales.customers.store'))
+        ->and($payload['updateUrlBase'] ?? null)->toBe(url('/sales/customers'));
+});
+
+it('11b. list endpoint remains the source of truth for customer records', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    ($this->grantPermission)($user, 'sales-customers-manage');
+
+    ($this->createCustomer)($tenant, ['name' => 'Listed Customer']);
+
+    ($this->getIndex)($user)
+        ->assertOk()
+        ->assertDontSee('Listed Customer');
+
+    $this->actingAs($user)
+        ->getJson(route('sales.customers.list'))
+        ->assertOk()
+        ->assertJsonPath('data.0.name', 'Listed Customer')
+        ->assertJsonPath('data.0.is_active', true);
+});
+
+it('11c. inactive customers are not visible in index', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
     ($this->grantPermission)($user, 'sales-customers-manage');
@@ -269,8 +348,14 @@ it('11a. inactive customers are not visible in index', function () {
 
     ($this->getIndex)($user)
         ->assertOk()
-        ->assertSee('Active Customer')
+        ->assertDontSee('Active Customer')
         ->assertDontSee('Inactive Customer');
+
+    $this->actingAs($user)
+        ->getJson(route('sales.customers.list'))
+        ->assertOk()
+        ->assertJsonPath('data.0.name', 'Active Customer')
+        ->assertJsonMissing(['name' => 'Inactive Customer']);
 });
 
 it('12. customer detail page loads for same tenant', function () {
@@ -311,6 +396,7 @@ it('14. customer can be updated via AJAX', function () {
         'notes' => 'Updated notes',
     ])->assertOk()
         ->assertJsonPath('data.name', 'Updated Customer')
+        ->assertJsonPath('data.is_active', false)
         ->assertJsonPath('data.status', 'inactive')
         ->assertJsonPath('data.notes', 'Updated notes');
 
@@ -318,6 +404,7 @@ it('14. customer can be updated via AJAX', function () {
         'id' => $customer->id,
         'tenant_id' => $tenant->id,
         'name' => 'Updated Customer',
+        'is_active' => 0,
         'status' => 'inactive',
         'notes' => 'Updated notes',
     ]);
@@ -384,6 +471,7 @@ it('19. archive updates status to archived', function () {
 
     ($this->deleteDestroy)($user, $customer->id)
         ->assertOk()
+        ->assertJsonPath('data.is_active', false)
         ->assertJsonPath('data.status', 'archived');
 });
 
