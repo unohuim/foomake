@@ -428,14 +428,20 @@ it('16. products create action uses the configured create uri', function () {
 });
 
 it('17. products import preview action uses the configured import preview uri', function () {
-    $source = file_get_contents(base_path('resources/js/pages/sales-products-index.js'));
+    $source = file_exists(base_path('resources/js/lib/import-module.js'))
+        ? file_get_contents(base_path('resources/js/lib/import-module.js'))
+        : '';
 
     expect($source)->toContain('endpoints.importPreview')
-        ->and($source)->not->toContain('safePayload.previewUrl');
+        ->and($source)->not->toContain('safePayload.previewUrl')
+        ->and(file_get_contents(base_path('resources/js/pages/sales-products-index.js')))
+            ->toContain("import { createImportModule } from '../lib/import-module';");
 });
 
 it('18. products import store action uses the configured import store uri', function () {
-    $source = file_get_contents(base_path('resources/js/pages/sales-products-index.js'));
+    $source = file_exists(base_path('resources/js/lib/import-module.js'))
+        ? file_get_contents(base_path('resources/js/lib/import-module.js'))
+        : '';
 
     expect($source)->toContain('endpoints.importStore')
         ->and($source)->not->toContain('safePayload.importUrl');
@@ -768,11 +774,15 @@ it('36. products edit submit updates the product', function () {
 
 it('37. products create and import behavior remain preserved while edit support exists', function () {
     $source = file_get_contents(base_path('resources/js/pages/sales-products-index.js'));
+    $importModuleSource = file_exists(base_path('resources/js/lib/import-module.js'))
+        ? file_get_contents(base_path('resources/js/lib/import-module.js'))
+        : '';
 
     expect($source)->toContain('openCreatePanel()')
         ->and($source)->toContain('openImportPanel()')
         ->and($source)->toContain('submitCreate()')
-        ->and($source)->toContain('submitImport()');
+        ->and($source)->toContain('createImportModule(')
+        ->and($importModuleSource)->toContain('submitImport()');
 });
 
 it('38. crud config includes the export endpoint', function () {
@@ -837,7 +847,10 @@ it('42. export button uses the arrow down on square heroicon path', function () 
 
 it('43. import slide over label is ecommerce store and includes hidden file upload mode', function () {
     $blade = file_get_contents(base_path('resources/views/sales/products/index.blade.php'));
-    $source = file_get_contents(base_path('resources/js/pages/sales-products-index.js'));
+    $source = file_exists(base_path('resources/js/lib/import-module.js'))
+        ? file_get_contents(base_path('resources/js/lib/import-module.js'))
+        : '';
+    $pageModuleSource = file_get_contents(base_path('resources/js/pages/sales-products-index.js'));
 
     expect($blade)->toContain('Ecommerce Store')
         ->and($blade)->toContain('data-products-import-file-input')
@@ -849,6 +862,7 @@ it('43. import slide over label is ecommerce store and includes hidden file uplo
         ->and($blade)->not->toContain('Choose File')
         ->and($blade)->toContain("x-show=\"selectedSource && !isFileUploadMode() && selectedSourceEnabled() && !sourceConnected()\"")
         ->and($blade)->toContain('data-products-import-empty-state')
+        ->and($pageModuleSource)->toContain("import { createImportModule } from '../lib/import-module';")
         ->and($source)->toContain('handleLocalFileChange(event)')
         ->and($source)->toContain('parseLocalCsv(text)')
         ->and($source)->toContain('parseCsvRows(text)')
@@ -879,7 +893,8 @@ it('43. import slide over label is ecommerce store and includes hidden file uplo
         ->and($blade)->toContain('data-products-import-preview-search')
         ->and($blade)->toContain('data-products-import-show-duplicates')
         ->and($blade)->toContain('<template x-for="fileSource in cachedFileSources" :key="fileSource.value">')
-        ->and($source)->toContain("loadingMessage: 'Loading file preview...'");
+        ->and($source)->toContain("config.labels?.loadingPreviewFile || 'Loading file preview...'")
+        ->and($source)->toContain('loadingMessage: loadingFilePreviewLabel');
 });
 
 it('44. products page renders an export slide over root', function () {
@@ -904,12 +919,16 @@ it('45. export slide over includes current filters and all records options', fun
 
 it('46. import export slide over js is reusable and config driven', function () {
     $source = file_get_contents(base_path('resources/js/pages/sales-products-index.js'));
+    $importModuleSource = file_exists(base_path('resources/js/lib/import-module.js'))
+        ? file_get_contents(base_path('resources/js/lib/import-module.js'))
+        : '';
 
     expect($source)->toContain('slideOvers:')
-        ->and($source)->toContain("import: {")
         ->and($source)->toContain("export: {")
         ->and($source)->toContain('openSlideOver(')
-        ->and($source)->toContain('closeSlideOver(');
+        ->and($source)->toContain('closeSlideOver(')
+        ->and($source)->toContain('createImportModule(')
+        ->and($importModuleSource)->toContain('buildImportRowPayload(row, importSource)');
 });
 
 it('47. products payload includes file upload as an explicit import mode', function () {

@@ -419,11 +419,11 @@ it('23. products import ui includes a preview loading state contract', function 
         ->assertOk()
         ->assertSee('data-products-import-preview-loading', false);
 
-    $pageModuleSource = file_get_contents(base_path('resources/js/pages/sales-products-index.js'));
+    $importModuleSource = file_get_contents(base_path('resources/js/lib/import-module.js'));
 
-    expect($pageModuleSource)->toContain('isLoadingPreview')
-        ->and($pageModuleSource)->toContain('Loading preview...')
-        ->and($pageModuleSource)->toContain('previewLoadingMessage');
+    expect($importModuleSource)->toContain('isLoadingPreview')
+        ->and($importModuleSource)->toContain("config.labels?.loadingPreviewDefault || 'Loading preview...'")
+        ->and($importModuleSource)->toContain('previewLoadingMessage');
 });
 
 it('24. imported ecommerce items still appear on manufacturing materials because they are normal items', function () {

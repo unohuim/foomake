@@ -45,6 +45,10 @@ beforeEach(function () {
 
     $this->bladeSource = file_get_contents(base_path('resources/views/sales/products/index.blade.php'));
     $this->pageModuleSource = file_get_contents(base_path('resources/js/pages/sales-products-index.js'));
+    $this->importModulePath = base_path('resources/js/lib/import-module.js');
+    $this->importModuleSource = file_exists($this->importModulePath)
+        ? file_get_contents($this->importModulePath)
+        : '';
 });
 
 it('1. products page still renders the import panel root for persistence flows', function () {
@@ -60,115 +64,128 @@ it('1. products page still renders the import panel root for persistence flows',
         ->assertSee('data-products-import-file-input', false);
 });
 
-it('2. cached file sources exist in page module state', function () {
-    expect($this->pageModuleSource)
+it('2. products import persistence is extracted into a shared import module file', function () {
+    expect($this->importModulePath)->toBeString()
+        ->and(str_ends_with($this->importModulePath, 'resources/js/lib/import-module.js'))->toBeTrue()
+        ->and(file_exists($this->importModulePath))->toBeTrue();
+});
+
+it('3. cached file sources exist in the shared import module state', function () {
+    expect($this->importModuleSource)
         ->toContain('cachedFileSources: []');
 });
 
-it('3. the next cached file source id exists in page module state', function () {
-    expect($this->pageModuleSource)
+it('4. the next cached file source id exists in the shared import module state', function () {
+    expect($this->importModuleSource)
         ->toContain('nextCachedFileSourceId: 1');
 });
 
-it('4. reset import state clears cached file sources', function () {
-    expect($this->pageModuleSource)
+it('5. reset import state clears cached file sources', function () {
+    expect($this->importModuleSource)
         ->toContain('this.cachedFileSources = [];');
 });
 
-it('5. reset import state resets the cached file source counter', function () {
-    expect($this->pageModuleSource)
+it('6. reset import state resets the cached file source counter', function () {
+    expect($this->importModuleSource)
         ->toContain('this.nextCachedFileSourceId = 1;');
 });
 
-it('6. selecting file upload triggers the file picker flow', function () {
-    expect($this->pageModuleSource)
+it('7. selecting file upload triggers the file picker flow', function () {
+    expect($this->importModuleSource)
         ->toContain('if (this.isFileUploadMode()) {')
-        ->and($this->pageModuleSource)->toContain('this.openImportFilePicker();');
+        ->and($this->importModuleSource)->toContain('this.openImportFilePicker();');
 });
 
-it('7. the file picker flow clears the native input before click', function () {
-    expect($this->pageModuleSource)
+it('8. the file picker flow clears the native input before click', function () {
+    expect($this->importModuleSource)
         ->toContain('clearImportFileInput()')
-        ->and($this->pageModuleSource)->toContain('this.clearImportFileInput();')
-        ->and($this->pageModuleSource)->toContain('this.$refs.importFileInput?.click();');
+        ->and($this->importModuleSource)->toContain('this.clearImportFileInput();')
+        ->and($this->importModuleSource)->toContain('this.$refs.importFileInput?.click();');
 });
 
-it('8. loaded files are stored through cache current file preview rows', function () {
-    expect($this->pageModuleSource)
+it('9. loaded files are stored through cache current file preview rows', function () {
+    expect($this->importModuleSource)
         ->toContain('cacheCurrentFilePreviewRows(rows)')
-        ->and($this->pageModuleSource)->toContain('this.cachedFileSources.push({');
+        ->and($this->importModuleSource)->toContain('this.cachedFileSources.push({');
 });
 
-it('9. cached file source values are generated with a distinct prefixed id', function () {
-    expect($this->pageModuleSource)
+it('10. cached file source values are generated with a distinct prefixed id', function () {
+    expect($this->importModuleSource)
         ->toContain('const value = `file-upload-cached:${this.nextCachedFileSourceId}`;');
 });
 
-it('10. cached file source ids are incremented after storage', function () {
-    expect($this->pageModuleSource)
+it('11. cached file source ids are incremented after storage', function () {
+    expect($this->importModuleSource)
         ->toContain('this.nextCachedFileSourceId += 1;');
 });
 
-it('11. cached file source labels use the selected filename', function () {
-    expect($this->pageModuleSource)
+it('12. cached file source labels use the selected filename', function () {
+    expect($this->importModuleSource)
         ->toContain('label: this.selectedFileName,');
 });
 
-it('12. selecting a cached file source is detected by helper', function () {
-    expect($this->pageModuleSource)
+it('13. selecting a cached file source is detected by helper', function () {
+    expect($this->importModuleSource)
         ->toContain("return this.selectedSource.startsWith('file-upload-cached:');");
 });
 
-it('13. selecting a cached file source restores preview rows', function () {
-    expect($this->pageModuleSource)
+it('14. selecting a cached file source restores preview rows', function () {
+    expect($this->importModuleSource)
         ->toContain('if (this.isCachedFileSource()) {')
-        ->and($this->pageModuleSource)->toContain('this.restoreCachedFilePreview();');
+        ->and($this->importModuleSource)->toContain('this.restoreCachedFilePreview();');
 });
 
-it('14. restoring a cached file preview resolves the current cached source by selected value', function () {
-    expect($this->pageModuleSource)
+it('15. restoring a cached file preview resolves the current cached source by selected value', function () {
+    expect($this->importModuleSource)
         ->toContain('currentCachedFileSource()')
-        ->and($this->pageModuleSource)->toContain('return this.cachedFileSources.find((fileSource) => fileSource.value === this.selectedSource) || null;');
+        ->and($this->importModuleSource)->toContain('return this.cachedFileSources.find((fileSource) => fileSource.value === this.selectedSource) || null;');
 });
 
-it('15. restoring a cached file preview maps rows back through normalize preview row', function () {
-    expect($this->pageModuleSource)
+it('16. restoring a cached file preview maps rows back through normalize preview row', function () {
+    expect($this->importModuleSource)
         ->toContain('this.previewRows = fileSource.rows.map((row) => normalizePreviewRow({');
 });
 
-it('16. cached file source options render through x for in the source dropdown', function () {
+it('17. cached file source options still render through x for in the source dropdown', function () {
     expect($this->bladeSource)
         ->toContain('<template x-for="fileSource in cachedFileSources" :key="fileSource.value">');
 });
 
-it('17. cached file source options bind both the stored value and label', function () {
+it('18. cached file source options still bind both the stored value and label', function () {
     expect($this->bladeSource)
         ->toContain('<option :value="fileSource.value" x-text="fileSource.label"></option>');
 });
 
-it('18. switching to woocommerce does not clear cached file sources in handle source change', function () {
-    $handleSourceStart = strpos($this->pageModuleSource, 'handleSourceChange() {');
-    $handleSourceEnd = strpos($this->pageModuleSource, 'isFileUploadMode() {');
+it('19. switching to woocommerce does not clear cached file sources in handle source change', function () {
+    $handleSourceStart = strpos($this->importModuleSource, 'handleSourceChange() {');
+    $handleSourceEnd = strpos($this->importModuleSource, 'isFileUploadMode() {');
 
     expect($handleSourceStart)->not->toBeFalse()
         ->and($handleSourceEnd)->not->toBeFalse();
 
-    $handleSourceBlock = substr($this->pageModuleSource, $handleSourceStart, $handleSourceEnd - $handleSourceStart);
+    $handleSourceBlock = substr($this->importModuleSource, $handleSourceStart, $handleSourceEnd - $handleSourceStart);
 
     expect($handleSourceBlock)
         ->not->toContain('this.cachedFileSources = [];')
         ->and($handleSourceBlock)->not->toContain('this.nextCachedFileSourceId = 1;')
-        ->and($handleSourceBlock)->toContain("loadingMessage: 'Loading WooCommerce preview...'");
+        ->and($this->importModuleSource)->toContain("config.labels?.loadingPreviewExternal || 'Loading WooCommerce preview...'")
+        ->and($handleSourceBlock)->toContain('loadingMessage: loadingExternalPreviewLabel');
 });
 
-it('19. cached file sources do not alter import payload shape', function () {
-    expect($this->pageModuleSource)
+it('20. cached file sources do not alter import payload shape', function () {
+    expect($this->importModuleSource)
         ->toContain('source: importSource,')
-        ->and($this->pageModuleSource)->toContain('is_local_file_import: this.hasLocalFileRows')
-        ->and($this->pageModuleSource)->toContain('rows,');
+        ->and($this->importModuleSource)->toContain('is_local_file_import: this.hasLocalFileRows')
+        ->and($this->importModuleSource)->toContain('rows,');
 });
 
-it('20. import source value stays null for file upload and cached file sources', function () {
-    expect($this->pageModuleSource)
+it('21. import source value stays null for file upload and cached file sources', function () {
+    expect($this->importModuleSource)
         ->toContain('return this.isFileUploadMode() || this.isCachedFileSource() ? null : this.selectedSource;');
+});
+
+it('22. sales products page module delegates import persistence to the shared import module', function () {
+    expect($this->pageModuleSource)
+        ->toContain("import { createImportModule } from '../lib/import-module';")
+        ->and($this->pageModuleSource)->toContain('createImportModule(');
 });

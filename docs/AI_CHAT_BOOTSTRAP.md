@@ -5,6 +5,7 @@ This file is the single source to paste at the beginning of new LLM chats for fu
 Paste the entire content (or as much as context allows) when starting a session.
 
 ## docs/AI_CHAT_CODEX.md
+
 # AI Chat Bootstrap (READ FIRST)
 
 You are assisting with development on this repository.
@@ -235,7 +236,9 @@ If unsure, **stop immediately and ask**.
   **not global model scopes**
 - The **smallest possible change per PR**
 
+
 ## docs/PR2_ROADMAP.md
+
 # PR2_ROADMAP — UI + Domain Completion (Post-PR-006)
 
 This roadmap defines the **second major phase** of work: completing **Items, Inventory, Suppliers, and Manufacturing**
@@ -1528,7 +1531,9 @@ Introduce a UoM-level display precision field and enforce consistent quantity fo
 - Any changes to storage precision or BCMath scale
 - JavaScript formatting or UI-only overrides per view
 
+
 ## docs/CONVENTIONS.md
+
 # Conventions
 
 This document defines the **mandatory development conventions** for this repository.  
@@ -1782,7 +1787,9 @@ These rules apply to:
 - Unit conversions
 - Any inventory-affecting calculations
 
+
 ## docs/ARCHITECTURE_INVENTORY.md
+
 # Architecture Inventory
 
 This document tracks **reusable abstractions, components, and architectural patterns**
@@ -3526,19 +3533,25 @@ Confirmations or single-field actions.
 **Type:** UI Pattern  
 **Location:**  
 - `docs/architecture/ui/ImportSlideOverPreviewPattern.yaml`  
+- `app/Http/Controllers/SalesProductController.php`  
 - `resources/views/sales/products/index.blade.php`  
+- `resources/js/lib/import-config.js`  
+- `resources/js/lib/import-module.js`  
 - `resources/js/pages/sales-products-index.js`  
 
 **Purpose:**  
-Provide a reusable import slide-over pattern where preview loads automatically from the chosen source, bulk options and preview records use accordions, and the preview list stays card-based and page-scoped.
+Provide a reusable config-driven import slide-over pattern where preview loads automatically from the chosen source, bulk options and preview records use accordions, and the preview list stays card-based and page-scoped.
 
 **When to Use:**  
-Preview-first import slide-overs that combine source selection, duplicate-aware row visibility, and per-row overrides without leaving the current page.
+Preview-first import slide-overs that combine source selection, duplicate-aware row visibility, per-row overrides, and resource-specific endpoints without leaving the current page.
 
 **When Not to Use:**  
 One-step uploads with no preview, or workflows that require global JavaScript state or client-owned import authority.
 
 **Public Interface:**  
+- `data-import-config`  
+- `resources/js/lib/import-config.js`  
+- `resources/js/lib/import-module.js`  
 - `data-products-import-bulk-options-accordion`  
 - `data-products-import-preview-records-accordion`  
 - `data-products-import-preview-search`  
@@ -3561,6 +3574,7 @@ One-step uploads with no preview, or workflows that require global JavaScript st
 Notes:
 - Bulk Import Options defaults collapsed while Preview Records accordion defaults open.
 - Preview records render as responsive cards; duplicate rows remain in DOM state and are hidden by default until explicitly shown.
+- Loading labels and bulk option defaults are provided through the server-generated import config rather than hardcoded in the page module.
 - The preview records area is the only scrollable region inside the slide-over.
 
 ---
@@ -3898,6 +3912,8 @@ Static Blade pages with no interactivity.
 - `docs/UI_DESIGN.md`  
 - `resources/js/app.js`  
 - `resources/js/pages/**`
+- `data-page`
+- `data-payload`
 
 **Example Usage:**  
 ```blade
@@ -3945,6 +3961,8 @@ Vendor or generated views excluded from repository checks, plus Breeze/shared la
 **Location:**  
 - `docs/architecture/ui/ConfiguredCrudPageModulePattern.yaml`  
 - `resources/js/lib/crud-config.js`  
+- `resources/js/lib/import-config.js`  
+- `resources/js/lib/import-module.js`  
 - `resources/js/lib/generic-crud.js`  
 - `resources/js/lib/crud-page.js`  
 - `resources/js/pages/sales-products-index.js`  
@@ -3953,7 +3971,7 @@ Vendor or generated views excluded from repository checks, plus Breeze/shared la
 - `resources/views/sales/customers/index.blade.php`
 
 **Purpose:**  
-Centralize a shared config-driven CRUD renderer behind a server-generated contract while keeping Blade index pages mount-only and page-specific slideouts, validation state, and callbacks inside each page module.
+Centralize a shared config-driven CRUD renderer behind server-generated page contracts while keeping Blade index pages mount-only and page-specific slideouts, validation state, import callbacks, and other resource behavior inside each page module.
 
 **When to Use:**  
 Interactive Blade CRUD pages that share toolbar, list rendering, sticky layout, action menus, and list/create/import/sort mechanics but need different routes, columns, row display rules, or page-specific callbacks. All future CRUD index pages should use this abstraction unless a separately approved architecture entry says otherwise.
@@ -3964,7 +3982,10 @@ Static pages, or domain workflows that exceed generic CRUD concerns.
 **Public Interface:**  
 - `docs/architecture/ui/ConfiguredCrudPageModulePattern.yaml`  
 - `data-crud-config`  
+- `data-import-config`  
 - `resources/js/lib/crud-config.js`  
+- `resources/js/lib/import-config.js`  
+- `resources/js/lib/import-module.js`
 - `resources/js/lib/generic-crud.js`
 - `resources/js/lib/crud-page.js`
 
@@ -3974,10 +3995,12 @@ Static pages, or domain workflows that exceed generic CRUD concerns.
 
 **Key Rules:**  
 - Blade index shells remain mount-only for CRUD concerns and must provide a bounded viewport-height container for the shared CRUD module.  
+- CRUD pages that use the shared import abstraction emit a separate `data-import-config` contract instead of embedding import internals into the CRUD config.  
 - `data-crud-root` must fill the available bounded height with `h-full` / `min-h-0`-compatible layout so the shared renderer can size its records pane correctly.  
 - The shared CRUD renderer owns toolbar layout, search input, create/import/export buttons, sticky desktop headers, record table/cards, empty states, and row action menus.  
 - Toolbar and page chrome remain outside the records scroller; the records/results area is the only scrollable region for CRUD list rendering.  
 - Desktop and mobile variants follow the same scroll-containment contract: header/toolbar stays fixed in the component shell while only records scroll.  
+- Shared import helpers own config parsing, source-switch preview loading, local CSV caching, selection rules, duplicate visibility, and import submit wiring without introducing global state.  
 
 **Example Usage:**  
 ```blade
@@ -4027,7 +4050,9 @@ it('creates a material', function () {
 
 ---
 
+
 ## docs/PERMISSIONS_MATRIX.md
+
 # Permissions Matrix
 
 This document is the source-of-truth for **authorization intent** in this repository.
@@ -4222,7 +4247,9 @@ return [
 ];
 ```
 
+
 ## docs/ENUMS.md
+
 # ENUMS — Canonical Enum Authority
 
 This document defines the canonical, normative enum-like values used throughout the system.
@@ -4476,7 +4503,9 @@ Do not introduce new enum values without updating this document.
 
 No conflicts or ambiguities were found at time of creation based on existing migrations, models, actions, and tests.
 
+
 ## docs/DB_SCHEMA.md
+
 # Database Schema Inventory (DB_SCHEMA)
 
 This document inventories **all database tables and columns** as defined by migrations.
@@ -5771,7 +5800,9 @@ Migrations remain the **sole source of truth**.
 
 **End of DB_SCHEMA**
 
+
 ## docs/UI_DESIGN.md
+
 # UI_DESIGN.md — Canonical UI Direction & Constraints
 
 This document defines the **authoritative UI design rules** for this repository.
@@ -6365,7 +6396,9 @@ They are mandatory, not stylistic.
 
 ::contentReference[oaicite:0]{index=0}
 
+
 ## routes/web.php
+
 <?php
 
 use App\Http\Controllers\InventoryController;
@@ -6645,7 +6678,9 @@ Route::delete('/manufacturing/uom-conversions/items/{itemConversion}', [UomConve
 
 require __DIR__ . '/auth.php';
 
+
 ## docs/PR3_ROADMAP.md
+
 # PR3_ROADMAP — Sales + CRM Foundations
 
 This roadmap defines the third major phase of work: introducing the **Sales domain (CRM foundations + Sales Orders)**, fully integrated with inventory before any external integrations.
@@ -7324,7 +7359,9 @@ After PR3 completion:
 - Sales orders impact inventory correctly
 - System ready for external integrations
 
+
 ## docs/BACKLOG.md
+
 # BACKLOG
 
 This backlog captures outstanding product capabilities identified from competitive feature review and QuickBooks Online integration planning.
@@ -7694,3 +7731,5 @@ QuickBooks Online integration reduces admin work, improves bookkeeping accuracy,
 - Each PR should remain small, test-first, and tenant-safe.
 - Documentation updates should only happen when explicitly required and approved.
 - Any reusable abstraction introduced by these PRs must be recorded in the architecture inventory when applicable.
+
+

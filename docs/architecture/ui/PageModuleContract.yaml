@@ -16,6 +16,7 @@ when_not_to_use:
 rules:
   - Every interactive page must have exactly one page root element with data-page and data-payload attributes.
   - Every interactive page must include exactly one payload script tag with type application/json and an id matching data-payload.
+  - Page roots may expose additional typed data-* config contracts such as data-crud-config and data-import-config when shared stateless helpers need server-generated configuration.
   - Blade templates must contain no executable script tags beyond JSON payload blocks.
   - The only allowed script tag in Blade is a payload block: <script type="application/json">.
   - All page UI logic must live in resources/js/pages/**.
@@ -29,16 +30,29 @@ rules:
   - Page modules must avoid build-invalid syntax such as optional chaining on assignment LHS.
   - Page modules may call shared DOM refresh helpers after successful AJAX mutations when server-rendered navigation or other page chrome becomes stale.
   - Shared helpers must remain stateless and must not replace backend authority.
+  - Page modules may compose multiple shared helpers such as CRUD and import abstractions, but page-scoped callbacks, slide-over orchestration, and toasts remain owned by the page module.
 public_interface:
   - docs/architecture/ui/PageModuleContract.yaml
   - docs/UI_DESIGN.md
   - resources/js/app.js
   - resources/js/pages/**
   - resources/js/navigation/**
+  - data-page
+  - data-payload
 example_usage: |
   Blade:
     <script type="application/json" id="materials-index-payload">@json($payload)</script>
     <div data-page="materials-index" data-payload="materials-index-payload" x-data="materialsIndex"></div>
+
+  Blade with shared page contracts:
+    <script type="application/json" id="sales-products-index-payload">@json($payload)</script>
+    <div
+        data-page="sales-products-index"
+        data-payload="sales-products-index-payload"
+        data-crud-config='@json($crudConfig)'
+        data-import-config='@json($importConfig)'
+        x-data="salesProductsIndex"
+    ></div>
 
   Make Orders (persisted):
     <script type="application/json" id="manufacturing-make-orders-payload">@json($payload)</script>
@@ -49,6 +63,9 @@ example_usage: |
     export function mount(rootEl, payload) {
       Alpine.data('materialsIndex', () => ({ /* state + methods */ }));
     }
+
+    // resources/js/pages/sales-products-index.js
+    // Compose parseCrudConfig/createGenericCrud with parseImportConfig/createImportModule.
 
     // resources/js/pages/manufacturing-make-orders.js
     // Payload includes: make_orders[], recipes[], can_execute, store_url, schedule_url_base, make_url_base.

@@ -12,6 +12,7 @@
         data-page="sales-products-index"
         data-payload="sales-products-index-payload"
         data-crud-config='@json($crudConfig)'
+        data-import-config='@json($importConfig)'
         x-data="salesProductsIndex"
     >
         <div class="fixed top-6 right-6 z-50" x-show="toast.visible">

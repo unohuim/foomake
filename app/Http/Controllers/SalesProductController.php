@@ -40,6 +40,7 @@ class SalesProductController extends Controller
         $uoms = Uom::query()->orderBy('name')->get();
         $tenantCurrency = $user?->tenant?->currency_code ?: (string) config('app.currency_code', 'USD');
         $crudConfig = $this->productsCrudConfig();
+        $importConfig = $this->productsImportConfig($user, $uoms);
 
         $payload = [
             'uoms' => $uoms->map(fn (Uom $uom): array => [
@@ -47,28 +48,17 @@ class SalesProductController extends Controller
                 'name' => $uom->name,
                 'symbol' => $uom->symbol,
             ])->values()->all(),
-            'sources' => array_merge([
-                [
-                    'value' => 'file-upload',
-                    'label' => 'File Upload',
-                    'enabled' => true,
-                    'connected' => false,
-                    'status' => 'local',
-                    'status_label' => 'Local file',
-                ],
-            ], $this->availableSourcesForTenant((int) $user->tenant_id)),
+            'sources' => $importConfig['sources'],
             'listUrl' => $crudConfig['endpoints']['list'],
             'storeUrl' => $crudConfig['endpoints']['create'],
             'updateUrlBase' => url('/sales/products'),
-            'canManageImports' => Gate::allows('inventory-products-manage'),
+            'canManageImports' => $importConfig['permissions']['canManageImports'],
             'canManageProducts' => Gate::allows('inventory-products-manage'),
-            'canManageConnections' => Gate::allows('system-users-manage'),
-            'connectorsPageUrl' => Gate::allows('system-users-manage')
-                ? route('profile.connectors.index')
-                : null,
+            'canManageConnections' => $importConfig['permissions']['canManageConnections'],
+            'connectorsPageUrl' => $importConfig['connectorsPageUrl'],
             'connectUrlBase' => url('/sales/products/import-sources'),
-            'previewUrl' => $crudConfig['endpoints']['importPreview'],
-            'importUrl' => $crudConfig['endpoints']['importStore'],
+            'previewUrl' => $importConfig['endpoints']['preview'],
+            'importUrl' => $importConfig['endpoints']['store'],
             'navigationStateUrl' => route('navigation.state'),
             'csrfToken' => csrf_token(),
             'tenantCurrency' => Str::upper($tenantCurrency),
@@ -76,6 +66,7 @@ class SalesProductController extends Controller
 
         return view('sales.products.index', [
             'crudConfig' => $crudConfig,
+            'importConfig' => $importConfig,
             'payload' => $payload,
         ]);
     }
@@ -617,6 +608,81 @@ class SalesProductController extends Controller
                     'label' => 'Edit',
                     'tone' => 'default',
                 ],
+            ],
+        ];
+    }
+
+    /**
+     * Return the shared import config for the Sales Products import module.
+     *
+     * @return array<string, mixed>
+     */
+    private function productsImportConfig(\App\Models\User $user, Collection $uoms): array
+    {
+        $canManageImports = Gate::allows('inventory-products-manage');
+        $canManageConnections = Gate::allows('system-users-manage');
+
+        return [
+            'resource' => 'products',
+            'endpoints' => [
+                'preview' => route('sales.products.import.preview'),
+                'store' => route('sales.products.import.store'),
+            ],
+            'labels' => [
+                'title' => 'Import Products',
+                'source' => 'Ecommerce Store',
+                'submit' => 'Import Selected',
+                'previewSearch' => 'Search preview records',
+                'loadingPreviewDefault' => 'Loading preview...',
+                'loadingPreviewFile' => 'Loading file preview...',
+                'loadingPreviewExternal' => 'Loading WooCommerce preview...',
+            ],
+            'permissions' => [
+                'canManageImports' => $canManageImports,
+                'canManageConnections' => $canManageConnections,
+            ],
+            'connectorsPageUrl' => $canManageConnections
+                ? route('profile.connectors.index')
+                : null,
+            'sources' => array_merge([
+                [
+                    'value' => 'file-upload',
+                    'label' => 'File Upload',
+                    'enabled' => true,
+                    'connected' => false,
+                    'status' => 'local',
+                    'status_label' => 'Local file',
+                ],
+            ], $this->availableSourcesForTenant((int) $user->tenant_id)),
+            'uoms' => $uoms->map(fn (Uom $uom): array => [
+                'id' => $uom->id,
+                'name' => $uom->name,
+                'symbol' => $uom->symbol,
+            ])->values()->all(),
+            'bulkOptions' => [
+                'create_fulfillment_recipes' => [
+                    'label' => 'Create fulfillment recipes',
+                    'default' => true,
+                ],
+                'import_all_as_manufacturable' => [
+                    'label' => 'Import all selected as manufacturable',
+                    'default' => false,
+                ],
+                'import_all_as_purchasable' => [
+                    'label' => 'Import all selected as buyable/purchasable',
+                    'default' => false,
+                ],
+                'bulk_base_uom_id' => [
+                    'label' => 'Bulk base UoM',
+                    'default' => '',
+                ],
+            ],
+            'rowBehavior' => [
+                'hideDuplicatesByDefault' => true,
+                'selectVisibleNonDuplicateRowsOnly' => true,
+                'submitSelectedVisibleRowsOnly' => true,
+                'duplicateFlagField' => 'is_duplicate',
+                'selectionField' => 'selected',
             ],
         ];
     }

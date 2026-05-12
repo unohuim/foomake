@@ -6,16 +6,19 @@ location:
   - resources/views/sales/products/index.blade.php
   - resources/views/sales/customers/index.blade.php
   - resources/js/lib/crud-config.js
+  - resources/js/lib/import-config.js
+  - resources/js/lib/import-module.js
   - resources/js/lib/generic-crud.js
   - resources/js/lib/crud-page.js
   - resources/js/pages/sales-products-index.js
   - resources/js/pages/sales-customers-index.js
-purpose: Define a reusable, server-configured CRUD page-module pattern where Blade is a mount-only shell, controllers emit a typed CRUD config, and a shared JavaScript renderer owns the CRUD UI while page modules keep resource-specific slideouts and action handlers.
+purpose: Define a reusable, server-configured CRUD page-module pattern where Blade is a mount-only shell, controllers emit typed page contracts, a shared JavaScript renderer owns generic CRUD UI, and page modules compose resource-specific slideovers and action handlers with optional shared import behavior.
 when_to_use:
   - Building any new interactive CRUD index page after the Products and Customers migrations
   - Migrating an interactive CRUD page to a shared mount-only page-module pattern without introducing client-owned routing or global state
   - Reusing the same toolbar, list rendering, action menu, create/import/export triggers, and sort mechanics across multiple Blade pages with different resource contracts
   - Keeping page-specific slideouts, validation UX, and callback behavior outside the shared CRUD renderer while centralizing the common config-driven shell
+  - Attaching a reusable import workflow to a CRUD page without moving import endpoints, import authority, or page callbacks into the shared CRUD renderer
 when_not_to_use:
   - Pages whose behavior is fully static
   - Workflows that require multi-step orchestration or domain-specific state transitions beyond generic CRUD concerns
@@ -23,6 +26,7 @@ when_not_to_use:
 rules:
   - Future CRUD index pages must use this shared generic CRUD renderer abstraction unless an approved architecture entry explicitly documents why they cannot.
   - Blade must render the CRUD contract on the page root via data-crud-config.
+  - CRUD pages that use the shared import abstraction must render a separate import contract on the page root via data-import-config rather than embedding import internals inside the CRUD config.
   - Blade index shells must remain mount-only for CRUD UI concerns and may not render toolbar markup, record tables, record cards, empty states, or row action cells directly.
   - Blade index shells that use the shared CRUD renderer must provide a bounded height container so the CRUD module can fill the available viewport area without making the whole page the list scroller.
   - data-crud-root must fill the available page-shell height and preserve min-height propagation so the shared renderer can size its internal records pane correctly.
@@ -37,14 +41,19 @@ rules:
   - The records/list area is the only scrollable region for CRUD list rendering; toolbar chrome remains outside that scroll container.
   - Desktop and mobile variants must follow the same scroll-containment contract: toolbar and page header chrome remain fixed in the component shell while only the records/results pane scrolls.
   - Shared CRUD helpers may handle config parsing, list query construction, fetch, create submission, export trigger wiring, sort toggling, and config-driven shell rendering.
-  - Page-specific behavior such as create/edit/import panel state, row-to-form mapping, toasts, validation UX, and action callbacks remains in the page module.
+  - Shared import helpers may handle import config parsing, source switching, preview loading, local CSV caching, duplicate visibility, selection behavior, and import submission wiring.
+  - Page-specific behavior such as create/edit/import panel state, row-to-form mapping, toasts, validation UX, success callbacks, and domain-specific row rendering hooks remains in the page module.
   - Products and Customers are the current reference implementations for this pattern.
   - Missing or invalid CRUD config must fail safely without breaking initial page load.
+  - Missing or invalid import config must fail safely without breaking initial page load.
   - Backend routes remain authoritative and must not be hardcoded in shared JavaScript.
 public_interface:
   - docs/architecture/ui/ConfiguredCrudPageModulePattern.yaml
   - data-crud-config
+  - data-import-config
   - resources/js/lib/crud-config.js
+  - resources/js/lib/import-config.js
+  - resources/js/lib/import-module.js
   - resources/js/lib/generic-crud.js
   - resources/js/lib/crud-page.js
 example_usage: |
@@ -99,12 +108,33 @@ example_usage: |
         ],
     ];
 
+    $importConfig = [
+        'resource' => 'products',
+        'endpoints' => [
+            'preview' => route('sales.products.import.preview'),
+            'store' => route('sales.products.import.store'),
+        ],
+        'labels' => [
+            'title' => 'Import Products',
+            'source' => 'Ecommerce Store',
+            'submit' => 'Import Selected',
+            'previewSearch' => 'Search preview records',
+            'loadingPreviewDefault' => 'Loading preview...',
+            'loadingPreviewFile' => 'Loading file preview...',
+            'loadingPreviewExternal' => 'Loading WooCommerce preview...',
+        ],
+        'bulkOptions' => [
+            'create_fulfillment_recipes' => ['label' => 'Create fulfillment recipes', 'default' => true],
+        ],
+    ];
+
   Blade:
     <div
         class="flex h-[calc(100vh-8rem)] min-h-0 flex-col overflow-hidden"
         data-page="sales-products-index"
         data-payload="sales-products-index-payload"
         data-crud-config='@json($crudConfig)'
+        data-import-config='@json($importConfig)'
         x-data="salesProductsIndex"
     >
         <div class="mx-auto flex h-full min-h-0 w-full max-w-7xl flex-1 flex-col overflow-hidden sm:px-6 lg:px-8">
@@ -114,6 +144,8 @@ example_usage: |
 
   Page module:
     const crud = createGenericCrud(parseCrudConfig(rootEl));
+    const importConfig = parseImportConfig(rootEl);
+    const importModule = createImportModule({ config: importConfig, callbacks: { onImportSuccess: () => this.fetchProducts() } });
     mountCrudRenderer(rootEl.querySelector('[data-crud-root]'), {
         ...crud,
         state: { records: 'products', loading: 'isLoadingList', error: 'listError', search: 'search', sort: 'sort' },

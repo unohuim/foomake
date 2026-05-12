@@ -137,6 +137,14 @@ beforeEach(function () {
         return is_array($payload) ? $payload : [];
     };
 
+    $this->extractImportConfig = function ($response): array {
+        preg_match("/data-import-config='([^']+)'/", $response->getContent(), $matches);
+
+        $config = json_decode(html_entity_decode($matches[1] ?? '{}', ENT_QUOTES), true);
+
+        return is_array($config) ? $config : [];
+    };
+
     $this->createCustomer = function (Tenant $tenant): object {
         $customerId = DB::table('customers')->insertGetId([
             'tenant_id' => $tenant->id,
@@ -280,9 +288,17 @@ it('1. the import confirmation UI includes a global create fulfillment recipes c
 });
 
 it('2. the create fulfillment recipes checkbox defaults checked', function () {
-    $source = file_get_contents(base_path('resources/js/pages/sales-products-index.js'));
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    ($this->grantPermission)($user, 'inventory-products-manage');
 
-    expect($source)->toContain('createFulfillmentRecipes: true');
+    $response = $this->actingAs($user)
+        ->get(route('sales.products.index'))
+        ->assertOk();
+
+    $config = ($this->extractImportConfig)($response);
+
+    expect($config['bulkOptions']['create_fulfillment_recipes']['default'] ?? null)->toBeTrue();
 });
 
 it('3. the import request accepts create_fulfillment_recipes true', function () {
