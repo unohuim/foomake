@@ -183,6 +183,8 @@ Route::middleware('auth')->group(function () {
         ->name('sales.customers.index');
     Route::get('/sales/customers/list', [CustomerController::class, 'list'])
         ->name('sales.customers.list');
+    Route::get('/sales/customers/export', [CustomerController::class, 'export'])
+        ->name('sales.customers.export');
     Route::post('/sales/customers/import-preview', [CustomerController::class, 'previewImport'])
         ->name('sales.customers.import.preview');
     Route::post('/sales/customers/imports', [CustomerController::class, 'storeImport'])

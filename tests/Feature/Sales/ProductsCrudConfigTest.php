@@ -845,24 +845,46 @@ it('42. export button uses the arrow down on square heroicon path', function () 
         ->and($rendererSource)->toContain('M12 15V3m0 12 3.75-3.75M12 15l-3.75-3.75');
 });
 
-it('43. import slide over label is ecommerce store and includes hidden file upload mode', function () {
+it('43. shared import component keeps file upload first and preserves the config source list order', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermissions)($user, ['inventory-products-view', 'inventory-products-manage']);
+
+    $response = $this->actingAs($user)->get(route('sales.products.index'))->assertOk();
+    preg_match("/data-import-config='([^']+)'/", $response->getContent(), $matches);
+    $importConfig = json_decode(html_entity_decode($matches[1] ?? '{}', ENT_QUOTES), true);
     $blade = file_get_contents(base_path('resources/views/sales/products/index.blade.php'));
     $source = file_exists(base_path('resources/js/lib/import-module.js'))
         ? file_get_contents(base_path('resources/js/lib/import-module.js'))
         : '';
     $pageModuleSource = file_get_contents(base_path('resources/js/pages/sales-products-index.js'));
 
-    expect($blade)->toContain('Ecommerce Store')
-        ->and($blade)->toContain('data-products-import-file-input')
-        ->and($blade)->toContain('type="file"')
-        ->and($blade)->toContain('accept=".csv,text/csv"')
-        ->and($blade)->toContain('class="sr-only"')
-        ->and($blade)->toContain('x-text="sourceOptionLabel(source)"')
-        ->and($blade)->not->toContain('>Source<')
-        ->and($blade)->not->toContain('Choose File')
-        ->and($blade)->toContain("x-show=\"selectedSource && !isFileUploadMode() && selectedSourceEnabled() && !sourceConnected()\"")
-        ->and($blade)->toContain('data-products-import-empty-state')
+    expect($blade)->not->toContain('data-products-import-file-input')
+        ->and($blade)->not->toContain('data-products-import-empty-state')
+        ->and($blade)->not->toContain('rowProductErrors(index)')
+        ->and($blade)->not->toContain('data-products-import-preview-card')
+        ->and($blade)->not->toContain('data-products-import-preview-search')
+        ->and($blade)->not->toContain('data-products-import-show-duplicates')
+        ->and($blade)->not->toContain('<template x-for="fileSource in cachedFileSources" :key="fileSource.value">')
         ->and($pageModuleSource)->toContain("import { createImportModule } from '../lib/import-module';")
+        ->and($pageModuleSource)->toContain('importModule.mount(rootEl);')
+        ->and($source)->toContain('data-shared-import-file-input')
+        ->and($source)->toContain('data-shared-import-empty-state')
+        ->and($source)->toContain('data-shared-import-preview-card')
+        ->and($source)->toContain('data-shared-import-preview-search')
+        ->and($source)->toContain('data-shared-import-show-duplicates')
+        ->and($importConfig['sources'][0]['label'] ?? null)->toBe('File Upload')
+        ->and(collect($importConfig['sources'] ?? [])->contains(fn ($sourceConfig) => ($sourceConfig['label'] ?? null) === 'WooCommerce'))->toBeTrue()
+        ->and($response->getContent())->toContain('data-import-config=')
+        ->and($source)->toContain('type="file"')
+        ->and($source)->toContain('accept=".csv,text/csv"')
+        ->and($source)->toContain('class="sr-only"')
+        ->and($source)->toContain('x-text="sourceOptionLabel(source)"')
+        ->and($source)->toContain('<template x-for="source in sources" :key="source.value">')
+        ->and($source)->not->toContain('>Source<')
+        ->and($source)->not->toContain('Choose File')
+        ->and($source)->toContain('!sourceConnected() && !isCachedFileSource() && !isFileUploadMode()')
         ->and($source)->toContain('handleLocalFileChange(event)')
         ->and($source)->toContain('parseLocalCsv(text)')
         ->and($source)->toContain('parseCsvRows(text)')
@@ -875,25 +897,23 @@ it('43. import slide over label is ecommerce store and includes hidden file uplo
         ->and($source)->toContain('return this.isFileUploadMode() || this.isCachedFileSource() ? null : this.selectedSource;')
         ->and($source)->toContain('sourceOptionLabel(source)')
         ->and($source)->toContain('openImportFilePicker()')
-        ->and($source)->toContain('this.$refs.importFileInput?.click();')
+        ->and($source)->toContain('if (this.$refs.importFileInput) {')
+        ->and($source)->toContain('this.$refs.importFileInput.click();')
         ->and($source)->toContain('restoreCachedFilePreview()')
         ->and($source)->toContain('cacheCurrentFilePreviewRows(rows)')
         ->and($source)->toContain('source: importSource')
         ->and($source)->toContain('is_local_file_import: this.hasLocalFileRows')
         ->and($source)->toContain('buildImportRowPayload(row, importSource)')
-        ->and($source)->toContain("this.rowError(index, 'base_uom_id')")
-        ->and($source)->toContain("this.importError = data.message || 'Unable to import products.'")
+        ->and($source)->toContain("const importUnavailableMessage = messages.importUnavailable || 'Unable to import products.';")
+        ->and($source)->toContain('rowValidationMessages(index)')
+        ->and($source)->toContain("this.importError = data.message || importUnavailableMessage;")
         ->and($source)->toContain("default_price_cents: Object.prototype.hasOwnProperty.call(row, 'default_price_cents')")
         ->and($source)->toContain("image_url: Object.prototype.hasOwnProperty.call(row, 'image_url')")
         ->and($source)->toContain("&& typeof row.image_url === 'string'")
         ->and($source)->toContain("&& row.image_url.trim() !== ''")
         ->and($source)->toContain("source: 'file-upload'")
-        ->and($blade)->toContain('rowProductErrors(index)')
-        ->and($blade)->toContain('data-products-import-preview-card')
-        ->and($blade)->toContain('data-products-import-preview-search')
-        ->and($blade)->toContain('data-products-import-show-duplicates')
-        ->and($blade)->toContain('<template x-for="fileSource in cachedFileSources" :key="fileSource.value">')
-        ->and($source)->toContain("config.labels?.loadingPreviewFile || 'Loading file preview...'")
+        ->and($source)->toContain('<template x-for="fileSource in cachedFileSources" :key="fileSource.value">')
+        ->and($source)->toContain("const loadingFilePreviewLabel = labels.loadingPreviewFile || 'Loading file preview...';")
         ->and($source)->toContain('loadingMessage: loadingFilePreviewLabel');
 });
 

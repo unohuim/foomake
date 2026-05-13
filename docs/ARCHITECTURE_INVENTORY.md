@@ -1742,16 +1742,19 @@ Confirmations or single-field actions.
 **Location:**  
 - `docs/architecture/ui/ImportSlideOverPreviewPattern.yaml`  
 - `app/Http/Controllers/SalesProductController.php`  
+- `app/Http/Controllers/CustomerController.php`  
 - `resources/views/sales/products/index.blade.php`  
+- `resources/views/sales/customers/index.blade.php`  
 - `resources/js/lib/import-config.js`  
 - `resources/js/lib/import-module.js`  
 - `resources/js/pages/sales-products-index.js`  
+- `resources/js/pages/sales-customers-index.js`  
 
 **Purpose:**  
-Provide a reusable config-driven import slide-over pattern where preview loads automatically from the chosen source, bulk options and preview records use accordions, and the preview list stays card-based and page-scoped.
+Provide a reusable config-driven import slide-over component that owns the full import UX and lifecycle, auto-loads previews from the chosen source, keeps bulk options and preview records in accordions, and preserves backend import authority.
 
 **When to Use:**  
-Preview-first import slide-overs that combine source selection, duplicate-aware row visibility, per-row overrides, and resource-specific endpoints without leaving the current page.
+Preview-first import slide-overs that combine source selection, duplicate-aware row visibility, config-driven preview rendering, approved data adapters, and resource-specific endpoints without leaving the current page.
 
 **When Not to Use:**  
 One-step uploads with no preview, or workflows that require global JavaScript state or client-owned import authority.
@@ -1760,29 +1763,43 @@ One-step uploads with no preview, or workflows that require global JavaScript st
 - `data-import-config`  
 - `resources/js/lib/import-config.js`  
 - `resources/js/lib/import-module.js`  
-- `data-products-import-bulk-options-accordion`  
-- `data-products-import-preview-records-accordion`  
-- `data-products-import-preview-search`  
-- `data-products-import-show-duplicates`  
-- `data-products-import-preview-scroll`  
+- `createImportModule({ config, adapters, callbacks }).mount(hostComponent)`  
+
+**Key Rules:**  
+- The shared import component owns the import slide-over markup rather than relying on resource-specific Blade form markup.  
+- Resource pages may not render import slide-over form markup, import preview cards, import source controls, import bulk controls, or import footer actions directly.  
+- Preview loading auto-starts when a connected external source is selected or when a valid local file has been read.  
+- The slide-over must not require a manual Load Preview button.  
+- Bulk options and preview records render as separate accordions, with bulk options default collapsed and preview records default open.  
+- Preview rows render as responsive cards rather than a table.  
+- Preview row selection, search text, duplicate visibility, and row override state are owned by the shared import component rather than the resource page module.  
+- Resource-specific data-shape differences may enter the shared import component only through approved adapters for local-row parsing, preview-row normalization, import-row payload building, submit-body shaping, and import-success callbacks.  
+- Approved adapters may shape data but may not own import markup, control visibility, or override import lifecycle behavior.  
 
 **Example Usage:**  
-```blade
-<button type="button" data-products-import-preview-records-accordion>
-    Preview Records
-</button>
+```js
+const importConfig = parseImportConfig(rootEl);
+const importModule = createImportModule({
+    config: importConfig,
+    adapters: {
+        parseLocalRows,
+        normalizePreviewRow,
+        buildImportRowPayload,
+        buildSubmitBody,
+    },
+    callbacks: {
+        onImportSuccess: refreshProducts,
+    },
+});
 
-<div data-products-import-preview-scroll>
-    <article x-show="rowVisibleInPreview(row)">
-        <p class="truncate" x-text="row.name"></p>
-    </article>
-</div>
+importModule.mount(rootEl);
 ```
 
 Notes:
+- Products and Customers now consume the same shared import component path and no longer keep import slide-over form markup in Blade.
 - Bulk Import Options defaults collapsed while Preview Records accordion defaults open.
-- Preview records render as responsive cards; duplicate rows remain in DOM state and are hidden by default until explicitly shown.
-- Loading labels and bulk option defaults are provided through the server-generated import config rather than hardcoded in the page module.
+- Preview records render as responsive cards; duplicate rows remain in DOM state and are hidden or shown according to the server-generated row-behavior config.
+- Loading labels, preview display expressions, messages, and bulk option defaults are provided through the server-generated import config rather than hardcoded in the resource page module.
 - The preview records area is the only scrollable region inside the slide-over.
 
 ---
@@ -2180,7 +2197,7 @@ Vendor or generated views excluded from repository checks, plus Breeze/shared la
 - `resources/views/sales/customers/index.blade.php`
 
 **Purpose:**  
-Centralize a shared config-driven CRUD renderer behind server-generated page contracts while keeping Blade index pages mount-only and page-specific slideouts, validation state, import/export callbacks, and other resource behavior inside each page module.
+Centralize a shared config-driven CRUD renderer behind server-generated page contracts while keeping Blade index pages mount-only, moving import UX and lifecycle into a shared import component, and leaving page-specific create/export behavior plus approved data adapters in each page module.
 
 **When to Use:**  
 Interactive Blade CRUD pages that share toolbar, list rendering, sticky layout, action menus, and list/create/import/sort mechanics but need different routes, columns, row display rules, or page-specific callbacks. All future CRUD index pages should use this abstraction unless a separately approved architecture entry says otherwise.
@@ -2211,7 +2228,14 @@ Static pages, or domain workflows that exceed generic CRUD concerns.
 - Toolbar and page chrome remain outside the records scroller; the records/results area is the only scrollable region for CRUD list rendering.  
 - Desktop and mobile variants follow the same scroll-containment contract: header/toolbar stays fixed in the component shell while only records scroll.  
 - Shared export helpers may own export panel state, scope selection, config-driven URL building, and submission wiring while leaving Blade slide-over markup and page-owned permissions/messages local to the page module.  
-- Shared import helpers own config parsing, source-switch preview loading, local CSV caching, selection rules, duplicate visibility, and import submit wiring without introducing global state.  
+- Shared import helpers own import panel markup, source-switch preview loading, local CSV caching, selection rules, duplicate visibility, preview row rendering, validation display, and import submit wiring without introducing global state.  
+- Resource pages may provide only declarative import config plus approved data adapters such as local-row parsing, preview-row normalization, import-row payload building, submit-body shaping, and import-success callbacks.  
+- Resource pages must not contain import slide-over form markup or page-local import UX overrides.  
+
+Notes:
+- Sales Products and Sales Customers both compose `resources/js/lib/export-module.js` for export slide-over behavior.
+- Sales Products and Sales Customers both mount the shared import component from `resources/js/lib/import-module.js`; neither page keeps import slide-over form markup in Blade.
+- Sales Customers now exposes a full export surface through `sales.customers.export`, `endpoints.export`, page-local export Blade markup, and shared export-module wiring rather than a no-op export toolbar callback.
 
 **Example Usage:**  
 ```blade

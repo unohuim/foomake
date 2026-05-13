@@ -2,16 +2,19 @@ name: Import Slide-Over Preview Pattern
 type: UI Pattern
 location:
   - app/Http/Controllers/SalesProductController.php
+  - app/Http/Controllers/CustomerController.php
   - resources/views/sales/products/index.blade.php
+  - resources/views/sales/customers/index.blade.php
   - resources/js/lib/import-config.js
   - resources/js/lib/import-module.js
   - resources/js/pages/sales-products-index.js
-purpose: Define a reusable config-driven import slide-over pattern that auto-preview loads rows from the selected source, keeps bulk options and preview records in accordions, and preserves page-scoped preview selection behavior without changing backend import authority.
+  - resources/js/pages/sales-customers-index.js
+purpose: Define a reusable config-driven import slide-over component that owns the full import UX and lifecycle, auto-preview loads rows from the selected source, keeps bulk options and preview records in accordions, and preserves backend import authority.
 when_to_use:
-  - Building a page-scoped import slide-over that previews external or file-backed records before submit
-  - Reusing an import workflow that needs local source selection, duplicate-aware preview visibility, and record-level overrides in the same panel
+  - Building a shared import slide-over that previews external or file-backed records before submit
+  - Reusing one import workflow across multiple CRUD resources while enforcing identical import structure and lifecycle
   - Migrating an import panel away from a manual preview trigger while keeping server-side preview and import contracts unchanged
-  - Extracting import state, preview/store flow, and loading labels into a shared module while leaving endpoints and domain rules resource-specific
+  - Extracting import state, markup, preview/store flow, and loading labels into a shared component while leaving endpoints and domain rules resource-specific
 when_not_to_use:
   - Simple file uploads that do not preview rows before submit
   - Import flows that require global JavaScript state, client-owned routing, or server-side selection authority to move into the browser
@@ -19,30 +22,30 @@ when_not_to_use:
 rules:
   - The page root must expose a server-generated import contract via data-import-config.
   - Shared import config parsing must live outside the page module and fail safely on missing or invalid JSON.
+  - The shared import component must own the import slide-over markup rather than relying on resource-specific Blade form markup.
+  - Resource pages may not render import slide-over form markup, import preview cards, import source controls, import bulk controls, or import footer actions directly.
   - Preview loading must auto-start when a connected external source is selected or when a valid local file has been read.
   - The slide-over must not require a manual Load Preview button.
   - Bulk options and preview records must render as separate accordions, with bulk options default collapsed and preview records default open.
   - Preview rows must render as responsive cards rather than a table.
-  - Preview row selection, search text, duplicate visibility, and row override state must remain page-scoped local state.
+  - Preview row selection, search text, duplicate visibility, and row override state must be owned by the shared import component rather than the resource page module.
   - duplicate rows must remain in DOM state and selection state even when hidden from view.
   - Duplicate rows must be visually hidden by default and revealed only when the duplicate-visibility control is enabled.
   - Mass-select behavior must operate only on currently visible non-duplicate rows unless an approved architecture entry documents otherwise.
-  - Shared import state may normalize bulk option defaults such as create_fulfillment_recipes from the server-generated import config rather than hardcoding resource-specific defaults in the page module.
+  - Shared import state may normalize bulk option defaults such as create_fulfillment_recipes from the server-generated import config rather than hardcoding resource-specific defaults in the resource page module.
   - Loading labels for default, file-upload, and external previews must come from the public import contract or its safe fallbacks.
   - The preview records container is the only scrollable region inside the import slide-over; header, source controls, and bulk options remain fixed in place within the panel.
   - Preview filtering and visibility controls must not change backend preview payloads or import domain behavior.
   - Validation and import authority remain owned by backend preview and import endpoints.
+  - Resource-specific data-shape differences may enter the shared import component only through approved adapters for local-row parsing, preview-row normalization, import-row payload building, submit-body shaping, and import-success callbacks.
+  - Approved adapters may shape data but may not own import markup, control visibility, or override import lifecycle behavior.
   - No global JavaScript state may be introduced to implement this pattern.
 public_interface:
   - docs/architecture/ui/ImportSlideOverPreviewPattern.yaml
   - data-import-config
   - resources/js/lib/import-config.js
   - resources/js/lib/import-module.js
-  - data-products-import-bulk-options-accordion
-  - data-products-import-preview-records-accordion
-  - data-products-import-preview-search
-  - data-products-import-show-duplicates
-  - data-products-import-preview-scroll
+  - createImportModule({ config, adapters, callbacks }).mount(hostComponent)
 example_usage: |
   Blade page root:
     <div
@@ -75,4 +78,18 @@ example_usage: |
 
   Page module:
     const importConfig = parseImportConfig(rootEl);
-    const importModule = createImportModule({ config: importConfig, callbacks: { onImportSuccess: refreshProducts } });
+    const importModule = createImportModule({
+        config: importConfig,
+        adapters: {
+            parseLocalRows,
+            normalizePreviewRow,
+            buildImportRowPayload,
+            buildSubmitBody,
+        },
+        callbacks: { onImportSuccess: refreshProducts },
+    });
+    Alpine.data('salesProductsIndex', () => ({
+        init() {
+            importModule.mount(this);
+        },
+    }));

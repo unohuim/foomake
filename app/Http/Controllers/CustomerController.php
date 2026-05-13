@@ -16,6 +16,7 @@ use App\Models\SalesOrder;
 use App\Models\SalesOrderLine;
 use App\Models\Task;
 use App\Services\WooCommerceCustomerPreviewService;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -44,7 +45,7 @@ class CustomerController extends Controller
             ->orderBy('name')
             ->get();
         $crudConfig = $this->customersCrudConfig();
-        $canManageImports = Gate::allows('system-users-manage');
+        $importConfig = $this->customersImportConfig();
 
         $payload = [
             'customers' => $customers->map(fn (Customer $customer) => $this->customerIndexData($customer))->values()->all(),
@@ -53,16 +54,17 @@ class CustomerController extends Controller
             'navigationStateUrl' => route('navigation.state'),
             'csrfToken' => csrf_token(),
             'statuses' => Customer::statuses(),
-            'sources' => $this->availableSourcesForTenant((int) auth()->user()->tenant_id),
-            'canManageImports' => $canManageImports,
-            'canManageConnections' => $canManageImports,
-            'connectorsPageUrl' => $canManageImports ? route('profile.connectors.index') : null,
-            'previewUrl' => $crudConfig['endpoints']['importPreview'],
-            'importUrl' => $crudConfig['endpoints']['importStore'],
+            'sources' => $importConfig['sources'],
+            'canManageImports' => $importConfig['permissions']['canManageImports'],
+            'canManageConnections' => $importConfig['permissions']['canManageConnections'],
+            'connectorsPageUrl' => $importConfig['connectorsPageUrl'],
+            'previewUrl' => $importConfig['endpoints']['preview'],
+            'importUrl' => $importConfig['endpoints']['store'],
         ];
 
         return view('sales.customers.index', [
             'crudConfig' => $crudConfig,
+            'importConfig' => $importConfig,
             'customers' => $customers,
             'payload' => $payload,
         ]);
@@ -80,38 +82,7 @@ class CustomerController extends Controller
         $search = trim((string) ($validated['search'] ?? ''));
         $sortColumn = (string) ($validated['sort'] ?? 'name');
         $direction = (string) ($validated['direction'] ?? 'asc');
-
-        $query = Customer::query()
-            ->with('primaryContact')
-            ->where('status', Customer::STATUS_ACTIVE);
-
-        if ($search !== '') {
-            $query->where(function ($builder) use ($search): void {
-                $builder
-                    ->where('name', 'like', '%' . $search . '%')
-                    ->orWhereHas('primaryContact', function ($contactQuery) use ($search): void {
-                        $contactQuery->where('email', 'like', '%' . $search . '%');
-                    });
-            });
-        }
-
-        match ($sortColumn) {
-            'email' => $query
-                ->leftJoin('customer_contacts as primary_contacts', function ($join): void {
-                    $join->on('primary_contacts.customer_id', '=', 'customers.id')
-                        ->on('primary_contacts.tenant_id', '=', 'customers.tenant_id')
-                        ->where('primary_contacts.is_primary', '=', 1);
-                })
-                ->select('customers.*')
-                ->orderByRaw(
-                    "CASE WHEN primary_contacts.email IS NULL OR primary_contacts.email = '' THEN 1 ELSE 0 END asc"
-                )
-                ->orderBy('primary_contacts.email', $direction)
-                ->orderBy('customers.name'),
-            default => $query->orderBy('customers.name', $direction),
-        };
-
-        $customers = $query->get();
+        $customers = $this->customersQuery($search, $sortColumn, $direction)->get();
 
         return response()->json([
             'data' => $customers
@@ -131,6 +102,46 @@ class CustomerController extends Controller
     }
 
     /**
+     * Download a CSV export for sales customers.
+     */
+    public function export(ListSalesCustomersRequest $request): StreamedResponse
+    {
+        Gate::authorize('sales-customers-manage');
+
+        $validated = $request->validated();
+        $scope = (string) ($validated['scope'] ?? 'current');
+        $search = $scope === 'all'
+            ? ''
+            : trim((string) ($validated['search'] ?? ''));
+        $sortColumn = $scope === 'all'
+            ? 'name'
+            : (string) ($validated['sort'] ?? 'name');
+        $direction = $scope === 'all'
+            ? 'asc'
+            : (string) ($validated['direction'] ?? 'asc');
+        $customers = $this->customersQuery($search, $sortColumn, $direction)->get();
+
+        return response()->streamDownload(function () use ($customers): void {
+            $handle = fopen('php://output', 'wb');
+
+            if ($handle === false) {
+                return;
+            }
+
+            fputcsv($handle, $this->customerExportHeaders());
+
+            foreach ($customers as $customer) {
+                fputcsv($handle, $this->customerExportRow($customer));
+            }
+
+            fclose($handle);
+        }, 'customers-export.csv', [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => 'attachment; filename=customers-export.csv',
+        ]);
+    }
+
+    /**
      * Return WooCommerce-backed preview rows for the selected source.
      */
     public function previewImport(
@@ -138,6 +149,17 @@ class CustomerController extends Controller
         WooCommerceCustomerPreviewService $previewService
     ): JsonResponse {
         $source = (string) $request->validated('source');
+
+        if ($source === 'file-upload') {
+            return response()->json([
+                'data' => [
+                    'source' => $source,
+                    'is_connected' => true,
+                    'rows' => $request->validated('rows', []),
+                ],
+            ]);
+        }
+
         $connection = $this->connectedSourceForTenant((int) $request->user()->tenant_id, $source);
 
         if (! $connection) {
@@ -174,7 +196,7 @@ class CustomerController extends Controller
     {
         $source = (string) $request->validated('source');
 
-        if (! $this->connectedSourceForTenant((int) $request->user()->tenant_id, $source)) {
+        if ($source !== 'file-upload' && ! $this->connectedSourceForTenant((int) $request->user()->tenant_id, $source)) {
             return $this->notConnectedResponse();
         }
 
@@ -366,6 +388,86 @@ class CustomerController extends Controller
             'address_provider' => $customer->address_provider,
             'address_provider_id' => $customer->address_provider_id,
             'show_url' => route('sales.customers.show', $customer),
+        ];
+    }
+
+    /**
+     * Build the filtered and sorted customers query shared by list and export.
+     */
+    private function customersQuery(string $search, string $sortColumn, string $direction)
+    {
+        $query = Customer::query()
+            ->with('primaryContact')
+            ->where('status', Customer::STATUS_ACTIVE);
+
+        if ($search !== '') {
+            $query->where(function ($builder) use ($search): void {
+                $builder
+                    ->where('name', 'like', '%' . $search . '%')
+                    ->orWhereHas('primaryContact', function ($contactQuery) use ($search): void {
+                        $contactQuery->where('email', 'like', '%' . $search . '%');
+                    });
+            });
+        }
+
+        match ($sortColumn) {
+            'email' => $query
+                ->leftJoin('customer_contacts as primary_contacts', function ($join): void {
+                    $join->on('primary_contacts.customer_id', '=', 'customers.id')
+                        ->on('primary_contacts.tenant_id', '=', 'customers.tenant_id')
+                        ->where('primary_contacts.is_primary', '=', 1);
+                })
+                ->select('customers.*')
+                ->orderByRaw(
+                    "CASE WHEN primary_contacts.email IS NULL OR primary_contacts.email = '' THEN 1 ELSE 0 END asc"
+                )
+                ->orderBy('primary_contacts.email', $direction)
+                ->orderBy('customers.name'),
+            default => $query->orderBy('customers.name', $direction),
+        };
+
+        return $query;
+    }
+
+    /**
+     * Return the CSV headers for customer exports.
+     *
+     * @return array<int, string>
+     */
+    private function customerExportHeaders(): array
+    {
+        return [
+            'name',
+            'email',
+            'status',
+            'address_line_1',
+            'address_line_2',
+            'city',
+            'region',
+            'postal_code',
+            'country_code',
+            'formatted_address',
+        ];
+    }
+
+    /**
+     * Return one CSV row for a customer export.
+     *
+     * @return array<int, string|null>
+     */
+    private function customerExportRow(Customer $customer): array
+    {
+        return [
+            $customer->name,
+            $customer->primaryContact?->email,
+            $customer->status,
+            $customer->address_line_1,
+            $customer->address_line_2,
+            $customer->city,
+            $customer->region,
+            $customer->postal_code,
+            $customer->country_code,
+            $customer->formatted_address,
         ];
     }
 
@@ -780,6 +882,7 @@ class CustomerController extends Controller
             'resource' => 'customers',
             'endpoints' => [
                 'list' => route('sales.customers.list'),
+                'export' => route('sales.customers.export'),
                 'create' => route('sales.customers.store'),
                 'importPreview' => route('sales.customers.import.preview'),
                 'importStore' => route('sales.customers.import.store'),
@@ -832,6 +935,88 @@ class CustomerController extends Controller
                     'id' => 'archive',
                     'label' => 'Archive',
                     'tone' => 'warning',
+                ],
+            ],
+        ];
+    }
+
+    /**
+     * Return the shared import config for the Sales Customers import module.
+     *
+     * @return array<string, mixed>
+     */
+    private function customersImportConfig(): array
+    {
+        $canManageImports = Gate::allows('system-users-manage');
+
+        return [
+            'resource' => 'customers',
+            'endpoints' => [
+                'preview' => route('sales.customers.import.preview'),
+                'store' => route('sales.customers.import.store'),
+            ],
+            'labels' => [
+                'title' => 'Import Customers',
+                'source' => 'Source',
+                'submit' => 'Confirm Import',
+                'previewSearch' => 'Search preview records',
+                'loadingPreviewDefault' => 'Loading preview...',
+                'loadingPreviewFile' => 'Loading file preview...',
+                'loadingPreviewExternal' => 'Loading WooCommerce preview...',
+                'emptyStateDescription' => 'Select a WooCommerce connection or switch to file upload to start loading an import preview.',
+                'noBulkOptions' => 'No additional import options are available for this resource.',
+                'previewDescription' => 'Review the import preview before confirming the selected records.',
+            ],
+            'permissions' => [
+                'canManageImports' => $canManageImports,
+                'canManageConnections' => $canManageImports,
+            ],
+            'messages' => [
+                'importUnavailable' => 'Unable to import customers.',
+                'emptyFileRows' => 'The selected CSV file does not contain any customer rows.',
+                'missingFileHeaders' => 'The selected CSV file is missing one or more required customer headers.',
+                'emptySelection' => 'Select at least one customer to import.',
+            ],
+            'connectorsPageUrl' => $canManageImports
+                ? route('profile.connectors.index')
+                : null,
+            'sources' => array_merge([
+                [
+                    'value' => 'file-upload',
+                    'label' => 'File Upload',
+                    'enabled' => true,
+                    'connected' => false,
+                    'status' => 'local',
+                    'status_label' => 'Local file',
+                ],
+            ], $this->availableSourcesForTenant((int) auth()->user()->tenant_id)),
+            'rowBehavior' => [
+                'hideDuplicatesByDefault' => false,
+                'selectVisibleNonDuplicateRowsOnly' => false,
+                'submitSelectedVisibleRowsOnly' => false,
+                'duplicateFlagField' => 'is_duplicate',
+                'selectionField' => 'selected',
+            ],
+            'previewDisplay' => [
+                'titleExpression' => "row.name || '—'",
+                'subtitleExpression' => "row.email || row.external_id || ''",
+                'bodyExpression' => "[row.address_line_1, row.address_line_2, row.city, row.region, row.postal_code, row.country_code].filter(Boolean).join(', ') || '—'",
+                'searchExpressions' => [
+                    'row.name',
+                    'row.email',
+                    'row.phone',
+                    'row.external_id',
+                    'row.external_source',
+                    'row.address_line_1',
+                    'row.address_line_2',
+                    'row.city',
+                    'row.region',
+                    'row.postal_code',
+                    'row.country_code',
+                    'previewStatusLabel(row)',
+                ],
+                'errorFields' => [
+                    'name',
                 ],
             ],
         ];

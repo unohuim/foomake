@@ -13,13 +13,13 @@ location:
   - resources/js/lib/crud-page.js
   - resources/js/pages/sales-products-index.js
   - resources/js/pages/sales-customers-index.js
-purpose: Define a reusable, server-configured CRUD page-module pattern where Blade is a mount-only shell, controllers emit typed page contracts, a shared JavaScript renderer owns generic CRUD UI, and page modules compose resource-specific slideovers and action handlers with optional shared import and export behavior.
+purpose: Define a reusable, server-configured CRUD page-module pattern where Blade is a mount-only shell, controllers emit typed page contracts, a shared JavaScript renderer owns generic CRUD UI, a shared import component owns import UX and lifecycle, and page modules compose resource-specific create and export actions plus approved data adapters.
 when_to_use:
   - Building any new interactive CRUD index page after the Products and Customers migrations
   - Migrating an interactive CRUD page to a shared mount-only page-module pattern without introducing client-owned routing or global state
   - Reusing the same toolbar, list rendering, action menu, create/import/export triggers, and sort mechanics across multiple Blade pages with different resource contracts
-  - Keeping page-specific slideouts, validation UX, and callback behavior outside the shared CRUD renderer while centralizing the common config-driven shell
-  - Attaching a reusable import workflow to a CRUD page without moving import endpoints, import authority, or page callbacks into the shared CRUD renderer
+  - Keeping page-specific create and export slideouts, validation UX, and callback behavior outside the shared CRUD renderer while centralizing the common config-driven shell
+  - Attaching a reusable import workflow to a CRUD page while moving import UX ownership into the shared import component and leaving import endpoints and import authority on the server
   - Attaching a reusable export workflow to a CRUD page without moving export endpoints, list authority, or page-owned slide-over markup into the shared CRUD renderer
 when_not_to_use:
   - Pages whose behavior is fully static
@@ -30,6 +30,7 @@ rules:
   - Blade must render the CRUD contract on the page root via data-crud-config.
   - CRUD pages that use the shared import abstraction must render a separate import contract on the page root via data-import-config rather than embedding import internals inside the CRUD config.
   - Blade index shells must remain mount-only for CRUD UI concerns and may not render toolbar markup, record tables, record cards, empty states, or row action cells directly.
+  - Blade index shells that use the shared import abstraction must not contain import slide-over form markup, import preview cards, import source controls, import bulk controls, or import footer actions.
   - Blade index shells that use the shared CRUD renderer must provide a bounded height container so the CRUD module can fill the available viewport area without making the whole page the list scroller.
   - data-crud-root must fill the available page-shell height and preserve min-height propagation so the shared renderer can size its internal records pane correctly.
   - The CRUD config must be valid JSON and must be server-generated in Blade.
@@ -44,9 +45,12 @@ rules:
   - Desktop and mobile variants must follow the same scroll-containment contract: toolbar and page header chrome remain fixed in the component shell while only the records/results pane scrolls.
   - Shared CRUD helpers may handle config parsing, list query construction, fetch, create submission, export trigger wiring, sort toggling, and config-driven shell rendering.
   - Shared export helpers may handle export panel state, scope selection, config-driven URL building, and submission wiring without hardcoding resource-specific routes.
-  - Shared import helpers may handle import config parsing, source switching, preview loading, local CSV caching, duplicate visibility, selection behavior, and import submission wiring.
-  - Page-specific behavior such as create/edit/import/export panel markup, row-to-form mapping, toasts, validation UX, success callbacks, and domain-specific row rendering hooks remains in the page module.
+  - Shared import helpers must own import panel markup, source switching, source connection status UI, preview loading, local CSV caching, duplicate visibility controls, selection behavior, preview row rendering, validation display, and import submission wiring.
+  - Resource pages may provide only declarative import config plus approved data adapters such as local-row parsing, preview-row normalization, import-row payload building, submit-body shaping, and import-success callbacks.
+  - Page modules must not own import UX methods, import slide-over markup, or import-specific view overrides.
+  - Page-specific behavior such as create/edit/export panel markup, row-to-form mapping, toasts, non-import validation UX, success callbacks outside import, and non-import domain-specific rendering remains in the page module.
   - Products and Customers are the current reference implementations for this pattern.
+  - Products and Customers both use the shared export module while keeping their export slide-over markup in Blade and their permission/messages local to the page module.
   - Missing or invalid CRUD config must fail safely without breaking initial page load.
   - Missing or invalid import config must fail safely without breaking initial page load.
   - Backend routes remain authoritative and must not be hardcoded in shared JavaScript.
@@ -150,7 +154,16 @@ example_usage: |
     const crud = createGenericCrud(parseCrudConfig(rootEl));
     const importConfig = parseImportConfig(rootEl);
     const exportModule = createExportModule({ permissionKey: 'canExportProducts' });
-    const importModule = createImportModule({ config: importConfig, callbacks: { onImportSuccess: () => this.fetchProducts() } });
+    const importModule = createImportModule({
+        config: importConfig,
+        adapters: {
+            parseLocalRows,
+            normalizePreviewRow,
+            buildImportRowPayload,
+            buildSubmitBody,
+        },
+        callbacks: { onImportSuccess: () => this.fetchProducts() },
+    });
     mountCrudRenderer(rootEl.querySelector('[data-crud-root]'), {
         ...crud,
         state: { records: 'products', loading: 'isLoadingList', error: 'listError', search: 'search', sort: 'sort' },
@@ -160,6 +173,33 @@ example_usage: |
         actions: [{ id: 'edit', label: 'Edit', tone: 'default', handler: 'openEdit(record)' }],
     });
     Alpine.data('salesProductsIndex', () => ({
-        ...importModule,
+        ...exportModule,
+        mountImportUi() {
+            importModule.mount(this);
+        },
+    }));
+
+  Customers page module:
+    const crud = createGenericCrud(parseCrudConfig(rootEl));
+    const importConfig = parseImportConfig(rootEl);
+    const importModule = createImportModule({
+        config: importConfig,
+        adapters: {
+            parseLocalRows,
+            normalizePreviewRow,
+            buildImportRowPayload,
+            buildSubmitBody,
+        },
+        callbacks: { onImportSuccess: () => this.fetchCustomers() },
+    });
+    const exportModule = createExportModule({ permissionKey: 'canExportCustomers' });
+    mountCrudRenderer(rootEl.querySelector('[data-crud-root]'), {
+        ...crud,
+        handlers: { searchInput: 'handleSearchInput()', toggleSort: 'toggleSort(column)', create: 'openCreatePanel()', import: 'openImportPanel()', export: 'openExportPanel()' },
+    });
+    Alpine.data('salesCustomersIndex', () => ({
+        mountImportUi() {
+            importModule.mount(this);
+        },
         ...exportModule,
     }));

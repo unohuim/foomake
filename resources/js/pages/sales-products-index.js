@@ -70,10 +70,6 @@ export function mount(rootEl, payload) {
     });
 
     const emptySlideOvers = () => ({
-        import: {
-            open: false,
-            title: importConfig.labels?.title || 'Import Products',
-        },
         export: {
             open: false,
             title: 'Export Products',
@@ -90,6 +86,7 @@ export function mount(rootEl, payload) {
             },
         },
     });
+    importModule.mount(rootEl);
     const exportModule = createExportModule({
         permissionKey: 'canExportProducts',
         unavailableMessage: 'Unable to export products.',

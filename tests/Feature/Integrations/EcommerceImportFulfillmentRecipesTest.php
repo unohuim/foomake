@@ -279,8 +279,11 @@ it('1. the import confirmation UI includes a global create fulfillment recipes c
 
     $response = $this->actingAs($user)
         ->get(route('sales.products.index'))
-        ->assertOk()
-        ->assertSee('Create fulfillment recipes');
+        ->assertOk();
+
+    $config = ($this->extractImportConfig)($response);
+
+    expect($config['bulkOptions']['create_fulfillment_recipes']['label'] ?? null)->toBe('Create fulfillment recipes');
 
     $payload = ($this->extractPayload)($response, 'sales-products-index-payload');
 
@@ -1249,9 +1252,18 @@ it('41. no recipe lines or components are auto created during import', function 
     expect($recipe->lines()->count())->toBe(0);
 });
 
-it('42. no row level recipe indicators are introduced in the import preview UI contract', function () {
-    $source = file_get_contents(base_path('resources/views/sales/products/index.blade.php'));
+it('42. no row level recipe indicators are introduced in the shared import UI contract', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    ($this->grantPermission)($user, 'inventory-products-manage');
 
-    expect($source)->toContain('Create fulfillment recipes')
+    $response = $this->actingAs($user)
+        ->get(route('sales.products.index'))
+        ->assertOk();
+
+    $config = ($this->extractImportConfig)($response);
+    $source = file_get_contents(base_path('resources/js/lib/import-module.js'));
+
+    expect($config['bulkOptions']['create_fulfillment_recipes']['label'] ?? null)->toBe('Create fulfillment recipes')
         ->and($source)->not->toContain('Create recipe for this row');
 });

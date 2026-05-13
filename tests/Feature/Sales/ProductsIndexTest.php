@@ -395,7 +395,7 @@ it('21. crud config disables import actions for view only users', function () {
     expect($config['permissions']['showImport'] ?? null)->toBeFalse();
 });
 
-it('22. renders a slide-over root for the import workflow', function () {
+it('22. exposes the import config contract without server rendered import markup', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
 
@@ -404,11 +404,13 @@ it('22. renders a slide-over root for the import workflow', function () {
     $this->actingAs($user)
         ->get(route('sales.products.index'))
         ->assertOk()
-        ->assertSee('data-products-import-panel', false)
+        ->assertSee('data-import-config=', false)
+        ->assertDontSee('data-products-import-panel', false)
+        ->assertDontSee('data-shared-import-panel', false)
         ->assertSee('aria-modal="true"', false);
 });
 
-it('23. products import ui includes a preview loading state contract', function () {
+it('23. products import module includes a preview loading state contract', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
 
@@ -417,12 +419,12 @@ it('23. products import ui includes a preview loading state contract', function 
     $this->actingAs($user)
         ->get(route('sales.products.index'))
         ->assertOk()
-        ->assertSee('data-products-import-preview-loading', false);
+        ->assertDontSee('data-products-import-preview-loading', false);
 
     $importModuleSource = file_get_contents(base_path('resources/js/lib/import-module.js'));
 
     expect($importModuleSource)->toContain('isLoadingPreview')
-        ->and($importModuleSource)->toContain("config.labels?.loadingPreviewDefault || 'Loading preview...'")
+        ->and($importModuleSource)->toContain('data-shared-import-preview-loading')
         ->and($importModuleSource)->toContain('previewLoadingMessage');
 });
 

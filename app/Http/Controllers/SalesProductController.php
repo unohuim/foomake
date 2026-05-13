@@ -636,10 +636,18 @@ class SalesProductController extends Controller
                 'loadingPreviewDefault' => 'Loading preview...',
                 'loadingPreviewFile' => 'Loading file preview...',
                 'loadingPreviewExternal' => 'Loading WooCommerce preview...',
+                'emptyStateDescription' => 'Select a WooCommerce connection or switch to file upload to start loading an import preview.',
+                'noBulkOptions' => 'No additional import options are available for this resource.',
+                'previewDescription' => 'Review the import preview before confirming the selected records.',
             ],
             'permissions' => [
                 'canManageImports' => $canManageImports,
                 'canManageConnections' => $canManageConnections,
+            ],
+            'messages' => [
+                'importUnavailable' => 'Unable to import products.',
+                'emptyFileRows' => 'The selected CSV file does not contain any product rows.',
+                'missingFileHeaders' => 'The selected CSV file is missing one or more required product headers.',
             ],
             'connectorsPageUrl' => $canManageConnections
                 ? route('profile.connectors.index')
@@ -683,6 +691,23 @@ class SalesProductController extends Controller
                 'submitSelectedVisibleRowsOnly' => true,
                 'duplicateFlagField' => 'is_duplicate',
                 'selectionField' => 'selected',
+            ],
+            'previewDisplay' => [
+                'titleExpression' => "row.name || '—'",
+                'subtitleExpression' => "row.sku || row.external_id || ''",
+                'bodyExpression' => '',
+                'searchExpressions' => [
+                    'row.name',
+                    'row.sku',
+                    'row.external_id',
+                    'row.external_source',
+                    'row.price',
+                    'previewStatusLabel(row)',
+                ],
+                'errorFields' => [
+                    'name',
+                    'base_uom_id',
+                ],
             ],
         ];
     }

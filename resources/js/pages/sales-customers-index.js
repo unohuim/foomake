@@ -1,12 +1,16 @@
 import { parseCrudConfig } from '../lib/crud-config';
+import { parseImportConfig } from '../lib/import-config';
 import { mountCrudRenderer } from '../lib/crud-page';
+import { createExportModule } from '../lib/export-module';
 import { createGenericCrud } from '../lib/generic-crud';
+import { createImportModule } from '../lib/import-module';
 import { refreshNavigationState } from '../navigation/refresh-navigation-state';
 
 export function mount(rootEl, payload) {
     const Alpine = window.Alpine;
     const safePayload = payload || {};
     const crud = createGenericCrud(parseCrudConfig(rootEl));
+    const importConfig = parseImportConfig(rootEl);
     const crudRootEl = rootEl.querySelector('[data-crud-root]');
     const actionDefinitions = (Array.isArray(crud.actions) ? crud.actions : []).map((action) => ({
         ...action,
@@ -15,7 +19,7 @@ export function mount(rootEl, payload) {
     const rendererConfig = {
         ...crud,
         createHandler: 'openCreatePanel()',
-        exportHandler: 'handleExportUnavailable()',
+        exportHandler: 'openExportPanel()',
         importHandler: 'openImportPanel()',
         state: {
             records: 'customers',
@@ -27,7 +31,7 @@ export function mount(rootEl, payload) {
         handlers: {
             searchInput: 'handleSearchInput()',
             toggleSort: 'toggleSort(column)',
-            export: 'handleExportUnavailable()',
+            export: 'openExportPanel()',
             create: 'openCreatePanel()',
             import: 'openImportPanel()',
         },
@@ -56,17 +60,12 @@ export function mount(rootEl, payload) {
         formatted_address: [],
     });
 
-    const emptyImportErrors = () => ({
-        source: [],
+    const emptySlideOvers = () => ({
+        export: {
+            open: false,
+            title: 'Export Customers',
+        },
     });
-
-    const parseJsonResponse = async (response) => {
-        try {
-            return await response.json();
-        } catch (error) {
-            return {};
-        }
-    };
 
     const emptyForm = () => ({
         name: '',
@@ -93,22 +92,132 @@ export function mount(rootEl, payload) {
         country_code: customer.country_code || '',
         formatted_address: customer.formatted_address || '',
     });
+    const importModule = createImportModule({
+        config: importConfig,
+        adapters: {
+            parseLocalRows: (text, helpers) => {
+                const rows = helpers.parseCsvRows(text);
+
+                if (rows.length < 2) {
+                    return [];
+                }
+
+                const headers = rows[0].map((header) => header.trim());
+                const requiredHeaders = [
+                    'external_id',
+                    'name',
+                    'email',
+                    'phone',
+                    'address_line_1',
+                    'address_line_2',
+                    'city',
+                    'region',
+                    'postal_code',
+                    'country_code',
+                ];
+                const hasRequiredHeaders = requiredHeaders.every((header) => headers.includes(header));
+
+                if (!hasRequiredHeaders) {
+                    helpers.setFileError('The selected CSV file is missing one or more required customer headers.');
+                    return null;
+                }
+
+                return rows
+                    .slice(1)
+                    .filter((row) => row.some((value) => value.trim() !== ''))
+                    .map((row, index) => headers.reduce((carry, header, rowIndex) => {
+                        carry[header] = row[rowIndex] ?? '';
+
+                        return carry;
+                    }, {
+                        __row_index: index,
+                    }))
+                    .map((record) => ({
+                        external_id: record.external_id !== ''
+                            ? record.external_id
+                            : `file-customer-${record.__row_index + 1}-${helpers.slugify(record.name || 'customer')}`,
+                        external_source: record.external_source || '',
+                        name: record.name,
+                        email: record.email || null,
+                        phone: record.phone || null,
+                        address_line_1: record.address_line_1 || null,
+                        address_line_2: record.address_line_2 || null,
+                        city: record.city || null,
+                        region: record.region || null,
+                        postal_code: record.postal_code || null,
+                        country_code: record.country_code || null,
+                        is_active: true,
+                        is_duplicate: false,
+                        selected: true,
+                    }));
+            },
+            normalizePreviewRow: (row) => ({
+                ...row,
+                selected: row.selected !== false,
+                external_source: row.external_source || '',
+                is_active: row.is_active !== false,
+                is_duplicate: Boolean(row.is_duplicate),
+                email: row.email || '',
+                phone: row.phone || '',
+                address_line_1: row.address_line_1 || '',
+                address_line_2: row.address_line_2 || '',
+                city: row.city || '',
+                region: row.region || '',
+                postal_code: row.postal_code || '',
+                country_code: row.country_code || '',
+            }),
+            buildImportRowPayload: (defaultPayload, row) => ({
+                external_id: row.external_id,
+                name: row.name,
+                email: row.email || null,
+                phone: row.phone || null,
+                address_line_1: row.address_line_1 || null,
+                address_line_2: row.address_line_2 || null,
+                city: row.city || null,
+                region: row.region || null,
+                postal_code: row.postal_code || null,
+                country_code: row.country_code || null,
+            }),
+            buildSubmitBody: (defaultBody, { importSource, rows }) => ({
+                source: defaultBody.is_local_file_import ? 'file-upload' : importSource,
+                rows,
+            }),
+        },
+        callbacks: {
+            onImportSuccess: async (component) => {
+                await component.fetchCustomers();
+                await refreshNavigationState(component.navigationStateUrl);
+                component.showToast('success', 'Customers imported.');
+            },
+        },
+    });
+    importModule.mount(rootEl);
+    const exportModule = createExportModule({
+        permissionKey: 'canExportCustomers',
+        unavailableMessage: 'Unable to export customers.',
+    });
 
     Alpine.data('salesCustomersIndex', () => ({
+        ...importModule,
+        ...exportModule,
         crud,
         endpoints: crud.endpoints || {},
         columns: Array.isArray(crud.columns) ? crud.columns : [],
         headers: crud.headers || {},
         sortable: Array.isArray(crud.sortable) ? crud.sortable : [],
         customers: Array.isArray(safePayload.customers) ? safePayload.customers : [],
+        uoms: [],
         updateUrlBase: safePayload.updateUrlBase || '',
         navigationStateUrl: safePayload.navigationStateUrl || '',
         csrfToken: safePayload.csrfToken || '',
         statuses: safePayload.statuses || ['active', 'inactive', 'archived'],
-        sources: safePayload.sources || [],
-        canManageImports: Boolean(safePayload.canManageImports),
-        canManageConnections: Boolean(safePayload.canManageConnections),
-        connectorsPageUrl: safePayload.connectorsPageUrl || '',
+        sources: Array.isArray(importConfig.sources) && importConfig.sources.length > 0
+            ? importConfig.sources
+            : (safePayload.sources || []),
+        canExportCustomers: Boolean(crud.permissions?.showExport),
+        canManageImports: Boolean(importConfig.permissions?.canManageImports ?? safePayload.canManageImports),
+        canManageConnections: Boolean(importConfig.permissions?.canManageConnections ?? safePayload.canManageConnections),
+        connectorsPageUrl: importConfig.connectorsPageUrl || safePayload.connectorsPageUrl || '',
         isLoadingList: false,
         listError: '',
         search: '',
@@ -120,18 +229,10 @@ export function mount(rootEl, payload) {
         isSubmitting: false,
         formMode: 'create',
         editingCustomerId: null,
+        slideOvers: emptySlideOvers(),
         form: emptyForm(),
-        errors: emptyErrors(),
+        formErrors: emptyErrors(),
         generalError: '',
-        isImportPanelOpen: false,
-        selectedSource: '',
-        previewRows: [],
-        importErrors: emptyImportErrors(),
-        importPreviewError: '',
-        importError: '',
-        importValidationErrors: {},
-        isLoadingPreview: false,
-        isSubmittingImport: false,
         toast: {
             visible: false,
             message: '',
@@ -144,8 +245,25 @@ export function mount(rootEl, payload) {
         columnHeader(column) {
             return this.headers[column] || column;
         },
+        slideOverTitle(name) {
+            return this.slideOvers[name]?.title || '';
+        },
         isSortableColumn(column) {
             return this.sortable.includes(column);
+        },
+        openSlideOver(name) {
+            if (!this.slideOvers[name]) {
+                return;
+            }
+
+            this.slideOvers[name].open = true;
+        },
+        closeSlideOver(name) {
+            if (!this.slideOvers[name]) {
+                return;
+            }
+
+            this.slideOvers[name].open = false;
         },
         customerCellText(customer, column) {
             switch (column) {
@@ -235,7 +353,7 @@ export function mount(rootEl, payload) {
             this.formMode = 'create';
             this.editingCustomerId = null;
             this.form = emptyForm();
-            this.errors = emptyErrors();
+            this.formErrors = emptyErrors();
             this.generalError = '';
             this.isFormOpen = true;
             this.$nextTick(() => {
@@ -245,14 +363,11 @@ export function mount(rootEl, payload) {
         openCreatePanel() {
             this.openCreate();
         },
-        handleExportUnavailable() {
-            return;
-        },
         openEdit(customer) {
             this.formMode = 'edit';
             this.editingCustomerId = customer.id;
             this.form = customerToForm(customer);
-            this.errors = emptyErrors();
+            this.formErrors = emptyErrors();
             this.generalError = '';
             this.isFormOpen = true;
             this.$nextTick(() => {
@@ -262,7 +377,7 @@ export function mount(rootEl, payload) {
         closeForm() {
             this.isFormOpen = false;
             this.isSubmitting = false;
-            this.errors = emptyErrors();
+            this.formErrors = emptyErrors();
             this.generalError = '';
         },
         async submitForm() {
@@ -283,7 +398,7 @@ export function mount(rootEl, payload) {
             };
 
             this.isSubmitting = true;
-            this.errors = emptyErrors();
+            this.formErrors = emptyErrors();
             this.generalError = '';
 
             if (this.formMode === 'create') {
@@ -291,7 +406,7 @@ export function mount(rootEl, payload) {
                     body,
                     csrfToken: this.csrfToken,
                     onValidationError: (data) => {
-                        this.errors = this.normalizeErrors(data.errors);
+                        this.formErrors = this.normalizeErrors(data.errors);
                         this.generalError = data.message || 'Validation failed.';
                     },
                     onError: () => {
@@ -327,7 +442,7 @@ export function mount(rootEl, payload) {
 
             if (response.status === 422) {
                 const data = await response.json();
-                this.errors = this.normalizeErrors(data.errors);
+                this.formErrors = this.normalizeErrors(data.errors);
                 this.generalError = data.message || 'Validation failed.';
                 this.isSubmitting = false;
                 return;
@@ -361,172 +476,6 @@ export function mount(rootEl, payload) {
             await this.fetchCustomers();
             await refreshNavigationState(this.navigationStateUrl);
             this.showToast('success', 'Customer archived.');
-        },
-        openImportPanel() {
-            if (!this.canManageImports) {
-                return;
-            }
-
-            this.isImportPanelOpen = true;
-            this.resetImportState();
-        },
-        closeImportPanel() {
-            this.isImportPanelOpen = false;
-            this.resetImportState();
-        },
-        resetImportState() {
-            this.selectedSource = '';
-            this.previewRows = [];
-            this.importErrors = emptyImportErrors();
-            this.importPreviewError = '';
-            this.importError = '';
-            this.importValidationErrors = {};
-            this.isLoadingPreview = false;
-            this.isSubmittingImport = false;
-        },
-        handleSourceChange() {
-            this.previewRows = [];
-            this.importErrors = emptyImportErrors();
-            this.importPreviewError = '';
-            this.importError = '';
-            this.importValidationErrors = {};
-        },
-        selectedSourceMeta() {
-            return this.sources.find((source) => source.value === this.selectedSource) || null;
-        },
-        selectedSourceEnabled() {
-            return Boolean(this.selectedSourceMeta()?.enabled);
-        },
-        sourceConnected() {
-            return Boolean(this.selectedSourceMeta()?.connected);
-        },
-        selectedSourceConnectionLabel() {
-            return this.selectedSourceMeta()?.status_label || '';
-        },
-        selectedRowCount() {
-            return this.previewRows.filter((row) => row.selected).length;
-        },
-        rowError(index, field) {
-            const key = `rows.${index}.${field}`;
-            const errors = this.importValidationErrors[key];
-
-            return Array.isArray(errors) && errors.length > 0 ? errors[0] : '';
-        },
-        async loadPreview() {
-            if (!this.endpoints.importPreview) {
-                this.importPreviewError = 'Unable to load preview.';
-                return;
-            }
-
-            if (this.isLoadingPreview) {
-                return;
-            }
-
-            this.importPreviewError = '';
-            this.importError = '';
-            this.importValidationErrors = {};
-            this.importErrors = emptyImportErrors();
-            this.isLoadingPreview = true;
-
-            try {
-                const response = await fetch(this.endpoints.importPreview, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        Accept: 'application/json',
-                        'X-CSRF-TOKEN': this.csrfToken,
-                    },
-                    body: JSON.stringify({
-                        source: this.selectedSource,
-                    }),
-                });
-
-                if (response.status === 422) {
-                    const data = await parseJsonResponse(response);
-                    this.importPreviewError = data.message || 'Unable to load preview.';
-                    this.importErrors.source = Array.isArray(data.errors?.source) ? data.errors.source : [];
-                    return;
-                }
-
-                if (!response.ok) {
-                    const data = await parseJsonResponse(response);
-                    this.importPreviewError = data.message || 'Unable to load preview.';
-                    this.importErrors.source = Array.isArray(data.errors?.source) ? data.errors.source : [];
-                    return;
-                }
-
-                const data = await parseJsonResponse(response);
-                this.previewRows = (data.data?.rows || []).map((row) => ({
-                    ...row,
-                    selected: true,
-                }));
-            } catch (error) {
-                this.importPreviewError = 'Unable to load preview.';
-            } finally {
-                this.isLoadingPreview = false;
-            }
-        },
-        async submitImport() {
-            if (!this.endpoints.importStore) {
-                this.importError = 'Unable to import customers.';
-                return;
-            }
-
-            const rows = this.previewRows
-                .filter((row) => row.selected)
-                .map((row) => ({
-                    external_id: row.external_id,
-                    name: row.name,
-                    email: row.email || null,
-                    phone: row.phone || null,
-                    address_line_1: row.address_line_1 || null,
-                    address_line_2: row.address_line_2 || null,
-                    city: row.city || null,
-                    region: row.region || null,
-                    postal_code: row.postal_code || null,
-                    country_code: row.country_code || null,
-                }));
-
-            if (rows.length === 0) {
-                this.importError = 'Select at least one customer to import.';
-                return;
-            }
-
-            this.isSubmittingImport = true;
-            this.importError = '';
-            this.importValidationErrors = {};
-
-            const response = await fetch(this.endpoints.importStore, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Accept: 'application/json',
-                    'X-CSRF-TOKEN': this.csrfToken,
-                },
-                body: JSON.stringify({
-                    source: this.selectedSource,
-                    rows,
-                }),
-            });
-
-            if (response.status === 422) {
-                const data = await response.json();
-                this.importError = data.message || 'Unable to import customers.';
-                this.importValidationErrors = data.errors || {};
-                this.isSubmittingImport = false;
-                return;
-            }
-
-            if (!response.ok) {
-                this.importError = 'Unable to import customers.';
-                this.isSubmittingImport = false;
-                return;
-            }
-
-            await this.fetchCustomers();
-            await refreshNavigationState(this.navigationStateUrl);
-            this.closeImportPanel();
-            this.showToast('success', 'Customers imported.');
         },
     }));
 }

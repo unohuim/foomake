@@ -32,7 +32,7 @@ class ImportExternalCustomersRequest extends FormRequest
             'source' => [
                 'required',
                 'string',
-                Rule::in(['woocommerce', 'shopify']),
+                Rule::in(['woocommerce', 'shopify', 'file-upload']),
             ],
             'rows' => [
                 'required',

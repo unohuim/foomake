@@ -351,8 +351,28 @@ it('12. import slideout contract exists', function () {
 
     ($this->getCustomersIndex)($user)
         ->assertOk()
-        ->assertSee('Import Customers')
-        ->assertSee('data-customers-import-panel', false);
+        ->assertSee('data-import-config=', false)
+        ->assertDontSee('data-customers-import-panel', false)
+        ->assertDontSee('data-customers-import-preview-records-accordion', false)
+        ->assertDontSee('data-customers-import-preview-card', false);
+});
+
+it('12a. customers import config exposes file upload first and keeps ecommerce store available', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermissions)($user, ['sales-customers-manage', 'system-users-manage']);
+
+    $response = ($this->getCustomersIndex)($user)
+        ->assertOk()
+        ->assertSee('data-import-config=', false);
+
+    preg_match("/data-import-config='([^']+)'/", $response->getContent(), $matches);
+
+    $importConfig = json_decode(html_entity_decode($matches[1] ?? '{}', ENT_QUOTES), true);
+
+    expect($importConfig['sources'][0]['label'] ?? null)->toBe('File Upload')
+        ->and(collect($importConfig['sources'] ?? [])->contains(fn ($sourceConfig) => ($sourceConfig['label'] ?? null) === 'WooCommerce'))->toBeTrue();
 });
 
 it('13. woo customer preview requires woo admin permission', function () {
@@ -407,6 +427,62 @@ it('15. preview uses existing woo connection', function () {
         ->assertJsonPath('data.is_connected', true);
 
     Http::assertSentCount(1);
+});
+
+it('15a. file upload preview accepts shared local rows through the existing preview endpoint', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermissions)($user, ['sales-customers-manage', 'system-users-manage']);
+
+    $this->actingAs($user)->postJson(route('sales.customers.import.preview'), [
+        'source' => 'file-upload',
+        'rows' => [
+            [
+                'external_id' => 'file-customer-1',
+                'external_source' => '',
+                'name' => 'Local File Customer',
+                'email' => 'local-file@example.test',
+                'phone' => '555-0101',
+                'address_line_1' => '1 Shared Way',
+                'address_line_2' => null,
+                'city' => 'Toronto',
+                'region' => 'ON',
+                'postal_code' => 'M5V1K4',
+                'country_code' => 'CA',
+            ],
+        ],
+    ])->assertOk()
+        ->assertJsonPath('data.source', 'file-upload')
+        ->assertJsonPath('data.rows.0.external_id', 'file-customer-1')
+        ->assertJsonPath('data.rows.0.name', 'Local File Customer');
+});
+
+it('15b. file upload store accepts shared local rows through the existing import endpoint', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermissions)($user, ['sales-customers-manage', 'system-users-manage']);
+
+    $this->actingAs($user)->postJson(route('sales.customers.import.store'), [
+        'source' => 'file-upload',
+        'rows' => [
+            [
+                'external_id' => 'file-customer-store-1',
+                'name' => 'Stored File Customer',
+                'email' => 'stored-file@example.test',
+                'phone' => '555-0102',
+                'address_line_1' => '2 Shared Way',
+                'address_line_2' => null,
+                'city' => 'Toronto',
+                'region' => 'ON',
+                'postal_code' => 'M5V1K5',
+                'country_code' => 'CA',
+            ],
+        ],
+    ])->assertCreated()
+        ->assertJsonPath('data.imported_count', 1)
+        ->assertJsonPath('data.imported.0.name', 'Stored File Customer');
 });
 
 it('16. missing woo connection returns json error', function () {
@@ -988,28 +1064,35 @@ it('31. customer action menu still exposes edit and archive behavior through con
         ->and($customersScript)->toContain('archive(record)');
 });
 
-it('32. customer import preview button loading contract prevents duplicate requests', function () {
+it('32. customer import preview loading state is owned by the shared import component', function () {
     $customersBlade = file_get_contents(base_path('resources/views/sales/customers/index.blade.php'));
     $customersScript = file_get_contents(base_path('resources/js/pages/sales-customers-index.js'));
+    $importModuleSource = file_get_contents(base_path('resources/js/lib/import-module.js'));
 
-    expect($customersBlade)->toContain('x-bind:disabled="isLoadingPreview"')
-        ->and($customersBlade)->toContain("x-on:click=\"loadPreview()\"")
-        ->and($customersScript)->toContain('if (this.isLoadingPreview) {')
-        ->and($customersScript)->toContain('return;')
-        ->and($customersScript)->toContain('this.isLoadingPreview = true;')
-        ->and($customersScript)->toContain('this.isLoadingPreview = false;');
+    expect($customersBlade)->not->toContain("x-on:click=\"loadPreview()\"")
+        ->and($customersBlade)->not->toContain('x-bind:disabled="isLoadingPreview"')
+        ->and($customersScript)->toContain("import { createImportModule } from '../lib/import-module';")
+        ->and($customersScript)->toContain('const importModule = createImportModule(')
+        ->and($customersScript)->toContain('importModule.mount(rootEl);')
+        ->and($importModuleSource)->toContain('data-shared-import-preview-loading')
+        ->and($importModuleSource)->toContain('async loadPreview(options = {})')
+        ->and($importModuleSource)->toContain('this.isLoadingPreview = true;')
+        ->and($importModuleSource)->toContain('this.isLoadingPreview = false;');
 });
 
-it('33. customer import preview errors render in the slideout without requiring retry', function () {
+it('33. customer import preview errors render through the shared import component contract', function () {
     $customersBlade = file_get_contents(base_path('resources/views/sales/customers/index.blade.php'));
     $customersScript = file_get_contents(base_path('resources/js/pages/sales-customers-index.js'));
+    $importModuleSource = file_get_contents(base_path('resources/js/lib/import-module.js'));
 
-    expect($customersBlade)->toContain('x-text="importPreviewError"')
-        ->and($customersBlade)->toContain('x-text="importErrors.source[0]"')
-        ->and($customersScript)->toContain('const parseJsonResponse = async (response) => {')
-        ->and($customersScript)->toContain('this.importPreviewError =')
-        ->and($customersScript)->toContain('this.importErrors.source =')
-        ->and($customersScript)->toContain('await parseJsonResponse(response)');
+    expect($customersBlade)->not->toContain('x-text="previewError"')
+        ->and($customersBlade)->not->toContain('x-text="errors.source[0]"')
+        ->and($customersScript)->toContain("import { createImportModule } from '../lib/import-module';")
+        ->and($customersScript)->not->toContain('messages: {')
+        ->and($importModuleSource)->toContain('data-shared-import-panel')
+        ->and($importModuleSource)->toContain('this.previewError = errorMessage;')
+        ->and($importModuleSource)->toContain('this.errors.source = data.errors && Array.isArray(data.errors.source) ? data.errors.source : [];')
+        ->and($importModuleSource)->toContain('x-text="errors.source[0]"');
 });
 
 it('34. import and create buttons still open page specific panels through configured callbacks', function () {
@@ -1048,9 +1131,11 @@ it('36. customers crud config can enable export through shared labels and permis
 it('37. customers page module wires export through the shared crud renderer contract', function () {
     $customersScript = file_get_contents(base_path('resources/js/pages/sales-customers-index.js'));
 
-    expect($customersScript)->toContain("exportHandler: 'handleExportUnavailable()'")
-        ->and($customersScript)->toContain("export: 'handleExportUnavailable()'")
-        ->and($customersScript)->toContain('handleExportUnavailable() {');
+    expect($customersScript)->toContain("import { createExportModule } from '../lib/export-module';")
+        ->and($customersScript)->toContain('const exportModule = createExportModule(')
+        ->and($customersScript)->toContain("exportHandler: 'openExportPanel()'")
+        ->and($customersScript)->toContain("export: 'openExportPanel()'")
+        ->and($customersScript)->toContain('...exportModule,');
 });
 
 it('38. shared crud renderer owns the customers export toolbar button markup', function () {
@@ -1059,5 +1144,5 @@ it('38. shared crud renderer owns the customers export toolbar button markup', f
 
     expect($rendererSource)->toContain('data-crud-toolbar-export-button')
         ->and($customersBlade)->not->toContain('data-crud-toolbar-export-button')
-        ->and($customersBlade)->not->toContain('Export Customers');
+        ->and($customersBlade)->toContain('data-customers-export-panel');
 });

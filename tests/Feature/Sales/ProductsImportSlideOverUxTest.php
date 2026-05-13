@@ -45,7 +45,6 @@ beforeEach(function () {
 
     $this->bladeSource = file_get_contents(base_path('resources/views/sales/products/index.blade.php'));
     $this->pageModuleSource = file_get_contents(base_path('resources/js/pages/sales-products-index.js'));
-    $this->inventorySource = file_get_contents(base_path('docs/ARCHITECTURE_INVENTORY.md'));
     $this->architectureSource = file_get_contents(base_path('docs/architecture/ui/ImportSlideOverPreviewPattern.yaml'));
     $this->importModulePath = base_path('resources/js/lib/import-module.js');
     $this->importModuleSource = file_exists($this->importModulePath)
@@ -53,7 +52,7 @@ beforeEach(function () {
         : '';
 });
 
-it('1. products page still renders the import panel root after the extraction', function () {
+it('1. products page response no longer renders import slide over markup server side', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
 
@@ -62,186 +61,151 @@ it('1. products page still renders the import panel root after the extraction', 
     $this->actingAs($user)
         ->get(route('sales.products.index'))
         ->assertOk()
-        ->assertSee('data-products-import-panel', false)
-        ->assertSee('data-products-import-preview-search', false);
+        ->assertDontSee('data-products-import-panel', false)
+        ->assertDontSee('data-shared-import-panel', false);
 });
 
-it('2. preview records stay hidden until an import source or mode is selected', function () {
+it('2. products blade keeps the page root import config contract only', function () {
     expect($this->bladeSource)
-        ->toContain('x-show="!hasSelectedImportSource()"')
-        ->and($this->bladeSource)->toContain('x-show="hasSelectedImportSource()"')
-        ->and($this->bladeSource)->toContain('data-products-import-empty-state');
+        ->toContain('data-import-config=')
+        ->and($this->bladeSource)->not->toContain('data-products-import-panel')
+        ->and($this->bladeSource)->not->toContain('data-products-import-preview-card');
 });
 
-it('3. load preview button no longer exists in the products import slide over', function () {
+it('3. products blade no longer contains import close button wiring', function () {
     expect($this->bladeSource)
-        ->not->toContain('Load Preview')
-        ->and($this->bladeSource)->not->toContain("x-on:click=\"loadPreview()\"");
+        ->not->toContain('x-on:click="closeImportPanel()"')
+        ->and($this->bladeSource)->not->toContain('x-on:change="handleSourceChange()"')
+        ->and($this->bladeSource)->not->toContain('x-on:click="submitImport()"');
 });
 
-it('4. the shared import module file exists for delegated import behavior', function () {
+it('4. the shared import module file exists', function () {
     expect(file_exists($this->importModulePath))->toBeTrue();
 });
 
-it('5. sales products page module delegates import behavior to the shared import module', function () {
+it('5. products page module delegates import behavior to the shared import module', function () {
     expect($this->pageModuleSource)
         ->toContain("import { createImportModule } from '../lib/import-module';")
-        ->and($this->pageModuleSource)->toContain('createImportModule(');
+        ->and($this->pageModuleSource)->toContain('const importModule = createImportModule(')
+        ->and($this->pageModuleSource)->toContain('importModule.mount(rootEl);');
 });
 
-it('6. woo commerce source selection auto loads preview in the shared import module', function () {
+it('6. products page module still wires the shared toolbar import handler', function () {
+    expect($this->pageModuleSource)
+        ->toContain("importHandler: 'openImportPanel()'")
+        ->and($this->pageModuleSource)->toContain("import: 'openImportPanel()'");
+});
+
+it('7. products page module does not contain page local import parsing adapters', function () {
+    expect($this->pageModuleSource)
+        ->not->toContain('parseLocalRows:')
+        ->and($this->pageModuleSource)->not->toContain('normalizePreviewRow:')
+        ->and($this->pageModuleSource)->not->toContain('buildImportRowPayload:')
+        ->and($this->pageModuleSource)->not->toContain('buildSubmitBody:');
+});
+
+it('8. shared import module renders the shared panel root', function () {
     expect($this->importModuleSource)
-        ->toContain('handleSourceChange()')
-        ->and($this->importModuleSource)->toContain('this.loadPreview({')
-        ->and($this->importModuleSource)->toContain("config.labels?.loadingPreviewExternal || 'Loading WooCommerce preview...'")
-        ->and($this->importModuleSource)->toContain('loadingMessage: loadingExternalPreviewLabel');
+        ->toContain('data-shared-import-panel')
+        ->and($this->importModuleSource)->toContain('data-shared-import-root');
 });
 
-it('7. file selection auto loads preview after the file is read', function () {
+it('9. shared import module renders the shared file input controls', function () {
+    expect($this->importModuleSource)
+        ->toContain('data-shared-import-file-input')
+        ->and($this->importModuleSource)->toContain('type="file"')
+        ->and($this->importModuleSource)->toContain('accept=".csv,text/csv"');
+});
+
+it('10. shared import module renders the shared empty state', function () {
+    expect($this->importModuleSource)
+        ->toContain('data-shared-import-empty-state')
+        ->and($this->importModuleSource)->toContain('Choose an import source');
+});
+
+it('11. shared import module renders the bulk options accordion', function () {
+    expect($this->importModuleSource)
+        ->toContain('data-shared-import-bulk-options-accordion')
+        ->and($this->importModuleSource)->toContain('Bulk Import Options');
+});
+
+it('12. shared import module renders the preview accordion', function () {
+    expect($this->importModuleSource)
+        ->toContain('data-shared-import-preview-records-accordion')
+        ->and($this->importModuleSource)->toContain('Import Preview');
+});
+
+it('13. shared import module renders preview search and duplicate controls', function () {
+    expect($this->importModuleSource)
+        ->toContain('data-shared-import-preview-search')
+        ->and($this->importModuleSource)->toContain('data-shared-import-show-duplicates')
+        ->and($this->importModuleSource)->toContain('data-shared-import-select-visible');
+});
+
+it('14. shared import module renders preview loading and empty states', function () {
+    expect($this->importModuleSource)
+        ->toContain('data-shared-import-preview-loading')
+        ->and($this->importModuleSource)->toContain('data-shared-import-preview-empty-state')
+        ->and($this->importModuleSource)->toContain('data-shared-import-preview-scroll');
+});
+
+it('15. shared import module renders preview cards', function () {
+    expect($this->importModuleSource)
+        ->toContain('data-shared-import-preview-card')
+        ->and($this->importModuleSource)->toContain('rowValidationMessages(index)');
+});
+
+it('16. products import no longer requires a manual load preview button', function () {
+    expect($this->importModuleSource)
+        ->not->toContain('Load Preview')
+        ->and($this->importModuleSource)->not->toContain('x-on:click="loadPreview()"');
+});
+
+it('17. file selection still auto loads preview in the shared module', function () {
     expect($this->importModuleSource)
         ->toContain('async handleLocalFileChange(event)')
-        ->and($this->importModuleSource)->toContain('const text = await file.text();')
         ->and($this->importModuleSource)->toContain("source: 'file-upload'")
-        ->and($this->importModuleSource)->toContain("config.labels?.loadingPreviewFile || 'Loading file preview...'")
         ->and($this->importModuleSource)->toContain('loadingMessage: loadingFilePreviewLabel');
 });
 
-it('8. selecting file upload auto opens the hidden file picker', function () {
+it('18. woo commerce source selection still auto loads preview in the shared module', function () {
     expect($this->importModuleSource)
-        ->toContain('openImportFilePicker()')
-        ->and($this->importModuleSource)->toContain('this.$refs.importFileInput?.click();')
-        ->and($this->importModuleSource)->toContain('if (this.isFileUploadMode()) {')
-        ->and($this->importModuleSource)->toContain('this.openImportFilePicker();');
+        ->toContain('handleSourceChange()')
+        ->and($this->importModuleSource)->toContain('this.loadPreview({')
+        ->and($this->importModuleSource)->toContain('loadingMessage: loadingExternalPreviewLabel');
 });
 
-it('9. a selected file becomes a separate cached source option that can restore preview rows', function () {
+it('19. cached file source persistence remains in the shared module', function () {
     expect($this->importModuleSource)
-        ->toContain("return this.selectedSource.startsWith('file-upload-cached:');")
-        ->and($this->importModuleSource)->toContain('cachedFileSources: []')
-        ->and($this->importModuleSource)->toContain('nextCachedFileSourceId: 1')
-        ->and($this->importModuleSource)->toContain('restoreCachedFilePreview()')
+        ->toContain('cachedFileSources: []')
         ->and($this->importModuleSource)->toContain('cacheCurrentFilePreviewRows(rows)')
-        ->and($this->importModuleSource)->toContain('const value = `file-upload-cached:${this.nextCachedFileSourceId}`;')
-        ->and($this->bladeSource)->toContain('<template x-for="fileSource in cachedFileSources" :key="fileSource.value">');
+        ->and($this->importModuleSource)->toContain('restoreCachedFilePreview()')
+        ->and($this->importModuleSource)->toContain("return this.selectedSource.startsWith('file-upload-cached:');");
 });
 
-it('10. loading state appears during preview load', function () {
-    expect($this->bladeSource)
-        ->toContain('data-products-import-preview-loading')
-        ->and($this->bladeSource)->toContain('x-show="isLoadingPreview"')
-        ->and($this->importModuleSource)->toContain('this.isLoadingPreview = true;')
-        ->and($this->importModuleSource)->toContain('this.previewLoadingMessage = loadingMessage;');
-});
-
-it('11. bulk import options accordion exists in the import panel', function () {
-    expect($this->bladeSource)
-        ->toContain('Bulk Import Options')
-        ->and($this->bladeSource)->toContain('data-products-import-bulk-options-accordion');
-});
-
-it('12. bulk import options accordion defaults collapsed in the shared import module', function () {
-    expect($this->importModuleSource)->toContain('bulkOptionsAccordionOpen: false');
-});
-
-it('13. import preview accordion exists in the import panel', function () {
-    expect($this->bladeSource)
-        ->toContain('Import Preview')
-        ->and($this->bladeSource)->toContain('data-products-import-preview-records-accordion');
-});
-
-it('14. import preview accordion defaults open in the shared import module', function () {
-    expect($this->importModuleSource)->toContain('previewRecordsAccordionOpen: true');
-});
-
-it('15. preview uses cards instead of a table', function () {
-    expect($this->bladeSource)
-        ->toContain('data-products-import-preview-card')
-        ->and($this->bladeSource)->not->toContain('<table class="min-w-full divide-y divide-gray-100">');
-});
-
-it('16. preview cards still show status labels', function () {
-    expect($this->bladeSource)
-        ->toContain('x-text="previewStatusLabel(row)"')
-        ->and($this->importModuleSource)->toContain("return 'Duplicate';")
-        ->and($this->importModuleSource)->toContain("return row.is_active ? 'Active' : 'Inactive';");
-});
-
-it('17. show duplicates defaults off in the shared import module', function () {
-    expect($this->importModuleSource)->toContain('showDuplicateRows: false');
-});
-
-it('18. duplicate rows are visually hidden instead of being removed from state', function () {
-    expect($this->bladeSource)
-        ->toContain('x-show="rowVisibleInPreview(row)"')
-        ->and($this->bladeSource)->toContain('x-bind:aria-hidden="rowVisibleInPreview(row) ? \'false\' : \'true\'"')
-        ->and($this->importModuleSource)->toContain('if (!this.showDuplicateRows && row.is_duplicate) {');
-});
-
-it('19. only the preview records area is scrollable', function () {
-    expect($this->bladeSource)
-        ->toContain('data-products-import-preview-scroll')
-        ->and($this->bladeSource)->toContain('max-h-[32rem]')
-        ->and($this->bladeSource)->toContain('overflow-y-auto')
-        ->and($this->bladeSource)->not->toContain('data-products-import-preview-records-accordion overflow-y-auto');
-});
-
-it('20. select all still excludes duplicate rows by default', function () {
-    expect($this->bladeSource)
-        ->toContain('data-products-import-select-visible')
-        ->and($this->bladeSource)->toContain('Select All')
-        ->and($this->importModuleSource)->toContain('visibleSelectablePreviewRows()')
-        ->and($this->importModuleSource)->toContain('this.rowVisibleInPreview(row) && !row.is_duplicate');
-});
-
-it('21. import selected submits only the currently selected visible rows', function () {
+it('20. products fallback import message remains unchanged in the shared module', function () {
     expect($this->importModuleSource)
-        ->toContain('selectedVisiblePreviewRows()')
-        ->and($this->importModuleSource)->toContain('return this.previewRows.filter((row) => row.selected && this.rowVisibleInPreview(row));')
-        ->and($this->importModuleSource)->toContain('const rows = this.selectedVisiblePreviewRows()');
+        ->toContain("const importUnavailableMessage = messages.importUnavailable || 'Unable to import products.';")
+        ->and($this->pageModuleSource)->not->toContain('importUnavailable:');
 });
 
-it('22. preview empty state exists for no records or hidden duplicate rows', function () {
-    expect($this->bladeSource)
-        ->toContain('data-products-import-preview-empty-state')
-        ->and($this->importModuleSource)->toContain('previewEmptyStateTitle()')
-        ->and($this->importModuleSource)->toContain('previewEmptyStateMessage()');
-});
-
-it('23. the shared import module is responsible for csv parsing and normalization', function () {
-    expect($this->importModuleSource)
-        ->toContain('parseLocalCsv(text)')
-        ->and($this->importModuleSource)->toContain('parseCsvRows(text)')
-        ->and($this->importModuleSource)->toContain('csvBooleanOrNull(value)')
-        ->and($this->importModuleSource)->toContain('slugify(value)');
-});
-
-it('24. the shared import module is responsible for import submission payload building', function () {
+it('21. products preview payload building remains in the shared module defaults', function () {
     expect($this->importModuleSource)
         ->toContain('buildImportRowPayload(row, importSource)')
-        ->and($this->importModuleSource)->toContain('source: importSource')
-        ->and($this->importModuleSource)->toContain('is_local_file_import: this.hasLocalFileRows')
-        ->and($this->importModuleSource)->toContain('create_fulfillment_recipes: this.createFulfillmentRecipes');
+        ->and($this->importModuleSource)->toContain('default_price_cents: Object.prototype.hasOwnProperty.call(row, \'default_price_cents\')')
+        ->and($this->importModuleSource)->toContain('image_url: Object.prototype.hasOwnProperty.call(row, \'image_url\')');
 });
 
-it('25. the sales products page module no longer owns csv parsing internals directly', function () {
-    expect($this->pageModuleSource)
-        ->not->toContain('parseLocalCsv(text)')
-        ->and($this->pageModuleSource)->not->toContain('parseCsvRows(text)')
-        ->and($this->pageModuleSource)->not->toContain('csvBooleanOrNull(value)')
-        ->and($this->pageModuleSource)->not->toContain('cacheCurrentFilePreviewRows(rows)');
+it('22. products submit still uses selected visible preview rows by default', function () {
+    expect($this->importModuleSource)
+        ->toContain('const submitSelectedVisibleRowsOnly = rowBehavior.submitSelectedVisibleRowsOnly !== false;')
+        ->and($this->importModuleSource)->toContain('selectedImportRows()')
+        ->and($this->importModuleSource)->toContain('return submitSelectedVisibleRowsOnly');
 });
 
-it('26. architecture yaml documents the reusable import slide over preview pattern', function () {
+it('23. architecture yaml now documents shared import component ownership', function () {
     expect($this->architectureSource)
-        ->toContain('name: Import Slide-Over Preview Pattern')
-        ->and($this->architectureSource)->toContain('auto-preview')
-        ->and($this->architectureSource)->toContain('duplicate rows must remain in DOM state')
-        ->and($this->architectureSource)->toContain('only scrollable region');
-});
-
-it('27. architecture inventory mentions the reusable import slide over preview pattern', function () {
-    expect($this->inventorySource)
-        ->toContain('Import Slide-Over Preview Pattern')
-        ->and($this->inventorySource)->toContain('Preview Records accordion')
-        ->and($this->inventorySource)->toContain('duplicate rows remain in DOM state');
+        ->toContain('The shared import component must own the import slide-over markup')
+        ->and($this->architectureSource)->toContain('Resource pages may not render import slide-over form markup')
+        ->and($this->architectureSource)->toContain('createImportModule({ config, adapters, callbacks }).mount(hostComponent)');
 });

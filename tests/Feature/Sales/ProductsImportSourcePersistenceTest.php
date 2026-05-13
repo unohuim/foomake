@@ -51,7 +51,7 @@ beforeEach(function () {
         : '';
 });
 
-it('1. products page still renders the import panel root for persistence flows', function () {
+it('1. products page no longer renders import panel markup server side for persistence flows', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
 
@@ -60,8 +60,9 @@ it('1. products page still renders the import panel root for persistence flows',
     $this->actingAs($user)
         ->get(route('sales.products.index'))
         ->assertOk()
-        ->assertSee('data-products-import-panel', false)
-        ->assertSee('data-products-import-file-input', false);
+        ->assertDontSee('data-products-import-panel', false)
+        ->assertDontSee('data-products-import-file-input', false)
+        ->assertDontSee('data-shared-import-panel', false);
 });
 
 it('2. products import persistence is extracted into a shared import module file', function () {
@@ -100,7 +101,8 @@ it('8. the file picker flow clears the native input before click', function () {
     expect($this->importModuleSource)
         ->toContain('clearImportFileInput()')
         ->and($this->importModuleSource)->toContain('this.clearImportFileInput();')
-        ->and($this->importModuleSource)->toContain('this.$refs.importFileInput?.click();');
+        ->and($this->importModuleSource)->toContain('if (this.$refs.importFileInput) {')
+        ->and($this->importModuleSource)->toContain('this.$refs.importFileInput.click();');
 });
 
 it('9. loaded files are stored through cache current file preview rows', function () {
@@ -146,13 +148,13 @@ it('16. restoring a cached file preview maps rows back through normalize preview
         ->toContain('this.previewRows = fileSource.rows.map((row) => normalizePreviewRow({');
 });
 
-it('17. cached file source options still render through x for in the source dropdown', function () {
-    expect($this->bladeSource)
+it('17. cached file source options now render through the shared import component source dropdown', function () {
+    expect($this->importModuleSource)
         ->toContain('<template x-for="fileSource in cachedFileSources" :key="fileSource.value">');
 });
 
 it('18. cached file source options still bind both the stored value and label', function () {
-    expect($this->bladeSource)
+    expect($this->importModuleSource)
         ->toContain('<option :value="fileSource.value" x-text="fileSource.label"></option>');
 });
 
@@ -168,7 +170,7 @@ it('19. switching to woocommerce does not clear cached file sources in handle so
     expect($handleSourceBlock)
         ->not->toContain('this.cachedFileSources = [];')
         ->and($handleSourceBlock)->not->toContain('this.nextCachedFileSourceId = 1;')
-        ->and($this->importModuleSource)->toContain("config.labels?.loadingPreviewExternal || 'Loading WooCommerce preview...'")
+        ->and($this->importModuleSource)->toContain("const loadingExternalPreviewLabel = labels.loadingPreviewExternal || 'Loading WooCommerce preview...';")
         ->and($handleSourceBlock)->toContain('loadingMessage: loadingExternalPreviewLabel');
 });
 
