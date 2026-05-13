@@ -2169,6 +2169,7 @@ Vendor or generated views excluded from repository checks, plus Breeze/shared la
 **Location:**  
 - `docs/architecture/ui/ConfiguredCrudPageModulePattern.yaml`  
 - `resources/js/lib/crud-config.js`  
+- `resources/js/lib/export-module.js`  
 - `resources/js/lib/import-config.js`  
 - `resources/js/lib/import-module.js`  
 - `resources/js/lib/generic-crud.js`  
@@ -2179,7 +2180,7 @@ Vendor or generated views excluded from repository checks, plus Breeze/shared la
 - `resources/views/sales/customers/index.blade.php`
 
 **Purpose:**  
-Centralize a shared config-driven CRUD renderer behind server-generated page contracts while keeping Blade index pages mount-only and page-specific slideouts, validation state, import callbacks, and other resource behavior inside each page module.
+Centralize a shared config-driven CRUD renderer behind server-generated page contracts while keeping Blade index pages mount-only and page-specific slideouts, validation state, import/export callbacks, and other resource behavior inside each page module.
 
 **When to Use:**  
 Interactive Blade CRUD pages that share toolbar, list rendering, sticky layout, action menus, and list/create/import/sort mechanics but need different routes, columns, row display rules, or page-specific callbacks. All future CRUD index pages should use this abstraction unless a separately approved architecture entry says otherwise.
@@ -2192,6 +2193,7 @@ Static pages, or domain workflows that exceed generic CRUD concerns.
 - `data-crud-config`  
 - `data-import-config`  
 - `resources/js/lib/crud-config.js`  
+- `resources/js/lib/export-module.js`  
 - `resources/js/lib/import-config.js`  
 - `resources/js/lib/import-module.js`
 - `resources/js/lib/generic-crud.js`
@@ -2208,6 +2210,7 @@ Static pages, or domain workflows that exceed generic CRUD concerns.
 - The shared CRUD renderer owns toolbar layout, search input, create/import/export buttons, sticky desktop headers, record table/cards, empty states, and row action menus.  
 - Toolbar and page chrome remain outside the records scroller; the records/results area is the only scrollable region for CRUD list rendering.  
 - Desktop and mobile variants follow the same scroll-containment contract: header/toolbar stays fixed in the component shell while only records scroll.  
+- Shared export helpers may own export panel state, scope selection, config-driven URL building, and submission wiring while leaving Blade slide-over markup and page-owned permissions/messages local to the page module.  
 - Shared import helpers own config parsing, source-switch preview loading, local CSV caching, selection rules, duplicate visibility, and import submit wiring without introducing global state.  
 
 **Example Usage:**  

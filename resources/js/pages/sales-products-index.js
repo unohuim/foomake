@@ -1,6 +1,7 @@
 import { parseCrudConfig } from '../lib/crud-config';
 import { parseImportConfig } from '../lib/import-config';
 import { mountCrudRenderer } from '../lib/crud-page';
+import { createExportModule } from '../lib/export-module';
 import { createGenericCrud } from '../lib/generic-crud';
 import { createImportModule } from '../lib/import-module';
 import { refreshNavigationState } from '../navigation/refresh-navigation-state';
@@ -89,9 +90,14 @@ export function mount(rootEl, payload) {
             },
         },
     });
+    const exportModule = createExportModule({
+        permissionKey: 'canExportProducts',
+        unavailableMessage: 'Unable to export products.',
+    });
 
     Alpine.data('salesProductsIndex', () => ({
         ...importModule,
+        ...exportModule,
         crud,
         endpoints: crud.endpoints || {},
         columns: Array.isArray(crud.columns) ? crud.columns : [],
@@ -128,8 +134,6 @@ export function mount(rootEl, payload) {
         createGeneralError: '',
         createErrors: emptyCreateErrors(),
         createForm: emptyCreateForm(),
-        exportScope: 'current',
-        exportError: '',
         toast: {
             visible: false,
             message: '',
@@ -382,59 +386,6 @@ export function mount(rootEl, payload) {
                     this.isCreateSubmitting = false;
                 },
             });
-        },
-        openExportPanel() {
-            if (!this.canExportProducts) {
-                return;
-            }
-
-            this.resetExportState();
-            this.openSlideOver('export');
-        },
-        closeExportPanel() {
-            this.closeSlideOver('export');
-            this.resetExportState();
-        },
-        resetExportState() {
-            this.exportScope = 'current';
-            this.exportError = '';
-        },
-        buildExportUrl() {
-            if (!this.endpoints.export) {
-                return '';
-            }
-
-            const exportUrl = new URL(this.endpoints.export, window.location.origin);
-
-            if (this.exportScope === 'all') {
-                exportUrl.searchParams.set('scope', 'all');
-
-                return exportUrl.toString();
-            }
-
-            exportUrl.searchParams.set('scope', 'current');
-
-            if (typeof this.search === 'string' && this.search.trim() !== '') {
-                exportUrl.searchParams.set('search', this.search.trim());
-            }
-
-            if (this.isSortableColumn(this.sort?.column) && ['asc', 'desc'].includes(this.sort?.direction)) {
-                exportUrl.searchParams.set('sort', this.sort.column);
-                exportUrl.searchParams.set('direction', this.sort.direction);
-            }
-
-            return exportUrl.toString();
-        },
-        submitExport() {
-            const exportUrl = this.buildExportUrl();
-
-            if (exportUrl === '') {
-                this.exportError = 'Unable to export products.';
-                return;
-            }
-
-            window.location.assign(exportUrl);
-            this.closeExportPanel();
         },
     }));
 }
