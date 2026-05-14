@@ -6,11 +6,11 @@ location:
   - app/Http/Requests/Sales/UpdateSalesOrderRequest.php
   - app/Models/SalesOrder.php
   - resources/views/sales/orders/index.blade.php
-  - resources/views/sales/customers/show.blade.php
-purpose: Document the sales-order customer/contact assignment rules shared by the Sales Orders index and the customer detail Orders mini-index.
+  - resources/views/sales/orders/show.blade.php
+purpose: Document the sales-order customer/contact assignment rules used by editable Sales Order header flows on the shared Orders index shell and the Sales Order detail page.
 when_to_use:
-  - Creating or updating editable sales orders from the Sales Orders index
-  - Creating or updating editable sales orders from the customer detail Orders section
+  - Creating editable sales orders from the Sales Orders index
+  - Updating editable sales-order headers from the Sales Order detail page
   - Validating customer/contact combinations for sales-order forms
 when_not_to_use:
   - Sales-order line items, pricing snapshots, fulfillment, inventory impact, or invoicing flows
@@ -26,7 +26,7 @@ rules:
   - A contact from the previous customer must never be preserved after customer_id changes.
   - Sales-order create, update, and delete mutations return JSON for AJAX consumers and do not redirect.
   - Completed and cancelled sales orders are terminal and cannot be edited again.
-  - Sales-order mutations use sales-sales-orders-manage, while customer detail read access remains sales-customers-view.
+  - Sales-order mutations use sales-sales-orders-manage and do not introduce a separate permission slug.
 public_interface:
   - SalesOrder::STATUS_DRAFT
   - SalesOrder::STATUS_OPEN

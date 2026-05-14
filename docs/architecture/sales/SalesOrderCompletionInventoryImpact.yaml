@@ -9,8 +9,7 @@ location:
   - app/Models/SalesOrder.php
   - app/Models/SalesOrderLine.php
   - app/Models/StockMove.php
-  - resources/views/sales/orders/index.blade.php
-  - resources/views/sales/customers/show.blade.php
+  - resources/views/sales/orders/show.blade.php
 purpose: Document the inventory-ledger effects of packing a sales order and the safeguards around availability checks, issue posting, and reversal moves.
 when_to_use:
   - Moving an OPEN sales order into the first active operational sales workflow stage when that stage is the seeded packing stage

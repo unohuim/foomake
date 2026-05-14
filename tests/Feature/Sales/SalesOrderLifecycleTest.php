@@ -613,8 +613,11 @@ it('59. future quantity display is not introduced', function () {
 });
 
 it('60. task checklist system is introduced on the sales orders page', function () {
-    $source = file_get_contents(base_path('resources/views/sales/orders/index.blade.php'));
+    $detailSource = file_get_contents(base_path('resources/views/sales/orders/show.blade.php'));
+    $indexSource = file_get_contents(base_path('resources/views/sales/orders/index.blade.php'));
 
-    expect($source)->toContain('Checklist')
-        ->and($source)->toContain('current_stage_tasks');
+    expect($detailSource)->toContain('Checklist')
+        ->and($detailSource)->toContain('current_stage_tasks')
+        ->and($indexSource)->not->toContain('Checklist')
+        ->and($indexSource)->not->toContain('current_stage_tasks');
 });

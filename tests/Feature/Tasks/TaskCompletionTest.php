@@ -221,7 +221,7 @@ it('7. completing an already completed task is idempotent', function () {
     expect($task->fresh()->completed_at?->toDateTimeString())->toBe($completedAt?->toDateTimeString());
 });
 
-it('8. completed tasks remain visible on sales orders index payload', function () {
+it('8. completed tasks remain visible on sales order detail payload', function () {
     $tenant = ($this->makeTenant)();
     $assignee = ($this->makeUser)($tenant);
     $manager = ($this->makeUser)($tenant);
@@ -233,14 +233,14 @@ it('8. completed tasks remain visible on sales orders index payload', function (
 
     ($this->completeTask)($assignee, $task)->assertOk();
 
-    $response = $this->actingAs($manager)->get(route('sales.orders.index'))->assertOk();
-    $payload = ($this->extractPayload)($response, 'sales-orders-index-payload');
-    $orderPayload = collect($payload['orders'] ?? [])->firstWhere('id', $order->id);
+    $response = $this->actingAs($manager)->get(route('sales.orders.show', $order))->assertOk();
+    $payload = ($this->extractPayload)($response, 'sales-orders-show-payload');
+    $orderPayload = $payload['order'] ?? [];
 
     expect($orderPayload['current_stage_tasks'][0]['status'] ?? null)->toBe('completed');
 });
 
-it('9. completed tasks are clearly marked completed in payload', function () {
+it('9. completed tasks are clearly marked completed in detail payload', function () {
     $tenant = ($this->makeTenant)();
     $assignee = ($this->makeUser)($tenant);
     $manager = ($this->makeUser)($tenant);
@@ -253,11 +253,11 @@ it('9. completed tasks are clearly marked completed in payload', function () {
     ($this->completeTask)($assignee, $task)->assertOk();
 
     $payload = ($this->extractPayload)(
-        $this->actingAs($manager)->get(route('sales.orders.index'))->assertOk(),
-        'sales-orders-index-payload'
+        $this->actingAs($manager)->get(route('sales.orders.show', $order))->assertOk(),
+        'sales-orders-show-payload'
     );
 
-    $taskPayload = collect(collect($payload['orders'] ?? [])->firstWhere('id', $order->id)['current_stage_tasks'] ?? [])->first();
+    $taskPayload = collect($payload['order']['current_stage_tasks'] ?? [])->first();
 
     expect($taskPayload['is_completed'] ?? null)->toBeTrue();
 });
@@ -331,7 +331,7 @@ it('14. task completion preserves title description and assignment snapshots', f
         ->and($task->fresh()->assigned_to_user_id)->toBe($assignee->id);
 });
 
-it('15. open task payload is clearly actionable before completion', function () {
+it('15. open task detail payload is clearly actionable before completion', function () {
     $tenant = ($this->makeTenant)();
     $assignee = ($this->makeUser)($tenant);
     $customer = ($this->createCustomer)($tenant);
@@ -341,17 +341,17 @@ it('15. open task payload is clearly actionable before completion', function () 
     ($this->grantPermission)($assignee, 'sales-sales-orders-manage');
 
     $payload = ($this->extractPayload)(
-        $this->actingAs($assignee)->get(route('sales.orders.index'))->assertOk(),
-        'sales-orders-index-payload'
+        $this->actingAs($assignee)->get(route('sales.orders.show', $order))->assertOk(),
+        'sales-orders-show-payload'
     );
 
-    $taskPayload = collect(collect($payload['orders'] ?? [])->firstWhere('id', $order->id)['current_stage_tasks'] ?? [])->first();
+    $taskPayload = collect($payload['order']['current_stage_tasks'] ?? [])->first();
 
     expect($taskPayload['status'] ?? null)->toBe('open')
         ->and($taskPayload['can_complete'] ?? null)->toBeTrue();
 });
 
-it('16. completed task payload is no longer actionable for the assigned user', function () {
+it('16. completed task detail payload is no longer actionable for the assigned user', function () {
     $tenant = ($this->makeTenant)();
     $assignee = ($this->makeUser)($tenant);
     $customer = ($this->createCustomer)($tenant);
@@ -363,11 +363,11 @@ it('16. completed task payload is no longer actionable for the assigned user', f
     ($this->completeTask)($assignee, $task)->assertOk();
 
     $payload = ($this->extractPayload)(
-        $this->actingAs($assignee)->get(route('sales.orders.index'))->assertOk(),
-        'sales-orders-index-payload'
+        $this->actingAs($assignee)->get(route('sales.orders.show', $order))->assertOk(),
+        'sales-orders-show-payload'
     );
 
-    $taskPayload = collect(collect($payload['orders'] ?? [])->firstWhere('id', $order->id)['current_stage_tasks'] ?? [])->first();
+    $taskPayload = collect($payload['order']['current_stage_tasks'] ?? [])->first();
 
     expect($taskPayload['can_complete'] ?? null)->toBeFalse();
 });

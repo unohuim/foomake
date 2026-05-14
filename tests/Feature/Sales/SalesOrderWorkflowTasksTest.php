@@ -623,7 +623,7 @@ it('17. cancelling a sales order removes open tasks and keeps completed task his
         ->and(Task::query()->where('domain_record_id', $order->id)->where('status', 'completed')->exists())->toBeTrue();
 });
 
-it('18. sales orders page payload shows current stage tasks without duplicates', function () {
+it('18. sales order detail payload shows current stage tasks without duplicates', function () {
     $tenant = ($this->makeTenant)();
     $stages = ($this->seedSalesStages)($tenant);
     $manager = ($this->makeUser)($tenant);
@@ -640,9 +640,9 @@ it('18. sales orders page payload shows current stage tasks without duplicates',
 
     ($this->transitionOrder)($manager, $order, SalesOrder::STATUS_PACKING)->assertOk();
 
-    $response = $this->actingAs($manager)->get(route('sales.orders.index'))->assertOk();
-    $payload = ($this->extractPayload)($response, 'sales-orders-index-payload');
-    $orderPayload = collect($payload['orders'] ?? [])->firstWhere('id', $order->id);
+    $response = $this->actingAs($manager)->get(route('sales.orders.show', $order))->assertOk();
+    $payload = ($this->extractPayload)($response, 'sales-orders-show-payload');
+    $orderPayload = $payload['order'] ?? [];
 
     expect($orderPayload['current_stage_tasks'] ?? [])->toHaveCount(1)
         ->and($orderPayload['current_stage_tasks'][0]['title'] ?? null)->toBe('Checklist item');

@@ -177,9 +177,3 @@ The agent must NEVER read, index, modify, or reason about files matching these p
 - \*.log
 - .env
 - bootstrap/cache/\*\*
-- docs/AI_CHAT_BOOTSTRAP.md
-- docs/AI_CHAT_CODEX.md
-- docs/AI_CHAT.md
-- docs/AI_CONSOLIDATIONS_PROMPT.md
-- docs/AI_DOCS_UPDATE_PROMPT.md
-- docs/AI_CHAT_AOC.md

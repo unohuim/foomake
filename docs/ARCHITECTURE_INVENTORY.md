@@ -459,7 +459,7 @@ $customer->contacts()->create([
 - `app/Models/SalesOrder.php`  
 
 **Purpose:**  
-Document the sales-order customer/contact rules shared by the Sales Orders index and the customer detail Orders mini-index.
+Document the sales-order customer/contact rules used by editable Sales Order header flows on the shared Orders index shell and the Sales Order detail page.
 
 **When to Use:**  
 Any editable sales-order create, update, delete, or validation flow, including customer changes that may re-default the assigned contact.
@@ -502,7 +502,7 @@ $order = SalesOrder::query()->create([
 - `app/Models/SalesOrderLine.php`  
 
 **Purpose:**  
-Document the editable sales-order line mutation rules, immutable unit-price snapshots, and canonical scale-6 quantity/line-total behavior shared by the Sales Orders index and the customer detail Orders mini-index.
+Document the editable sales-order line mutation rules, immutable unit-price snapshots, canonical scale-6 quantity/line-total behavior, and optional source-line identity used on the Sales Order detail page.
 
 **When to Use:**  
 Any sales-order line create, delete, or quantity-update flow for editable sales orders.
@@ -530,6 +530,47 @@ $line = SalesOrderLine::query()->create([
     'unit_price_currency_code' => $item->default_price_currency_code,
     'line_total_cents' => '832.500000',
 ]);
+```
+
+---
+
+### Sales Order External CSV Import Export
+
+**Name:** Sales Order External CSV Import Export  
+**Type:** Domain Import Export Rule  
+**Location:**  
+- `docs/architecture/sales/SalesOrderExternalCsvImportExport.yaml`  
+- `app/Http/Controllers/SalesOrderController.php`  
+- `app/Http/Requests/Sales/PreviewExternalSalesOrderImportRequest.php`  
+- `app/Http/Requests/Sales/ImportExternalSalesOrdersRequest.php`  
+- `app/Models/SalesOrder.php`  
+- `app/Models/SalesOrderLine.php`  
+- `resources/js/pages/sales-orders-index.js`  
+
+**Purpose:**  
+Document the line-level external CSV export contract, grouped file-upload preview/import behavior, tenant-scoped duplicate identity, and external status sync rules for Sales Orders.
+
+**When to Use:**  
+Any Sales Orders CSV export, file-upload preview/import flow, duplicate identity check, or external status sync behavior.
+
+**When Not to Use:**  
+Native Sales Order header forms, native Sales Order line mutations on the detail page, or inventory-impacting workflow transitions.
+
+**Public Interface:**  
+- `sales.orders.export`  
+- `sales.orders.import.preview`  
+- `sales.orders.import.store`  
+- `external_source`  
+- `external_id`  
+- `external_status`  
+- `external_status_synced_at`  
+- `sales_order_lines.external_id`  
+
+**Example Usage:**  
+```text
+external_source,order_external_id,order_date,customer_name,contact_name,city,status,external_status,line_external_id,product_external_id,product_name,quantity,unit_price
+legacy_csv,SO-1001,2026-05-14,Ada Buyer,Jane Buyer,Toronto,OPEN,processing,LINE-1,SKU-2001,Imported Item,2.000000,15.00
+legacy_csv,SO-1001,2026-05-14,Ada Buyer,Jane Buyer,Toronto,OPEN,processing,LINE-2,SKU-2002,Imported Item 2,1.000000,5.00
 ```
 
 ---
@@ -1768,10 +1809,17 @@ One-step uploads with no preview, or workflows that require global JavaScript st
 **Key Rules:**  
 - The shared import component owns the import slide-over markup rather than relying on resource-specific Blade form markup.  
 - Resource pages may not render import slide-over form markup, import preview cards, import source controls, import bulk controls, or import footer actions directly.  
+- Minimum preview-row height is the UX goal.  
+- Preview rows must render as a single compact horizontal row with a left-truncated primary value and a right-aligned secondary value.  
+- Preview rows must not render a second metadata line.  
+- Preview rows must not render a status badge.  
+- Products: truncated name left, price right only.  
+- Customers: truncated name left, city right only.  
 - Preview loading auto-starts when a connected external source is selected or when a valid local file has been read.  
 - The slide-over must not require a manual Load Preview button.  
 - Bulk options and preview records render as separate accordions, with bulk options default collapsed and preview records default open.  
 - Preview rows render as responsive cards rather than a table.  
+- Duplicate rows are hidden by default.  
 - Preview row selection, search text, duplicate visibility, and row override state are owned by the shared import component rather than the resource page module.  
 - Resource-specific data-shape differences may enter the shared import component only through approved adapters for local-row parsing, preview-row normalization, import-row payload building, submit-body shaping, and import-success callbacks.  
 - Approved adapters may shape data but may not own import markup, control visibility, or override import lifecycle behavior.  
@@ -1798,9 +1846,10 @@ importModule.mount(rootEl);
 Notes:
 - Products and Customers now consume the same shared import component path and no longer keep import slide-over form markup in Blade.
 - Bulk Import Options defaults collapsed while Preview Records accordion defaults open.
-- Preview records render as responsive cards; duplicate rows remain in DOM state and are hidden or shown according to the server-generated row-behavior config.
+- Preview records render as responsive cards; duplicate rows remain in DOM state and are hidden by default.
 - Loading labels, preview display expressions, messages, and bulk option defaults are provided through the server-generated import config rather than hardcoded in the resource page module.
 - The preview records area is the only scrollable region inside the slide-over.
+- Full row data may still exist internally for validation, duplicate detection, search, and import payload correctness, but extra detail must not render in preview rows.
 
 ---
 
@@ -2276,10 +2325,13 @@ Static pages, or domain workflows that exceed generic CRUD concerns.
 - Desktop and mobile variants follow the same scroll-containment contract: header/toolbar stays fixed in the component shell while only records scroll.  
 - Shared export helpers own export panel markup, open/close/reset lifecycle, scope selection, validation/error display, config-driven URL building, and export submission wiring without introducing global state.  
 - Shared import helpers own import panel markup, source-switch preview loading, local CSV caching, selection rules, duplicate visibility, preview row rendering, validation display, and import submit wiring without introducing global state.  
+- Shared import preview rows must stay minimum-height and single-line; page modules may not expand them into stacked detail cards.  
+- Shared import preview rows may render only the approved resource-specific left/right compact values from the server-generated import config.  
 - Resource pages may provide export differences only through the server-generated CRUD contract; export-specific copy, endpoint, and visibility must not be hardcoded in page-local Blade or page-local JavaScript.  
 - Resource pages may provide only declarative import config plus approved data adapters such as local-row parsing, preview-row normalization, import-row payload building, submit-body shaping, and import-success callbacks.  
 - Resource pages must not contain export slide-over form markup or page-local export UX overrides.  
 - Resource pages must not contain import slide-over form markup or page-local import UX overrides.  
+- Resource pages must not reintroduce custom preview markup or preview-only view overrides to bypass the shared compact preview-row contract.  
 
 Notes:
 - Sales Products and Sales Customers both mount the shared export component from `resources/js/lib/export-module.js`; neither page keeps export slide-over form markup in Blade.

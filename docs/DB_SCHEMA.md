@@ -199,7 +199,7 @@ Migrations remain the **sole source of truth**.
 ## sales_orders
 
 **Tenant-owned:** Yes  
-**Purpose:** Sales order headers shared by the Sales Orders index and the customer detail Orders mini-index
+**Purpose:** Sales order headers shared by the Sales Orders index, the Sales Order detail page, and grouped external-import identity
 
 ### Columns
 
@@ -209,7 +209,12 @@ Migrations remain the **sole source of truth**.
 | tenant_id  | bigint    | No       | FK → tenants.id (CASCADE)            |
 | customer_id | bigint   | No       | FK → customers.id (CASCADE)          |
 | contact_id | bigint    | Yes      | FK → customer_contacts.id (SET NULL) |
+| order_date | date      | Yes      | Actual order date used by CRUD index/export and external imports |
 | status     | string    | No       | Defaults to `DRAFT`; allowed values are defined in `docs/ENUMS.md` |
+| external_source | string | Yes    | Imported/source-system order identity namespace |
+| external_id | string   | Yes      | Imported/source-system order identity value |
+| external_status | string | Yes    | Raw external/source-system order status |
+| external_status_synced_at | timestamp | Yes | Last time raw external status was synced |
 | created_at | timestamp | Yes      | —                                    |
 | updated_at | timestamp | Yes      | —                                    |
 
@@ -219,6 +224,7 @@ Migrations remain the **sole source of truth**.
 - Index: `(tenant_id, status)`
 - Index: `(tenant_id, customer_id)`
 - Index: `(tenant_id, contact_id)`
+- Unique: `(tenant_id, external_source, external_id)` (`sales_orders_tenant_source_external_unique`)
 - Implicit (FK index): `tenant_id`
 - Implicit (FK index): `customer_id`
 - Implicit (FK index): `contact_id`
@@ -226,6 +232,10 @@ Migrations remain the **sole source of truth**.
 ### Behavioral Notes
 
 - Sales order headers remain editable only while `status` is `DRAFT` or `OPEN`.
+- Sales Orders index remains header-only; order lines and workflow/task UI live on the Sales Order detail page.
+- External CSV import/export uses source-system order identity only; app internal order IDs are not part of the import contract.
+- Re-import may update only `external_status` and `external_status_synced_at`; it never changes the local app-controlled `status`.
+- Imported terminal and non-terminal external orders create no stock moves during import.
 - `COMPLETED` and `CANCELLED` are terminal.
 - `DRAFT`, `OPEN`, `COMPLETED`, and `CANCELLED` are system statuses.
 - Operational middle stages are derived from active tenant `workflow_stages` rows in the `sales` workflow domain and are persisted as uppercase stage keys in `sales_orders.status`.
@@ -241,7 +251,7 @@ Migrations remain the **sole source of truth**.
 ## sales_order_lines
 
 **Tenant-owned:** Yes  
-**Purpose:** Sales order line items with immutable price snapshots for the Sales Orders index and customer detail Orders mini-index
+**Purpose:** Sales order line items with immutable price snapshots and optional imported source-line identity for the Sales Order detail page and external CSV import/export
 
 ### Columns
 
@@ -251,6 +261,7 @@ Migrations remain the **sole source of truth**.
 | tenant_id  | bigint        | No       | FK → tenants.id (CASCADE)              |
 | sales_order_id | bigint    | No       | FK → sales_orders.id (CASCADE)         |
 | item_id    | bigint        | No       | FK → items.id (CASCADE)                |
+| external_id | string       | Yes      | Imported/source-system line identity; not `sales_order_lines.id` |
 | quantity   | decimal(18,6) | No       | Canonical BCMath quantity string       |
 | unit_price_cents | unsignedInteger | No | Immutable unit price snapshot in minor currency units |
 | unit_price_currency_code | char(3) | No | Immutable unit price snapshot currency |
@@ -263,6 +274,7 @@ Migrations remain the **sole source of truth**.
 - PK: `id`
 - Index: `(tenant_id, sales_order_id)`
 - Index: `(sales_order_id, item_id)`
+- Index: `(tenant_id, sales_order_id, external_id)` (`sales_order_lines_tenant_order_external_idx`)
 - Implicit (FK index): `tenant_id`
 - Implicit (FK index): `sales_order_id`
 - Implicit (FK index): `item_id`
@@ -270,6 +282,9 @@ Migrations remain the **sole source of truth**.
 ### Behavioral Notes
 
 - Sales order line mutations are allowed only while the parent sales order is `DRAFT` or `OPEN`.
+- External CSV export emits one row per sales order line and repeats order header fields on each exported row.
+- External CSV file-upload import groups rows into unique orders by `(tenant_id, external_source, order_external_id)` and creates one sales-order line per grouped CSV row.
+- `external_id` is the source-system line ID when present; it is not used as the local primary key.
 - On the seeded `packing -> packed` transition, each line may generate exactly one posted `stock_moves` ledger entry with `source_type = App\Models\SalesOrderLine` and `source_id = sales_order_lines.id`.
 
 ---

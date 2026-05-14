@@ -47,6 +47,9 @@ rules:
   - Shared CRUD helpers may handle config parsing, list query construction, fetch, create submission, export trigger wiring, sort toggling, and config-driven shell rendering.
   - Shared export helpers must own export panel markup, open/close/reset lifecycle, scope selection, validation/error display, config-driven URL building, and export submission wiring without hardcoding resource-specific routes.
   - Shared import helpers must own import panel markup, source switching, source connection status UI, preview loading, local CSV caching, duplicate visibility controls, selection behavior, preview row rendering, validation display, and import submission wiring.
+  - Shared import preview rows must stay minimum-height and single-line; page modules may not expand them into stacked detail cards.
+  - Shared import preview rows may render only the approved resource-specific left/right compact values from the server-generated import config.
+  - Resource pages must not reintroduce custom preview markup or preview-only view overrides to bypass the shared compact preview-row contract.
   - Resource pages may provide only declarative import config plus approved data adapters such as local-row parsing, preview-row normalization, import-row payload building, submit-body shaping, and import-success callbacks.
   - Page modules must not own import UX methods, import slide-over markup, or import-specific view overrides.
   - Resource pages may provide export differences only through the server-generated CRUD contract; export-specific copy, endpoint, and visibility must not be hardcoded in page-local Blade or page-local JavaScript.

@@ -208,8 +208,18 @@ Route::middleware('auth')->group(function () {
 
     Route::get('/sales/orders', [SalesOrderController::class, 'index'])
         ->name('sales.orders.index');
+    Route::get('/sales/orders/list', [SalesOrderController::class, 'list'])
+        ->name('sales.orders.list');
+    Route::get('/sales/orders/export', [SalesOrderController::class, 'export'])
+        ->name('sales.orders.export');
+    Route::post('/sales/orders/import-preview', [SalesOrderController::class, 'previewImport'])
+        ->name('sales.orders.import.preview');
+    Route::post('/sales/orders/imports', [SalesOrderController::class, 'storeImport'])
+        ->name('sales.orders.import.store');
     Route::post('/sales/orders', [SalesOrderController::class, 'store'])
         ->name('sales.orders.store');
+    Route::get('/sales/orders/{salesOrder}', [SalesOrderController::class, 'show'])
+        ->name('sales.orders.show');
     Route::patch('/sales/orders/{salesOrder}', [SalesOrderController::class, 'update'])
         ->name('sales.orders.update');
     Route::patch('/sales/orders/{salesOrder}/status', [SalesOrderStatusController::class, 'update'])

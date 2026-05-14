@@ -144,20 +144,26 @@ class SalesOrderLineController extends Controller
 
         return [
             'id' => $order->id,
+            'date' => $order->order_date?->format('Y-m-d'),
             'customer_id' => $order->customer_id,
             'customer_name' => $order->customer?->name,
             'contact_id' => $order->contact_id,
             'contact_name' => $contactName,
+            'city' => $order->customer?->city,
             'status' => $order->status,
             'can_edit' => $order->isEditable(),
             'can_manage_lines' => $order->allowsLineMutations(),
             'available_status_transitions' => $order->availableTransitions(),
             'status_update_url' => route('sales.orders.status.update', $order),
+            'show_url' => route('sales.orders.show', $order),
             'lines' => $lines,
             'line_count' => count($lines),
             'order_total_cents' => $orderTotalCents,
             'order_total_amount' => bcdiv($orderTotalCents, '100', self::SCALE),
             'current_stage_tasks' => $this->currentStageTasksData($order),
+            'external_source' => $order->external_source,
+            'external_id' => $order->external_id,
+            'external_status' => $order->external_status,
         ];
     }
 

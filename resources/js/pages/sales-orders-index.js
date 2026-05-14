@@ -1,36 +1,305 @@
+import { parseCrudConfig } from '../lib/crud-config';
+import { parseImportConfig } from '../lib/import-config';
+import { mountCrudRenderer } from '../lib/crud-page';
+import { createExportModule } from '../lib/export-module';
+import { createGenericCrud } from '../lib/generic-crud';
+import { createImportModule } from '../lib/import-module';
+import { refreshNavigationState } from '../navigation/refresh-navigation-state';
+
 export function mount(rootEl, payload) {
     const Alpine = window.Alpine;
     const safePayload = payload || {};
+    const crud = createGenericCrud(parseCrudConfig(rootEl));
+    const importConfig = parseImportConfig(rootEl);
+    const crudRootEl = rootEl.querySelector('[data-crud-root]');
+    const actionDefinitions = (Array.isArray(crud.actions) ? crud.actions : []).map((action) => ({
+        ...action,
+        handler: action.id === 'view'
+            ? 'view(record)'
+            : action.id === 'edit'
+                ? 'openEdit(record)'
+                : '',
+    }));
+    const rendererConfig = {
+        ...crud,
+        createHandler: 'openCreatePanel()',
+        exportHandler: 'openExportPanel()',
+        importHandler: 'openImportPanel()',
+        state: {
+            records: 'orders',
+            loading: 'isLoadingList',
+            error: 'listError',
+            search: 'search',
+            sort: 'sort',
+        },
+        handlers: {
+            searchInput: 'handleSearchInput()',
+            toggleSort: 'toggleSort(column)',
+            export: 'openExportPanel()',
+            create: 'openCreatePanel()',
+            import: 'openImportPanel()',
+        },
+        rowDisplay: {
+            ...crud.rowDisplay,
+            cellTextExpression: 'orderCellText(record, column)',
+        },
+        mobileCard: {
+            ...crud.mobileCard,
+        },
+        actions: actionDefinitions,
+    };
+
+    mountCrudRenderer(crudRootEl, rendererConfig);
 
     const emptyErrors = () => ({
         customer_id: [],
         contact_id: [],
+        order_date: [],
     });
 
     const emptyForm = () => ({
         customer_id: '',
         contact_id: '',
+        order_date: '',
     });
 
-    const emptyLineErrors = () => ({
-        item_id: [],
-        quantity: [],
+    const orderToForm = (order) => ({
+        customer_id: order?.customer_id ? String(order.customer_id) : '',
+        contact_id: order?.contact_id ? String(order.contact_id) : '',
+        order_date: order?.date || '',
     });
 
-    const emptyLineForm = () => ({
-        item_id: '',
-        quantity: '1.000000',
+    const importModule = createImportModule({
+        config: importConfig,
+        adapters: {
+            parseLocalRows: (text, helpers) => {
+                const rows = helpers.parseCsvRows(text);
+
+                if (rows.length < 2) {
+                    return [];
+                }
+
+                const headers = rows[0].map((header) => header.trim());
+                const exportHeaders = [
+                    'external_source',
+                    'order_external_id',
+                    'order_date',
+                    'customer_name',
+                    'contact_name',
+                    'city',
+                    'status',
+                    'external_status',
+                    'line_external_id',
+                    'product_external_id',
+                    'product_name',
+                    'quantity',
+                    'unit_price',
+                ];
+                const hasExportHeaders = exportHeaders.every((header) => headers.includes(header));
+
+                if (!hasExportHeaders) {
+                    helpers.setFileError('The selected CSV file is missing one or more required order headers.');
+                    return null;
+                }
+
+                const parsedRows = rows
+                    .slice(1)
+                    .filter((row) => row.some((value) => value.trim() !== ''))
+                    .map((row, index) => headers.reduce((carry, header, rowIndex) => {
+                        carry[header] = row[rowIndex] ?? '';
+
+                        return carry;
+                    }, {
+                        __row_index: index,
+                    }));
+
+                const normalizedSources = parsedRows
+                    .map((record) => (record.external_source || '').trim().toLowerCase())
+                    .filter((value) => value !== '');
+
+                if (normalizedSources.length !== parsedRows.length) {
+                    helpers.setFileError('Every imported order row must include external_source.');
+                    return null;
+                }
+
+                if (new Set(normalizedSources).size > 1) {
+                    helpers.setFileError('Every row in one import file must use the same external_source.');
+                    return null;
+                }
+
+                const groupedRecords = new Map();
+
+                for (const record of parsedRows) {
+                    const externalSource = (record.external_source || '').trim();
+                    const orderExternalId = (record.order_external_id || '').trim();
+
+                    if (orderExternalId === '') {
+                        helpers.setFileError('Every imported order row must include order_external_id.');
+                        return null;
+                    }
+
+                    const groupKey = `${externalSource.toLowerCase()}|${orderExternalId}`;
+
+                    if (!groupedRecords.has(groupKey)) {
+                        groupedRecords.set(groupKey, {
+                            external_id: orderExternalId,
+                            external_source: externalSource,
+                            external_status: (record.external_status || record.status || '').trim(),
+                            status: (record.status || '').trim(),
+                            date: (record.order_date || '').trim(),
+                            contact_name: (record.contact_name || '').trim(),
+                            customer: {
+                                external_id: '',
+                                name: (record.customer_name || '').trim(),
+                                email: '',
+                                phone: '',
+                                address_line_1: '',
+                                address_line_2: '',
+                                city: (record.city || '').trim(),
+                                region: '',
+                                postal_code: '',
+                                country_code: '',
+                            },
+                            lines: [],
+                            is_duplicate: false,
+                            selected: true,
+                        });
+                    }
+
+                    groupedRecords.get(groupKey).lines.push({
+                        external_id: (record.line_external_id || '').trim(),
+                        product_external_id: (record.product_external_id || '').trim(),
+                        name: (record.product_name || '').trim(),
+                        quantity: (record.quantity || '0.000000').trim(),
+                        unit_price: (record.unit_price || '0').trim(),
+                        currency_code: '',
+                    });
+                }
+
+                return Array.from(groupedRecords.values());
+            },
+            normalizePreviewRow: (row) => ({
+                ...row,
+                selected: row.selected !== false,
+                external_source: row.external_source || '',
+                external_status: row.external_status || '',
+                status: row.status || '',
+                date: row.date || '',
+                contact_name: row.contact_name || '',
+                customer: row.customer && typeof row.customer === 'object'
+                    ? {
+                        external_id: row.customer.external_id || '',
+                        name: row.customer.name || '',
+                        email: row.customer.email || '',
+                        phone: row.customer.phone || '',
+                        address_line_1: row.customer.address_line_1 || '',
+                        address_line_2: row.customer.address_line_2 || '',
+                        city: row.customer.city || '',
+                        region: row.customer.region || '',
+                        postal_code: row.customer.postal_code || '',
+                        country_code: row.customer.country_code || '',
+                    }
+                    : {
+                        external_id: '',
+                        name: '',
+                        email: '',
+                        phone: '',
+                        address_line_1: '',
+                        address_line_2: '',
+                        city: '',
+                        region: '',
+                        postal_code: '',
+                        country_code: '',
+                    },
+                lines: Array.isArray(row.lines)
+                    ? row.lines.map((line) => ({
+                        external_id: line.external_id || '',
+                        product_external_id: line.product_external_id || '',
+                        name: line.name || '',
+                        quantity: line.quantity || '0.000000',
+                        unit_price: line.unit_price || '',
+                        unit_price_cents: line.unit_price_cents ?? null,
+                        currency_code: line.currency_code || '',
+                    }))
+                    : [],
+                is_duplicate: Boolean(row.is_duplicate),
+            }),
+            buildImportRowPayload: (defaultPayload, row, context) => ({
+                external_id: row.external_id,
+                external_source: row.external_source || context.importSource,
+                external_status: row.external_status || '',
+                status: row.status || '',
+                date: row.date || null,
+                contact_name: row.contact_name || null,
+                customer: {
+                    external_id: row.customer?.external_id || '',
+                    name: row.customer?.name || '',
+                    email: row.customer?.email || null,
+                    phone: row.customer?.phone || null,
+                    address_line_1: row.customer?.address_line_1 || null,
+                    address_line_2: row.customer?.address_line_2 || null,
+                    city: row.customer?.city || null,
+                    region: row.customer?.region || null,
+                    postal_code: row.customer?.postal_code || null,
+                    country_code: row.customer?.country_code || null,
+                },
+                lines: Array.isArray(row.lines)
+                    ? row.lines.map((line) => ({
+                        external_id: line.external_id,
+                        product_external_id: line.product_external_id || '',
+                        name: line.name || '',
+                        quantity: line.quantity || '0.000000',
+                        unit_price: line.unit_price || null,
+                        unit_price_cents: line.unit_price_cents || null,
+                        currency_code: line.currency_code || null,
+                    }))
+                    : [],
+            }),
+            buildSubmitBody: (defaultBody, { importSource, rows }) => ({
+                source: defaultBody.is_local_file_import ? 'file-upload' : importSource,
+                rows,
+            }),
+        },
+        callbacks: {
+            onImportSuccess: async (component) => {
+                await component.fetchOrders();
+                await refreshNavigationState(component.navigationStateUrl);
+                component.showToast('success', 'Orders imported.');
+            },
+        },
     });
+    importModule.mount(rootEl);
+    const exportModule = createExportModule({
+        config: crud,
+    });
+    exportModule.mount(rootEl);
 
     Alpine.data('salesOrdersIndex', () => ({
-        orders: safePayload.orders || [],
-        customers: safePayload.customers || [],
-        sellableItems: safePayload.sellableItems || [],
-        storeUrl: safePayload.storeUrl || '',
+        ...importModule,
+        ...exportModule,
+        crud,
+        endpoints: crud.endpoints || {},
+        columns: Array.isArray(crud.columns) ? crud.columns : [],
+        headers: crud.headers || {},
+        sortable: Array.isArray(crud.sortable) ? crud.sortable : [],
+        orders: Array.isArray(safePayload.orders) ? safePayload.orders : [],
+        customers: Array.isArray(safePayload.customers) ? safePayload.customers : [],
+        sources: Array.isArray(importConfig.sources) && importConfig.sources.length > 0
+            ? importConfig.sources
+            : (safePayload.sources || []),
         updateUrlBase: safePayload.updateUrlBase || '',
-        deleteUrlBase: safePayload.deleteUrlBase || '',
-        lineStoreUrlBase: safePayload.lineStoreUrlBase || '',
+        navigationStateUrl: safePayload.navigationStateUrl || '',
         csrfToken: safePayload.csrfToken || '',
+        canManageImports: Boolean(importConfig.permissions?.canManageImports ?? safePayload.canManageImports),
+        canManageConnections: Boolean(importConfig.permissions?.canManageConnections ?? safePayload.canManageConnections),
+        connectorsPageUrl: importConfig.connectorsPageUrl || safePayload.connectorsPageUrl || '',
+        isLoadingList: false,
+        listError: '',
+        search: '',
+        sort: {
+            column: 'date',
+            direction: 'desc',
+        },
         isFormOpen: false,
         isSubmitting: false,
         formMode: 'create',
@@ -38,11 +307,6 @@ export function mount(rootEl, payload) {
         form: emptyForm(),
         errors: emptyErrors(),
         generalError: '',
-        lineForms: {},
-        lineErrorsByOrder: {},
-        lineGeneralErrorsByOrder: {},
-        lineEditQuantities: {},
-        lineEditErrorsByLine: {},
         toast: {
             visible: false,
             message: '',
@@ -50,35 +314,74 @@ export function mount(rootEl, payload) {
             timeoutId: null,
         },
         init() {
-            this.orders.forEach((order) => {
-                this.syncLineState(order);
-            });
+            this.fetchOrders();
         },
-        normalizeErrors(errors) {
-            const normalized = emptyErrors();
+        columnHeader(column) {
+            return this.headers[column] || column;
+        },
+        isSortableColumn(column) {
+            return this.sortable.includes(column);
+        },
+        orderCustomerSummary(order) {
+            const name = order?.customer_name || '—';
+            const city = order?.city || '—';
 
-            if (!errors || typeof errors !== 'object') {
-                return normalized;
+            return `${this.truncatedCustomerName(name)} • ${city}`;
+        },
+        orderStatusSummary(order) {
+            return order?.status || '—';
+        },
+        previewStatusLabel(row) {
+            if (row && row.is_duplicate) {
+                return 'Duplicate';
             }
 
-            Object.keys(normalized).forEach((key) => {
-                normalized[key] = Array.isArray(errors[key]) ? errors[key] : [];
-            });
-
-            return normalized;
+            return (row && row.external_status) || 'Pending';
         },
-        normalizeLineErrors(errors) {
-            const normalized = emptyLineErrors();
+        truncatedPreviewCustomerName(row) {
+            const customer = row && typeof row.customer === 'object' && !Array.isArray(row.customer)
+                ? row.customer
+                : {};
 
-            if (!errors || typeof errors !== 'object') {
-                return normalized;
+            return this.truncatedCustomerName(customer.name || '');
+        },
+        compactPreviewMeta(row) {
+            const customer = row && typeof row.customer === 'object' && !Array.isArray(row.customer)
+                ? row.customer
+                : {};
+            const date = row && typeof row.date === 'string' && row.date.trim() !== ''
+                ? row.date.trim()
+                : '—';
+            const city = typeof customer.city === 'string' && customer.city.trim() !== ''
+                ? customer.city.trim()
+                : '—';
+
+            return `${date} • ${city}`;
+        },
+        truncatedCustomerName(name) {
+            const value = typeof name === 'string' ? name : '';
+
+            if (value.length <= 32) {
+                return value || '—';
             }
 
-            Object.keys(normalized).forEach((key) => {
-                normalized[key] = Array.isArray(errors[key]) ? errors[key] : [];
-            });
-
-            return normalized;
+            return `${value.slice(0, 29)}...`;
+        },
+        orderCellText(order, column) {
+            switch (column) {
+            case 'id':
+                return order?.id ? String(order.id) : '—';
+            case 'date':
+                return order?.date || '—';
+            case 'customer_name':
+                return this.truncatedCustomerName(order?.customer_name || '');
+            case 'city':
+                return order?.city || '—';
+            case 'status':
+                return order?.status || '—';
+            default:
+                return '—';
+            }
         },
         showToast(type, message) {
             this.toast.type = type;
@@ -120,31 +423,66 @@ export function mount(rootEl, payload) {
         handleCustomerChange() {
             this.form.contact_id = this.defaultContactIdForCustomer(this.form.customer_id);
         },
-        ensureLineForm(orderId) {
-            if (!this.lineForms[orderId]) {
-                this.lineForms[orderId] = emptyLineForm();
+        normalizeErrors(errors) {
+            if (!errors || typeof errors !== 'object') {
+                return emptyErrors();
             }
 
-            if (!this.lineErrorsByOrder[orderId]) {
-                this.lineErrorsByOrder[orderId] = emptyLineErrors();
-            }
-
-            if (!Object.prototype.hasOwnProperty.call(this.lineGeneralErrorsByOrder, orderId)) {
-                this.lineGeneralErrorsByOrder[orderId] = '';
-            }
+            return {
+                ...emptyErrors(),
+                customer_id: Array.isArray(errors.customer_id) ? errors.customer_id : [],
+                contact_id: Array.isArray(errors.contact_id) ? errors.contact_id : [],
+                order_date: Array.isArray(errors.order_date) ? errors.order_date : [],
+            };
         },
-        syncLineState(order) {
-            this.ensureLineForm(order.id);
+        async fetchOrders() {
+            if (!this.endpoints.list) {
+                this.orders = [];
+                return;
+            }
 
-            (order.lines || []).forEach((line) => {
-                this.lineEditQuantities[line.id] = line.quantity;
+            await this.crud.fetchList({
+                search: this.search,
+                sort: this.sort,
+                onStart: () => {
+                    this.isLoadingList = true;
+                    this.listError = '';
+                },
+                onValidationError: (data) => {
+                    this.listError = data.message || 'Unable to load orders.';
+                    this.showToast('error', this.listError);
+                },
+                onError: () => {
+                    this.listError = 'Unable to load orders.';
+                    this.showToast('error', this.listError);
+                },
+                onSuccess: (data) => {
+                    this.orders = Array.isArray(data.data) ? data.data : [];
 
-                if (!this.lineEditErrorsByLine[line.id]) {
-                    this.lineEditErrorsByLine[line.id] = emptyLineErrors();
-                }
+                    if (data.meta?.sort) {
+                        this.sort = {
+                            column: data.meta.sort.column || this.sort.column,
+                            direction: data.meta.sort.direction || this.sort.direction,
+                        };
+                    }
+                },
+                onFinally: () => {
+                    this.isLoadingList = false;
+                },
             });
         },
-        openCreate() {
+        handleSearchInput() {
+            this.fetchOrders();
+        },
+        toggleSort(column) {
+            if (!this.isSortableColumn(column)) {
+                return;
+            }
+
+            this.sort = this.crud.nextSort(this.sort, column);
+            this.fetchOrders();
+        },
+        openCreatePanel() {
             this.formMode = 'create';
             this.editingOrderId = null;
             this.form = emptyForm();
@@ -153,16 +491,13 @@ export function mount(rootEl, payload) {
             this.isFormOpen = true;
         },
         openEdit(order) {
-            if (!order || !order.can_edit) {
+            if (!order?.can_edit) {
                 return;
             }
 
             this.formMode = 'edit';
             this.editingOrderId = order.id;
-            this.form = {
-                customer_id: order.customer_id ? String(order.customer_id) : '',
-                contact_id: order.contact_id ? String(order.contact_id) : '',
-            };
+            this.form = orderToForm(order);
             this.errors = emptyErrors();
             this.generalError = '';
             this.isFormOpen = true;
@@ -173,69 +508,12 @@ export function mount(rootEl, payload) {
             this.errors = emptyErrors();
             this.generalError = '';
         },
-        upsertOrder(order) {
-            const existingIndex = this.orders.findIndex((entry) => entry.id === order.id);
-
-            if (existingIndex === -1) {
-                this.orders.unshift(order);
-                this.syncLineState(order);
+        view(order) {
+            if (!order?.show_url) {
                 return;
             }
 
-            this.orders.splice(existingIndex, 1, order);
-            this.syncLineState(order);
-        },
-        canEditOrder(order) {
-            return !!order?.can_edit;
-        },
-        canManageOrderLines(order) {
-            return !!order?.can_manage_lines;
-        },
-        canChangeStatus(order) {
-            return Array.isArray(order?.available_status_transitions) && order.available_status_transitions.length > 0;
-        },
-        applyOrderLifecycleUpdate(orderId, data) {
-            const existingIndex = this.orders.findIndex((entry) => entry.id === orderId);
-
-            if (existingIndex === -1) {
-                return;
-            }
-
-            this.orders.splice(existingIndex, 1, {
-                ...this.orders[existingIndex],
-                status: data.status,
-                can_edit: data.can_edit,
-                can_manage_lines: data.can_manage_lines,
-                available_status_transitions: data.available_status_transitions || [],
-                current_stage_tasks: data.current_stage_tasks || [],
-            });
-        },
-        updateTaskInOrder(orderId, taskData) {
-            const order = this.orders.find((entry) => entry.id === orderId);
-
-            if (!order) {
-                return;
-            }
-
-            const tasks = Array.isArray(order.current_stage_tasks) ? [...order.current_stage_tasks] : [];
-            const existingIndex = tasks.findIndex((entry) => entry.id === taskData.id);
-
-            if (existingIndex === -1) {
-                tasks.push(taskData);
-            } else {
-                tasks.splice(existingIndex, 1, taskData);
-            }
-
-            order.current_stage_tasks = tasks.sort((left, right) => {
-                if (Number(left.sort_order || 0) === Number(right.sort_order || 0)) {
-                    return Number(left.id || 0) - Number(right.id || 0);
-                }
-
-                return Number(left.sort_order || 0) - Number(right.sort_order || 0);
-            });
-        },
-        formatLineMoney(amount, currencyCode) {
-            return `${currencyCode} ${amount}`;
+            window.location.assign(order.show_url);
         },
         async submitForm() {
             if (this.isSubmitting) {
@@ -247,7 +525,7 @@ export function mount(rootEl, payload) {
             this.generalError = '';
 
             const isCreate = this.formMode === 'create';
-            const url = isCreate ? this.storeUrl : `${this.updateUrlBase}/${this.editingOrderId}`;
+            const url = isCreate ? this.endpoints.create : `${this.updateUrlBase}/${this.editingOrderId}`;
             const method = isCreate ? 'POST' : 'PATCH';
 
             const response = await fetch(url, {
@@ -260,6 +538,7 @@ export function mount(rootEl, payload) {
                 body: JSON.stringify({
                     customer_id: this.form.customer_id === '' ? null : Number(this.form.customer_id),
                     contact_id: this.form.contact_id === '' ? null : Number(this.form.contact_id),
+                    order_date: this.form.order_date || null,
                 }),
             });
 
@@ -278,184 +557,10 @@ export function mount(rootEl, payload) {
                 return;
             }
 
-            const data = await response.json();
-            this.upsertOrder(data.data);
+            await this.fetchOrders();
+            await refreshNavigationState(this.navigationStateUrl);
             this.closeForm();
             this.showToast('success', isCreate ? 'Sales order created.' : 'Sales order updated.');
-        },
-        async submitStatus(order, status) {
-            if (!order || !order.status_update_url) {
-                return;
-            }
-
-            const response = await fetch(order.status_update_url, {
-                method: 'PATCH',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Accept: 'application/json',
-                    'X-CSRF-TOKEN': this.csrfToken,
-                },
-                body: JSON.stringify({ status }),
-            });
-
-            if (response.status === 422) {
-                const data = await response.json();
-                this.showToast('error', data.message || 'Unable to update status.');
-                return;
-            }
-
-            if (!response.ok) {
-                this.showToast('error', 'Unable to update status.');
-                return;
-            }
-
-            const data = await response.json();
-            this.applyOrderLifecycleUpdate(order.id, data.data || {});
-            this.showToast('success', 'Status updated.');
-        },
-        async completeTask(order, task) {
-            if (!order || !task || !task.complete_url || !task.can_complete) {
-                return;
-            }
-
-            const response = await fetch(task.complete_url, {
-                method: 'PATCH',
-                headers: {
-                    Accept: 'application/json',
-                    'X-CSRF-TOKEN': this.csrfToken,
-                },
-            });
-
-            if (!response.ok) {
-                this.showToast('error', 'Unable to complete task.');
-                return;
-            }
-
-            const data = await response.json();
-            this.updateTaskInOrder(order.id, data.data || {});
-            this.showToast('success', 'Task completed.');
-        },
-        async submitLine(order) {
-            if (!this.canManageOrderLines(order)) {
-                return;
-            }
-
-            this.ensureLineForm(order.id);
-            this.lineErrorsByOrder[order.id] = emptyLineErrors();
-            this.lineGeneralErrorsByOrder[order.id] = '';
-
-            const response = await fetch(`${this.lineStoreUrlBase}/${order.id}/lines`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Accept: 'application/json',
-                    'X-CSRF-TOKEN': this.csrfToken,
-                },
-                body: JSON.stringify({
-                    item_id: this.lineForms[order.id].item_id === '' ? null : Number(this.lineForms[order.id].item_id),
-                    quantity: this.lineForms[order.id].quantity,
-                }),
-            });
-
-            if (response.status === 422) {
-                const data = await response.json();
-                this.lineErrorsByOrder[order.id] = this.normalizeLineErrors(data.errors);
-                this.lineGeneralErrorsByOrder[order.id] = data.message || 'Validation failed.';
-                return;
-            }
-
-            if (!response.ok) {
-                this.lineGeneralErrorsByOrder[order.id] = 'Unable to add line.';
-                this.showToast('error', this.lineGeneralErrorsByOrder[order.id]);
-                return;
-            }
-
-            const data = await response.json();
-            this.upsertOrder(data.data.order);
-            this.lineForms[order.id] = emptyLineForm();
-            this.lineErrorsByOrder[order.id] = emptyLineErrors();
-            this.lineGeneralErrorsByOrder[order.id] = '';
-            this.showToast('success', 'Line added.');
-        },
-        async saveLineQuantity(order, line) {
-            if (!this.canManageOrderLines(order)) {
-                return;
-            }
-
-            this.lineEditErrorsByLine[line.id] = emptyLineErrors();
-
-            const response = await fetch(`${this.lineStoreUrlBase}/${order.id}/lines/${line.id}`, {
-                method: 'PATCH',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Accept: 'application/json',
-                    'X-CSRF-TOKEN': this.csrfToken,
-                },
-                body: JSON.stringify({
-                    quantity: this.lineEditQuantities[line.id] || line.quantity,
-                }),
-            });
-
-            if (response.status === 422) {
-                const data = await response.json();
-                this.lineEditErrorsByLine[line.id] = this.normalizeLineErrors(data.errors);
-                this.showToast('error', data.message || 'Unable to update line quantity.');
-                return;
-            }
-
-            if (!response.ok) {
-                this.showToast('error', 'Unable to update line quantity.');
-                return;
-            }
-
-            const data = await response.json();
-            this.upsertOrder(data.data.order);
-            this.showToast('success', 'Line quantity updated.');
-        },
-        async deleteLine(order, line) {
-            if (!this.canManageOrderLines(order)) {
-                return;
-            }
-
-            const response = await fetch(`${this.lineStoreUrlBase}/${order.id}/lines/${line.id}`, {
-                method: 'DELETE',
-                headers: {
-                    Accept: 'application/json',
-                    'X-CSRF-TOKEN': this.csrfToken,
-                },
-            });
-
-            if (response.status === 422) {
-                const data = await response.json();
-                this.showToast('error', data.message || 'Unable to remove line.');
-                return;
-            }
-
-            if (!response.ok) {
-                this.showToast('error', 'Unable to remove line.');
-                return;
-            }
-
-            const data = await response.json();
-            this.upsertOrder(data.data.order);
-            this.showToast('success', 'Line removed.');
-        },
-        async deleteOrder(order) {
-            const response = await fetch(`${this.deleteUrlBase}/${order.id}`, {
-                method: 'DELETE',
-                headers: {
-                    Accept: 'application/json',
-                    'X-CSRF-TOKEN': this.csrfToken,
-                },
-            });
-
-            if (!response.ok) {
-                this.showToast('error', 'Unable to delete sales order.');
-                return;
-            }
-
-            this.orders = this.orders.filter((entry) => entry.id !== order.id);
-            this.showToast('success', 'Sales order deleted.');
         },
     }));
 }

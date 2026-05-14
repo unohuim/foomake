@@ -7,13 +7,13 @@ location:
   - app/Models/SalesOrder.php
   - app/Models/SalesOrderLine.php
   - database/migrations/2026_05_04_000010_create_sales_order_lines_table.php
-  - resources/views/sales/orders/index.blade.php
-  - resources/views/sales/customers/show.blade.php
-purpose: Document the editable sales-order line mutation rules, immutable unit-price snapshots, and canonical quantity math shared by the Sales Orders index and the customer detail Orders mini-index.
+  - database/migrations/2026_05_14_130000_add_external_id_to_sales_order_lines_table.php
+  - resources/views/sales/orders/show.blade.php
+purpose: Document the editable sales-order line mutation rules, immutable unit-price snapshots, canonical quantity math, and optional source-line identity used on the Sales Order detail page.
 when_to_use:
-  - Adding lines to editable sales orders
-  - Removing lines from editable sales orders
-  - Editing editable sales-order line quantities
+  - Adding lines to editable sales orders from the Sales Order detail page
+  - Removing lines from editable sales orders from the Sales Order detail page
+  - Editing editable sales-order line quantities from the Sales Order detail page
   - Validating sellable-item eligibility and line payloads
 when_not_to_use:
   - Sales-order header customer/contact assignment
@@ -23,6 +23,7 @@ rules:
   - Sales order line mutations are allowed only while the parent sales order status is DRAFT or OPEN.
   - Only items eligible for selling may be added as sales-order lines.
   - quantity is stored and exposed as a canonical scale-6 BCMath string.
+  - sales_order_lines.external_id, when present, stores source-system line identity and is never treated as the local primary key.
   - unit_price_cents is captured from the item at line creation and becomes an immutable snapshot.
   - unit_price_currency_code is captured at line creation and becomes an immutable snapshot.
   - line_total_cents is stored and exposed as a canonical scale-6 string in minor currency units.

@@ -39,6 +39,10 @@ class StoreSalesOrderRequest extends FormRequest
                 'integer',
                 Rule::exists('customer_contacts', 'id')->where('tenant_id', $this->user()?->tenant_id),
             ],
+            'order_date' => [
+                'nullable',
+                'date',
+            ],
         ];
     }
 
@@ -75,6 +79,7 @@ class StoreSalesOrderRequest extends FormRequest
             'errors' => [
                 'customer_id' => $errors['customer_id'] ?? [],
                 'contact_id' => $errors['contact_id'] ?? [],
+                'order_date' => $errors['order_date'] ?? [],
             ],
         ], 422));
     }

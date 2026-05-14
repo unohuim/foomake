@@ -5,6 +5,7 @@ This file is the single source to paste at the beginning of new LLM chats for fu
 Paste the entire content (or as much as context allows) when starting a session.
 
 ## docs/AI_CHAT_CODEX.md
+
 # AI Chat Bootstrap (READ FIRST)
 
 You are assisting with development on this repository.
@@ -236,6 +237,7 @@ If unsure, **stop immediately and ask**.
 - The **smallest possible change per PR**
 
 ## docs/PR2_ROADMAP.md
+
 # PR2_ROADMAP — UI + Domain Completion (Post-PR-006)
 
 This roadmap defines the **second major phase** of work: completing **Items, Inventory, Suppliers, and Manufacturing**
@@ -1529,6 +1531,7 @@ Introduce a UoM-level display precision field and enforce consistent quantity fo
 - JavaScript formatting or UI-only overrides per view
 
 ## docs/CONVENTIONS.md
+
 # Conventions
 
 This document defines the **mandatory development conventions** for this repository.  
@@ -1783,6 +1786,7 @@ These rules apply to:
 - Any inventory-affecting calculations
 
 ## docs/ARCHITECTURE_INVENTORY.md
+
 # Architecture Inventory
 
 This document tracks **reusable abstractions, components, and architectural patterns**
@@ -2244,7 +2248,7 @@ $customer->contacts()->create([
 - `app/Models/SalesOrder.php`  
 
 **Purpose:**  
-Document the sales-order customer/contact rules shared by the Sales Orders index and the customer detail Orders mini-index.
+Document the sales-order customer/contact rules used by editable Sales Order header flows on the shared Orders index shell and the Sales Order detail page.
 
 **When to Use:**  
 Any editable sales-order create, update, delete, or validation flow, including customer changes that may re-default the assigned contact.
@@ -2287,7 +2291,7 @@ $order = SalesOrder::query()->create([
 - `app/Models/SalesOrderLine.php`  
 
 **Purpose:**  
-Document the editable sales-order line mutation rules, immutable unit-price snapshots, and canonical scale-6 quantity/line-total behavior shared by the Sales Orders index and the customer detail Orders mini-index.
+Document the editable sales-order line mutation rules, immutable unit-price snapshots, canonical scale-6 quantity/line-total behavior, and optional source-line identity used on the Sales Order detail page.
 
 **When to Use:**  
 Any sales-order line create, delete, or quantity-update flow for editable sales orders.
@@ -2315,6 +2319,47 @@ $line = SalesOrderLine::query()->create([
     'unit_price_currency_code' => $item->default_price_currency_code,
     'line_total_cents' => '832.500000',
 ]);
+```
+
+---
+
+### Sales Order External CSV Import Export
+
+**Name:** Sales Order External CSV Import Export  
+**Type:** Domain Import Export Rule  
+**Location:**  
+- `docs/architecture/sales/SalesOrderExternalCsvImportExport.yaml`  
+- `app/Http/Controllers/SalesOrderController.php`  
+- `app/Http/Requests/Sales/PreviewExternalSalesOrderImportRequest.php`  
+- `app/Http/Requests/Sales/ImportExternalSalesOrdersRequest.php`  
+- `app/Models/SalesOrder.php`  
+- `app/Models/SalesOrderLine.php`  
+- `resources/js/pages/sales-orders-index.js`  
+
+**Purpose:**  
+Document the line-level external CSV export contract, grouped file-upload preview/import behavior, tenant-scoped duplicate identity, and external status sync rules for Sales Orders.
+
+**When to Use:**  
+Any Sales Orders CSV export, file-upload preview/import flow, duplicate identity check, or external status sync behavior.
+
+**When Not to Use:**  
+Native Sales Order header forms, native Sales Order line mutations on the detail page, or inventory-impacting workflow transitions.
+
+**Public Interface:**  
+- `sales.orders.export`  
+- `sales.orders.import.preview`  
+- `sales.orders.import.store`  
+- `external_source`  
+- `external_id`  
+- `external_status`  
+- `external_status_synced_at`  
+- `sales_order_lines.external_id`  
+
+**Example Usage:**  
+```text
+external_source,order_external_id,order_date,customer_name,contact_name,city,status,external_status,line_external_id,product_external_id,product_name,quantity,unit_price
+legacy_csv,SO-1001,2026-05-14,Ada Buyer,Jane Buyer,Toronto,OPEN,processing,LINE-1,SKU-2001,Imported Item,2.000000,15.00
+legacy_csv,SO-1001,2026-05-14,Ada Buyer,Jane Buyer,Toronto,OPEN,processing,LINE-2,SKU-2002,Imported Item 2,1.000000,5.00
 ```
 
 ---
@@ -3527,16 +3572,19 @@ Confirmations or single-field actions.
 **Location:**  
 - `docs/architecture/ui/ImportSlideOverPreviewPattern.yaml`  
 - `app/Http/Controllers/SalesProductController.php`  
+- `app/Http/Controllers/CustomerController.php`  
 - `resources/views/sales/products/index.blade.php`  
+- `resources/views/sales/customers/index.blade.php`  
 - `resources/js/lib/import-config.js`  
 - `resources/js/lib/import-module.js`  
 - `resources/js/pages/sales-products-index.js`  
+- `resources/js/pages/sales-customers-index.js`  
 
 **Purpose:**  
-Provide a reusable config-driven import slide-over pattern where preview loads automatically from the chosen source, bulk options and preview records use accordions, and the preview list stays card-based and page-scoped.
+Provide a reusable config-driven import slide-over component that owns the full import UX and lifecycle, auto-loads previews from the chosen source, keeps bulk options and preview records in accordions, and preserves backend import authority.
 
 **When to Use:**  
-Preview-first import slide-overs that combine source selection, duplicate-aware row visibility, per-row overrides, and resource-specific endpoints without leaving the current page.
+Preview-first import slide-overs that combine source selection, duplicate-aware row visibility, config-driven preview rendering, approved data adapters, and resource-specific endpoints without leaving the current page.
 
 **When Not to Use:**  
 One-step uploads with no preview, or workflows that require global JavaScript state or client-owned import authority.
@@ -3545,30 +3593,99 @@ One-step uploads with no preview, or workflows that require global JavaScript st
 - `data-import-config`  
 - `resources/js/lib/import-config.js`  
 - `resources/js/lib/import-module.js`  
-- `data-products-import-bulk-options-accordion`  
-- `data-products-import-preview-records-accordion`  
-- `data-products-import-preview-search`  
-- `data-products-import-show-duplicates`  
-- `data-products-import-preview-scroll`  
+- `createImportModule({ config, adapters, callbacks }).mount(hostComponent)`  
+
+**Key Rules:**  
+- The shared import component owns the import slide-over markup rather than relying on resource-specific Blade form markup.  
+- Resource pages may not render import slide-over form markup, import preview cards, import source controls, import bulk controls, or import footer actions directly.  
+- Minimum preview-row height is the UX goal.  
+- Preview rows must render as a single compact horizontal row with a left-truncated primary value and a right-aligned secondary value.  
+- Preview rows must not render a second metadata line.  
+- Preview rows must not render a status badge.  
+- Products: truncated name left, price right only.  
+- Customers: truncated name left, city right only.  
+- Preview loading auto-starts when a connected external source is selected or when a valid local file has been read.  
+- The slide-over must not require a manual Load Preview button.  
+- Bulk options and preview records render as separate accordions, with bulk options default collapsed and preview records default open.  
+- Preview rows render as responsive cards rather than a table.  
+- Duplicate rows are hidden by default.  
+- Preview row selection, search text, duplicate visibility, and row override state are owned by the shared import component rather than the resource page module.  
+- Resource-specific data-shape differences may enter the shared import component only through approved adapters for local-row parsing, preview-row normalization, import-row payload building, submit-body shaping, and import-success callbacks.  
+- Approved adapters may shape data but may not own import markup, control visibility, or override import lifecycle behavior.  
 
 **Example Usage:**  
-```blade
-<button type="button" data-products-import-preview-records-accordion>
-    Preview Records
-</button>
+```js
+const importConfig = parseImportConfig(rootEl);
+const importModule = createImportModule({
+    config: importConfig,
+    adapters: {
+        parseLocalRows,
+        normalizePreviewRow,
+        buildImportRowPayload,
+        buildSubmitBody,
+    },
+    callbacks: {
+        onImportSuccess: refreshProducts,
+    },
+});
 
-<div data-products-import-preview-scroll>
-    <article x-show="rowVisibleInPreview(row)">
-        <p class="truncate" x-text="row.name"></p>
-    </article>
-</div>
+importModule.mount(rootEl);
 ```
 
 Notes:
+- Products and Customers now consume the same shared import component path and no longer keep import slide-over form markup in Blade.
 - Bulk Import Options defaults collapsed while Preview Records accordion defaults open.
-- Preview records render as responsive cards; duplicate rows remain in DOM state and are hidden by default until explicitly shown.
-- Loading labels and bulk option defaults are provided through the server-generated import config rather than hardcoded in the page module.
+- Preview records render as responsive cards; duplicate rows remain in DOM state and are hidden by default.
+- Loading labels, preview display expressions, messages, and bulk option defaults are provided through the server-generated import config rather than hardcoded in the resource page module.
 - The preview records area is the only scrollable region inside the slide-over.
+- Full row data may still exist internally for validation, duplicate detection, search, and import payload correctness, but extra detail must not render in preview rows.
+
+---
+
+### Export Slide-Over Pattern
+
+**Name:** Export Slide-Over Pattern  
+**Type:** UI Pattern  
+**Location:**  
+- `docs/architecture/ui/ExportSlideOverPattern.yaml`  
+- `resources/js/lib/export-module.js`  
+- `resources/js/pages/sales-products-index.js`  
+- `resources/js/pages/sales-customers-index.js`  
+- `resources/views/sales/products/index.blade.php`  
+- `resources/views/sales/customers/index.blade.php`  
+
+**Purpose:**  
+Provide a reusable config-driven export slide-over component that owns the full export UX and lifecycle, derives export requests from the shared CRUD contract, and preserves backend route authority.
+
+**When to Use:**  
+Shared export slide-overs that need identical structure and lifecycle across multiple CRUD resources while keeping export endpoints and CSV authority on the server.
+
+**When Not to Use:**  
+One-click downloads with no scope chooser, or workflows that require global JavaScript state or client-owned export authority.
+
+**Public Interface:**  
+- `data-crud-config`  
+- `resources/js/lib/export-module.js`  
+- `createExportModule({ config }).mount(hostComponent)`  
+
+**Key Rules:**  
+- The shared export component owns the export slide-over markup rather than relying on resource-specific Blade form markup.  
+- Resource pages may not render export slide-over form markup, export scope controls, export footer actions, or export validation/error markup directly.  
+- Resource pages may not own export lifecycle methods such as `openExportPanel`, `closeExportPanel`, `resetExportState`, `buildExportUrl`, or `submitExport` outside the shared export component.  
+- Export scope, descriptive copy, unavailable-message copy, submit/cancel labels, and visibility must come from the server-generated CRUD contract or safe shared defaults.  
+- Export URL construction remains config-driven and must not hardcode resource-specific endpoints in shared JavaScript.  
+
+**Example Usage:**  
+```js
+const crud = createGenericCrud(parseCrudConfig(rootEl));
+const exportModule = createExportModule({ config: crud });
+
+exportModule.mount(rootEl);
+```
+
+Notes:
+- Products and Customers now consume the same shared export component path and no longer keep export slide-over form markup in Blade.
+- Export differences are expressed through CRUD config labels, permissions, and endpoints rather than page-local Blade or page-local lifecycle code.
 
 ---
 
@@ -3965,7 +4082,7 @@ Vendor or generated views excluded from repository checks, plus Breeze/shared la
 - `resources/views/sales/customers/index.blade.php`
 
 **Purpose:**  
-Centralize a shared config-driven CRUD renderer behind server-generated page contracts while keeping Blade index pages mount-only and page-specific slideouts, validation state, import/export callbacks, and other resource behavior inside each page module.
+Centralize a shared config-driven CRUD renderer behind server-generated page contracts while keeping Blade index pages mount-only, moving import UX and lifecycle into a shared import component, and leaving page-specific create/export behavior plus approved data adapters in each page module.
 
 **When to Use:**  
 Interactive Blade CRUD pages that share toolbar, list rendering, sticky layout, action menus, and list/create/import/sort mechanics but need different routes, columns, row display rules, or page-specific callbacks. All future CRUD index pages should use this abstraction unless a separately approved architecture entry says otherwise.
@@ -3995,8 +4112,20 @@ Static pages, or domain workflows that exceed generic CRUD concerns.
 - The shared CRUD renderer owns toolbar layout, search input, create/import/export buttons, sticky desktop headers, record table/cards, empty states, and row action menus.  
 - Toolbar and page chrome remain outside the records scroller; the records/results area is the only scrollable region for CRUD list rendering.  
 - Desktop and mobile variants follow the same scroll-containment contract: header/toolbar stays fixed in the component shell while only records scroll.  
-- Shared export helpers may own export panel state, scope selection, config-driven URL building, and submission wiring while leaving Blade slide-over markup and page-owned permissions/messages local to the page module.  
-- Shared import helpers own config parsing, source-switch preview loading, local CSV caching, selection rules, duplicate visibility, and import submit wiring without introducing global state.  
+- Shared export helpers own export panel markup, open/close/reset lifecycle, scope selection, validation/error display, config-driven URL building, and export submission wiring without introducing global state.  
+- Shared import helpers own import panel markup, source-switch preview loading, local CSV caching, selection rules, duplicate visibility, preview row rendering, validation display, and import submit wiring without introducing global state.  
+- Shared import preview rows must stay minimum-height and single-line; page modules may not expand them into stacked detail cards.  
+- Shared import preview rows may render only the approved resource-specific left/right compact values from the server-generated import config.  
+- Resource pages may provide export differences only through the server-generated CRUD contract; export-specific copy, endpoint, and visibility must not be hardcoded in page-local Blade or page-local JavaScript.  
+- Resource pages may provide only declarative import config plus approved data adapters such as local-row parsing, preview-row normalization, import-row payload building, submit-body shaping, and import-success callbacks.  
+- Resource pages must not contain export slide-over form markup or page-local export UX overrides.  
+- Resource pages must not contain import slide-over form markup or page-local import UX overrides.  
+- Resource pages must not reintroduce custom preview markup or preview-only view overrides to bypass the shared compact preview-row contract.  
+
+Notes:
+- Sales Products and Sales Customers both mount the shared export component from `resources/js/lib/export-module.js`; neither page keeps export slide-over form markup in Blade.
+- Sales Products and Sales Customers both mount the shared import component from `resources/js/lib/import-module.js`; neither page keeps import slide-over form markup in Blade.
+- Sales Customers now exposes a full export surface through `sales.customers.export`, `endpoints.export`, and shared export-component wiring rather than a no-op export toolbar callback.
 
 **Example Usage:**  
 ```blade
@@ -4047,6 +4176,7 @@ it('creates a material', function () {
 ---
 
 ## docs/PERMISSIONS_MATRIX.md
+
 # Permissions Matrix
 
 This document is the source-of-truth for **authorization intent** in this repository.
@@ -4242,6 +4372,7 @@ return [
 ```
 
 ## docs/ENUMS.md
+
 # ENUMS — Canonical Enum Authority
 
 This document defines the canonical, normative enum-like values used throughout the system.
@@ -4419,6 +4550,38 @@ Do not introduce new enum values without updating this document.
 - Cancelling from `PACKED` appends reversing stock moves and preserves the original audit trail.
 - Older roadmap-era statuses such as `CONFIRMED` and `FULFILLED` are not valid statuses.
 
+### Sales Order External Status Mapping
+
+**Name:** SalesOrder external status mapping  
+**Storage location(s):** `sales_orders.external_status` (nullable string column), import preview rows, import store rows  
+**Mapped external values:**
+
+- `completed`
+- `cancelled`
+- `canceled`
+- `refunded`
+- `failed`
+- `processing`
+- `pending`
+- `pending payment`
+- `on-hold`
+- `on hold`
+- `draft`
+- `new`
+
+**Semantic meaning:**
+
+- `completed` maps to local `COMPLETED`
+- `cancelled`, `canceled`, `refunded`, and `failed` map to local `CANCELLED`
+- `processing`, `pending`, `pending payment`, `on-hold`, `on hold`, `draft`, and `new` map to local `OPEN`
+
+**Notes:**
+
+- `external_status` remains a nullable string and is not an enum or enum-backed cast.
+- External status sync is informational and duplicate-safe; local Sales Order status remains app-controlled.
+- Re-import may update only `external_status` and `external_status_synced_at`.
+- Unknown external statuses must fail safely during preview or import rather than silently mapping to the wrong local status.
+
 ### Task Status
 
 **Name:** Task status  
@@ -4496,6 +4659,7 @@ Do not introduce new enum values without updating this document.
 No conflicts or ambiguities were found at time of creation based on existing migrations, models, actions, and tests.
 
 ## docs/DB_SCHEMA.md
+
 # Database Schema Inventory (DB_SCHEMA)
 
 This document inventories **all database tables and columns** as defined by migrations.
@@ -4697,7 +4861,7 @@ Migrations remain the **sole source of truth**.
 ## sales_orders
 
 **Tenant-owned:** Yes  
-**Purpose:** Sales order headers shared by the Sales Orders index and the customer detail Orders mini-index
+**Purpose:** Sales order headers shared by the Sales Orders index, the Sales Order detail page, and grouped external-import identity
 
 ### Columns
 
@@ -4707,7 +4871,12 @@ Migrations remain the **sole source of truth**.
 | tenant_id  | bigint    | No       | FK → tenants.id (CASCADE)            |
 | customer_id | bigint   | No       | FK → customers.id (CASCADE)          |
 | contact_id | bigint    | Yes      | FK → customer_contacts.id (SET NULL) |
+| order_date | date      | Yes      | Actual order date used by CRUD index/export and external imports |
 | status     | string    | No       | Defaults to `DRAFT`; allowed values are defined in `docs/ENUMS.md` |
+| external_source | string | Yes    | Imported/source-system order identity namespace |
+| external_id | string   | Yes      | Imported/source-system order identity value |
+| external_status | string | Yes    | Raw external/source-system order status |
+| external_status_synced_at | timestamp | Yes | Last time raw external status was synced |
 | created_at | timestamp | Yes      | —                                    |
 | updated_at | timestamp | Yes      | —                                    |
 
@@ -4717,6 +4886,7 @@ Migrations remain the **sole source of truth**.
 - Index: `(tenant_id, status)`
 - Index: `(tenant_id, customer_id)`
 - Index: `(tenant_id, contact_id)`
+- Unique: `(tenant_id, external_source, external_id)` (`sales_orders_tenant_source_external_unique`)
 - Implicit (FK index): `tenant_id`
 - Implicit (FK index): `customer_id`
 - Implicit (FK index): `contact_id`
@@ -4724,6 +4894,10 @@ Migrations remain the **sole source of truth**.
 ### Behavioral Notes
 
 - Sales order headers remain editable only while `status` is `DRAFT` or `OPEN`.
+- Sales Orders index remains header-only; order lines and workflow/task UI live on the Sales Order detail page.
+- External CSV import/export uses source-system order identity only; app internal order IDs are not part of the import contract.
+- Re-import may update only `external_status` and `external_status_synced_at`; it never changes the local app-controlled `status`.
+- Imported terminal and non-terminal external orders create no stock moves during import.
 - `COMPLETED` and `CANCELLED` are terminal.
 - `DRAFT`, `OPEN`, `COMPLETED`, and `CANCELLED` are system statuses.
 - Operational middle stages are derived from active tenant `workflow_stages` rows in the `sales` workflow domain and are persisted as uppercase stage keys in `sales_orders.status`.
@@ -4739,7 +4913,7 @@ Migrations remain the **sole source of truth**.
 ## sales_order_lines
 
 **Tenant-owned:** Yes  
-**Purpose:** Sales order line items with immutable price snapshots for the Sales Orders index and customer detail Orders mini-index
+**Purpose:** Sales order line items with immutable price snapshots and optional imported source-line identity for the Sales Order detail page and external CSV import/export
 
 ### Columns
 
@@ -4749,6 +4923,7 @@ Migrations remain the **sole source of truth**.
 | tenant_id  | bigint        | No       | FK → tenants.id (CASCADE)              |
 | sales_order_id | bigint    | No       | FK → sales_orders.id (CASCADE)         |
 | item_id    | bigint        | No       | FK → items.id (CASCADE)                |
+| external_id | string       | Yes      | Imported/source-system line identity; not `sales_order_lines.id` |
 | quantity   | decimal(18,6) | No       | Canonical BCMath quantity string       |
 | unit_price_cents | unsignedInteger | No | Immutable unit price snapshot in minor currency units |
 | unit_price_currency_code | char(3) | No | Immutable unit price snapshot currency |
@@ -4761,6 +4936,7 @@ Migrations remain the **sole source of truth**.
 - PK: `id`
 - Index: `(tenant_id, sales_order_id)`
 - Index: `(sales_order_id, item_id)`
+- Index: `(tenant_id, sales_order_id, external_id)` (`sales_order_lines_tenant_order_external_idx`)
 - Implicit (FK index): `tenant_id`
 - Implicit (FK index): `sales_order_id`
 - Implicit (FK index): `item_id`
@@ -4768,6 +4944,9 @@ Migrations remain the **sole source of truth**.
 ### Behavioral Notes
 
 - Sales order line mutations are allowed only while the parent sales order is `DRAFT` or `OPEN`.
+- External CSV export emits one row per sales order line and repeats order header fields on each exported row.
+- External CSV file-upload import groups rows into unique orders by `(tenant_id, external_source, order_external_id)` and creates one sales-order line per grouped CSV row.
+- `external_id` is the source-system line ID when present; it is not used as the local primary key.
 - On the seeded `packing -> packed` transition, each line may generate exactly one posted `stock_moves` ledger entry with `source_type = App\Models\SalesOrderLine` and `source_id = sales_order_lines.id`.
 
 ---
@@ -5791,6 +5970,7 @@ Migrations remain the **sole source of truth**.
 **End of DB_SCHEMA**
 
 ## docs/UI_DESIGN.md
+
 # UI_DESIGN.md — Canonical UI Direction & Constraints
 
 This document defines the **authoritative UI design rules** for this repository.
@@ -6064,6 +6244,29 @@ It is probably **wrong** for this system.
 - Contact create, edit, delete, and set-primary controls must render only for users who can manage customers.
 - When contacts exist, the UI must always present exactly one primary contact for that customer.
 - Contacts are managed in-page with AJAX mutations and JSON validation feedback.
+
+### Sales Orders Index + Detail Split
+
+- `/sales/orders` must remain a shared configured CRUD/import/export page-module surface like Products and Customers.
+- The Sales Orders index is header-only:
+    - no order lines
+    - no workflow UI
+    - no `current_stage_tasks`
+- `/sales/orders/{salesOrder}` owns:
+    - order lines
+    - workflow/task UI
+    - editable line and workflow actions when the order lifecycle allows them
+- The Orders index must remain a mount shell that passes shared `data-crud-config` and `data-import-config` attributes to the page module.
+- Orders import and export must continue using the shared slide-over components; do not add Orders-specific import or export panel markup.
+- Orders export is line-level CSV:
+    - one CSV row per sales order line
+    - repeated order header fields on each row
+- Orders file-upload import groups CSV rows into unique orders for preview and store.
+- Orders import preview must render one compact record per grouped order.
+- Preview records show only:
+    - customer name as the left-aligned primary text
+    - order date and city as compact secondary metadata on the same row
+- Preview records must not display line item names, raw external IDs, or arbitrary external metadata.
 
 ### `/manufacturing/uom-conversions`
 
@@ -6385,6 +6588,7 @@ They are mandatory, not stylistic.
 ::contentReference[oaicite:0]{index=0}
 
 ## routes/web.php
+
 <?php
 
 use App\Http\Controllers\InventoryController;
@@ -6570,6 +6774,8 @@ Route::middleware('auth')->group(function () {
         ->name('sales.customers.index');
     Route::get('/sales/customers/list', [CustomerController::class, 'list'])
         ->name('sales.customers.list');
+    Route::get('/sales/customers/export', [CustomerController::class, 'export'])
+        ->name('sales.customers.export');
     Route::post('/sales/customers/import-preview', [CustomerController::class, 'previewImport'])
         ->name('sales.customers.import.preview');
     Route::post('/sales/customers/imports', [CustomerController::class, 'storeImport'])
@@ -6593,8 +6799,18 @@ Route::middleware('auth')->group(function () {
 
     Route::get('/sales/orders', [SalesOrderController::class, 'index'])
         ->name('sales.orders.index');
+    Route::get('/sales/orders/list', [SalesOrderController::class, 'list'])
+        ->name('sales.orders.list');
+    Route::get('/sales/orders/export', [SalesOrderController::class, 'export'])
+        ->name('sales.orders.export');
+    Route::post('/sales/orders/import-preview', [SalesOrderController::class, 'previewImport'])
+        ->name('sales.orders.import.preview');
+    Route::post('/sales/orders/imports', [SalesOrderController::class, 'storeImport'])
+        ->name('sales.orders.import.store');
     Route::post('/sales/orders', [SalesOrderController::class, 'store'])
         ->name('sales.orders.store');
+    Route::get('/sales/orders/{salesOrder}', [SalesOrderController::class, 'show'])
+        ->name('sales.orders.show');
     Route::patch('/sales/orders/{salesOrder}', [SalesOrderController::class, 'update'])
         ->name('sales.orders.update');
     Route::patch('/sales/orders/{salesOrder}/status', [SalesOrderStatusController::class, 'update'])
@@ -6665,6 +6881,7 @@ Route::delete('/manufacturing/uom-conversions/items/{itemConversion}', [UomConve
 require __DIR__ . '/auth.php';
 
 ## docs/PR3_ROADMAP.md
+
 # PR3_ROADMAP — Sales + CRM Foundations
 
 This roadmap defines the third major phase of work: introducing the **Sales domain (CRM foundations + Sales Orders)**, fully integrated with inventory before any external integrations.
@@ -7205,6 +7422,67 @@ Tasks accordion:
 
 ---
 
+### PR3-SO-008 — Shared Orders CRUD Index + Detail + Line-Level CSV Import/Export
+
+Status: Implemented
+
+**Goal**
+Refactor Sales Orders so the index is a clean shared CRUD/import/export surface and move workflow and order-line operations to the Sales Order detail page, while adding full external CSV order import/export support.
+
+**Includes**
+
+- Route remains `/sales/orders` for the shared Orders CRUD index
+- New detail route: `/sales/orders/{salesOrder}`
+- Orders index uses the same shared configured CRUD/import/export page-module pattern as Products and Customers
+- Orders index remains header-only:
+    - columns: `id`, `date`, `customer_name`, `city`, `status`
+    - import/export actions from the shared slide-over components
+    - row `View` action to `/sales/orders/{salesOrder}`
+- Sales Order detail page owns:
+    - order lines
+    - workflow UI
+    - current-stage workflow tasks
+    - editable line/workflow actions when lifecycle rules allow them
+- Full CSV export is line-level:
+    - one CSV row per sales order line
+    - repeated order header fields on every row
+    - uses import identities only, not app internal order or line IDs
+- Required CSV columns:
+    - `external_source`
+    - `order_external_id`
+    - `order_date`
+    - `customer_name`
+    - `contact_name`
+    - `city`
+    - `status`
+    - `external_status`
+    - `line_external_id`
+    - `product_external_id`
+    - `product_name`
+    - `quantity`
+    - `unit_price`
+- File-upload preview groups CSV rows into unique orders by `(tenant_id, external_source, order_external_id)`
+- File-upload preview renders one compact preview record per grouped order
+- WooCommerce order import remains supported through the same shared import surface
+
+**Rules**
+
+- `external_source` is required for CSV import
+- Every row in one CSV file must use the same `external_source`
+- Duplicate order detection remains tenant-scoped on `(tenant_id, external_source, order_external_id)`
+- Same `external_source + order_external_id` in another tenant is allowed
+- Import creates one `sales_orders` row per grouped order and one `sales_order_lines` row per grouped CSV line
+- `line_external_id` is source-system line identity only; it is not `sales_order_lines.id`
+- `product_external_id` is source-system product identity only; it is not `items.id`
+- Missing products are created as inactive sellable items
+- Missing imported products do not create fulfillment recipes
+- Import creates no stock moves
+- Re-import may update only `external_status` and `external_status_synced_at`
+- Re-import never changes local app-controlled order status
+- Unknown external statuses must fail safely rather than silently mapping to the wrong local status
+
+---
+
 ## DOMAIN 3 — External Integration (Post-Inventory Only)
 
 ### PR3-INT-001 — External Product Import Prep
@@ -7344,6 +7622,7 @@ After PR3 completion:
 - System ready for external integrations
 
 ## docs/BACKLOG.md
+
 # BACKLOG
 
 This backlog captures outstanding product capabilities identified from competitive feature review and QuickBooks Online integration planning.
@@ -7713,4 +7992,3 @@ QuickBooks Online integration reduces admin work, improves bookkeeping accuracy,
 - Each PR should remain small, test-first, and tenant-safe.
 - Documentation updates should only happen when explicitly required and approved.
 - Any reusable abstraction introduced by these PRs must be recorded in the architecture inventory when applicable.
-

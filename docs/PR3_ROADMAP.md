@@ -538,6 +538,67 @@ Tasks accordion:
 
 ---
 
+### PR3-SO-008 — Shared Orders CRUD Index + Detail + Line-Level CSV Import/Export
+
+Status: Implemented
+
+**Goal**
+Refactor Sales Orders so the index is a clean shared CRUD/import/export surface and move workflow and order-line operations to the Sales Order detail page, while adding full external CSV order import/export support.
+
+**Includes**
+
+- Route remains `/sales/orders` for the shared Orders CRUD index
+- New detail route: `/sales/orders/{salesOrder}`
+- Orders index uses the same shared configured CRUD/import/export page-module pattern as Products and Customers
+- Orders index remains header-only:
+    - columns: `id`, `date`, `customer_name`, `city`, `status`
+    - import/export actions from the shared slide-over components
+    - row `View` action to `/sales/orders/{salesOrder}`
+- Sales Order detail page owns:
+    - order lines
+    - workflow UI
+    - current-stage workflow tasks
+    - editable line/workflow actions when lifecycle rules allow them
+- Full CSV export is line-level:
+    - one CSV row per sales order line
+    - repeated order header fields on every row
+    - uses import identities only, not app internal order or line IDs
+- Required CSV columns:
+    - `external_source`
+    - `order_external_id`
+    - `order_date`
+    - `customer_name`
+    - `contact_name`
+    - `city`
+    - `status`
+    - `external_status`
+    - `line_external_id`
+    - `product_external_id`
+    - `product_name`
+    - `quantity`
+    - `unit_price`
+- File-upload preview groups CSV rows into unique orders by `(tenant_id, external_source, order_external_id)`
+- File-upload preview renders one compact preview record per grouped order
+- WooCommerce order import remains supported through the same shared import surface
+
+**Rules**
+
+- `external_source` is required for CSV import
+- Every row in one CSV file must use the same `external_source`
+- Duplicate order detection remains tenant-scoped on `(tenant_id, external_source, order_external_id)`
+- Same `external_source + order_external_id` in another tenant is allowed
+- Import creates one `sales_orders` row per grouped order and one `sales_order_lines` row per grouped CSV line
+- `line_external_id` is source-system line identity only; it is not `sales_order_lines.id`
+- `product_external_id` is source-system product identity only; it is not `items.id`
+- Missing products are created as inactive sellable items
+- Missing imported products do not create fulfillment recipes
+- Import creates no stock moves
+- Re-import may update only `external_status` and `external_status_synced_at`
+- Re-import never changes local app-controlled order status
+- Unknown external statuses must fail safely rather than silently mapping to the wrong local status
+
+---
+
 ## DOMAIN 3 — External Integration (Post-Inventory Only)
 
 ### PR3-INT-001 — External Product Import Prep

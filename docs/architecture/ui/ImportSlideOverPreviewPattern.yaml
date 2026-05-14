@@ -24,6 +24,15 @@ rules:
   - Shared import config parsing must live outside the page module and fail safely on missing or invalid JSON.
   - The shared import component must own the import slide-over markup rather than relying on resource-specific Blade form markup.
   - Resource pages may not render import slide-over form markup, import preview cards, import source controls, import bulk controls, or import footer actions directly.
+  - Minimum preview-row height is the UX goal.
+  - Preview rows must render as a single compact horizontal row with a left-truncated primary value and a right-aligned secondary value.
+  - Preview rows must not render a second metadata line.
+  - Preview rows must not render a status badge.
+  - Products may display only truncated name on the left and price on the right.
+  - Customers may display only truncated name on the left and city on the right.
+  - Duplicate rows must be hidden by default.
+  - Full row data may remain internal for validation, duplicate detection, search, and import payload correctness, but extra details must not render in preview rows.
+  - Resource pages must not reintroduce custom preview markup to bypass the compact preview-row contract.
   - Preview loading must auto-start when a connected external source is selected or when a valid local file has been read.
   - The slide-over must not require a manual Load Preview button.
   - Bulk options and preview records must render as separate accordions, with bulk options default collapsed and preview records default open.
@@ -70,9 +79,14 @@ example_usage: |
             'create_fulfillment_recipes' => ['label' => 'Create fulfillment recipes', 'default' => true],
         ],
         'rowBehavior' => [
-            'hideDuplicatesByDefault' => true,
+            'hideDuplicatesByDefault' => false,
             'selectVisibleNonDuplicateRowsOnly' => true,
             'submitSelectedVisibleRowsOnly' => true,
+        ],
+        'previewDisplay' => [
+            'titleExpression' => "row.name || '—'",
+            'subtitleExpression' => "formattedProductPrice(row)",
+            'bodyExpression' => '',
         ],
     ];
 

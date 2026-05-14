@@ -99,6 +99,37 @@ class WooCommerceClient
     }
 
     /**
+     * Fetch WooCommerce orders for preview normalization.
+     *
+     * @return array<int, array<string, mixed>>
+     *
+     * @throws WooCommerceException
+     */
+    public function listOrders(string $storeUrl, string $consumerKey, string $consumerSecret): array
+    {
+        try {
+            $response = $this->baseRequest($storeUrl, $consumerKey, $consumerSecret)
+                ->get('/orders', [
+                    'per_page' => 100,
+                ]);
+        } catch (ConnectionException $exception) {
+            throw new WooCommerceException('The WooCommerce store could not be reached.', 0, $exception);
+        }
+
+        if ($response->failed()) {
+            throw new WooCommerceException('The WooCommerce order preview could not be loaded.');
+        }
+
+        $orders = $response->json();
+
+        if (! is_array($orders)) {
+            throw new WooCommerceException('The WooCommerce order response was malformed.');
+        }
+
+        return $orders;
+    }
+
+    /**
      * Fetch WooCommerce variations for a parent variable product.
      *
      * @return array<int, array<string, mixed>>

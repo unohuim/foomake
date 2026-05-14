@@ -175,6 +175,38 @@ Do not introduce new enum values without updating this document.
 - Cancelling from `PACKED` appends reversing stock moves and preserves the original audit trail.
 - Older roadmap-era statuses such as `CONFIRMED` and `FULFILLED` are not valid statuses.
 
+### Sales Order External Status Mapping
+
+**Name:** SalesOrder external status mapping  
+**Storage location(s):** `sales_orders.external_status` (nullable string column), import preview rows, import store rows  
+**Mapped external values:**
+
+- `completed`
+- `cancelled`
+- `canceled`
+- `refunded`
+- `failed`
+- `processing`
+- `pending`
+- `pending payment`
+- `on-hold`
+- `on hold`
+- `draft`
+- `new`
+
+**Semantic meaning:**
+
+- `completed` maps to local `COMPLETED`
+- `cancelled`, `canceled`, `refunded`, and `failed` map to local `CANCELLED`
+- `processing`, `pending`, `pending payment`, `on-hold`, `on hold`, `draft`, and `new` map to local `OPEN`
+
+**Notes:**
+
+- `external_status` remains a nullable string and is not an enum or enum-backed cast.
+- External status sync is informational and duplicate-safe; local Sales Order status remains app-controlled.
+- Re-import may update only `external_status` and `external_status_synced_at`.
+- Unknown external statuses must fail safely during preview or import rather than silently mapping to the wrong local status.
+
 ### Task Status
 
 **Name:** Task status  

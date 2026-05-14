@@ -272,6 +272,29 @@ It is probably **wrong** for this system.
 - When contacts exist, the UI must always present exactly one primary contact for that customer.
 - Contacts are managed in-page with AJAX mutations and JSON validation feedback.
 
+### Sales Orders Index + Detail Split
+
+- `/sales/orders` must remain a shared configured CRUD/import/export page-module surface like Products and Customers.
+- The Sales Orders index is header-only:
+    - no order lines
+    - no workflow UI
+    - no `current_stage_tasks`
+- `/sales/orders/{salesOrder}` owns:
+    - order lines
+    - workflow/task UI
+    - editable line and workflow actions when the order lifecycle allows them
+- The Orders index must remain a mount shell that passes shared `data-crud-config` and `data-import-config` attributes to the page module.
+- Orders import and export must continue using the shared slide-over components; do not add Orders-specific import or export panel markup.
+- Orders export is line-level CSV:
+    - one CSV row per sales order line
+    - repeated order header fields on each row
+- Orders file-upload import groups CSV rows into unique orders for preview and store.
+- Orders import preview must render one compact record per grouped order.
+- Preview records show only:
+    - customer name as the left-aligned primary text
+    - order date and city as compact secondary metadata on the same row
+- Preview records must not display line item names, raw external IDs, or arbitrary external metadata.
+
 ### `/manufacturing/uom-conversions`
 
 This page follows the page-module + AJAX CRUD pattern and is split into two sections:

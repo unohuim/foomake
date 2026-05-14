@@ -15,6 +15,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property int $tenant_id
  * @property int $sales_order_id
  * @property int $item_id
+ * @property string|null $external_id
  * @property string $quantity
  * @property int $unit_price_cents
  * @property string $unit_price_currency_code
@@ -32,6 +33,7 @@ class SalesOrderLine extends Model
         'tenant_id',
         'sales_order_id',
         'item_id',
+        'external_id',
         'quantity',
         'unit_price_cents',
         'unit_price_currency_code',

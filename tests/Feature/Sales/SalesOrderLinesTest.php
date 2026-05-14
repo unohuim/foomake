@@ -628,11 +628,11 @@ it('13b. quantity edit after later item price changes still recalculates from th
         ->and($updateResponse->json('data.order.order_total_cents'))->toBe('750.000000');
 
     $indexResponse = $this->actingAs($user)
-        ->get(route('sales.orders.index'))
+        ->get(route('sales.orders.show', $order->id))
         ->assertOk();
 
-    $payload = ($this->extractPayload)($indexResponse, 'sales-orders-index-payload');
-    $orderPayload = collect($payload['orders'] ?? [])->firstWhere('id', $order->id);
+    $payload = ($this->extractPayload)($indexResponse, 'sales-orders-show-payload');
+    $orderPayload = $payload['order'] ?? [];
     $linePayload = collect($orderPayload['lines'] ?? [])->firstWhere('id', $lineId);
 
     expect($linePayload['unit_price_cents'] ?? null)->toBe(250)
@@ -978,7 +978,7 @@ it('26d. customer detail create order button is enabled when a sellable item exi
     expect($payload['orderItems'][0]['name'] ?? null)->toBe('Gift Box');
 });
 
-it('27. created lines appear in the sales orders index payload on readback', function () {
+it('27. created lines appear in the sales order detail payload on readback', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
     $customer = ($this->createCustomer)($tenant, ['name' => 'Retailer']);
@@ -997,11 +997,11 @@ it('27. created lines appear in the sales orders index payload on readback', fun
     $lineId = (int) $storeResponse->json('data.line.id');
 
     $indexResponse = $this->actingAs($user)
-        ->get(route('sales.orders.index'))
+        ->get(route('sales.orders.show', $order->id))
         ->assertOk();
 
-    $payload = ($this->extractPayload)($indexResponse, 'sales-orders-index-payload');
-    $orderPayload = collect($payload['orders'] ?? [])->firstWhere('id', $order->id);
+    $payload = ($this->extractPayload)($indexResponse, 'sales-orders-show-payload');
+    $orderPayload = $payload['order'] ?? [];
 
     expect($orderPayload['line_count'] ?? null)->toBe(1)
         ->and($orderPayload['lines'][0]['id'] ?? null)->toBe($lineId)

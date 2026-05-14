@@ -1,0 +1,64 @@
+name: Sales Order External CSV Import Export
+type: Domain Import Export Rule
+location:
+  - app/Http/Controllers/SalesOrderController.php
+  - app/Http/Requests/Sales/PreviewExternalSalesOrderImportRequest.php
+  - app/Http/Requests/Sales/ImportExternalSalesOrdersRequest.php
+  - app/Models/SalesOrder.php
+  - app/Models/SalesOrderLine.php
+  - database/migrations/2026_05_14_120000_add_external_identity_to_sales_orders_table.php
+  - database/migrations/2026_05_14_130000_add_external_id_to_sales_order_lines_table.php
+  - resources/js/pages/sales-orders-index.js
+  - resources/views/sales/orders/index.blade.php
+purpose: Document the line-level external CSV export contract, grouped file-upload preview/import behavior, tenant-scoped duplicate identity, and external status sync rules for Sales Orders.
+when_to_use:
+  - Exporting Sales Orders as external/import-compatible CSV
+  - Previewing Sales Orders from file-upload CSV rows before import
+  - Importing grouped external Sales Orders and Sales Order lines
+  - Re-importing existing external Sales Orders to refresh external sync fields
+when_not_to_use:
+  - Native editable Sales Order header forms
+  - Native Sales Order line create, update, or delete mutations on the detail page
+  - Inventory-impacting Sales Order workflow transitions
+rules:
+  - Sales Orders external identity is tenant-scoped normalized external_source plus exact trimmed external_id on sales_orders.
+  - Sales Order CSV export is line-level and emits exactly one CSV row per sales_order_line.
+  - Export repeats order header fields on every row and must not emit JSON-in-CSV.
+  - Export uses source-system identities only and must not emit app internal order or line IDs as import identities.
+  - Required CSV columns are external_source, order_external_id, order_date, customer_name, contact_name, city, status, external_status, line_external_id, product_external_id, product_name, quantity, and unit_price.
+  - File-upload preview groups rows into unique orders by tenant_id plus external_source plus order_external_id.
+  - File-upload preview renders one compact preview record per grouped order and keeps line rows internal to the grouped import payload.
+  - external_source is required for CSV import and every row in one CSV file must use the same external_source.
+  - Import creates one sales_orders row per grouped order and one sales_order_lines row per grouped CSV row.
+  - line_external_id, when present, stores source-system line identity on sales_order_lines.external_id and is never treated as the local primary key.
+  - product_external_id is source-system product identity used for tenant-scoped item matching on external_source plus external_id.
+  - Missing imported products are created as inactive sellable items and do not create fulfillment recipes.
+  - Imported Sales Orders create no stock moves.
+  - Re-import may update only external_status and external_status_synced_at on an existing Sales Order and must never change the local app-controlled Sales Order status.
+  - Duplicate preview and duplicate prevention are tenant-scoped on external_source plus order_external_id.
+  - External status mapping is canonical: completed maps to COMPLETED; cancelled, canceled, refunded, and failed map to CANCELLED; processing, pending, pending payment, on-hold, on hold, draft, and new map to OPEN.
+  - Unknown external statuses must fail safely with explicit preview or import validation errors.
+public_interface:
+  - sales.orders.export
+  - sales.orders.import.preview
+  - sales.orders.import.store
+  - external_source
+  - external_id
+  - external_status
+  - external_status_synced_at
+  - sales_order_lines.external_id
+example_usage: |
+  source rows:
+    external_source,order_external_id,order_date,customer_name,contact_name,city,status,external_status,line_external_id,product_external_id,product_name,quantity,unit_price
+    legacy_csv,SO-1001,2026-05-14,Ada Buyer,Jane Buyer,Toronto,OPEN,processing,LINE-1,SKU-2001,Imported Item,2.000000,15.00
+    legacy_csv,SO-1001,2026-05-14,Ada Buyer,Jane Buyer,Toronto,OPEN,processing,LINE-2,SKU-2002,Imported Item 2,1.000000,5.00
+
+  grouped preview row:
+    external_id: SO-1001
+    external_source: legacy_csv
+    date: 2026-05-14
+    customer.name: Ada Buyer
+    customer.city: Toronto
+    lines:
+      - external_id: LINE-1
+      - external_id: LINE-2

@@ -15,6 +15,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property int $tenant_id
  * @property int $customer_id
  * @property int|null $contact_id
+ * @property string|null $order_date
  * @property string $status
  */
 class SalesOrder extends Model
@@ -37,7 +38,20 @@ class SalesOrder extends Model
         'tenant_id',
         'customer_id',
         'contact_id',
+        'order_date',
         'status',
+        'external_source',
+        'external_id',
+        'external_status',
+        'external_status_synced_at',
+    ];
+
+    /**
+     * @var array<string, string>
+     */
+    protected $casts = [
+        'order_date' => 'date:Y-m-d',
+        'external_status_synced_at' => 'datetime',
     ];
 
     /**
