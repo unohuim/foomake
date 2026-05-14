@@ -77,7 +77,6 @@ const renderPreviewCardMarkup = (config) => {
     const previewDisplay = config.previewDisplay || {};
     const titleExpression = sanitizeExpression(previewDisplay.titleExpression, "row.name || '—'");
     const subtitleExpression = sanitizeExpression(previewDisplay.subtitleExpression);
-    const bodyExpression = sanitizeExpression(previewDisplay.bodyExpression);
 
     return `
         <article
@@ -88,16 +87,12 @@ const renderPreviewCardMarkup = (config) => {
         >
             <div class="flex min-h-10 items-center gap-3">
                 <input type="checkbox" class="shrink-0 rounded border-gray-300 text-blue-600 shadow-sm focus:ring-blue-500" x-model="row.selected" x-bind:disabled="row.is_duplicate">
-                <div class="min-w-0 flex-1 overflow-hidden">
-                    <p class="block truncate text-sm font-medium text-gray-900" x-bind:title="${titleExpression}" x-text="${titleExpression}"></p>
+                <div class="flex min-w-0 flex-1 items-center justify-between gap-3 overflow-hidden">
+                    <p class="min-w-0 flex-1 truncate text-sm font-medium text-gray-900" x-bind:title="${titleExpression}" x-text="${titleExpression}"></p>
                     ${subtitleExpression !== '' ? `
-                        <p class="mt-1 truncate text-xs text-gray-500" x-show="Boolean(${subtitleExpression})" x-bind:title="${subtitleExpression}" x-text="${subtitleExpression}"></p>
-                    ` : ''}
-                    ${bodyExpression !== '' ? `
-                        <p class="mt-1 truncate text-xs text-gray-500" x-show="Boolean(${bodyExpression})" x-text="${bodyExpression}"></p>
+                        <p class="shrink-0 truncate text-xs text-gray-500" x-show="Boolean(${subtitleExpression})" x-bind:title="${subtitleExpression}" x-text="${subtitleExpression}"></p>
                     ` : ''}
                 </div>
-                <span class="shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase leading-none" :class="row.is_duplicate ? 'bg-red-50 text-red-700' : (row.is_active ? 'bg-green-50 text-green-700' : 'bg-yellow-50 text-yellow-700')" x-text="previewStatusLabel(row)"></span>
             </div>
             <template x-if="rowValidationMessages(index).length > 0">
                 <div class="mt-2 space-y-1">
@@ -389,8 +384,7 @@ export function createImportModule(options = {}) {
     const emptyFileRowsMessage = messages.emptyFileRows || 'The selected CSV file does not contain any product rows.';
     const missingFileHeadersMessage = messages.missingFileHeaders || 'The selected CSV file is missing one or more required product headers.';
     const emptySelectionMessage = messages.emptySelection || '';
-    const hideDuplicatesByDefault = rowBehavior.hideDuplicatesByDefault === true;
-    const showDuplicatesDefault = !hideDuplicatesByDefault;
+    const showDuplicatesDefault = false;
     const submitSelectedVisibleRowsOnly = rowBehavior.submitSelectedVisibleRowsOnly !== false;
     const createFulfillmentRecipesDefault = Boolean(bulkOptions.create_fulfillment_recipes && bulkOptions.create_fulfillment_recipes.enabled)
         ? bulkOptions.create_fulfillment_recipes.default !== false

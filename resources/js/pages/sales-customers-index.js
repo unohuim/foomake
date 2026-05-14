@@ -60,13 +60,6 @@ export function mount(rootEl, payload) {
         formatted_address: [],
     });
 
-    const emptySlideOvers = () => ({
-        export: {
-            open: false,
-            title: 'Export Customers',
-        },
-    });
-
     const emptyForm = () => ({
         name: '',
         status: 'active',
@@ -92,6 +85,27 @@ export function mount(rootEl, payload) {
         country_code: customer.country_code || '',
         formatted_address: customer.formatted_address || '',
     });
+    const parseCustomerIsActive = (value) => {
+        if (value === null || value === undefined) {
+            return false;
+        }
+
+        if (typeof value === 'boolean') {
+            return value;
+        }
+
+        const normalized = String(value).trim().toLowerCase();
+
+        if (['1', 'true', 'yes', 'active'].includes(normalized)) {
+            return true;
+        }
+
+        if (['0', 'false', 'no', 'inactive', ''].includes(normalized)) {
+            return false;
+        }
+
+        return false;
+    };
     const importModule = createImportModule({
         config: importConfig,
         adapters: {
@@ -105,9 +119,11 @@ export function mount(rootEl, payload) {
                 const headers = rows[0].map((header) => header.trim());
                 const requiredHeaders = [
                     'external_id',
+                    'external_source',
                     'name',
                     'email',
                     'phone',
+                    'is_active',
                     'address_line_1',
                     'address_line_2',
                     'city',
@@ -146,7 +162,7 @@ export function mount(rootEl, payload) {
                         region: record.region || null,
                         postal_code: record.postal_code || null,
                         country_code: record.country_code || null,
-                        is_active: true,
+                        is_active: parseCustomerIsActive(record.is_active),
                         is_duplicate: false,
                         selected: true,
                     }));
@@ -155,7 +171,7 @@ export function mount(rootEl, payload) {
                 ...row,
                 selected: row.selected !== false,
                 external_source: row.external_source || '',
-                is_active: row.is_active !== false,
+                is_active: parseCustomerIsActive(row.is_active),
                 is_duplicate: Boolean(row.is_duplicate),
                 email: row.email || '',
                 phone: row.phone || '',
@@ -171,6 +187,7 @@ export function mount(rootEl, payload) {
                 name: row.name,
                 email: row.email || null,
                 phone: row.phone || null,
+                is_active: row.is_active,
                 address_line_1: row.address_line_1 || null,
                 address_line_2: row.address_line_2 || null,
                 city: row.city || null,
@@ -193,9 +210,9 @@ export function mount(rootEl, payload) {
     });
     importModule.mount(rootEl);
     const exportModule = createExportModule({
-        permissionKey: 'canExportCustomers',
-        unavailableMessage: 'Unable to export customers.',
+        config: crud,
     });
+    exportModule.mount(rootEl);
 
     Alpine.data('salesCustomersIndex', () => ({
         ...importModule,
@@ -214,7 +231,6 @@ export function mount(rootEl, payload) {
         sources: Array.isArray(importConfig.sources) && importConfig.sources.length > 0
             ? importConfig.sources
             : (safePayload.sources || []),
-        canExportCustomers: Boolean(crud.permissions?.showExport),
         canManageImports: Boolean(importConfig.permissions?.canManageImports ?? safePayload.canManageImports),
         canManageConnections: Boolean(importConfig.permissions?.canManageConnections ?? safePayload.canManageConnections),
         connectorsPageUrl: importConfig.connectorsPageUrl || safePayload.connectorsPageUrl || '',
@@ -229,7 +245,6 @@ export function mount(rootEl, payload) {
         isSubmitting: false,
         formMode: 'create',
         editingCustomerId: null,
-        slideOvers: emptySlideOvers(),
         form: emptyForm(),
         formErrors: emptyErrors(),
         generalError: '',
@@ -245,25 +260,8 @@ export function mount(rootEl, payload) {
         columnHeader(column) {
             return this.headers[column] || column;
         },
-        slideOverTitle(name) {
-            return this.slideOvers[name]?.title || '';
-        },
         isSortableColumn(column) {
             return this.sortable.includes(column);
-        },
-        openSlideOver(name) {
-            if (!this.slideOvers[name]) {
-                return;
-            }
-
-            this.slideOvers[name].open = true;
-        },
-        closeSlideOver(name) {
-            if (!this.slideOvers[name]) {
-                return;
-            }
-
-            this.slideOvers[name].open = false;
         },
         customerCellText(customer, column) {
             switch (column) {

@@ -1125,6 +1125,8 @@ it('36. customers crud config can enable export through shared labels and permis
 
     expect($config['labels']['exportTitle'] ?? null)->toBe('Export Customers')
         ->and($config['labels']['exportAriaLabel'] ?? null)->toBe('Export Customers')
+        ->and($config['labels']['exportCurrentOptionTitle'] ?? null)->toBe('Current filters and sort')
+        ->and($config['labels']['exportAllOptionTitle'] ?? null)->toBe('All records')
         ->and($config['permissions']['showExport'] ?? null)->toBeTrue();
 });
 
@@ -1141,8 +1143,10 @@ it('37. customers page module wires export through the shared crud renderer cont
 it('38. shared crud renderer owns the customers export toolbar button markup', function () {
     $rendererSource = file_get_contents(base_path('resources/js/lib/crud-page.js'));
     $customersBlade = file_get_contents(base_path('resources/views/sales/customers/index.blade.php'));
+    $exportModuleSource = file_get_contents(base_path('resources/js/lib/export-module.js'));
 
     expect($rendererSource)->toContain('data-crud-toolbar-export-button')
         ->and($customersBlade)->not->toContain('data-crud-toolbar-export-button')
-        ->and($customersBlade)->toContain('data-customers-export-panel');
+        ->and($customersBlade)->not->toContain('data-customers-export-panel')
+        ->and($exportModuleSource)->toContain('data-shared-export-panel');
 });

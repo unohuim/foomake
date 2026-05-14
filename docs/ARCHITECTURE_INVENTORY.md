@@ -1804,6 +1804,53 @@ Notes:
 
 ---
 
+### Export Slide-Over Pattern
+
+**Name:** Export Slide-Over Pattern  
+**Type:** UI Pattern  
+**Location:**  
+- `docs/architecture/ui/ExportSlideOverPattern.yaml`  
+- `resources/js/lib/export-module.js`  
+- `resources/js/pages/sales-products-index.js`  
+- `resources/js/pages/sales-customers-index.js`  
+- `resources/views/sales/products/index.blade.php`  
+- `resources/views/sales/customers/index.blade.php`  
+
+**Purpose:**  
+Provide a reusable config-driven export slide-over component that owns the full export UX and lifecycle, derives export requests from the shared CRUD contract, and preserves backend route authority.
+
+**When to Use:**  
+Shared export slide-overs that need identical structure and lifecycle across multiple CRUD resources while keeping export endpoints and CSV authority on the server.
+
+**When Not to Use:**  
+One-click downloads with no scope chooser, or workflows that require global JavaScript state or client-owned export authority.
+
+**Public Interface:**  
+- `data-crud-config`  
+- `resources/js/lib/export-module.js`  
+- `createExportModule({ config }).mount(hostComponent)`  
+
+**Key Rules:**  
+- The shared export component owns the export slide-over markup rather than relying on resource-specific Blade form markup.  
+- Resource pages may not render export slide-over form markup, export scope controls, export footer actions, or export validation/error markup directly.  
+- Resource pages may not own export lifecycle methods such as `openExportPanel`, `closeExportPanel`, `resetExportState`, `buildExportUrl`, or `submitExport` outside the shared export component.  
+- Export scope, descriptive copy, unavailable-message copy, submit/cancel labels, and visibility must come from the server-generated CRUD contract or safe shared defaults.  
+- Export URL construction remains config-driven and must not hardcode resource-specific endpoints in shared JavaScript.  
+
+**Example Usage:**  
+```js
+const crud = createGenericCrud(parseCrudConfig(rootEl));
+const exportModule = createExportModule({ config: crud });
+
+exportModule.mount(rootEl);
+```
+
+Notes:
+- Products and Customers now consume the same shared export component path and no longer keep export slide-over form markup in Blade.
+- Export differences are expressed through CRUD config labels, permissions, and endpoints rather than page-local Blade or page-local lifecycle code.
+
+---
+
 ### Row Actions Dropdown Pattern
 
 **Name:** Row Actions Dropdown Pattern  
@@ -2227,15 +2274,17 @@ Static pages, or domain workflows that exceed generic CRUD concerns.
 - The shared CRUD renderer owns toolbar layout, search input, create/import/export buttons, sticky desktop headers, record table/cards, empty states, and row action menus.  
 - Toolbar and page chrome remain outside the records scroller; the records/results area is the only scrollable region for CRUD list rendering.  
 - Desktop and mobile variants follow the same scroll-containment contract: header/toolbar stays fixed in the component shell while only records scroll.  
-- Shared export helpers may own export panel state, scope selection, config-driven URL building, and submission wiring while leaving Blade slide-over markup and page-owned permissions/messages local to the page module.  
+- Shared export helpers own export panel markup, open/close/reset lifecycle, scope selection, validation/error display, config-driven URL building, and export submission wiring without introducing global state.  
 - Shared import helpers own import panel markup, source-switch preview loading, local CSV caching, selection rules, duplicate visibility, preview row rendering, validation display, and import submit wiring without introducing global state.  
+- Resource pages may provide export differences only through the server-generated CRUD contract; export-specific copy, endpoint, and visibility must not be hardcoded in page-local Blade or page-local JavaScript.  
 - Resource pages may provide only declarative import config plus approved data adapters such as local-row parsing, preview-row normalization, import-row payload building, submit-body shaping, and import-success callbacks.  
+- Resource pages must not contain export slide-over form markup or page-local export UX overrides.  
 - Resource pages must not contain import slide-over form markup or page-local import UX overrides.  
 
 Notes:
-- Sales Products and Sales Customers both compose `resources/js/lib/export-module.js` for export slide-over behavior.
+- Sales Products and Sales Customers both mount the shared export component from `resources/js/lib/export-module.js`; neither page keeps export slide-over form markup in Blade.
 - Sales Products and Sales Customers both mount the shared import component from `resources/js/lib/import-module.js`; neither page keeps import slide-over form markup in Blade.
-- Sales Customers now exposes a full export surface through `sales.customers.export`, `endpoints.export`, page-local export Blade markup, and shared export-module wiring rather than a no-op export toolbar callback.
+- Sales Customers now exposes a full export surface through `sales.customers.export`, `endpoints.export`, and shared export-component wiring rather than a no-op export toolbar callback.
 
 **Example Usage:**  
 ```blade

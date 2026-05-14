@@ -122,6 +122,18 @@ beforeEach(function () {
 
         return is_array($config) ? $config : [];
     };
+    $this->extractImportConfig = function ($response): array {
+        preg_match("/data-import-config='([^']+)'/", $response->getContent(), $matches);
+
+        expect($matches)->toHaveKey(1);
+
+        $decoded = html_entity_decode($matches[1], ENT_QUOTES);
+        $config = json_decode($decoded, true);
+
+        expect(json_last_error())->toBe(JSON_ERROR_NONE);
+
+        return is_array($config) ? $config : [];
+    };
 
     $this->extractPayload = function ($response, string $payloadId): array {
         preg_match(
@@ -809,7 +821,9 @@ it('39. crud config includes export labels for the shared toolbar', function () 
     );
 
     expect($config['labels']['exportTitle'] ?? null)->toBe('Export Products')
-        ->and($config['labels']['exportAriaLabel'] ?? null)->toBe('Export Products');
+        ->and($config['labels']['exportAriaLabel'] ?? null)->toBe('Export Products')
+        ->and($config['labels']['exportCurrentOptionTitle'] ?? null)->toBe('Current filters and sort')
+        ->and($config['labels']['exportAllOptionTitle'] ?? null)->toBe('All records');
 });
 
 it('40. toolbar order is search export import add in the shared renderer', function () {
@@ -917,7 +931,19 @@ it('43. shared import component keeps file upload first and preserves the config
         ->and($source)->toContain('loadingMessage: loadingFilePreviewLabel');
 });
 
-it('44. products page renders an export slide over root', function () {
+it('43a. products import config keeps preview rows compact with name and price only', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermissions)($user, ['inventory-products-view', 'inventory-products-manage']);
+
+    $config = ($this->extractImportConfig)($this->actingAs($user)->get(route('sales.products.index'))->assertOk());
+    expect($config['previewDisplay']['titleExpression'] ?? null)->toBe("row.name || '—'")
+        ->and($config['previewDisplay']['subtitleExpression'] ?? null)->toBe("formattedProductPrice(row)")
+        ->and($config['previewDisplay']['bodyExpression'] ?? null)->toBe('');
+});
+
+it('44. products page no longer renders export slide over markup server side', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
 
@@ -926,28 +952,32 @@ it('44. products page renders an export slide over root', function () {
     $this->actingAs($user)
         ->get(route('sales.products.index'))
         ->assertOk()
-        ->assertSee('data-products-export-panel', false);
+        ->assertDontSee('data-products-export-panel', false)
+        ->assertDontSee('data-shared-export-panel', false);
 });
 
-it('45. export slide over includes current filters and all records options', function () {
-    $blade = file_get_contents(base_path('resources/views/sales/products/index.blade.php'));
+it('45. shared export component includes current filters and all records options', function () {
+    $source = file_get_contents(base_path('resources/js/lib/export-module.js'));
 
-    expect($blade)->toContain('Current filters and sort')
-        ->and($blade)->toContain('All records')
-        ->and($blade)->toContain('CSV');
+    expect($source)->toContain('Current filters and sort')
+        ->and($source)->toContain('All records')
+        ->and($source)->toContain('CSV');
 });
 
-it('46. import export slide over js is reusable and config driven', function () {
+it('46. export slide over js is reusable and config driven without page local export markup', function () {
     $source = file_get_contents(base_path('resources/js/pages/sales-products-index.js'));
+    $exportModuleSource = file_get_contents(base_path('resources/js/lib/export-module.js'));
     $importModuleSource = file_exists(base_path('resources/js/lib/import-module.js'))
         ? file_get_contents(base_path('resources/js/lib/import-module.js'))
         : '';
 
-    expect($source)->toContain('slideOvers:')
-        ->and($source)->toContain("export: {")
-        ->and($source)->toContain('openSlideOver(')
-        ->and($source)->toContain('closeSlideOver(')
+    expect($source)->not->toContain('slideOvers:')
+        ->and($source)->not->toContain('openSlideOver(')
+        ->and($source)->not->toContain('closeSlideOver(')
+        ->and($source)->toContain('exportModule.mount(rootEl);')
         ->and($source)->toContain('createImportModule(')
+        ->and($exportModuleSource)->toContain('data-shared-export-panel')
+        ->and($exportModuleSource)->toContain('mount(rootEl)')
         ->and($importModuleSource)->toContain('buildImportRowPayload(row, importSource)');
 });
 

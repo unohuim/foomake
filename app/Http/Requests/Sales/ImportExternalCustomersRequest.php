@@ -14,6 +14,30 @@ use Illuminate\Validation\Rule;
 class ImportExternalCustomersRequest extends FormRequest
 {
     /**
+     * Canonicalize file-upload active-state values before validation.
+     */
+    protected function prepareForValidation(): void
+    {
+        $rows = $this->input('rows');
+
+        if (! is_array($rows)) {
+            return;
+        }
+
+        $this->merge([
+            'rows' => array_map(function ($row) {
+                if (! is_array($row) || ! array_key_exists('is_active', $row)) {
+                    return $row;
+                }
+
+                $row['is_active'] = $this->canonicalIsActive($row['is_active']);
+
+                return $row;
+            }, $rows),
+        ]);
+    }
+
+    /**
      * Determine if the user is authorized to make this request.
      */
     public function authorize(): bool
@@ -60,6 +84,10 @@ class ImportExternalCustomersRequest extends FormRequest
                 'string',
                 'max:255',
             ],
+            'rows.*.is_active' => [
+                'nullable',
+                'boolean',
+            ],
             'rows.*.address_line_1' => [
                 'nullable',
                 'string',
@@ -103,5 +131,35 @@ class ImportExternalCustomersRequest extends FormRequest
             'message' => 'The given data was invalid.',
             'errors' => $validator->errors()->toArray(),
         ], 422));
+    }
+
+    /**
+     * Convert accepted boolean-like CSV values into canonical booleans.
+     */
+    private function canonicalIsActive(mixed $value): bool
+    {
+        if ($value === null) {
+            return false;
+        }
+
+        if (is_bool($value)) {
+            return $value;
+        }
+
+        if (! is_scalar($value)) {
+            return false;
+        }
+
+        $normalized = mb_strtolower(trim((string) $value));
+
+        if (in_array($normalized, ['true', '1', 'yes', 'active'], true)) {
+            return true;
+        }
+
+        if (in_array($normalized, ['false', '0', 'no', 'inactive', ''], true)) {
+            return false;
+        }
+
+        return false;
     }
 }

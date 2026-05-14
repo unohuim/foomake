@@ -234,6 +234,7 @@ it('8. customers page imports the shared export module', function () {
 it('9. customers page composes the shared export module', function () {
     expect($this->customersScript)
         ->toContain('const exportModule = createExportModule(')
+        ->and($this->customersScript)->toContain('exportModule.mount(rootEl);')
         ->and($this->customersScript)->toContain('...exportModule,');
 });
 
@@ -245,7 +246,9 @@ it('10. customers page wires export through openExportPanel on the shared crud r
 
 it('11. customers page no longer owns the export unavailable stub', function () {
     expect($this->customersScript)
-        ->not->toContain('handleExportUnavailable() {');
+        ->not->toContain('handleExportUnavailable() {')
+        ->and($this->customersScript)->not->toContain('slideOvers:')
+        ->and($this->customersScript)->not->toContain('slideOverTitle(');
 });
 
 it('12. customers page no longer owns export url construction directly', function () {
@@ -259,7 +262,7 @@ it('13. customers page no longer owns export submission directly', function () {
         ->and($this->customersScript)->not->toContain('window.location.assign(exportUrl);');
 });
 
-it('14. customers export blade renders an export slide over root', function () {
+it('14. customers page no longer renders export slide over markup server side', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
 
@@ -267,25 +270,26 @@ it('14. customers export blade renders an export slide over root', function () {
 
     ($this->getCustomersIndex)($user)
         ->assertOk()
-        ->assertSee('data-customers-export-panel', false);
+        ->assertDontSee('data-customers-export-panel', false)
+        ->assertDontSee('data-shared-export-panel', false);
 });
 
-it('15. customers export blade includes current filters and all records options', function () {
-    expect($this->customersBlade)
+it('15. shared export component includes current filters and all records options', function () {
+    expect($this->exportModuleSource)
         ->toContain('Current filters and sort')
-        ->and($this->customersBlade)->toContain('All records')
-        ->and($this->customersBlade)->toContain('x-model="exportScope"');
+        ->and($this->exportModuleSource)->toContain('All records')
+        ->and($this->exportModuleSource)->toContain('x-model="exportScope"');
 });
 
-it('16. customers export blade displays export errors', function () {
-    expect($this->customersBlade)
+it('16. shared export component displays export errors', function () {
+    expect($this->exportModuleSource)
         ->toContain('x-text="exportError"');
 });
 
-it('17. customers export blade binds submitting state on the export button', function () {
-    expect($this->customersBlade)
+it('17. shared export component binds submitting state on the export button', function () {
+    expect($this->exportModuleSource)
         ->toContain('x-bind:disabled="isExportSubmitting"')
-        ->and($this->customersBlade)->toContain("x-bind:class=\"isExportSubmitting ? 'cursor-not-allowed opacity-60' : ''\"");
+        ->and($this->exportModuleSource)->toContain("x-bind:class=\"isExportSubmitting ? 'cursor-not-allowed opacity-60' : ''\"");
 });
 
 it('18. customers export route responds with a csv attachment filename', function () {
@@ -308,17 +312,358 @@ it('19. customers export csv includes expected headers', function () {
     $header = ($this->csvHeader)(($this->exportCustomers)($user));
 
     expect($header)->toBe([
+        'external_id',
+        'external_source',
         'name',
         'email',
-        'status',
+        'phone',
+        'is_active',
         'address_line_1',
         'address_line_2',
         'city',
         'region',
         'postal_code',
         'country_code',
-        'formatted_address',
     ]);
+});
+
+it('19a. customers export csv headers are accepted by customers file upload import preview', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermissions)($user, ['sales-customers-manage', 'system-users-manage']);
+
+    $customer = ($this->createCustomer)($tenant, [
+        'name' => 'Round Trip Customer',
+        'status' => 'active',
+        'address_line_1' => '10 Export Lane',
+        'city' => 'Toronto',
+        'region' => 'ON',
+        'postal_code' => 'M5V1A1',
+        'country_code' => 'CA',
+    ]);
+    ($this->createCustomerContact)($tenant, $customer->id, [
+        'email' => 'roundtrip@example.test',
+        'phone' => '555-0105',
+    ]);
+
+    $rows = ($this->csvRows)(($this->exportCustomers)($user, ['scope' => 'all']));
+    $header = $rows[0];
+    $record = $rows[1];
+    $payload = array_combine($header, $record);
+
+    $this->actingAs($user)->postJson(route('sales.customers.import.preview'), [
+        'source' => 'file-upload',
+        'rows' => [$payload],
+    ])->assertOk()
+        ->assertJsonPath('data.source', 'file-upload')
+        ->assertJsonPath('data.rows.0.name', 'Round Trip Customer');
+});
+
+it('19b. customers export csv round trips active state through file upload preview', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermissions)($user, ['sales-customers-manage', 'system-users-manage']);
+
+    $activeCustomer = ($this->createCustomer)($tenant, [
+        'name' => 'Active Export Customer',
+        'status' => 'active',
+    ]);
+    ($this->createCustomerContact)($tenant, $activeCustomer->id, [
+        'email' => 'active-export@example.test',
+    ]);
+
+    $inactiveCustomer = ($this->createCustomer)($tenant, [
+        'name' => 'Inactive Export Customer',
+        'status' => 'inactive',
+    ]);
+    ($this->createCustomerContact)($tenant, $inactiveCustomer->id, [
+        'email' => 'inactive-export@example.test',
+    ]);
+
+    $records = ($this->csvRecords)(($this->exportCustomers)($user, ['scope' => 'all']));
+
+    expect(collect($records)->firstWhere('name', 'Active Export Customer')['is_active'] ?? null)->toBe('1')
+        ->and(collect($records)->firstWhere('name', 'Inactive Export Customer')['is_active'] ?? null)->toBe('0');
+
+    $response = $this->actingAs($user)->postJson(route('sales.customers.import.preview'), [
+        'source' => 'file-upload',
+        'rows' => $records,
+    ])->assertOk();
+
+    $previewRows = collect($response->json('data.rows', []));
+
+    expect($previewRows->firstWhere('name', 'Active Export Customer')['is_active'] ?? null)->toBeTrue()
+        ->and($previewRows->firstWhere('name', 'Active Export Customer')['status_label'] ?? null)->toBe('Active')
+        ->and($previewRows->firstWhere('name', 'Inactive Export Customer')['is_active'] ?? null)->toBeFalse()
+        ->and($previewRows->firstWhere('name', 'Inactive Export Customer')['status_label'] ?? null)->toBe('Inactive');
+});
+
+it('19c. customers export csv re import preview flags duplicate existing rows by external source and external id', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermissions)($user, ['sales-customers-manage', 'system-users-manage']);
+
+    $customer = ($this->createCustomer)($tenant, [
+        'name' => 'Duplicate Export Customer',
+        'status' => 'active',
+    ]);
+    ($this->createCustomerContact)($tenant, $customer->id, [
+        'email' => 'duplicate-export@example.test',
+    ]);
+
+    \App\Models\ExternalCustomerMapping::query()->create([
+        'tenant_id' => $tenant->id,
+        'customer_id' => $customer->id,
+        'source' => 'woocommerce',
+        'external_customer_id' => 'woo-customer-1001',
+    ]);
+
+    $records = ($this->csvRecords)(($this->exportCustomers)($user, ['scope' => 'all']));
+
+    expect(collect($records)->firstWhere('name', 'Duplicate Export Customer')['external_source'] ?? null)->toBe('woocommerce')
+        ->and(collect($records)->firstWhere('name', 'Duplicate Export Customer')['external_id'] ?? null)->toBe('woo-customer-1001');
+
+    $this->actingAs($user)->postJson(route('sales.customers.import.preview'), [
+        'source' => 'file-upload',
+        'rows' => $records,
+    ])->assertOk()
+        ->assertJsonPath('data.rows.0.is_duplicate', true)
+        ->assertJsonPath('data.rows.0.selected', false)
+        ->assertJsonPath('data.rows.0.duplicate_reason', 'A customer with the same external source and external ID already exists.');
+});
+
+it('19d. customers export csv re import preview flags duplicate existing rows by canonical email fallback when no external source is present', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermissions)($user, ['sales-customers-manage', 'system-users-manage']);
+
+    $customer = ($this->createCustomer)($tenant, [
+        'name' => 'Email Duplicate Export Customer',
+        'status' => 'active',
+    ]);
+    ($this->createCustomerContact)($tenant, $customer->id, [
+        'email' => 'email-duplicate@example.test',
+    ]);
+
+    $records = ($this->csvRecords)(($this->exportCustomers)($user, ['scope' => 'all']));
+
+    expect(collect($records)->firstWhere('name', 'Email Duplicate Export Customer')['external_source'] ?? null)->toBe('');
+
+    $this->actingAs($user)->postJson(route('sales.customers.import.preview'), [
+        'source' => 'file-upload',
+        'rows' => $records,
+    ])->assertOk()
+        ->assertJsonPath('data.rows.0.is_duplicate', true)
+        ->assertJsonPath('data.rows.0.selected', false)
+        ->assertJsonPath('data.rows.0.duplicate_reason', 'A customer with the same email already exists.');
+});
+
+it('19e. customers file upload preview parses canonical is_active string variants explicitly', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermissions)($user, ['sales-customers-manage', 'system-users-manage']);
+
+    $rows = [
+        [
+            'external_id' => 'csv-active-1',
+            'external_source' => 'file-upload',
+            'name' => 'CSV One',
+            'email' => 'csv-one@example.test',
+            'phone' => null,
+            'is_active' => '1',
+            'address_line_1' => null,
+            'address_line_2' => null,
+            'city' => null,
+            'region' => null,
+            'postal_code' => null,
+            'country_code' => 'CA',
+        ],
+        [
+            'external_id' => 'csv-inactive-0',
+            'external_source' => 'file-upload',
+            'name' => 'CSV Zero',
+            'email' => 'csv-zero@example.test',
+            'phone' => null,
+            'is_active' => '0',
+            'address_line_1' => null,
+            'address_line_2' => null,
+            'city' => null,
+            'region' => null,
+            'postal_code' => null,
+            'country_code' => 'CA',
+        ],
+        [
+            'external_id' => 'csv-active-true',
+            'external_source' => 'file-upload',
+            'name' => 'CSV True',
+            'email' => 'csv-true@example.test',
+            'phone' => null,
+            'is_active' => 'true',
+            'address_line_1' => null,
+            'address_line_2' => null,
+            'city' => null,
+            'region' => null,
+            'postal_code' => null,
+            'country_code' => 'CA',
+        ],
+        [
+            'external_id' => 'csv-inactive-false',
+            'external_source' => 'file-upload',
+            'name' => 'CSV False',
+            'email' => 'csv-false@example.test',
+            'phone' => null,
+            'is_active' => 'false',
+            'address_line_1' => null,
+            'address_line_2' => null,
+            'city' => null,
+            'region' => null,
+            'postal_code' => null,
+            'country_code' => 'CA',
+        ],
+        [
+            'external_id' => 'csv-active-yes',
+            'external_source' => 'file-upload',
+            'name' => 'CSV Yes',
+            'email' => 'csv-yes@example.test',
+            'phone' => null,
+            'is_active' => 'yes',
+            'address_line_1' => null,
+            'address_line_2' => null,
+            'city' => null,
+            'region' => null,
+            'postal_code' => null,
+            'country_code' => 'CA',
+        ],
+        [
+            'external_id' => 'csv-inactive-no',
+            'external_source' => 'file-upload',
+            'name' => 'CSV No',
+            'email' => 'csv-no@example.test',
+            'phone' => null,
+            'is_active' => 'no',
+            'address_line_1' => null,
+            'address_line_2' => null,
+            'city' => null,
+            'region' => null,
+            'postal_code' => null,
+            'country_code' => 'CA',
+        ],
+        [
+            'external_id' => 'csv-active-active',
+            'external_source' => 'file-upload',
+            'name' => 'CSV Active',
+            'email' => 'csv-active@example.test',
+            'phone' => null,
+            'is_active' => 'active',
+            'address_line_1' => null,
+            'address_line_2' => null,
+            'city' => null,
+            'region' => null,
+            'postal_code' => null,
+            'country_code' => 'CA',
+        ],
+        [
+            'external_id' => 'csv-inactive-inactive',
+            'external_source' => 'file-upload',
+            'name' => 'CSV Inactive',
+            'email' => 'csv-inactive@example.test',
+            'phone' => null,
+            'is_active' => 'inactive',
+            'address_line_1' => null,
+            'address_line_2' => null,
+            'city' => null,
+            'region' => null,
+            'postal_code' => null,
+            'country_code' => 'CA',
+        ],
+    ];
+
+    $response = $this->actingAs($user)->postJson(route('sales.customers.import.preview'), [
+        'source' => 'file-upload',
+        'rows' => $rows,
+    ])->assertOk();
+
+    $previewRows = collect($response->json('data.rows', []));
+
+    expect($previewRows->firstWhere('name', 'CSV One')['is_active'] ?? null)->toBeTrue()
+        ->and($previewRows->firstWhere('name', 'CSV Zero')['is_active'] ?? null)->toBeFalse()
+        ->and($previewRows->firstWhere('name', 'CSV True')['is_active'] ?? null)->toBeTrue()
+        ->and($previewRows->firstWhere('name', 'CSV False')['is_active'] ?? null)->toBeFalse()
+        ->and($previewRows->firstWhere('name', 'CSV Yes')['is_active'] ?? null)->toBeTrue()
+        ->and($previewRows->firstWhere('name', 'CSV No')['is_active'] ?? null)->toBeFalse()
+        ->and($previewRows->firstWhere('name', 'CSV Active')['is_active'] ?? null)->toBeTrue()
+        ->and($previewRows->firstWhere('name', 'CSV Inactive')['is_active'] ?? null)->toBeFalse()
+        ->and($previewRows->firstWhere('name', 'CSV Inactive')['status_label'] ?? null)->toBe('Inactive');
+
+    $this->actingAs($user)->postJson(route('sales.customers.import.preview'), [
+        'source' => 'file-upload',
+        'rows' => [[
+            'external_id' => 'csv-empty-active',
+            'external_source' => 'file-upload',
+            'name' => 'CSV Empty',
+            'email' => 'csv-empty@example.test',
+            'phone' => null,
+            'is_active' => '',
+            'address_line_1' => null,
+            'address_line_2' => null,
+            'city' => null,
+            'region' => null,
+            'postal_code' => null,
+            'country_code' => 'CA',
+        ], [
+            'external_id' => 'csv-null-active',
+            'external_source' => 'file-upload',
+            'name' => 'CSV Null',
+            'email' => 'csv-null@example.test',
+            'phone' => null,
+            'is_active' => null,
+            'address_line_1' => null,
+            'address_line_2' => null,
+            'city' => null,
+            'region' => null,
+            'postal_code' => null,
+            'country_code' => 'CA',
+        ]],
+    ])->assertOk()
+        ->assertJsonPath('data.rows.0.is_active', false)
+        ->assertJsonPath('data.rows.1.is_active', false);
+});
+
+it('19f. customers file upload preview accepts the shared component payload shape with boolean is_active and nullable optional fields', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermissions)($user, ['sales-customers-manage', 'system-users-manage']);
+
+    $response = $this->actingAs($user)->postJson(route('sales.customers.import.preview'), [
+        'source' => 'file-upload',
+        'rows' => [[
+            'external_id' => 'browser-payload-customer-1',
+            'external_source' => '',
+            'name' => 'Browser Payload Customer',
+            'email' => 'browser-payload@example.test',
+            'phone' => null,
+            'is_active' => false,
+            'address_line_1' => null,
+            'address_line_2' => null,
+            'city' => null,
+            'region' => null,
+            'postal_code' => null,
+            'country_code' => 'CA',
+            'is_duplicate' => false,
+            'selected' => true,
+        ]],
+    ])->assertOk();
+
+    $previewRows = collect($response->json('data.rows', []));
+
+    expect($previewRows->firstWhere('name', 'Browser Payload Customer')['is_active'] ?? null)->toBeFalse()
+        ->and($previewRows->firstWhere('name', 'Browser Payload Customer')['status_label'] ?? null)->toBe('Inactive');
 });
 
 it('20. customers export current filters uses the current search text', function () {

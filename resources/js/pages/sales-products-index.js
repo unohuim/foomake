@@ -69,13 +69,6 @@ export function mount(rootEl, payload) {
         default_price_amount: '',
     });
 
-    const emptySlideOvers = () => ({
-        export: {
-            open: false,
-            title: 'Export Products',
-        },
-    });
-
     const importModule = createImportModule({
         config: importConfig,
         callbacks: {
@@ -88,9 +81,9 @@ export function mount(rootEl, payload) {
     });
     importModule.mount(rootEl);
     const exportModule = createExportModule({
-        permissionKey: 'canExportProducts',
-        unavailableMessage: 'Unable to export products.',
+        config: crud,
     });
+    exportModule.mount(rootEl);
 
     Alpine.data('salesProductsIndex', () => ({
         ...importModule,
@@ -111,7 +104,6 @@ export function mount(rootEl, payload) {
         navigationStateUrl: safePayload.navigationStateUrl || '',
         csrfToken: safePayload.csrfToken || '',
         tenantCurrency: safePayload.tenantCurrency || '',
-        canExportProducts: Boolean(crud.permissions?.showExport),
         canManageImports: Boolean(importConfig.permissions?.canManageImports ?? safePayload.canManageImports),
         canManageProducts: Boolean(safePayload.canManageProducts),
         canManageConnections: Boolean(importConfig.permissions?.canManageConnections ?? safePayload.canManageConnections),
@@ -123,7 +115,6 @@ export function mount(rootEl, payload) {
             column: 'name',
             direction: 'desc',
         },
-        slideOvers: emptySlideOvers(),
         isCreatePanelOpen: false,
         panelMode: 'create',
         editingProductId: null,
@@ -253,23 +244,6 @@ export function mount(rootEl, payload) {
                     ? errors.default_price_currency_code
                     : [],
             };
-        },
-        slideOverTitle(name) {
-            return this.slideOvers[name]?.title || '';
-        },
-        openSlideOver(name) {
-            if (!this.slideOvers[name]) {
-                return;
-            }
-
-            this.slideOvers[name].open = true;
-        },
-        closeSlideOver(name) {
-            if (!this.slideOvers[name]) {
-                return;
-            }
-
-            this.slideOvers[name].open = false;
         },
         openCreatePanel() {
             if (!this.canManageProducts) {

@@ -119,7 +119,7 @@ class CustomerController extends Controller
         $direction = $scope === 'all'
             ? 'asc'
             : (string) ($validated['direction'] ?? 'asc');
-        $customers = $this->customersQuery($search, $sortColumn, $direction)->get();
+        $customers = $this->customersQuery($search, $sortColumn, $direction, true)->get();
 
         return response()->streamDownload(function () use ($customers): void {
             $handle = fopen('php://output', 'wb');
@@ -155,7 +155,11 @@ class CustomerController extends Controller
                 'data' => [
                     'source' => $source,
                     'is_connected' => true,
-                    'rows' => $request->validated('rows', []),
+                    'rows' => $this->annotateDuplicatePreviewRows(
+                        (int) $request->user()->tenant_id,
+                        $request->validated('rows', []),
+                        null
+                    ),
                 ],
             ]);
         }
@@ -184,7 +188,7 @@ class CustomerController extends Controller
             'data' => [
                 'source' => $source,
                 'is_connected' => true,
-                'rows' => $rows,
+                'rows' => $this->annotateDuplicatePreviewRows((int) $request->user()->tenant_id, $rows, $source),
             ],
         ]);
     }
@@ -394,11 +398,14 @@ class CustomerController extends Controller
     /**
      * Build the filtered and sorted customers query shared by list and export.
      */
-    private function customersQuery(string $search, string $sortColumn, string $direction)
+    private function customersQuery(string $search, string $sortColumn, string $direction, bool $includeInactive = false)
     {
         $query = Customer::query()
-            ->with('primaryContact')
-            ->where('status', Customer::STATUS_ACTIVE);
+            ->with('primaryContact');
+
+        if (! $includeInactive) {
+            $query->where('status', Customer::STATUS_ACTIVE);
+        }
 
         if ($search !== '') {
             $query->where(function ($builder) use ($search): void {
@@ -437,16 +444,18 @@ class CustomerController extends Controller
     private function customerExportHeaders(): array
     {
         return [
+            'external_id',
+            'external_source',
             'name',
             'email',
-            'status',
+            'phone',
+            'is_active',
             'address_line_1',
             'address_line_2',
             'city',
             'region',
             'postal_code',
             'country_code',
-            'formatted_address',
         ];
     }
 
@@ -457,17 +466,25 @@ class CustomerController extends Controller
      */
     private function customerExportRow(Customer $customer): array
     {
+        $mapping = ExternalCustomerMapping::query()
+            ->where('tenant_id', $customer->tenant_id)
+            ->where('customer_id', $customer->id)
+            ->orderBy('id')
+            ->first();
+
         return [
+            $mapping?->external_customer_id ?? (string) $customer->id,
+            $mapping?->source ?? '',
             $customer->name,
             $customer->primaryContact?->email,
-            $customer->status,
+            $customer->primaryContact?->phone,
+            $customer->status === Customer::STATUS_ACTIVE ? '1' : '0',
             $customer->address_line_1,
             $customer->address_line_2,
             $customer->city,
             $customer->region,
             $customer->postal_code,
             $customer->country_code,
-            $customer->formatted_address,
         ];
     }
 
@@ -520,6 +537,189 @@ class CustomerController extends Controller
         }
 
         return $customer;
+    }
+
+    /**
+     * Annotate preview rows with tenant-scoped duplicate metadata.
+     *
+     * @param  array<int, array<string, mixed>>  $rows
+     * @return array<int, array<string, mixed>>
+     */
+    private function annotateDuplicatePreviewRows(int $tenantId, array $rows, ?string $defaultSource): array
+    {
+        $duplicateKeys = collect($rows)
+            ->map(function (array $row) use ($defaultSource): ?string {
+                $externalSource = $this->normalizedExternalSource($row['external_source'] ?? null)
+                    ?? $this->normalizedExternalSource($defaultSource);
+                $externalId = $this->normalizedExternalId($row['external_id'] ?? null);
+
+                if ($externalSource === null || $externalId === null) {
+                    return null;
+                }
+
+                return $externalSource . '|' . $externalId;
+            })
+            ->filter()
+            ->values();
+        $emails = collect($rows)
+            ->map(fn (array $row): ?string => $this->normalizedEmail($row['email'] ?? null))
+            ->filter()
+            ->values();
+
+        $existingKeys = collect();
+        $existingEmails = collect();
+
+        if ($duplicateKeys->isNotEmpty()) {
+            $existingKeys = ExternalCustomerMapping::query()
+                ->where('tenant_id', $tenantId)
+                ->get(['source', 'external_customer_id'])
+                ->map(function (ExternalCustomerMapping $mapping): ?string {
+                    $externalSource = $this->normalizedExternalSource($mapping->source);
+                    $externalId = $this->normalizedExternalId($mapping->external_customer_id);
+
+                    if ($externalSource === null || $externalId === null) {
+                        return null;
+                    }
+
+                    return $externalSource . '|' . $externalId;
+                })
+                ->filter(fn (?string $key): bool => $key !== null && $duplicateKeys->contains($key))
+                ->flip();
+        }
+
+        if ($emails->isNotEmpty()) {
+            $existingEmails = CustomerContact::query()
+                ->where('tenant_id', $tenantId)
+                ->whereNotNull('email')
+                ->get(['email'])
+                ->map(fn (CustomerContact $contact): ?string => $this->normalizedEmail($contact->email))
+                ->filter(fn (?string $email): bool => $email !== null && $emails->contains($email))
+                ->flip();
+        }
+
+        return array_map(function (array $row) use ($defaultSource, $existingKeys, $existingEmails): array {
+            $externalSource = $this->normalizedExternalSource($row['external_source'] ?? null)
+                ?? $this->normalizedExternalSource($defaultSource);
+            $externalId = $this->normalizedExternalId($row['external_id'] ?? null);
+            $duplicateKey = $externalSource !== null && $externalId !== null
+                ? $externalSource . '|' . $externalId
+                : null;
+            $duplicateReason = '';
+            $isDuplicate = false;
+
+            if ($duplicateKey !== null && $existingKeys->has($duplicateKey)) {
+                $isDuplicate = true;
+                $duplicateReason = 'A customer with the same external source and external ID already exists.';
+            } else {
+                $email = $this->normalizedEmail($row['email'] ?? null);
+
+                if ($email !== null && $existingEmails->has($email)) {
+                    $isDuplicate = true;
+                    $duplicateReason = 'A customer with the same email already exists.';
+                }
+            }
+
+            return $this->annotatedPreviewRow($row, $defaultSource, $isDuplicate, $duplicateReason);
+        }, $rows);
+    }
+
+    /**
+     * Apply normalized preview metadata to a customer preview row.
+     *
+     * @param  array<string, mixed>  $row
+     * @return array<string, mixed>
+     */
+    private function annotatedPreviewRow(
+        array $row,
+        ?string $defaultSource,
+        bool $isDuplicate,
+        string $duplicateReason = ''
+    ): array
+    {
+        $externalSource = $this->normalizedExternalSource($row['external_source'] ?? null)
+            ?? $this->normalizedExternalSource($defaultSource);
+        $isActive = $this->parsedImportedIsActive($row['is_active'] ?? null);
+
+        return array_merge($row, [
+            'external_source' => $externalSource ?? '',
+            'is_active' => $isActive,
+            'is_duplicate' => $isDuplicate,
+            'duplicate_reason' => $isDuplicate ? $duplicateReason : '',
+            'selected' => array_key_exists('selected', $row) ? (bool) $row['selected'] && ! $isDuplicate : ! $isDuplicate,
+            'status_label' => $isActive ? 'Active' : 'Inactive',
+        ]);
+    }
+
+    /**
+     * Normalize an external source value for exact duplicate matching.
+     */
+    private function normalizedExternalSource(mixed $value): ?string
+    {
+        if (! is_string($value)) {
+            return null;
+        }
+
+        $normalized = mb_strtolower(trim($value));
+
+        return $normalized === '' ? null : $normalized;
+    }
+
+    /**
+     * Normalize an external ID value for exact duplicate matching.
+     */
+    private function normalizedExternalId(mixed $value): ?string
+    {
+        if (! is_scalar($value)) {
+            return null;
+        }
+
+        $normalized = trim((string) $value);
+
+        return $normalized === '' ? null : $normalized;
+    }
+
+    /**
+     * Normalize an email value for duplicate matching.
+     */
+    private function normalizedEmail(mixed $value): ?string
+    {
+        if (! is_scalar($value)) {
+            return null;
+        }
+
+        $normalized = mb_strtolower(trim((string) $value));
+
+        return $normalized === '' ? null : $normalized;
+    }
+
+    /**
+     * Parse imported customer active-state values using the canonical CSV contract.
+     */
+    private function parsedImportedIsActive(mixed $value): bool
+    {
+        if ($value === null) {
+            return false;
+        }
+
+        if (is_bool($value)) {
+            return $value;
+        }
+
+        if (! is_scalar($value)) {
+            return false;
+        }
+
+        $normalized = mb_strtolower(trim((string) $value));
+
+        if (in_array($normalized, ['1', 'true', 'yes', 'active'], true)) {
+            return true;
+        }
+
+        if (in_array($normalized, ['0', 'false', 'no', 'inactive', ''], true)) {
+            return false;
+        }
+
+        return false;
     }
 
     /**
@@ -898,6 +1098,16 @@ class CustomerController extends Controller
                 'searchPlaceholder' => 'Search customers',
                 'exportTitle' => 'Export Customers',
                 'exportAriaLabel' => 'Export Customers',
+                'exportDescription' => 'Export customers as CSV using the current customers list filters and sort when needed.',
+                'exportFormatLabel' => 'CSV',
+                'exportScopeLegend' => 'Export Scope',
+                'exportCurrentOptionTitle' => 'Current filters and sort',
+                'exportCurrentOptionDescription' => 'Uses the current search text and sort order from the customers list.',
+                'exportAllOptionTitle' => 'All records',
+                'exportAllOptionDescription' => 'Exports every active customer in the current tenant.',
+                'exportCancelLabel' => 'Cancel',
+                'exportSubmitLabel' => 'Export CSV',
+                'exportUnavailableMessage' => 'Unable to export customers.',
                 'importTitle' => 'Import Customers',
                 'importAriaLabel' => 'Import Customers',
                 'createTitle' => 'Add New Customer',
@@ -999,8 +1209,8 @@ class CustomerController extends Controller
             ],
             'previewDisplay' => [
                 'titleExpression' => "row.name || '—'",
-                'subtitleExpression' => "row.email || row.external_id || ''",
-                'bodyExpression' => "[row.address_line_1, row.address_line_2, row.city, row.region, row.postal_code, row.country_code].filter(Boolean).join(', ') || '—'",
+                'subtitleExpression' => "row.city || '—'",
+                'bodyExpression' => '',
                 'searchExpressions' => [
                     'row.name',
                     'row.email',

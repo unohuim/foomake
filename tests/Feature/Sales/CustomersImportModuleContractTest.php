@@ -230,8 +230,44 @@ it('11. customers import config exposes preview display expressions for the shar
     $config = ($this->extractImportConfig)(($this->getCustomersIndex)($user));
 
     expect($config['previewDisplay']['titleExpression'] ?? null)->toBe("row.name || '—'")
-        ->and($config['previewDisplay']['subtitleExpression'] ?? null)->toBe("row.email || row.external_id || ''")
-        ->and($config['previewDisplay']['bodyExpression'] ?? null)->toContain('row.address_line_1');
+        ->and($config['previewDisplay']['subtitleExpression'] ?? null)->toBe("row.city || '—'")
+        ->and($config['previewDisplay']['bodyExpression'] ?? null)->toBe('');
+});
+
+it('11a. customers import config preview display relies on canonical is_active state', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermissions)($user, ['sales-customers-manage', 'system-users-manage']);
+
+    $config = ($this->extractImportConfig)(($this->getCustomersIndex)($user));
+
+    expect(json_encode($config['previewDisplay'] ?? []))->not->toContain('status');
+});
+
+it('11b. customers import config search/display still includes external source and external id for duplicate-aware previews', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermissions)($user, ['sales-customers-manage', 'system-users-manage']);
+
+    $config = ($this->extractImportConfig)(($this->getCustomersIndex)($user));
+
+    expect($config['previewDisplay']['subtitleExpression'] ?? null)->toBe("row.city || '—'")
+        ->and($config['previewDisplay']['searchExpressions'] ?? [])->toContain('row.external_id')
+        ->and($config['previewDisplay']['searchExpressions'] ?? [])->toContain('row.external_source');
+});
+
+it('11c. customers import config preview rows stay compact and do not expose contact or address detail fields', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermissions)($user, ['sales-customers-manage', 'system-users-manage']);
+
+    $config = ($this->extractImportConfig)(($this->getCustomersIndex)($user));
+    expect($config['previewDisplay']['titleExpression'] ?? null)->toBe("row.name || '—'")
+        ->and($config['previewDisplay']['subtitleExpression'] ?? null)->toBe("row.city || '—'")
+        ->and($config['previewDisplay']['bodyExpression'] ?? null)->toBe('');
 });
 
 it('12. customers import config exposes customer specific messages through config', function () {
@@ -264,6 +300,46 @@ it('15. customers page module composes the shared import module with adapters', 
         ->and($this->customersPageModuleSource)->toContain('normalizePreviewRow:')
         ->and($this->customersPageModuleSource)->toContain('buildImportRowPayload:')
         ->and($this->customersPageModuleSource)->toContain('buildSubmitBody:');
+});
+
+it('15a. customers local csv parser accepts export-compatible headers and canonical is_active', function () {
+    expect($this->customersPageModuleSource)
+        ->toContain("const requiredHeaders = [")
+        ->and($this->customersPageModuleSource)->toContain("'external_id'")
+        ->and($this->customersPageModuleSource)->toContain("'external_source'")
+        ->and($this->customersPageModuleSource)->toContain("'phone'")
+        ->and($this->customersPageModuleSource)->toContain("'is_active'")
+        ->and($this->customersPageModuleSource)->not->toContain("'status'")
+        ->and($this->customersPageModuleSource)->toContain('const parseCustomerIsActive = (value) => {')
+        ->and($this->customersPageModuleSource)->toContain("['1', 'true', 'yes', 'active'].includes(normalized)")
+        ->and($this->customersPageModuleSource)->toContain("['0', 'false', 'no', 'inactive', ''].includes(normalized)")
+        ->and($this->customersPageModuleSource)->not->toContain("is_active: ['1', 'true', 'yes'].includes(")
+        ->and($this->customersPageModuleSource)->not->toContain('is_active: row.is_active !== false');
+});
+
+it('15b. customers import payload builder no longer relies on stale status field', function () {
+    expect($this->customersPageModuleSource)
+        ->toContain('is_active: row.is_active')
+        ->and($this->customersPageModuleSource)->not->toContain('status: row.status')
+        ->and($this->customersPageModuleSource)->not->toContain('status: defaultPayload.status');
+});
+
+it('15c. customers file upload adapter keeps external source and external id available for duplicate matching', function () {
+    expect($this->customersPageModuleSource)
+        ->toContain('external_id: record.external_id !== \'\'')
+        ->and($this->customersPageModuleSource)->toContain('external_source: record.external_source || \'\'')
+        ->and($this->customersPageModuleSource)->toContain('is_duplicate: false');
+});
+
+it('15d. customers preview request validation accepts canonical is_active rows for file uploads', function () {
+    $requestSource = file_get_contents(base_path('app/Http/Requests/Sales/PreviewExternalCustomerImportRequest.php'));
+
+    expect($requestSource)
+        ->toContain("'rows.*.is_active'")
+        ->and($requestSource)->toContain("'nullable'")
+        ->and($requestSource)->toContain('prepareForValidation')
+        ->and($requestSource)->toContain("'active'")
+        ->and($requestSource)->toContain("'inactive'");
 });
 
 it('16. customers page module mounts the shared import ui', function () {
@@ -320,7 +396,19 @@ it('23. shared import module supports config driven preview display expressions'
         ->toContain('const previewDisplay = config.previewDisplay || {};')
         ->and($this->importModuleSource)->toContain('titleExpression')
         ->and($this->importModuleSource)->toContain('subtitleExpression')
-        ->and($this->importModuleSource)->toContain('bodyExpression');
+        ->and($this->importModuleSource)->not->toContain('bodyExpression');
+});
+
+it('23a. shared import module preview renderer stays compact and single line', function () {
+    expect($this->importModuleSource)
+        ->toContain('items-center justify-between gap-3')
+        ->and($this->importModuleSource)->not->toContain('rounded-full px-2.5 py-1')
+        ->and($this->importModuleSource)->not->toContain("mt-1 truncate text-xs text-gray-500");
+});
+
+it('23b. shared import module always hides duplicate rows by default', function () {
+    expect($this->importModuleSource)
+        ->toContain('const showDuplicatesDefault = false;');
 });
 
 it('24. customers and products now mount the same shared import component path', function () {

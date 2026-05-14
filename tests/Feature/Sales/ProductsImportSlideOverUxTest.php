@@ -45,7 +45,6 @@ beforeEach(function () {
 
     $this->bladeSource = file_get_contents(base_path('resources/views/sales/products/index.blade.php'));
     $this->pageModuleSource = file_get_contents(base_path('resources/js/pages/sales-products-index.js'));
-    $this->architectureSource = file_get_contents(base_path('docs/architecture/ui/ImportSlideOverPreviewPattern.yaml'));
     $this->importModulePath = base_path('resources/js/lib/import-module.js');
     $this->importModuleSource = file_exists($this->importModulePath)
         ? file_get_contents($this->importModulePath)
@@ -155,6 +154,16 @@ it('15. shared import module renders preview cards', function () {
         ->and($this->importModuleSource)->toContain('rowValidationMessages(index)');
 });
 
+it('15a. shared import module keeps preview rows to a single compact line', function () {
+    expect($this->importModuleSource)
+        ->toContain('items-center justify-between gap-3')
+        ->and($this->importModuleSource)->toContain('min-w-0 flex-1 truncate text-sm font-medium')
+        ->and($this->importModuleSource)->toContain('shrink-0 truncate text-xs text-gray-500')
+        ->and($this->importModuleSource)->not->toContain('bodyExpression')
+        ->and($this->importModuleSource)->not->toContain('rounded-full px-2.5 py-1')
+        ->and($this->importModuleSource)->not->toContain("mt-1 truncate text-xs text-gray-500");
+});
+
 it('16. products import no longer requires a manual load preview button', function () {
     expect($this->importModuleSource)
         ->not->toContain('Load Preview')
@@ -203,9 +212,8 @@ it('22. products submit still uses selected visible preview rows by default', fu
         ->and($this->importModuleSource)->toContain('return submitSelectedVisibleRowsOnly');
 });
 
-it('23. architecture yaml now documents shared import component ownership', function () {
-    expect($this->architectureSource)
-        ->toContain('The shared import component must own the import slide-over markup')
-        ->and($this->architectureSource)->toContain('Resource pages may not render import slide-over form markup')
-        ->and($this->architectureSource)->toContain('createImportModule({ config, adapters, callbacks }).mount(hostComponent)');
+it('23. shared import module always defaults duplicate rows to hidden', function () {
+    expect($this->importModuleSource)
+        ->toContain('const showDuplicatesDefault = false;')
+        ->and($this->importModuleSource)->not->toContain('const showDuplicatesDefault = !hideDuplicatesByDefault;');
 });

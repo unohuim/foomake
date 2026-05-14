@@ -1,0 +1,68 @@
+name: Export Slide-Over Pattern
+type: UI Pattern
+location:
+  - app/Http/Controllers/SalesProductController.php
+  - app/Http/Controllers/CustomerController.php
+  - resources/views/sales/products/index.blade.php
+  - resources/views/sales/customers/index.blade.php
+  - resources/js/lib/export-module.js
+  - resources/js/pages/sales-products-index.js
+  - resources/js/pages/sales-customers-index.js
+purpose: Define a reusable config-driven export slide-over component that owns the full export UX and lifecycle, derives export requests from the shared CRUD contract, and preserves backend route authority.
+when_to_use:
+  - Building a shared export slide-over across multiple CRUD resources
+  - Reusing one export workflow across Products, Customers, and future CRUD pages while enforcing identical export structure and lifecycle
+  - Extracting export markup, scope selection, loading state, error display, and config-driven URL construction into a shared component
+when_not_to_use:
+  - One-click downloads that do not require a scope chooser or slide-over confirmation
+  - Workflows that require multi-step export wizards or domain-specific client-side orchestration
+  - Pages that cannot express export endpoint, export copy, and export visibility through the server-generated CRUD contract
+rules:
+  - Export configuration must remain server-generated inside the CRUD contract rather than hardcoded in page-local Blade or page-local JavaScript.
+  - The shared export component must own the export slide-over markup rather than relying on resource-specific Blade form markup.
+  - Resource pages may not render export slide-over form markup, export scope controls, export footer actions, or export validation/error markup directly.
+  - Resource pages may not own export lifecycle methods such as openExportPanel, closeExportPanel, resetExportState, buildExportUrl, or submitExport outside the shared export component.
+  - Export scope, descriptive copy, unavailable-message copy, submit/cancel labels, and visibility must come from the server-generated CRUD contract or safe shared defaults.
+  - Export URL construction must remain config-driven and must not hardcode resource-specific endpoints in shared JavaScript.
+  - Validation and CSV authority remain owned by backend export endpoints.
+  - No global JavaScript state may be introduced to implement this pattern.
+public_interface:
+  - docs/architecture/ui/ExportSlideOverPattern.yaml
+  - data-crud-config
+  - resources/js/lib/export-module.js
+  - createExportModule({ config }).mount(hostComponent)
+example_usage: |
+  CRUD config:
+    $crudConfig = [
+        'endpoints' => [
+            'export' => route('sales.products.export'),
+        ],
+        'labels' => [
+            'exportTitle' => 'Export Products',
+            'exportDescription' => 'Export products as CSV using the same import-relevant field set.',
+            'exportCurrentOptionTitle' => 'Current filters and sort',
+            'exportAllOptionTitle' => 'All records',
+            'exportSubmitLabel' => 'Export CSV',
+            'exportCancelLabel' => 'Cancel',
+            'exportUnavailableMessage' => 'Unable to export products.',
+        ],
+        'permissions' => [
+            'showExport' => true,
+        ],
+    ];
+
+  Blade page root:
+    <div
+        data-page="sales-products-index"
+        data-payload="sales-products-index-payload"
+        data-crud-config='@json($crudConfig)'
+        x-data="salesProductsIndex"
+    ></div>
+
+  Page module:
+    const crud = createGenericCrud(parseCrudConfig(rootEl));
+    const exportModule = createExportModule({ config: crud });
+    exportModule.mount(rootEl);
+    Alpine.data('salesProductsIndex', () => ({
+        ...exportModule,
+    }));

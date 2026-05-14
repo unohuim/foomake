@@ -300,7 +300,7 @@ it('16. import config includes the bulk base uom option contract', function () {
     expect($config['bulkOptions']['bulk_base_uom_id'] ?? null)->toBeArray();
 });
 
-it('17. import config includes hidden duplicates by default row behavior', function () {
+it('17. import config keeps duplicate rows hidden by default', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
 
@@ -308,7 +308,7 @@ it('17. import config includes hidden duplicates by default row behavior', funct
 
     $config = ($this->extractImportConfig)(($this->getProductsIndex)($user));
 
-    expect($config['rowBehavior']['hideDuplicatesByDefault'] ?? null)->toBeTrue();
+    expect($config['rowBehavior']['hideDuplicatesByDefault'] ?? null)->toBeFalse();
 });
 
 it('18. import config includes visible non duplicate mass selection behavior', function () {

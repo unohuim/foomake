@@ -86,7 +86,7 @@ beforeEach(function () {
         : '';
 });
 
-it('1. products page still renders the export slide over root', function () {
+it('1. products page no longer renders export slide over markup server side', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
 
@@ -94,7 +94,8 @@ it('1. products page still renders the export slide over root', function () {
 
     ($this->getProductsIndex)($user)
         ->assertOk()
-        ->assertSee('data-products-export-panel', false);
+        ->assertDontSee('data-products-export-panel', false)
+        ->assertDontSee('data-shared-export-panel', false);
 });
 
 it('2. products crud config still decodes successfully after export extraction', function () {
@@ -160,7 +161,8 @@ it('7. shared export module file exists', function () {
 it('8. shared export module exports a reusable factory', function () {
     expect($this->exportModuleSource)
         ->toContain('export function createExportModule')
-        ->and($this->exportModuleSource)->toContain('return {');
+        ->and($this->exportModuleSource)->toContain('mount(rootEl)')
+        ->and($this->exportModuleSource)->toContain('data-shared-export-panel');
 });
 
 it('9. sales products page imports the shared export module', function () {
@@ -171,6 +173,7 @@ it('9. sales products page imports the shared export module', function () {
 it('10. sales products page composes the shared export module', function () {
     expect($this->pageModuleSource)
         ->toContain('const exportModule = createExportModule(')
+        ->and($this->pageModuleSource)->toContain('exportModule.mount(rootEl);')
         ->and($this->pageModuleSource)->toContain('...exportModule,');
 });
 
@@ -182,7 +185,9 @@ it('11. page module still wires the shared crud renderer export trigger to openE
 
 it('12. export url construction no longer lives only inside the products page module', function () {
     expect($this->pageModuleSource)
-        ->not->toContain('buildExportUrl() {');
+        ->not->toContain('buildExportUrl() {')
+        ->and($this->pageModuleSource)->not->toContain('slideOvers:')
+        ->and($this->pageModuleSource)->not->toContain('slideOverTitle(');
 });
 
 it('13. export submit logic no longer lives only inside the products page module', function () {
@@ -206,12 +211,12 @@ it('16. shared export module owns export submitting state', function () {
         ->toContain('isExportSubmitting: false');
 });
 
-it('17. shared export module preserves open and close slide over behavior', function () {
+it('17. shared export module owns open and close panel behavior', function () {
     expect($this->exportModuleSource)
         ->toContain('openExportPanel()')
-        ->and($this->exportModuleSource)->toContain("this.openSlideOver('export');")
+        ->and($this->exportModuleSource)->toContain('this.isExportPanelOpen = true;')
         ->and($this->exportModuleSource)->toContain('closeExportPanel()')
-        ->and($this->exportModuleSource)->toContain("this.closeSlideOver('export');");
+        ->and($this->exportModuleSource)->toContain('this.isExportPanelOpen = false;');
 });
 
 it('18. shared export module preserves config driven export url building for all records and current filters', function () {
@@ -226,8 +231,8 @@ it('18. shared export module preserves config driven export url building for all
 
 it('19. shared export module still targets the configured export endpoint instead of a hardcoded products path', function () {
     expect($this->exportModuleSource)
-        ->toContain('if (!this.endpoints.export) {')
-        ->and($this->exportModuleSource)->toContain('const exportUrl = new URL(this.endpoints.export, window.location.origin);')
+        ->toContain('if (!endpoints.export) {')
+        ->and($this->exportModuleSource)->toContain('const exportUrl = new URL(endpoints.export, window.location.origin);')
         ->and($this->exportModuleSource)->not->toContain('/sales/products/export');
 });
 
@@ -236,7 +241,7 @@ it('20. shared export module still surfaces export errors and closes after succe
         ->toContain('this.exportError = unavailableMessage;')
         ->and($this->exportModuleSource)->toContain('window.location.assign(exportUrl);')
         ->and($this->exportModuleSource)->toContain('this.closeExportPanel();')
-        ->and($this->pageModuleSource)->toContain("unavailableMessage: 'Unable to export products.'");
+        ->and($this->exportModuleSource)->toContain('labels.exportUnavailableMessage');
 });
 
 it('21. shared export module resets submitting state after export submission attempts', function () {
@@ -245,11 +250,11 @@ it('21. shared export module resets submitting state after export submission att
         ->and($this->exportModuleSource)->toContain('this.isExportSubmitting = false;');
 });
 
-it('22. products export blade markup still keeps current and all scope options unchanged', function () {
-    expect($this->bladeSource)
+it('22. shared export component keeps current and all scope options unchanged', function () {
+    expect($this->exportModuleSource)
         ->toContain('Current filters and sort')
-        ->and($this->bladeSource)->toContain('All records')
-        ->and($this->bladeSource)->toContain('x-model="exportScope"');
+        ->and($this->exportModuleSource)->toContain('All records')
+        ->and($this->exportModuleSource)->toContain('x-model="exportScope"');
 });
 
 it('23. products page still delegates import behavior to the shared import module', function () {

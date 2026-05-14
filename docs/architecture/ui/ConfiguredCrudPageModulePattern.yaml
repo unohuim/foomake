@@ -7,20 +7,21 @@ location:
   - resources/views/sales/customers/index.blade.php
   - resources/js/lib/crud-config.js
   - resources/js/lib/export-module.js
+  - docs/architecture/ui/ExportSlideOverPattern.yaml
   - resources/js/lib/import-config.js
   - resources/js/lib/import-module.js
   - resources/js/lib/generic-crud.js
   - resources/js/lib/crud-page.js
   - resources/js/pages/sales-products-index.js
   - resources/js/pages/sales-customers-index.js
-purpose: Define a reusable, server-configured CRUD page-module pattern where Blade is a mount-only shell, controllers emit typed page contracts, a shared JavaScript renderer owns generic CRUD UI, a shared import component owns import UX and lifecycle, and page modules compose resource-specific create and export actions plus approved data adapters.
+purpose: Define a reusable, server-configured CRUD page-module pattern where Blade is a mount-only shell, controllers emit typed page contracts, a shared JavaScript renderer owns generic CRUD UI, shared import and export components own their full UX and lifecycle, and page modules compose resource-specific create actions plus approved import data adapters.
 when_to_use:
   - Building any new interactive CRUD index page after the Products and Customers migrations
   - Migrating an interactive CRUD page to a shared mount-only page-module pattern without introducing client-owned routing or global state
   - Reusing the same toolbar, list rendering, action menu, create/import/export triggers, and sort mechanics across multiple Blade pages with different resource contracts
-  - Keeping page-specific create and export slideouts, validation UX, and callback behavior outside the shared CRUD renderer while centralizing the common config-driven shell
+  - Keeping page-specific create slideouts and non-import/non-export validation UX outside the shared CRUD renderer while centralizing the common config-driven shell
   - Attaching a reusable import workflow to a CRUD page while moving import UX ownership into the shared import component and leaving import endpoints and import authority on the server
-  - Attaching a reusable export workflow to a CRUD page without moving export endpoints, list authority, or page-owned slide-over markup into the shared CRUD renderer
+  - Attaching a reusable export workflow to a CRUD page while moving export markup and lifecycle ownership into a shared export component
 when_not_to_use:
   - Pages whose behavior is fully static
   - Workflows that require multi-step orchestration or domain-specific state transitions beyond generic CRUD concerns
@@ -44,13 +45,15 @@ rules:
   - The records/list area is the only scrollable region for CRUD list rendering; toolbar chrome remains outside that scroll container.
   - Desktop and mobile variants must follow the same scroll-containment contract: toolbar and page header chrome remain fixed in the component shell while only the records/results pane scrolls.
   - Shared CRUD helpers may handle config parsing, list query construction, fetch, create submission, export trigger wiring, sort toggling, and config-driven shell rendering.
-  - Shared export helpers may handle export panel state, scope selection, config-driven URL building, and submission wiring without hardcoding resource-specific routes.
+  - Shared export helpers must own export panel markup, open/close/reset lifecycle, scope selection, validation/error display, config-driven URL building, and export submission wiring without hardcoding resource-specific routes.
   - Shared import helpers must own import panel markup, source switching, source connection status UI, preview loading, local CSV caching, duplicate visibility controls, selection behavior, preview row rendering, validation display, and import submission wiring.
   - Resource pages may provide only declarative import config plus approved data adapters such as local-row parsing, preview-row normalization, import-row payload building, submit-body shaping, and import-success callbacks.
   - Page modules must not own import UX methods, import slide-over markup, or import-specific view overrides.
-  - Page-specific behavior such as create/edit/export panel markup, row-to-form mapping, toasts, non-import validation UX, success callbacks outside import, and non-import domain-specific rendering remains in the page module.
+  - Resource pages may provide export differences only through the server-generated CRUD contract; export-specific copy, endpoint, and visibility must not be hardcoded in page-local Blade or page-local JavaScript.
+  - Resource pages must not contain export slide-over form markup or page-local export UX overrides.
+  - Page-specific behavior such as create/edit form markup, row-to-form mapping, toasts, non-import/non-export validation UX, success callbacks outside import, and non-import/non-export domain-specific rendering remains in the page module.
   - Products and Customers are the current reference implementations for this pattern.
-  - Products and Customers both use the shared export module while keeping their export slide-over markup in Blade and their permission/messages local to the page module.
+  - Products and Customers both use the shared export module as the render-owning export component and do not keep export slide-over markup in Blade.
   - Missing or invalid CRUD config must fail safely without breaking initial page load.
   - Missing or invalid import config must fail safely without breaking initial page load.
   - Backend routes remain authoritative and must not be hardcoded in shared JavaScript.
@@ -60,6 +63,7 @@ public_interface:
   - data-import-config
   - resources/js/lib/crud-config.js
   - resources/js/lib/export-module.js
+  - docs/architecture/ui/ExportSlideOverPattern.yaml
   - resources/js/lib/import-config.js
   - resources/js/lib/import-module.js
   - resources/js/lib/generic-crud.js
@@ -153,7 +157,7 @@ example_usage: |
   Page module:
     const crud = createGenericCrud(parseCrudConfig(rootEl));
     const importConfig = parseImportConfig(rootEl);
-    const exportModule = createExportModule({ permissionKey: 'canExportProducts' });
+    const exportModule = createExportModule({ config: crud });
     const importModule = createImportModule({
         config: importConfig,
         adapters: {
@@ -174,9 +178,6 @@ example_usage: |
     });
     Alpine.data('salesProductsIndex', () => ({
         ...exportModule,
-        mountImportUi() {
-            importModule.mount(this);
-        },
     }));
 
   Customers page module:
@@ -192,14 +193,11 @@ example_usage: |
         },
         callbacks: { onImportSuccess: () => this.fetchCustomers() },
     });
-    const exportModule = createExportModule({ permissionKey: 'canExportCustomers' });
+    const exportModule = createExportModule({ config: crud });
     mountCrudRenderer(rootEl.querySelector('[data-crud-root]'), {
         ...crud,
         handlers: { searchInput: 'handleSearchInput()', toggleSort: 'toggleSort(column)', create: 'openCreatePanel()', import: 'openImportPanel()', export: 'openExportPanel()' },
     });
     Alpine.data('salesCustomersIndex', () => ({
-        mountImportUi() {
-            importModule.mount(this);
-        },
         ...exportModule,
     }));
