@@ -55,8 +55,16 @@
                 </div>
             </div>
 
+            @if ($payload['purchaseOrderCreate'] ?? null)
+                <div data-purchase-order-create-root></div>
+            @endif
+
+            @if (($payload['sections']['purchaseOrders'] ?? null))
+                <div data-js-crud-section-root data-section-key="purchaseOrders"></div>
+            @endif
+
             @if (($payload['sections']['supplierPackages'] ?? null))
-                <div data-js-crud-section-root></div>
+                <div data-js-crud-section-root data-section-key="supplierPackages"></div>
             @endif
         </div>
     </div>

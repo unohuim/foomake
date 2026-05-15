@@ -6,6 +6,8 @@ use App\Http\Controllers\ItemController;
 use App\Http\Controllers\ItemPurchaseOptionPriceController;
 use App\Http\Controllers\MakeOrderController;
 use App\Http\Controllers\MaterialController;
+use App\Http\Controllers\MaterialDraftPurchaseOrderController;
+use App\Http\Controllers\MaterialPurchaseOrderController;
 use App\Http\Controllers\MaterialSupplierPackageController;
 use App\Http\Controllers\NavigationStateController;
 use App\Http\Controllers\CustomerController;
@@ -84,6 +86,10 @@ Route::middleware('auth')->group(function () {
     Route::delete('/materials/{item}', [ItemController::class, 'destroy'])->name('materials.destroy');
     Route::get('/materials/{item}/supplier-packages', [MaterialSupplierPackageController::class, 'index'])
         ->name('materials.supplier-packages.index');
+    Route::get('/materials/{item}/purchase-orders', [MaterialPurchaseOrderController::class, 'index'])
+        ->name('materials.purchase-orders.index');
+    Route::post('/materials/{item}/purchase-orders', [MaterialDraftPurchaseOrderController::class, 'store'])
+        ->name('materials.purchase-orders.store');
     Route::post('/materials/{item}/supplier-packages', [MaterialSupplierPackageController::class, 'store'])
         ->name('materials.supplier-packages.store');
     Route::patch('/materials/{item}/supplier-packages/{option}', [MaterialSupplierPackageController::class, 'update'])

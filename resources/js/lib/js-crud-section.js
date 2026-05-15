@@ -75,6 +75,7 @@ const normalizeSectionConfig = (config) => {
         description: asString(safeConfig.description),
         emptyState: asString(safeConfig.emptyState, 'No records found.'),
         csrfToken: asString(safeConfig.csrfToken),
+        defaultOpen: asBoolean(safeConfig.defaultOpen),
         permissions: {
             canCreate: Boolean(permissions.canCreate),
         },
@@ -173,14 +174,14 @@ const renderCrudSection = () => `
         data-js-crud-section-card
         x-data="jsCrudSection($el)"
     >
-        <div class="flex flex-col sm:flex-row gap-3 px-3 py-4 sm:items-center sm:px-6 sm:py-5">
+        <div class="flex items-start justify-between gap-3 px-3 py-4 sm:px-6 sm:py-5">
             <div class="min-w-0 flex-1">
                 <h3 class="text-lg font-semibold text-gray-900" x-text="section.title"></h3>
                 <p class="mt-1 text-sm text-gray-500" x-text="section.description"></p>
             </div>
             <button
                 type="button"
-                class="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-gray-300 text-gray-600 transition hover:bg-gray-50 hover:text-gray-900 sm:ml-auto"
+                class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-gray-300 text-gray-600 transition hover:bg-gray-50 hover:text-gray-900"
                 aria-expanded="false"
                 x-bind:aria-expanded="isOpen ? 'true' : 'false'"
                 x-on:click="toggleOpen()"
@@ -345,7 +346,7 @@ const buildLayoutText = (record, entry) => {
 const createSectionState = (section, adapters) => ({
     section,
     adapters,
-    isOpen: false,
+    isOpen: asBoolean(section.defaultOpen),
     hasLoaded: false,
     isLoading: false,
     isFormOpen: false,
@@ -363,6 +364,11 @@ const createSectionState = (section, adapters) => ({
     errors: {},
     sectionError: '',
     formError: '',
+    init() {
+        if (this.isOpen && !this.hasLoaded) {
+            this.fetchPage(1);
+        }
+    },
     async toggleOpen() {
         const nextOpen = !this.isOpen;
 

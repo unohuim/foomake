@@ -227,7 +227,12 @@ class MaterialSupplierPackageController extends Controller
         $packPrecision = (int) ($option->packUom?->display_precision ?? 1);
         $hasHistory = $this->hasHistory($request, $option);
         $canManage = Gate::allows('purchasing-suppliers-manage');
+        $canCreatePurchaseOrders = Gate::allows('purchasing-purchase-orders-create');
         $availableActions = [];
+
+        if ($canCreatePurchaseOrders && (bool) $option->is_active) {
+            $availableActions[] = 'purchase';
+        }
 
         if ($canManage) {
             $availableActions[] = 'edit';
@@ -239,6 +244,7 @@ class MaterialSupplierPackageController extends Controller
 
         return [
             'id' => $option->id,
+            'item_purchase_option_id' => $option->id,
             'supplier_id' => $option->supplier_id,
             'supplier_name' => $option->supplier?->company_name,
             'pack_quantity' => $packQuantity,

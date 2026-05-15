@@ -39,14 +39,24 @@ class ItemController extends Controller
 
         $canViewPurchasing = Gate::allows('purchasing-suppliers-view');
         $canManagePurchasing = Gate::allows('purchasing-suppliers-manage');
+        $canViewPurchaseOrders = Gate::allows('purchasing-purchase-orders-create');
+        $canCreatePurchaseOrdersFromPackages = $canViewPurchasing
+            && Gate::allows('purchasing-purchase-orders-create');
 
         $payload = [
             'item' => [
                 'id' => $item->id,
                 'name' => $item->name,
             ],
+            'tenantCurrency' => strtoupper($this->resolveTenantCurrency($request)),
             'canViewPurchasing' => $canViewPurchasing,
+            'purchaseOrderCreate' => $canCreatePurchaseOrdersFromPackages && $item->is_purchasable
+                ? $this->purchaseOrderCreateConfig($request, $item)
+                : null,
             'sections' => [
+                'purchaseOrders' => $canViewPurchaseOrders && $item->is_purchasable
+                    ? $this->purchaseOrdersSectionConfig($item)
+                    : null,
                 'supplierPackages' => $canViewPurchasing && $item->is_purchasable
                     ? $this->supplierPackagesSectionConfig($request, $item, $canManagePurchasing)
                     : null,
@@ -262,6 +272,7 @@ class ItemController extends Controller
             'description' => 'Linked purchasing options for this material.',
             'emptyState' => 'No supplier packages have been added for this material.',
             'csrfToken' => csrf_token(),
+            'defaultOpen' => false,
             'permissions' => [
                 'canCreate' => $canManagePurchasing,
             ],
@@ -358,6 +369,13 @@ class ItemController extends Controller
             ],
             'actions' => [
                 [
+                    'id' => 'purchase',
+                    'label' => 'Purchase',
+                    'type' => 'custom',
+                    'tone' => 'default',
+                    'handlerKey' => 'purchase',
+                ],
+                [
                     'id' => 'edit',
                     'label' => 'Edit',
                     'type' => 'edit',
@@ -380,6 +398,126 @@ class ItemController extends Controller
                     'method' => 'DELETE',
                 ],
             ],
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function purchaseOrdersSectionConfig(Item $item): array
+    {
+        return [
+            'resource' => 'material-purchase-orders',
+            'title' => 'Purchase Orders',
+            'description' => 'Purchase orders that include this material.',
+            'emptyState' => 'No purchase orders include this material yet.',
+            'csrfToken' => csrf_token(),
+            'defaultOpen' => true,
+            'permissions' => [
+                'canCreate' => false,
+            ],
+            'endpoints' => [
+                'list' => route('materials.purchase-orders.index', $item),
+            ],
+            'fields' => [],
+            'rowLayout' => [
+                'primaryText' => [
+                    'field' => 'display.poNumberText',
+                    'fallback' => 'Draft PO',
+                ],
+                'secondaryFields' => [
+                    [
+                        'label' => 'Order date',
+                        'field' => 'display.orderDateText',
+                        'fallback' => 'No order date',
+                    ],
+                    [
+                        'label' => 'Supplier',
+                        'field' => 'display.supplierText',
+                        'fallback' => 'Supplier not set',
+                    ],
+                ],
+                'badges' => [
+                    [
+                        'field' => 'display.statusText',
+                        'toneField' => 'display.statusTone',
+                        'fallback' => '',
+                    ],
+                ],
+                'rightMeta' => [
+                    [
+                        'label' => 'Total',
+                        'field' => 'display.totalText',
+                        'fallback' => '—',
+                        'strong' => true,
+                    ],
+                ],
+            ],
+            'actions' => [
+                [
+                    'id' => 'view',
+                    'label' => 'View',
+                    'type' => 'view',
+                    'tone' => 'default',
+                    'urlField' => 'display.showUrl',
+                ],
+            ],
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function purchaseOrderCreateConfig(Request $request, Item $item): array
+    {
+        $options = \App\Models\ItemPurchaseOption::query()
+            ->where('tenant_id', $request->user()->tenant_id)
+            ->where('item_id', $item->id)
+            ->where('is_active', true)
+            ->whereNotNull('supplier_id')
+            ->with(['supplier', 'packUom', 'currentPrice'])
+            ->whereHas('supplier')
+            ->orderBy('id')
+            ->get();
+
+        $suppliers = $options
+            ->map(fn (\App\Models\ItemPurchaseOption $option): ?array => $option->supplier
+                ? [
+                    'id' => $option->supplier->id,
+                    'name' => $option->supplier->company_name,
+                ]
+                : null)
+            ->filter()
+            ->unique('id')
+            ->values()
+            ->all();
+
+        $packages = $options
+            ->map(function (\App\Models\ItemPurchaseOption $option) use ($item): array {
+                $quantity = bcadd((string) $option->pack_quantity, '0', 6);
+                $symbol = $option->packUom?->symbol;
+                $label = $symbol
+                    ? sprintf('%s (%s %s)', $option->supplier?->company_name, $quantity, $symbol)
+                    : sprintf('%s (%s)', $option->supplier?->company_name, $quantity);
+
+                return [
+                    'id' => $option->id,
+                    'supplier_id' => $option->supplier_id,
+                    'supplier_name' => $option->supplier?->company_name,
+                    'item_id' => $option->item_id,
+                    'item_name' => $item->name,
+                    'label' => $label,
+                    'current_price_cents' => $option->currentPrice?->converted_price_cents ?? 0,
+                ];
+            })
+            ->values()
+            ->all();
+
+        return [
+            'storeUrl' => route('materials.purchase-orders.store', $item),
+            'csrfToken' => csrf_token(),
+            'suppliers' => $suppliers,
+            'packages' => $packages,
         ];
     }
 

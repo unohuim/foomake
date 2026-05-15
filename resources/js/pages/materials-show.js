@@ -1,4 +1,5 @@
 import { mountCrudSection } from '../lib/js-crud-section';
+import { mountPurchaseOrderCreate } from '../lib/js-purchase-order-create';
 
 const asString = (value, fallback = '') => {
     if (typeof value === 'string' && value.trim() !== '') {
@@ -27,7 +28,7 @@ const packageDisplayText = (record) => {
     return `${quantity} ${uomSymbol}`;
 };
 
-const stateDisplay = (record) => {
+const supplierPackageStateDisplay = (record) => {
     if (record.is_active === false || record.state === 'archived') {
         return {
             text: 'Archived',
@@ -41,7 +42,7 @@ const stateDisplay = (record) => {
     };
 };
 
-const buildPayload = (form) => ({
+const buildSupplierPackagePayload = (form) => ({
     supplier_id: toStringValue(form.supplier_id),
     pack_quantity: asString(form.pack_quantity),
     pack_uom_id: toStringValue(form.pack_uom_id),
@@ -49,16 +50,70 @@ const buildPayload = (form) => ({
     price_amount: asString(form.price_amount),
 });
 
+const formatMoney = (currencyCode, cents) => {
+    const safeCurrencyCode = asString(currencyCode, 'USD');
+    const safeCents = Number(cents || 0);
+
+    return `${safeCurrencyCode} ${(safeCents / 100).toFixed(2)}`;
+};
+
+const purchaseOrderStatusDisplay = (record) => {
+    switch (record.status) {
+    case 'OPEN':
+    case 'PARTIALLY-RECEIVED':
+        return {
+            text: record.status,
+            tone: 'default',
+        };
+    case 'RECEIVED':
+        return {
+            text: record.status,
+            tone: 'success',
+        };
+    case 'BACK-ORDERED':
+    case 'SHORT-CLOSED':
+    case 'CANCELLED':
+        return {
+            text: record.status,
+            tone: 'muted',
+        };
+    default:
+        return {
+            text: asString(record.status, '—'),
+            tone: 'muted',
+        };
+    }
+};
+
 export function mount(rootEl, payload) {
     const safePayload = payload || {};
-    const sectionConfig = safePayload.sections?.supplierPackages || null;
-    const sectionRootEl = rootEl.querySelector('[data-js-crud-section-root]');
+    const tenantCurrency = asString(safePayload.tenantCurrency, 'USD');
+    const purchaseOrderCreateRootEl = rootEl.querySelector('[data-purchase-order-create-root]');
+    const purchaseOrderCreate = mountPurchaseOrderCreate(purchaseOrderCreateRootEl, safePayload.purchaseOrderCreate || {});
 
-    mountCrudSection(sectionRootEl, {
-        section: sectionConfig,
-        adapters: {
+    const adaptersBySectionKey = {
+        purchaseOrders: {
             normalizeRow: (record) => {
-                const state = stateDisplay(record);
+                const status = purchaseOrderStatusDisplay(record);
+
+                return {
+                    ...record,
+                    display: {
+                        poNumberText: record.po_number ? `PO #${record.po_number}` : 'Draft PO',
+                        orderDateText: asString(record.order_date, 'No order date'),
+                        supplierText: asString(record.supplier_name, 'Supplier not set'),
+                        totalText: formatMoney(tenantCurrency, record.po_grand_total_cents),
+                        statusText: status.text,
+                        statusTone: status.tone,
+                        showUrl: asString(record.show_url),
+                    },
+                };
+            },
+            handleAction: async () => {},
+        },
+        supplierPackages: {
+            normalizeRow: (record) => {
+                const state = supplierPackageStateDisplay(record);
 
                 return {
                     ...record,
@@ -79,9 +134,26 @@ export function mount(rootEl, payload) {
                     },
                 };
             },
-            buildCreatePayload: (form) => buildPayload(form),
-            buildUpdatePayload: (form) => buildPayload(form),
-            handleAction: async () => {},
+            buildCreatePayload: (form) => buildSupplierPackagePayload(form),
+            buildUpdatePayload: (form) => buildSupplierPackagePayload(form),
+            handleAction: async ({ action, record }) => {
+                if (action.handlerKey === 'purchase' && purchaseOrderCreate) {
+                    purchaseOrderCreate.openFromSupplierPackage({
+                        supplier_id: record.supplier_id,
+                        item_purchase_option_id: record.item_purchase_option_id ?? record.id,
+                    });
+                }
+            },
         },
+    };
+
+    rootEl.querySelectorAll('[data-js-crud-section-root]').forEach((sectionRootEl) => {
+        const sectionKey = sectionRootEl.dataset.sectionKey || '';
+        const sectionConfig = safePayload.sections?.[sectionKey] || null;
+
+        mountCrudSection(sectionRootEl, {
+            section: sectionConfig,
+            adapters: adaptersBySectionKey[sectionKey] || {},
+        });
     });
 }

@@ -240,10 +240,10 @@ beforeEach(function (): void {
         return is_array($payload) ? $payload : [];
     };
 
-    $this->extractSectionConfig = function ($response): array {
+    $this->extractSectionConfig = function ($response, string $sectionKey = 'supplierPackages'): array {
         $payload = ($this->extractPayload)($response, 'materials-show-payload');
 
-        $section = $payload['sections']['supplierPackages'] ?? null;
+        $section = $payload['sections'][$sectionKey] ?? null;
 
         return is_array($section) ? $section : [];
     };
@@ -254,6 +254,20 @@ beforeEach(function (): void {
         return $request->getJson(route('materials.supplier-packages.index', array_merge([
             'item' => $item,
         ], $query)));
+    };
+
+    $this->getMaterialPurchaseOrders = function (?User $user, Item $item, array $query = []) {
+        $request = $user ? $this->actingAs($user) : $this;
+
+        return $request->getJson(route('materials.purchase-orders.index', array_merge([
+            'item' => $item,
+        ], $query)));
+    };
+
+    $this->postMaterialPurchaseOrder = function (?User $user, Item $item, array $payload) {
+        $request = $user ? $this->actingAs($user) : $this;
+
+        return $request->postJson(route('materials.purchase-orders.store', $item), $payload);
     };
 
     $this->postPackage = function (?User $user, Item $item, array $payload) {
@@ -282,6 +296,16 @@ beforeEach(function (): void {
 
     $this->extractPurchaseOrderPayload = function ($response): array {
         return ($this->extractPayload)($response, 'purchasing-orders-show-payload');
+    };
+
+    $this->getPurchaseOrdersIndex = function (?User $user, array $query = []) {
+        $request = $user ? $this->actingAs($user) : $this;
+
+        return $request->get(route('purchasing.orders.index', $query));
+    };
+
+    $this->extractPurchaseOrdersIndexPayload = function ($response): array {
+        return ($this->extractPayload)($response, 'purchasing-orders-index-payload');
     };
 });
 
@@ -325,6 +349,115 @@ it('3. includes the supplier packages section config for purchasable materials w
         ->and($section['endpoints']['create'] ?? null)->toBe(route('materials.supplier-packages.store', $item))
         ->and($section['endpoints']['update'] ?? null)->toBe(url("/materials/{$item->id}/supplier-packages/{id}"))
         ->and($section['endpoints']['remove'] ?? null)->toBe(url("/materials/{$item->id}/supplier-packages/{id}"));
+});
+
+it('3a. includes the purchase orders section config for purchasable materials with the current purchase order create permission', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $uom = ($this->makeUom)($tenant);
+    $item = ($this->makeItem)($tenant, $uom, ['name' => 'Purchasable Purchase Order Material']);
+
+    ($this->grantPermissions)($user, ['inventory-materials-view', 'purchasing-purchase-orders-create']);
+
+    $response = ($this->getShow)($user, $item)
+        ->assertOk();
+
+    $section = ($this->extractSectionConfig)($response, 'purchaseOrders');
+
+    expect($section['resource'] ?? null)->toBe('material-purchase-orders')
+        ->and($section['endpoints']['list'] ?? null)->toBe(route('materials.purchase-orders.index', $item))
+        ->and($section['permissions']['canCreate'] ?? null)->toBeFalse()
+        ->and($section['defaultOpen'] ?? null)->toBeTrue()
+        ->and(array_key_exists('createUrl', $section))->toBeFalse()
+        ->and($section['actions'][0]['id'] ?? null)->toBe('view')
+        ->and($section['actions'][0]['label'] ?? null)->toBe('View')
+        ->and($section['actions'][0]['type'] ?? null)->toBe('view');
+});
+
+it('3b. keeps the purchase orders section read only with no create capability or mutation row actions', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $uom = ($this->makeUom)($tenant);
+    $item = ($this->makeItem)($tenant, $uom);
+
+    ($this->grantPermissions)($user, ['inventory-materials-view', 'purchasing-purchase-orders-create']);
+
+    $section = ($this->extractSectionConfig)(($this->getShow)($user, $item), 'purchaseOrders');
+    $actionIds = collect($section['actions'] ?? [])->pluck('id')->all();
+
+    expect($section['permissions']['canCreate'] ?? null)->toBeFalse()
+        ->and($section['fields'] ?? [])->toBe([])
+        ->and(array_keys($section['endpoints'] ?? []))->toBe(['list'])
+        ->and(array_key_exists('createUrl', $section))->toBeFalse()
+        ->and($actionIds)->toBe(['view'])
+        ->and($actionIds)->not->toContain('edit')
+        ->and($actionIds)->not->toContain('remove')
+        ->and($actionIds)->not->toContain('archive');
+});
+
+it('3c. still includes the supplier packages section alongside purchase orders for purchasable materials', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $uom = ($this->makeUom)($tenant);
+    $item = ($this->makeItem)($tenant, $uom);
+
+    ($this->grantPermissions)($user, [
+        'inventory-materials-view',
+        'purchasing-suppliers-view',
+        'purchasing-purchase-orders-create',
+    ]);
+
+    $response = ($this->getShow)($user, $item)->assertOk();
+
+    expect(($this->extractSectionConfig)($response, 'supplierPackages'))->not->toBe([])
+        ->and(($this->extractSectionConfig)($response, 'purchaseOrders'))->not->toBe([]);
+});
+
+it('3ca. renders the purchase order create package payload for purchasable materials with supplier packages', function (): void {
+    $tenant = ($this->makeTenant)(['currency_code' => 'USD']);
+    $user = ($this->makeUser)($tenant);
+    $uom = ($this->makeUom)($tenant, ['symbol' => 'kg-msp-3ca']);
+    $item = ($this->makeItem)($tenant, $uom, ['name' => 'Payload Material']);
+    $supplier = ($this->makeSupplier)($tenant, ['company_name' => 'Payload Supplier']);
+    $option = ($this->makeOption)($tenant, $supplier, $item, $uom, ['supplier_sku' => 'PAYLOAD-3CA']);
+    ($this->makePrice)($tenant, $option, [
+        'price_cents' => 2750,
+        'converted_price_cents' => 2750,
+        'price_currency_code' => 'USD',
+    ]);
+
+    ($this->grantPermissions)($user, [
+        'inventory-materials-view',
+        'purchasing-suppliers-view',
+        'purchasing-purchase-orders-create',
+    ]);
+
+    $response = ($this->getShow)($user, $item)->assertOk();
+    $payload = ($this->extractPayload)($response, 'materials-show-payload');
+    $package = collect($payload['purchaseOrderCreate']['packages'] ?? [])->firstWhere('id', $option->id);
+
+    expect($payload['sections']['purchaseOrders']['defaultOpen'] ?? null)->toBeTrue()
+        ->and($payload['sections']['purchaseOrders']['permissions']['canCreate'] ?? null)->toBeFalse()
+        ->and(array_key_exists('createUrl', $payload['sections']['purchaseOrders'] ?? []))->toBeFalse()
+        ->and($package)->not->toBeNull()
+        ->and($package['item_id'] ?? null)->toBe($item->id)
+        ->and($package['item_name'] ?? null)->toBe('Payload Material')
+        ->and($package['supplier_id'] ?? null)->toBe($supplier->id)
+        ->and($package['supplier_name'] ?? null)->toBe('Payload Supplier')
+        ->and($package['current_price_cents'] ?? null)->toBe(2750);
+});
+
+it('3d. purchase orders section create capability is hidden when the user lacks the current purchase order create permission', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $uom = ($this->makeUom)($tenant);
+    $item = ($this->makeItem)($tenant, $uom);
+
+    ($this->grantPermissions)($user, ['inventory-materials-view', 'purchasing-suppliers-view']);
+
+    $response = ($this->getShow)($user, $item)->assertOk();
+
+    expect(($this->extractSectionConfig)($response, 'purchaseOrders'))->toBe([]);
 });
 
 it('4. preserves the material detail header while using the section shell', function (): void {
@@ -386,6 +519,45 @@ it('5. omits the supplier packages section for non-purchasable materials', funct
     $response->assertDontSee('data-js-crud-section-root', false);
 });
 
+it('5a. omits the purchase orders section for non-purchasable materials', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $uom = ($this->makeUom)($tenant);
+    $item = ($this->makeItem)($tenant, $uom, [
+        'is_purchasable' => false,
+        'name' => 'Non Purchasable Purchase Orders',
+    ]);
+
+    ($this->grantPermissions)($user, ['inventory-materials-view', 'purchasing-purchase-orders-create']);
+
+    $response = ($this->getShow)($user, $item)
+        ->assertOk();
+
+    expect(($this->extractSectionConfig)($response, 'purchaseOrders'))->toBe([]);
+});
+
+it('5b. material detail source renders purchase orders before supplier packages', function (): void {
+    $viewSource = file_get_contents(resource_path('views/materials/show.blade.php'));
+
+    $purchaseOrdersPosition = strpos($viewSource, 'data-section-key="purchaseOrders"');
+    $supplierPackagesPosition = strpos($viewSource, 'data-section-key="supplierPackages"');
+
+    expect($purchaseOrdersPosition)->not->toBeFalse()
+        ->and($supplierPackagesPosition)->not->toBeFalse()
+        ->and($purchaseOrdersPosition)->toBeLessThan($supplierPackagesPosition);
+});
+
+it('5c. material detail payload config defines purchase orders before supplier packages', function (): void {
+    $controllerSource = file_get_contents(app_path('Http/Controllers/ItemController.php'));
+
+    $purchaseOrdersPosition = strpos($controllerSource, "'purchaseOrders' =>");
+    $supplierPackagesPosition = strpos($controllerSource, "'supplierPackages' =>");
+
+    expect($purchaseOrdersPosition)->not->toBeFalse()
+        ->and($supplierPackagesPosition)->not->toBeFalse()
+        ->and($purchaseOrdersPosition)->toBeLessThan($supplierPackagesPosition);
+});
+
 it('6. removes the legacy supplier package payload and duplicated server rendered package list markup', function (): void {
     $viewSource = file_get_contents(resource_path('views/materials/show.blade.php'));
 
@@ -411,7 +583,8 @@ it('7. js crud section source renders a rounded accordion card shell', function 
 it('8. js crud section source defaults the accordion closed', function (): void {
     $source = file_get_contents(resource_path('js/lib/js-crud-section.js'));
 
-    expect($source)->toContain('isOpen: false');
+    expect($source)->toContain('defaultOpen: asBoolean(safeConfig.defaultOpen)')
+        ->and($source)->toContain('isOpen: asBoolean(section.defaultOpen)');
 });
 
 it('9. js crud section source lazy loads records on first open', function (): void {
@@ -516,6 +689,8 @@ it('17. js crud section source uses config driven row actions without global sta
     expect($source)->toContain('visibleActions(record)')
         ->and($source)->toContain('section.actions')
         ->and($source)->toContain('action.type')
+        ->and($source)->toContain("case 'custom'")
+        ->and($source)->toContain('this.adapters.handleAction')
         ->and($source)->not->toContain('window.');
 });
 
@@ -526,7 +701,11 @@ it('17a. js crud section core source does not reference supplier package specifi
         ->and($source)->not->toContain('pack_quantity_display')
         ->and($source)->not->toContain('pack_uom_symbol')
         ->and($source)->not->toContain('supplier_sku')
-        ->and($source)->not->toContain('current_price_display');
+        ->and($source)->not->toContain('current_price_display')
+        ->and($source)->not->toContain('po_number')
+        ->and($source)->not->toContain('order_date')
+        ->and($source)->not->toContain('po_grand_total_cents')
+        ->and($source)->not->toContain('show_url');
 });
 
 it('17b. js crud section source exposes adapter hooks for row normalization payload mapping and custom actions', function (): void {
@@ -556,6 +735,23 @@ it('18a. js crud section source uses a square rounded lg create button and mobil
         ->and($source)->toContain('px-3 sm:px-6')
         ->and($source)->toContain('p-3 sm:p-4')
         ->and($source)->toContain('flex-col sm:flex-row');
+});
+
+it('18aa. js crud section source keeps the accordion trigger right aligned on mobile with a generic header layout', function (): void {
+    $source = file_get_contents(resource_path('js/lib/js-crud-section.js'));
+
+    expect($source)->toContain('flex items-start justify-between gap-3')
+        ->and($source)->toContain('min-w-0 flex-1')
+        ->and($source)->toContain('h-10 w-10')
+        ->and($source)->toContain('shrink-0')
+        ->and($source)->not->toContain('rounded-full border border-gray-200');
+});
+
+it('18ab. js crud section source supports configurable default open state for embedded sections', function (): void {
+    $source = file_get_contents(resource_path('js/lib/js-crud-section.js'));
+
+    expect($source)->toContain('defaultOpen')
+        ->and($source)->toContain('isOpen: asBoolean(section.defaultOpen)');
 });
 
 it('18b. js crud section source keeps the create button right aligned in the accordion header area', function (): void {
@@ -611,6 +807,21 @@ it('19a. supplier packages row layout is expressed through config instead of cor
         ->and($controllerSource)->toContain("'rightMeta'");
 });
 
+it('19b. purchase orders row layout is expressed through config and page adapters instead of core row markup', function (): void {
+    $controllerSource = file_get_contents(app_path('Http/Controllers/ItemController.php'));
+    $pageSource = file_get_contents(resource_path('js/pages/materials-show.js'));
+
+    expect($controllerSource)->toContain("'purchaseOrders'")
+        ->and($controllerSource)->toContain("'resource' => 'material-purchase-orders'")
+        ->and($controllerSource)->toContain("'rowLayout' =>")
+        ->and($controllerSource)->toContain("'urlField' => 'display.showUrl'")
+        ->and($pageSource)->toContain('purchaseOrders:')
+        ->and($pageSource)->toContain('showUrl')
+        ->and($pageSource)->toContain('poNumberText')
+        ->and($pageSource)->toContain('totalText')
+        ->and($pageSource)->toContain('statusText');
+});
+
 it('20. requires authentication for supplier package list requests', function (): void {
     $tenant = ($this->makeTenant)();
     $uom = ($this->makeUom)($tenant);
@@ -664,6 +875,7 @@ it('23. returns paginated supplier package rows with supplier name quantity uom 
         ->assertJsonPath('meta.current_page', 1);
 
     expect($response->json('data.0.id'))->toBe($option->id)
+        ->and($response->json('data.0.item_purchase_option_id'))->toBe($option->id)
         ->and($response->json('data.0.supplier_name'))->toBe('List Supplier')
         ->and($response->json('data.0.pack_quantity'))->toBe('8.500000')
         ->and($response->json('data.0.pack_uom_symbol'))->toBe('kg-msp-23')
@@ -742,6 +954,26 @@ it('26. represents archived packages consistently in the list payload', function
     expect($row['state'] ?? null)->toBe('archived')
         ->and($row['is_active'] ?? null)->toBeFalse()
         ->and($row['available_actions'] ?? [])->toContain('edit');
+});
+
+it('26a. active supplier package rows include the purchase action when the user can create purchase orders', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $uom = ($this->makeUom)($tenant, ['symbol' => 'kg-msp-26a']);
+    $item = ($this->makeItem)($tenant, $uom);
+    $supplier = ($this->makeSupplier)($tenant);
+    $option = ($this->makeOption)($tenant, $supplier, $item, $uom);
+
+    ($this->grantPermissions)($user, [
+        'inventory-materials-view',
+        'purchasing-suppliers-view',
+        'purchasing-purchase-orders-create',
+    ]);
+
+    $response = ($this->getPackages)($user, $item)->assertOk();
+    $row = collect($response->json('data'))->firstWhere('id', $option->id);
+
+    expect($row['available_actions'] ?? [])->toContain('purchase');
 });
 
 it('27. requires authentication for supplier package create requests', function (): void {
@@ -1208,4 +1440,552 @@ it('44. returns 404 for cross tenant material detail access in the embedded sect
 
     ($this->getShow)($user, $item)
         ->assertNotFound();
+});
+
+it('45. requires authentication for material purchase order list requests', function (): void {
+    $tenant = ($this->makeTenant)();
+    $uom = ($this->makeUom)($tenant);
+    $item = ($this->makeItem)($tenant, $uom);
+
+    ($this->getMaterialPurchaseOrders)(null, $item)
+        ->assertUnauthorized();
+});
+
+it('46. forbids material purchase order list requests without purchase order read permission', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $uom = ($this->makeUom)($tenant);
+    $item = ($this->makeItem)($tenant, $uom);
+
+    ($this->grantPermission)($user, 'inventory-materials-view');
+
+    ($this->getMaterialPurchaseOrders)($user, $item)
+        ->assertForbidden();
+});
+
+it('47. returns 404 for cross tenant material purchase order list access', function (): void {
+    $tenant = ($this->makeTenant)();
+    $otherTenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $uom = ($this->makeUom)($otherTenant);
+    $item = ($this->makeItem)($otherTenant, $uom);
+
+    ($this->grantPermissions)($user, ['inventory-materials-view', 'purchasing-purchase-orders-create']);
+
+    ($this->getMaterialPurchaseOrders)($user, $item)
+        ->assertNotFound();
+});
+
+it('48. returns paginated purchase orders for the material and excludes unrelated orders', function (): void {
+    $tenant = ($this->makeTenant)(['currency_code' => 'USD']);
+    $user = ($this->makeUser)($tenant);
+    $uom = ($this->makeUom)($tenant, ['symbol' => 'kg-msp-48']);
+    $item = ($this->makeItem)($tenant, $uom, ['name' => 'Material With Orders']);
+    $otherItem = ($this->makeItem)($tenant, $uom, ['name' => 'Other Material']);
+    $supplier = ($this->makeSupplier)($tenant, ['company_name' => 'PO Supplier']);
+    $option = ($this->makeOption)($tenant, $supplier, $item, $uom, ['supplier_sku' => 'PO-48-OPTION']);
+    $otherOption = ($this->makeOption)($tenant, $supplier, $otherItem, $uom, ['supplier_sku' => 'PO-48-OTHER']);
+    $visibleOrder = ($this->makePurchaseOrder)($tenant, $user, $supplier, [
+        'po_number' => 'PO-48',
+        'po_subtotal_cents' => 1800,
+        'po_grand_total_cents' => 2250,
+        'shipping_cents' => 300,
+        'tax_cents' => 150,
+        'status' => PurchaseOrder::STATUS_BACK_ORDERED,
+    ]);
+    $hiddenOrder = ($this->makePurchaseOrder)($tenant, $user, $supplier, [
+        'po_number' => 'PO-HIDDEN-48',
+        'po_subtotal_cents' => 9900,
+        'po_grand_total_cents' => 9900,
+        'status' => PurchaseOrder::STATUS_OPEN,
+    ]);
+
+    ($this->makePurchaseOrderLine)($tenant, $visibleOrder, $item, $option, [
+        'line_subtotal_cents' => 1200,
+    ]);
+    ($this->makePurchaseOrderLine)($tenant, $visibleOrder, $otherItem, $otherOption, [
+        'line_subtotal_cents' => 600,
+    ]);
+    ($this->makePurchaseOrderLine)($tenant, $hiddenOrder, $otherItem, $otherOption, [
+        'line_subtotal_cents' => 9900,
+    ]);
+
+    ($this->grantPermissions)($user, ['inventory-materials-view', 'purchasing-purchase-orders-create']);
+
+    $response = ($this->getMaterialPurchaseOrders)($user, $item, ['page' => 1])
+        ->assertOk()
+        ->assertJsonPath('meta.current_page', 1)
+        ->assertJsonPath('meta.total', 1);
+
+    expect($response->json('data.0.id'))->toBe($visibleOrder->id)
+        ->and($response->json('data.0.po_number'))->toBe('PO-48')
+        ->and($response->json('data.0.supplier_name'))->toBe('PO Supplier')
+        ->and($response->json('data.0.order_date'))->toBe('2026-05-15')
+        ->and($response->json('data.0.po_grand_total_cents'))->toBe(2250)
+        ->and($response->json('data.0.status'))->toBe(PurchaseOrder::STATUS_BACK_ORDERED)
+        ->and($response->json('data.0.show_url'))->toBe(route('purchasing.orders.show', $visibleOrder));
+
+    $ids = collect($response->json('data'))->pluck('id')->all();
+
+    expect($ids)->toContain($visibleOrder->id)
+        ->and($ids)->not->toContain($hiddenOrder->id);
+});
+
+it('49. excludes cross tenant purchase orders even if rogue lines reference the current material id', function (): void {
+    $tenant = ($this->makeTenant)();
+    $otherTenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $uom = ($this->makeUom)($tenant, ['symbol' => 'kg-msp-49']);
+    $item = ($this->makeItem)($tenant, $uom);
+    $supplier = ($this->makeSupplier)($tenant);
+    $option = ($this->makeOption)($tenant, $supplier, $item, $uom);
+    $visibleOrder = ($this->makePurchaseOrder)($tenant, $user, $supplier, ['po_number' => 'PO-49']);
+    ($this->makePurchaseOrderLine)($tenant, $visibleOrder, $item, $option);
+
+    $otherSupplier = ($this->makeSupplier)($otherTenant, ['company_name' => 'Other Tenant Supplier']);
+    $otherUser = ($this->makeUser)($otherTenant);
+    $otherUom = ($this->makeUom)($otherTenant, ['symbol' => 'kg-other-49']);
+    $otherItem = ($this->makeItem)($otherTenant, $otherUom);
+    $otherOption = ($this->makeOption)($otherTenant, $otherSupplier, $otherItem, $otherUom);
+    $rogueOrder = ($this->makePurchaseOrder)($otherTenant, $otherUser, $otherSupplier, ['po_number' => 'PO-ROGUE-49']);
+
+    PurchaseOrderLine::withoutGlobalScopes()->create([
+        'tenant_id' => $otherTenant->id,
+        'purchase_order_id' => $rogueOrder->id,
+        'item_id' => $item->id,
+        'item_purchase_option_id' => $otherOption->id,
+        'pack_count' => 1,
+        'unit_price_cents' => 100,
+        'line_subtotal_cents' => 100,
+        'unit_price_amount' => 100,
+        'unit_price_currency_code' => 'USD',
+        'converted_unit_price_amount' => 100,
+        'fx_rate' => '1.000000',
+        'fx_rate_as_of' => Carbon::parse('2026-05-15')->toDateString(),
+    ]);
+
+    ($this->grantPermissions)($user, ['inventory-materials-view', 'purchasing-purchase-orders-create']);
+
+    $response = ($this->getMaterialPurchaseOrders)($user, $item)->assertOk();
+    $ids = collect($response->json('data'))->pluck('id')->all();
+
+    expect($ids)->toContain($visibleOrder->id)
+        ->and($ids)->not->toContain($rogueOrder->id);
+});
+
+it('50. returns an empty paginated purchase order list when the material is not on any orders', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $uom = ($this->makeUom)($tenant);
+    $item = ($this->makeItem)($tenant, $uom);
+
+    ($this->grantPermissions)($user, ['inventory-materials-view', 'purchasing-purchase-orders-create']);
+
+    $response = ($this->getMaterialPurchaseOrders)($user, $item)
+        ->assertOk()
+        ->assertJsonPath('meta.total', 0)
+        ->assertJsonPath('meta.current_page', 1);
+
+    expect($response->json('data'))->toBe([]);
+});
+
+it('51. purchase order rows include raw status fields and the page adapter owns the safe po number fallback', function (): void {
+    $tenant = ($this->makeTenant)(['currency_code' => 'USD']);
+    $user = ($this->makeUser)($tenant);
+    $uom = ($this->makeUom)($tenant, ['symbol' => 'kg-msp-51']);
+    $item = ($this->makeItem)($tenant, $uom);
+    $supplier = ($this->makeSupplier)($tenant, ['company_name' => 'Fallback Supplier']);
+    $option = ($this->makeOption)($tenant, $supplier, $item, $uom);
+    $order = ($this->makePurchaseOrder)($tenant, $user, $supplier, [
+        'po_number' => null,
+        'po_subtotal_cents' => 500,
+        'po_grand_total_cents' => 700,
+        'shipping_cents' => 100,
+        'tax_cents' => 100,
+        'status' => PurchaseOrder::STATUS_SHORT_CLOSED,
+    ]);
+
+    ($this->makePurchaseOrderLine)($tenant, $order, $item, $option, [
+        'line_subtotal_cents' => 500,
+    ]);
+
+    ($this->grantPermissions)($user, ['inventory-materials-view', 'purchasing-purchase-orders-create']);
+
+    $response = ($this->getMaterialPurchaseOrders)($user, $item)->assertOk();
+    $row = $response->json('data.0');
+    $pageSource = file_get_contents(resource_path('js/pages/materials-show.js'));
+
+    expect(array_key_exists('po_number', $row))->toBeTrue()
+        ->and($row['po_number'])->toBeNull()
+        ->and($row['status'] ?? null)->toBe(PurchaseOrder::STATUS_SHORT_CLOSED)
+        ->and($row['show_url'] ?? null)->toBe(route('purchasing.orders.show', $order))
+        ->and($pageSource)->toContain('Draft PO')
+        ->and($pageSource)->toContain('statusTone')
+        ->and($pageSource)->toContain('poNumberText');
+});
+
+it('52. material purchase order section exposes only a view action and no mutation or create capability', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $uom = ($this->makeUom)($tenant);
+    $item = ($this->makeItem)($tenant, $uom);
+
+    ($this->grantPermissions)($user, ['inventory-materials-view', 'purchasing-purchase-orders-create']);
+
+    $section = ($this->extractSectionConfig)(($this->getShow)($user, $item), 'purchaseOrders');
+
+    expect(collect($section['actions'] ?? [])->pluck('label')->all())->toBe(['View'])
+        ->and($section['endpoints'] ?? [])->toBe([
+            'list' => route('materials.purchase-orders.index', $item),
+        ])
+        ->and($section['permissions']['canCreate'] ?? null)->toBeFalse()
+        ->and(array_key_exists('createUrl', $section))->toBeFalse();
+});
+
+it('53. supplier packages page module includes a reusable purchase order create module contract', function (): void {
+    $pageSource = file_get_contents(resource_path('js/pages/materials-show.js'));
+    $moduleSource = file_get_contents(resource_path('js/lib/js-purchase-order-create.js'));
+    $controllerSource = file_get_contents(app_path('Http/Controllers/ItemController.php'));
+
+    expect($pageSource)->toContain('mountPurchaseOrderCreate(')
+        ->and($pageSource)->toContain('openFromSupplierPackage')
+        ->and($controllerSource)->toContain("'handlerKey' => 'purchase'")
+        ->and($moduleSource)->toContain('supplier_id')
+        ->and($moduleSource)->toContain('item_purchase_option_id')
+        ->and($moduleSource)->toContain('pack_count')
+        ->and($moduleSource)->toContain('availablePackages')
+        ->and($moduleSource)->toContain('isSubmitting')
+        ->and($moduleSource)->toContain('errors')
+        ->and($moduleSource)->toContain('data-purchase-order-create-panel')
+        ->and($moduleSource)->toContain('x-show="isOpen"')
+        ->and($moduleSource)->toContain('Alpine.reactive')
+        ->and($moduleSource)->toContain('window.location.href')
+        ->and($moduleSource)->not->toContain('window.purchaseOrderCreate');
+});
+
+it('54. supplier package purchase action preselects supplier and package while leaving quantity empty', function (): void {
+    $pageSource = file_get_contents(resource_path('js/pages/materials-show.js'));
+    $moduleSource = file_get_contents(resource_path('js/lib/js-purchase-order-create.js'));
+
+    expect($pageSource)->toContain('openFromSupplierPackage')
+        ->and($pageSource)->toContain("action.handlerKey === 'purchase'")
+        ->and($pageSource)->toContain('record.item_purchase_option_id ?? record.id')
+        ->and($moduleSource)->toContain('supplier_id: toStringValue(prefill.supplier_id)')
+        ->and($moduleSource)->toContain('item_purchase_option_id: toStringValue(prefill.item_purchase_option_id)')
+        ->and($moduleSource)->toContain('this.isOpen = true')
+        ->and($moduleSource)->toContain("pack_count: ''");
+});
+
+it('55. supplier packages config exposes a custom purchase row action while keeping the header plus for package create only', function (): void {
+    $controllerSource = file_get_contents(app_path('Http/Controllers/ItemController.php'));
+    $crudSource = file_get_contents(resource_path('js/lib/js-crud-section.js'));
+
+    expect($controllerSource)->toContain("'id' => 'purchase'")
+        ->and($controllerSource)->toContain("'type' => 'custom'")
+        ->and($controllerSource)->toContain("'handlerKey' => 'purchase'")
+        ->and($crudSource)->toContain('x-show="section.permissions.canCreate"')
+        ->and($crudSource)->toContain('openCreateForm()');
+});
+
+it('56. requires authentication for creating a draft purchase order from a material supplier package', function (): void {
+    $tenant = ($this->makeTenant)();
+    $uom = ($this->makeUom)($tenant);
+    $item = ($this->makeItem)($tenant, $uom);
+    $supplier = ($this->makeSupplier)($tenant);
+    $option = ($this->makeOption)($tenant, $supplier, $item, $uom);
+
+    ($this->postMaterialPurchaseOrder)(null, $item, [
+        'supplier_id' => $supplier->id,
+        'item_purchase_option_id' => $option->id,
+        'pack_count' => '2',
+    ])->assertUnauthorized();
+});
+
+it('57. forbids creating a draft purchase order from a material supplier package without purchase order create permission', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $uom = ($this->makeUom)($tenant);
+    $item = ($this->makeItem)($tenant, $uom);
+    $supplier = ($this->makeSupplier)($tenant);
+    $option = ($this->makeOption)($tenant, $supplier, $item, $uom);
+
+    ($this->grantPermissions)($user, ['inventory-materials-view', 'purchasing-suppliers-view']);
+
+    ($this->postMaterialPurchaseOrder)($user, $item, [
+        'supplier_id' => $supplier->id,
+        'item_purchase_option_id' => $option->id,
+        'pack_count' => '2',
+    ])->assertForbidden();
+});
+
+it('58. creates a draft purchase order with exactly one line from a supplier package and returns the redirect url', function (): void {
+    $tenant = ($this->makeTenant)(['currency_code' => 'USD']);
+    $user = ($this->makeUser)($tenant);
+    $uom = ($this->makeUom)($tenant, ['symbol' => 'kg-msp-58']);
+    $item = ($this->makeItem)($tenant, $uom, ['name' => 'PO Create Material']);
+    $supplier = ($this->makeSupplier)($tenant, ['company_name' => 'PO Create Supplier']);
+    $option = ($this->makeOption)($tenant, $supplier, $item, $uom);
+    ($this->makePrice)($tenant, $option, [
+        'price_cents' => 2500,
+        'converted_price_cents' => 2500,
+        'price_currency_code' => 'USD',
+    ]);
+
+    ($this->grantPermissions)($user, [
+        'inventory-materials-view',
+        'purchasing-suppliers-view',
+        'purchasing-purchase-orders-create',
+    ]);
+
+    $response = ($this->postMaterialPurchaseOrder)($user, $item, [
+        'supplier_id' => $supplier->id,
+        'item_purchase_option_id' => $option->id,
+        'pack_count' => '3',
+    ])->assertCreated();
+
+    $purchaseOrderId = $response->json('data.id');
+
+    expect($response->json('data.show_url'))->toBe(route('purchasing.orders.show', $purchaseOrderId));
+
+    $this->assertDatabaseHas('purchase_orders', [
+        'id' => $purchaseOrderId,
+        'tenant_id' => $tenant->id,
+        'supplier_id' => $supplier->id,
+        'status' => PurchaseOrder::STATUS_DRAFT,
+        'po_subtotal_cents' => 7500,
+        'po_grand_total_cents' => 7500,
+    ]);
+
+    $this->assertDatabaseHas('purchase_order_lines', [
+        'purchase_order_id' => $purchaseOrderId,
+        'item_id' => $item->id,
+        'item_purchase_option_id' => $option->id,
+        'pack_count' => 3,
+        'unit_price_cents' => 2500,
+        'line_subtotal_cents' => 7500,
+    ]);
+});
+
+it('58a. keeps the copied purchase order line price historical after the supplier package price changes later', function (): void {
+    $tenant = ($this->makeTenant)(['currency_code' => 'USD']);
+    $user = ($this->makeUser)($tenant);
+    $uom = ($this->makeUom)($tenant, ['symbol' => 'kg-msp-58a']);
+    $item = ($this->makeItem)($tenant, $uom, ['name' => 'Historical Price Material']);
+    $supplier = ($this->makeSupplier)($tenant, ['company_name' => 'Historical Price Supplier']);
+    $option = ($this->makeOption)($tenant, $supplier, $item, $uom);
+    $initialPrice = ($this->makePrice)($tenant, $option, [
+        'price_cents' => 1800,
+        'converted_price_cents' => 1800,
+        'price_currency_code' => 'USD',
+    ]);
+
+    ($this->grantPermissions)($user, [
+        'inventory-materials-view',
+        'purchasing-suppliers-view',
+        'purchasing-purchase-orders-create',
+    ]);
+
+    $response = ($this->postMaterialPurchaseOrder)($user, $item, [
+        'supplier_id' => $supplier->id,
+        'item_purchase_option_id' => $option->id,
+        'pack_count' => '4',
+    ])->assertCreated();
+
+    $purchaseOrderId = $response->json('data.id');
+
+    ItemPurchaseOptionPrice::query()
+        ->whereKey($initialPrice->id)
+        ->update(['ended_at' => now()]);
+
+    ($this->makePrice)($tenant, $option, [
+        'price_cents' => 2200,
+        'converted_price_cents' => 2200,
+        'price_currency_code' => 'USD',
+    ]);
+
+    $this->assertDatabaseHas('purchase_order_lines', [
+        'purchase_order_id' => $purchaseOrderId,
+        'item_purchase_option_id' => $option->id,
+        'unit_price_cents' => 1800,
+        'line_subtotal_cents' => 7200,
+    ]);
+
+    $this->assertDatabaseHas('purchase_orders', [
+        'id' => $purchaseOrderId,
+        'po_subtotal_cents' => 7200,
+        'po_grand_total_cents' => 7200,
+    ]);
+});
+
+it('59. rejects cross tenant supplier package purchase order creation', function (): void {
+    $tenant = ($this->makeTenant)();
+    $otherTenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $otherUom = ($this->makeUom)($otherTenant);
+    $otherItem = ($this->makeItem)($otherTenant, $otherUom);
+    $otherSupplier = ($this->makeSupplier)($otherTenant);
+    $otherOption = ($this->makeOption)($otherTenant, $otherSupplier, $otherItem, $otherUom);
+
+    ($this->grantPermissions)($user, [
+        'inventory-materials-view',
+        'purchasing-purchase-orders-create',
+    ]);
+
+    ($this->postMaterialPurchaseOrder)($user, $otherItem, [
+        'supplier_id' => $otherSupplier->id,
+        'item_purchase_option_id' => $otherOption->id,
+        'pack_count' => '2',
+    ])->assertNotFound();
+});
+
+it('60. rejects non purchasable material purchase order creation from supplier package context', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $uom = ($this->makeUom)($tenant);
+    $item = ($this->makeItem)($tenant, $uom, ['is_purchasable' => false]);
+    $supplier = ($this->makeSupplier)($tenant);
+    $option = ($this->makeOption)($tenant, $supplier, $item, $uom);
+
+    ($this->grantPermissions)($user, [
+        'inventory-materials-view',
+        'purchasing-purchase-orders-create',
+    ]);
+
+    ($this->postMaterialPurchaseOrder)($user, $item, [
+        'supplier_id' => $supplier->id,
+        'item_purchase_option_id' => $option->id,
+        'pack_count' => '2',
+    ])->assertStatus(422)
+        ->assertJsonValidationErrors(['item_id']);
+});
+
+it('61. rejects supplier packages that do not belong to the material', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $uom = ($this->makeUom)($tenant);
+    $item = ($this->makeItem)($tenant, $uom);
+    $otherItem = ($this->makeItem)($tenant, $uom, ['name' => 'Other Item']);
+    $supplier = ($this->makeSupplier)($tenant);
+    $option = ($this->makeOption)($tenant, $supplier, $otherItem, $uom);
+
+    ($this->grantPermissions)($user, [
+        'inventory-materials-view',
+        'purchasing-purchase-orders-create',
+    ]);
+
+    ($this->postMaterialPurchaseOrder)($user, $item, [
+        'supplier_id' => $supplier->id,
+        'item_purchase_option_id' => $option->id,
+        'pack_count' => '2',
+    ])->assertStatus(422)
+        ->assertJsonValidationErrors(['item_purchase_option_id']);
+});
+
+it('62. rejects a supplier that does not match the supplier package', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $uom = ($this->makeUom)($tenant);
+    $item = ($this->makeItem)($tenant, $uom);
+    $supplier = ($this->makeSupplier)($tenant);
+    $otherSupplier = ($this->makeSupplier)($tenant, ['company_name' => 'Wrong Supplier']);
+    $option = ($this->makeOption)($tenant, $supplier, $item, $uom);
+
+    ($this->grantPermissions)($user, [
+        'inventory-materials-view',
+        'purchasing-purchase-orders-create',
+    ]);
+
+    ($this->postMaterialPurchaseOrder)($user, $item, [
+        'supplier_id' => $otherSupplier->id,
+        'item_purchase_option_id' => $option->id,
+        'pack_count' => '2',
+    ])->assertStatus(422)
+        ->assertJsonValidationErrors(['supplier_id']);
+});
+
+it('63. validates missing and invalid supplier package purchase order create inputs', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $uom = ($this->makeUom)($tenant);
+    $item = ($this->makeItem)($tenant, $uom);
+
+    ($this->grantPermissions)($user, [
+        'inventory-materials-view',
+        'purchasing-purchase-orders-create',
+    ]);
+
+    ($this->postMaterialPurchaseOrder)($user, $item, [
+        'pack_count' => '0',
+    ])->assertStatus(422)
+        ->assertJsonValidationErrors(['item_purchase_option_id', 'pack_count']);
+});
+
+it('64. rejects zero negative and decimal pack counts for supplier package purchase order creation', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $uom = ($this->makeUom)($tenant);
+    $item = ($this->makeItem)($tenant, $uom);
+    $supplier = ($this->makeSupplier)($tenant);
+    $option = ($this->makeOption)($tenant, $supplier, $item, $uom);
+
+    ($this->grantPermissions)($user, [
+        'inventory-materials-view',
+        'purchasing-purchase-orders-create',
+    ]);
+
+    ($this->postMaterialPurchaseOrder)($user, $item, [
+        'item_purchase_option_id' => $option->id,
+        'pack_count' => '0',
+    ])->assertStatus(422)->assertJsonValidationErrors(['pack_count']);
+
+    ($this->postMaterialPurchaseOrder)($user, $item, [
+        'item_purchase_option_id' => $option->id,
+        'pack_count' => '-1',
+    ])->assertStatus(422)->assertJsonValidationErrors(['pack_count']);
+
+    ($this->postMaterialPurchaseOrder)($user, $item, [
+        'item_purchase_option_id' => $option->id,
+        'pack_count' => '1.5',
+    ])->assertStatus(422)->assertJsonValidationErrors(['pack_count']);
+});
+
+it('64a. rejects supplier package purchase order creation when the selected package has no current price', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $uom = ($this->makeUom)($tenant);
+    $item = ($this->makeItem)($tenant, $uom);
+    $supplier = ($this->makeSupplier)($tenant);
+    $option = ($this->makeOption)($tenant, $supplier, $item, $uom);
+
+    ($this->grantPermissions)($user, [
+        'inventory-materials-view',
+        'purchasing-purchase-orders-create',
+    ]);
+
+    ($this->postMaterialPurchaseOrder)($user, $item, [
+        'supplier_id' => $supplier->id,
+        'item_purchase_option_id' => $option->id,
+        'pack_count' => '2',
+    ])->assertStatus(422)
+        ->assertJsonValidationErrors(['item_purchase_option_id']);
+
+    $this->assertDatabaseCount('purchase_orders', 0);
+    $this->assertDatabaseCount('purchase_order_lines', 0);
+});
+
+it('65. opening the supplier package purchase flow does not create a purchase order automatically', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $uom = ($this->makeUom)($tenant);
+    $item = ($this->makeItem)($tenant, $uom);
+
+    ($this->grantPermissions)($user, [
+        'inventory-materials-view',
+        'purchasing-suppliers-view',
+        'purchasing-purchase-orders-create',
+    ]);
+
+    ($this->getShow)($user, $item)->assertOk();
+
+    $this->assertDatabaseCount('purchase_orders', 0);
 });
