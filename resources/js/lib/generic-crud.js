@@ -11,6 +11,7 @@ export function createGenericCrud(config) {
         columns: Array.isArray(crud.columns) ? crud.columns : [],
         headers: crud.headers && typeof crud.headers === 'object' ? crud.headers : {},
         sortable: Array.isArray(crud.sortable) ? crud.sortable : [],
+        detailUrlTemplate: typeof crud.detailUrlTemplate === 'string' ? crud.detailUrlTemplate : '',
         buildListQueryParams(search, sort) {
             const params = new URLSearchParams();
             const normalizedSearch = typeof search === 'string' ? search.trim() : '';
@@ -44,6 +45,13 @@ export function createGenericCrud(config) {
                 column,
                 direction: currentSort.direction === 'desc' ? 'asc' : 'desc',
             };
+        },
+        buildDetailUrl(record) {
+            if (!this.detailUrlTemplate || !record || record.id === undefined || record.id === null) {
+                return '';
+            }
+
+            return this.detailUrlTemplate.replace('{id}', encodeURIComponent(String(record.id)));
         },
         async fetchList({ search, sort, onStart, onSuccess, onValidationError, onError, onFinally }) {
             if (!this.endpoints.list) {

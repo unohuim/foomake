@@ -1115,10 +1115,11 @@ it('31. imported products appear on the manufacturing materials index after impo
         ]],
     ])->assertCreated();
 
-    $this->actingAs($user)
-        ->get(route('materials.index'))
-        ->assertOk()
-        ->assertSee('Visible Imported Material Item');
+    $response = $this->actingAs($user)
+        ->getJson(route('materials.list'))
+        ->assertOk();
+
+    expect(collect($response->json('data'))->pluck('name')->contains('Visible Imported Material Item'))->toBeTrue();
 });
 
 it('32. protects the invariant that no separate products table is introduced for imports', function () {

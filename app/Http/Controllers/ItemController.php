@@ -3,9 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\Item;
-use App\Models\ItemPurchaseOption;
+use App\Models\Supplier;
 use App\Models\Uom;
-use App\Support\QuantityFormatter;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -39,44 +38,19 @@ class ItemController extends Controller
         }
 
         $canViewPurchasing = Gate::allows('purchasing-suppliers-view');
-        $packages = [];
-
-        if ($canViewPurchasing) {
-            $packages = ItemPurchaseOption::query()
-                ->with(['supplier', 'packUom', 'currentPrice'])
-                ->where('item_id', $item->id)
-                ->whereNotNull('supplier_id')
-                ->whereHas('supplier')
-                ->orderBy('id')
-                ->get()
-                ->map(function (ItemPurchaseOption $option) {
-                    $currentPrice = $option->currentPrice;
-                    $packQuantity = bcadd((string) $option->pack_quantity, '0', 6);
-                    $packPrecision = (int) ($option->packUom?->display_precision ?? 1);
-
-                    return [
-                        'id' => $option->id,
-                        'supplier_company_name' => $option->supplier?->company_name,
-                        'pack_quantity' => $packQuantity,
-                        'pack_quantity_display' => QuantityFormatter::format($packQuantity, $packPrecision),
-                        'pack_uom_symbol' => $option->packUom?->symbol,
-                        'supplier_sku' => $option->supplier_sku,
-                        'current_price_display' => $currentPrice
-                            ? $this->formatMoney($currentPrice->price_currency_code, $currentPrice->converted_price_cents)
-                            : null,
-                    ];
-                })
-                ->values()
-                ->toArray();
-        }
+        $canManagePurchasing = Gate::allows('purchasing-suppliers-manage');
 
         $payload = [
             'item' => [
                 'id' => $item->id,
                 'name' => $item->name,
             ],
-            'packages' => $packages,
             'canViewPurchasing' => $canViewPurchasing,
+            'sections' => [
+                'supplierPackages' => $canViewPurchasing && $item->is_purchasable
+                    ? $this->supplierPackagesSectionConfig($request, $item, $canManagePurchasing)
+                    : null,
+            ],
         ];
 
         return view('materials.show', [
@@ -278,15 +252,135 @@ class ItemController extends Controller
     }
 
     /**
-     * Format cents into currency display.
+     * @return array<string, mixed>
      */
-    private function formatMoney(?string $currencyCode, ?int $cents): ?string
+    private function supplierPackagesSectionConfig(Request $request, Item $item, bool $canManagePurchasing): array
     {
-        if (!$currencyCode || $cents === null) {
-            return null;
-        }
-
-        return sprintf('%s %s', $currencyCode, number_format($cents / 100, 2, '.', ''));
+        return [
+            'resource' => 'supplier-packages',
+            'title' => 'Supplier Packages',
+            'description' => 'Linked purchasing options for this material.',
+            'emptyState' => 'No supplier packages have been added for this material.',
+            'csrfToken' => csrf_token(),
+            'permissions' => [
+                'canCreate' => $canManagePurchasing,
+            ],
+            'endpoints' => [
+                'list' => route('materials.supplier-packages.index', $item),
+                'create' => route('materials.supplier-packages.store', $item),
+                'update' => url("/materials/{$item->id}/supplier-packages/{id}"),
+                'remove' => url("/materials/{$item->id}/supplier-packages/{id}"),
+            ],
+            'fields' => [
+                [
+                    'name' => 'supplier_id',
+                    'label' => 'Supplier',
+                    'type' => 'select',
+                    'required' => true,
+                    'options' => Supplier::query()
+                        ->where('tenant_id', $request->user()->tenant_id)
+                        ->orderBy('company_name')
+                        ->get(['id', 'company_name'])
+                        ->map(fn (Supplier $supplier): array => [
+                            'value' => (string) $supplier->id,
+                            'label' => $supplier->company_name,
+                        ])
+                        ->values()
+                        ->all(),
+                ],
+                [
+                    'name' => 'pack_quantity',
+                    'label' => 'Package quantity',
+                    'type' => 'text',
+                    'required' => true,
+                ],
+                [
+                    'name' => 'pack_uom_id',
+                    'label' => 'Package UoM',
+                    'type' => 'select',
+                    'required' => true,
+                    'options' => Uom::query()
+                        ->where('tenant_id', $request->user()->tenant_id)
+                        ->orderBy('symbol')
+                        ->get(['id', 'symbol', 'name'])
+                        ->map(fn (Uom $uom): array => [
+                            'value' => (string) $uom->id,
+                            'label' => sprintf('%s (%s)', $uom->name, $uom->symbol),
+                        ])
+                        ->values()
+                        ->all(),
+                ],
+                [
+                    'name' => 'supplier_sku',
+                    'label' => 'Supplier SKU',
+                    'type' => 'text',
+                    'required' => false,
+                ],
+                [
+                    'name' => 'price_amount',
+                    'label' => 'Price',
+                    'type' => 'text',
+                    'required' => true,
+                ],
+            ],
+            'rowLayout' => [
+                'primaryText' => [
+                    'field' => 'display.primaryText',
+                    'fallback' => 'Unknown supplier',
+                ],
+                'secondaryFields' => [
+                    [
+                        'label' => 'Package',
+                        'field' => 'display.packageText',
+                        'fallback' => '—',
+                    ],
+                    [
+                        'label' => 'SKU',
+                        'field' => 'display.skuText',
+                        'fallback' => '—',
+                    ],
+                ],
+                'badges' => [
+                    [
+                        'field' => 'display.stateText',
+                        'toneField' => 'display.stateTone',
+                        'fallback' => '',
+                    ],
+                ],
+                'rightMeta' => [
+                    [
+                        'label' => 'Price',
+                        'field' => 'display.priceText',
+                        'fallback' => 'No price',
+                        'strong' => true,
+                    ],
+                ],
+            ],
+            'actions' => [
+                [
+                    'id' => 'edit',
+                    'label' => 'Edit',
+                    'type' => 'edit',
+                    'tone' => 'default',
+                ],
+                [
+                    'id' => 'remove',
+                    'label' => 'Remove',
+                    'type' => 'remove',
+                    'tone' => 'warning',
+                    'endpointKey' => 'remove',
+                    'method' => 'DELETE',
+                ],
+                [
+                    'id' => 'archive',
+                    'label' => 'Archive',
+                    'type' => 'archive',
+                    'tone' => 'warning',
+                    'endpointKey' => 'remove',
+                    'method' => 'DELETE',
+                ],
+            ],
+        ];
     }
 
     /**

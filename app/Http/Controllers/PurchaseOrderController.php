@@ -135,6 +135,7 @@ class PurchaseOrderController extends Controller
 
         $purchaseOptions = ItemPurchaseOption::query()
             ->where('tenant_id', $request->user()->tenant_id)
+            ->where('is_active', true)
             ->with(['item', 'packUom', 'currentPrice'])
             ->orderBy('id')
             ->get();

@@ -97,6 +97,59 @@ class StockMove extends Model
 }
 ```
 
+### Configured CRUD Page Module Pattern
+
+**Name:** Configured CRUD Page Module Pattern  
+**Type:** UI Architectural Pattern  
+**Location:**  
+- `app/Http/Controllers/SalesProductController.php`  
+- `app/Http/Controllers/CustomerController.php`  
+- `app/Http/Controllers/MaterialController.php`  
+- `resources/views/sales/products/index.blade.php`  
+- `resources/views/sales/customers/index.blade.php`  
+- `resources/views/materials/index.blade.php`  
+- `resources/js/lib/crud-config.js`  
+- `resources/js/lib/generic-crud.js`  
+- `resources/js/lib/crud-page.js`  
+- `resources/js/pages/sales-products-index.js`  
+- `resources/js/pages/sales-customers-index.js`  
+- `resources/js/pages/materials-index.js`
+
+**Purpose:**  
+Provide a mount-only Blade shell plus server-configured shared CRUD renderer so index pages reuse one toolbar, list, empty-state, and row-action pattern without global JavaScript state.
+
+**When to Use:**  
+Any interactive CRUD index page that can express its list, row display, actions, and optional import/export behavior from a server-generated contract.
+
+**When Not to Use:**  
+Static pages, multi-step workflows, or pages that cannot express their behavior through the shared CRUD contract.
+
+**Public Interface:**  
+- `data-crud-config`  
+- `data-crud-root`  
+- `createGenericCrud(parseCrudConfig(rootEl))`  
+- `mountCrudRenderer(rootEl, config)`  
+- optional `detailUrlTemplate`
+
+**Example Usage:**  
+```php
+$crudConfig = [
+    'resource' => 'materials',
+    'endpoints' => [
+        'list' => route('materials.list'),
+        'create' => route('materials.store'),
+        'update' => url('/materials/{id}'),
+        'delete' => url('/materials/{id}'),
+    ],
+    'detailUrlTemplate' => url('/materials/{id}'),
+];
+```
+
+Notes:
+- Products, Customers, and Materials are current reference implementations.
+- `detailUrlTemplate` is optional. When present, create flows may redirect to the created record detail page after success.
+- When `detailUrlTemplate` is absent, the existing inline success behavior such as list refresh remains the fallback.
+
 ---
 
 ### User Auth Identity Safety

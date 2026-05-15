@@ -6,6 +6,7 @@ use App\Http\Controllers\ItemController;
 use App\Http\Controllers\ItemPurchaseOptionPriceController;
 use App\Http\Controllers\MakeOrderController;
 use App\Http\Controllers\MaterialController;
+use App\Http\Controllers\MaterialSupplierPackageController;
 use App\Http\Controllers\NavigationStateController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\CustomerContactController;
@@ -77,9 +78,18 @@ Route::middleware('auth')->group(function () {
     Route::delete('/manufacturing/inventory-counts/{inventoryCount}/lines/{line}', [InventoryCountController::class, 'destroyLine']);
 
     Route::get('/materials', [MaterialController::class, 'index'])->name('materials.index');
+    Route::get('/materials/list', [MaterialController::class, 'list'])->name('materials.list');
     Route::post('/materials', [ItemController::class, 'store'])->name('materials.store');
     Route::patch('/materials/{item}', [ItemController::class, 'update'])->name('materials.update');
     Route::delete('/materials/{item}', [ItemController::class, 'destroy'])->name('materials.destroy');
+    Route::get('/materials/{item}/supplier-packages', [MaterialSupplierPackageController::class, 'index'])
+        ->name('materials.supplier-packages.index');
+    Route::post('/materials/{item}/supplier-packages', [MaterialSupplierPackageController::class, 'store'])
+        ->name('materials.supplier-packages.store');
+    Route::patch('/materials/{item}/supplier-packages/{option}', [MaterialSupplierPackageController::class, 'update'])
+        ->name('materials.supplier-packages.update');
+    Route::delete('/materials/{item}/supplier-packages/{option}', [MaterialSupplierPackageController::class, 'destroy'])
+        ->name('materials.supplier-packages.destroy');
     Route::get('/materials/uom-categories', [UomCategoryController::class, 'index'])
         ->name('materials.uom-categories.index');
     Route::get('/manufacturing/uom-categories', [UomCategoryController::class, 'index']);

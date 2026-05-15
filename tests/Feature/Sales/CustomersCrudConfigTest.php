@@ -258,6 +258,25 @@ it('7. config includes customer headers', function () {
     ]);
 });
 
+it('8. config includes the optional detail redirect template because customers have a detail route', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermission)($user, 'sales-customers-manage');
+
+    $config = ($this->extractCrudConfig)(($this->getCustomersIndex)($user));
+
+    expect($config['detailUrlTemplate'] ?? null)->toBe(url('/sales/customers/{id}'));
+});
+
+it('9. customers page module redirects after create using the shared crud detail helper', function () {
+    $pageSource = file_get_contents(resource_path('js/pages/sales-customers-index.js'));
+
+    expect($pageSource)->toContain('const redirectUrl = this.crud.buildDetailUrl(data?.data);')
+        ->and($pageSource)->toContain('window.location.assign(redirectUrl);')
+        ->and($pageSource)->toContain('await this.fetchCustomers();');
+});
+
 it('8. config includes customer sortable fields', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);

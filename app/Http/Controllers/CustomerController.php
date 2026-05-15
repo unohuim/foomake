@@ -1087,6 +1087,7 @@ class CustomerController extends Controller
                 'importPreview' => route('sales.customers.import.preview'),
                 'importStore' => route('sales.customers.import.store'),
             ],
+            'detailUrlTemplate' => url('/sales/customers/{id}'),
             'columns' => ['name', 'email', 'address_summary'],
             'headers' => [
                 'name' => 'Name',

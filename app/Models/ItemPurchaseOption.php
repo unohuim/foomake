@@ -17,6 +17,13 @@ class ItemPurchaseOption extends Model
     protected $guarded = [];
 
     /**
+     * @var array<string, string>
+     */
+    protected $casts = [
+        'is_active' => 'boolean',
+    ];
+
+    /**
      * Get the tenant that owns the purchase option.
      */
     public function tenant(): BelongsTo

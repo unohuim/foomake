@@ -42,7 +42,8 @@ class PurchaseOrderLineController extends Controller
                 'integer',
                 Rule::exists('item_purchase_options', 'id')
                     ->where('tenant_id', $request->user()->tenant_id)
-                    ->where('supplier_id', $purchaseOrder->supplier_id),
+                    ->where('supplier_id', $purchaseOrder->supplier_id)
+                    ->where('is_active', true),
             ],
             'item_id' => ['nullable', 'integer'],
             'pack_count' => ['required', 'integer', 'min:1'],
@@ -61,6 +62,7 @@ class PurchaseOrderLineController extends Controller
             ->with(['item', 'packUom'])
             ->where('id', $validated['item_purchase_option_id'])
             ->where('tenant_id', $request->user()->tenant_id)
+            ->where('is_active', true)
             ->firstOrFail();
 
         if (isset($validated['item_id']) && (int) $validated['item_id'] !== (int) $option->item_id) {

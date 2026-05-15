@@ -5,63 +5,14 @@
         </h2>
     </x-slot>
 
-    @php
-        $uomsExist = \App\Models\Uom::query()->exists();
-        $uoms = \App\Models\Uom::query()->orderBy('name')->get();
-        $tenantCurrency = auth()->user()?->tenant?->currency_code ?: (string) config('app.currency_code', 'USD');
-        $formatCentsToAmount = function (?int $cents): ?string {
-            if ($cents === null) {
-                return null;
-            }
-
-            $whole = intdiv($cents, 100);
-            $decimal = $cents % 100;
-
-            return sprintf('%d.%02d', $whole, $decimal);
-        };
-        $uomsPayload = $uoms->map(function ($uom) {
-            return [
-                'id' => $uom->id,
-                'name' => $uom->name,
-                'symbol' => $uom->symbol,
-            ];
-        });
-        $itemsPayload = $items->map(function ($item) use ($formatCentsToAmount) {
-            return [
-                'id' => $item->id,
-                'name' => $item->name,
-                'base_uom_id' => $item->base_uom_id,
-                'base_uom_name' => $item->baseUom->name,
-                'base_uom_symbol' => $item->baseUom->symbol,
-                'is_purchasable' => $item->is_purchasable,
-                'is_sellable' => $item->is_sellable,
-                'is_manufacturable' => $item->is_manufacturable,
-                'default_price_amount' => $formatCentsToAmount($item->default_price_cents),
-                'default_price_currency_code' => $item->default_price_currency_code,
-                'has_stock_moves' => $item->stockMoves()->exists(),
-            ];
-        });
-        $payload = [
-            'items' => $itemsPayload,
-            'uoms' => $uomsPayload,
-            'uomsExist' => $uomsExist,
-            'updateUrlBase' => url('/materials'),
-            'showUrlBase' => url('/materials'),
-            'storeUrl' => route('materials.store'),
-            'navigationStateUrl' => route('navigation.state'),
-            'csrfToken' => csrf_token(),
-            'tenantCurrency' => $tenantCurrency,
-        ];
-    @endphp
-
     <script type="application/json" id="materials-index-payload">@json($payload)</script>
 
     <div
-        class="py-12"
+        class="flex h-[calc(100vh-8rem)] min-h-0 flex-col overflow-hidden"
         data-page="materials-index"
         data-payload="materials-index-payload"
+        data-crud-config='@json($crudConfig)'
         x-data="materialsIndex"
-        x-init="init()"
     >
         <div class="fixed top-6 right-6 z-50" x-show="toast.visible">
             <div
@@ -71,121 +22,8 @@
             ></div>
         </div>
 
-        <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
-            <div class="flex items-center justify-between mb-6" x-show="items.length > 0">
-                <h3 class="text-lg font-medium text-gray-900">All materials</h3>
-                <button
-                    type="button"
-                    class="inline-flex items-center px-4 py-2 bg-blue-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition ease-in-out duration-150"
-                    x-on:click="openCreate()"
-                    :disabled="!uomsExist"
-                    :class="!uomsExist ? 'opacity-50 cursor-not-allowed' : ''"
-                >
-                    Create Material
-                </button>
-            </div>
-
-            <div x-cloak x-show="items.length === 0">
-                <div class="bg-white border border-gray-100 shadow-sm sm:rounded-lg">
-                    <div class="p-6">
-                        <h3 class="text-lg font-medium text-gray-900">No materials yet</h3>
-                        <p class="mt-2 text-sm text-gray-600">
-                            Materials will appear here once you add them.
-                        </p>
-                        @if (! $uomsExist)
-                            <p class="mt-3 text-sm text-gray-600">
-                                Create a Unit of Measure first to add materials.
-                            </p>
-                        @endif
-                        <div class="mt-4">
-                            <button
-                                type="button"
-                                class="inline-flex items-center px-4 py-2 bg-blue-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition ease-in-out duration-150"
-                                x-on:click="openCreate()"
-                                :disabled="!uomsExist"
-                                :class="!uomsExist ? 'opacity-50 cursor-not-allowed' : ''"
-                            >
-                                Create Material
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div x-show="items.length > 0">
-                <div class="bg-white border border-gray-100 shadow-sm sm:rounded-lg">
-                    <div class="p-6">
-                        <div class="overflow-x-auto">
-                            <table class="min-w-full divide-y divide-gray-100">
-                                <thead>
-                                    <tr>
-                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                            Name
-                                        </th>
-                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                            Base UoM
-                                        </th>
-                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                            Flags
-                                        </th>
-                                        <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                            Actions
-                                        </th>
-                                    </tr>
-                                </thead>
-                                <tbody class="divide-y divide-gray-100">
-                                    <template x-for="item in items" :key="item.id">
-                                        <tr>
-                                            <td class="px-4 py-4 text-sm text-gray-900">
-                                                <a
-                                                    class="text-gray-900 hover:text-blue-600"
-                                                    x-bind:href="showUrlBase + '/' + item.id"
-                                                    x-text="item.name"
-                                                ></a>
-                                            </td>
-                                            <td class="px-4 py-4 text-sm text-gray-700">
-                                                <span x-text="item.base_uom_name"></span>
-                                                (<span x-text="item.base_uom_symbol"></span>)
-                                            </td>
-                                            <td class="px-4 py-4 text-sm text-gray-700">
-                                                <div class="flex flex-wrap gap-2 text-xs text-gray-600">
-                                                    <span class="px-2 py-1 bg-gray-100 rounded-full" x-show="item.is_purchasable">
-                                                        Purchasable
-                                                    </span>
-                                                    <span class="px-2 py-1 bg-gray-100 rounded-full" x-show="item.is_sellable">
-                                                        Sellable
-                                                    </span>
-                                                    <span class="px-2 py-1 bg-gray-100 rounded-full" x-show="item.is_manufacturable">
-                                                        Manufacturable
-                                                    </span>
-                                                    <span class="text-gray-400" x-show="!item.is_purchasable && !item.is_sellable && !item.is_manufacturable">—</span>
-                                                </div>
-                                            </td>
-
-                                            <td class="px-4 py-4 text-right text-sm">
-                                                <div
-                                                    class="relative inline-block text-left"
-                                                    x-on:keydown.escape.window="closeActionMenu()"
-                                                >
-                                                    <button
-                                                        type="button"
-                                                        class="inline-flex items-center justify-center w-8 h-8 text-gray-500 hover:text-gray-700"
-                                                        aria-label="Material actions"
-                                                        x-on:click="toggleActionMenu($event, item.id)"
-                                                    >
-                                                        ⋮
-                                                    </button>
-                                                </div>
-                                            </td>
-
-                                        </tr>
-                                    </template>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            </div>
+        <div class="mx-auto flex h-full min-h-0 w-full max-w-7xl flex-1 flex-col overflow-hidden sm:px-6 lg:px-8">
+            <div class="flex h-full min-h-0 flex-1 flex-col" data-crud-root></div>
 
             <div
                 class="fixed inset-0 z-40 items-center justify-center hidden"
@@ -226,33 +64,5 @@
             @include('materials.partials.create-material-slide-over', ['uoms' => $uoms])
             @include('materials.partials.edit-material-slide-over', ['uoms' => $uoms])
         </div>
-
-        <template x-teleport="body">
-            <div
-                x-show="actionMenuOpen"
-                x-cloak
-                x-on:click.outside="closeActionMenu()"
-                x-transition
-                class="fixed z-50 mt-2 w-40 rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5"
-                x-bind:style="'top:' + actionMenuTop + 'px; left:' + (actionMenuLeft - 160) + 'px;'"
-            >
-                <div class="py-1">
-                    <button
-                        type="button"
-                        class="block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100"
-                        x-on:click="openEditFromActionMenu()"
-                    >
-                        Edit
-                    </button>
-                    <button
-                        type="button"
-                        class="block w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50"
-                        x-on:click="openDeleteFromActionMenu()"
-                    >
-                        Delete
-                    </button>
-                </div>
-            </div>
-        </template>
     </div>
 </x-app-layout>

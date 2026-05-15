@@ -1,9 +1,43 @@
-import Alpine from 'alpinejs';
+import { parseCrudConfig } from '../lib/crud-config';
+import { mountCrudRenderer } from '../lib/crud-page';
+import { createGenericCrud } from '../lib/generic-crud';
 import { refreshNavigationState } from '../navigation/refresh-navigation-state';
 
 export function mount(rootEl, payload) {
+    const Alpine = window.Alpine;
     const safePayload = payload || {};
-    const payloadUoms = safePayload.uoms || [];
+    const crud = createGenericCrud(parseCrudConfig(rootEl));
+    const crudRootEl = rootEl.querySelector('[data-crud-root]');
+    const actionDefinitions = (Array.isArray(crud.actions) ? crud.actions : []).map((action) => ({
+        ...action,
+        handler: action.id === 'edit' ? 'openEdit(record)' : action.id === 'delete' ? 'openDelete(record)' : '',
+    }));
+    const rendererConfig = {
+        ...crud,
+        state: {
+            records: 'materials',
+            loading: 'isLoadingList',
+            error: 'listError',
+            search: 'search',
+            sort: 'sort',
+        },
+        handlers: {
+            searchInput: 'handleSearchInput()',
+            toggleSort: 'toggleSort(column)',
+            create: 'openCreate()',
+        },
+        rowDisplay: {
+            ...crud.rowDisplay,
+            cellTextExpression: 'materialCellText(record, column)',
+        },
+        mobileCard: {
+            ...crud.mobileCard,
+        },
+        actions: actionDefinitions,
+    };
+
+    mountCrudRenderer(crudRootEl, rendererConfig);
+
     const emptyErrors = () => ({
         name: [],
         base_uom_id: [],
@@ -11,63 +45,169 @@ export function mount(rootEl, payload) {
         default_price_currency_code: [],
     });
 
+    const emptyForm = () => ({
+        name: '',
+        base_uom_id: '',
+        is_purchasable: false,
+        is_sellable: false,
+        is_manufacturable: false,
+        default_price_amount: '',
+    });
+
+    const buildItemEndpoint = (template, itemId) => {
+        if (!template || itemId === null || itemId === undefined) {
+            return '';
+        }
+
+        return template.replace('{id}', encodeURIComponent(String(itemId)));
+    };
+
     Alpine.data('materialsIndex', () => ({
-        items: safePayload.items || [],
-        uoms: payloadUoms,
+        crud,
+        endpoints: crud.endpoints || {},
+        columns: Array.isArray(crud.columns) ? crud.columns : [],
+        headers: crud.headers || {},
+        sortable: Array.isArray(crud.sortable) ? crud.sortable : [],
+        materials: [],
+        uoms: Array.isArray(safePayload.uoms) ? safePayload.uoms : [],
         uomsById: {},
-        uomsExist: Boolean(safePayload.uomsExist),
-        updateUrlBase: safePayload.updateUrlBase || '',
-        showUrlBase: safePayload.showUrlBase || '',
-        storeUrl: safePayload.storeUrl || '',
         navigationStateUrl: safePayload.navigationStateUrl || '',
         csrfToken: safePayload.csrfToken || '',
         tenantCurrency: safePayload.tenantCurrency || '',
+        isLoadingList: false,
+        listError: '',
+        search: '',
+        sort: {
+            column: 'name',
+            direction: 'asc',
+        },
         isCreateOpen: false,
         isSubmitting: false,
         errors: emptyErrors(),
         generalError: '',
+        form: emptyForm(),
         isEditOpen: false,
         isEditSubmitting: false,
         editErrors: emptyErrors(),
         editGeneralError: '',
         editItemId: null,
         editBaseUomLocked: false,
+        editForm: emptyForm(),
         isDeleteOpen: false,
         isDeleteSubmitting: false,
         deleteError: '',
         deleteItemId: null,
         deleteItemName: '',
-        actionMenuOpen: false,
-        actionMenuTop: 0,
-        actionMenuLeft: 0,
-        actionMenuItemId: null,
         toast: {
             visible: false,
             message: '',
             type: 'success',
             timeoutId: null,
         },
-        form: {
-            name: '',
-            base_uom_id: '',
-            is_purchasable: false,
-            is_sellable: false,
-            is_manufacturable: false,
-            default_price_amount: '',
-        },
-        editForm: {
-            name: '',
-            base_uom_id: '',
-            is_purchasable: false,
-            is_sellable: false,
-            is_manufacturable: false,
-            default_price_amount: '',
-        },
         init() {
-            this.uomsById = this.uoms.reduce((map, uom) => {
-                map[uom.id] = uom;
-                return map;
+            this.uomsById = this.uoms.reduce((carry, uom) => {
+                carry[uom.id] = uom;
+
+                return carry;
             }, {});
+            this.fetchMaterials();
+        },
+        columnHeader(column) {
+            return this.headers[column] || column;
+        },
+        isSortableColumn(column) {
+            return this.sortable.includes(column);
+        },
+        materialBaseUomLabel(record) {
+            const name = record?.base_uom_name || '';
+            const symbol = record?.base_uom_symbol || '';
+
+            if (name && symbol) {
+                return `${name} (${symbol})`;
+            }
+
+            return name || symbol || '—';
+        },
+        materialFlagsLabel(record) {
+            const flags = [];
+
+            if (record?.is_purchasable) {
+                flags.push('Purchasable');
+            }
+
+            if (record?.is_sellable) {
+                flags.push('Sellable');
+            }
+
+            if (record?.is_manufacturable) {
+                flags.push('Manufacturable');
+            }
+
+            return flags.length > 0 ? flags.join(', ') : '—';
+        },
+        materialCellText(record, column) {
+            if (column === 'base_uom') {
+                return this.materialBaseUomLabel(record);
+            }
+
+            if (column === 'flags') {
+                return this.materialFlagsLabel(record);
+            }
+
+            return record?.[column] || '—';
+        },
+        showToast(type, message) {
+            this.toast.type = type;
+            this.toast.message = message;
+            this.toast.visible = true;
+
+            if (this.toast.timeoutId) {
+                clearTimeout(this.toast.timeoutId);
+            }
+
+            this.toast.timeoutId = setTimeout(() => {
+                this.toast.visible = false;
+            }, 2500);
+        },
+        async fetchMaterials() {
+            await this.crud.fetchList({
+                search: this.search,
+                sort: this.sort,
+                onStart: () => {
+                    this.isLoadingList = true;
+                    this.listError = '';
+                },
+                onSuccess: (data) => {
+                    this.materials = Array.isArray(data?.data) ? data.data : [];
+
+                    if (data?.meta?.sort?.column && data?.meta?.sort?.direction) {
+                        this.sort = {
+                            column: data.meta.sort.column,
+                            direction: data.meta.sort.direction,
+                        };
+                    }
+                },
+                onValidationError: () => {
+                    this.listError = 'Unable to load materials.';
+                },
+                onError: () => {
+                    this.listError = 'Unable to load materials.';
+                },
+                onFinally: () => {
+                    this.isLoadingList = false;
+                },
+            });
+        },
+        handleSearchInput() {
+            this.fetchMaterials();
+        },
+        toggleSort(column) {
+            if (!this.isSortableColumn(column)) {
+                return;
+            }
+
+            this.sort = this.crud.nextSort(this.sort, column);
+            this.fetchMaterials();
         },
         normalizeErrors(errors) {
             if (!errors || typeof errors !== 'object') {
@@ -85,27 +225,15 @@ export function mount(rootEl, payload) {
                     : [],
             };
         },
-        showToast(type, message) {
-            this.toast.type = type;
-            this.toast.message = message;
-            this.toast.visible = true;
-
-            if (this.toast.timeoutId) {
-                clearTimeout(this.toast.timeoutId);
-            }
-
-            this.toast.timeoutId = setTimeout(() => {
-                this.toast.visible = false;
-            }, 2500);
-        },
         openCreate() {
-            if (!this.uomsExist) {
+            if (!this.crud.permissions?.showCreate) {
                 return;
             }
 
             this.isCreateOpen = true;
             this.generalError = '';
             this.errors = emptyErrors();
+            this.form = emptyForm();
             this.$nextTick(() => {
                 this.$refs.createMaterialNameInput?.focus();
             });
@@ -115,33 +243,22 @@ export function mount(rootEl, payload) {
             this.isSubmitting = false;
             this.generalError = '';
             this.errors = emptyErrors();
-            this.resetForm();
+            this.form = emptyForm();
         },
-        resetForm() {
-            this.form = {
-                name: '',
-                base_uom_id: '',
-                is_purchasable: false,
-                is_sellable: false,
-                is_manufacturable: false,
-                default_price_amount: '',
-            };
-        },
-        openEdit(item) {
-            this.closeActionMenu();
-            this.editItemId = item.id;
+        openEdit(record) {
+            this.editItemId = record.id;
             this.editForm = {
-                name: item.name,
-                base_uom_id: item.base_uom_id,
-                is_purchasable: item.is_purchasable,
-                is_sellable: item.is_sellable,
-                is_manufacturable: item.is_manufacturable,
-                default_price_amount: item.default_price_amount || '',
+                name: record.name || '',
+                base_uom_id: record.base_uom_id ? String(record.base_uom_id) : '',
+                is_purchasable: Boolean(record.is_purchasable),
+                is_sellable: Boolean(record.is_sellable),
+                is_manufacturable: Boolean(record.is_manufacturable),
+                default_price_amount: record.default_price_amount || '',
             };
-            this.editBaseUomLocked = item.has_stock_moves;
-            this.isEditOpen = true;
+            this.editBaseUomLocked = Boolean(record.has_stock_moves);
             this.editErrors = emptyErrors();
             this.editGeneralError = '';
+            this.isEditOpen = true;
         },
         closeEdit() {
             this.isEditOpen = false;
@@ -150,22 +267,11 @@ export function mount(rootEl, payload) {
             this.editGeneralError = '';
             this.editItemId = null;
             this.editBaseUomLocked = false;
-            this.resetEditForm();
+            this.editForm = emptyForm();
         },
-        resetEditForm() {
-            this.editForm = {
-                name: '',
-                base_uom_id: '',
-                is_purchasable: false,
-                is_sellable: false,
-                is_manufacturable: false,
-                default_price_amount: '',
-            };
-        },
-        openDelete(item) {
-            this.closeActionMenu();
-            this.deleteItemId = item.id;
-            this.deleteItemName = item.name;
+        openDelete(record) {
+            this.deleteItemId = record.id;
+            this.deleteItemName = record.name || '';
             this.deleteError = '';
             this.isDeleteOpen = true;
         },
@@ -176,181 +282,92 @@ export function mount(rootEl, payload) {
             this.deleteItemId = null;
             this.deleteItemName = '';
         },
-        toggleActionMenu(event, itemId) {
-            if (this.actionMenuOpen && this.actionMenuItemId === itemId) {
-                this.closeActionMenu();
-                return;
-            }
-
-            const button = event.currentTarget;
-            if (!button) {
-                return;
-            }
-
-            const rect = button.getBoundingClientRect();
-
-            this.actionMenuTop = rect.bottom;
-            this.actionMenuLeft = rect.right;
-            this.actionMenuItemId = itemId;
-            this.actionMenuOpen = true;
-        },
-        closeActionMenu() {
-            this.actionMenuOpen = false;
-            this.actionMenuItemId = null;
-            this.actionMenuTop = 0;
-            this.actionMenuLeft = 0;
-        },
-        isActionMenuOpenFor(itemId) {
-            return this.actionMenuOpen && this.actionMenuItemId === itemId;
-        },
-        getActionMenuItem() {
-            return this.items.find((item) => item.id === this.actionMenuItemId) || null;
-        },
-        openEditFromActionMenu() {
-            const item = this.getActionMenuItem();
-            this.closeActionMenu();
-
-            if (!item) {
-                return;
-            }
-
-            this.openEdit(item);
-        },
-        openDeleteFromActionMenu() {
-            const item = this.getActionMenuItem();
-            this.closeActionMenu();
-
-            if (!item) {
-                return;
-            }
-
-            this.openDelete(item);
-        },
         async submitCreate() {
             this.isSubmitting = true;
             this.generalError = '';
             this.errors = emptyErrors();
 
-            const payload = {
-                name: this.form.name,
-                base_uom_id: this.form.base_uom_id,
-                is_purchasable: this.form.is_purchasable,
-                is_sellable: this.form.is_sellable,
-                is_manufacturable: this.form.is_manufacturable,
-                default_price_amount: this.form.default_price_amount,
-            };
-
-            const response = await fetch(this.storeUrl, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Accept: 'application/json',
-                    'X-CSRF-TOKEN': this.csrfToken,
+            await this.crud.submitCreate({
+                body: this.form,
+                csrfToken: this.csrfToken,
+                onValidationError: (data) => {
+                    this.errors = this.normalizeErrors(data.errors);
+                    this.generalError = data.message || 'The given data was invalid.';
                 },
-                body: JSON.stringify(payload),
+                onError: () => {
+                    this.generalError = 'Something went wrong. Please try again.';
+                },
+                onSuccess: async (data) => {
+                    const redirectUrl = this.crud.buildDetailUrl(data?.data);
+
+                    if (redirectUrl) {
+                        window.location.assign(redirectUrl);
+                        return;
+                    }
+
+                    await this.fetchMaterials();
+                    await refreshNavigationState(this.navigationStateUrl);
+                    this.closeCreate();
+                    this.showToast('success', 'Material created.');
+                },
+                onFinally: () => {
+                    this.isSubmitting = false;
+                },
             });
-
-            if (response.status === 422) {
-                const data = await response.json();
-                this.errors = this.normalizeErrors(data.errors);
-                this.isSubmitting = false;
-                return;
-            }
-
-            if (!response.ok) {
-                this.generalError = 'Something went wrong. Please try again.';
-                this.isSubmitting = false;
-                return;
-            }
-
-            const data = await response.json();
-            const uom = this.uomsById[data.data.base_uom_id] || { name: '', symbol: '' };
-
-            this.items.unshift({
-                id: data.data.id,
-                name: data.data.name,
-                base_uom_id: data.data.base_uom_id,
-                base_uom_name: uom.name,
-                base_uom_symbol: uom.symbol,
-                is_purchasable: data.data.is_purchasable,
-                is_sellable: data.data.is_sellable,
-                is_manufacturable: data.data.is_manufacturable,
-                default_price_amount: data.data.default_price_amount,
-                default_price_currency_code: data.data.default_price_currency_code,
-                has_stock_moves: false,
-            });
-
-            await refreshNavigationState(this.navigationStateUrl);
-            this.closeCreate();
         },
         async submitEdit() {
+            const endpoint = buildItemEndpoint(this.endpoints.update, this.editItemId);
+
+            if (!endpoint) {
+                this.editGeneralError = 'Something went wrong. Please try again.';
+                return;
+            }
+
             this.isEditSubmitting = true;
             this.editGeneralError = '';
             this.editErrors = emptyErrors();
 
-            const payload = {
-                name: this.editForm.name,
-                base_uom_id: this.editForm.base_uom_id,
-                is_purchasable: this.editForm.is_purchasable,
-                is_sellable: this.editForm.is_sellable,
-                is_manufacturable: this.editForm.is_manufacturable,
-                default_price_amount: this.editForm.default_price_amount,
-            };
-
-            const response = await fetch(this.updateUrlBase + '/' + this.editItemId, {
+            const response = await fetch(endpoint, {
                 method: 'PATCH',
                 headers: {
                     'Content-Type': 'application/json',
                     Accept: 'application/json',
                     'X-CSRF-TOKEN': this.csrfToken,
                 },
-                body: JSON.stringify(payload),
+                body: JSON.stringify(this.editForm),
             });
 
             if (response.status === 422) {
                 const data = await response.json();
                 this.editErrors = this.normalizeErrors(data.errors);
+                this.editGeneralError = data.message || 'The given data was invalid.';
                 this.isEditSubmitting = false;
                 return;
             }
 
             if (!response.ok) {
                 this.editGeneralError = 'Something went wrong. Please try again.';
-                this.showToast('error', 'Unable to update material.');
                 this.isEditSubmitting = false;
                 return;
             }
 
-            const data = await response.json();
-            const uom = this.uomsById[data.data.base_uom_id] || { name: '', symbol: '' };
-            const itemIndex = this.items.findIndex((item) => item.id === data.data.id);
-
-            if (itemIndex !== -1) {
-                this.items[itemIndex] = {
-                    ...this.items[itemIndex],
-                    id: data.data.id,
-                    name: data.data.name,
-                    base_uom_id: data.data.base_uom_id,
-                    base_uom_name: uom.name,
-                    base_uom_symbol: uom.symbol,
-                    is_purchasable: data.data.is_purchasable,
-                    is_sellable: data.data.is_sellable,
-                    is_manufacturable: data.data.is_manufacturable,
-                    default_price_amount: data.data.default_price_amount,
-                    default_price_currency_code: data.data.default_price_currency_code,
-                    has_stock_moves: data.data.has_stock_moves ?? this.items[itemIndex].has_stock_moves,
-                };
-            }
-
+            await this.fetchMaterials();
             await refreshNavigationState(this.navigationStateUrl);
-            this.showToast('success', 'Material updated.');
             this.closeEdit();
+            this.showToast('success', 'Material updated.');
         },
         async submitDelete() {
+            const endpoint = buildItemEndpoint(this.endpoints.delete, this.deleteItemId);
+
+            if (!endpoint) {
+                this.deleteError = 'Something went wrong. Please try again.';
+                return;
+            }
+
             this.isDeleteSubmitting = true;
             this.deleteError = '';
 
-            const response = await fetch(this.updateUrlBase + '/' + this.deleteItemId, {
+            const response = await fetch(endpoint, {
                 method: 'DELETE',
                 headers: {
                     Accept: 'application/json',
@@ -360,23 +377,21 @@ export function mount(rootEl, payload) {
 
             if (response.status === 422) {
                 const data = await response.json();
-                this.deleteError = data.message || 'Unable to delete material.';
-                this.showToast('error', this.deleteError);
+                this.deleteError = data.message || 'Material cannot be deleted.';
                 this.isDeleteSubmitting = false;
                 return;
             }
 
             if (!response.ok) {
                 this.deleteError = 'Something went wrong. Please try again.';
-                this.showToast('error', 'Unable to delete material.');
                 this.isDeleteSubmitting = false;
                 return;
             }
 
-            this.items = this.items.filter((item) => item.id !== this.deleteItemId);
+            await this.fetchMaterials();
             await refreshNavigationState(this.navigationStateUrl);
-            this.showToast('success', 'Material deleted.');
             this.closeDelete();
+            this.showToast('success', 'Material deleted.');
         },
     }));
 }

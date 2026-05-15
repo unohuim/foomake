@@ -263,6 +263,27 @@ it('4. crud config includes the import preview endpoint', function () {
     expect($config['endpoints']['importPreview'] ?? null)->toBe(route('sales.products.import.preview'));
 });
 
+it('4a. config does not include a detail redirect template because products do not have a configured detail route', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermissions)($user, ['inventory-products-view', 'inventory-products-manage']);
+
+    $config = ($this->extractCrudConfig)(
+        $this->actingAs($user)->get(route('sales.products.index'))
+    );
+
+    expect(array_key_exists('detailUrlTemplate', $config))->toBeFalse();
+});
+
+it('4b. products page module keeps inline list refresh behavior available when no detail redirect template is configured', function () {
+    $pageSource = file_get_contents(resource_path('js/pages/sales-products-index.js'));
+
+    expect($pageSource)->toContain('const redirectUrl = this.crud.buildDetailUrl(data?.data);')
+        ->and($pageSource)->toContain('if (redirectUrl) {')
+        ->and($pageSource)->toContain('await this.fetchProducts();');
+});
+
 it('5. crud config includes the import store endpoint', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);

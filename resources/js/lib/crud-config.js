@@ -52,6 +52,8 @@ export function normalizeCrudConfig(config) {
             list: typeof rawEndpoints.list === 'string' && rawEndpoints.list.trim() !== '' ? rawEndpoints.list : '',
             export: typeof rawEndpoints.export === 'string' && rawEndpoints.export.trim() !== '' ? rawEndpoints.export : '',
             create: typeof rawEndpoints.create === 'string' && rawEndpoints.create.trim() !== '' ? rawEndpoints.create : '',
+            update: typeof rawEndpoints.update === 'string' && rawEndpoints.update.trim() !== '' ? rawEndpoints.update : '',
+            delete: typeof rawEndpoints.delete === 'string' && rawEndpoints.delete.trim() !== '' ? rawEndpoints.delete : '',
             importPreview: typeof rawEndpoints.importPreview === 'string' && rawEndpoints.importPreview.trim() !== ''
                 ? rawEndpoints.importPreview
                 : '',
@@ -97,6 +99,7 @@ export function normalizeCrudConfig(config) {
             subtitleExpression: sanitizeLabel(rawMobileCard.subtitleExpression),
             bodyExpression: sanitizeLabel(rawMobileCard.bodyExpression),
         },
+        detailUrlTemplate: sanitizeLabel(config.detailUrlTemplate),
         actions: sanitizeActionDefinitions(config.actions),
     };
 }

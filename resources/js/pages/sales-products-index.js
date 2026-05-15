@@ -347,7 +347,14 @@ export function mount(rootEl, payload) {
                 onError: () => {
                     this.createGeneralError = 'Something went wrong. Please try again.';
                 },
-                onSuccess: async () => {
+                onSuccess: async (data) => {
+                    const redirectUrl = this.crud.buildDetailUrl(data?.data);
+
+                    if (redirectUrl) {
+                        window.location.assign(redirectUrl);
+                        return;
+                    }
+
                     await this.fetchProducts();
                     await refreshNavigationState(this.navigationStateUrl);
                     this.showToast('success', 'Product created.');

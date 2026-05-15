@@ -442,10 +442,11 @@ it('24. imported ecommerce items still appear on manufacturing materials because
         'external_id' => 'woo-2001',
     ]);
 
-    $this->actingAs($user)
-        ->get(route('materials.index'))
-        ->assertOk()
-        ->assertSee('Shared Item Product');
+    $response = $this->actingAs($user)
+        ->getJson(route('materials.list'))
+        ->assertOk();
+
+    expect(collect($response->json('data'))->pluck('name')->contains('Shared Item Product'))->toBeTrue();
 });
 
 it('25. protects the invariant that no separate products table exists', function () {

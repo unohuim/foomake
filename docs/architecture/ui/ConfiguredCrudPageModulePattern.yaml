@@ -3,8 +3,10 @@ type: UI Architectural Pattern
 location:
   - app/Http/Controllers/SalesProductController.php
   - app/Http/Controllers/CustomerController.php
+  - app/Http/Controllers/MaterialController.php
   - resources/views/sales/products/index.blade.php
   - resources/views/sales/customers/index.blade.php
+  - resources/views/materials/index.blade.php
   - resources/js/lib/crud-config.js
   - resources/js/lib/export-module.js
   - docs/architecture/ui/ExportSlideOverPattern.yaml
@@ -14,9 +16,10 @@ location:
   - resources/js/lib/crud-page.js
   - resources/js/pages/sales-products-index.js
   - resources/js/pages/sales-customers-index.js
+  - resources/js/pages/materials-index.js
 purpose: Define a reusable, server-configured CRUD page-module pattern where Blade is a mount-only shell, controllers emit typed page contracts, a shared JavaScript renderer owns generic CRUD UI, shared import and export components own their full UX and lifecycle, and page modules compose resource-specific create actions plus approved import data adapters.
 when_to_use:
-  - Building any new interactive CRUD index page after the Products and Customers migrations
+  - Building any new interactive CRUD index page after the Products, Customers, and Materials migrations
   - Migrating an interactive CRUD page to a shared mount-only page-module pattern without introducing client-owned routing or global state
   - Reusing the same toolbar, list rendering, action menu, create/import/export triggers, and sort mechanics across multiple Blade pages with different resource contracts
   - Keeping page-specific create slideouts and non-import/non-export validation UX outside the shared CRUD renderer while centralizing the common config-driven shell
@@ -35,7 +38,12 @@ rules:
   - Blade index shells that use the shared CRUD renderer must provide a bounded height container so the CRUD module can fill the available viewport area without making the whole page the list scroller.
   - data-crud-root must fill the available page-shell height and preserve min-height propagation so the shared renderer can size its internal records pane correctly.
   - The CRUD config must be valid JSON and must be server-generated in Blade.
-  - The CRUD config must include resource, endpoints.list, endpoints.create, endpoints.importPreview, endpoints.importStore, columns, headers, sortable, labels, permissions, rowDisplay, mobileCard, and actions.
+  - The CRUD config must include resource, endpoints.list, endpoints.create, columns, headers, sortable, labels, permissions, rowDisplay, mobileCard, and actions.
+  - CRUD pages that use shared import must additionally provide endpoints.importPreview and endpoints.importStore.
+  - CRUD pages that use shared edit or delete flows may provide endpoint templates such as endpoints.update and endpoints.delete.
+  - CRUD pages may optionally provide detailUrlTemplate for post-create redirect behavior.
+  - When detailUrlTemplate is present and a create request succeeds with a created-record payload that includes id, the page module may redirect to that detail URL after create.
+  - When detailUrlTemplate is absent, create behavior must preserve the existing inline success flow such as list refresh, toast feedback, or panel close behavior.
   - Resources that expose export through the shared toolbar must also provide endpoints.export plus labels and permissions for the export action.
   - sortable values must reference only configured column keys.
   - Shared CRUD helpers must remain stateless and must not introduce global JavaScript state.
@@ -55,8 +63,9 @@ rules:
   - Resource pages may provide export differences only through the server-generated CRUD contract; export-specific copy, endpoint, and visibility must not be hardcoded in page-local Blade or page-local JavaScript.
   - Resource pages must not contain export slide-over form markup or page-local export UX overrides.
   - Page-specific behavior such as create/edit form markup, row-to-form mapping, toasts, non-import/non-export validation UX, success callbacks outside import, and non-import/non-export domain-specific rendering remains in the page module.
-  - Products and Customers are the current reference implementations for this pattern.
+  - Products, Customers, and Materials are the current reference implementations for this pattern.
   - Products and Customers both use the shared export module as the render-owning export component and do not keep export slide-over markup in Blade.
+  - Materials uses the same shared CRUD renderer and mount-only Blade shell pattern without shared import or export.
   - Missing or invalid CRUD config must fail safely without breaking initial page load.
   - Missing or invalid import config must fail safely without breaking initial page load.
   - Backend routes remain authoritative and must not be hardcoded in shared JavaScript.
@@ -123,6 +132,31 @@ example_usage: |
         ],
     ];
 
+    $materialsCrudConfig = [
+        'resource' => 'materials',
+        'endpoints' => [
+            'list' => route('materials.list'),
+            'create' => route('materials.store'),
+            'update' => url('/materials/{id}'),
+            'delete' => url('/materials/{id}'),
+        ],
+        'detailUrlTemplate' => url('/materials/{id}'),
+        'columns' => ['name', 'base_uom', 'flags'],
+        'headers' => [
+            'name' => 'Name',
+            'base_uom' => 'Base UoM',
+            'flags' => 'Flags',
+        ],
+        'sortable' => ['name', 'base_uom'],
+        'permissions' => [
+            'showCreate' => true,
+        ],
+        'actions' => [
+            ['id' => 'edit', 'label' => 'Edit', 'tone' => 'default'],
+            ['id' => 'delete', 'label' => 'Delete', 'tone' => 'warning'],
+        ],
+    ];
+
     $importConfig = [
         'resource' => 'products',
         'endpoints' => [
@@ -182,6 +216,14 @@ example_usage: |
     Alpine.data('salesProductsIndex', () => ({
         ...exportModule,
     }));
+
+  Shared create redirect:
+    const redirectUrl = crud.buildDetailUrl(response.data);
+    if (redirectUrl) {
+      window.location.assign(redirectUrl);
+      return;
+    }
+    await this.fetchRecords();
 
   Customers page module:
     const crud = createGenericCrud(parseCrudConfig(rootEl));
