@@ -227,6 +227,10 @@ it('renders show payload markers', function () {
     $this->actingAs($user)
         ->get("/purchasing/orders/{$orderId}")
         ->assertOk()
+        ->assertSee('Purchase Orders')
+        ->assertSee('ID #' . $orderId)
+        ->assertSee(route('purchasing.orders.index'), false)
+        ->assertDontSee('Back to Purchase Orders')
         ->assertSee('data-page="purchasing-orders-show"', false)
         ->assertSee('purchasing-orders-show-payload', false);
 });

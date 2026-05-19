@@ -228,6 +228,11 @@ it('3. sales order detail route exists and responds for authorized users', funct
     $this->actingAs($user)
         ->get(route('sales.orders.show', $order))
         ->assertOk()
+        ->assertSee('Sales Orders')
+        ->assertSee('ID #' . $order->id)
+        ->assertSee(route('sales.orders.index'), false)
+        ->assertDontSee('Back to orders')
+        ->assertDontSee('Back to Sales Orders')
         ->assertSee('data-page="sales-orders-show"', false)
         ->assertSee('sales-orders-show-payload', false);
 });

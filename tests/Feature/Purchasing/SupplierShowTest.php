@@ -220,12 +220,16 @@ it('returns 404 for cross-tenant supplier access', function () {
 it('renders the page module payload for the supplier detail page', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
-    $supplier = ($this->makeSupplier)($tenant);
+    $supplier = ($this->makeSupplier)($tenant, ['company_name' => 'Breadcrumb Supplier']);
 
     ($this->grantPermission)($user, 'purchasing-suppliers-view');
 
     ($this->getShow)($user, $supplier)
         ->assertOk()
+        ->assertSee('Suppliers')
+        ->assertSee('Breadcrumb Supplier')
+        ->assertSee(route('purchasing.suppliers.index'), false)
+        ->assertDontSee('Back to Suppliers')
         ->assertSee('data-page="purchasing-suppliers-show"', false)
         ->assertSee('purchasing-suppliers-show-payload', false);
 });

@@ -1,16 +1,37 @@
 <x-app-layout>
+    @php
+        $breadcrumbItems = [
+            [
+                'label' => 'Home',
+                'url' => url('/'),
+            ],
+            [
+                'label' => 'Recipes',
+                'url' => route('manufacturing.recipes.index'),
+            ],
+            [
+                'label' => $recipe->name,
+                'url' => null,
+            ],
+        ];
+    @endphp
+
     <x-slot name="header">
-        <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-                <h2 class="font-semibold text-xl text-gray-800 leading-tight" x-text="recipe.name || 'Recipe'"></h2>
-                <p class="mt-1 text-sm text-gray-500">{{ $recipe->item?->name ?? '—' }}</p>
+        <div>
+            <div class="flex flex-col gap-2">
+                <div>
+                    <h2 class="font-semibold text-xl text-gray-800 leading-tight">Recipe</h2>
+                    <div class="mt-1 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-gray-500">
+                        <p class="font-medium text-gray-800" x-text="recipe.name || 'Recipe'"></p>
+                        <span class="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-600">
+                            {{ $recipe->item?->name ?? '—' }}
+                        </span>
+                        <span class="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-600" x-text="recipe.recipe_type_label || '—'"></span>
+                    </div>
+                </div>
             </div>
-            <a
-                href="{{ route('manufacturing.recipes.index') }}"
-                class="text-sm text-blue-600 hover:text-blue-500"
-            >
-                {{ __('Back to Recipes') }}
-            </a>
+
+            <x-resource-breadcrumbs :items="$breadcrumbItems" />
         </div>
     </x-slot>
 

@@ -1,8 +1,29 @@
 <x-app-layout>
+    @php
+        $breadcrumbItems = [
+            [
+                'label' => 'Home',
+                'url' => url('/'),
+            ],
+            [
+                'label' => 'Customers',
+                'url' => route('sales.customers.index'),
+            ],
+            [
+                'label' => $customer->name,
+                'url' => null,
+            ],
+        ];
+    @endphp
+
     <x-slot name="header">
-        <h2 class="font-semibold text-xl text-gray-800 leading-tight">
-            {{ __('Customer: :name', ['name' => $customer->name]) }}
-        </h2>
+        <div>
+            <h2 class="font-semibold text-xl text-gray-800 leading-tight">
+                {{ __('Customer: :name', ['name' => $customer->name]) }}
+            </h2>
+
+            <x-resource-breadcrumbs :items="$breadcrumbItems" />
+        </div>
     </x-slot>
 
     <script type="application/json" id="sales-customers-show-payload">@json($payload)</script>

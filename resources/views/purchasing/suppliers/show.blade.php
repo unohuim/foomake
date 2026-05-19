@@ -1,8 +1,29 @@
 <x-app-layout>
+    @php
+        $breadcrumbItems = [
+            [
+                'label' => 'Home',
+                'url' => url('/'),
+            ],
+            [
+                'label' => 'Suppliers',
+                'url' => route('purchasing.suppliers.index'),
+            ],
+            [
+                'label' => $supplier->company_name,
+                'url' => null,
+            ],
+        ];
+    @endphp
+
     <x-slot name="header">
-        <h2 class="font-semibold text-xl text-gray-800 leading-tight">
-            {{ __('Supplier: :name', ['name' => $supplier->company_name]) }}
-        </h2>
+        <div>
+            <h2 class="font-semibold text-xl text-gray-800 leading-tight">
+                {{ __('Supplier: :name', ['name' => $supplier->company_name]) }}
+            </h2>
+
+            <x-resource-breadcrumbs :items="$breadcrumbItems" />
+        </div>
     </x-slot>
 
     @php

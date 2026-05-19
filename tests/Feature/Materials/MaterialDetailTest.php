@@ -94,10 +94,12 @@ it('allows users with inventory-materials-view permission to view the material d
         ->assertOk()
         ->assertSee($item->name)
         ->assertSee($uom->name)
+        ->assertSee('Materials')
         ->assertSee('Purchasable')
         ->assertSee('Sellable')
         ->assertSee('Manufacturable')
-        ->assertSee('Back to Materials');
+        ->assertDontSee('Back to Materials')
+        ->assertSee(route('materials.index'), false);
 });
 
 it('returns 404 for cross-tenant material access (tenant scope hides other-tenant items)', function () {

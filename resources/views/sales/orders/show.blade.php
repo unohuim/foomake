@@ -1,8 +1,29 @@
 <x-app-layout>
+    @php
+        $breadcrumbItems = [
+            [
+                'label' => 'Home',
+                'url' => url('/'),
+            ],
+            [
+                'label' => 'Sales Orders',
+                'url' => route('sales.orders.index'),
+            ],
+            [
+                'label' => 'ID #' . $salesOrder->id,
+                'url' => null,
+            ],
+        ];
+    @endphp
+
     <x-slot name="header">
-        <h2 class="font-semibold text-xl text-gray-800 leading-tight">
-            {{ __('Sales Order #:id', ['id' => $salesOrder->id]) }}
-        </h2>
+        <div>
+            <h2 class="font-semibold text-xl text-gray-800 leading-tight">
+                {{ __('Sales Order #:id', ['id' => $salesOrder->id]) }}
+            </h2>
+
+            <x-resource-breadcrumbs :items="$breadcrumbItems" />
+        </div>
     </x-slot>
 
     <script type="application/json" id="sales-orders-show-payload">@json($payload)</script>
@@ -29,10 +50,6 @@
                             <p class="text-sm text-gray-500">Status</p>
                             <p class="mt-1 text-lg font-semibold text-gray-900" x-text="order.status"></p>
                         </div>
-
-                        <a class="text-sm font-medium text-blue-600 hover:text-blue-500" :href="indexUrl">
-                            Back to orders
-                        </a>
                     </div>
 
                     <div class="mt-6 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">

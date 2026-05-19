@@ -281,7 +281,10 @@ it('12. customer detail page loads for same tenant', function () {
 
     ($this->getShow)($user, $customer->id)
         ->assertOk()
-        ->assertSee('Detail Customer');
+        ->assertSee('Customers')
+        ->assertSee('Detail Customer')
+        ->assertSee(route('sales.customers.index'), false)
+        ->assertDontSee('Back to Customers');
 });
 
 it('13. other-tenant customer detail returns 404', function () {

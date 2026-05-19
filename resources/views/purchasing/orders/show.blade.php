@@ -1,15 +1,38 @@
 <x-app-layout>
+    @php
+        $breadcrumbItems = [
+            [
+                'label' => 'Home',
+                'url' => url('/'),
+            ],
+            [
+                'label' => 'Purchase Orders',
+                'url' => route('purchasing.orders.index'),
+            ],
+            [
+                'label' => 'ID #' . $purchaseOrder->id,
+                'url' => null,
+            ],
+        ];
+    @endphp
+
     <x-slot name="header">
-        <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div>
             <div>
-                <h2 class="font-semibold text-xl text-gray-800 leading-tight">
-                    {{ __('Purchase Order') }}
-                </h2>
-                <p class="text-sm text-gray-500">ID #{{ $purchaseOrder->id }}</p>
+                <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                        <h2 class="font-semibold text-xl text-gray-800 leading-tight">
+                            {{ __('Purchase Order') }}
+                        </h2>
+                        <p class="text-sm text-gray-500">ID #{{ $purchaseOrder->id }}</p>
+                    </div>
+                    <span class="inline-flex items-center rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold uppercase text-gray-600">
+                        {{ $purchaseOrder->status }}
+                    </span>
+                </div>
             </div>
-            <span class="inline-flex items-center rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold uppercase text-gray-600">
-                {{ $purchaseOrder->status }}
-            </span>
+
+            <x-resource-breadcrumbs :items="$breadcrumbItems" />
         </div>
     </x-slot>
 

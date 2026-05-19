@@ -198,7 +198,11 @@ test('allows users with inventory-recipes-view permission to view recipes and re
 
     $showResponse
         ->assertOk()
+        ->assertSee('Recipe')
         ->assertSee('Batch of Patties')
+        ->assertSee('Recipes')
+        ->assertSee(route('manufacturing.recipes.index'), false)
+        ->assertDontSee('Back to Recipes')
         ->assertSee($input->name)
         ->assertSee('Output per Run')
         ->assertSee('54.0');
