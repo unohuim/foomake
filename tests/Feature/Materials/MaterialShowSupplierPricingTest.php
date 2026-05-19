@@ -464,7 +464,12 @@ it('4. preserves the material detail header while using the section shell', func
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
     $uom = ($this->makeUom)($tenant, ['name' => 'Kilogram', 'symbol' => 'kg-msp-4']);
-    $item = ($this->makeItem)($tenant, $uom, ['name' => 'Material Header']);
+    $item = ($this->makeItem)($tenant, $uom, [
+        'name' => 'Material Header',
+        'is_purchasable' => true,
+        'is_sellable' => true,
+        'is_manufacturable' => true,
+    ]);
 
     ($this->grantPermissions)($user, ['inventory-materials-view', 'purchasing-suppliers-view']);
 
@@ -473,17 +478,20 @@ it('4. preserves the material detail header while using the section shell', func
         ->assertSee('Material')
         ->assertSee('Material Header')
         ->assertSee('Back to Materials')
-        ->assertSee('Kilogram (kg-msp-4)');
+        ->assertSee('Kilogram')
+        ->assertSee('Purchasable')
+        ->assertSee('Sellable')
+        ->assertSee('Manufacturable');
 });
 
-it('4a. core fields section contains the base uom and all material flags', function (): void {
+it('4a. material detail header contains the base uom badge and only the enabled flag icons', function (): void {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
     $uom = ($this->makeUom)($tenant, ['name' => 'Pound', 'symbol' => 'lb-msp-4a']);
     $item = ($this->makeItem)($tenant, $uom, [
-        'name' => 'Core Fields Material',
+        'name' => 'Header Flags Material',
         'is_purchasable' => true,
-        'is_sellable' => true,
+        'is_sellable' => false,
         'is_manufacturable' => false,
     ]);
 
@@ -491,13 +499,12 @@ it('4a. core fields section contains the base uom and all material flags', funct
 
     ($this->getShow)($user, $item)
         ->assertOk()
-        ->assertSee('Core fields')
-        ->assertSee('Name')
-        ->assertSee('Base UoM')
-        ->assertSee('Pound (lb-msp-4a)')
+        ->assertSee('Header Flags Material')
+        ->assertSee('Pound')
         ->assertSee('Purchasable')
-        ->assertSee('Sellable')
-        ->assertSee('Manufacturable');
+        ->assertDontSee('Sellable')
+        ->assertDontSee('Manufacturable')
+        ->assertDontSee('Core fields');
 });
 
 it('5. omits the supplier packages section for non-purchasable materials', function (): void {
@@ -564,10 +571,13 @@ it('6. removes the legacy supplier package payload and duplicated server rendere
     expect($viewSource)->toContain('materials-show-payload')
         ->and($viewSource)->toContain('data-js-crud-section-root')
         ->and($viewSource)->toContain('px-1 sm:px-6')
-        ->and($viewSource)->toContain('>Flags<')
+        ->and($viewSource)->toContain('aria-label="Purchasable"')
+        ->and($viewSource)->toContain('aria-label="Sellable"')
+        ->and($viewSource)->toContain('aria-label="Manufacturable"')
         ->and($viewSource)->not->toContain('materials-show-supplier-packages-payload')
         ->and($viewSource)->not->toContain('data-section="supplier-packages"')
         ->and($viewSource)->not->toContain("@forelse (\$payload['packages'] as \$package)")
+        ->and($viewSource)->not->toContain('Core fields')
         ->and($viewSource)->not->toContain('<h3 class="text-lg font-medium text-gray-900">Flags</h3>')
         ->and($viewSource)->not->toContain('<h3 class="text-lg font-medium text-gray-900">Base UoM</h3>');
 });

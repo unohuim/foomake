@@ -286,7 +286,7 @@ class ItemController extends Controller
                 [
                     'name' => 'supplier_id',
                     'label' => 'Supplier',
-                    'type' => 'select',
+                    'type' => 'combobox',
                     'required' => true,
                     'options' => Supplier::query()
                         ->where('tenant_id', $request->user()->tenant_id)
@@ -298,6 +298,38 @@ class ItemController extends Controller
                         ])
                         ->values()
                         ->all(),
+                    'inlineCreate' => $canManagePurchasing
+                        ? [
+                            'label' => '+ New Supplier',
+                            'storeUrl' => route('purchasing.suppliers.store'),
+                            'fields' => [
+                                [
+                                    'name' => 'company_name',
+                                    'label' => 'Company name',
+                                    'type' => 'text',
+                                    'required' => true,
+                                ],
+                                [
+                                    'name' => 'email',
+                                    'label' => 'Email',
+                                    'type' => 'email',
+                                    'required' => false,
+                                ],
+                                [
+                                    'name' => 'phone',
+                                    'label' => 'Phone',
+                                    'type' => 'text',
+                                    'required' => false,
+                                ],
+                                [
+                                    'name' => 'url',
+                                    'label' => 'URL',
+                                    'type' => 'url',
+                                    'required' => false,
+                                ],
+                            ],
+                        ]
+                        : null,
                 ],
                 [
                     'name' => 'pack_quantity',
@@ -310,6 +342,7 @@ class ItemController extends Controller
                     'label' => 'Package UoM',
                     'type' => 'select',
                     'required' => true,
+                    'rowGroup' => 'package-uom-price',
                     'options' => Uom::query()
                         ->where('tenant_id', $request->user()->tenant_id)
                         ->orderBy('symbol')
@@ -332,6 +365,7 @@ class ItemController extends Controller
                     'label' => 'Price',
                     'type' => 'text',
                     'required' => true,
+                    'rowGroup' => 'package-uom-price',
                 ],
             ],
             'rowLayout' => [

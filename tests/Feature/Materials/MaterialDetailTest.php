@@ -83,14 +83,17 @@ it('allows users with inventory-materials-view permission to view the material d
     $user = User::factory()->for($tenant)->create();
     ($this->grantMaterialsViewPermission)($user);
 
-    [$item, $uom] = ($this->makeItem)($tenant);
+    [$item, $uom] = ($this->makeItem)($tenant, [
+        'is_purchasable' => true,
+        'is_sellable' => true,
+        'is_manufacturable' => true,
+    ]);
 
     $this->actingAs($user)
         ->get(route('materials.show', $item))
         ->assertOk()
         ->assertSee($item->name)
-        ->assertSee($uom->name . ' (' . $uom->symbol . ')')
-        ->assertSee('Flags')
+        ->assertSee($uom->name)
         ->assertSee('Purchasable')
         ->assertSee('Sellable')
         ->assertSee('Manufacturable')

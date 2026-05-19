@@ -1886,6 +1886,59 @@ class StockMove extends Model
 }
 ```
 
+### Configured CRUD Page Module Pattern
+
+**Name:** Configured CRUD Page Module Pattern  
+**Type:** UI Architectural Pattern  
+**Location:**  
+- `app/Http/Controllers/SalesProductController.php`  
+- `app/Http/Controllers/CustomerController.php`  
+- `app/Http/Controllers/MaterialController.php`  
+- `resources/views/sales/products/index.blade.php`  
+- `resources/views/sales/customers/index.blade.php`  
+- `resources/views/materials/index.blade.php`  
+- `resources/js/lib/crud-config.js`  
+- `resources/js/lib/generic-crud.js`  
+- `resources/js/lib/crud-page.js`  
+- `resources/js/pages/sales-products-index.js`  
+- `resources/js/pages/sales-customers-index.js`  
+- `resources/js/pages/materials-index.js`
+
+**Purpose:**  
+Provide a mount-only Blade shell plus server-configured shared CRUD renderer so index pages reuse one toolbar, list, empty-state, and row-action pattern without global JavaScript state.
+
+**When to Use:**  
+Any interactive CRUD index page that can express its list, row display, actions, and optional import/export behavior from a server-generated contract.
+
+**When Not to Use:**  
+Static pages, multi-step workflows, or pages that cannot express their behavior through the shared CRUD contract.
+
+**Public Interface:**  
+- `data-crud-config`  
+- `data-crud-root`  
+- `createGenericCrud(parseCrudConfig(rootEl))`  
+- `mountCrudRenderer(rootEl, config)`  
+- optional `detailUrlTemplate`
+
+**Example Usage:**  
+```php
+$crudConfig = [
+    'resource' => 'materials',
+    'endpoints' => [
+        'list' => route('materials.list'),
+        'create' => route('materials.store'),
+        'update' => url('/materials/{id}'),
+        'delete' => url('/materials/{id}'),
+    ],
+    'detailUrlTemplate' => url('/materials/{id}'),
+];
+```
+
+Notes:
+- Products, Customers, and Materials are current reference implementations.
+- `detailUrlTemplate` is optional. When present, create flows may redirect to the created record detail page after success.
+- When `detailUrlTemplate` is absent, the existing inline success behavior such as list refresh remains the fallback.
+
 ---
 
 ### User Auth Identity Safety
@@ -6589,6 +6642,7 @@ They are mandatory, not stylistic.
 
 ## routes/web.php
 
+```php
 <?php
 
 use App\Http\Controllers\InventoryController;
@@ -6597,6 +6651,9 @@ use App\Http\Controllers\ItemController;
 use App\Http\Controllers\ItemPurchaseOptionPriceController;
 use App\Http\Controllers\MakeOrderController;
 use App\Http\Controllers\MaterialController;
+use App\Http\Controllers\MaterialDraftPurchaseOrderController;
+use App\Http\Controllers\MaterialPurchaseOrderController;
+use App\Http\Controllers\MaterialSupplierPackageController;
 use App\Http\Controllers\NavigationStateController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\CustomerContactController;
@@ -6668,9 +6725,22 @@ Route::middleware('auth')->group(function () {
     Route::delete('/manufacturing/inventory-counts/{inventoryCount}/lines/{line}', [InventoryCountController::class, 'destroyLine']);
 
     Route::get('/materials', [MaterialController::class, 'index'])->name('materials.index');
+    Route::get('/materials/list', [MaterialController::class, 'list'])->name('materials.list');
     Route::post('/materials', [ItemController::class, 'store'])->name('materials.store');
     Route::patch('/materials/{item}', [ItemController::class, 'update'])->name('materials.update');
     Route::delete('/materials/{item}', [ItemController::class, 'destroy'])->name('materials.destroy');
+    Route::get('/materials/{item}/supplier-packages', [MaterialSupplierPackageController::class, 'index'])
+        ->name('materials.supplier-packages.index');
+    Route::get('/materials/{item}/purchase-orders', [MaterialPurchaseOrderController::class, 'index'])
+        ->name('materials.purchase-orders.index');
+    Route::post('/materials/{item}/purchase-orders', [MaterialDraftPurchaseOrderController::class, 'store'])
+        ->name('materials.purchase-orders.store');
+    Route::post('/materials/{item}/supplier-packages', [MaterialSupplierPackageController::class, 'store'])
+        ->name('materials.supplier-packages.store');
+    Route::patch('/materials/{item}/supplier-packages/{option}', [MaterialSupplierPackageController::class, 'update'])
+        ->name('materials.supplier-packages.update');
+    Route::delete('/materials/{item}/supplier-packages/{option}', [MaterialSupplierPackageController::class, 'destroy'])
+        ->name('materials.supplier-packages.destroy');
     Route::get('/materials/uom-categories', [UomCategoryController::class, 'index'])
         ->name('materials.uom-categories.index');
     Route::get('/manufacturing/uom-categories', [UomCategoryController::class, 'index']);
@@ -6879,6 +6949,8 @@ Route::delete('/manufacturing/uom-conversions/items/{itemConversion}', [UomConve
     ->name('manufacturing.uom-conversions.items.destroy');
 
 require __DIR__ . '/auth.php';
+
+```
 
 ## docs/PR3_ROADMAP.md
 

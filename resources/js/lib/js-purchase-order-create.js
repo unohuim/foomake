@@ -12,7 +12,16 @@ const toStringValue = (value) => {
     return String(value);
 };
 
-const renderPurchaseOrderCreate = () => `
+const escapeHtmlAttribute = (value) => String(value)
+    .replaceAll('&', '&amp;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;');
+
+const serializeJsonAttribute = (value) => escapeHtmlAttribute(JSON.stringify(value));
+
+const renderPurchaseOrderCreate = (config) => `
     <div x-data="purchaseOrderCreate($el)">
         <div
             data-purchase-order-create-panel
@@ -26,7 +35,14 @@ const renderPurchaseOrderCreate = () => `
                         <h4 class="text-lg font-semibold text-gray-900">Create Purchase Order</h4>
                         <p class="mt-1 text-sm text-gray-500">Create a draft purchase order with one line.</p>
                     </div>
-                    <button type="button" class="text-sm text-gray-500 transition hover:text-gray-700" x-on:click="close()">Close</button>
+                    <button
+                        type="button"
+                        aria-label="Close"
+                        class="rounded-lg p-2 text-gray-500 transition hover:bg-gray-100 hover:text-gray-700"
+                        x-on:click="close()"
+                    >
+                        <span aria-hidden="true" class="text-lg leading-none">&times;</span>
+                    </button>
                 </div>
 
                 <div class="flex-1 space-y-5 px-4 py-5 sm:px-6">
@@ -34,44 +50,122 @@ const renderPurchaseOrderCreate = () => `
 
                     <div>
                         <label class="block text-xs font-semibold uppercase tracking-wide text-gray-500" for="purchase-order-create-supplier">Supplier</label>
-                        <select
+                        <div
                             id="purchase-order-create-supplier"
-                            class="mt-1 block w-full rounded-lg border-gray-300 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                            data-supplier-options="${serializeJsonAttribute(asArray(config.suppliers).map((supplier) => ({
+                                value: toStringValue(supplier.id),
+                                label: asString(supplier.name),
+                            })))}"
+                            x-data="combobox({
+                                name: 'supplier_id',
+                                options: JSON.parse($el.dataset.supplierOptions || '[]'),
+                                selectedValue: form.supplier_id,
+                                placeholder: 'Search suppliers',
+                                noResultsText: 'No suppliers found.',
+                                inputId: 'purchase-order-create-supplier-input',
+                                listId: 'purchase-order-create-supplier-listbox',
+                            })"
+                            x-modelable="selectedValue"
                             x-model="form.supplier_id"
-                            x-on:change="handleSupplierChange()"
+                            x-on:click.outside="closeDropdown()"
+                            x-on:keydown.arrow-down.prevent="highlightNext()"
+                            x-on:keydown.arrow-up.prevent="highlightPrevious()"
+                            x-on:keydown.enter.prevent="selectHighlighted()"
+                            x-on:keydown.escape.prevent="closeDropdown()"
+                            x-effect="configuredOptions = supplierComboboxOptions()"
                         >
-                            <option value="">Select</option>
-                            <template x-for="supplier in suppliers" :key="supplier.id">
-                                <option :value="supplier.id" x-text="supplier.name"></option>
-                            </template>
-                        </select>
+                            <div class="relative mt-1">
+                                <input
+                                    id="purchase-order-create-supplier-input"
+                                    type="text"
+                                    role="combobox"
+                                    autocomplete="off"
+                                    class="block w-full rounded-xl border border-gray-300 bg-white px-4 py-3 pr-11 text-sm text-gray-900 shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                                    :placeholder="placeholder"
+                                    x-model="query"
+                                    x-on:focus="openDropdown()"
+                                    x-on:input="handleQueryInput($event.target.value)"
+                                    x-bind:aria-expanded="open.toString()"
+                                    x-bind:aria-controls="listId"
+                                    x-bind:aria-activedescendant="activeDescendantId()"
+                                />
+
+                                <input type="hidden" name="supplier_id" x-model="selectedValue" />
+
+                                <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400">
+                                    <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                        <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 11.168l3.71-3.938a.75.75 0 1 1 1.08 1.04l-4.25 4.5a.75.75 0 0 1-1.08 0l-4.25-4.5a.75.75 0 0 1 .02-1.06Z" clip-rule="evenodd" />
+                                    </svg>
+                                </div>
+
+                                <div x-ref="slotOptions" class="hidden"></div>
+
+                                <div
+                                    class="absolute z-20 mt-2 max-h-72 w-full overflow-auto rounded-2xl border border-gray-200 bg-white p-2 shadow-xl ring-1 ring-black/5"
+                                    x-cloak
+                                    x-show="open"
+                                    role="listbox"
+                                    id="purchase-order-create-supplier-listbox"
+                                >
+                                    <template x-if="filteredOptions().length === 0">
+                                        <div class="rounded-xl px-3 py-3 text-sm text-gray-500" x-text="noResultsText"></div>
+                                    </template>
+
+                                    <template x-for="(option, index) in filteredOptions()" :key="option.value">
+                                        <button
+                                            type="button"
+                                            class="flex w-full items-start justify-between rounded-xl px-3 py-3 text-left transition"
+                                            role="option"
+                                            x-bind:id="optionDomId(index)"
+                                            x-bind:aria-selected="isSelected(option).toString()"
+                                            x-on:mouseenter="highlightedIndex = index"
+                                            x-on:click="selectOption(option)"
+                                            x-bind:class="highlightedIndex === index ? 'bg-blue-50 text-blue-900' : 'text-gray-900 hover:bg-gray-50'"
+                                        >
+                                            <span class="min-w-0">
+                                                <span class="block truncate text-sm font-medium" x-text="option.label"></span>
+                                                <span class="mt-1 block truncate text-xs text-gray-500" x-show="option.description" x-text="option.description"></span>
+                                            </span>
+
+                                            <span class="ml-3 text-blue-600" x-show="isSelected(option)">
+                                                <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                                    <path fill-rule="evenodd" d="M16.704 5.29a1 1 0 0 1 .006 1.414l-8 8.07a1 1 0 0 1-1.42 0l-4-4.035a1 1 0 0 1 1.42-1.41l3.29 3.32 7.29-7.36a1 1 0 0 1 1.414 0Z" clip-rule="evenodd" />
+                                                </svg>
+                                            </span>
+                                        </button>
+                                    </template>
+                                </div>
+                            </div>
+                        </div>
                         <p class="mt-1 text-xs text-red-600" x-text="firstError('supplier_id')"></p>
                     </div>
 
-                    <div>
-                        <label class="block text-xs font-semibold uppercase tracking-wide text-gray-500" for="purchase-order-create-package">Supplier Package</label>
-                        <select
-                            id="purchase-order-create-package"
-                            class="mt-1 block w-full rounded-lg border-gray-300 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                            x-model="form.item_purchase_option_id"
-                        >
-                            <option value="">Select</option>
-                            <template x-for="option in availablePackages" :key="option.id">
-                                <option :value="option.id" x-text="option.label"></option>
-                            </template>
-                        </select>
-                        <p class="mt-1 text-xs text-red-600" x-text="firstError('item_purchase_option_id')"></p>
-                    </div>
+                    <div class="flex items-start justify-between gap-4">
+                        <div class="min-w-0 flex-1">
+                            <label class="block text-xs font-semibold uppercase tracking-wide text-gray-500" for="purchase-order-create-package">PACKAGE</label>
+                            <select
+                                id="purchase-order-create-package"
+                                class="mt-1 block w-full rounded-lg border-gray-300 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                                x-model="form.item_purchase_option_id"
+                            >
+                                <option value="">Select</option>
+                                <template x-for="option in availablePackages" :key="option.id">
+                                    <option :value="option.id" x-text="option.label"></option>
+                                </template>
+                            </select>
+                            <p class="mt-1 text-xs text-red-600" x-text="firstError('item_purchase_option_id')"></p>
+                        </div>
 
-                    <div>
-                        <label class="block text-xs font-semibold uppercase tracking-wide text-gray-500" for="purchase-order-create-pack-count">Quantity</label>
-                        <input
-                            id="purchase-order-create-pack-count"
-                            type="text"
-                            class="mt-1 block w-full rounded-lg border-gray-300 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                            x-model="form.pack_count"
-                        />
-                        <p class="mt-1 text-xs text-red-600" x-text="firstError('pack_count')"></p>
+                        <div class="w-24 shrink-0">
+                            <label class="block text-xs font-semibold uppercase tracking-wide text-gray-500" for="purchase-order-create-pack-count">QTY</label>
+                            <input
+                                id="purchase-order-create-pack-count"
+                                type="text"
+                                class="mt-1 block w-full rounded-lg border-gray-300 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                                x-model="form.pack_count"
+                            />
+                            <p class="mt-1 text-xs text-red-600" x-text="firstError('pack_count')"></p>
+                        </div>
                     </div>
                 </div>
 
@@ -97,8 +191,10 @@ const createState = (config) => ({
         item_purchase_option_id: '',
         pack_count: '',
     },
-    get suppliers() {
-        return asArray(this.config.suppliers);
+    init() {
+        this.$watch('form.supplier_id', () => {
+            this.handleSupplierChange();
+        });
     },
     get packages() {
         return asArray(this.config.packages);
@@ -111,6 +207,12 @@ const createState = (config) => ({
         }
 
         return this.packages.filter((option) => toStringValue(option.supplier_id) === supplierId);
+    },
+    supplierComboboxOptions() {
+        return asArray(this.config.suppliers).map((supplier) => ({
+            value: toStringValue(supplier.id),
+            label: asString(supplier.name),
+        }));
     },
     firstError(field) {
         const values = this.errors[field];
@@ -212,11 +314,13 @@ export function mountPurchaseOrderCreate(targetEl, input) {
 
     targetEl._purchaseOrderCreateConfig = config;
     targetEl._purchaseOrderCreateState = state;
-    targetEl.innerHTML = renderPurchaseOrderCreate();
+    targetEl.innerHTML = renderPurchaseOrderCreate(config);
 
     Alpine.data('purchaseOrderCreate', (el) => (
         el.closest('[data-purchase-order-create-root]')?._purchaseOrderCreateState || state
     ));
+
+    Alpine.initTree(targetEl);
 
     return state;
 }

@@ -135,16 +135,10 @@ class SupplierController extends Controller
             'email' => ['nullable', 'email', 'max:255'],
             'currency_code' => ['nullable', 'string', 'size:3'],
         ]);
-
-        $tenantCurrency = $request->user()?->tenant?->currency_code;
-        $defaultCurrency = $tenantCurrency ?: (string) config('app.currency_code', 'USD');
         $currencyCode = $validated['currency_code'] ?? null;
-
-        if ($currencyCode === null || $currencyCode === '') {
-            $currencyCode = $defaultCurrency;
-        } else {
-            $currencyCode = strtoupper($currencyCode);
-        }
+        $currencyCode = $currencyCode === null || $currencyCode === ''
+            ? null
+            : strtoupper($currencyCode);
 
         $supplier = Supplier::query()->create([
             'tenant_id' => $request->user()->tenant_id,

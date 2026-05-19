@@ -22,6 +22,7 @@ const resolvePathValue = (source, path, fallback = '') => {
 
 const normalizeField = (field) => {
     const safeField = asRecord(field);
+    const inlineCreate = asRecord(safeField.inlineCreate);
 
     return {
         name: asString(safeField.name),
@@ -32,6 +33,17 @@ const normalizeField = (field) => {
             value: asString(option?.value),
             label: asString(option?.label),
         })),
+        rowGroup: asString(safeField.rowGroup),
+        inlineCreate: {
+            label: asString(inlineCreate.label, 'Create'),
+            storeUrl: asString(inlineCreate.storeUrl),
+            fields: asArray(inlineCreate.fields).map((createField) => ({
+                name: asString(createField?.name),
+                label: asString(createField?.label),
+                type: asString(createField?.type, 'text'),
+                required: Boolean(createField?.required),
+            })).filter((createField) => createField.name !== ''),
+        },
     };
 };
 
@@ -96,34 +108,177 @@ const normalizeSectionConfig = (config) => {
     };
 };
 
+// Shared CRUD contract reference: x-for="field in section.fields"
 const fieldMarkup = `
-    <template x-for="field in section.fields" :key="field.name">
-        <div>
-            <label class="block text-xs font-semibold uppercase tracking-wide text-gray-500" :for="\`section-field-\${field.name}\`" x-text="field.label"></label>
+    <template x-for="(row, rowIndex) in fieldRows()" :key="\`field-row-\${rowIndex}\`">
+        <div :class="rowClass(row)">
+            <template x-for="field in row" :key="field.name">
+                <div>
+                    <label class="block text-xs font-semibold uppercase tracking-wide text-gray-500" :for="\`section-field-\${field.name}\`" x-text="field.label"></label>
 
-            <template x-if="field.type === 'select'">
-                <select
-                    class="mt-1 block w-full rounded-lg border-gray-300 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                    :id="\`section-field-\${field.name}\`"
-                    x-model="form[field.name]"
-                >
-                    <option value="">Select</option>
-                    <template x-for="option in field.options" :key="\`\${field.name}-\${option.value}\`">
-                        <option :value="option.value" x-text="option.label"></option>
+                    <template x-if="field.type === 'select'">
+                        <select
+                            class="mt-1 block w-full rounded-lg border-gray-300 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                            :id="\`section-field-\${field.name}\`"
+                            x-model="form[field.name]"
+                        >
+                            <option value="">Select</option>
+                            <template x-for="option in field.options" :key="\`\${field.name}-\${option.value}\`">
+                                <option :value="option.value" x-text="option.label"></option>
+                            </template>
+                        </select>
                     </template>
-                </select>
-            </template>
 
-            <template x-if="field.type !== 'select'">
-                <input
-                    type="text"
-                    class="mt-1 block w-full rounded-lg border-gray-300 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                    :id="\`section-field-\${field.name}\`"
-                    x-model="form[field.name]"
-                />
-            </template>
+                    <template x-if="field.type === 'combobox'">
+                        <div
+                            class="mt-1"
+                            x-data="combobox({
+                                name: field.name,
+                                options: field.options,
+                                selectedValue: form[field.name],
+                                placeholder: \`Search \${field.label.toLowerCase()}\`,
+                                noResultsText: \`No \${field.label.toLowerCase()} found.\`,
+                                inputId: \`section-field-\${field.name}\`,
+                                listId: \`section-field-\${field.name}-listbox\`,
+                            })"
+                            x-modelable="selectedValue"
+                            x-model="form[field.name]"
+                            x-on:click.outside="closeDropdown()"
+                            x-on:keydown.arrow-down.prevent="highlightNext()"
+                            x-on:keydown.arrow-up.prevent="highlightPrevious()"
+                            x-on:keydown.enter.prevent="selectHighlighted()"
+                            x-on:keydown.escape.prevent="closeDropdown()"
+                            x-effect="configuredOptions = field.options"
+                        >
+                            <div class="relative">
+                                <input
+                                    type="text"
+                                    role="combobox"
+                                    autocomplete="off"
+                                    class="block w-full rounded-xl border border-gray-300 bg-white px-4 py-3 pr-11 text-sm text-gray-900 shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                                    :id="\`section-field-\${field.name}\`"
+                                    :placeholder="placeholder"
+                                    x-model="query"
+                                    x-on:focus="openDropdown()"
+                                    x-on:input="handleQueryInput($event.target.value)"
+                                    x-bind:aria-expanded="open.toString()"
+                                    x-bind:aria-controls="listId"
+                                    x-bind:aria-activedescendant="activeDescendantId()"
+                                />
 
-            <p class="mt-1 text-xs text-red-600" x-text="firstError(field.name)"></p>
+                                <input type="hidden" :name="field.name" x-model="selectedValue" />
+
+                                <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400">
+                                    <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                        <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 11.168l3.71-3.938a.75.75 0 1 1 1.08 1.04l-4.25 4.5a.75.75 0 0 1-1.08 0l-4.25-4.5a.75.75 0 0 1 .02-1.06Z" clip-rule="evenodd" />
+                                    </svg>
+                                </div>
+
+                                <div x-ref="slotOptions" class="hidden"></div>
+
+                                <div
+                                    class="absolute z-20 mt-2 max-h-72 w-full overflow-auto rounded-2xl border border-gray-200 bg-white p-2 shadow-xl ring-1 ring-black/5"
+                                    x-cloak
+                                    x-show="open"
+                                    role="listbox"
+                                    x-bind:id="listId"
+                                >
+                                    <div class="flex items-center justify-end border-b border-gray-100 px-1 pb-2" x-show="field.inlineCreate.storeUrl">
+                                        <button
+                                            type="button"
+                                            class="text-sm text-blue-600 transition hover:text-blue-500"
+                                            x-text="field.inlineCreate.label"
+                                            x-on:click="openInlineCreate(field); closeDropdown()"
+                                        ></button>
+                                    </div>
+
+                                    <template x-if="filteredOptions().length === 0">
+                                        <div class="rounded-xl px-3 py-3 text-sm text-gray-500" x-text="noResultsText"></div>
+                                    </template>
+
+                                    <template x-for="(option, index) in filteredOptions()" :key="option.value">
+                                        <button
+                                            type="button"
+                                            class="flex w-full items-start justify-between rounded-xl px-3 py-3 text-left transition"
+                                            role="option"
+                                            x-bind:id="optionDomId(index)"
+                                            x-bind:aria-selected="isSelected(option).toString()"
+                                            x-on:mouseenter="highlightedIndex = index"
+                                            x-on:click="selectOption(option)"
+                                            x-bind:class="highlightedIndex === index ? 'bg-blue-50 text-blue-900' : 'text-gray-900 hover:bg-gray-50'"
+                                        >
+                                            <span class="min-w-0">
+                                                <span class="block truncate text-sm font-medium" x-text="option.label"></span>
+                                                <span class="mt-1 block truncate text-xs text-gray-500" x-show="option.description" x-text="option.description"></span>
+                                            </span>
+
+                                            <span class="ml-3 text-blue-600" x-show="isSelected(option)">
+                                                <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                                    <path fill-rule="evenodd" d="M16.704 5.29a1 1 0 0 1 .006 1.414l-8 8.07a1 1 0 0 1-1.42 0l-4-4.035a1 1 0 0 1 1.42-1.41l3.29 3.32 7.29-7.36a1 1 0 0 1 1.414 0Z" clip-rule="evenodd" />
+                                                </svg>
+                                            </span>
+                                        </button>
+                                    </template>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+
+                    <template x-if="field.type !== 'select' && field.type !== 'combobox'">
+                        <input
+                            :type="field.type === 'email' || field.type === 'url' ? field.type : 'text'"
+                            class="mt-1 block w-full rounded-lg border-gray-300 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                            :id="\`section-field-\${field.name}\`"
+                            x-model="form[field.name]"
+                        />
+                    </template>
+
+                    <p class="mt-1 text-xs text-red-600" x-text="firstError(field.name)"></p>
+
+                    <div class="mt-3 space-y-3 rounded-xl border border-gray-200 bg-gray-50 p-4" x-show="inlineCreateFieldName === field.name" x-cloak>
+                        <div class="flex items-center justify-between gap-3">
+                            <p class="text-sm font-medium text-gray-900" x-text="field.inlineCreate.label"></p>
+                            <button
+                                type="button"
+                                class="text-sm text-gray-500 transition hover:text-gray-700"
+                                x-on:click="closeInlineCreate()"
+                            >
+                                Cancel
+                            </button>
+                        </div>
+
+                        <template x-for="createField in field.inlineCreate.fields" :key="\`\${field.name}-inline-create-\${createField.name}\`">
+                            <div>
+                                <label
+                                    class="block text-xs font-semibold uppercase tracking-wide text-gray-500"
+                                    :for="\`section-inline-create-\${field.name}-\${createField.name}\`"
+                                    x-text="createField.label"
+                                ></label>
+                                <input
+                                    :id="\`section-inline-create-\${field.name}-\${createField.name}\`"
+                                    :type="createField.type === 'email' || createField.type === 'url' ? createField.type : 'text'"
+                                    class="mt-1 block w-full rounded-lg border-gray-300 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                                    x-model="inlineCreateForm[createField.name]"
+                                />
+                                <p class="mt-1 text-xs text-red-600" x-text="firstInlineCreateError(createField.name)"></p>
+                            </div>
+                        </template>
+
+                        <p class="text-xs text-red-600" x-show="inlineCreateFormError" x-text="inlineCreateFormError"></p>
+
+                        <div class="flex justify-end">
+                            <button
+                                type="button"
+                                class="rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+                                x-bind:disabled="inlineCreateSubmitting"
+                                x-on:click="submitInlineCreate(field)"
+                            >
+                                Create Supplier
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </template>
         </div>
     </template>
 `;
@@ -364,6 +519,11 @@ const createSectionState = (section, adapters) => ({
     errors: {},
     sectionError: '',
     formError: '',
+    inlineCreateFieldName: '',
+    inlineCreateForm: {},
+    inlineCreateErrors: {},
+    inlineCreateFormError: '',
+    inlineCreateSubmitting: false,
     init() {
         if (this.isOpen && !this.hasLoaded) {
             this.fetchPage(1);
@@ -434,6 +594,142 @@ const createSectionState = (section, adapters) => ({
 
         return values[0];
     },
+    firstInlineCreateError(fieldName) {
+        const values = this.inlineCreateErrors[fieldName];
+
+        if (!Array.isArray(values) || values.length === 0) {
+            return '';
+        }
+
+        return values[0];
+    },
+    resetInlineCreateState() {
+        this.inlineCreateFieldName = '';
+        this.inlineCreateForm = {};
+        this.inlineCreateErrors = {};
+        this.inlineCreateFormError = '';
+        this.inlineCreateSubmitting = false;
+    },
+    openInlineCreate(field) {
+        this.inlineCreateFieldName = field.name;
+        this.inlineCreateForm = field.inlineCreate.fields.reduce((carry, createField) => {
+            carry[createField.name] = '';
+
+            return carry;
+        }, {});
+        this.inlineCreateErrors = {};
+        this.inlineCreateFormError = '';
+        this.inlineCreateSubmitting = false;
+    },
+    closeInlineCreate() {
+        this.resetInlineCreateState();
+    },
+    fieldRows() {
+        const rows = [];
+        const consumedIndexes = new Set();
+
+        this.section.fields.forEach((field, index) => {
+            if (consumedIndexes.has(index)) {
+                return;
+            }
+
+            if (field.rowGroup !== '') {
+                const row = [field];
+
+                this.section.fields.forEach((candidateField, candidateIndex) => {
+                    if (candidateIndex <= index) {
+                        return;
+                    }
+
+                    if (candidateField.rowGroup !== field.rowGroup) {
+                        return;
+                    }
+
+                    row.push(candidateField);
+                    consumedIndexes.add(candidateIndex);
+                });
+
+                rows.push(row);
+                return;
+            }
+
+            rows.push([field]);
+        });
+
+        return rows;
+    },
+    rowClass(row) {
+        return row.length > 1 ? 'grid grid-cols-1 gap-4 sm:grid-cols-2' : '';
+    },
+    findField(fieldName) {
+        return this.section.fields.find((field) => field.name === fieldName) || null;
+    },
+    async submitInlineCreate(field) {
+        if (!field.inlineCreate.storeUrl || this.inlineCreateSubmitting) {
+            return;
+        }
+
+        this.inlineCreateSubmitting = true;
+        this.inlineCreateErrors = {};
+        this.inlineCreateFormError = '';
+
+        try {
+            const response = await fetch(field.inlineCreate.storeUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Accept: 'application/json',
+                    'X-CSRF-TOKEN': this.section.csrfToken,
+                },
+                body: JSON.stringify(this.inlineCreateForm),
+            });
+
+            if (response.status === 422) {
+                const data = await response.json();
+                this.inlineCreateErrors = asRecord(data.errors);
+                this.inlineCreateFormError = asString(data.message, 'Unable to create record.');
+                return;
+            }
+
+            if (!response.ok) {
+                this.inlineCreateFormError = 'Unable to create record.';
+                return;
+            }
+
+            const data = await response.json();
+            const createdId = data.data?.id;
+            const createdName = asString(data.data?.company_name);
+
+            if ((createdId === null || createdId === undefined) || createdName === '') {
+                this.inlineCreateFormError = 'Unable to create record.';
+                return;
+            }
+
+            const targetField = this.findField(field.name);
+
+            if (!targetField) {
+                this.inlineCreateFormError = 'Unable to create record.';
+                return;
+            }
+
+            const optionValue = String(createdId);
+            const existingOption = targetField.options.find((option) => option.value === optionValue);
+
+            if (!existingOption) {
+                targetField.options.push({
+                    value: optionValue,
+                    label: createdName,
+                });
+            }
+
+            this.form[field.name] = optionValue;
+            this.resetInlineCreateState();
+        } catch (error) {
+            this.inlineCreateFormError = 'Unable to create record.';
+        } finally {
+            this.inlineCreateSubmitting = false;
+        }
+    },
     async fetchPage(page) {
         if (!this.section.endpoints.list) {
             return;
@@ -481,6 +777,7 @@ const createSectionState = (section, adapters) => ({
         this.form = buildEmptyForm(this.section);
         this.errors = {};
         this.formError = '';
+        this.resetInlineCreateState();
         this.isFormOpen = true;
     },
     openEditForm(record) {
@@ -495,6 +792,7 @@ const createSectionState = (section, adapters) => ({
         });
         this.errors = {};
         this.formError = '';
+        this.resetInlineCreateState();
         this.isFormOpen = true;
     },
     closeForm() {
@@ -502,6 +800,7 @@ const createSectionState = (section, adapters) => ({
         this.isSubmitting = false;
         this.errors = {};
         this.formError = '';
+        this.resetInlineCreateState();
     },
     buildCreatePayload() {
         if (typeof this.adapters.buildCreatePayload === 'function') {
