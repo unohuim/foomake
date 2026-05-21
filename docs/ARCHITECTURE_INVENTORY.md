@@ -1156,6 +1156,43 @@ $total = bcadd($a, $b, 6);
 
 ---
 
+### Inventory Availability Read Model
+
+**Name:** Inventory Availability Read Model  
+**Type:** Read Model / Domain Rule  
+**Location:**  
+- `docs/architecture/inventory/InventoryAvailabilityReadModel.yaml`  
+- `app/Support/Inventory/InventoryAvailabilityIndexReadModel.php`  
+- `app/Support/Inventory/InventoryAvailabilityCalculator.php`  
+- `app/Http/Controllers/InventoryController.php`
+
+**Purpose:**  
+Provide one tenant-scoped availability contract for the inventory index and single-item availability reads.
+
+**When to Use:**  
+Rendering inventory availability columns or resolving availability for one item.
+
+**When Not to Use:**  
+Posting stock moves or mutating operational records.
+
+**Public Interface:**  
+- `InventoryAvailabilityIndexReadModel::rows()`  
+- `InventoryAvailabilityIndexReadModel::rowForItem()`  
+- `InventoryAvailabilityCalculator::forItem(Item $item)`
+
+**Rules:**  
+- Availability math remains canonical BCMath at scale 6.  
+- UI-facing inventory quantities must render using the item base UoM `display_precision`.  
+- The read model may expose both canonical quantity fields and backend-formatted display fields for the same row.  
+
+**Example Usage:**  
+```php
+$rows = $indexReadModel->rows($tenantId, 'flour');
+$availability = $calculator->forItem($item);
+```
+
+---
+
 ### Item
 
 **Name:** Item  

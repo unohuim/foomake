@@ -5,44 +5,17 @@
         </h2>
     </x-slot>
 
-    <div class="py-12">
-        <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
-            <div class="bg-white shadow-sm sm:rounded-lg">
-                <div class="p-6 text-gray-900">
-                    @if ($items->isEmpty())
-                        <p class="text-sm text-gray-600">
-                            {{ __('No inventory items available.') }}
-                        </p>
-                    @else
-                        <div class="overflow-x-auto">
-                            <table class="min-w-full text-sm">
-                                <thead class="text-left text-gray-500">
-                                    <tr class="border-b border-gray-100">
-                                        <th class="px-3 py-2 font-medium">{{ __('Item') }}</th>
-                                        <th class="px-3 py-2 font-medium">{{ __('Base UoM') }}</th>
-                                        <th class="px-3 py-2 text-right font-medium">{{ __('On-hand') }}</th>
-                                    </tr>
-                                </thead>
-                                <tbody class="divide-y divide-gray-100">
-                                    @foreach ($items as $item)
-                                        <tr>
-                                            <td class="px-3 py-3 text-gray-900">
-                                                {{ $item->name }}
-                                            </td>
-                                            <td class="px-3 py-3 text-gray-600">
-                                                {{ $item->baseUom->name }} ({{ $item->baseUom->symbol }})
-                                            </td>
-                                            <td class="px-3 py-3 text-right text-gray-900">
-                                                @qtyForUom($item->onHandQuantity(), $item->baseUom, 1)
-                                            </td>
-                                        </tr>
-                                    @endforeach
-                                </tbody>
-                            </table>
-                        </div>
-                    @endif
-                </div>
-            </div>
+    <script type="application/json" id="inventory-index-payload">@json($payload)</script>
+
+    <div
+        class="flex h-[calc(100vh-8rem)] min-h-0 flex-col overflow-hidden"
+        data-page="inventory-index"
+        data-payload="inventory-index-payload"
+        data-crud-config='@json($crudConfig)'
+        x-data="inventoryIndex"
+    >
+        <div class="mx-auto flex h-full min-h-0 w-full max-w-7xl flex-1 flex-col overflow-hidden sm:px-6 lg:px-8">
+            <div class="flex h-full min-h-0 flex-1 flex-col" data-crud-root></div>
         </div>
     </div>
 </x-app-layout>

@@ -88,6 +88,7 @@ export function normalizeCrudConfig(config) {
                 carry[column] = {
                     kind: sanitizeLabel(definition.kind, 'text'),
                     urlExpression: sanitizeLabel(definition.urlExpression),
+                    subtitleExpression: sanitizeLabel(definition.subtitleExpression),
                 };
 
                 return carry;

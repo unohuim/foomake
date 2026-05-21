@@ -236,35 +236,14 @@ beforeEach(function () {
         return is_array($payload) ? $payload : [];
     };
 
-    $this->inventoryOnHandForItem = function (string $html, string $itemName): ?string {
-        $dom = new \DOMDocument();
+    $this->inventoryOnHandForItem = function (User $user, Item $item): ?string {
+        $response = $this->actingAs($user)
+            ->getJson(route('inventory.list'))
+            ->assertOk();
 
-        libxml_use_internal_errors(true);
-        $dom->loadHTML($html);
-        libxml_clear_errors();
+        $row = collect($response->json('data'))->firstWhere('id', $item->id);
 
-        $xpath = new \DOMXPath($dom);
-        $rows = $xpath->query('//tbody/tr');
-
-        if ($rows === false) {
-            return null;
-        }
-
-        foreach ($rows as $row) {
-            $cells = $xpath->query('./td', $row);
-
-            if ($cells === false || $cells->length < 3) {
-                continue;
-            }
-
-            $name = trim((string) $cells->item(0)?->textContent);
-
-            if ($name === $itemName) {
-                return trim((string) $cells->item(2)?->textContent);
-            }
-        }
-
-        return null;
+        return is_array($row) ? ($row['on_hand_display'] ?? null) : null;
     };
 });
 
@@ -328,7 +307,7 @@ it('formatter uses uom display_precision in formatForUom', function () {
     expect(QuantityFormatter::formatForUom('2.100000', $uom, 6))->toBe('2.100');
 });
 
-it('inventory representative page displays precision 0 using item base uom precision', function () {
+it('inventory representative page returns a whole number string at precision 0', function () {
     $tenant = ($this->makeTenant)('Inventory Precision 0 Tenant');
     $user = ($this->makeUser)($tenant, 'inventory-precision-0@example.test');
     ($this->grantPermissions)($user, ['inventory-adjustments-view']);
@@ -338,14 +317,13 @@ it('inventory representative page displays precision 0 using item base uom preci
     $item = ($this->makeItem)($tenant, $uom, 'Inventory Precision 0 Item');
     ($this->addStockMove)($tenant, $item, $uom, '2.345000');
 
-    $response = $this->actingAs($user)->get(route('inventory.index'))->assertOk();
-    $display = ($this->inventoryOnHandForItem)($response->getContent(), $item->name);
+    $display = ($this->inventoryOnHandForItem)($user, $item);
 
     assertNotNull($display);
     expect($display)->toBe('2');
 });
 
-it('inventory representative page displays precision 1 using item base uom precision', function () {
+it('inventory representative page returns one decimal at precision 1', function () {
     $tenant = ($this->makeTenant)('Inventory Precision 1 Tenant');
     $user = ($this->makeUser)($tenant, 'inventory-precision-1@example.test');
     ($this->grantPermissions)($user, ['inventory-adjustments-view']);
@@ -355,14 +333,13 @@ it('inventory representative page displays precision 1 using item base uom preci
     $item = ($this->makeItem)($tenant, $uom, 'Inventory Precision 1 Item');
     ($this->addStockMove)($tenant, $item, $uom, '2.100000');
 
-    $response = $this->actingAs($user)->get(route('inventory.index'))->assertOk();
-    $display = ($this->inventoryOnHandForItem)($response->getContent(), $item->name);
+    $display = ($this->inventoryOnHandForItem)($user, $item);
 
     assertNotNull($display);
     expect($display)->toBe('2.1');
 });
 
-it('inventory representative page output changes when only uom display_precision changes for the same item', function () {
+it('inventory representative page output changes when only uom display precision changes for the same item', function () {
     $tenant = ($this->makeTenant)('Inventory Same Item Precision Change Tenant');
     $user = ($this->makeUser)($tenant, 'inventory-same-item-precision-change@example.test');
     ($this->grantPermissions)($user, ['inventory-adjustments-view']);
@@ -372,8 +349,7 @@ it('inventory representative page output changes when only uom display_precision
     $item = ($this->makeItem)($tenant, $uom, 'Inventory Same Item Precision');
     ($this->addStockMove)($tenant, $item, $uom, '2.100000');
 
-    $firstResponse = $this->actingAs($user)->get(route('inventory.index'))->assertOk();
-    $firstDisplay = ($this->inventoryOnHandForItem)($firstResponse->getContent(), $item->name);
+    $firstDisplay = ($this->inventoryOnHandForItem)($user, $item);
 
     assertNotNull($firstDisplay);
     expect($firstDisplay)->toBe('2');
@@ -382,14 +358,13 @@ it('inventory representative page output changes when only uom display_precision
         'display_precision' => 3,
     ]);
 
-    $secondResponse = $this->actingAs($user)->get(route('inventory.index'))->assertOk();
-    $secondDisplay = ($this->inventoryOnHandForItem)($secondResponse->getContent(), $item->name);
+    $secondDisplay = ($this->inventoryOnHandForItem)($user, $item);
 
     assertNotNull($secondDisplay);
     expect($secondDisplay)->toBe('2.100');
 });
 
-it('inventory representative page uses default display_precision 1 when uom display_precision is omitted', function () {
+it('inventory representative page uses the default precision when uom display precision is omitted', function () {
     $tenant = ($this->makeTenant)('Inventory Default Precision Tenant');
     $user = ($this->makeUser)($tenant, 'inventory-default-precision@example.test');
     ($this->grantPermissions)($user, ['inventory-adjustments-view']);
@@ -406,15 +381,14 @@ it('inventory representative page uses default display_precision 1 when uom disp
     $item = ($this->makeItem)($tenant, $uom, 'Inventory Default Precision Item');
     ($this->addStockMove)($tenant, $item, $uom, '2.100000');
 
-    $response = $this->actingAs($user)->get(route('inventory.index'))->assertOk();
-    $display = ($this->inventoryOnHandForItem)($response->getContent(), $item->name);
+    $display = ($this->inventoryOnHandForItem)($user, $item);
 
     assertNotNull($display);
     expect((int) $uom->fresh()->display_precision)->toBe(1);
     expect($display)->toBe('2.1');
 });
 
-it('inventory representative page displays precision 2 with half-up rounding', function () {
+it('inventory representative page rounds half up at precision 2', function () {
     $tenant = ($this->makeTenant)('Inventory Precision 2 Tenant');
     $user = ($this->makeUser)($tenant, 'inventory-precision-2@example.test');
     ($this->grantPermissions)($user, ['inventory-adjustments-view']);
@@ -424,14 +398,13 @@ it('inventory representative page displays precision 2 with half-up rounding', f
     $item = ($this->makeItem)($tenant, $uom, 'Inventory Precision 2 Item');
     ($this->addStockMove)($tenant, $item, $uom, '2.345000');
 
-    $response = $this->actingAs($user)->get(route('inventory.index'))->assertOk();
-    $display = ($this->inventoryOnHandForItem)($response->getContent(), $item->name);
+    $display = ($this->inventoryOnHandForItem)($user, $item);
 
     assertNotNull($display);
     expect($display)->toBe('2.35');
 });
 
-it('inventory representative page displays precision 3 with trailing zeros', function () {
+it('inventory representative page preserves trailing zeros at precision 3', function () {
     $tenant = ($this->makeTenant)('Inventory Precision 3 Tenant');
     $user = ($this->makeUser)($tenant, 'inventory-precision-3@example.test');
     ($this->grantPermissions)($user, ['inventory-adjustments-view']);
@@ -441,14 +414,13 @@ it('inventory representative page displays precision 3 with trailing zeros', fun
     $item = ($this->makeItem)($tenant, $uom, 'Inventory Precision 3 Item');
     ($this->addStockMove)($tenant, $item, $uom, '2.100000');
 
-    $response = $this->actingAs($user)->get(route('inventory.index'))->assertOk();
-    $display = ($this->inventoryOnHandForItem)($response->getContent(), $item->name);
+    $display = ($this->inventoryOnHandForItem)($user, $item);
 
     assertNotNull($display);
     expect($display)->toBe('2.100');
 });
 
-it('inventory representative page displays zero with trailing zeros at precision 3', function () {
+it('inventory representative page preserves zero at precision 3', function () {
     $tenant = ($this->makeTenant)('Inventory Precision 3 Zero Tenant');
     $user = ($this->makeUser)($tenant, 'inventory-precision-3-zero@example.test');
     ($this->grantPermissions)($user, ['inventory-adjustments-view']);
@@ -458,14 +430,13 @@ it('inventory representative page displays zero with trailing zeros at precision
     $item = ($this->makeItem)($tenant, $uom, 'Inventory Precision 3 Zero Item');
     ($this->addStockMove)($tenant, $item, $uom, '0.000000');
 
-    $response = $this->actingAs($user)->get(route('inventory.index'))->assertOk();
-    $display = ($this->inventoryOnHandForItem)($response->getContent(), $item->name);
+    $display = ($this->inventoryOnHandForItem)($user, $item);
 
     assertNotNull($display);
     expect($display)->toBe('0.000');
 });
 
-it('inventory representative page displays precision 6 with trailing zeros', function () {
+it('inventory representative page supports precision 6', function () {
     $tenant = ($this->makeTenant)('Inventory Precision 6 Tenant');
     $user = ($this->makeUser)($tenant, 'inventory-precision-6@example.test');
     ($this->grantPermissions)($user, ['inventory-adjustments-view']);
@@ -475,14 +446,13 @@ it('inventory representative page displays precision 6 with trailing zeros', fun
     $item = ($this->makeItem)($tenant, $uom, 'Inventory Precision 6 Item');
     ($this->addStockMove)($tenant, $item, $uom, '2.000000');
 
-    $response = $this->actingAs($user)->get(route('inventory.index'))->assertOk();
-    $display = ($this->inventoryOnHandForItem)($response->getContent(), $item->name);
+    $display = ($this->inventoryOnHandForItem)($user, $item);
 
     assertNotNull($display);
     expect($display)->toBe('2.000000');
 });
 
-it('inventory representative page changes output when two items use different uom precision', function () {
+it('inventory representative page uses each items uom precision independently', function () {
     $tenant = ($this->makeTenant)('Inventory Mixed Precision Tenant');
     $user = ($this->makeUser)($tenant, 'inventory-mixed-precision@example.test');
     ($this->grantPermissions)($user, ['inventory-adjustments-view']);
@@ -497,10 +467,8 @@ it('inventory representative page changes output when two items use different uo
     ($this->addStockMove)($tenant, $itemZero, $uomZero, '2.100000');
     ($this->addStockMove)($tenant, $itemThree, $uomThree, '2.100000');
 
-    $response = $this->actingAs($user)->get(route('inventory.index'))->assertOk();
-
-    $displayZero = ($this->inventoryOnHandForItem)($response->getContent(), $itemZero->name);
-    $displayThree = ($this->inventoryOnHandForItem)($response->getContent(), $itemThree->name);
+    $displayZero = ($this->inventoryOnHandForItem)($user, $itemZero);
+    $displayThree = ($this->inventoryOnHandForItem)($user, $itemThree);
 
     assertNotNull($displayZero);
     assertNotNull($displayThree);

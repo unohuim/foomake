@@ -1,0 +1,38 @@
+name: Inventory Availability Read Model
+type: Read Model / Domain Rule
+location:
+  - app/Support/Inventory/InventoryAvailabilityIndexReadModel.php
+  - app/Support/Inventory/InventoryAvailabilityCalculator.php
+  - app/Http/Controllers/InventoryController.php
+  - resources/views/inventory/index.blade.php
+  - resources/js/pages/inventory-index.js
+purpose: Define the tenant-scoped availability contract for the inventory index and single-item availability lookups without storing denormalized inventory totals on items.
+when_to_use:
+  - Rendering the inventory index availability columns
+  - Looking up on-hand sell buy make and net values for one tenant-scoped item
+  - Reusing the same availability semantics for inventory list reads
+when_not_to_use:
+  - Posting stock moves
+  - Mutating purchase orders sales orders recipes or make orders
+  - Performing storage math or domain arithmetic outside BCMath canonical scale 6
+rules:
+  - Public interfaces are InventoryAvailabilityIndexReadModel::rows() for bulk reads and InventoryAvailabilityCalculator::forItem(Item $item) for single-item reads.
+  - On-Hand is the current posted stock-move balance for the item and ignores non-posted stock moves.
+  - Sell includes direct demand from tenant-scoped sales-order lines whose parent sales orders are not DRAFT COMPLETED or CANCELLED.
+  - Sell also includes tenant-scoped component demand from the selected active fulfillment recipe when that recipe output item appears on a qualifying sales order.
+  - Fulfillment recipe component demand is recipe line quantity multiplied by sales-order line quantity divided by recipe output_quantity using BCMath at canonical scale 6.
+  - Buy includes inbound tenant-scoped purchase-order line quantity for purchase orders that are not DRAFT RECEIVED SHORT-CLOSED or CANCELLED.
+  - Buy quantity is pack_count multiplied by item_purchase_options.pack_quantity using BCMath at canonical scale 6.
+  - Make includes tenant-scoped make-order output_quantity for make orders that are not DRAFT MADE or CANCELLED.
+  - Net is computed as On-Hand minus Sell plus Buy plus Make using BCMath at canonical scale 6.
+  - Canonical quantity fields remain decimal strings at scale 6 and must never use float math.
+  - UI-facing display quantity fields must be backend-formatted from the item base UoM display_precision.
+  - The read model may expose both canonical quantity fields and display-formatted quantity fields in the same row contract.
+  - All reads remain tenant-scoped and must not leak rows or aggregates across tenants.
+public_interface:
+  - InventoryAvailabilityIndexReadModel::rows(int $tenantId, string $search = '', string $sortColumn = 'item', string $direction = 'asc')
+  - InventoryAvailabilityIndexReadModel::rowForItem(Item $item)
+  - InventoryAvailabilityCalculator::forItem(Item $item)
+example_usage: |
+  $rows = $indexReadModel->rows($tenantId, 'flour');
+  $availability = $calculator->forItem($item);

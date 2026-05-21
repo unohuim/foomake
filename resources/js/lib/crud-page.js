@@ -184,6 +184,7 @@ const renderCellContent = (config, column) => {
     const definition = recordDefinition(config.rowDisplay.columns[column]);
     const kind = sanitizeExpression(definition.kind, 'text');
     const urlExpression = sanitizeExpression(definition.urlExpression);
+    const subtitleExpression = sanitizeExpression(definition.subtitleExpression);
     const cellTextExpression = config.rowDisplay.cellTextExpression;
 
     if (kind === 'product-name') {
@@ -214,6 +215,32 @@ const renderCellContent = (config, column) => {
         `;
     }
 
+    if (kind === 'stacked-text') {
+        if (urlExpression !== '') {
+            return `
+                <template x-if="column === '${column}'">
+                    <div class="min-w-0">
+                        <a class="font-medium text-blue-600 hover:text-blue-500" :href="${urlExpression}" x-text="${cellTextExpression}"></a>
+                        ${subtitleExpression !== '' ? `
+                            <p class="mt-1 truncate text-sm text-gray-500" x-show="Boolean(${subtitleExpression})" x-text="${subtitleExpression}"></p>
+                        ` : ''}
+                    </div>
+                </template>
+            `;
+        }
+
+        return `
+            <template x-if="column === '${column}'">
+                <div class="min-w-0">
+                    <div class="font-medium text-gray-900" x-text="${cellTextExpression}"></div>
+                    ${subtitleExpression !== '' ? `
+                        <p class="mt-1 truncate text-sm text-gray-500" x-show="Boolean(${subtitleExpression})" x-text="${subtitleExpression}"></p>
+                    ` : ''}
+                </div>
+            </template>
+        `;
+    }
+
     return `
         <template x-if="column === '${column}'">
             <span x-text="${cellTextExpression}"></span>
@@ -222,7 +249,8 @@ const renderCellContent = (config, column) => {
 };
 
 const renderDesktopTable = (config) => {
-    const colspan = String(config.columns.length + 1);
+    const hasActions = config.actions.length > 0;
+    const colspan = String(config.columns.length + (hasActions ? 1 : 0));
     const columnsMarkup = config.columns.map((column) => renderCellContent(config, column)).join('');
 
     return `
@@ -246,9 +274,11 @@ const renderDesktopTable = (config) => {
                                     </template>
                                 </th>
                             </template>
-                            <th class="sticky top-0 z-10 bg-white px-6 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">
-                                <span class="sr-only">Actions</span>
-                            </th>
+                            ${hasActions ? `
+                                <th class="sticky top-0 z-10 bg-white px-6 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">
+                                    <span class="sr-only">Actions</span>
+                                </th>
+                            ` : ''}
                         </tr>
                     </thead>
                     <tbody
@@ -266,9 +296,11 @@ const renderDesktopTable = (config) => {
                                         ${columnsMarkup}
                                     </td>
                                 </template>
-                                <td class="px-6 py-4 text-right text-sm">
-                                    ${renderActionCell(config, 'ml-auto')}
-                                </td>
+                                ${hasActions ? `
+                                    <td class="px-6 py-4 text-right text-sm">
+                                        ${renderActionCell(config, 'ml-auto')}
+                                    </td>
+                                ` : ''}
                             </tr>
                         </template>
                     </tbody>
@@ -346,6 +378,7 @@ const renderMobileCards = (config) => {
     const mediaExpression = config.mobileCard.mediaExpression;
     const subtitleExpression = config.mobileCard.subtitleExpression;
     const bodyExpression = config.mobileCard.bodyExpression;
+    const hasActions = config.actions.length > 0;
 
     return `
         <div class="h-full min-h-0 md:hidden" data-crud-mobile-cards>
@@ -384,7 +417,7 @@ const renderMobileCards = (config) => {
                                             ${subtitleExpression !== '' ? `<p class="mt-1 text-sm text-gray-600" x-text="${subtitleExpression}"></p>` : ''}
                                         </div>
 
-                                        ${renderActionCell(config, 'ml-auto shrink-0')}
+                                        ${hasActions ? renderActionCell(config, 'ml-auto shrink-0') : ''}
                                     </div>
 
                                     ${bodyExpression !== '' ? `<p class="mt-3 text-sm text-gray-700" x-text="${bodyExpression}"></p>` : ''}

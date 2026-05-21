@@ -48,6 +48,7 @@ Route::middleware('auth')->group(function () {
         ->name('navigation.state');
 
     Route::get('/inventory', [InventoryController::class, 'index'])->name('inventory.index');
+    Route::get('/inventory/list', [InventoryController::class, 'list'])->name('inventory.list');
     Route::get('/manufacturing/inventory', [InventoryController::class, 'index']);
 
     Route::get('/inventory/counts', [InventoryCountController::class, 'index'])
