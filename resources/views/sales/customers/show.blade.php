@@ -65,6 +65,10 @@
                             <p class="mt-1 text-base text-gray-900" x-text="customer.name"></p>
                         </div>
                         <div>
+                            <p class="text-sm text-gray-500">Customer Type</p>
+                            <p class="mt-1 text-base text-gray-900" x-text="customer.customer_type_label || '—'"></p>
+                        </div>
+                        <div>
                             <p class="text-sm text-gray-500">Notes</p>
                             <p class="mt-1 text-base text-gray-900 whitespace-pre-line" x-text="customer.notes || '—'"></p>
                         </div>

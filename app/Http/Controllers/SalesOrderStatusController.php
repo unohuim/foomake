@@ -6,12 +6,14 @@ use App\Actions\Sales\BuildSalesOrderIssuePlanAction;
 use App\Actions\Sales\CancelPackedSalesOrderAction;
 use App\Actions\Sales\MoveSalesOrderToPackingAction;
 use App\Actions\Sales\PackSalesOrderAction;
-use App\Actions\Workflows\AssertSalesOrderStageTasksCompletedAction;
+use App\Actions\Workflows\AssertWorkflowStageTasksCompletedAction;
 use App\Actions\Workflows\DeleteOpenSalesOrderTasksAction;
-use App\Actions\Workflows\GenerateSalesOrderWorkflowTasksAction;
+use App\Actions\Workflows\GenerateWorkflowStageTasksAction;
 use App\Actions\Workflows\ResolveSalesWorkflowStageAction;
 use App\Http\Requests\Sales\UpdateSalesOrderStatusRequest;
 use App\Models\SalesOrder;
+use App\Models\SalesOrderLine;
+use App\Models\StockMove;
 use App\Models\Task;
 use DomainException;
 use Illuminate\Http\JsonResponse;
@@ -33,8 +35,8 @@ class SalesOrderStatusController extends Controller
         MoveSalesOrderToPackingAction $moveToPackingAction,
         PackSalesOrderAction $packSalesOrderAction,
         CancelPackedSalesOrderAction $cancelPackedSalesOrderAction,
-        AssertSalesOrderStageTasksCompletedAction $assertStageTasksCompletedAction,
-        GenerateSalesOrderWorkflowTasksAction $generateWorkflowTasksAction,
+        AssertWorkflowStageTasksCompletedAction $assertWorkflowStageTasksCompletedAction,
+        GenerateWorkflowStageTasksAction $generateWorkflowStageTasksAction,
         DeleteOpenSalesOrderTasksAction $deleteOpenSalesOrderTasksAction
     ): JsonResponse {
         Gate::authorize('sales-sales-orders-manage');
@@ -54,36 +56,36 @@ class SalesOrderStatusController extends Controller
 
         try {
             $salesOrder = match (true) {
-                $targetStatus === SalesOrder::STATUS_CANCELLED => $salesOrder->status === SalesOrder::STATUS_PACKED
+                $targetStatus === SalesOrder::STATUS_CANCELLED => $this->hasPostedInventoryImpact($salesOrder)
                     ? $cancelPackedSalesOrderAction->execute($salesOrder, $deleteOpenSalesOrderTasksAction)
                     : $this->transitionWithoutInventory(
                         $salesOrder,
                         $targetStatus,
-                        $assertStageTasksCompletedAction,
-                        $generateWorkflowTasksAction,
+                        $assertWorkflowStageTasksCompletedAction,
+                        $generateWorkflowStageTasksAction,
                         $deleteOpenSalesOrderTasksAction,
                         $resolver
                     ),
-                $targetStage !== null && $targetStage->key === 'packed' => $packSalesOrderAction->execute(
+                $targetStage !== null && $targetStage->is_inventory_effect_stage => $packSalesOrderAction->execute(
                     $salesOrder,
                     $buildPlanAction,
-                    $assertStageTasksCompletedAction,
-                    $generateWorkflowTasksAction,
+                    $assertWorkflowStageTasksCompletedAction,
+                    $generateWorkflowStageTasksAction,
                     $targetStatus,
                     $targetStage->key
                 ),
                 $salesOrder->status === SalesOrder::STATUS_OPEN && $targetStage !== null => $moveToPackingAction->execute(
                     $salesOrder,
                     $buildPlanAction,
-                    $generateWorkflowTasksAction,
+                    $generateWorkflowStageTasksAction,
                     $targetStatus,
                     $targetStage->key
                 ),
                 default => $this->transitionWithoutInventory(
                     $salesOrder,
                     $targetStatus,
-                    $assertStageTasksCompletedAction,
-                    $generateWorkflowTasksAction,
+                    $assertWorkflowStageTasksCompletedAction,
+                    $generateWorkflowStageTasksAction,
                     $deleteOpenSalesOrderTasksAction,
                     $resolver
                 ),
@@ -115,8 +117,8 @@ class SalesOrderStatusController extends Controller
     private function transitionWithoutInventory(
         SalesOrder $salesOrder,
         string $targetStatus,
-        AssertSalesOrderStageTasksCompletedAction $assertStageTasksCompletedAction,
-        GenerateSalesOrderWorkflowTasksAction $generateWorkflowTasksAction,
+        AssertWorkflowStageTasksCompletedAction $assertWorkflowStageTasksCompletedAction,
+        GenerateWorkflowStageTasksAction $generateWorkflowStageTasksAction,
         DeleteOpenSalesOrderTasksAction $deleteOpenSalesOrderTasksAction,
         ResolveSalesWorkflowStageAction $resolver
     ): SalesOrder
@@ -124,8 +126,8 @@ class SalesOrderStatusController extends Controller
         return DB::transaction(function () use (
             $salesOrder,
             $targetStatus,
-            $assertStageTasksCompletedAction,
-            $generateWorkflowTasksAction,
+            $assertWorkflowStageTasksCompletedAction,
+            $generateWorkflowStageTasksAction,
             $deleteOpenSalesOrderTasksAction,
             $resolver
         ): SalesOrder {
@@ -135,7 +137,12 @@ class SalesOrderStatusController extends Controller
                 ->firstOrFail();
 
             if ($targetStatus !== SalesOrder::STATUS_CANCELLED && $resolver->currentStageForStatus($lockedOrder) !== null) {
-                $assertStageTasksCompletedAction->execute($lockedOrder);
+                $assertWorkflowStageTasksCompletedAction->execute(
+                    (int) $lockedOrder->tenant_id,
+                    (int) $lockedOrder->id,
+                    $resolver->currentStageForStatus($lockedOrder),
+                    'Complete all tasks for this stage before moving the sales order forward.'
+                );
             }
 
             $lockedOrder->forceFill(['status' => $targetStatus])->save();
@@ -143,7 +150,11 @@ class SalesOrderStatusController extends Controller
             $targetStage = $resolver->activeStageForStatus($lockedOrder, $targetStatus);
 
             if ($targetStage !== null) {
-                $generateWorkflowTasksAction->execute($lockedOrder, $targetStage->key);
+                $generateWorkflowStageTasksAction->execute(
+                    (int) $lockedOrder->tenant_id,
+                    (int) $lockedOrder->id,
+                    $targetStage
+                );
             }
 
             if ($targetStatus === SalesOrder::STATUS_CANCELLED) {
@@ -208,5 +219,24 @@ class SalesOrderStatusController extends Controller
             'completed_by_user_name' => $task->completedBy?->name,
             'complete_url' => route('tasks.complete', $task),
         ];
+    }
+
+    /**
+     * Determine whether inventory has already been posted for the sales order.
+     */
+    private function hasPostedInventoryImpact(SalesOrder $salesOrder): bool
+    {
+        $lineIds = SalesOrderLine::query()
+            ->where('sales_order_id', $salesOrder->id)
+            ->pluck('id');
+
+        if ($lineIds->isEmpty()) {
+            return false;
+        }
+
+        return StockMove::query()
+            ->where('source_type', SalesOrderLine::class)
+            ->whereIn('source_id', $lineIds->all())
+            ->exists();
     }
 }

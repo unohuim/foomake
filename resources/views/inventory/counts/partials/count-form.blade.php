@@ -2,6 +2,7 @@
     'formVar' => 'form',
     'errorsVar' => 'errors',
     'errorsPrefix' => '',
+    'users' => collect(),
 ])
 
 @php
@@ -39,6 +40,8 @@
                         type="datetime-local"
                         class="w-full rounded-md border-gray-300 focus:border-blue-500 focus:ring-blue-500"
                         x-model="{{ $formVar }}.counted_at"
+                        x-on:change="handleCountedAtChange($event)"
+                        x-on:input="handleCountedAtChange($event)"
                     />
                     <p class="text-sm text-red-600" x-show="{{ $errorsPath }}?.counted_at" x-text="{{ $errorsPath }}?.counted_at?.[0]"></p>
                 </div>
@@ -54,6 +57,25 @@
                         x-model="{{ $formVar }}.notes"
                     ></textarea>
                     <p class="text-sm text-red-600" x-show="{{ $errorsPath }}?.notes" x-text="{{ $errorsPath }}?.notes?.[0]"></p>
+                </div>
+
+                <div class="space-y-2">
+                    <label class="text-sm font-medium text-gray-700" for="assigned_to_user_id">
+                        {{ __('Assigned User') }}
+                    </label>
+                    <select
+                        id="assigned_to_user_id"
+                        class="w-full rounded-md border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+                        x-model="{{ $formVar }}.assigned_to_user_id"
+                    >
+                        <option value="">{{ __('Select a user') }}</option>
+                        @foreach ($users as $user)
+                            <option value="{{ $user->id }}">
+                                {{ $user->name }} ({{ $user->email }})
+                            </option>
+                        @endforeach
+                    </select>
+                    <p class="text-sm text-red-600" x-show="{{ $errorsPath }}?.assigned_to_user_id" x-text="{{ $errorsPath }}?.assigned_to_user_id?.[0]"></p>
                 </div>
 
                 <p class="text-sm text-red-600" x-show="{{ $errorsPath }}?.general" x-text="{{ $errorsPath }}?.general?.[0]"></p>

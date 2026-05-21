@@ -673,6 +673,33 @@ it('19. customer detail orders payload also shows current stage tasks', function
     expect($orderPayload['current_stage_tasks'] ?? [])->toHaveCount(1);
 });
 
+it('19a. workflow stage task gating uses a shared generic assertion action for sales and inventory runtimes', function () {
+    $genericSource = file_get_contents(app_path('Actions/Workflows/AssertWorkflowStageTasksCompletedAction.php'));
+    $salesSource = file_get_contents(app_path('Http/Controllers/SalesOrderStatusController.php'));
+    $inventorySource = file_get_contents(app_path('Actions/Inventory/AdvanceInventoryCountWorkflowStageAction.php'));
+
+    expect($genericSource)->toContain('class AssertWorkflowStageTasksCompletedAction')
+        ->and($genericSource)->toContain('workflow_domain_id')
+        ->and($genericSource)->toContain('workflow_stage_id')
+        ->and($genericSource)->toContain('domain_record_id')
+        ->and($salesSource)->toContain('AssertWorkflowStageTasksCompletedAction')
+        ->and($inventorySource)->toContain('AssertWorkflowStageTasksCompletedAction')
+        ->and($inventorySource)->not->toContain('AssertInventoryCountStageTasksCompletedAction');
+});
+
+it('19b. workflow stage task generation uses a shared generic stage entry action for sales and inventory runtimes', function () {
+    $genericSource = file_get_contents(app_path('Actions/Workflows/GenerateWorkflowStageTasksAction.php'));
+    $salesSource = file_get_contents(app_path('Http/Controllers/SalesOrderStatusController.php'));
+    $inventorySource = file_get_contents(app_path('Actions/Inventory/AdvanceInventoryCountWorkflowStageAction.php'));
+
+    expect($genericSource)->toContain('class GenerateWorkflowStageTasksAction')
+        ->and($genericSource)->toContain('workflow_task_template_id')
+        ->and($genericSource)->toContain('assigned_to_user_id')
+        ->and($salesSource)->toContain('GenerateWorkflowStageTasksAction')
+        ->and($inventorySource)->toContain('GenerateWorkflowStageTasksAction')
+        ->and($inventorySource)->not->toContain('GenerateInventoryCountWorkflowTasksAction');
+});
+
 it('20. no purchase order tasks are generated in this PR', function () {
     expect(Task::query()->where('workflow_domain_id', WorkflowDomain::query()->where('key', 'purchasing')->value('id'))->exists())->toBeFalse();
 });
@@ -779,7 +806,7 @@ it('26. workflow domain and default sales stage seeding is idempotent', function
     app(SeedDefaultWorkflowStagesForTenantAction::class)->execute($tenant);
     app(SeedDefaultWorkflowStagesForTenantAction::class)->execute($tenant);
 
-    expect(WorkflowDomain::query()->count())->toBe(3)
+    expect(WorkflowDomain::query()->count())->toBe(4)
         ->and(WorkflowStage::withoutGlobalScopes()
             ->where('tenant_id', $tenant->id)
             ->where('workflow_domain_id', ($this->salesDomain)()->id)

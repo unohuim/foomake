@@ -69,7 +69,9 @@ const normalizeLayoutEntry = (entry) => {
         label: asString(safeEntry.label),
         field: asString(safeEntry.field),
         suffixField: asString(safeEntry.suffixField),
-        fallback: asString(safeEntry.fallback, '—'),
+        fallback: Object.prototype.hasOwnProperty.call(safeEntry, 'fallback')
+            ? String(safeEntry.fallback ?? '')
+            : '—',
         toneField: asString(safeEntry.toneField),
         strong: asBoolean(safeEntry.strong),
     };
@@ -88,6 +90,7 @@ const normalizeSectionConfig = (config) => {
         emptyState: asString(safeConfig.emptyState, 'No records found.'),
         csrfToken: asString(safeConfig.csrfToken),
         defaultOpen: asBoolean(safeConfig.defaultOpen),
+        showRowActionsMenu: safeConfig.showRowActionsMenu !== false,
         permissions: {
             canCreate: Boolean(permissions.canCreate),
         },
@@ -285,9 +288,9 @@ const fieldMarkup = `
 
 const actionMenuMarkup = `
     <div
-        class="relative inline-flex"
+        class="relative inline-flex overflow-visible"
         x-data="{ open: false }"
-        x-show="visibleActions(record).length > 0"
+        x-show="section.showRowActionsMenu && visibleActions(record).length > 0"
         x-on:keydown.escape.window="open = false"
         x-on:click.outside="open = false"
     >
@@ -305,7 +308,7 @@ const actionMenuMarkup = `
         </button>
 
         <div
-            class="absolute right-0 z-20 mt-2 w-40 rounded-md border border-gray-200 bg-white py-1 shadow-lg"
+            class="absolute right-0 z-30 mt-2 w-40 rounded-md border border-gray-200 bg-white py-1 shadow-lg"
             x-show="open"
             x-cloak
             role="menu"
@@ -323,9 +326,28 @@ const actionMenuMarkup = `
     </div>
 `;
 
+const inlineActionsMarkup = `
+    <div
+        class="flex flex-wrap items-center justify-end gap-2 self-center"
+        x-show="!section.showRowActionsMenu && visibleActions(record).length > 0"
+    >
+        <template x-for="action in visibleActions(record)" :key="\`\${record.id}-inline-\${action.id}\`">
+            <button
+                type="button"
+                class="inline-flex items-center rounded-lg border px-3 py-1.5 text-xs font-semibold uppercase tracking-widest transition"
+                :class="action.tone === 'warning'
+                    ? 'border-yellow-300 text-yellow-700 hover:bg-yellow-50'
+                    : 'border-slate-300 text-slate-700 hover:bg-slate-50'"
+                x-text="actionLabel(record, action)"
+                x-on:click="performAction(record, action)"
+            ></button>
+        </template>
+    </div>
+`;
+
 const renderCrudSection = () => `
     <section
-        class="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm"
+        class="overflow-visible rounded-2xl border border-gray-200 bg-white shadow-sm"
         data-js-crud-section-card
         x-data="jsCrudSection($el)"
     >
@@ -371,7 +393,7 @@ const renderCrudSection = () => `
             <div class="space-y-3" x-show="records.length > 0">
                 <template x-for="record in records" :key="record.id">
                     <article class="rounded-xl border border-gray-100 bg-gray-50 p-3 sm:p-4">
-                        <div class="flex flex-col sm:flex-row gap-4 sm:items-start sm:justify-between">
+                        <div class="flex flex-col sm:flex-row gap-4 sm:items-center sm:justify-between">
                             <div class="min-w-0 flex-1">
                                 <div class="flex items-center gap-3">
                                     <p class="truncate text-sm font-semibold text-gray-900" x-text="primaryText(record)"></p>
@@ -383,17 +405,19 @@ const renderCrudSection = () => `
                                         ></span>
                                     </template>
                                 </div>
-                                <template x-for="line in secondaryFieldItems(record)" :key="\`\${record.id}-\${line.label}-secondary\`">
-                                    <p class="mt-1 text-sm text-gray-600">
-                                        <template x-if="line.label">
-                                            <span class="text-gray-500" x-text="\`\${line.label}: \`"></span>
-                                        </template>
-                                        <span class="text-gray-700" x-text="line.text"></span>
-                                    </p>
-                                </template>
+                                <div class="mt-1 flex flex-wrap items-center gap-4">
+                                    <template x-for="line in secondaryFieldItems(record)" :key="\`\${record.id}-\${line.label}-secondary\`">
+                                        <p class="text-sm text-gray-600">
+                                            <template x-if="line.label">
+                                                <span class="text-gray-500" x-text="\`\${line.label}: \`"></span>
+                                            </template>
+                                            <span class="text-gray-700" x-text="line.text"></span>
+                                        </p>
+                                    </template>
+                                </div>
                             </div>
 
-                            <div class="flex items-start justify-between gap-3 sm:justify-end">
+                            <div class="flex items-center justify-end gap-3 self-center">
                                 <div class="text-left sm:text-right">
                                     <template x-for="meta in rightMetaItems(record)" :key="\`\${record.id}-\${meta.label}-meta\`">
                                         <p class="text-sm" :class="meta.strong ? 'font-semibold text-gray-900' : 'text-gray-600'">
@@ -404,6 +428,7 @@ const renderCrudSection = () => `
                                         </p>
                                     </template>
                                 </div>
+                                ${inlineActionsMarkup}
                                 ${actionMenuMarkup}
                             </div>
                         </div>
@@ -554,7 +579,7 @@ const createSectionState = (section, adapters) => ({
         return this.section.rowLayout.secondaryFields.map((entry) => ({
             label: entry.label,
             text: buildLayoutText(record, entry),
-        }));
+        })).filter((entry) => entry.text !== '');
     },
     badgeItems(record) {
         return this.section.rowLayout.badges
@@ -572,9 +597,10 @@ const createSectionState = (section, adapters) => ({
         }));
     },
     visibleActions(record) {
+        const hasExplicitAvailableActions = Array.isArray(record.availableActions) || Array.isArray(record.available_actions);
         const availableActions = asArray(record.availableActions || record.available_actions);
 
-        if (availableActions.length === 0) {
+        if (!hasExplicitAvailableActions && availableActions.length === 0) {
             return this.section.actions;
         }
 

@@ -2,13 +2,17 @@
     $user = auth()->user();
     $navigationEligibility = app(\App\Navigation\NavigationEligibility::class)->forUser($user);
 
-    $manufacturingActive = request()->routeIs('materials.*')
-        || request()->routeIs('manufacturing.*')
-        || request()->routeIs('inventory.*')
+    $manufacturingActive = (request()->routeIs('materials.*') && !request()->routeIs('materials.uom-categories.*'))
+        || request()->routeIs('manufacturing.make-orders.*')
+        || request()->routeIs('manufacturing.recipes.*');
+    $stockActive = request()->routeIs('inventory.*')
         || request()->routeIs('inventory.counts.*')
-        || request()->routeIs('manufacturing.uom-conversions.*');
+        || request()->routeIs('manufacturing.uoms.*')
+        || request()->routeIs('manufacturing.uom-conversions.*')
+        || request()->routeIs('materials.uom-categories.*');
     $purchasingActive = request()->routeIs('purchasing.*');
     $salesActive = request()->routeIs('sales.*');
+    $profileActive = request()->routeIs('profile.*') || request()->routeIs('admin.workflows.*');
 
     $canViewPurchaseOrders = $user?->can('purchasing-purchase-orders-create') ?? false;
     $canViewSuppliers = $user?->can('purchasing-suppliers-view') ?? false;
@@ -29,12 +33,8 @@
 
     $showPurchasingNav = $canViewPurchaseOrders || $canViewSuppliers;
     $showSalesNav = $canManageCustomers || $canManageSalesOrders || $canViewProducts || $canManageProducts;
-    $showManufacturingNav = $canViewInventory
-        || $canViewMakeOrders
-        || $canViewMaterials
-        || $canManageMaterials
-        || $canViewRecipes;
-    $showAdminNav = $canManageWorkflows;
+    $showManufacturingNav = $canViewMakeOrders || $canViewMaterials || $canViewRecipes;
+    $showStockNav = $canViewInventory || $canManageMaterials;
 @endphp
 
 <nav x-data="{ open: false }" class="border-b border-slate-800 bg-slate-950 shadow-lg shadow-slate-950/20">
@@ -146,16 +146,6 @@
                         </x-slot>
 
                         <x-slot name="content">
-                            @can('inventory-adjustments-view')
-                                <x-nav-dropdown-link :href="route('inventory.index')" :active="request()->routeIs('inventory.index')">
-                                    {{ __('Inventory') }}
-                                </x-nav-dropdown-link>
-
-                                <x-nav-dropdown-link :href="route('inventory.counts.index')" :active="request()->routeIs('inventory.counts.*')">
-                                    {{ __('Inventory Counts') }}
-                                </x-nav-dropdown-link>
-                            @endcan
-
                             @can('inventory-make-orders-view')
                                 @if ($canOpenMakeOrders)
                                     <x-nav-dropdown-link
@@ -193,35 +183,59 @@
                                     {{ __('Recipes') }}
                                 </x-nav-dropdown-link>
                             @endcan
-
-                            @can('inventory-materials-manage')
-                                <x-nav-dropdown-link :href="route('manufacturing.uoms.index')" :active="request()->routeIs('manufacturing.uoms.*')">
-                                    {{ __('Units of Measure') }}
-                                </x-nav-dropdown-link>
-
-                                <x-nav-dropdown-link :href="route('manufacturing.uom-conversions.index')" :active="request()->routeIs('manufacturing.uom-conversions.*')">
-                                    {{ __('UoM Conversions') }}
-                                </x-nav-dropdown-link>
-
-                                <x-nav-dropdown-link :href="route('materials.uom-categories.index')" :active="request()->routeIs('materials.uom-categories.*')">
-                                    {{ __('UoM Categories') }}
-                                </x-nav-dropdown-link>
-                            @endcan
                         </x-slot>
                     </x-nav-dropdown>
                 @endif
 
-                @if ($showAdminNav)
-                    <x-nav-dropdown :active="request()->routeIs('admin.workflows.*')" align="left" data-nav-dropdown-trigger="admin">
+                @if ($showStockNav)
+                    <x-nav-dropdown :active="$stockActive" align="left" data-nav-dropdown-trigger="stock">
                         <x-slot name="trigger">
-                            {{ __('Admin') }}
+                            {{ __('Stock') }}
                         </x-slot>
 
                         <x-slot name="content">
-                            @can('workflow-manage')
-                                <x-nav-dropdown-link :href="route('admin.workflows.index')" :active="request()->routeIs('admin.workflows.*')">
-                                    {{ __('Workflows') }}
+                            @can('inventory-adjustments-view')
+                                <x-nav-dropdown-link :href="route('inventory.index')" :active="request()->routeIs('inventory.index')">
+                                    {{ __('Inventory') }}
                                 </x-nav-dropdown-link>
+
+                                <x-nav-dropdown-link :href="route('inventory.counts.index')" :active="request()->routeIs('inventory.counts.*')">
+                                    {{ __('Inventory Counts') }}
+                                </x-nav-dropdown-link>
+                            @endcan
+
+                            @can('inventory-materials-manage')
+                                <div
+                                    class="mt-2 rounded-2xl border border-slate-700/70 bg-slate-950/70 p-2"
+                                    data-stock-uom-section="desktop"
+                                    x-data="{ open: false }"
+                                >
+                                    <button
+                                        type="button"
+                                        class="flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-400 transition hover:bg-slate-800/60 hover:text-slate-200"
+                                        x-on:click="open = !open"
+                                        x-bind:aria-expanded="open ? 'true' : 'false'"
+                                    >
+                                        <span>{{ __('UoM') }}</span>
+                                        <svg class="h-4 w-4 transition duration-200 ease-out" x-bind:class="open ? 'rotate-180' : ''" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                            <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.512a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z" clip-rule="evenodd" />
+                                        </svg>
+                                    </button>
+
+                                    <div class="mt-2 space-y-2" x-show="open" x-cloak>
+                                        <x-nav-dropdown-link :href="route('materials.uom-categories.index')" :active="request()->routeIs('materials.uom-categories.*')">
+                                            {{ __('UoM Categories') }}
+                                        </x-nav-dropdown-link>
+
+                                        <x-nav-dropdown-link :href="route('manufacturing.uoms.index')" :active="request()->routeIs('manufacturing.uoms.*')">
+                                            {{ __('Units of Measure') }}
+                                        </x-nav-dropdown-link>
+
+                                        <x-nav-dropdown-link :href="route('manufacturing.uom-conversions.index')" :active="request()->routeIs('manufacturing.uom-conversions.*')">
+                                            {{ __('UoM Conversions') }}
+                                        </x-nav-dropdown-link>
+                                    </div>
+                                </div>
                             @endcan
                         </x-slot>
                     </x-nav-dropdown>
@@ -230,7 +244,7 @@
         </div>
 
         <div class="hidden items-center sm:flex">
-            <x-nav-dropdown align="right">
+            <x-nav-dropdown align="right" :active="$profileActive">
                 <x-slot name="trigger">
                     {{ $user?->name }}
                 </x-slot>
@@ -243,6 +257,12 @@
                     @if ($canManageSystemUsers)
                         <x-nav-dropdown-link :href="route('profile.connectors.index')" :active="request()->routeIs('profile.connectors.*')">
                             {{ __('Connectors') }}
+                        </x-nav-dropdown-link>
+                    @endif
+
+                    @if ($canManageWorkflows)
+                        <x-nav-dropdown-link :href="route('admin.workflows.index')" :active="request()->routeIs('admin.workflows.*')" data-profile-workflows-link="desktop">
+                            {{ __('Workflows') }}
                         </x-nav-dropdown-link>
                     @endif
 
@@ -390,16 +410,6 @@
                     </x-slot>
 
                     <x-slot name="content">
-                        @can('inventory-adjustments-view')
-                            <x-nav-dropdown-link :href="route('inventory.index')" :active="request()->routeIs('inventory.index')" mobile>
-                                {{ __('Inventory') }}
-                            </x-nav-dropdown-link>
-
-                            <x-nav-dropdown-link :href="route('inventory.counts.index')" :active="request()->routeIs('inventory.counts.*')" mobile>
-                                {{ __('Inventory Counts') }}
-                            </x-nav-dropdown-link>
-                        @endcan
-
                         @can('inventory-make-orders-view')
                             @if ($canOpenMakeOrders)
                                 <x-nav-dropdown-link
@@ -438,35 +448,59 @@
                                 {{ __('Recipes') }}
                             </x-nav-dropdown-link>
                         @endcan
-
-                        @can('inventory-materials-manage')
-                            <x-nav-dropdown-link :href="route('manufacturing.uoms.index')" :active="request()->routeIs('manufacturing.uoms.*')" mobile>
-                                {{ __('Units of Measure') }}
-                            </x-nav-dropdown-link>
-
-                            <x-nav-dropdown-link :href="route('manufacturing.uom-conversions.index')" :active="request()->routeIs('manufacturing.uom-conversions.*')" mobile>
-                                {{ __('UoM Conversions') }}
-                            </x-nav-dropdown-link>
-
-                            <x-nav-dropdown-link :href="route('materials.uom-categories.index')" :active="request()->routeIs('materials.uom-categories.*')" mobile>
-                                {{ __('UoM Categories') }}
-                            </x-nav-dropdown-link>
-                        @endcan
                     </x-slot>
                 </x-nav-dropdown>
             @endif
 
-            @if ($showAdminNav)
-                <x-nav-dropdown :active="request()->routeIs('admin.workflows.*')" mobile panel-id="mobile-nav-admin" data-nav-mobile-group="admin">
+            @if ($showStockNav)
+                <x-nav-dropdown :active="$stockActive" mobile panel-id="mobile-nav-stock" data-nav-mobile-group="stock">
                     <x-slot name="trigger">
-                        {{ __('Admin') }}
+                        {{ __('Stock') }}
                     </x-slot>
 
                     <x-slot name="content">
-                        @can('workflow-manage')
-                            <x-nav-dropdown-link :href="route('admin.workflows.index')" :active="request()->routeIs('admin.workflows.*')" mobile>
-                                {{ __('Workflows') }}
+                        @can('inventory-adjustments-view')
+                            <x-nav-dropdown-link :href="route('inventory.index')" :active="request()->routeIs('inventory.index')" mobile>
+                                {{ __('Inventory') }}
                             </x-nav-dropdown-link>
+
+                            <x-nav-dropdown-link :href="route('inventory.counts.index')" :active="request()->routeIs('inventory.counts.*')" mobile>
+                                {{ __('Inventory Counts') }}
+                            </x-nav-dropdown-link>
+                        @endcan
+
+                        @can('inventory-materials-manage')
+                            <div
+                                class="mt-2 rounded-2xl border border-slate-700/70 bg-slate-950/70 p-2"
+                                data-stock-uom-section="mobile"
+                                x-data="{ open: false }"
+                            >
+                                <button
+                                    type="button"
+                                    class="flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-400 transition hover:bg-slate-800/60 hover:text-slate-200"
+                                    x-on:click="open = !open"
+                                    x-bind:aria-expanded="open ? 'true' : 'false'"
+                                >
+                                    <span>{{ __('UoM') }}</span>
+                                    <svg class="h-4 w-4 transition duration-200 ease-out" x-bind:class="open ? 'rotate-180' : ''" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                        <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.512a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z" clip-rule="evenodd" />
+                                    </svg>
+                                </button>
+
+                                <div class="mt-2 space-y-2" x-show="open" x-cloak>
+                                    <x-nav-dropdown-link :href="route('materials.uom-categories.index')" :active="request()->routeIs('materials.uom-categories.*')" mobile>
+                                        {{ __('UoM Categories') }}
+                                    </x-nav-dropdown-link>
+
+                                    <x-nav-dropdown-link :href="route('manufacturing.uoms.index')" :active="request()->routeIs('manufacturing.uoms.*')" mobile>
+                                        {{ __('Units of Measure') }}
+                                    </x-nav-dropdown-link>
+
+                                    <x-nav-dropdown-link :href="route('manufacturing.uom-conversions.index')" :active="request()->routeIs('manufacturing.uom-conversions.*')" mobile>
+                                        {{ __('UoM Conversions') }}
+                                    </x-nav-dropdown-link>
+                                </div>
+                            </div>
                         @endcan
                     </x-slot>
                 </x-nav-dropdown>
@@ -486,6 +520,12 @@
             @if ($canManageSystemUsers)
                 <x-nav-link :href="route('profile.connectors.index')" :active="request()->routeIs('profile.connectors.*')" mobile>
                     {{ __('Connectors') }}
+                </x-nav-link>
+            @endif
+
+            @if ($canManageWorkflows)
+                <x-nav-link :href="route('admin.workflows.index')" :active="request()->routeIs('admin.workflows.*')" mobile data-profile-workflows-link="mobile">
+                    {{ __('Workflows') }}
                 </x-nav-link>
             @endif
 

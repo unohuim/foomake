@@ -11,7 +11,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property int $tenant_id
  * @property int $inventory_count_id
  * @property int $item_id
- * @property string $counted_quantity
+ * @property string|null $counted_quantity
  * @property string|null $notes
  */
 class InventoryCountLine extends Model

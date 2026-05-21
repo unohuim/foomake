@@ -5,7 +5,6 @@ This file is the single source to paste at the beginning of new LLM chats for fu
 Paste the entire content (or as much as context allows) when starting a session.
 
 ## docs/AI_CHAT_CODEX.md
-
 # AI Chat Bootstrap (READ FIRST)
 
 You are assisting with development on this repository.
@@ -237,7 +236,6 @@ If unsure, **stop immediately and ask**.
 - The **smallest possible change per PR**
 
 ## docs/PR2_ROADMAP.md
-
 # PR2_ROADMAP — UI + Domain Completion (Post-PR-006)
 
 This roadmap defines the **second major phase** of work: completing **Items, Inventory, Suppliers, and Manufacturing**
@@ -1531,7 +1529,6 @@ Introduce a UoM-level display precision field and enforce consistent quantity fo
 - JavaScript formatting or UI-only overrides per view
 
 ## docs/CONVENTIONS.md
-
 # Conventions
 
 This document defines the **mandatory development conventions** for this repository.  
@@ -1786,7 +1783,6 @@ These rules apply to:
 - Any inventory-affecting calculations
 
 ## docs/ARCHITECTURE_INVENTORY.md
-
 # Architecture Inventory
 
 This document tracks **reusable abstractions, components, and architectural patterns**
@@ -1894,15 +1890,18 @@ class StockMove extends Model
 - `app/Http/Controllers/SalesProductController.php`  
 - `app/Http/Controllers/CustomerController.php`  
 - `app/Http/Controllers/MaterialController.php`  
+- `app/Http/Controllers/InventoryCountController.php`  
 - `resources/views/sales/products/index.blade.php`  
 - `resources/views/sales/customers/index.blade.php`  
 - `resources/views/materials/index.blade.php`  
+- `resources/views/inventory/counts/index.blade.php`  
 - `resources/js/lib/crud-config.js`  
 - `resources/js/lib/generic-crud.js`  
 - `resources/js/lib/crud-page.js`  
 - `resources/js/pages/sales-products-index.js`  
 - `resources/js/pages/sales-customers-index.js`  
 - `resources/js/pages/materials-index.js`
+- `resources/js/pages/inventory-counts-index.js`
 
 **Purpose:**  
 Provide a mount-only Blade shell plus server-configured shared CRUD renderer so index pages reuse one toolbar, list, empty-state, and row-action pattern without global JavaScript state.
@@ -1935,9 +1934,111 @@ $crudConfig = [
 ```
 
 Notes:
-- Products, Customers, and Materials are current reference implementations.
+- Products, Customers, Materials, and Inventory Counts are current reference implementations.
 - `detailUrlTemplate` is optional. When present, create flows may redirect to the created record detail page after success.
 - When `detailUrlTemplate` is absent, the existing inline success behavior such as list refresh remains the fallback.
+
+### Reusable CRUD Detail Section Pattern
+
+**Name:** Reusable CRUD Detail Section Pattern  
+**Type:** UI Architectural Pattern  
+**Location:**  
+- `resources/js/lib/js-crud-section.js`  
+- `resources/js/pages/materials-show.js`  
+- `resources/js/pages/inventory-count-show.js`  
+- `resources/views/materials/show.blade.php`  
+- `resources/views/inventory/counts/show.blade.php`  
+
+**Purpose:**  
+Provide a shared expandable detail-section CRUD surface for record sublists such as supplier packages, purchase orders, and inventory count materials.
+
+**When to Use:**  
+- Detail pages that manage a scoped child-record collection with list/create/update/delete behavior  
+- Row-action menus that must escape beyond the section/card boundary  
+
+**When Not to Use:**  
+- Index pages already covered by the configured CRUD page module  
+- One-off embedded forms without list state  
+
+**Public Interface:**  
+- `data-js-crud-section-root`  
+- `data-section-key`  
+- `mountCrudSection(rootEl, { section, adapters })`  
+
+**Example Usage:**  
+```html
+<div data-js-crud-section-root data-section-key="countLines"></div>
+<div data-js-crud-section-root data-section-key="tasks"></div>
+```
+
+Notes:
+- Reusable CRUD detail sections must keep their outer shell `overflow-visible` so row-action dropdowns are not clipped.
+- Inventory Count detail uses this pattern with a `Materials` section and a read-only `Tasks` section that reuses the existing task completion route/payload contract.
+- Reusable detail sections may disable the vertical-dots row menu through `showRowActionsMenu: false`; the default remains enabled for existing section consumers, and disabled sections may surface their configured row actions inline instead.
+
+### Workflow Stage Inventory Effect Invariant
+
+**Name:** Workflow Stage Inventory Effect Invariant  
+**Type:** Workflow Configuration Invariant  
+**Location:**  
+- `docs/architecture/workflows/WorkflowStageInventoryEffectInvariant.yaml`  
+- `app/Actions/Workflows/EnforceWorkflowStageInventoryEffectInvariantAction.php`  
+- `database/migrations/2026_05_20_000001_add_is_inventory_effect_stage_to_workflow_stages_table.php`  
+
+**Purpose:**  
+Allow workflow stages to identify which stock-impacting operational stage owns inventory posting while preventing workflow admin from leaving stock-impacting workflow domains without exactly one active inventory-effect stage.
+
+**When to Use:**  
+- Stock workflow-stage admin configuration  
+- Sales runtime inventory-effect stage resolution  
+
+**When Not to Use:**  
+- Purchase-order runtime receiving  
+- Make-order runtime execution  
+- Inventory-count runtime posting  
+
+**Public Interface:**  
+- `EnforceWorkflowStageInventoryEffectInvariantAction::normalizeAndAssert()`  
+- `WorkflowStage::$is_inventory_effect_stage`  
+
+**Example Usage:**  
+```php
+$stage->is_inventory_effect_stage = true;
+```
+
+Notes:
+- The fixed workflow domains are `sales`, `purchasing`, `manufacturing`, and `inventory`.
+- Default seeded stock-impacting stage sets are tenant-scoped and idempotent.
+- Only Sales runtime currently resolves the marker to trigger stock posting.
+
+### Workflow Stage Task Gating
+
+**Name:** Workflow Stage Task Gating  
+**Type:** Workflow Domain Rule  
+**Location:**  
+- `docs/architecture/workflows/WorkflowStageTaskGating.yaml`  
+- `app/Actions/Workflows/AssertWorkflowStageTasksCompletedAction.php`  
+- `app/Actions/Workflows/GenerateWorkflowStageTasksAction.php`  
+
+**Purpose:**  
+Apply one shared stage-entry task generation and stage-exit blocking rule across adopted workflow domains.
+
+**When to Use:**  
+- Sales-order stage transitions  
+- Inventory-count stage transitions  
+
+**When Not to Use:**  
+- Draft setup outside workflow stages  
+- Purchase-order and make-order runtime integrations before approval  
+
+**Public Interface:**  
+- `AssertWorkflowStageTasksCompletedAction::execute()`  
+- `GenerateWorkflowStageTasksAction::execute()`  
+
+**Example Usage:**  
+```php
+$generateWorkflowStageTasksAction->execute($tenantId, $recordId, $stage, $preferredAssigneeUserId);
+```
 
 ---
 
@@ -2136,7 +2237,7 @@ Gate::authorize('inventory-materials-manage');
 - `docs/PR3_ROADMAP.md`  
 
 **Purpose:**  
-Document the gate that controls workflow-configuration access under `Admin -> Workflows`.
+Document the gate that controls workflow-configuration access from the profile dropdown `Connectors -> Workflows` entry.
 
 **When to Use:**  
 Workflow stage and workflow task-template configuration surfaces.
@@ -2877,7 +2978,7 @@ $onHand = $item->onHandQuantity();
 **Location:** `app/Models/InventoryCount.php`
 
 **Purpose:**  
-Represent inventory count sessions with status derived from `posted_at`.
+Represent inventory count sessions whose posted lifecycle remains derived from `posted_at` while draft setup stays outside workflow stages and submitted counts progress through the tenant-configured Inventory workflow.
 
 **When to Use:**  
 Recording inventory count sessions and posting adjustments.
@@ -2889,6 +2990,10 @@ Inventory adjustments outside a count context.
 - `tenant()`  
 - `lines()`  
 - `postedByUser()`  
+- `createdByUser()`  
+- `taskedByUser()`  
+- `assignedToUser()`  
+- `workflowStage()`  
 - `stockMoves()`  
 - `getStatusAttribute()`
 
@@ -2896,6 +3001,19 @@ Inventory adjustments outside a count context.
 ```php
 $status = $inventoryCount->status;
 ```
+
+Notes:
+- Draft counts stay outside workflow stages until they are submitted into the first active Inventory workflow stage.
+- Count-level audit is tracked with `created_by_user_id` and `tasked_by_user_id`.
+- Draft creation does not require assignment; if a count-level assignee is present it is reused when workflow tasks are generated.
+- Workflow task assignment uses generated `tasks.assigned_to_user_id` rather than a separate inventory-count-only task system.
+- Draft detail exposes only the next valid workflow action, defaulting to `Open` when seeded inventory stages are unchanged.
+- Submitted Inventory Counts may expose previous-stage and next-stage actions using stage names only. Previous-stage movement is Inventory Count specific and never reverses posted stock.
+- Inventory Count detail mounts reusable `Materials` and `Tasks` sections through shared `js-crud-section` payload/config rendering; the `Tasks` section is not bespoke markup, uses the existing `tasks.complete` route contract, disables the shared dots menu through config, always shows `Assigned By`, then swaps `Assigned To` for `Completed By` once the task is completed, and shows a visible inline `Complete` action only while the task is incomplete and completable.
+- Shared section metadata rendering filters explicit empty metadata values so mutually exclusive task-row labels do not render placeholder rows.
+- Inventory Count index `Status` reflects the current workflow stage label rather than the posted lifecycle label.
+- Count lines may leave `counted_quantity` blank during draft/setup, but posting must fail until every line has a quantity.
+- The direct `/inventory/counts/{count}/post` route remains a compatibility path and may move the count to the Inventory inventory-effect stage before posting.
 
 ---
 
@@ -4229,7 +4347,6 @@ it('creates a material', function () {
 ---
 
 ## docs/PERMISSIONS_MATRIX.md
-
 # Permissions Matrix
 
 This document is the source-of-truth for **authorization intent** in this repository.
@@ -4425,7 +4542,6 @@ return [
 ```
 
 ## docs/ENUMS.md
-
 # ENUMS — Canonical Enum Authority
 
 This document defines the canonical, normative enum-like values used throughout the system.
@@ -4552,6 +4668,25 @@ Do not introduce new enum values without updating this document.
 ---
 
 ## Sales
+
+### Customer Type
+
+**Name:** Customer type  
+**Storage location(s):** `customers.customer_type` (string column)  
+**Allowed values:**
+
+- `business`
+- `consumer`
+
+**Semantic meaning:**
+
+- `business`: Customer is treated as a business/commercial account.
+- `consumer`: Customer is treated as an individual/consumer account.
+
+**Notes:**
+
+- Display labels are `Business` and `Consumer`.
+- Default value is `business`.
 
 ### Sales Order Status
 
@@ -4712,7 +4847,6 @@ Do not introduce new enum values without updating this document.
 No conflicts or ambiguities were found at time of creation based on existing migrations, models, actions, and tests.
 
 ## docs/DB_SCHEMA.md
-
 # Database Schema Inventory (DB_SCHEMA)
 
 This document inventories **all database tables and columns** as defined by migrations.
@@ -4830,6 +4964,7 @@ Migrations remain the **sole source of truth**.
 | tenant_id  | bigint    | No       | FK → tenants.id (CASCADE) |
 | name       | string    | No       | —                         |
 | status     | string    | No       | Defaults to `active`      |
+| customer_type | string | No       | Defaults to `business`; see `docs/ENUMS.md` |
 | notes      | text      | Yes      | —                         |
 | address_line_1 | string | Yes      | —                         |
 | address_line_2 | string | Yes      | —                         |
@@ -4850,6 +4985,7 @@ Migrations remain the **sole source of truth**.
 - PK: `id`
 - Index: `(tenant_id, name)`
 - Index: `(tenant_id, status)`
+- Index: `(tenant_id, customer_type)`
 - Implicit (FK index): `tenant_id`
 
 ---
@@ -5168,7 +5304,11 @@ Migrations remain the **sole source of truth**.
 | ----------------- | --------- | -------- | ------------------------- |
 | id                | bigint    | No       | Primary key               |
 | tenant_id         | bigint    | No       | FK → tenants.id (CASCADE) |
+| created_by_user_id | bigint   | Yes      | FK → users.id (SET NULL)  |
+| tasked_by_user_id | bigint    | Yes      | FK → users.id (SET NULL)  |
+| assigned_to_user_id | bigint  | Yes      | FK → users.id (SET NULL)  |
 | counted_at        | timestamp | No       | —                         |
+| workflow_stage_id | bigint    | Yes      | FK → workflow_stages.id (SET NULL) |
 | posted_at         | timestamp | Yes      | —                         |
 | posted_by_user_id | bigint    | Yes      | FK → users.id (SET NULL)  |
 | notes             | text      | Yes      | —                         |
@@ -5180,6 +5320,10 @@ Migrations remain the **sole source of truth**.
 - PK: `id`
 - Unique: `(id, tenant_id)`
 - Implicit (FK index): `tenant_id`
+- Implicit (FK index): `created_by_user_id`
+- Implicit (FK index): `tasked_by_user_id`
+- Implicit (FK index): `assigned_to_user_id`
+- Implicit (FK index): `workflow_stage_id`
 - Implicit (FK index): `posted_by_user_id`
 
 ---
@@ -5197,7 +5341,7 @@ Migrations remain the **sole source of truth**.
 | tenant_id          | bigint        | No       | FK → tenants.id (CASCADE) |
 | inventory_count_id | bigint        | No       | Part of composite FK      |
 | item_id            | bigint        | No       | FK → items.id (CASCADE)   |
-| counted_quantity   | decimal(18,6) | No       | —                         |
+| counted_quantity   | decimal(18,6) | Yes      | Nullable until completion/posting |
 | notes              | text          | Yes      | —                         |
 | created_at         | timestamp     | Yes      | —                         |
 | updated_at         | timestamp     | Yes      | —                         |
@@ -6023,7 +6167,6 @@ Migrations remain the **sole source of truth**.
 **End of DB_SCHEMA**
 
 ## docs/UI_DESIGN.md
-
 # UI_DESIGN.md — Canonical UI Direction & Constraints
 
 This document defines the **authoritative UI design rules** for this repository.
@@ -6094,6 +6237,7 @@ The UI should feel:
 - Current implementation groups functionality under top-level dropdowns such as:
     - Purchasing
     - Manufacturing
+    - Stock
 
 - No nested mega-menus initially
 - Active state must be subtle (underline or tone shift)
@@ -6166,6 +6310,7 @@ The UI should feel:
 - Slide-overs preferred for create/edit
 - Modals for confirmation and short forms
 - Never stack modals
+- Native date-picker fields may auto-collapse after a date selection when that improves operational flow, but selected values and time input behavior must be preserved
 
 ### Tables & Lists
 
@@ -6174,6 +6319,16 @@ The UI should feel:
 - Subtle dividers only when necessary
 - Vertical “⋮” actions menu on the far right
 - Row click ≠ edit (explicit actions only)
+- Reusable CRUD detail sections must not clip row-action menus; section/card shells and menu wrappers must allow dropdowns to escape with visible overflow and a stable elevated z-index
+- Mobile list summaries may truncate long secondary identifiers such as assigned-user emails when the full value would otherwise destabilize the card layout
+- Inventory Count task rows keep task title and status on the left, with metadata labels rendered in a clean spaced row beneath
+- Inventory Count task rows always show `Assigned By`
+- Inventory Count task rows show `Assigned To` only while incomplete and `Completed By` only after completion; those labels are mutually exclusive
+- Inventory Count task rows render a right-aligned, vertically centered inline `Complete` button only while the task is incomplete and completable
+- Inventory Count completed task rows hide `Complete`
+- Inventory Count task rows do not use the vertical-dots action menu
+- Inventory Count task rows do not render a `—` placeholder for blank `Completed By`
+- Inventory Count create datetime fields may blur the native picker and move focus to the next logical field after a real value selection, while preserving the chosen datetime value
 
 ---
 
@@ -6399,7 +6554,11 @@ Entities may appear in multiple domains with **domain-specific behavior and attr
 - **Sales**
 - **Purchasing**
 - **Manufacturing**
+- **Stock**
 - **Reports**
+
+Workflow configuration does not live under a top-level admin menu.
+It is exposed from the profile dropdown under **Connectors** when the user has the existing workflow gate.
 
 ---
 
@@ -6434,15 +6593,32 @@ Focus: production execution and operational primitives.
 **Dropdown items:**
 
 - Orders (Make Orders)
-- Inventory
-- Inventory Counts
 - Materials
 - Recipes
-- Units of Measure (UoM)
-- UoM Categories
 
-Manufacturing owns **inventory mechanics and unit semantics**.  
-Sales and Purchasing consume these primitives but do not define them.
+Manufacturing owns **production execution and recipe-oriented primitives**.  
+Sales, Purchasing, and Stock consume related shared primitives but do not define manufacturing behavior.
+
+---
+
+### Stock Domain
+
+Focus: stock visibility, inventory adjustment workflows, and unit-of-measure administration.
+
+**Dropdown items:**
+
+- Inventory
+- Inventory Counts
+- UoM subsection (collapsed by default)
+  - UoM Categories
+  - Units of Measure (UoM)
+  - UoM Conversions
+
+Stock owns **inventory mechanics and unit semantics**.  
+Sales, Purchasing, and Manufacturing consume these primitives but do not define them.
+
+Inventory Count detail uses the visible section label **Materials** for count-line CRUD.
+Inventory Count workflow buttons stay grouped and floated right in the detail header, with the previous-stage button on the left and the next-stage button on the right. Button text uses the stage name only.
 
 ---
 
@@ -6450,7 +6626,7 @@ Sales and Purchasing consume these primitives but do not define them.
 
 - Navigation reflects **how the business operates**, not how data is stored.
 - Products are **contextual**, not singular — behavior differs per domain.
-- Manufacturing centralizes stock, units, and recipes to avoid duplication.
+- Manufacturing stays focused on execution workflows, while Stock centralizes stock and unit semantics.
 - This structure scales cleanly as domains expand without menu sprawl.
 
 ---
@@ -6589,6 +6765,11 @@ splice
 
 filtered reassignment
 
+Inventory Count create keeps the native `datetime-local` control. After selecting a date, the input should blur so the browser picker collapses without clearing the selected value or breaking time entry.
+
+Workflow stage admin hides the stage key field, generates keys server-side from stage names on create, preserves keys on rename, and re-sorts the stage list immediately after each save without a manual reorder button.
+Inventory Count task rows use a visible inline **Complete** button rather than a vertical-dots menu.
+
 Needing a refresh indicates a broken implementation.
 
 Global JavaScript State
@@ -6641,8 +6822,6 @@ They are mandatory, not stylistic.
 ::contentReference[oaicite:0]{index=0}
 
 ## routes/web.php
-
-```php
 <?php
 
 use App\Http\Controllers\InventoryController;
@@ -6698,6 +6877,9 @@ Route::middleware('auth')->group(function () {
     Route::get('/inventory/counts', [InventoryCountController::class, 'index'])
         ->name('inventory.counts.index');
     Route::get('/manufacturing/inventory-counts', [InventoryCountController::class, 'index']);
+    Route::get('/inventory/counts/list', [InventoryCountController::class, 'list'])
+        ->name('inventory.counts.list');
+    Route::get('/manufacturing/inventory-counts/list', [InventoryCountController::class, 'list']);
     Route::post('/inventory/counts', [InventoryCountController::class, 'store'])
         ->name('inventory.counts.store');
     Route::post('/manufacturing/inventory-counts', [InventoryCountController::class, 'store']);
@@ -6710,10 +6892,25 @@ Route::middleware('auth')->group(function () {
     Route::delete('/inventory/counts/{inventoryCount}', [InventoryCountController::class, 'destroy'])
         ->name('inventory.counts.destroy');
     Route::delete('/manufacturing/inventory-counts/{inventoryCount}', [InventoryCountController::class, 'destroy']);
+    Route::post('/inventory/counts/{inventoryCount}/submit', [InventoryCountController::class, 'submit'])
+        ->name('inventory.counts.submit');
+    Route::post('/manufacturing/inventory-counts/{inventoryCount}/submit', [InventoryCountController::class, 'submit']);
+    Route::post('/inventory/counts/{inventoryCount}/advance', [InventoryCountController::class, 'advance'])
+        ->name('inventory.counts.advance');
+    Route::post('/manufacturing/inventory-counts/{inventoryCount}/advance', [InventoryCountController::class, 'advance']);
+    Route::post('/inventory/counts/{inventoryCount}/previous', [InventoryCountController::class, 'previous'])
+        ->name('inventory.counts.previous');
+    Route::post('/manufacturing/inventory-counts/{inventoryCount}/previous', [InventoryCountController::class, 'previous']);
     Route::post('/inventory/counts/{inventoryCount}/post', [InventoryCountController::class, 'post'])
         ->name('inventory.counts.post');
     Route::post('/manufacturing/inventory-counts/{inventoryCount}/post', [InventoryCountController::class, 'post']);
 
+    Route::get('/inventory/counts/{inventoryCount}/lines', [InventoryCountController::class, 'listLines'])
+        ->name('inventory.counts.lines.index');
+    Route::get('/manufacturing/inventory-counts/{inventoryCount}/lines', [InventoryCountController::class, 'listLines']);
+    Route::get('/inventory/counts/{inventoryCount}/tasks', [InventoryCountController::class, 'listTasks'])
+        ->name('inventory.counts.tasks.index');
+    Route::get('/manufacturing/inventory-counts/{inventoryCount}/tasks', [InventoryCountController::class, 'listTasks']);
     Route::post('/inventory/counts/{inventoryCount}/lines', [InventoryCountController::class, 'storeLine'])
         ->name('inventory.counts.lines.store');
     Route::post('/manufacturing/inventory-counts/{inventoryCount}/lines', [InventoryCountController::class, 'storeLine']);
@@ -6950,10 +7147,7 @@ Route::delete('/manufacturing/uom-conversions/items/{itemConversion}', [UomConve
 
 require __DIR__ . '/auth.php';
 
-```
-
 ## docs/PR3_ROADMAP.md
-
 # PR3_ROADMAP — Sales + CRM Foundations
 
 This roadmap defines the third major phase of work: introducing the **Sales domain (CRM foundations + Sales Orders)**, fully integrated with inventory before any external integrations.
@@ -7694,7 +7888,6 @@ After PR3 completion:
 - System ready for external integrations
 
 ## docs/BACKLOG.md
-
 # BACKLOG
 
 This backlog captures outstanding product capabilities identified from competitive feature review and QuickBooks Online integration planning.
@@ -7713,6 +7906,7 @@ These items are not committed PR scope unless explicitly selected and approved.
 6. Costing and accounting depth
 7. Document generation
 8. Integrations, starting with QuickBooks Online
+9.
 
 ---
 

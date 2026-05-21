@@ -10,8 +10,13 @@ when_not_to_use:
 rules:
   - Actions are explicit and do not rely on row click.
   - Destructive actions require confirmation before submission.
+  - Reusable detail sections may disable the vertical-dots row menu through a `showRowActionsMenu` config flag.
+  - `showRowActionsMenu` defaults to enabled/true so existing section consumers keep their current row menu behavior.
+  - When `showRowActionsMenu` is false, row actions should remain visible inline rather than disappearing.
+  - Shared detail-section metadata entries may use an explicit empty fallback to suppress rendering for mutually exclusive row metadata.
 public_interface:
   - Dropdown Blade component with trigger and content slots
+  - Shared detail-section config flag `showRowActionsMenu`
 example_usage: |
   <x-dropdown>
       <x-slot name="trigger">...</x-slot>

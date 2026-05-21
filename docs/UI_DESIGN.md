@@ -68,6 +68,7 @@ The UI should feel:
 - Current implementation groups functionality under top-level dropdowns such as:
     - Purchasing
     - Manufacturing
+    - Stock
 
 - No nested mega-menus initially
 - Active state must be subtle (underline or tone shift)
@@ -140,6 +141,7 @@ The UI should feel:
 - Slide-overs preferred for create/edit
 - Modals for confirmation and short forms
 - Never stack modals
+- Native date-picker fields may auto-collapse after a date selection when that improves operational flow, but selected values and time input behavior must be preserved
 
 ### Tables & Lists
 
@@ -148,6 +150,16 @@ The UI should feel:
 - Subtle dividers only when necessary
 - Vertical “⋮” actions menu on the far right
 - Row click ≠ edit (explicit actions only)
+- Reusable CRUD detail sections must not clip row-action menus; section/card shells and menu wrappers must allow dropdowns to escape with visible overflow and a stable elevated z-index
+- Mobile list summaries may truncate long secondary identifiers such as assigned-user emails when the full value would otherwise destabilize the card layout
+- Inventory Count task rows keep task title and status on the left, with metadata labels rendered in a clean spaced row beneath
+- Inventory Count task rows always show `Assigned By`
+- Inventory Count task rows show `Assigned To` only while incomplete and `Completed By` only after completion; those labels are mutually exclusive
+- Inventory Count task rows render a right-aligned, vertically centered inline `Complete` button only while the task is incomplete and completable
+- Inventory Count completed task rows hide `Complete`
+- Inventory Count task rows do not use the vertical-dots action menu
+- Inventory Count task rows do not render a `—` placeholder for blank `Completed By`
+- Inventory Count create datetime fields may blur the native picker and move focus to the next logical field after a real value selection, while preserving the chosen datetime value
 
 ---
 
@@ -373,7 +385,11 @@ Entities may appear in multiple domains with **domain-specific behavior and attr
 - **Sales**
 - **Purchasing**
 - **Manufacturing**
+- **Stock**
 - **Reports**
+
+Workflow configuration does not live under a top-level admin menu.
+It is exposed from the profile dropdown under **Connectors** when the user has the existing workflow gate.
 
 ---
 
@@ -408,15 +424,32 @@ Focus: production execution and operational primitives.
 **Dropdown items:**
 
 - Orders (Make Orders)
-- Inventory
-- Inventory Counts
 - Materials
 - Recipes
-- Units of Measure (UoM)
-- UoM Categories
 
-Manufacturing owns **inventory mechanics and unit semantics**.  
-Sales and Purchasing consume these primitives but do not define them.
+Manufacturing owns **production execution and recipe-oriented primitives**.  
+Sales, Purchasing, and Stock consume related shared primitives but do not define manufacturing behavior.
+
+---
+
+### Stock Domain
+
+Focus: stock visibility, inventory adjustment workflows, and unit-of-measure administration.
+
+**Dropdown items:**
+
+- Inventory
+- Inventory Counts
+- UoM subsection (collapsed by default)
+  - UoM Categories
+  - Units of Measure (UoM)
+  - UoM Conversions
+
+Stock owns **inventory mechanics and unit semantics**.  
+Sales, Purchasing, and Manufacturing consume these primitives but do not define them.
+
+Inventory Count detail uses the visible section label **Materials** for count-line CRUD.
+Inventory Count workflow buttons stay grouped and floated right in the detail header, with the previous-stage button on the left and the next-stage button on the right. Button text uses the stage name only.
 
 ---
 
@@ -424,7 +457,7 @@ Sales and Purchasing consume these primitives but do not define them.
 
 - Navigation reflects **how the business operates**, not how data is stored.
 - Products are **contextual**, not singular — behavior differs per domain.
-- Manufacturing centralizes stock, units, and recipes to avoid duplication.
+- Manufacturing stays focused on execution workflows, while Stock centralizes stock and unit semantics.
 - This structure scales cleanly as domains expand without menu sprawl.
 
 ---
@@ -562,6 +595,11 @@ push
 splice
 
 filtered reassignment
+
+Inventory Count create keeps the native `datetime-local` control. After selecting a date, the input should blur so the browser picker collapses without clearing the selected value or breaking time entry.
+
+Workflow stage admin hides the stage key field, generates keys server-side from stage names on create, preserves keys on rename, and re-sorts the stage list immediately after each save without a manual reorder button.
+Inventory Count task rows use a visible inline **Complete** button rather than a vertical-dots menu.
 
 Needing a refresh indicates a broken implementation.
 

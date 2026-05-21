@@ -48,7 +48,7 @@
                 >
                     <div>
                         <h3 class="text-lg font-semibold text-slate-900">Stages</h3>
-                        <p class="mt-1 text-sm text-slate-600">Create, edit, deactivate, reactivate, and reorder operational workflow stages.</p>
+                        <p class="mt-1 text-sm text-slate-600">Create, edit, deactivate, and reactivate operational workflow stages.</p>
                     </div>
                     <span class="text-sm font-semibold text-slate-500" x-text="stagesOpen ? 'Hide' : 'Show'"></span>
                 </button>
@@ -79,6 +79,12 @@
                                                         :class="stage.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'"
                                                         x-text="stage.is_active ? 'Active' : 'Inactive'"
                                                     ></span>
+                                                    <span
+                                                        x-show="stage.is_inventory_effect_stage"
+                                                        class="rounded-full bg-sky-100 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-sky-700"
+                                                    >
+                                                        Inventory Effect
+                                                    </span>
                                                 </div>
                                                 <p class="mt-1 text-xs uppercase tracking-[0.2em] text-slate-500" x-text="stage.workflow_domain_key"></p>
                                                 <p class="mt-2 text-sm text-slate-600" x-text="stage.description || 'No description.'"></p>
@@ -117,11 +123,6 @@
                                 </label>
 
                                 <label class="block text-sm font-medium text-slate-700">
-                                    Key
-                                    <input type="text" class="mt-1 block w-full rounded-xl border-slate-300 text-sm shadow-sm focus:border-slate-500 focus:ring-slate-500" x-model="stageForm.key">
-                                </label>
-
-                                <label class="block text-sm font-medium text-slate-700">
                                     Name
                                     <input type="text" class="mt-1 block w-full rounded-xl border-slate-300 text-sm shadow-sm focus:border-slate-500 focus:ring-slate-500" x-model="stageForm.name">
                                 </label>
@@ -140,13 +141,14 @@
                                     <input type="checkbox" class="rounded border-slate-300 text-slate-900 shadow-sm focus:ring-slate-500" x-model="stageForm.is_active">
                                     <span>Active</span>
                                 </label>
+
+                                <label class="inline-flex items-center gap-3 text-sm font-medium text-slate-700">
+                                    <input type="checkbox" class="rounded border-slate-300 text-slate-900 shadow-sm focus:ring-slate-500" x-model="stageForm.is_inventory_effect_stage">
+                                    <span>Inventory effect stage</span>
+                                </label>
                             </div>
 
-                            <div class="mt-5 flex items-center justify-between">
-                                <button type="button" class="rounded-full border border-slate-300 px-3 py-1.5 text-xs font-semibold uppercase tracking-widest text-slate-700 hover:bg-slate-100" x-on:click="reorderStages()">
-                                    Reorder active stages
-                                </button>
-
+                            <div class="mt-5 flex items-center justify-end">
                                 <button type="submit" class="rounded-full bg-slate-900 px-4 py-2 text-xs font-semibold uppercase tracking-widest text-white hover:bg-slate-800">
                                     Save stage
                                 </button>

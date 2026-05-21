@@ -10,14 +10,14 @@ use DomainException;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Reverse posted packed-order stock moves and cancel the order.
+ * Reverse posted sales-order stock moves and cancel the order.
  */
 class CancelPackedSalesOrderAction
 {
     private const SCALE = 6;
 
     /**
-     * Cancel a packed sales order and append reversing stock moves.
+     * Cancel a stock-impacted sales order and append reversing stock moves.
      *
      * @throws DomainException
      */
@@ -31,10 +31,6 @@ class CancelPackedSalesOrderAction
                 ->lockForUpdate()
                 ->firstOrFail();
 
-            if ($lockedOrder->status !== SalesOrder::STATUS_PACKED) {
-                throw new DomainException('Status transition is not allowed.');
-            }
-
             $lineIds = SalesOrderLine::query()
                 ->where('sales_order_id', $lockedOrder->id)
                 ->pluck('id');
@@ -44,6 +40,10 @@ class CancelPackedSalesOrderAction
                 ->whereIn('source_id', $lineIds->all() === [] ? [0] : $lineIds->all())
                 ->orderBy('id')
                 ->get();
+
+            if ($moves->isEmpty()) {
+                throw new DomainException('Status transition is not allowed.');
+            }
 
             foreach ($moves as $move) {
                 StockMove::query()->create([

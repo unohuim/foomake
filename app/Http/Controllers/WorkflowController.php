@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\Workflows\EnsureWorkflowDomainsSeededAction;
+use App\Actions\Workflows\SeedDefaultWorkflowStagesForTenantAction;
 use App\Models\User;
 use App\Models\WorkflowDomain;
 use App\Models\WorkflowStage;
@@ -21,6 +23,9 @@ class WorkflowController extends Controller
     public function index(Request $request): View
     {
         Gate::authorize('workflow-manage');
+
+        app(EnsureWorkflowDomainsSeededAction::class)->execute();
+        app(SeedDefaultWorkflowStagesForTenantAction::class)->execute($request->user()->tenant);
 
         $showInactive = $request->boolean('show_inactive');
 
@@ -101,6 +106,7 @@ class WorkflowController extends Controller
             'description' => $stage->description,
             'sort_order' => $stage->sort_order,
             'is_active' => $stage->is_active,
+            'is_inventory_effect_stage' => $stage->is_inventory_effect_stage,
             'is_seeded_sales_stage' => in_array($stage->key, ['packing', 'packed', 'shipping'], true)
                 && $stage->workflowDomain?->key === 'sales',
         ];

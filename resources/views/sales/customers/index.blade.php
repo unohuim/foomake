@@ -69,6 +69,21 @@
                                             <p class="mt-1 text-sm text-red-600" x-text="formErrors.name[0]"></p>
                                         </div>
 
+                                        <div>
+                                            <label class="block text-sm font-medium text-gray-700">
+                                                Customer Type
+                                                <select
+                                                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                                                    x-model="form.customer_type"
+                                                >
+                                                    <template x-for="[value, label] in Object.entries(customerTypes)" :key="value">
+                                                        <option :value="value" x-text="label"></option>
+                                                    </template>
+                                                </select>
+                                            </label>
+                                            <p class="mt-1 text-sm text-red-600" x-text="formErrors.customer_type[0]"></p>
+                                        </div>
+
                                         <div x-show="formMode === 'edit'">
                                             <label class="block text-sm font-medium text-gray-700">
                                                 <span x-text="'Sta' + 'tus'"></span>

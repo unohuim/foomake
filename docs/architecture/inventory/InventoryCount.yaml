@@ -2,19 +2,61 @@ name: InventoryCount
 type: Eloquent Model
 location:
   - app/Models/InventoryCount.php
-purpose: Represent an inventory count session with status derived from posted_at.
+purpose: Represent an inventory count session whose posted lifecycle remains derived from posted_at while operational progression uses tenant-configured Inventory workflow stages.
 when_to_use:
   - Recording inventory count sessions
   - Posting inventory count adjustments to the ledger
+  - Tracking inventory count progression through the Inventory workflow domain after draft setup
 when_not_to_use:
   - Storing inventory adjustments without an inventory count context
 rules:
+  - Draft remains outside workflow stages and is represented by workflow_stage_id = null while posted_at is null.
   - Status is computed from posted_at and not stored in the database.
+  - Count creation records created_by_user_id and tasked_by_user_id audit fields on the inventory count.
+  - Assignment is optional during draft setup; when present it is reused for generated workflow tasks.
+  - Actual workflow assignment uses generated tasks assigned through tasks.assigned_to_user_id.
+  - Submitted counts move into the first active Inventory workflow stage for the tenant.
+  - Submitted counts default into Open when the seeded Inventory workflow stages are unchanged.
+  - Submitting a count generates workflow tasks for the entered Inventory stage using the shared task system.
+  - Leaving the current Inventory workflow stage is blocked while required current-stage tasks remain open.
+  - Inventory count detail uses the reusable CRUD detail-section pattern with a Materials section and a Tasks section.
+  - The Materials section manages inventory count lines through reusable list/create/update/delete endpoints.
+  - The Tasks section is workflow-driven and exposes current-stage workflow tasks using the existing task completion route and payload pattern.
+  - The Tasks section renders a visible inline Complete button only for incomplete completable tasks and disables the shared vertical-dots row menu through reusable section config.
+  - Completed task rows do not render a Complete action.
+  - Inventory Count task-row metadata always shows Assigned By from the Inventory Count creator/assigner source.
+  - Incomplete task rows show Assigned To and do not show Completed By.
+  - Completed task rows show Completed By and do not show Assigned To.
+  - Assigned To and Completed By must never render together.
+  - Missing Completed By values must not render a dash or placeholder.
+  - Inventory Count task-row Complete actions remain right-aligned and vertically centered inside the shared section renderer.
+  - Task completion uses PATCH /tasks/{task}/complete.
+  - The Inventory Count create counted_at field blurs the native picker after a real value change and may move focus to the next logical field without clearing the selected datetime value.
+  - Duplicate item_id values are rejected within the same inventory count, while the same material may appear on different inventory counts.
+  - Count lines may omit counted_quantity during draft/setup and non-effect workflow stages.
+  - Every count line must have counted_quantity before posting or advancing into the inventory-effect stage.
+  - Advancing into the Inventory inventory-effect stage posts the count through PostInventoryCountAction.
+  - Posting must remain transactional and idempotent through posted_at guarding.
+  - The direct /post compatibility path may move a count directly to the inventory-effect stage before posting.
   - Posting sets posted_at and posted_by_user_id.
+  - Draft detail pages expose only the next valid workflow action, defaulting to Open when seeded stages are unchanged.
+  - Submitted non-terminal counts may expose both previous-stage and next-stage actions using stage names only.
+  - Previous-stage actions are Inventory Count specific, are hidden on Draft/first-stage/posted states, and never reverse stock moves.
+  - Inventory Count previous and next buttons must be resolved from configured stage order, not hardcoded stage keys.
+  - Visible Post Count actions are hidden from the UI while the backend /post route remains compatible.
+  - Inventory count detail breadcrumbs render Home / Inventory Counts / ID# {id}.
+  - Inventory count detail header surfaces counted date, line item count, workflow stage, and notes without a separate core-details card.
+  - Inventory count index exposes Counter as the assigned-user email and truncates that value to 20 characters in mobile list summaries.
+  - Inventory count index Status shows the current workflow stage label rather than the posted lifecycle label.
   - Enum-like values must use values defined in docs/ENUMS.md.
 public_interface:
   - lines()
+  - workflowStage()
+  - createdByUser()
+  - taskedByUser()
+  - assignedToUser()
   - stockMoves()
   - getStatusAttribute()
+  - docs/architecture/workflows/WorkflowStageTaskGating.yaml
 example_usage: |
   $status = $inventoryCount->status;

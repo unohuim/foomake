@@ -35,7 +35,7 @@ class PostInventoryCountAction
                 ->firstOrFail();
 
             if ($lockedCount->posted_at !== null) {
-                throw new DomainException('Inventory count already posted.');
+                throw new DomainException('Inventory count is posted and cannot be modified.');
             }
 
             $lines = $lockedCount->lines()->with('item')->get();
@@ -54,6 +54,10 @@ class PostInventoryCountAction
 
                 if ($line->item === null || (int) $line->item->tenant_id !== (int) $lockedCount->tenant_id) {
                     throw new DomainException('Inventory count line item tenant mismatch.');
+                }
+
+                if ($line->counted_quantity === null || trim((string) $line->counted_quantity) === '') {
+                    throw new DomainException('All inventory count lines must have a counted quantity before posting.');
                 }
 
                 $itemsById[$line->item_id] = $line->item;

@@ -2,28 +2,30 @@
 
 namespace App\Actions\Workflows;
 
-use App\Models\SalesOrder;
 use App\Models\Task;
 use App\Models\User;
+use App\Models\WorkflowStage;
 use App\Models\WorkflowTaskTemplate;
 use DomainException;
 
 /**
- * Generate workflow tasks for a sales order entering an operational stage.
+ * Generate workflow tasks when a domain record enters a workflow stage.
  */
-class GenerateSalesOrderWorkflowTasksAction
+class GenerateWorkflowStageTasksAction
 {
     /**
-     * Generate idempotent tasks for the provided stage key.
+     * Generate idempotent tasks for the provided workflow stage.
      *
      * @throws DomainException
      */
-    public function execute(SalesOrder $salesOrder, string $stageKey): void
-    {
-        $stage = app(ResolveSalesWorkflowStageAction::class)->execute($salesOrder, $stageKey);
-
+    public function execute(
+        int $tenantId,
+        int $domainRecordId,
+        WorkflowStage $stage,
+        ?int $preferredAssigneeUserId = null
+    ): void {
         $templates = WorkflowTaskTemplate::withoutGlobalScopes()
-            ->where('tenant_id', $salesOrder->tenant_id)
+            ->where('tenant_id', $tenantId)
             ->where('workflow_domain_id', $stage->workflow_domain_id)
             ->where('workflow_stage_id', $stage->id)
             ->where('is_active', true)
@@ -33,9 +35,9 @@ class GenerateSalesOrderWorkflowTasksAction
 
         foreach ($templates as $template) {
             $existing = Task::withoutGlobalScopes()
-                ->where('tenant_id', $salesOrder->tenant_id)
+                ->where('tenant_id', $tenantId)
                 ->where('workflow_domain_id', $stage->workflow_domain_id)
-                ->where('domain_record_id', $salesOrder->id)
+                ->where('domain_record_id', $domainRecordId)
                 ->where('workflow_stage_id', $stage->id)
                 ->where('workflow_task_template_id', $template->id)
                 ->exists();
@@ -44,12 +46,14 @@ class GenerateSalesOrderWorkflowTasksAction
                 continue;
             }
 
-            $assigneeId = $template->default_assignee_user_id ?? $this->firstTenantUserId($salesOrder);
+            $assigneeId = $preferredAssigneeUserId
+                ?? $template->default_assignee_user_id
+                ?? $this->firstTenantUserId($tenantId);
 
             Task::withoutGlobalScopes()->create([
-                'tenant_id' => $salesOrder->tenant_id,
+                'tenant_id' => $tenantId,
                 'workflow_domain_id' => $stage->workflow_domain_id,
-                'domain_record_id' => $salesOrder->id,
+                'domain_record_id' => $domainRecordId,
                 'workflow_stage_id' => $stage->id,
                 'workflow_task_template_id' => $template->id,
                 'assigned_to_user_id' => $assigneeId,
@@ -64,14 +68,14 @@ class GenerateSalesOrderWorkflowTasksAction
     }
 
     /**
-     * Resolve the fallback assignee for generated tasks.
+     * Resolve the fallback assignee for generated workflow tasks.
      *
      * @throws DomainException
      */
-    private function firstTenantUserId(SalesOrder $salesOrder): int
+    private function firstTenantUserId(int $tenantId): int
     {
         $userId = User::query()
-            ->where('tenant_id', $salesOrder->tenant_id)
+            ->where('tenant_id', $tenantId)
             ->orderBy('id')
             ->value('id');
 
@@ -82,4 +86,3 @@ class GenerateSalesOrderWorkflowTasksAction
         return (int) $userId;
     }
 }
-

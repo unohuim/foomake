@@ -18,6 +18,8 @@ uses(RefreshDatabase::class);
 
 beforeEach(function () {
     $this->roleCounter = 1;
+    $this->stageCounter = 1;
+    $this->templateCounter = 1;
 
     $this->seed(WorkflowDomainSeeder::class);
 
@@ -59,6 +61,7 @@ beforeEach(function () {
     $this->salesDomain = fn (): WorkflowDomain => WorkflowDomain::query()->where('key', 'sales')->firstOrFail();
     $this->purchasingDomain = fn (): WorkflowDomain => WorkflowDomain::query()->where('key', 'purchasing')->firstOrFail();
     $this->manufacturingDomain = fn (): WorkflowDomain => WorkflowDomain::query()->where('key', 'manufacturing')->firstOrFail();
+    $this->inventoryDomain = fn (): WorkflowDomain => WorkflowDomain::query()->where('key', 'inventory')->firstOrFail();
 
     $this->seedSalesStages = function (Tenant $tenant): void {
         $domain = ($this->salesDomain)();
@@ -86,11 +89,14 @@ beforeEach(function () {
         WorkflowDomain $domain,
         array $attributes = []
     ): WorkflowStage {
+        $sequence = $this->stageCounter;
+        $this->stageCounter++;
+
         $payload = array_merge([
             'tenant_id' => $tenant->id,
             'workflow_domain_id' => $domain->id,
-            'key' => 'stage-' . fake()->unique()->slug(),
-            'name' => 'Stage ' . fake()->unique()->word(),
+            'key' => 'stage-' . $sequence,
+            'name' => 'Stage ' . $sequence,
             'description' => null,
             'sort_order' => 100,
             'is_active' => true,
@@ -110,11 +116,14 @@ beforeEach(function () {
         ?User $assignee = null,
         array $attributes = []
     ): WorkflowTaskTemplate {
+        $sequence = $this->templateCounter;
+        $this->templateCounter++;
+
         return WorkflowTaskTemplate::withoutGlobalScopes()->create(array_merge([
             'tenant_id' => $tenant->id,
             'workflow_domain_id' => $domain->id,
             'workflow_stage_id' => $stage->id,
-            'title' => 'Template ' . fake()->unique()->word(),
+            'title' => 'Template ' . $sequence,
             'description' => null,
             'sort_order' => 10,
             'is_active' => true,
@@ -123,17 +132,18 @@ beforeEach(function () {
     };
 });
 
-it('1. seeds workflow domains for sales purchasing and manufacturing', function () {
+it('1. seeds workflow domains for sales purchasing manufacturing and inventory', function () {
     expect(WorkflowDomain::query()->orderBy('sort_order')->orderBy('id')->pluck('key')->all())
-        ->toBe(['sales', 'purchasing', 'manufacturing']);
+        ->toBe(['sales', 'purchasing', 'manufacturing', 'inventory']);
 });
 
 it('2. workflow domain keys are unique and stable', function () {
-    expect(WorkflowDomain::query()->count())->toBe(3)
-        ->and(WorkflowDomain::query()->distinct('key')->count('key'))->toBe(3)
+    expect(WorkflowDomain::query()->count())->toBe(4)
+        ->and(WorkflowDomain::query()->distinct('key')->count('key'))->toBe(4)
         ->and(($this->salesDomain)()->name)->toBe('Sales')
         ->and(($this->purchasingDomain)()->name)->toBe('Purchasing')
-        ->and(($this->manufacturingDomain)()->name)->toBe('Manufacturing');
+        ->and(($this->manufacturingDomain)()->name)->toBe('Manufacturing')
+        ->and(($this->inventoryDomain)()->name)->toBe('Inventory');
 });
 
 it('3. workflow domains scope workflow stages', function () {
@@ -169,11 +179,29 @@ it('5. seeded sales operational stages exist with exact keys', function () {
     expect($keys)->toBe(['packing', 'packed', 'shipping']);
 });
 
-it('6. system statuses are not seeded as workflow stages', function () {
+it('6. sales does not seed system lifecycle statuses while inventory may use open and completed', function () {
     $tenant = ($this->makeTenant)();
-    ($this->seedSalesStages)($tenant);
+    $this->actingAs(($this->makeUser)($tenant));
+    app(\App\Actions\Workflows\SeedDefaultWorkflowStagesForTenantAction::class)->execute($tenant);
 
-    expect(WorkflowStage::query()->whereIn('key', ['draft', 'open', 'completed', 'cancelled'])->exists())->toBeFalse();
+    $salesStageKeys = WorkflowStage::query()
+        ->where('tenant_id', $tenant->id)
+        ->where('workflow_domain_id', ($this->salesDomain)()->id)
+        ->pluck('key')
+        ->all();
+
+    $inventoryStageKeys = WorkflowStage::query()
+        ->where('tenant_id', $tenant->id)
+        ->where('workflow_domain_id', ($this->inventoryDomain)()->id)
+        ->pluck('key')
+        ->all();
+
+    expect($salesStageKeys)->not->toContain('draft')
+        ->and($salesStageKeys)->not->toContain('open')
+        ->and($salesStageKeys)->not->toContain('completed')
+        ->and($salesStageKeys)->not->toContain('cancelled')
+        ->and($inventoryStageKeys)->toContain('open')
+        ->and($inventoryStageKeys)->toContain('completed');
 });
 
 it('7. workflow stages are tenant scoped', function () {
@@ -242,10 +270,28 @@ it('12. user with workflow manage can access admin workflows page and payload', 
 
     expect($payload['stageStoreUrl'] ?? null)->toBe(route('admin.workflows.stages.store'))
         ->and($payload['taskTemplateStoreUrl'] ?? null)->toBe(route('admin.workflows.task-templates.store'))
-        ->and($payload['domains'][0]['key'] ?? null)->toBe('sales');
+        ->and($payload['domains'][0]['key'] ?? null)->toBe('sales')
+        ->and($response->getContent())->not->toContain('>Key<')
+        ->and($response->getContent())->not->toContain('Reorder active stages');
 });
 
-it('13. authorized navigation shows admin workflows link', function () {
+it('12a. workflow stage admin UI hides the key field and still shows sort order', function () {
+    $source = file_get_contents(resource_path('views/admin/workflows/index.blade.php'));
+
+    expect($source)->not->toContain('>Key<')
+        ->and($source)->toContain('Sort order')
+        ->and($source)->not->toContain('Reorder active stages');
+});
+
+it('12b. workflow stage page module re-sorts the stage list after saves', function () {
+    $source = file_get_contents(resource_path('js/pages/admin-workflows-index.js'));
+
+    expect($source)->toContain('sortStages()')
+        ->and($source)->toContain('this.sortStages();')
+        ->and($source)->not->toContain('reorderStages()');
+});
+
+it('13. authorized navigation shows workflows in the profile dropdown', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
     ($this->grantPermission)($user, 'workflow-manage');
@@ -253,7 +299,7 @@ it('13. authorized navigation shows admin workflows link', function () {
     $this->actingAs($user)
         ->get(route('dashboard'))
         ->assertOk()
-        ->assertSee('Admin')
+        ->assertSee('data-profile-workflows-link="desktop"', false)
         ->assertSee('Workflows')
         ->assertSee(route('admin.workflows.index'), false);
 });
@@ -275,17 +321,17 @@ it('15. admin can create a workflow stage', function () {
 
     $response = $this->actingAs($user)->postJson(route('admin.workflows.stages.store'), [
         'workflow_domain_id' => ($this->salesDomain)()->id,
-        'key' => 'quality-check',
         'name' => 'Quality Check',
         'description' => 'Before shipping',
-        'sort_order' => 40,
+        'sort_order' => 1,
     ])->assertCreated();
 
     expect(WorkflowStage::query()->where('key', 'quality-check')->exists())->toBeTrue()
-        ->and($response->json('data.name'))->toBe('Quality Check');
+        ->and($response->json('data.name'))->toBe('Quality Check')
+        ->and($response->json('data.sort_order'))->toBe(1);
 });
 
-it('16. admin can edit a workflow stage', function () {
+it('16. admin can edit a workflow stage while preserving the generated key', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
     ($this->grantPermission)($user, 'workflow-manage');
@@ -297,15 +343,15 @@ it('16. admin can edit a workflow stage', function () {
 
     $this->actingAs($user)->patchJson(route('admin.workflows.stages.update', $stage), [
         'workflow_domain_id' => ($this->salesDomain)()->id,
-        'key' => 'quality-review',
         'name' => 'Quality Review',
         'description' => 'Updated',
-        'sort_order' => 50,
+        'sort_order' => 2,
         'is_active' => true,
     ])->assertOk();
 
-    expect($stage->fresh()->key)->toBe('quality-review')
-        ->and($stage->fresh()->name)->toBe('Quality Review');
+    expect($stage->fresh()->key)->toBe('quality-check')
+        ->and($stage->fresh()->name)->toBe('Quality Review')
+        ->and($stage->fresh()->sort_order)->toBe(2);
 });
 
 it('17. admin can deactivate and reactivate a workflow stage', function () {
@@ -316,7 +362,6 @@ it('17. admin can deactivate and reactivate a workflow stage', function () {
 
     $this->actingAs($user)->patchJson(route('admin.workflows.stages.update', $stage), [
         'workflow_domain_id' => $stage->workflow_domain_id,
-        'key' => $stage->key,
         'name' => $stage->name,
         'description' => $stage->description,
         'sort_order' => $stage->sort_order,
@@ -327,7 +372,6 @@ it('17. admin can deactivate and reactivate a workflow stage', function () {
 
     $this->actingAs($user)->patchJson(route('admin.workflows.stages.update', $stage), [
         'workflow_domain_id' => $stage->workflow_domain_id,
-        'key' => $stage->key,
         'name' => $stage->name,
         'description' => $stage->description,
         'sort_order' => $stage->sort_order,
@@ -376,8 +420,7 @@ it('20. duplicate workflow stage keys are blocked per tenant and domain', functi
 
     $this->actingAs($user)->postJson(route('admin.workflows.stages.store'), [
         'workflow_domain_id' => ($this->salesDomain)()->id,
-        'key' => 'packing',
-        'name' => 'Packing 2',
+        'name' => 'Packing',
         'description' => null,
         'sort_order' => 40,
     ])->assertStatus(422)->assertJsonValidationErrors(['key']);
@@ -392,30 +435,51 @@ it('21. same workflow stage key can exist in different domains', function () {
     expect(WorkflowStage::withoutGlobalScopes()->where('tenant_id', $tenant->id)->where('key', 'packing')->count())->toBe(2);
 });
 
-it('22. admin can reorder active operational stages', function () {
+it('22. workflow stage sort orders persist exact numeric values without string concatenation', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
     ($this->grantPermission)($user, 'workflow-manage');
 
-    $first = ($this->createStage)($tenant, ($this->salesDomain)(), ['key' => 'packing', 'sort_order' => 10]);
-    $second = ($this->createStage)($tenant, ($this->salesDomain)(), ['key' => 'packed', 'sort_order' => 20]);
-    $third = ($this->createStage)($tenant, ($this->salesDomain)(), ['key' => 'shipping', 'sort_order' => 30]);
-
-    $this->actingAs($user)->postJson(route('admin.workflows.stages.reorder'), [
+    $firstResponse = $this->actingAs($user)->postJson(route('admin.workflows.stages.store'), [
         'workflow_domain_id' => ($this->salesDomain)()->id,
-        'ordered_ids' => [$third->id, $first->id, $second->id],
-    ])->assertOk();
+        'name' => 'First Stage',
+        'description' => null,
+        'sort_order' => 1,
+    ])->assertCreated();
 
-    expect($third->fresh()->sort_order)->toBe(10)
-        ->and($first->fresh()->sort_order)->toBe(20)
-        ->and($second->fresh()->sort_order)->toBe(30);
+    $secondResponse = $this->actingAs($user)->postJson(route('admin.workflows.stages.store'), [
+        'workflow_domain_id' => ($this->salesDomain)()->id,
+        'name' => 'Second Stage',
+        'description' => null,
+        'sort_order' => 2,
+    ])->assertCreated();
+
+    expect($firstResponse->json('data.sort_order'))->toBe(1)
+        ->and($secondResponse->json('data.sort_order'))->toBe(2)
+        ->and(WorkflowStage::query()->where('name', 'First Stage')->value('sort_order'))->toBe(1)
+        ->and(WorkflowStage::query()->where('name', 'Second Stage')->value('sort_order'))->toBe(2);
 });
 
-it('23. system statuses cannot be reordered through workflow stage admin because they are not workflow stages', function () {
+it('23. inventory workflow system stages are reorderable while sales still excludes those lifecycle keys', function () {
     $tenant = ($this->makeTenant)();
-    ($this->seedSalesStages)($tenant);
+    app(\App\Actions\Workflows\SeedDefaultWorkflowStagesForTenantAction::class)->execute($tenant);
 
-    expect(WorkflowStage::query()->whereIn('key', ['draft', 'open', 'completed', 'cancelled'])->exists())->toBeFalse();
+    $inventoryStages = WorkflowStage::query()
+        ->where('tenant_id', $tenant->id)
+        ->where('workflow_domain_id', ($this->inventoryDomain)()->id)
+        ->orderBy('sort_order')
+        ->pluck('key')
+        ->all();
+
+    $salesStageKeys = WorkflowStage::query()
+        ->where('tenant_id', $tenant->id)
+        ->where('workflow_domain_id', ($this->salesDomain)()->id)
+        ->pluck('key')
+        ->all();
+
+    expect($inventoryStages)->toBe(['open', 'completed'])
+        ->and($salesStageKeys)->not->toContain('open')
+        ->and($salesStageKeys)->not->toContain('completed');
 });
 
 it('24. admin can create and edit a workflow task template', function () {

@@ -23,6 +23,7 @@ class EnsureWorkflowDomainsSeededAction
             ['key' => 'sales', 'name' => 'Sales', 'sort_order' => 10],
             ['key' => 'purchasing', 'name' => 'Purchasing', 'sort_order' => 20],
             ['key' => 'manufacturing', 'name' => 'Manufacturing', 'sort_order' => 30],
+            ['key' => 'inventory', 'name' => 'Inventory', 'sort_order' => 40],
         ] as $domain) {
             WorkflowDomain::query()->updateOrCreate([
                 'key' => $domain['key'],

@@ -2,39 +2,91 @@
 
 namespace App\Http\Controllers;
 
-use App\Actions\Inventory\PostInventoryCountAction;
+use App\Actions\Inventory\AdvanceInventoryCountWorkflowStageAction;
+use App\Actions\Workflows\ResolveInventoryWorkflowStageAction;
+use App\Actions\Workflows\SeedDefaultWorkflowStagesForTenantAction;
 use App\Models\InventoryCount;
 use App\Models\InventoryCountLine;
 use App\Models\Item;
+use App\Models\Task;
+use App\Models\User;
+use App\Models\WorkflowStage;
 use App\Support\QuantityFormatter;
 use DomainException;
+use Illuminate\Contracts\View\View;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
-use Symfony\Component\HttpFoundation\Response;
 
 class InventoryCountController extends Controller
 {
     /**
      * Display a listing of inventory counts.
      */
-    public function index(Request $request): Response
+    public function index(Request $request): View
     {
         Gate::authorize('inventory-adjustments-view');
 
-        $counts = InventoryCount::query()
+        $users = User::query()
             ->where('tenant_id', $request->user()->tenant_id)
-            ->withCount('lines')
-            ->orderByDesc('counted_at')
+            ->orderBy('name')
+            ->orderBy('id')
             ->get();
 
-        return response()->view('inventory.counts.index', [
-            'counts' => $counts,
+        return view('inventory.counts.index', [
+            'crudConfig' => $this->countsCrudConfig(),
             'payload' => [
-                'storeUrl' => route('inventory.counts.store'),
-                'csrfToken' => $request->session()->token(),
+                'csrfToken' => csrf_token(),
+                'users' => $users
+                    ->map(fn (User $user): array => [
+                        'id' => $user->id,
+                        'name' => $user->name,
+                        'email' => $user->email,
+                    ])
+                    ->values()
+                    ->all(),
+            ],
+            'users' => $users,
+        ]);
+    }
+
+    /**
+     * Return the inventory counts list read model for the shared CRUD page module.
+     */
+    public function list(Request $request): JsonResponse
+    {
+        Gate::authorize('inventory-adjustments-view');
+
+        $crudConfig = $this->countsCrudConfig();
+        $validated = $request->validate([
+            'search' => ['nullable', 'string'],
+            'sort' => ['nullable', 'string'],
+            'direction' => ['nullable', 'in:asc,desc'],
+        ]);
+
+        $search = trim((string) ($validated['search'] ?? ''));
+        $allowedSortColumns = $crudConfig['sortable'];
+        $requestedSortColumn = (string) ($validated['sort'] ?? 'counted_at');
+        $sortColumn = in_array($requestedSortColumn, $allowedSortColumns, true) ? $requestedSortColumn : 'counted_at';
+        $direction = (string) ($validated['direction'] ?? 'desc');
+        $counts = $this->countsQuery($request, $search, $sortColumn, $direction)->get();
+
+        return response()->json([
+            'data' => $counts
+                ->map(fn (InventoryCount $count): array => $this->countListData($count))
+                ->values()
+                ->all(),
+            'meta' => [
+                'search' => $search,
+                'sort' => [
+                    'column' => $sortColumn,
+                    'direction' => $direction,
+                ],
+                'allowed_sort_columns' => $crudConfig['sortable'],
+                'total' => $counts->count(),
             ],
         ]);
     }
@@ -42,13 +94,13 @@ class InventoryCountController extends Controller
     /**
      * Show a specific inventory count.
      */
-    public function show(Request $request, int $inventoryCount): Response
+    public function show(Request $request, int $inventoryCount): View
     {
         Gate::authorize('inventory-adjustments-view');
 
         $count = $this->findInventoryCount($request, $inventoryCount);
 
-        $count->load(['lines.item.baseUom']);
+        $count->load(['workflowStage', 'lines.item.baseUom']);
         $count->loadCount('lines');
 
         $items = Item::query()
@@ -57,9 +109,24 @@ class InventoryCountController extends Controller
             ->orderBy('name')
             ->get();
 
-        return response()->view('inventory.counts.show', [
+        $resolver = app(ResolveInventoryWorkflowStageAction::class);
+        $previousStage = $this->previousWorkflowActionStage($count, $resolver);
+        $nextStage = $this->nextWorkflowActionStage($count, $resolver);
+
+        return view('inventory.counts.show', [
             'inventoryCount' => $count,
             'items' => $items,
+            'previousWorkflowActionLabel' => $previousStage?->name,
+            'previousWorkflowActionEvent' => $this->previousWorkflowActionEvent($count, $previousStage),
+            'nextWorkflowActionLabel' => $nextStage?->name,
+            'nextWorkflowActionEvent' => $this->nextWorkflowActionEvent($count, $nextStage),
+            'payload' => [
+                'count' => $this->countPayload($count),
+                'sections' => [
+                    'countLines' => $this->countLinesSectionConfig($request, $count, $items),
+                    'tasks' => $this->tasksSectionConfig($count),
+                ],
+            ],
         ]);
     }
 
@@ -73,15 +140,26 @@ class InventoryCountController extends Controller
         $validated = $request->validate([
             'counted_at' => ['required', 'date'],
             'notes' => ['nullable', 'string'],
+            'assigned_to_user_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('users', 'id')->where('tenant_id', $request->user()->tenant_id),
+            ],
         ]);
 
         $count = InventoryCount::query()->forceCreate([
             'tenant_id' => $request->user()->tenant_id,
+            'created_by_user_id' => $request->user()->id,
+            'tasked_by_user_id' => $request->user()->id,
+            'assigned_to_user_id' => isset($validated['assigned_to_user_id'])
+                ? (int) $validated['assigned_to_user_id']
+                : null,
             'counted_at' => Carbon::parse($validated['counted_at']),
+            'workflow_stage_id' => null,
             'notes' => $validated['notes'] ?? null,
         ]);
 
-        $count->loadCount('lines');
+        $count->load(['workflowStage', 'assignedToUser'])->loadCount('lines');
 
         return response()->json([
             'count' => $this->countPayload($count),
@@ -97,20 +175,31 @@ class InventoryCountController extends Controller
 
         $count = $this->findInventoryCount($request, $inventoryCount);
 
-        if ($response = $this->ensureDraft($count)) {
+        if ($response = $this->ensureEditableDraft($count)) {
             return $response;
         }
 
         $validated = $request->validate([
             'counted_at' => ['required', 'date'],
             'notes' => ['nullable', 'string'],
+            'assigned_to_user_id' => [
+                'sometimes',
+                'integer',
+                Rule::exists('users', 'id')->where('tenant_id', $request->user()->tenant_id),
+            ],
         ]);
 
         $count->counted_at = Carbon::parse($validated['counted_at']);
         $count->notes = $validated['notes'] ?? null;
+
+        if (array_key_exists('assigned_to_user_id', $validated)) {
+            $count->assigned_to_user_id = (int) $validated['assigned_to_user_id'];
+            $count->tasked_by_user_id = $request->user()->id;
+        }
+
         $count->save();
 
-        $count->loadCount('lines');
+        $count->load(['workflowStage', 'assignedToUser'])->loadCount('lines');
 
         return response()->json([
             'count' => $this->countPayload($count),
@@ -126,7 +215,7 @@ class InventoryCountController extends Controller
 
         $count = $this->findInventoryCount($request, $inventoryCount);
 
-        if ($response = $this->ensureDraft($count)) {
+        if ($response = $this->ensureEditableDraft($count)) {
             return $response;
         }
 
@@ -138,33 +227,170 @@ class InventoryCountController extends Controller
     }
 
     /**
-     * Post an inventory count.
+     * Submit an inventory count into the configured inventory workflow.
      */
-    public function post(
+    public function submit(
         Request $request,
         int $inventoryCount,
-        PostInventoryCountAction $action
+        AdvanceInventoryCountWorkflowStageAction $action,
+        ResolveInventoryWorkflowStageAction $resolver,
+        SeedDefaultWorkflowStagesForTenantAction $seedDefaultStagesAction
     ): JsonResponse {
         Gate::authorize('inventory-adjustments-execute');
 
         $count = $this->findInventoryCount($request, $inventoryCount);
-
-        if ($response = $this->ensureDraft($count)) {
-            return $response;
-        }
+        $this->ensureInventoryWorkflowStagesExist($request, $resolver, $seedDefaultStagesAction);
 
         try {
-            $action->execute($count, (int) $request->user()->id);
+            $count = $action->submit($count, (int) $request->user()->id);
         } catch (DomainException $e) {
             return response()->json([
                 'message' => $e->getMessage(),
             ], 422);
         }
 
-        $count->refresh();
+        return response()->json([
+            'count' => $this->countPayload($count),
+        ]);
+    }
+
+    /**
+     * Advance an inventory count through the configured inventory workflow.
+     */
+    public function advance(
+        Request $request,
+        int $inventoryCount,
+        AdvanceInventoryCountWorkflowStageAction $action,
+        ResolveInventoryWorkflowStageAction $resolver,
+        SeedDefaultWorkflowStagesForTenantAction $seedDefaultStagesAction
+    ): JsonResponse {
+        Gate::authorize('inventory-adjustments-execute');
+
+        $count = $this->findInventoryCount($request, $inventoryCount);
+        $this->ensureInventoryWorkflowStagesExist($request, $resolver, $seedDefaultStagesAction);
+
+        try {
+            $count = $action->advance($count, (int) $request->user()->id);
+        } catch (DomainException $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+            ], 422);
+        }
 
         return response()->json([
             'count' => $this->countPayload($count),
+        ]);
+    }
+
+    /**
+     * Post an inventory count.
+     */
+    public function post(
+        Request $request,
+        int $inventoryCount,
+        AdvanceInventoryCountWorkflowStageAction $action,
+        ResolveInventoryWorkflowStageAction $resolver,
+        SeedDefaultWorkflowStagesForTenantAction $seedDefaultStagesAction
+    ): JsonResponse {
+        Gate::authorize('inventory-adjustments-execute');
+
+        $count = $this->findInventoryCount($request, $inventoryCount);
+        $this->ensureInventoryWorkflowStagesExist($request, $resolver, $seedDefaultStagesAction);
+
+        try {
+            $count = $action->postCompatible($count, (int) $request->user()->id);
+        } catch (DomainException $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+            ], 422);
+        }
+
+        return response()->json([
+            'count' => $this->countPayload($count),
+        ]);
+    }
+
+    /**
+     * Move an inventory count back to the previous configured workflow stage.
+     */
+    public function previous(
+        Request $request,
+        int $inventoryCount,
+        AdvanceInventoryCountWorkflowStageAction $action,
+        ResolveInventoryWorkflowStageAction $resolver,
+        SeedDefaultWorkflowStagesForTenantAction $seedDefaultStagesAction
+    ): JsonResponse {
+        Gate::authorize('inventory-adjustments-execute');
+
+        $count = $this->findInventoryCount($request, $inventoryCount);
+        $this->ensureInventoryWorkflowStagesExist($request, $resolver, $seedDefaultStagesAction);
+
+        try {
+            $count = $action->previous($count, (int) $request->user()->id);
+        } catch (DomainException $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+            ], 422);
+        }
+
+        return response()->json([
+            'count' => $this->countPayload($count),
+        ]);
+    }
+
+    /**
+     * Return the inventory count lines list read model for the reusable detail CRUD section.
+     */
+    public function listLines(Request $request, int $inventoryCount): JsonResponse
+    {
+        Gate::authorize('inventory-adjustments-view');
+
+        $count = $this->findInventoryCount($request, $inventoryCount);
+        $paginator = $count->lines()
+            ->where('tenant_id', $request->user()->tenant_id)
+            ->with('item.baseUom')
+            ->orderByDesc('id')
+            ->paginate(10);
+
+        return response()->json([
+            'data' => collect($paginator->items())
+                ->map(fn (InventoryCountLine $line): array => $this->linePayload($line))
+                ->values()
+                ->all(),
+            'meta' => $this->sectionMeta($paginator),
+        ]);
+    }
+
+    /**
+     * Return the current-stage inventory count tasks list for the reusable detail section.
+     */
+    public function listTasks(Request $request, int $inventoryCount): JsonResponse
+    {
+        Gate::authorize('inventory-adjustments-view');
+
+        $count = $this->findInventoryCount($request, $inventoryCount);
+        $count->load('workflowStage');
+
+        $paginator = Task::withoutGlobalScopes()
+            ->where('tenant_id', $request->user()->tenant_id)
+            ->where('workflow_domain_id', $count->workflowStage?->workflow_domain_id)
+            ->where('domain_record_id', $count->id)
+            ->when(
+                $count->workflow_stage_id !== null,
+                fn ($query) => $query->where('workflow_stage_id', $count->workflow_stage_id),
+                fn ($query) => $query->whereRaw('1 = 0')
+            )
+            ->with(['assignedTo', 'completedBy'])
+            ->orderBy('sort_order')
+            ->orderBy('id')
+            ->paginate(10);
+
+        return response()->json([
+            'data' => collect($paginator->items())
+                ->map(fn (Task $task): array => $this->taskPayload($task, $request->user()->id))
+                ->values()
+                ->all(),
+            'meta' => $this->sectionMeta($paginator),
         ]);
     }
 
@@ -177,17 +403,24 @@ class InventoryCountController extends Controller
 
         $count = $this->findInventoryCount($request, $inventoryCount);
 
-        if ($response = $this->ensureDraft($count)) {
+        if ($response = $this->ensureEditableLines($count)) {
             return $response;
         }
+
+        $request->merge([
+            'counted_quantity' => $this->normalizeOptionalQuantity($request->input('counted_quantity')),
+        ]);
 
         $validated = $request->validate([
             'item_id' => [
                 'required',
                 'integer',
                 Rule::exists('items', 'id')->where('tenant_id', $request->user()->tenant_id),
+                Rule::unique('inventory_count_lines', 'item_id')
+                    ->where('tenant_id', $request->user()->tenant_id)
+                    ->where('inventory_count_id', $count->id),
             ],
-            'counted_quantity' => ['required', 'string', 'regex:/^\d+(\.\d{1,6})?$/'],
+            'counted_quantity' => ['nullable', 'string', 'regex:/^\d+(\.\d{1,6})?$/'],
             'notes' => ['nullable', 'string'],
         ]);
 
@@ -195,7 +428,7 @@ class InventoryCountController extends Controller
             'tenant_id' => $request->user()->tenant_id,
             'inventory_count_id' => $count->id,
             'item_id' => $validated['item_id'],
-            'counted_quantity' => $validated['counted_quantity'],
+            'counted_quantity' => $validated['counted_quantity'] ?? null,
             'notes' => $validated['notes'] ?? null,
         ]);
 
@@ -215,9 +448,13 @@ class InventoryCountController extends Controller
 
         $count = $this->findInventoryCount($request, $inventoryCount);
 
-        if ($response = $this->ensureDraft($count)) {
+        if ($response = $this->ensureEditableLines($count)) {
             return $response;
         }
+
+        $request->merge([
+            'counted_quantity' => $this->normalizeOptionalQuantity($request->input('counted_quantity')),
+        ]);
 
         $lineModel = $count->lines()
             ->where('tenant_id', $request->user()->tenant_id)
@@ -229,13 +466,17 @@ class InventoryCountController extends Controller
                 'required',
                 'integer',
                 Rule::exists('items', 'id')->where('tenant_id', $request->user()->tenant_id),
+                Rule::unique('inventory_count_lines', 'item_id')
+                    ->where('tenant_id', $request->user()->tenant_id)
+                    ->where('inventory_count_id', $count->id)
+                    ->ignore($lineModel->id),
             ],
-            'counted_quantity' => ['required', 'string', 'regex:/^\d+(\.\d{1,6})?$/'],
+            'counted_quantity' => ['nullable', 'string', 'regex:/^\d+(\.\d{1,6})?$/'],
             'notes' => ['nullable', 'string'],
         ]);
 
         $lineModel->item_id = $validated['item_id'];
-        $lineModel->counted_quantity = $validated['counted_quantity'];
+        $lineModel->counted_quantity = $validated['counted_quantity'] ?? null;
         $lineModel->notes = $validated['notes'] ?? null;
         $lineModel->save();
 
@@ -255,7 +496,7 @@ class InventoryCountController extends Controller
 
         $count = $this->findInventoryCount($request, $inventoryCount);
 
-        if ($response = $this->ensureDraft($count)) {
+        if ($response = $this->ensureEditableLines($count)) {
             return $response;
         }
 
@@ -282,11 +523,37 @@ class InventoryCountController extends Controller
     }
 
     /**
-     * Ensure the inventory count is still draft.
+     * Ensure the inventory count is still in draft setup and editable.
      */
-    private function ensureDraft(InventoryCount $inventoryCount): ?JsonResponse
+    private function ensureEditableDraft(InventoryCount $inventoryCount): ?JsonResponse
     {
         if ($inventoryCount->posted_at !== null) {
+            return response()->json([
+                'message' => 'Inventory count is posted and cannot be modified.',
+            ], 422);
+        }
+
+        if ($inventoryCount->workflow_stage_id !== null) {
+            return response()->json([
+                'message' => 'Inventory count has been submitted and cannot be modified.',
+            ], 422);
+        }
+
+        return null;
+    }
+
+    /**
+     * Ensure the inventory count still allows count-line mutations.
+     */
+    private function ensureEditableLines(InventoryCount $inventoryCount): ?JsonResponse
+    {
+        if ($inventoryCount->posted_at !== null) {
+            return response()->json([
+                'message' => 'Inventory count is posted and cannot be modified.',
+            ], 422);
+        }
+
+        if ($inventoryCount->workflowStage?->is_inventory_effect_stage) {
             return response()->json([
                 'message' => 'Inventory count is posted and cannot be modified.',
             ], 422);
@@ -296,10 +563,31 @@ class InventoryCountController extends Controller
     }
 
     /**
+     * Seed inventory workflow stages only when the tenant has not configured any yet.
+     */
+    private function ensureInventoryWorkflowStagesExist(
+        Request $request,
+        ResolveInventoryWorkflowStageAction $resolver,
+        SeedDefaultWorkflowStagesForTenantAction $seedDefaultStagesAction
+    ): void {
+        $inventoryDomainId = $resolver->inventoryDomainId();
+
+        $hasStages = WorkflowStage::withoutGlobalScopes()
+            ->where('tenant_id', (int) $request->user()->tenant_id)
+            ->where('workflow_domain_id', $inventoryDomainId)
+            ->exists();
+
+        if (! $hasStages) {
+            $seedDefaultStagesAction->execute($request->user()->tenant()->firstOrFail());
+        }
+    }
+
+    /**
      * Build JSON payload for inventory counts.
      */
     private function countPayload(InventoryCount $inventoryCount): array
     {
+        $inventoryCount->loadMissing(['workflowStage', 'assignedToUser']);
         $inventoryCount->loadCount('lines');
 
         return [
@@ -308,13 +596,178 @@ class InventoryCountController extends Controller
             'counted_at_iso' => $inventoryCount->counted_at->format('Y-m-d\TH:i'),
             'notes' => $inventoryCount->notes ?? '',
             'status' => $inventoryCount->status,
+            'lifecycle_status_label' => $inventoryCount->status === 'posted' ? 'Posted' : 'Draft',
+            'created_by_user_id' => $inventoryCount->created_by_user_id,
+            'tasked_by_user_id' => $inventoryCount->tasked_by_user_id,
+            'assigned_to_user_id' => $inventoryCount->assigned_to_user_id,
+            'assigned_to_user_name' => $inventoryCount->assignedToUser?->name,
+            'workflow_stage_id' => $inventoryCount->workflow_stage_id,
+            'workflow_stage_key' => $inventoryCount->workflowStage?->key,
+            'workflow_stage_name' => $inventoryCount->workflowStage?->name,
+            'workflow_status_label' => $this->workflowStatusLabel($inventoryCount),
+            'is_draft_setup' => $this->isDraftSetup($inventoryCount),
+            'is_submitted' => $inventoryCount->workflow_stage_id !== null && $inventoryCount->posted_at === null,
             'posted_at_display' => $inventoryCount->posted_at?->format('Y-m-d H:i'),
             'posted_at_iso' => $inventoryCount->posted_at?->format('Y-m-d\TH:i'),
             'lines_count' => $inventoryCount->lines_count,
+            'current_stage_tasks' => $this->currentStageTasksData($inventoryCount),
             'show_url' => route('inventory.counts.show', $inventoryCount),
             'update_url' => route('inventory.counts.update', $inventoryCount),
             'delete_url' => route('inventory.counts.destroy', $inventoryCount),
+            'previous_url' => route('inventory.counts.previous', $inventoryCount),
+            'submit_url' => route('inventory.counts.submit', $inventoryCount),
+            'advance_url' => route('inventory.counts.advance', $inventoryCount),
             'post_url' => route('inventory.counts.post', $inventoryCount),
+        ];
+    }
+
+    /**
+     * Build the filtered and sorted inventory counts query shared by the index page.
+     */
+    private function countsQuery(Request $request, string $search, string $sortColumn, string $direction)
+    {
+        $query = InventoryCount::query()
+            ->where('tenant_id', $request->user()->tenant_id)
+            ->with(['workflowStage', 'assignedToUser'])
+            ->withCount('lines');
+
+        if ($search !== '') {
+            $query->where(function ($builder) use ($search): void {
+                $builder->where('notes', 'like', '%' . $search . '%');
+
+                if (ctype_digit($search)) {
+                    $builder->orWhereKey((int) $search);
+                }
+            });
+        }
+
+        return match ($sortColumn) {
+            'status' => $query
+                ->orderByRaw('CASE WHEN posted_at IS NULL THEN 0 ELSE 1 END ' . $direction)
+                ->orderByDesc('counted_at'),
+            'lines_count' => $query
+                ->orderBy('lines_count', $direction)
+                ->orderByDesc('counted_at'),
+            'posted_at' => $query
+                ->orderByRaw('posted_at IS NULL')
+                ->orderBy('posted_at', $direction)
+                ->orderByDesc('counted_at'),
+            default => $query
+                ->orderBy('counted_at', $direction)
+                ->orderByDesc('id'),
+        };
+    }
+
+    /**
+     * Build the JSON list row for the shared inventory counts CRUD renderer.
+     *
+     * @return array<string, mixed>
+     */
+    private function countListData(InventoryCount $inventoryCount): array
+    {
+        return [
+            'id' => $inventoryCount->id,
+            'counted_at' => $inventoryCount->counted_at->format('Y-m-d H:i'),
+            'counted_at_iso' => $inventoryCount->counted_at->format('Y-m-d\TH:i'),
+            'notes' => $inventoryCount->notes ?? '',
+            'status' => $inventoryCount->status,
+            'status_label' => $this->workflowStageStatusLabel($inventoryCount),
+            'lifecycle_status' => $inventoryCount->status,
+            'assigned_to_user_id' => $inventoryCount->assigned_to_user_id,
+            'counter_email' => $inventoryCount->assignedToUser?->email,
+            'posted_at' => $inventoryCount->posted_at?->format('Y-m-d H:i') ?? '—',
+            'posted_at_iso' => $inventoryCount->posted_at?->format('Y-m-d\TH:i'),
+            'lines_count' => $inventoryCount->lines_count ?? 0,
+            'show_url' => route('inventory.counts.show', $inventoryCount),
+            'update_url' => route('inventory.counts.update', $inventoryCount),
+            'delete_url' => route('inventory.counts.destroy', $inventoryCount),
+            'submit_url' => route('inventory.counts.submit', $inventoryCount),
+            'advance_url' => route('inventory.counts.advance', $inventoryCount),
+            'post_url' => route('inventory.counts.post', $inventoryCount),
+        ];
+    }
+
+    /**
+     * Return the shared CRUD config for the inventory counts index page module.
+     *
+     * @return array<string, mixed>
+     */
+    private function countsCrudConfig(): array
+    {
+        $canManageCounts = Gate::allows('inventory-adjustments-execute');
+
+        return [
+            'resource' => 'inventory-counts',
+            'endpoints' => [
+                'list' => route('inventory.counts.list'),
+                'create' => route('inventory.counts.store'),
+                'update' => url('/inventory/counts/{id}'),
+                'delete' => url('/inventory/counts/{id}'),
+            ],
+            'detailUrlTemplate' => url('/inventory/counts/{id}'),
+            'columns' => ['counted_at', 'status', 'counter', 'lines_count', 'posted_at'],
+            'headers' => [
+                'counted_at' => 'Counted At',
+                'status' => 'Status',
+                'counter' => 'Counter',
+                'lines_count' => 'Items',
+                'posted_at' => 'Posted At',
+            ],
+            'sortable' => ['counted_at', 'status', 'lines_count', 'posted_at'],
+            'labels' => [
+                'searchPlaceholder' => 'Search inventory counts',
+                'createTitle' => 'Create Inventory Count',
+                'createAriaLabel' => 'Create Inventory Count',
+                'emptyState' => 'No inventory counts found.',
+                'actionsAriaLabel' => 'Inventory count actions',
+            ],
+            'permissions' => [
+                'showExport' => false,
+                'showImport' => false,
+                'showCreate' => $canManageCounts,
+            ],
+            'rowDisplay' => [
+                'columns' => [
+                    'counted_at' => [
+                        'kind' => 'linked-text',
+                        'urlExpression' => 'record.show_url',
+                    ],
+                    'status' => ['kind' => 'text'],
+                    'counter' => ['kind' => 'text'],
+                    'lines_count' => ['kind' => 'text'],
+                    'posted_at' => ['kind' => 'text'],
+                ],
+            ],
+            'mobileCard' => [
+                'titleExpression' => "record.counted_at || '—'",
+                'subtitleExpression' => 'record.status_label || "—"',
+                'bodyExpression' => 'inventoryCountSummary(record)',
+            ],
+            'actions' => $canManageCounts
+                ? [
+                    [
+                        'id' => 'view',
+                        'label' => 'View',
+                        'tone' => 'default',
+                    ],
+                    [
+                        'id' => 'edit',
+                        'label' => 'Edit',
+                        'tone' => 'default',
+                    ],
+                    [
+                        'id' => 'delete',
+                        'label' => 'Delete',
+                        'tone' => 'warning',
+                    ],
+                ]
+                : [
+                    [
+                        'id' => 'view',
+                        'label' => 'View',
+                        'tone' => 'default',
+                    ],
+                ],
         ];
     }
 
@@ -328,8 +781,11 @@ class InventoryCountController extends Controller
             'item_id' => $line->item_id,
             'item_display' => $line->item->name . ' (' . $line->item->baseUom->symbol . ')',
             'counted_quantity' => $line->counted_quantity,
-            'counted_quantity_display' => QuantityFormatter::formatForUom($line->counted_quantity, $line->item?->baseUom, 1),
+            'counted_quantity_display' => $line->counted_quantity === null
+                ? '—'
+                : QuantityFormatter::formatForUom($line->counted_quantity, $line->item?->baseUom, 1),
             'notes' => $line->notes ?? '',
+            'notes_display' => $line->notes ?: '—',
             'update_url' => route('inventory.counts.lines.update', [
                 'inventoryCount' => $line->inventory_count_id,
                 'line' => $line->id,
@@ -338,6 +794,350 @@ class InventoryCountController extends Controller
                 'inventoryCount' => $line->inventory_count_id,
                 'line' => $line->id,
             ]),
+        ];
+    }
+
+    /**
+     * Build the reusable CRUD section config for the count lines section.
+     *
+     * @param \Illuminate\Support\Collection<int, Item> $items
+     * @return array<string, mixed>
+     */
+    private function countLinesSectionConfig(Request $request, InventoryCount $inventoryCount, $items): array
+    {
+        $canManage = Gate::allows('inventory-adjustments-execute');
+        $canMutateLines = $canManage && $this->ensureEditableLines($inventoryCount) === null;
+
+        return [
+            'resource' => 'inventory-count-lines',
+            'title' => 'Materials',
+            'description' => 'Manage counted materials for this inventory count.',
+            'emptyState' => 'No count lines added yet.',
+            'csrfToken' => csrf_token(),
+            'defaultOpen' => true,
+            'permissions' => [
+                'canCreate' => $canMutateLines,
+            ],
+            'endpoints' => [
+                'list' => route('inventory.counts.lines.index', $inventoryCount),
+                'create' => route('inventory.counts.lines.store', $inventoryCount),
+                'update' => url('/inventory/counts/' . $inventoryCount->id . '/lines/{id}'),
+                'remove' => url('/inventory/counts/' . $inventoryCount->id . '/lines/{id}'),
+            ],
+            'fields' => [
+                [
+                    'name' => 'item_id',
+                    'label' => 'Material',
+                    'type' => 'select',
+                    'required' => true,
+                    'options' => $items->map(fn (Item $item): array => [
+                        'value' => (string) $item->id,
+                        'label' => $item->name . ' (' . $item->baseUom?->symbol . ')',
+                    ])->values()->all(),
+                ],
+                [
+                    'name' => 'counted_quantity',
+                    'label' => 'Counted Quantity',
+                    'type' => 'text',
+                    'required' => false,
+                ],
+                [
+                    'name' => 'notes',
+                    'label' => 'Notes',
+                    'type' => 'text',
+                    'required' => false,
+                ],
+            ],
+            'actions' => $canMutateLines ? [
+                [
+                    'id' => 'edit',
+                    'label' => 'Edit',
+                    'tone' => 'default',
+                ],
+                [
+                    'id' => 'remove',
+                    'label' => 'Delete',
+                    'tone' => 'warning',
+                    'endpointKey' => 'remove',
+                    'method' => 'DELETE',
+                ],
+            ] : [],
+            'rowLayout' => [
+                'primaryText' => [
+                    'field' => 'item_display',
+                ],
+                'secondaryFields' => [
+                    [
+                        'label' => 'Notes',
+                        'field' => 'notes_display',
+                    ],
+                ],
+                'badges' => [],
+                'rightMeta' => [
+                    [
+                        'label' => 'Counted Qty',
+                        'field' => 'counted_quantity_display',
+                        'strong' => true,
+                    ],
+                ],
+            ],
+        ];
+    }
+
+    /**
+     * Build the reusable detail section config for current-stage tasks.
+     *
+     * @return array<string, mixed>
+     */
+    private function tasksSectionConfig(InventoryCount $inventoryCount): array
+    {
+        return [
+            'resource' => 'inventory-count-tasks',
+            'title' => 'Tasks',
+            'description' => 'Complete required workflow tasks before moving the inventory count forward.',
+            'emptyState' => 'No tasks for the current stage.',
+            'csrfToken' => csrf_token(),
+            'defaultOpen' => true,
+            'permissions' => [
+                'canCreate' => false,
+            ],
+            'showRowActionsMenu' => false,
+            'endpoints' => [
+                'list' => route('inventory.counts.tasks.index', $inventoryCount),
+                'create' => '',
+                'update' => '',
+                'remove' => '',
+            ],
+            'fields' => [],
+            'actions' => [
+                [
+                    'id' => 'complete',
+                    'label' => 'Complete',
+                    'type' => 'custom',
+                    'tone' => 'default',
+                    'handlerKey' => 'completeTask',
+                ],
+            ],
+            'rowLayout' => [
+                'primaryText' => [
+                    'field' => 'title',
+                ],
+                'secondaryFields' => [
+                    [
+                        'label' => 'Assigned By',
+                        'field' => 'assigned_by_user_name',
+                        'fallback' => '—',
+                    ],
+                    [
+                        'label' => 'Assigned To',
+                        'field' => 'assigned_to_display',
+                        'fallback' => '',
+                    ],
+                    [
+                        'label' => 'Completed By',
+                        'field' => 'completed_by_display',
+                        'fallback' => '',
+                    ],
+                ],
+                'badges' => [
+                    [
+                        'field' => 'status',
+                        'toneField' => 'status_tone',
+                    ],
+                ],
+                'rightMeta' => [],
+            ],
+        ];
+    }
+
+    /**
+     * Build section pagination meta for the shared detail CRUD component.
+     *
+     * @return array<string, int>
+     */
+    private function sectionMeta(LengthAwarePaginator $paginator): array
+    {
+        return [
+            'current_page' => $paginator->currentPage(),
+            'last_page' => $paginator->lastPage(),
+            'per_page' => $paginator->perPage(),
+            'total' => $paginator->total(),
+        ];
+    }
+
+    /**
+     * Determine whether a count is still in draft setup outside workflow stages.
+     */
+    private function isDraftSetup(InventoryCount $inventoryCount): bool
+    {
+        return $inventoryCount->workflow_stage_id === null && $inventoryCount->posted_at === null;
+    }
+
+    /**
+     * Return the workflow-facing status label for index/detail presentation.
+     */
+    private function workflowStatusLabel(InventoryCount $inventoryCount): string
+    {
+        if ($inventoryCount->workflow_stage_id === null) {
+            return $inventoryCount->posted_at !== null ? 'Posted' : 'Draft';
+        }
+
+        return $inventoryCount->workflowStage?->name ?? 'Unknown';
+    }
+
+    /**
+     * Return the workflow-stage label used by the Inventory Counts index status column.
+     */
+    private function workflowStageStatusLabel(InventoryCount $inventoryCount): string
+    {
+        if ($inventoryCount->workflow_stage_id === null) {
+            return 'Draft';
+        }
+
+        return $inventoryCount->workflowStage?->name ?? 'Unknown';
+    }
+
+    /**
+     * Resolve the next workflow stage the visible action should enter.
+     */
+    private function nextWorkflowActionStage(
+        InventoryCount $inventoryCount,
+        ResolveInventoryWorkflowStageAction $resolver
+    ): ?WorkflowStage {
+        if ($inventoryCount->posted_at !== null) {
+            return null;
+        }
+
+        if ($inventoryCount->workflow_stage_id === null) {
+            return $resolver->firstActiveStage($inventoryCount);
+        }
+
+        return $resolver->nextActiveStage($inventoryCount);
+    }
+
+    /**
+     * Resolve the previous workflow stage the visible action may move back to.
+     */
+    private function previousWorkflowActionStage(
+        InventoryCount $inventoryCount,
+        ResolveInventoryWorkflowStageAction $resolver
+    ): ?WorkflowStage {
+        if ($inventoryCount->posted_at !== null || $inventoryCount->workflow_stage_id === null) {
+            return null;
+        }
+
+        return $resolver->previousActiveStage($inventoryCount);
+    }
+
+    /**
+     * Resolve the visible next workflow button event name.
+     */
+    private function nextWorkflowActionEvent(InventoryCount $inventoryCount, ?WorkflowStage $targetStage): ?string
+    {
+        if ($targetStage === null || $inventoryCount->posted_at !== null) {
+            return null;
+        }
+
+        return $inventoryCount->workflow_stage_id === null
+            ? 'inventory-count-submit'
+            : 'inventory-count-advance';
+    }
+
+    /**
+     * Resolve the visible previous workflow button event name.
+     */
+    private function previousWorkflowActionEvent(InventoryCount $inventoryCount, ?WorkflowStage $targetStage): ?string
+    {
+        if ($targetStage === null || $inventoryCount->posted_at !== null || $inventoryCount->workflow_stage_id === null) {
+            return null;
+        }
+
+        return 'inventory-count-previous';
+    }
+
+    /**
+     * Normalize optional counted quantity inputs so blank setup values become null.
+     */
+    private function normalizeOptionalQuantity(mixed $quantity): mixed
+    {
+        if ($quantity === null) {
+            return null;
+        }
+
+        if (! is_string($quantity)) {
+            return $quantity;
+        }
+
+        $trimmed = trim($quantity);
+
+        return $trimmed === '' ? null : $trimmed;
+    }
+
+    /**
+     * Build current-stage task payloads for the detail page.
+     *
+     * @return array<int, array<string, int|string|bool|null>>
+     */
+    private function currentStageTasksData(InventoryCount $inventoryCount): array
+    {
+        $inventoryCount->loadMissing('workflowStage');
+
+        if ($inventoryCount->workflow_stage_id === null || ! $inventoryCount->workflowStage) {
+            return [];
+        }
+
+        return Task::withoutGlobalScopes()
+            ->where('tenant_id', $inventoryCount->tenant_id)
+            ->where('workflow_domain_id', $inventoryCount->workflowStage->workflow_domain_id)
+            ->where('domain_record_id', $inventoryCount->id)
+            ->where('workflow_stage_id', $inventoryCount->workflow_stage_id)
+            ->with(['assignedTo', 'completedBy'])
+            ->orderBy('sort_order')
+            ->orderBy('id')
+            ->get()
+            ->map(fn (Task $task): array => $this->taskPayload($task, auth()->id()))
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Build the shared task payload contract used by the detail page and task list endpoint.
+     *
+     * @return array<string, int|string|bool|null|array<int, string>>
+     */
+    private function taskPayload(Task $task, ?int $viewerUserId): array
+    {
+        $isCompleted = $task->isCompleted() || $task->completed_at !== null;
+        $canComplete = ! $isCompleted
+            && $viewerUserId !== null
+            && (int) $task->assigned_to_user_id === (int) $viewerUserId;
+        $inventoryCount = InventoryCount::query()
+            ->withoutGlobalScopes()
+            ->where('tenant_id', $task->tenant_id)
+            ->find($task->domain_record_id);
+
+        return [
+            'id' => $task->id,
+            'workflow_stage_id' => $task->workflow_stage_id,
+            'workflow_task_template_id' => $task->workflow_task_template_id,
+            'assigned_to_user_id' => $task->assigned_to_user_id,
+            'assigned_to_user_name' => $task->assignedTo?->name,
+            'assigned_by_user_name' => $inventoryCount?->createdByUser?->name
+                ?? $inventoryCount?->taskedByUser?->name,
+            'assigned_to_display' => $isCompleted ? '' : ($task->assignedTo?->name ?? '—'),
+            'title' => $task->title,
+            'description' => $task->description,
+            'sort_order' => $task->sort_order,
+            'status' => $task->status,
+            'status_tone' => $isCompleted ? 'success' : 'muted',
+            'is_completed' => $isCompleted,
+            'can_complete' => $canComplete,
+            'completed_at' => $task->completed_at?->toISOString(),
+            'completed_by_user_id' => $task->completed_by_user_id,
+            'completed_by_user_name' => $task->completedBy?->name,
+            'completed_by_display' => $isCompleted ? ($task->completedBy?->name ?? '—') : '',
+            'complete_url' => route('tasks.complete', $task),
+            'available_actions' => $canComplete ? ['complete'] : [],
         ];
     }
 }

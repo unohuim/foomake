@@ -115,6 +115,7 @@ Migrations remain the **sole source of truth**.
 | tenant_id  | bigint    | No       | FK → tenants.id (CASCADE) |
 | name       | string    | No       | —                         |
 | status     | string    | No       | Defaults to `active`      |
+| customer_type | string | No       | Defaults to `business`; see `docs/ENUMS.md` |
 | notes      | text      | Yes      | —                         |
 | address_line_1 | string | Yes      | —                         |
 | address_line_2 | string | Yes      | —                         |
@@ -135,6 +136,7 @@ Migrations remain the **sole source of truth**.
 - PK: `id`
 - Index: `(tenant_id, name)`
 - Index: `(tenant_id, status)`
+- Index: `(tenant_id, customer_type)`
 - Implicit (FK index): `tenant_id`
 
 ---
@@ -453,7 +455,11 @@ Migrations remain the **sole source of truth**.
 | ----------------- | --------- | -------- | ------------------------- |
 | id                | bigint    | No       | Primary key               |
 | tenant_id         | bigint    | No       | FK → tenants.id (CASCADE) |
+| created_by_user_id | bigint   | Yes      | FK → users.id (SET NULL)  |
+| tasked_by_user_id | bigint    | Yes      | FK → users.id (SET NULL)  |
+| assigned_to_user_id | bigint  | Yes      | FK → users.id (SET NULL)  |
 | counted_at        | timestamp | No       | —                         |
+| workflow_stage_id | bigint    | Yes      | FK → workflow_stages.id (SET NULL) |
 | posted_at         | timestamp | Yes      | —                         |
 | posted_by_user_id | bigint    | Yes      | FK → users.id (SET NULL)  |
 | notes             | text      | Yes      | —                         |
@@ -465,6 +471,10 @@ Migrations remain the **sole source of truth**.
 - PK: `id`
 - Unique: `(id, tenant_id)`
 - Implicit (FK index): `tenant_id`
+- Implicit (FK index): `created_by_user_id`
+- Implicit (FK index): `tasked_by_user_id`
+- Implicit (FK index): `assigned_to_user_id`
+- Implicit (FK index): `workflow_stage_id`
 - Implicit (FK index): `posted_by_user_id`
 
 ---
@@ -482,7 +492,7 @@ Migrations remain the **sole source of truth**.
 | tenant_id          | bigint        | No       | FK → tenants.id (CASCADE) |
 | inventory_count_id | bigint        | No       | Part of composite FK      |
 | item_id            | bigint        | No       | FK → items.id (CASCADE)   |
-| counted_quantity   | decimal(18,6) | No       | —                         |
+| counted_quantity   | decimal(18,6) | Yes      | Nullable until completion/posting |
 | notes              | text          | Yes      | —                         |
 | created_at         | timestamp     | Yes      | —                         |
 | updated_at         | timestamp     | Yes      | —                         |

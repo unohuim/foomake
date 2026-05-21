@@ -218,11 +218,13 @@ test('cross tenant isolation is enforced', function () {
     ]);
 
     $response = $this->actingAs($this->user)
-        ->get(route('inventory.counts.index'));
+        ->getJson(route('inventory.counts.list'));
 
     $response->assertOk();
-    $response->assertSee($ownCount->counted_at->format('Y-m-d H:i'));
-    $response->assertDontSee($otherCount->counted_at->format('Y-m-d H:i'));
+
+    expect(collect($response->json('data'))->pluck('id'))
+        ->toContain($ownCount->id)
+        ->not->toContain($otherCount->id);
 
     $this->actingAs($this->user)
         ->get(route('inventory.counts.show', $otherCount))

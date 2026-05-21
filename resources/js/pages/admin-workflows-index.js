@@ -4,11 +4,11 @@ export function mount(rootEl, payload) {
 
     const emptyStageForm = () => ({
         workflow_domain_id: '',
-        key: '',
         name: '',
         description: '',
-        sort_order: 10,
+        sort_order: '',
         is_active: true,
+        is_inventory_effect_stage: false,
     });
 
     const emptyTaskTemplateForm = () => ({
@@ -28,7 +28,6 @@ export function mount(rootEl, payload) {
         users: safePayload.users || [],
         stageStoreUrl: safePayload.stageStoreUrl || '',
         stageUpdateUrlBase: safePayload.stageUpdateUrlBase || '',
-        stageReorderUrl: safePayload.stageReorderUrl || '',
         taskTemplateStoreUrl: safePayload.taskTemplateStoreUrl || '',
         taskTemplateUpdateUrlBase: safePayload.taskTemplateUpdateUrlBase || '',
         taskTemplateReorderUrl: safePayload.taskTemplateReorderUrl || '',
@@ -87,11 +86,11 @@ export function mount(rootEl, payload) {
             this.editingStageId = stage.id;
             this.stageForm = {
                 workflow_domain_id: String(stage.workflow_domain_id || ''),
-                key: stage.key || '',
                 name: stage.name || '',
                 description: stage.description || '',
                 sort_order: Number(stage.sort_order || 10),
                 is_active: !!stage.is_active,
+                is_inventory_effect_stage: !!stage.is_inventory_effect_stage,
             };
         },
         resetStageForm() {
@@ -134,10 +133,25 @@ export function mount(rootEl, payload) {
 
             if (existingIndex === -1) {
                 this.stages.push(stage);
+                this.sortStages();
                 return;
             }
 
             this.stages.splice(existingIndex, 1, stage);
+            this.sortStages();
+        },
+        sortStages() {
+            this.stages = [...this.stages].sort((left, right) => {
+                if (Number(left.workflow_domain_id) !== Number(right.workflow_domain_id)) {
+                    return Number(left.workflow_domain_id) - Number(right.workflow_domain_id);
+                }
+
+                if (Number(left.sort_order) !== Number(right.sort_order)) {
+                    return Number(left.sort_order) - Number(right.sort_order);
+                }
+
+                return Number(left.id) - Number(right.id);
+            });
         },
         async toggleStage(stage) {
             await this.submitExistingStage({
@@ -155,11 +169,11 @@ export function mount(rootEl, payload) {
                 },
                 body: JSON.stringify({
                     workflow_domain_id: stage.workflow_domain_id,
-                    key: stage.key,
                     name: stage.name,
                     description: stage.description,
                     sort_order: stage.sort_order,
                     is_active: stage.is_active,
+                    is_inventory_effect_stage: !!stage.is_inventory_effect_stage,
                 }),
             });
 
@@ -171,39 +185,6 @@ export function mount(rootEl, payload) {
             const data = await response.json();
             this.upsertStage(data.data || {});
             this.showToast('success', 'Workflow stage updated.');
-        },
-        async reorderStages() {
-            const firstDomainId = this.filteredStages()[0]?.workflow_domain_id;
-
-            if (!firstDomainId) {
-                return;
-            }
-
-            const orderedIds = this.filteredStages()
-                .filter((stage) => String(stage.workflow_domain_id) === String(firstDomainId) && stage.is_active)
-                .sort((left, right) => Number(left.sort_order) - Number(right.sort_order))
-                .map((stage) => stage.id);
-
-            if (orderedIds.length === 0) {
-                return;
-            }
-
-            const response = await fetch(this.stageReorderUrl, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Accept: 'application/json',
-                    'X-CSRF-TOKEN': this.csrfToken,
-                },
-                body: JSON.stringify({
-                    workflow_domain_id: firstDomainId,
-                    ordered_ids: orderedIds,
-                }),
-            });
-
-            if (response.ok) {
-                this.showToast('success', 'Workflow stages reordered.');
-            }
         },
         openTaskTemplateCreate() {
             this.taskTemplateFormMode = 'create';

@@ -50,6 +50,7 @@ export function mount(rootEl, payload) {
     const emptyErrors = () => ({
         name: [],
         status: [],
+        customer_type: [],
         notes: [],
         address_line_1: [],
         address_line_2: [],
@@ -63,6 +64,7 @@ export function mount(rootEl, payload) {
     const emptyForm = () => ({
         name: '',
         status: 'active',
+        customer_type: 'business',
         notes: '',
         address_line_1: '',
         address_line_2: '',
@@ -76,6 +78,7 @@ export function mount(rootEl, payload) {
     const customerToForm = (customer) => ({
         name: customer.name || '',
         status: customer.status || 'active',
+        customer_type: customer.customer_type || 'business',
         notes: customer.notes || '',
         address_line_1: customer.address_line_1 || '',
         address_line_2: customer.address_line_2 || '',
@@ -228,6 +231,7 @@ export function mount(rootEl, payload) {
         navigationStateUrl: safePayload.navigationStateUrl || '',
         csrfToken: safePayload.csrfToken || '',
         statuses: safePayload.statuses || ['active', 'inactive', 'archived'],
+        customerTypes: safePayload.customerTypes || { business: 'Business', consumer: 'Consumer' },
         sources: Array.isArray(importConfig.sources) && importConfig.sources.length > 0
             ? importConfig.sources
             : (safePayload.sources || []),
@@ -385,6 +389,7 @@ export function mount(rootEl, payload) {
 
             const body = {
                 name: this.form.name,
+                customer_type: this.form.customer_type || 'business',
                 notes: this.form.notes || null,
                 address_line_1: this.form.address_line_1 || null,
                 address_line_2: this.form.address_line_2 || null,

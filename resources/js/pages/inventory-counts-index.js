@@ -1,41 +1,170 @@
-import Alpine from 'alpinejs';
+import { parseCrudConfig } from '../lib/crud-config';
+import { mountCrudRenderer } from '../lib/crud-page';
+import { createGenericCrud } from '../lib/generic-crud';
 
 export function mount(rootEl, payload) {
+    const Alpine = window.Alpine;
     const safePayload = payload || {};
+    const crud = createGenericCrud(parseCrudConfig(rootEl));
+    const crudRootEl = rootEl.querySelector('[data-crud-root]');
+    const actionDefinitions = (Array.isArray(crud.actions) ? crud.actions : []).map((action) => ({
+        ...action,
+        handler: action.id === 'view'
+            ? 'view(record)'
+            : action.id === 'edit'
+                ? 'openEdit(record)'
+                : action.id === 'delete'
+                    ? 'openDelete(record)'
+                    : '',
+    }));
+    const rendererConfig = {
+        ...crud,
+        state: {
+            records: 'counts',
+            loading: 'isLoadingList',
+            error: 'listError',
+            search: 'search',
+            sort: 'sort',
+        },
+        handlers: {
+            searchInput: 'handleSearchInput()',
+            toggleSort: 'toggleSort(column)',
+            create: 'openCreate()',
+        },
+        rowDisplay: {
+            ...crud.rowDisplay,
+            cellTextExpression: 'inventoryCountCellText(record, column)',
+        },
+        mobileCard: {
+            ...crud.mobileCard,
+        },
+        actions: actionDefinitions,
+    };
+
+    mountCrudRenderer(crudRootEl, rendererConfig);
+
     const emptyErrors = () => ({
         counted_at: [],
         notes: [],
+        assigned_to_user_id: [],
         general: [],
     });
 
-    const resolveCsrfToken = () => {
-        if (safePayload.csrfToken) {
-            return safePayload.csrfToken;
+    const emptyForm = () => ({
+        id: null,
+        counted_at: '',
+        notes: '',
+        assigned_to_user_id: '',
+        action: '',
+        method: 'POST',
+    });
+
+    const buildCountEndpoint = (template, countId) => {
+        if (!template || countId === null || countId === undefined) {
+            return '';
         }
 
-        const meta = document.querySelector('meta[name=csrf-token]');
-        return meta ? meta.getAttribute('content') : '';
+        return template.replace('{id}', encodeURIComponent(String(countId)));
     };
 
     Alpine.data('inventoryCountsIndex', () => ({
-        csrf: resolveCsrfToken(),
-        storeUrl: safePayload.storeUrl || '',
+        crud,
+        endpoints: crud.endpoints || {},
+        columns: Array.isArray(crud.columns) ? crud.columns : [],
+        headers: crud.headers || {},
+        sortable: Array.isArray(crud.sortable) ? crud.sortable : [],
+        users: Array.isArray(safePayload.users) ? safePayload.users : [],
+        counts: [],
+        csrf: safePayload.csrfToken || '',
         showCountForm: false,
         isEditing: false,
+        isSubmitting: false,
         errors: emptyErrors(),
-        toast: { show: false, type: 'success', message: '' },
-        form: { id: null, counted_at: '', notes: '', action: '', method: 'POST' },
+        isLoadingList: false,
+        listError: '',
+        search: '',
+        sort: {
+            column: 'counted_at',
+            direction: 'desc',
+        },
+        toast: {
+            show: false,
+            type: 'success',
+            message: '',
+            timeoutId: null,
+        },
+        form: emptyForm(),
         init() {
-            if (window.location.hash === '#create-count') {
-                this.openCreate();
-                this.clearCreateHash();
+            this.fetchCounts();
+        },
+        columnHeader(column) {
+            return this.headers[column] || column;
+        },
+        isSortableColumn(column) {
+            return this.sortable.includes(column);
+        },
+        inventoryCountSummary(record) {
+            const parts = [];
+
+            parts.push(`Counter: ${this.truncateCounterEmail(record)}`);
+
+            if (record?.lines_count !== undefined && record?.lines_count !== null) {
+                parts.push(`Items: ${record.lines_count}`);
             }
 
-            window.addEventListener('hashchange', () => {
-                if (window.location.hash === '#create-count') {
-                    this.openCreate();
-                    this.clearCreateHash();
-                }
+            parts.push(`Posted At: ${record?.posted_at || '—'}`);
+
+            return parts.join(' • ');
+        },
+        inventoryCountCellText(record, column) {
+            if (column === 'status') {
+                return record?.status_label || '—';
+            }
+
+            if (column === 'counter') {
+                return record?.counter_email || '—';
+            }
+
+            if (column === 'posted_at') {
+                return record?.posted_at || '—';
+            }
+
+            if (column === 'lines_count') {
+                return record?.lines_count ?? '—';
+            }
+
+            return record?.[column] || '—';
+        },
+        truncateCounterEmail(record) {
+            const email = record?.counter_email || '';
+
+            if (email.length <= 20) {
+                return email || '—';
+            }
+
+            return `${email.slice(0, 20)}…`;
+        },
+        focusCountedAtNextField(fieldId) {
+            if (!fieldId) {
+                return;
+            }
+
+            const nextField = document.getElementById(fieldId);
+
+            if (nextField instanceof HTMLElement && typeof nextField.focus === 'function') {
+                nextField.focus({ preventScroll: true });
+            }
+        },
+        handleCountedAtChange(event) {
+            this.form.counted_at = event.target.value;
+
+            if (!event?.target?.value) {
+                return;
+            }
+
+            requestAnimationFrame(() => {
+                event.target.blur();
+                this.focusCountedAtNextField('notes');
             });
         },
         normalizeErrors(errors) {
@@ -48,191 +177,228 @@ export function mount(rootEl, payload) {
                 ...errors,
                 counted_at: Array.isArray(errors.counted_at) ? errors.counted_at : [],
                 notes: Array.isArray(errors.notes) ? errors.notes : [],
+                assigned_to_user_id: Array.isArray(errors.assigned_to_user_id) ? errors.assigned_to_user_id : [],
                 general: Array.isArray(errors.general) ? errors.general : [],
             };
         },
-        setCreateHash() {
-            window.location.hash = '#create-count';
+        showToast(type, message) {
+            this.toast.type = type;
+            this.toast.message = message;
+            this.toast.show = true;
+
+            if (this.toast.timeoutId) {
+                clearTimeout(this.toast.timeoutId);
+            }
+
+            this.toast.timeoutId = setTimeout(() => {
+                this.toast.show = false;
+            }, 2500);
         },
-        openCreate() {
-            if (!this.storeUrl) {
+        async fetchCounts() {
+            await this.crud.fetchList({
+                search: this.search,
+                sort: this.sort,
+                onStart: () => {
+                    this.isLoadingList = true;
+                    this.listError = '';
+                },
+                onSuccess: (data) => {
+                    this.counts = Array.isArray(data?.data) ? data.data : [];
+
+                    if (data?.meta?.sort?.column && data?.meta?.sort?.direction) {
+                        this.sort = {
+                            column: data.meta.sort.column,
+                            direction: data.meta.sort.direction,
+                        };
+                    }
+                },
+                onValidationError: () => {
+                    this.listError = 'Unable to load inventory counts.';
+                },
+                onError: () => {
+                    this.listError = 'Unable to load inventory counts.';
+                },
+                onFinally: () => {
+                    this.isLoadingList = false;
+                },
+            });
+        },
+        handleSearchInput() {
+            this.fetchCounts();
+        },
+        toggleSort(column) {
+            if (!this.isSortableColumn(column)) {
                 return;
             }
 
+            this.sort = this.crud.nextSort(this.sort, column);
+            this.fetchCounts();
+        },
+        openCreate() {
             this.isEditing = false;
             this.errors = emptyErrors();
             this.form = {
                 id: null,
                 counted_at: '',
                 notes: '',
-                action: this.storeUrl,
+                assigned_to_user_id: '',
+                action: this.endpoints.create || '',
                 method: 'POST',
             };
-            this.showCountForm = true;
+            this.showCountForm = Boolean(this.form.action);
         },
-        clearCreateHash() {
-            history.replaceState(null, '', window.location.pathname + window.location.search);
-        },
-        openEdit(event) {
-            const row = event.target.closest('tr');
-            if (!row) {
+        openEdit(record) {
+            if (!record || record.status !== 'draft') {
+                this.view(record);
                 return;
             }
 
             this.isEditing = true;
             this.errors = emptyErrors();
             this.form = {
-                id: row.dataset.countId,
-                counted_at: row.dataset.countedAtIso,
-                notes: row.dataset.notes || '',
-                action: row.dataset.updateUrl,
+                id: record.id,
+                counted_at: record.counted_at_iso || '',
+                notes: record.notes || '',
+                assigned_to_user_id: record.assigned_to_user_id || '',
+                action: record.update_url || buildCountEndpoint(this.endpoints.update, record.id),
                 method: 'PATCH',
             };
-            this.showCountForm = true;
+            this.showCountForm = Boolean(this.form.action);
         },
         closeCountForm() {
             this.showCountForm = false;
         },
         async submitCountForm() {
             this.errors = emptyErrors();
+            this.isSubmitting = true;
 
-            const response = await fetch(this.form.action, {
-                method: this.form.method,
-                headers: {
-                    Accept: 'application/json',
-                    'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': this.csrf,
-                },
+            const onValidationError = (data) => {
+                this.errors = this.normalizeErrors(data?.errors);
+
+                if (!data?.errors) {
+                    this.errors.general = [data?.message || 'Unable to save count.'];
+                }
+            };
+
+            const onError = () => {
+                this.showToast('error', 'Unable to save count.');
+            };
+
+            if (this.form.method === 'POST') {
+                await this.crud.submitCreate({
+                    body: {
+                        counted_at: this.form.counted_at,
+                        notes: this.form.notes,
+                        assigned_to_user_id: this.form.assigned_to_user_id,
+                    },
+                    csrfToken: this.csrf,
+                    onValidationError,
+                    onError,
+                    onSuccess: async (data) => {
+                        const detailUrl = this.crud.buildDetailUrl(data?.count);
+
+                        if (detailUrl) {
+                            window.location.assign(detailUrl);
+                            return;
+                        }
+
+                        await this.fetchCounts();
+                        this.showToast('success', 'Inventory count saved.');
+                        this.closeCountForm();
+                    },
+                    onFinally: () => {
+                        this.isSubmitting = false;
+                    },
+                });
+
+                return;
+            }
+
+            try {
+                const response = await fetch(this.form.action, {
+                    method: this.form.method,
+                    headers: {
+                        Accept: 'application/json',
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': this.csrf,
+                    },
                 body: JSON.stringify({
                     counted_at: this.form.counted_at,
                     notes: this.form.notes,
+                    assigned_to_user_id: this.form.assigned_to_user_id,
                 }),
             });
 
-            const data = await response.json();
+                const data = await response.json();
 
-            if (!response.ok) {
                 if (response.status === 422) {
-                    this.errors = this.normalizeErrors(data.errors);
-
-                    if (!data.errors) {
-                        this.errors.general = [data.message || 'Unable to save count.'];
-                    }
-
+                    onValidationError(data);
                     return;
                 }
 
-                this.showToast('error', data.message || 'Unable to save count.');
-                return;
-            }
+                if (!response.ok) {
+                    onError();
+                    return;
+                }
 
-            if (this.isEditing) {
-                this.updateRow(data.count);
-            } else {
-                this.insertRow(data.count);
+                await this.fetchCounts();
+                this.showToast('success', 'Inventory count saved.');
+                this.closeCountForm();
+            } catch (error) {
+                onError();
+            } finally {
+                this.isSubmitting = false;
             }
-
-            this.showToast('success', 'Inventory count saved.');
-            this.closeCountForm();
         },
-        async deleteCount(event) {
-            const row = event.target.closest('tr');
-            if (!row) {
+        async openDelete(record) {
+            if (!record) {
                 return;
             }
 
-            if (!confirm('Delete this inventory count?')) {
+            if (record.status !== 'draft') {
+                this.showToast('error', 'Inventory count is posted and cannot be modified.');
                 return;
             }
 
-            const response = await fetch(row.dataset.deleteUrl, {
-                method: 'DELETE',
-                headers: {
-                    Accept: 'application/json',
-                    'X-CSRF-TOKEN': this.csrf,
-                },
-            });
-
-            const data = await response.json();
-
-            if (!response.ok) {
-                this.showToast('error', data.message || 'Unable to delete count.');
+            if (!window.confirm('Delete this inventory count?')) {
                 return;
             }
 
-            row.remove();
-            this.showToast('success', 'Inventory count deleted.');
+            const deleteUrl = record.delete_url || buildCountEndpoint(this.endpoints.delete, record.id);
+
+            if (!deleteUrl) {
+                this.showToast('error', 'Unable to delete count.');
+                return;
+            }
+
+            try {
+                const response = await fetch(deleteUrl, {
+                    method: 'DELETE',
+                    headers: {
+                        Accept: 'application/json',
+                        'X-CSRF-TOKEN': this.csrf,
+                    },
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    this.showToast('error', data?.message || 'Unable to delete count.');
+                    return;
+                }
+
+                await this.fetchCounts();
+                this.showToast('success', 'Inventory count deleted.');
+            } catch (error) {
+                this.showToast('error', 'Unable to delete count.');
+            }
         },
-        ensureCountsTable() {
-            if (this.$refs.countsTableBody) {
+        view(record) {
+            if (!record?.show_url) {
                 return;
             }
 
-            if (!this.$refs.countsTableContainer || !this.$refs.emptyStateContainer) {
-                return;
-            }
-
-            this.$refs.emptyStateContainer.classList.add('hidden');
-            this.$refs.countsTableContainer.classList.remove('hidden');
-        },
-        insertRow(count) {
-            this.ensureCountsTable();
-
-            if (!this.$refs.countsTableBody) {
-                this.showToast('error', 'Unable to render new row.');
-                return;
-            }
-
-            const template = this.$refs.countRowTemplate.content.cloneNode(true);
-            const row = template.querySelector('tr');
-
-            this.applyRowData(row, count);
-
-            this.$refs.countsTableBody.prepend(row);
-            window.Alpine.initTree(row);
-        },
-        updateRow(count) {
-            if (!this.$refs.countsTableBody) {
-                return;
-            }
-
-            const selector = '[data-count-id=\'' + count.id + '\']';
-            const row = this.$refs.countsTableBody.querySelector(selector);
-
-            if (!row) {
-                return;
-            }
-
-            this.applyRowData(row, count);
-        },
-        applyRowData(row, count) {
-            row.dataset.countId = count.id;
-            row.dataset.countedAt = count.counted_at;
-            row.dataset.countedAtIso = count.counted_at_iso;
-            row.dataset.notes = count.notes || '';
-            row.dataset.status = count.status;
-            row.dataset.postedAt = count.posted_at_display || '';
-            row.dataset.postedAtIso = count.posted_at_iso || '';
-            row.dataset.linesCount = count.lines_count;
-            row.dataset.showUrl = count.show_url;
-            row.dataset.updateUrl = count.update_url;
-            row.dataset.deleteUrl = count.delete_url;
-
-            row.querySelector('[data-role=\'counted-at\']').textContent = count.counted_at;
-            row.querySelector('[data-role=\'status\']').textContent = this.formatStatus(count.status);
-            row.querySelector('[data-role=\'lines-count\']').textContent = count.lines_count;
-            row.querySelector('[data-role=\'posted-at\']').textContent = count.posted_at_display || '—';
-            row.querySelector('[data-role=\'show-link\']').setAttribute('href', count.show_url);
-        },
-        formatStatus(status) {
-            return status === 'posted' ? 'Posted' : 'Draft';
-        },
-        showToast(type, message) {
-            this.toast = { show: true, type: type, message: message };
-
-            setTimeout(() => {
-                this.toast.show = false;
-            }, 2500);
+            window.location.assign(record.show_url);
         },
     }));
 }

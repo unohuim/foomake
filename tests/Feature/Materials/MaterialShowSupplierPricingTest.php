@@ -699,6 +699,7 @@ it('17. js crud section source uses config driven row actions without global sta
     $source = file_get_contents(resource_path('js/lib/js-crud-section.js'));
 
     expect($source)->toContain('visibleActions(record)')
+        ->and($source)->toContain('showRowActionsMenu')
         ->and($source)->toContain('section.actions')
         ->and($source)->toContain('action.type')
         ->and($source)->toContain("case 'custom'")
@@ -795,6 +796,29 @@ it('18d. js crud section supports a read only view action without core changes',
     expect($source)->toContain("case 'view'")
         ->and($source)->toContain("case 'custom'")
         ->and($source)->toContain('urlField');
+});
+
+it('18e. js crud section card shell does not clip row action dropdowns', function (): void {
+    $source = file_get_contents(resource_path('js/lib/js-crud-section.js'));
+
+    expect($source)->toContain('data-js-crud-section-card')
+        ->and($source)->toContain('overflow-visible rounded-2xl')
+        ->and($source)->not->toContain('overflow-hidden rounded-2xl');
+});
+
+it('18f. js crud section row action menu wrapper keeps menus above surrounding section content', function (): void {
+    $source = file_get_contents(resource_path('js/lib/js-crud-section.js'));
+
+    expect($source)->toContain('class="relative inline-flex overflow-visible"')
+        ->and($source)->toContain('absolute right-0 z-30 mt-2 w-40 rounded-md border border-gray-200 bg-white py-1 shadow-lg');
+});
+
+it('18g. js crud section keeps row action menus enabled by default unless a section disables them explicitly', function (): void {
+    $source = file_get_contents(resource_path('js/lib/js-crud-section.js'));
+
+    expect($source)->toContain('showRowActionsMenu: safeConfig.showRowActionsMenu !== false')
+        ->and($source)->toContain('x-show="section.showRowActionsMenu && visibleActions(record).length > 0"')
+        ->and($source)->toContain('x-show="!section.showRowActionsMenu && visibleActions(record).length > 0"');
 });
 
 it('19. material detail page module mounts the shared js crud section component through config and adapters', function (): void {

@@ -64,6 +64,7 @@ beforeEach(function () {
             'tenant_id' => $tenant->id,
             'name' => 'Customer ' . $customerCounter,
             'status' => 'active',
+            'customer_type' => 'business',
             'notes' => null,
             'created_at' => now(),
             'updated_at' => now(),
@@ -135,18 +136,21 @@ it('5. customer can be created via AJAX', function () {
     $response = ($this->postStore)($user, [
         'name' => 'Northwind Foods',
         'status' => 'inactive',
+        'customer_type' => 'consumer',
         'notes' => 'Primary CRM account',
     ]);
 
     $response->assertCreated()
         ->assertJsonPath('data.name', 'Northwind Foods')
         ->assertJsonPath('data.status', 'inactive')
+        ->assertJsonPath('data.customer_type', 'consumer')
         ->assertJsonPath('data.notes', 'Primary CRM account');
 
     $this->assertDatabaseHas('customers', [
         'tenant_id' => $tenant->id,
         'name' => 'Northwind Foods',
         'status' => 'inactive',
+        'customer_type' => 'consumer',
         'notes' => 'Primary CRM account',
     ]);
 });
@@ -173,13 +177,68 @@ it('7. status defaults correctly on create', function () {
     ]);
 
     $response->assertCreated()
-        ->assertJsonPath('data.status', 'active');
+        ->assertJsonPath('data.status', 'active')
+        ->assertJsonPath('data.customer_type', 'business');
 
     $this->assertDatabaseHas('customers', [
         'tenant_id' => $tenant->id,
         'name' => 'Default Status Customer',
         'status' => 'active',
+        'customer_type' => 'business',
     ]);
+});
+
+it('7a. customer type defaults to business on create', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    ($this->grantPermission)($user, 'sales-customers-manage');
+
+    ($this->postStore)($user, [
+        'name' => 'Default Type Customer',
+    ])->assertCreated()
+        ->assertJsonPath('data.customer_type', 'business');
+
+    $this->assertDatabaseHas('customers', [
+        'tenant_id' => $tenant->id,
+        'name' => 'Default Type Customer',
+        'customer_type' => 'business',
+    ]);
+});
+
+it('7b. business customer type is accepted on create', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    ($this->grantPermission)($user, 'sales-customers-manage');
+
+    ($this->postStore)($user, [
+        'name' => 'Business Customer',
+        'customer_type' => 'business',
+    ])->assertCreated()
+        ->assertJsonPath('data.customer_type', 'business');
+});
+
+it('7c. consumer customer type is accepted on create', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    ($this->grantPermission)($user, 'sales-customers-manage');
+
+    ($this->postStore)($user, [
+        'name' => 'Consumer Customer',
+        'customer_type' => 'consumer',
+    ])->assertCreated()
+        ->assertJsonPath('data.customer_type', 'consumer');
+});
+
+it('7d. customer type must be valid on create', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    ($this->grantPermission)($user, 'sales-customers-manage');
+
+    ($this->postStore)($user, [
+        'name' => 'Invalid Type Customer',
+        'customer_type' => 'enterprise',
+    ])->assertStatus(422)
+        ->assertJsonValidationErrors(['customer_type']);
 });
 
 it('8. status must be valid on create', function () {
@@ -283,6 +342,7 @@ it('12. customer detail page loads for same tenant', function () {
         ->assertOk()
         ->assertSee('Customers')
         ->assertSee('Detail Customer')
+        ->assertSee('Business')
         ->assertSee(route('sales.customers.index'), false)
         ->assertDontSee('Back to Customers');
 });
@@ -311,10 +371,12 @@ it('14. customer can be updated via AJAX', function () {
     ($this->patchUpdate)($user, $customer->id, [
         'name' => 'Updated Customer',
         'status' => 'inactive',
+        'customer_type' => 'consumer',
         'notes' => 'Updated notes',
     ])->assertOk()
         ->assertJsonPath('data.name', 'Updated Customer')
         ->assertJsonPath('data.status', 'inactive')
+        ->assertJsonPath('data.customer_type', 'consumer')
         ->assertJsonPath('data.notes', 'Updated notes');
 
     $this->assertDatabaseHas('customers', [
@@ -322,6 +384,7 @@ it('14. customer can be updated via AJAX', function () {
         'tenant_id' => $tenant->id,
         'name' => 'Updated Customer',
         'status' => 'inactive',
+        'customer_type' => 'consumer',
         'notes' => 'Updated notes',
     ]);
 });
@@ -350,6 +413,20 @@ it('16. status must be valid on update', function () {
         'status' => 'pending',
     ])->assertStatus(422)
         ->assertJsonValidationErrors(['status']);
+});
+
+it('16a. customer type must be valid on update', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    ($this->grantPermission)($user, 'sales-customers-manage');
+    $customer = ($this->createCustomer)($tenant);
+
+    ($this->patchUpdate)($user, $customer->id, [
+        'name' => 'Still Valid Name',
+        'status' => 'active',
+        'customer_type' => 'other',
+    ])->assertStatus(422)
+        ->assertJsonValidationErrors(['customer_type']);
 });
 
 it('17. customer can be archived via destroy action', function () {
@@ -483,6 +560,7 @@ it('22. successful AJAX responses return expected structure', function () {
                 'id',
                 'name',
                 'status',
+                'customer_type',
                 'notes',
                 'show_url',
             ],

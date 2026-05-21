@@ -1,63 +1,82 @@
-{{-- resources/views/inventory/counts/show.blade.php --}}
 <x-app-layout>
-    <x-slot name="header">
-        <div class="flex items-center justify-between">
-            <div>
-                <h2 class="font-semibold text-xl text-gray-800 leading-tight">
-                    {{ __('Inventory Count') }}
-                </h2>
-                <p class="text-sm text-gray-500">
-                    {{ $inventoryCount->counted_at->format('Y-m-d H:i') }}
-                </p>
-            </div>
-
-            <div class="flex items-center gap-3">
-                @can('inventory-adjustments-execute')
-                    @if ($inventoryCount->status === 'draft')
-                        <button
-                            type="button"
-                            class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md text-xs font-semibold text-gray-700 uppercase tracking-widest hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition"
-                            @click="$dispatch('inventory-count-open-edit')"
-                        >
-                            {{ __('Edit Count') }}
-                        </button>
-                        <button
-                            type="button"
-                            class="inline-flex items-center px-4 py-2 bg-blue-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition"
-                            @click="$dispatch('inventory-count-open-post')"
-                        >
-                            {{ __('Post Count') }}
-                        </button>
-                    @endif
-                @endcan
-
-                <a
-                    href="{{ route('inventory.counts.index') }}"
-                    class="text-sm text-gray-600 hover:text-gray-900"
-                >
-                    {{ __('Back to Counts') }}
-                </a>
-            </div>
-        </div>
-    </x-slot>
-
-    {{-- Safe payload: no JS inside attributes --}}
     @php
-        $payload = [
-            'count' => [
-                'id' => $inventoryCount->id,
-                'status' => $inventoryCount->status,
-                'countedAt' => $inventoryCount->counted_at->format('Y-m-d H:i'),
-                'countedAtIso' => $inventoryCount->counted_at->format('Y-m-d\TH:i'),
-                'postedAt' => $inventoryCount->posted_at?->format('Y-m-d H:i') ?? '',
-                'postUrl' => route('inventory.counts.post', $inventoryCount),
-                'updateUrl' => route('inventory.counts.update', $inventoryCount),
-                'deleteUrl' => route('inventory.counts.destroy', $inventoryCount),
+        $isDraftSetup = $inventoryCount->workflow_stage_id === null && $inventoryCount->posted_at === null;
+        $breadcrumbItems = [
+            [
+                'label' => 'Home',
+                'url' => url('/'),
             ],
-            'lineCount' => $inventoryCount->lines_count,
-            'lineCreateUrl' => route('inventory.counts.lines.store', $inventoryCount),
+            [
+                'label' => 'Inventory Counts',
+                'url' => route('inventory.counts.index'),
+            ],
+            [
+                'label' => 'ID# ' . $inventoryCount->id,
+                'url' => null,
+            ],
         ];
     @endphp
+
+    <x-slot name="header">
+        <div class="space-y-4">
+            <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                <div class="space-y-2">
+                    <div class="flex items-center gap-3">
+                        <h2 class="font-semibold text-xl text-gray-800 leading-tight">
+                            {{ __('Inventory Count') }}
+                        </h2>
+                        <span class="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-600">
+                            #{{ $inventoryCount->id }}
+                        </span>
+                    </div>
+
+                    <div class="flex flex-wrap items-center gap-2 text-sm text-gray-500">
+                        <span class="rounded-full bg-white px-3 py-1 ring-1 ring-gray-200">
+                            {{ __('Counted') }}: {{ $inventoryCount->counted_at->format('Y-m-d H:i') }}
+                        </span>
+                        <span class="rounded-full bg-white px-3 py-1 ring-1 ring-gray-200">
+                            {{ __('Line Items') }}: {{ $inventoryCount->lines_count }}
+                        </span>
+                        <span class="rounded-full bg-white px-3 py-1 ring-1 ring-gray-200">
+                            {{ __('Workflow Stage') }}: {{ $inventoryCount->workflowStage?->name ?? __('Draft') }}
+                        </span>
+                    </div>
+
+                    <p class="text-sm text-gray-600">
+                        {{ $inventoryCount->notes ?: __('No notes') }}
+                    </p>
+                </div>
+
+                @can('inventory-adjustments-execute')
+                    @if ($previousWorkflowActionLabel || $nextWorkflowActionLabel)
+                        <div x-data="{}" class="flex items-center justify-end gap-3">
+                            @if ($previousWorkflowActionLabel && $previousWorkflowActionEvent)
+                                <button
+                                    type="button"
+                                    class="inline-flex items-center justify-center rounded-md border border-slate-300 px-4 py-2 text-xs font-semibold uppercase tracking-widest text-slate-700 transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-500 focus:ring-offset-2"
+                                    x-on:click.prevent="window.dispatchEvent(new CustomEvent('{{ $previousWorkflowActionEvent }}'))"
+                                >
+                                    {{ $previousWorkflowActionLabel }}
+                                </button>
+                            @endif
+
+                            @if ($nextWorkflowActionLabel && $nextWorkflowActionEvent)
+                            <button
+                                type="button"
+                                class="inline-flex items-center justify-center rounded-md border border-transparent bg-slate-900 px-4 py-2 text-xs font-semibold uppercase tracking-widest text-white transition hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-500 focus:ring-offset-2"
+                                x-on:click.prevent="window.dispatchEvent(new CustomEvent('{{ $nextWorkflowActionEvent }}'))"
+                            >
+                                {{ $nextWorkflowActionLabel }}
+                            </button>
+                            @endif
+                        </div>
+                    @endif
+                @endcan
+            </div>
+
+            <x-resource-breadcrumbs :items="$breadcrumbItems" />
+        </div>
+    </x-slot>
 
     <script type="application/json" id="inventory-count-show-payload">@json($payload)</script>
 
@@ -66,222 +85,102 @@
         data-page="inventory-count-show"
         data-payload="inventory-count-show-payload"
         x-data="inventoryCountShow"
-        @inventory-count-open-edit.window="openEditCount()"
-        @inventory-count-open-post.window="openPostConfirm()"
+        @inventory-count-previous.window="moveToPreviousWorkflowStage()"
+        @inventory-count-submit.window="submitToWorkflow()"
+        @inventory-count-advance.window="advanceWorkflow()"
     >
         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 space-y-6">
-            <div class="bg-white shadow-sm sm:rounded-lg">
-                <div class="p-6 text-gray-900 space-y-4">
-                    <div x-cloak x-show="toast.show" class="fixed top-5 right-5 z-50">
-                        <div
-                            class="px-4 py-2 rounded-md text-sm text-white"
-                            :class="toast.type === 'success' ? 'bg-green-600' : 'bg-red-600'"
-                        >
-                            <span x-text="toast.message"></span>
-                        </div>
-                    </div>
+            <div x-cloak x-show="toast.show" class="fixed top-5 right-5 z-50">
+                <div
+                    class="px-4 py-2 rounded-md text-sm text-white"
+                    :class="toast.type === 'success' ? 'bg-green-600' : 'bg-red-600'"
+                >
+                    <span x-text="toast.message"></span>
+                </div>
+            </div>
 
-                    <div
-                        x-ref="countMeta"
-                        data-counted-at-iso="{{ $inventoryCount->counted_at->format('Y-m-d\TH:i') }}"
-                        data-notes="{{ $inventoryCount->notes ?? '' }}"
-                        data-status="{{ $inventoryCount->status }}"
-                    ></div>
+            <div
+                data-js-crud-section-root
+                data-section-key="countLines"
+            ></div>
 
-                    <div class="grid gap-4 sm:grid-cols-2">
-                        <div>
-                            <p class="text-xs uppercase text-gray-500">{{ __('Status') }}</p>
-                            <p class="text-sm text-gray-900" x-ref="statusDisplay">
-                                {{ ucfirst($inventoryCount->status) }}
-                            </p>
-                        </div>
-                        <div>
-                            <p class="text-xs uppercase text-gray-500">{{ __('Counted At') }}</p>
-                            <p class="text-sm text-gray-900" x-ref="countedAtDisplay">
-                                {{ $inventoryCount->counted_at->format('Y-m-d H:i') }}
-                            </p>
-                        </div>
-                        <div>
-                            <p class="text-xs uppercase text-gray-500">{{ __('Posted At') }}</p>
-                            <p class="text-sm text-gray-900" x-ref="postedAtDisplay">
-                                {{ $inventoryCount->posted_at?->format('Y-m-d H:i') ?? '—' }}
-                            </p>
-                        </div>
-                        <div>
-                            <p class="text-xs uppercase text-gray-500">{{ __('Line Items') }}</p>
-                            <p class="text-sm text-gray-900" x-ref="lineCountDisplay">
-                                {{ $inventoryCount->lines_count }}
-                            </p>
-                        </div>
-                        <div class="sm:col-span-2">
-                            <p class="text-xs uppercase text-gray-500">{{ __('Notes') }}</p>
-                            <p class="text-sm text-gray-900">
-                                {{ $inventoryCount->notes ?: __('No notes') }}
+            <div
+                data-js-crud-section-root
+                data-section-key="tasks"
+            >
+                @php
+                    $currentStageTasks = $payload['count']['current_stage_tasks'] ?? [];
+                @endphp
+
+                <section class="overflow-visible rounded-2xl border border-gray-200 bg-white shadow-sm" data-js-crud-section-card>
+                    <div class="flex items-start justify-between gap-3 px-3 py-4 sm:px-6 sm:py-5">
+                        <div class="min-w-0 flex-1">
+                            <h3 class="text-lg font-semibold text-gray-900">{{ __('Tasks') }}</h3>
+                            <p class="mt-1 text-sm text-gray-500">
+                                {{ __('Complete required workflow tasks before moving the inventory count forward.') }}
                             </p>
                         </div>
                     </div>
 
-                    @can('inventory-adjustments-execute')
-                        @if ($inventoryCount->status === 'draft')
-                            <div class="flex gap-3" x-ref="draftActions">
-                                <button
-                                    type="button"
-                                    class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md text-xs font-semibold text-gray-700 uppercase tracking-widest hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition"
-                                    @click="openEditCount()"
-                                >
-                                    {{ __('Edit Count') }}
-                                </button>
-                                <button
-                                    type="button"
-                                    class="inline-flex items-center px-4 py-2 bg-blue-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition"
-                                    @click="openPostConfirm()"
-                                >
-                                    {{ __('Post Count') }}
-                                </button>
+                    <div class="border-t border-gray-100 px-3 py-4 sm:px-6 sm:py-5">
+                        @if (count($currentStageTasks) > 0)
+                            <div class="space-y-3">
+                                @foreach ($currentStageTasks as $task)
+                                    <article class="rounded-xl border border-gray-100 bg-gray-50 p-3 sm:p-4">
+                                        <div class="flex flex-col sm:flex-row gap-4 sm:items-center sm:justify-between">
+                                            <div class="min-w-0 flex-1">
+                                                <div class="flex items-center gap-3">
+                                                    <p class="truncate text-sm font-semibold text-gray-900">{{ $task['title'] ?? __('Task') }}</p>
+                                                    <span class="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium {{ ($task['is_completed'] ?? false) ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-200 text-gray-700' }}">
+                                                        {{ $task['status'] ?? __('open') }}
+                                                    </span>
+                                                </div>
+                                                <div class="mt-1 flex flex-wrap items-center gap-4">
+                                                    <p class="text-sm text-gray-600">
+                                                        <span class="text-gray-500">{{ __('Assigned By: ') }}</span>
+                                                        <span class="text-gray-700">{{ $task['assigned_by_user_name'] ?? '—' }}</span>
+                                                    </p>
+                                                    @if (($task['assigned_to_display'] ?? '') !== '')
+                                                        <p class="text-sm text-gray-600">
+                                                            <span class="text-gray-500">{{ __('Assigned To: ') }}</span>
+                                                            <span class="text-gray-700">{{ $task['assigned_to_display'] }}</span>
+                                                        </p>
+                                                    @endif
+                                                    @if (($task['completed_by_display'] ?? '') !== '')
+                                                        <p class="text-sm text-gray-600">
+                                                            <span class="text-gray-500">{{ __('Completed By: ') }}</span>
+                                                            <span class="text-gray-700">{{ $task['completed_by_display'] }}</span>
+                                                        </p>
+                                                    @endif
+                                                </div>
+                                            </div>
+
+                                            @if (($task['available_actions'] ?? []) === ['complete'] && ! empty($task['complete_url']))
+                                                <div class="flex items-center justify-end gap-3 self-center">
+                                                    <form method="POST" action="{{ $task['complete_url'] }}">
+                                                        @csrf
+                                                        @method('PATCH')
+                                                        <button
+                                                            type="submit"
+                                                            class="inline-flex items-center rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold uppercase tracking-widest text-slate-700 transition hover:bg-slate-50"
+                                                        >
+                                                            {{ __('Complete') }}
+                                                        </button>
+                                                    </form>
+                                                </div>
+                                            @endif
+                                        </div>
+                                    </article>
+                                @endforeach
+                            </div>
+                        @else
+                            <div class="rounded-xl border border-dashed border-gray-300 px-4 py-8 text-center text-sm text-gray-500">
+                                {{ __('No tasks for the current stage.') }}
                             </div>
                         @endif
-                    @endcan
-                </div>
-            </div>
-
-            <div class="bg-white shadow-sm sm:rounded-lg">
-                <div class="p-6 text-gray-900 space-y-4">
-                    <div class="flex items-center justify-between">
-                        <h3 class="text-sm font-semibold text-gray-800">{{ __('Count Lines') }}</h3>
-
-                        @can('inventory-adjustments-execute')
-                            @if ($inventoryCount->status === 'draft')
-                                <button
-                                    type="button"
-                                    class="inline-flex items-center px-4 py-2 bg-blue-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition"
-                                    @click="openCreateLine()"
-                                    x-ref="lineActions"
-                                >
-                                    {{ __('Add Line') }}
-                                </button>
-                            @endif
-                        @endcan
                     </div>
-
-                    <div
-                        class="text-sm text-gray-600"
-                        x-ref="linesEmptyState"
-                        style="{{ $inventoryCount->lines->isEmpty() ? '' : 'display: none;' }}"
-                    >
-                        <p>{{ __('No count lines yet.') }}</p>
-                    </div>
-
-                    @if ($inventoryCount->lines->isNotEmpty())
-                        <div class="overflow-x-auto">
-                            <table class="min-w-full text-sm">
-                                <thead class="text-left text-gray-500">
-                                    <tr class="border-b border-gray-100">
-                                        <th class="px-3 py-2 font-medium">{{ __('Item') }}</th>
-                                        <th class="px-3 py-2 font-medium">{{ __('Counted Quantity') }}</th>
-                                        <th class="px-3 py-2 font-medium">{{ __('Notes') }}</th>
-                                        <th class="px-3 py-2 text-right font-medium">{{ __('Actions') }}</th>
-                                    </tr>
-                                </thead>
-                                <tbody class="divide-y divide-gray-100" x-ref="linesTableBody">
-                                    @foreach ($inventoryCount->lines as $line)
-                                        <tr
-                                            data-line-id="{{ $line->id }}"
-                                            data-item-id="{{ $line->item_id }}"
-                                            data-counted-quantity="{{ $line->counted_quantity }}"
-                                            data-counted-quantity-display="@qtyForUom($line->counted_quantity, $line->item?->baseUom, 1)"
-                                            data-notes="{{ $line->notes ?? '' }}"
-                                            data-update-url="{{ route('inventory.counts.lines.update', [$inventoryCount, $line]) }}"
-                                            data-delete-url="{{ route('inventory.counts.lines.destroy', [$inventoryCount, $line]) }}"
-                                        >
-                                            <td class="px-3 py-3 text-gray-900" data-role="item-display">
-                                                {{ $line->item->name }} ({{ $line->item->baseUom->symbol }})
-                                            </td>
-                                            <td class="px-3 py-3 text-gray-600" data-role="counted-quantity">
-                                                @qtyForUom($line->counted_quantity, $line->item?->baseUom, 1)
-                                            </td>
-                                            <td class="px-3 py-3 text-gray-600" data-role="notes">
-                                                {{ $line->notes ?? '—' }}
-                                            </td>
-                                            <td class="px-3 py-3 text-right space-x-3">
-                                                @can('inventory-adjustments-execute')
-                                                    @if ($inventoryCount->status === 'draft')
-                                                        <button
-                                                            type="button"
-                                                            class="text-gray-700 hover:text-gray-900"
-                                                            @click="openEditLine($event)"
-                                                        >
-                                                            {{ __('Edit') }}
-                                                        </button>
-                                                        <button
-                                                            type="button"
-                                                            class="text-red-600 hover:text-red-500"
-                                                            @click="deleteLine($event)"
-                                                        >
-                                                            {{ __('Delete') }}
-                                                        </button>
-                                                    @endif
-                                                @endcan
-                                            </td>
-                                        </tr>
-                                    @endforeach
-                                </tbody>
-                            </table>
-                        </div>
-                    @else
-                        <div class="overflow-x-auto" style="display: none;">
-                            <table class="min-w-full text-sm">
-                                <thead class="text-left text-gray-500">
-                                    <tr class="border-b border-gray-100">
-                                        <th class="px-3 py-2 font-medium">{{ __('Item') }}</th>
-                                        <th class="px-3 py-2 font-medium">{{ __('Counted Quantity') }}</th>
-                                        <th class="px-3 py-2 font-medium">{{ __('Notes') }}</th>
-                                        <th class="px-3 py-2 text-right font-medium">{{ __('Actions') }}</th>
-                                    </tr>
-                                </thead>
-                                <tbody class="divide-y divide-gray-100" x-ref="linesTableBody"></tbody>
-                            </table>
-                        </div>
-                    @endif
-                </div>
+                </section>
             </div>
         </div>
-
-        @can('inventory-adjustments-execute')
-            <template x-ref="lineRowTemplate">
-                <tr
-                    data-line-id=""
-                    data-item-id=""
-                    data-counted-quantity=""
-                    data-notes=""
-                    data-update-url=""
-                    data-delete-url=""
-                >
-                    <td class="px-3 py-3 text-gray-900" data-role="item-display"></td>
-                    <td class="px-3 py-3 text-gray-600" data-role="counted-quantity"></td>
-                    <td class="px-3 py-3 text-gray-600" data-role="notes"></td>
-                    <td class="px-3 py-3 text-right space-x-3">
-                        <button type="button" class="text-gray-700 hover:text-gray-900" @click="openEditLine($event)">
-                            {{ __('Edit') }}
-                        </button>
-                        <button type="button" class="text-red-600 hover:text-red-500" @click="deleteLine($event)">
-                            {{ __('Delete') }}
-                        </button>
-                    </td>
-                </tr>
-            </template>
-        @endcan
-
-        @include('inventory.counts.partials.count-form', [
-            'formVar' => 'countForm',
-            'errorsVar' => 'errors',
-            'errorsPrefix' => 'count.',
-            'submitLabel' => __('Save Count'),
-        ])
-
-        @include('inventory.counts.partials.line-form', [
-            'items' => $items,
-        ])
-
-        @include('inventory.counts.partials.post-confirm')
     </div>
 </x-app-layout>

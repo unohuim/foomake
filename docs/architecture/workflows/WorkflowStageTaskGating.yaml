@@ -1,0 +1,32 @@
+name: Workflow Stage Task Gating
+type: Domain Rule
+location:
+  - app/Actions/Workflows/AssertWorkflowStageTasksCompletedAction.php
+  - app/Actions/Workflows/GenerateWorkflowStageTasksAction.php
+  - app/Actions/Sales/MoveSalesOrderToPackingAction.php
+  - app/Actions/Sales/PackSalesOrderAction.php
+  - app/Actions/Inventory/AdvanceInventoryCountWorkflowStageAction.php
+purpose: Define the shared rule that workflow-stage entry creates configured tasks and leaving the current stage is blocked until required tasks are complete.
+when_to_use:
+  - Sales-order operational stage transitions
+  - Inventory-count workflow stage transitions
+  - Any future workflow-domain runtime that adopts generated stage tasks
+when_not_to_use:
+  - Draft setup that remains outside workflow stages
+  - Purchase-order or make-order runtime integration before explicit approval
+rules:
+  - Entering a workflow stage generates tasks from active templates matching the tenant, workflow domain, and entered stage.
+  - Task generation is idempotent for the same domain record, stage, and template.
+  - If no active templates exist for the entered stage, no tasks are generated and the transition remains allowed.
+  - Leaving the current workflow stage must fail while any generated tasks for that current stage remain open.
+  - Task gating applies generically across adopted workflow domains and must not be re-implemented separately per domain.
+  - Assigned users may complete their assigned tasks without inheriting domain-manage permissions solely for task completion.
+public_interface:
+  - AssertWorkflowStageTasksCompletedAction::execute()
+  - GenerateWorkflowStageTasksAction::execute()
+  - docs/architecture/workflows/Task.yaml
+example_usage: |
+  Inventory count submit:
+    count enters Open
+    generate Open-stage tasks from active templates
+    block Open -> Completed until current-stage tasks are complete

@@ -2,7 +2,8 @@
 
 namespace App\Actions\Sales;
 
-use App\Actions\Workflows\GenerateSalesOrderWorkflowTasksAction;
+use App\Actions\Workflows\GenerateWorkflowStageTasksAction;
+use App\Actions\Workflows\ResolveSalesWorkflowStageAction;
 use App\Models\SalesOrder;
 use DomainException;
 use Illuminate\Support\Facades\DB;
@@ -20,14 +21,14 @@ class MoveSalesOrderToPackingAction
     public function execute(
         SalesOrder $salesOrder,
         BuildSalesOrderIssuePlanAction $buildPlanAction,
-        GenerateSalesOrderWorkflowTasksAction $generateWorkflowTasksAction,
+        GenerateWorkflowStageTasksAction $generateWorkflowStageTasksAction,
         string $targetStatus,
         string $targetStageKey
     ): SalesOrder {
         return DB::transaction(function () use (
             $salesOrder,
             $buildPlanAction,
-            $generateWorkflowTasksAction,
+            $generateWorkflowStageTasksAction,
             $targetStatus,
             $targetStageKey
         ): SalesOrder {
@@ -49,7 +50,13 @@ class MoveSalesOrderToPackingAction
                 'status' => $targetStatus,
             ])->save();
 
-            $generateWorkflowTasksAction->execute($lockedOrder, $targetStageKey);
+            $stage = app(ResolveSalesWorkflowStageAction::class)->execute($lockedOrder, $targetStageKey);
+
+            $generateWorkflowStageTasksAction->execute(
+                (int) $lockedOrder->tenant_id,
+                (int) $lockedOrder->id,
+                $stage
+            );
 
             return $lockedOrder->fresh();
         });

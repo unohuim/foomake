@@ -360,6 +360,7 @@ it('14. update accepts all address fields', function () {
     $payload = array_merge([
         'name' => 'Updated Address Customer',
         'status' => 'inactive',
+        'customer_type' => 'consumer',
         'notes' => 'Updated with full address',
     ], ($this->addressPayload)());
 
@@ -392,6 +393,7 @@ it('15. update can clear address fields to null', function () {
     $response = ($this->patchUpdate)($user, $customer->id, [
         'name' => 'Clearable Customer',
         'status' => 'active',
+        'customer_type' => 'business',
         'notes' => null,
         'address_line_1' => null,
         'address_line_2' => null,
@@ -432,6 +434,7 @@ it('16. update rejects invalid latitude', function () {
     ($this->patchUpdate)($user, $customer->id, [
         'name' => 'Latitude Validation Customer',
         'status' => 'active',
+        'customer_type' => 'business',
         'latitude' => 'north',
     ])
         ->assertStatus(422)
@@ -447,10 +450,54 @@ it('17. update rejects invalid longitude', function () {
     ($this->patchUpdate)($user, $customer->id, [
         'name' => 'Longitude Validation Customer',
         'status' => 'active',
+        'customer_type' => 'business',
         'longitude' => 'west',
     ])
         ->assertStatus(422)
         ->assertJsonValidationErrors(['longitude']);
+});
+
+it('17a. update without customer type succeeds and preserves the existing type', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    ($this->grantPermission)($user, 'sales-customers-manage');
+    $customer = ($this->createCustomer)($tenant, [
+        'name' => 'Preserved Type Customer',
+        'customer_type' => 'consumer',
+    ]);
+
+    ($this->patchUpdate)($user, $customer->id, [
+        'name' => 'Preserved Type Customer',
+        'status' => 'inactive',
+        'notes' => 'Customer type omitted on update',
+    ])->assertOk();
+
+    $updatedCustomer = ($this->fetchCustomer)($customer->id);
+
+    expect($updatedCustomer->customer_type)->toBe('consumer')
+        ->and($updatedCustomer->status)->toBe('inactive');
+});
+
+it('17b. address updates without customer type still succeed', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    ($this->grantPermission)($user, 'sales-customers-manage');
+    $customer = ($this->createCustomer)($tenant, [
+        'name' => 'Address Only Type Preserve Customer',
+        'customer_type' => 'consumer',
+    ]);
+
+    ($this->patchUpdate)($user, $customer->id, array_merge([
+        'name' => 'Address Only Type Preserve Customer',
+        'status' => 'active',
+    ], ($this->addressPayload)([
+        'city' => 'Montreal',
+    ])))->assertOk();
+
+    $updatedCustomer = ($this->fetchCustomer)($customer->id);
+
+    expect($updatedCustomer->customer_type)->toBe('consumer')
+        ->and($updatedCustomer->city)->toBe('Montreal');
 });
 
 it('18. detail view displays address fields', function () {
@@ -584,6 +631,7 @@ it('23. successful update response includes address data', function () {
     ($this->patchUpdate)($user, $customer->id, array_merge([
         'name' => 'Structured Update Address Customer',
         'status' => 'inactive',
+        'customer_type' => 'business',
         'notes' => 'Now has address data',
     ], ($this->addressPayload)()))
         ->assertOk()
@@ -674,6 +722,7 @@ it('29. guest cannot update customer address', function () {
     $response = $this->patchJson(route('sales.customers.update', $customer->id), array_merge([
         'name' => 'Guest Update Address Customer',
         'status' => 'active',
+        'customer_type' => 'business',
     ], ($this->addressPayload)()));
 
     $response->assertUnauthorized();
@@ -689,6 +738,7 @@ it('30. user without permission is denied customer address update', function () 
     ($this->patchUpdate)($user, $customer->id, array_merge([
         'name' => 'Forbidden Update Address Customer',
         'status' => 'active',
+        'customer_type' => 'business',
     ], ($this->addressPayload)()))
         ->assertForbidden();
 });
@@ -705,6 +755,7 @@ it('31. other-tenant customer address update is inaccessible', function () {
     ($this->patchUpdate)($user, $customer->id, array_merge([
         'name' => 'Cross Tenant Update Address Customer',
         'status' => 'active',
+        'customer_type' => 'business',
     ], ($this->addressPayload)()))
         ->assertNotFound();
 });

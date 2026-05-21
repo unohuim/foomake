@@ -14,6 +14,7 @@ use App\Models\Tenant;
 use App\Models\Uom;
 use App\Models\UomCategory;
 use App\Models\User;
+use App\Models\WorkflowStage;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -228,6 +229,33 @@ beforeEach(function () {
             ->whereIn('source_id', $lineIds->all() === [] ? [0] : $lineIds->all())
             ->orderBy('id')
             ->get();
+    };
+
+    $this->markInventoryEffectStage = function (Tenant $tenant, string $stageKey): void {
+        WorkflowStage::withoutGlobalScopes()
+            ->where('tenant_id', $tenant->id)
+            ->where('workflow_domain_id', function ($query): void {
+                $query->select('id')
+                    ->from('workflow_domains')
+                    ->where('key', 'sales')
+                    ->limit(1);
+            })
+            ->update([
+                'is_inventory_effect_stage' => false,
+            ]);
+
+        WorkflowStage::withoutGlobalScopes()
+            ->where('tenant_id', $tenant->id)
+            ->where('workflow_domain_id', function ($query): void {
+                $query->select('id')
+                    ->from('workflow_domains')
+                    ->where('key', 'sales')
+                    ->limit(1);
+            })
+            ->where('key', $stageKey)
+            ->update([
+                'is_inventory_effect_stage' => true,
+            ]);
     };
 
     $this->asSixDecimals = fn (string|int $quantity): string => bcadd((string) $quantity, '0', 6);
@@ -745,4 +773,117 @@ it('58. make orders remain manufacturing only while sales order packing uses ful
         ->assertOk();
 
     expect($response->getContent())->not->toContain($recipe->name);
+});
+
+it('59. sales inventory posting follows the marked inventory-effect stage instead of hardcoded packed', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $customer = ($this->createCustomer)($tenant);
+    $uom = ($this->makeUom)($tenant);
+    $item = ($this->createItem)($tenant, $uom);
+    $order = ($this->createSalesOrder)($tenant, $customer->id);
+    ($this->createLine)($tenant, $order, $item, ['quantity' => '2.000000']);
+    ($this->createReceipt)($tenant, $item, '5.000000');
+    ($this->grantPermission)($user, 'sales-sales-orders-manage');
+    ($this->markInventoryEffectStage)($tenant, 'shipping');
+
+    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKING)->assertOk();
+    expect(($this->fetchOrderMoves)($order))->toHaveCount(0);
+
+    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKED)->assertOk();
+    expect(($this->fetchOrderMoves)($order))->toHaveCount(0);
+
+    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_SHIPPING)->assertOk();
+
+    expect(($this->fetchOrderMoves)($order))->toHaveCount(1)
+        ->and(($this->fetchOrder)($order)->status)->toBe(SalesOrder::STATUS_SHIPPING);
+});
+
+it('60. entering an unmarked packed stage creates no stock moves when another stage owns the inventory effect', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $customer = ($this->createCustomer)($tenant);
+    $uom = ($this->makeUom)($tenant);
+    $item = ($this->createItem)($tenant, $uom);
+    $order = ($this->createSalesOrder)($tenant, $customer->id);
+    ($this->createLine)($tenant, $order, $item, ['quantity' => '1.000000']);
+    ($this->createReceipt)($tenant, $item, '5.000000');
+    ($this->grantPermission)($user, 'sales-sales-orders-manage');
+    ($this->markInventoryEffectStage)($tenant, 'shipping');
+
+    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKING)->assertOk();
+    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKED)->assertOk();
+
+    expect(($this->fetchOrderMoves)($order))->toHaveCount(0)
+        ->and(($this->fetchOrder)($order)->status)->toBe(SalesOrder::STATUS_PACKED);
+});
+
+it('61. failure at the marked inventory-effect stage leaves the sales order in the previous stage with no stock moves', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $customer = ($this->createCustomer)($tenant);
+    $uom = ($this->makeUom)($tenant);
+    $item = ($this->createItem)($tenant, $uom);
+    $order = ($this->createSalesOrder)($tenant, $customer->id);
+    ($this->createLine)($tenant, $order, $item, ['quantity' => '2.000000']);
+    ($this->createReceipt)($tenant, $item, '2.000000');
+    ($this->grantPermission)($user, 'sales-sales-orders-manage');
+    ($this->markInventoryEffectStage)($tenant, 'shipping');
+
+    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKING)->assertOk();
+    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKED)->assertOk();
+
+    ($this->createAdjustmentIssue)($tenant, $item, '2.000000');
+
+    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_SHIPPING)
+        ->assertStatus(422)
+        ->assertJsonValidationErrors(['status']);
+
+    expect(($this->fetchOrder)($order)->status)->toBe(SalesOrder::STATUS_PACKED)
+        ->and(($this->fetchOrderMoves)($order))->toHaveCount(0);
+});
+
+it('62. default packed marker continues to preserve the existing sales inventory timing', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $customer = ($this->createCustomer)($tenant);
+    $uom = ($this->makeUom)($tenant);
+    $item = ($this->createItem)($tenant, $uom);
+    $order = ($this->createSalesOrder)($tenant, $customer->id);
+    ($this->createLine)($tenant, $order, $item, ['quantity' => '2.000000']);
+    ($this->createReceipt)($tenant, $item, '5.000000');
+    ($this->grantPermission)($user, 'sales-sales-orders-manage');
+
+    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKING)->assertOk();
+    expect(($this->fetchOrderMoves)($order))->toHaveCount(0);
+
+    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKED)->assertOk();
+
+    expect(($this->fetchOrderMoves)($order))->toHaveCount(1)
+        ->and(($this->fetchOrder)($order)->status)->toBe(SalesOrder::STATUS_PACKED);
+});
+
+it('63. cancellation still creates reversing moves after inventory posts at a moved marker stage', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $customer = ($this->createCustomer)($tenant);
+    $uom = ($this->makeUom)($tenant);
+    $item = ($this->createItem)($tenant, $uom);
+    $order = ($this->createSalesOrder)($tenant, $customer->id);
+    ($this->createLine)($tenant, $order, $item, ['quantity' => '2.000000']);
+    ($this->createReceipt)($tenant, $item, '5.000000');
+    ($this->grantPermission)($user, 'sales-sales-orders-manage');
+    ($this->markInventoryEffectStage)($tenant, 'packing');
+
+    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKING)->assertOk();
+
+    $beforeCancelCount = ($this->fetchOrderMoves)($order)->count();
+
+    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_CANCELLED)->assertOk();
+
+    $moves = ($this->fetchOrderMoves)($order);
+
+    expect($moves)->toHaveCount($beforeCancelCount * 2)
+        ->and($moves->last()->quantity)->toBe('2.000000')
+        ->and(($this->fetchOrder)($order)->status)->toBe(SalesOrder::STATUS_CANCELLED);
 });

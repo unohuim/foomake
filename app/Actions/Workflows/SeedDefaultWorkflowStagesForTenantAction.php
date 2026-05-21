@@ -8,7 +8,7 @@ use App\Models\WorkflowStage;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * Seed the default sales workflow stages for a tenant.
+ * Seed the default workflow stages for a tenant.
  */
 class SeedDefaultWorkflowStagesForTenantAction
 {
@@ -23,29 +23,62 @@ class SeedDefaultWorkflowStagesForTenantAction
 
         app(EnsureWorkflowDomainsSeededAction::class)->execute();
 
-        $salesDomainId = WorkflowDomain::query()
-            ->where('key', 'sales')
-            ->value('id');
+        $domains = WorkflowDomain::query()
+            ->whereIn('key', ['sales', 'purchasing', 'manufacturing', 'inventory'])
+            ->get()
+            ->keyBy('key');
 
-        if (! $salesDomainId) {
-            return;
-        }
+        foreach ($this->defaultStages() as $domainKey => $stages) {
+            $domainId = $domains->get($domainKey)?->id;
 
-        foreach ([
-            ['key' => 'packing', 'name' => 'Packing', 'sort_order' => 10],
-            ['key' => 'packed', 'name' => 'Packed', 'sort_order' => 20],
-            ['key' => 'shipping', 'name' => 'Shipping', 'sort_order' => 30],
-        ] as $stage) {
-            WorkflowStage::withoutGlobalScopes()->updateOrCreate([
-                'tenant_id' => $tenant->id,
-                'workflow_domain_id' => $salesDomainId,
-                'key' => $stage['key'],
-            ], [
-                'name' => $stage['name'],
-                'description' => null,
-                'sort_order' => $stage['sort_order'],
-                'is_active' => true,
-            ]);
+            if (! $domainId) {
+                continue;
+            }
+
+            foreach ($stages as $stage) {
+                WorkflowStage::withoutGlobalScopes()->updateOrCreate([
+                    'tenant_id' => $tenant->id,
+                    'workflow_domain_id' => $domainId,
+                    'key' => $stage['key'],
+                ], [
+                    'name' => $stage['name'],
+                    'description' => null,
+                    'sort_order' => $stage['sort_order'],
+                    'is_active' => true,
+                    'is_inventory_effect_stage' => $stage['is_inventory_effect_stage'],
+                ]);
+            }
+
+            app(EnforceWorkflowStageInventoryEffectInvariantAction::class)
+                ->assertDomain($tenant->id, (int) $domainId);
         }
+    }
+
+    /**
+     * Return the seeded default stages for each supported workflow domain.
+     *
+     * @return array<string, array<int, array<string, bool|int|string>>>
+     */
+    private function defaultStages(): array
+    {
+        return [
+            'sales' => [
+                ['key' => 'packing', 'name' => 'Packing', 'sort_order' => 10, 'is_inventory_effect_stage' => false],
+                ['key' => 'packed', 'name' => 'Packed', 'sort_order' => 20, 'is_inventory_effect_stage' => true],
+                ['key' => 'shipping', 'name' => 'Shipping', 'sort_order' => 30, 'is_inventory_effect_stage' => false],
+            ],
+            'purchasing' => [
+                ['key' => 'receiving', 'name' => 'Receiving', 'sort_order' => 10, 'is_inventory_effect_stage' => true],
+                ['key' => 'completed', 'name' => 'Completed', 'sort_order' => 20, 'is_inventory_effect_stage' => false],
+            ],
+            'manufacturing' => [
+                ['key' => 'production', 'name' => 'Production', 'sort_order' => 10, 'is_inventory_effect_stage' => true],
+                ['key' => 'completed', 'name' => 'Completed', 'sort_order' => 20, 'is_inventory_effect_stage' => false],
+            ],
+            'inventory' => [
+                ['key' => 'open', 'name' => 'Open', 'sort_order' => 10, 'is_inventory_effect_stage' => false],
+                ['key' => 'completed', 'name' => 'Completed', 'sort_order' => 20, 'is_inventory_effect_stage' => true],
+            ],
+        ];
     }
 }

@@ -16,6 +16,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property int $tenant_id
  * @property string $name
  * @property string $status
+ * @property string $customer_type
  * @property string|null $notes
  * @property string|null $address_line_1
  * @property string|null $address_line_2
@@ -38,6 +39,9 @@ class Customer extends Model
     public const STATUS_INACTIVE = 'inactive';
     public const STATUS_ARCHIVED = 'archived';
 
+    public const TYPE_BUSINESS = 'business';
+    public const TYPE_CONSUMER = 'consumer';
+
     /**
      * @var list<string>
      */
@@ -45,6 +49,7 @@ class Customer extends Model
         'tenant_id',
         'name',
         'status',
+        'customer_type',
         'notes',
         'address_line_1',
         'address_line_2',
@@ -122,5 +127,39 @@ class Customer extends Model
             self::STATUS_INACTIVE,
             self::STATUS_ARCHIVED,
         ];
+    }
+
+    /**
+     * Return the valid customer types.
+     *
+     * @return list<string>
+     */
+    public static function types(): array
+    {
+        return [
+            self::TYPE_BUSINESS,
+            self::TYPE_CONSUMER,
+        ];
+    }
+
+    /**
+     * Return the UI labels for customer types.
+     *
+     * @return array<string, string>
+     */
+    public static function typeLabels(): array
+    {
+        return [
+            self::TYPE_BUSINESS => 'Business',
+            self::TYPE_CONSUMER => 'Consumer',
+        ];
+    }
+
+    /**
+     * Resolve the current customer type label.
+     */
+    public function customerTypeLabel(): string
+    {
+        return self::typeLabels()[$this->customer_type] ?? ucfirst($this->customer_type);
     }
 }

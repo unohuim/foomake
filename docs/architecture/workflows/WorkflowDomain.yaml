@@ -18,9 +18,9 @@ rules:
   - Workflow domains are fixed system-owned records.
   - Workflow domains scope workflow stages and workflow task templates.
   - Admin users are not intended to create, edit, or delete workflow domains.
-  - Canonical workflow-domain keys are sales, purchasing, and manufacturing.
+  - Canonical workflow-domain keys are sales, purchasing, manufacturing, and inventory.
   - Workflow domains must be seeded deterministically and idempotently.
-  - Sales is the first runtime consumer, but the abstraction supports purchasing and manufacturing later.
+  - Sales is the first runtime workflow-stage consumer, but the abstraction also scopes purchasing, manufacturing, and inventory stage configuration.
 public_interface:
   - EnsureWorkflowDomainsSeededAction::execute()
   - WorkflowDomain::query()

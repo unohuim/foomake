@@ -19,6 +19,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property string|null $description
  * @property int $sort_order
  * @property bool $is_active
+ * @property bool $is_inventory_effect_stage
  */
 class WorkflowStage extends Model
 {
@@ -36,6 +37,7 @@ class WorkflowStage extends Model
         'description',
         'sort_order',
         'is_active',
+        'is_inventory_effect_stage',
     ];
 
     /**
@@ -43,6 +45,7 @@ class WorkflowStage extends Model
      */
     protected $casts = [
         'is_active' => 'boolean',
+        'is_inventory_effect_stage' => 'boolean',
     ];
 
     /**
@@ -77,4 +80,3 @@ class WorkflowStage extends Model
         return $this->hasMany(Task::class);
     }
 }
-

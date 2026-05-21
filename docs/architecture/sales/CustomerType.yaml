@@ -1,0 +1,39 @@
+name: Customer Type
+type: Customer Classification
+location:
+  - app/Models/Customer.php
+  - app/Http/Controllers/CustomerController.php
+  - database/migrations/2026_05_21_000002_add_customer_type_to_customers_table.php
+  - resources/js/pages/sales-customers-index.js
+  - resources/views/sales/customers/index.blade.php
+  - resources/views/sales/customers/show.blade.php
+purpose: Define the tenant-scoped customer classification used by customer CRUD flows and default imported-customer creation.
+when_to_use:
+  - Creating or updating customer records
+  - Rendering customer type in customer create/edit/detail UI
+  - Defaulting imported customers to the standard business classification
+when_not_to_use:
+  - Contact-level role or job-title classification
+  - Sales-order lifecycle or workflow-stage logic
+rules:
+  - customer_type is stored on customers.customer_type.
+  - Allowed values are business and consumer only.
+  - The default customer_type is business.
+  - Customer create and update validation must reject any value outside the allowed set.
+  - Customer create may omit customer_type and must default it to business.
+  - Customer update may omit customer_type and must preserve the existing stored value when omitted.
+  - Customer detail and CRUD payloads should expose both the stored customer_type and a UI-facing label.
+  - Customer import flows default customer_type to business unless an explicit app-level override is introduced later.
+public_interface:
+  - Customer::types()
+  - Customer::typeLabels()
+  - Customer::customerTypeLabel()
+  - sales.customers.store
+  - sales.customers.update
+example_usage: |
+  Customer::query()->create([
+      'tenant_id' => $tenantId,
+      'name' => 'Northwind Foods',
+      'status' => Customer::STATUS_ACTIVE,
+      'customer_type' => Customer::TYPE_BUSINESS,
+  ]);

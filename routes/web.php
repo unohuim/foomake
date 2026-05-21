@@ -53,6 +53,9 @@ Route::middleware('auth')->group(function () {
     Route::get('/inventory/counts', [InventoryCountController::class, 'index'])
         ->name('inventory.counts.index');
     Route::get('/manufacturing/inventory-counts', [InventoryCountController::class, 'index']);
+    Route::get('/inventory/counts/list', [InventoryCountController::class, 'list'])
+        ->name('inventory.counts.list');
+    Route::get('/manufacturing/inventory-counts/list', [InventoryCountController::class, 'list']);
     Route::post('/inventory/counts', [InventoryCountController::class, 'store'])
         ->name('inventory.counts.store');
     Route::post('/manufacturing/inventory-counts', [InventoryCountController::class, 'store']);
@@ -65,10 +68,25 @@ Route::middleware('auth')->group(function () {
     Route::delete('/inventory/counts/{inventoryCount}', [InventoryCountController::class, 'destroy'])
         ->name('inventory.counts.destroy');
     Route::delete('/manufacturing/inventory-counts/{inventoryCount}', [InventoryCountController::class, 'destroy']);
+    Route::post('/inventory/counts/{inventoryCount}/submit', [InventoryCountController::class, 'submit'])
+        ->name('inventory.counts.submit');
+    Route::post('/manufacturing/inventory-counts/{inventoryCount}/submit', [InventoryCountController::class, 'submit']);
+    Route::post('/inventory/counts/{inventoryCount}/advance', [InventoryCountController::class, 'advance'])
+        ->name('inventory.counts.advance');
+    Route::post('/manufacturing/inventory-counts/{inventoryCount}/advance', [InventoryCountController::class, 'advance']);
+    Route::post('/inventory/counts/{inventoryCount}/previous', [InventoryCountController::class, 'previous'])
+        ->name('inventory.counts.previous');
+    Route::post('/manufacturing/inventory-counts/{inventoryCount}/previous', [InventoryCountController::class, 'previous']);
     Route::post('/inventory/counts/{inventoryCount}/post', [InventoryCountController::class, 'post'])
         ->name('inventory.counts.post');
     Route::post('/manufacturing/inventory-counts/{inventoryCount}/post', [InventoryCountController::class, 'post']);
 
+    Route::get('/inventory/counts/{inventoryCount}/lines', [InventoryCountController::class, 'listLines'])
+        ->name('inventory.counts.lines.index');
+    Route::get('/manufacturing/inventory-counts/{inventoryCount}/lines', [InventoryCountController::class, 'listLines']);
+    Route::get('/inventory/counts/{inventoryCount}/tasks', [InventoryCountController::class, 'listTasks'])
+        ->name('inventory.counts.tasks.index');
+    Route::get('/manufacturing/inventory-counts/{inventoryCount}/tasks', [InventoryCountController::class, 'listTasks']);
     Route::post('/inventory/counts/{inventoryCount}/lines', [InventoryCountController::class, 'storeLine'])
         ->name('inventory.counts.lines.store');
     Route::post('/manufacturing/inventory-counts/{inventoryCount}/lines', [InventoryCountController::class, 'storeLine']);

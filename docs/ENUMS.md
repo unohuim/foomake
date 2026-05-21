@@ -125,6 +125,25 @@ Do not introduce new enum values without updating this document.
 
 ## Sales
 
+### Customer Type
+
+**Name:** Customer type  
+**Storage location(s):** `customers.customer_type` (string column)  
+**Allowed values:**
+
+- `business`
+- `consumer`
+
+**Semantic meaning:**
+
+- `business`: Customer is treated as a business/commercial account.
+- `consumer`: Customer is treated as an individual/consumer account.
+
+**Notes:**
+
+- Display labels are `Business` and `Consumer`.
+- Default value is `business`.
+
 ### Sales Order Status
 
 **Name:** SalesOrder status  

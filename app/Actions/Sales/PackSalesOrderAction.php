@@ -2,8 +2,9 @@
 
 namespace App\Actions\Sales;
 
-use App\Actions\Workflows\AssertSalesOrderStageTasksCompletedAction;
-use App\Actions\Workflows\GenerateSalesOrderWorkflowTasksAction;
+use App\Actions\Workflows\AssertWorkflowStageTasksCompletedAction;
+use App\Actions\Workflows\GenerateWorkflowStageTasksAction;
+use App\Actions\Workflows\ResolveSalesWorkflowStageAction;
 use App\Models\SalesOrder;
 use App\Models\StockMove;
 use DomainException;
@@ -22,16 +23,16 @@ class PackSalesOrderAction
     public function execute(
         SalesOrder $salesOrder,
         BuildSalesOrderIssuePlanAction $buildPlanAction,
-        AssertSalesOrderStageTasksCompletedAction $assertStageTasksCompletedAction,
-        GenerateSalesOrderWorkflowTasksAction $generateWorkflowTasksAction,
+        AssertWorkflowStageTasksCompletedAction $assertWorkflowStageTasksCompletedAction,
+        GenerateWorkflowStageTasksAction $generateWorkflowStageTasksAction,
         string $targetStatus,
         string $targetStageKey
     ): SalesOrder {
         return DB::transaction(function () use (
             $salesOrder,
             $buildPlanAction,
-            $assertStageTasksCompletedAction,
-            $generateWorkflowTasksAction,
+            $assertWorkflowStageTasksCompletedAction,
+            $generateWorkflowStageTasksAction,
             $targetStatus,
             $targetStageKey
         ): SalesOrder {
@@ -45,7 +46,14 @@ class PackSalesOrderAction
             }
 
             if ($lockedOrder->status !== SalesOrder::STATUS_OPEN) {
-                $assertStageTasksCompletedAction->execute($lockedOrder);
+                $currentStage = app(ResolveSalesWorkflowStageAction::class)->currentStageForStatus($lockedOrder);
+
+                $assertWorkflowStageTasksCompletedAction->execute(
+                    (int) $lockedOrder->tenant_id,
+                    (int) $lockedOrder->id,
+                    $currentStage,
+                    'Complete all tasks for this stage before moving the sales order forward.'
+                );
             }
 
             $plan = $buildPlanAction->execute($lockedOrder);
@@ -58,7 +66,13 @@ class PackSalesOrderAction
                 'status' => $targetStatus,
             ])->save();
 
-            $generateWorkflowTasksAction->execute($lockedOrder, $targetStageKey);
+            $stage = app(ResolveSalesWorkflowStageAction::class)->execute($lockedOrder, $targetStageKey);
+
+            $generateWorkflowStageTasksAction->execute(
+                (int) $lockedOrder->tenant_id,
+                (int) $lockedOrder->id,
+                $stage
+            );
 
             return $lockedOrder->fresh();
         });

@@ -162,7 +162,7 @@ it('shows the materials link when the user has inventory materials view permissi
         ->assertSee(route('materials.index'), false);
 });
 
-it('shows inventory links when the user has inventory adjustments view permission', function () {
+it('shows stock links when the user has inventory adjustments view permission', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
 
@@ -170,6 +170,7 @@ it('shows inventory links when the user has inventory adjustments view permissio
 
     ($this->render)($user)
         ->assertOk()
+        ->assertSee('Stock')
         ->assertSee('Inventory')
         ->assertSee('Inventory Counts')
         ->assertSee(route('inventory.index'), false)
@@ -479,6 +480,7 @@ it('renders dropdown triggers for grouped navigation', function () {
 
     ($this->grantPermissions)($user, [
         'inventory-materials-view',
+        'inventory-adjustments-view',
         'purchasing-suppliers-view',
     ]);
 
@@ -535,6 +537,100 @@ it('renders grouped dropdown links with the correct hrefs', function () {
         ->assertSee('href="' . route('materials.uom-categories.index') . '"', false);
 });
 
+it('does not render admin as a top level navigation group', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermission)($user, 'workflow-manage');
+
+    ($this->render)($user)
+        ->assertOk()
+        ->assertDontSee('data-nav-dropdown-trigger="admin"', false);
+});
+
+it('renders the stock group for authorized users', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermission)($user, 'inventory-adjustments-view');
+
+    ($this->render)($user)
+        ->assertOk()
+        ->assertSee('data-nav-dropdown-trigger="stock"', false)
+        ->assertSee('Stock');
+});
+
+it('renders stock immediately after manufacturing in the desktop navigation source order', function () {
+    $source = file_get_contents(resource_path('views/layouts/navigation.blade.php'));
+
+    $manufacturingPos = strpos($source, 'data-nav-dropdown-trigger="manufacturing"');
+    $stockPos = strpos($source, 'data-nav-dropdown-trigger="stock"');
+
+    expect($manufacturingPos)->not->toBeFalse()
+        ->and($stockPos)->not->toBeFalse()
+        ->and($stockPos)->toBeGreaterThan($manufacturingPos);
+});
+
+it('renders the stock dropdown with inventory and inventory counts links', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermission)($user, 'inventory-adjustments-view');
+
+    ($this->render)($user)
+        ->assertOk()
+        ->assertSee(route('inventory.index'), false)
+        ->assertSee(route('inventory.counts.index'), false)
+        ->assertSee('Inventory')
+        ->assertSee('Inventory Counts');
+});
+
+it('renders the stock dropdown uom subsection for authorized users', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermission)($user, 'inventory-materials-manage');
+
+    ($this->render)($user)
+        ->assertOk()
+        ->assertSee('data-stock-uom-section="desktop"', false)
+        ->assertSee('x-data="{ open: false }"', false)
+        ->assertSee('UoM')
+        ->assertSee('UoM Categories')
+        ->assertSee('Units of Measure')
+        ->assertSee('UoM Conversions');
+});
+
+it('renders the stock dropdown uom subsection collapsed by default on mobile', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermission)($user, 'inventory-materials-manage');
+
+    ($this->render)($user)
+        ->assertOk()
+        ->assertSee('data-stock-uom-section="mobile"', false)
+        ->assertSee('x-data="{ open: false }"', false);
+});
+
+it('keeps moved stock links out of the manufacturing dropdown content', function () {
+    $source = file_get_contents(resource_path('views/layouts/navigation.blade.php'));
+
+    $manufacturingPos = strpos($source, 'data-nav-dropdown-trigger="manufacturing"');
+    $stockPos = strpos($source, 'data-nav-dropdown-trigger="stock"');
+
+    expect($manufacturingPos)->not->toBeFalse()
+        ->and($stockPos)->not->toBeFalse();
+
+    $manufacturingSegment = substr($source, $manufacturingPos, $stockPos - $manufacturingPos);
+
+    expect($manufacturingSegment)->not->toContain("__('Inventory')")
+        ->and($manufacturingSegment)->not->toContain("__('Inventory Counts')")
+        ->and($manufacturingSegment)->not->toContain("__('UoM Categories')")
+        ->and($manufacturingSegment)->not->toContain("__('Units of Measure')")
+        ->and($manufacturingSegment)->not->toContain("__('UoM Conversions')");
+});
+
 it('renders mobile navigation markup', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
@@ -551,6 +647,7 @@ it('renders mobile nested groups as accordion sections', function () {
 
     ($this->grantPermissions)($user, [
         'inventory-materials-view',
+        'inventory-adjustments-view',
         'purchasing-suppliers-view',
     ]);
 
@@ -612,6 +709,74 @@ it('hides unauthorized manufacturing and purchasing links', function () {
         ->assertDontSee('UoM Categories');
 });
 
+it('does not render moved stock links for users without the existing stock gates', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermission)($user, 'inventory-materials-view');
+
+    ($this->render)($user)
+        ->assertOk()
+        ->assertDontSee('Stock')
+        ->assertDontSee('Inventory Counts')
+        ->assertDontSee('Units of Measure')
+        ->assertDontSee('UoM Conversions')
+        ->assertDontSee('UoM Categories');
+});
+
+it('renders inventory links in stock without rendering the uom subsection for view only inventory users', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermission)($user, 'inventory-adjustments-view');
+
+    ($this->render)($user)
+        ->assertOk()
+        ->assertSee('Stock')
+        ->assertSee('Inventory')
+        ->assertSee('Inventory Counts')
+        ->assertDontSee('data-stock-uom-section="desktop"', false);
+});
+
+it('renders workflows in the profile dropdown', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermission)($user, 'workflow-manage');
+
+    ($this->render)($user)
+        ->assertOk()
+        ->assertSee('data-profile-workflows-link="desktop"', false)
+        ->assertSee(route('admin.workflows.index'), false);
+});
+
+it('renders workflows directly after connectors in the profile dropdown source order', function () {
+    $source = file_get_contents(resource_path('views/layouts/navigation.blade.php'));
+
+    $connectorsPos = strpos($source, "route('profile.connectors.index')");
+    $workflowsPos = strpos($source, 'data-profile-workflows-link="desktop"');
+
+    expect($connectorsPos)->not->toBeFalse()
+        ->and($workflowsPos)->not->toBeFalse()
+        ->and($workflowsPos)->toBeGreaterThan($connectorsPos);
+});
+
+it('keeps workflows gate and route behavior in the profile dropdown', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->render)($user)
+        ->assertOk()
+        ->assertDontSee('data-profile-workflows-link="desktop"', false);
+
+    ($this->grantPermission)($user, 'workflow-manage');
+
+    ($this->render)($user)
+        ->assertOk()
+        ->assertSee('data-profile-workflows-link="desktop"', false)
+        ->assertSee(route('admin.workflows.index'), false);
+});
+
 it('allows super admin to see all permitted navigation groups and links', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
@@ -621,6 +786,7 @@ it('allows super admin to see all permitted navigation groups and links', functi
     ($this->render)($user)
         ->assertOk()
         ->assertSee('Purchasing')
+        ->assertSee('Stock')
         ->assertSee('Manufacturing')
         ->assertSee('Suppliers')
         ->assertSee('Orders')
@@ -632,6 +798,125 @@ it('allows super admin to see all permitted navigation groups and links', functi
         ->assertSee('Units of Measure')
         ->assertSee('UoM Conversions')
         ->assertSee('UoM Categories');
+});
+
+it('shows the stock group only when at least one stock route is permitted', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->render)($user)
+        ->assertOk()
+        ->assertDontSee('Stock');
+
+    ($this->grantPermission)($user, 'inventory-adjustments-view');
+
+    ($this->render)($user)
+        ->assertOk()
+        ->assertSee('Stock');
+});
+
+it('does not show the manufacturing group when only stock permissions are present', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermissions)($user, [
+        'inventory-adjustments-view',
+        'inventory-materials-manage',
+    ]);
+
+    ($this->render)($user)
+        ->assertOk()
+        ->assertSee('Stock')
+        ->assertDontSee('Manufacturing')
+        ->assertSee('Inventory')
+        ->assertSee('Inventory Counts')
+        ->assertSee('Units of Measure')
+        ->assertSee('UoM Conversions')
+        ->assertSee('UoM Categories');
+});
+
+it('keeps moved stock links out of manufacturing when rendering manufacturing specific permissions', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermissions)($user, [
+        'inventory-materials-view',
+        'inventory-recipes-view',
+    ]);
+
+    ($this->render)($user)
+        ->assertOk()
+        ->assertSee('Manufacturing')
+        ->assertSee('Materials')
+        ->assertSee('Recipes')
+        ->assertDontSee('Inventory Counts')
+        ->assertDontSee('Units of Measure')
+        ->assertDontSee('UoM Conversions')
+        ->assertDontSee('UoM Categories');
+});
+
+it('keeps backend route gates unchanged for moved stock routes', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->render)($user, 'inventory.index')
+        ->assertForbidden();
+
+    ($this->render)($user, 'inventory.counts.index')
+        ->assertForbidden();
+});
+
+it('marks stock as active on inventory pages and does not activate manufacturing there', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermission)($user, 'inventory-adjustments-view');
+
+    $content = ($this->render)($user, 'inventory.index')
+        ->assertOk()
+        ->getContent();
+
+    expect($content)->toMatch('/border border-slate-600 bg-slate-800[^"]*"[^>]*data-nav-dropdown-trigger="stock"/')
+        ->and($content)->not->toMatch('/border border-slate-600 bg-slate-800[^"]*"[^>]*data-nav-dropdown-trigger="manufacturing"/');
+});
+
+it('marks stock as active on inventory counts pages', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermission)($user, 'inventory-adjustments-view');
+
+    ($this->render)($user, 'inventory.counts.index')
+        ->assertOk()
+        ->assertSee('data-nav-dropdown-trigger="stock"', false);
+});
+
+it('marks stock as active on uom pages and leaves manufacturing inactive there', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermission)($user, 'inventory-materials-manage');
+
+    $content = ($this->render)($user, 'manufacturing.uoms.index')
+        ->assertOk()
+        ->getContent();
+
+    expect($content)->toMatch('/border border-slate-600 bg-slate-800[^"]*"[^>]*data-nav-dropdown-trigger="stock"/')
+        ->and($content)->not->toMatch('/border border-slate-600 bg-slate-800[^"]*"[^>]*data-nav-dropdown-trigger="manufacturing"/');
+});
+
+it('marks the profile dropdown active on workflow pages', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermission)($user, 'workflow-manage');
+
+    $content = ($this->render)($user, 'admin.workflows.index')
+        ->assertOk()
+        ->getContent();
+
+    expect($content)->toMatch('/class="inline-flex items-center gap-2 rounded-full border border-slate-600 bg-slate-800[^"]*"[^>]*>\\s*<span>' . preg_quote($user->name, '/') . '<\/span>/')
+        ->and($content)->toContain('data-profile-workflows-link="desktop"');
 });
 
 it('keeps route names unchanged for dashboard and navigation destinations', function () {

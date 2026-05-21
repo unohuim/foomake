@@ -12,7 +12,11 @@ use Illuminate\Support\Carbon;
 /**
  * @property int $id
  * @property int $tenant_id
+ * @property int|null $created_by_user_id
+ * @property int|null $tasked_by_user_id
+ * @property int|null $assigned_to_user_id
  * @property Carbon $counted_at
+ * @property int|null $workflow_stage_id
  * @property Carbon|null $posted_at
  * @property int|null $posted_by_user_id
  * @property string|null $notes
@@ -23,7 +27,11 @@ class InventoryCount extends Model
 
     protected $fillable = [
         'tenant_id',
+        'created_by_user_id',
+        'tasked_by_user_id',
+        'assigned_to_user_id',
         'counted_at',
+        'workflow_stage_id',
         'posted_at',
         'posted_by_user_id',
         'notes',
@@ -56,6 +64,38 @@ class InventoryCount extends Model
     public function postedByUser(): BelongsTo
     {
         return $this->belongsTo(User::class, 'posted_by_user_id');
+    }
+
+    /**
+     * @return BelongsTo
+     */
+    public function createdByUser(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'created_by_user_id');
+    }
+
+    /**
+     * @return BelongsTo
+     */
+    public function taskedByUser(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'tasked_by_user_id');
+    }
+
+    /**
+     * @return BelongsTo
+     */
+    public function assignedToUser(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'assigned_to_user_id');
+    }
+
+    /**
+     * @return BelongsTo
+     */
+    public function workflowStage(): BelongsTo
+    {
+        return $this->belongsTo(WorkflowStage::class, 'workflow_stage_id');
     }
 
     /**

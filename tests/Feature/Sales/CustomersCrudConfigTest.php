@@ -71,6 +71,7 @@ beforeEach(function () {
             'tenant_id' => $tenant->id,
             'name' => 'Customers Crud Customer ' . $customerCounter,
             'status' => 'active',
+            'customer_type' => 'business',
             'notes' => null,
             'address_line_1' => null,
             'address_line_2' => null,
@@ -304,7 +305,8 @@ it('9. customer list still loads', function () {
     ($this->getCustomersList)($user)
         ->assertOk()
         ->assertJsonPath('data.0.name', 'List Customer')
-        ->assertJsonPath('data.0.email', 'list@example.test');
+        ->assertJsonPath('data.0.email', 'list@example.test')
+        ->assertJsonPath('data.0.customer_type', 'business');
 });
 
 it('10. customer create still works', function () {
@@ -315,9 +317,32 @@ it('10. customer create still works', function () {
 
     ($this->postCustomer)($user, [
         'name' => 'Created Customer',
+        'customer_type' => 'consumer',
         'notes' => 'Imported later',
     ])->assertCreated()
-        ->assertJsonPath('data.name', 'Created Customer');
+        ->assertJsonPath('data.name', 'Created Customer')
+        ->assertJsonPath('data.customer_type', 'consumer');
+});
+
+it('10a. customers create form exposes the customer type field and labels', function () {
+    $source = file_get_contents(resource_path('views/sales/customers/index.blade.php'));
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    ($this->grantPermission)($user, 'sales-customers-manage');
+    $config = ($this->extractCrudConfig)(($this->getCustomersIndex)($user));
+
+    expect($source)->toContain('customer_type')
+        ->and($source)->toContain('Customer Type')
+        ->and($config['customerTypes']['business'] ?? null)->toBe('Business')
+        ->and($config['customerTypes']['consumer'] ?? null)->toBe('Consumer');
+});
+
+it('10b. customers page module tracks customer type in form state and payload mapping', function () {
+    $source = file_get_contents(resource_path('js/pages/sales-customers-index.js'));
+
+    expect($source)->toContain('customer_type')
+        ->and($source)->toContain("customer_type: 'business'")
+        ->and($source)->toContain("customer_type: customer.customer_type || 'business'");
 });
 
 it('11. customer sorting still works', function () {
@@ -501,7 +526,8 @@ it('15b. file upload store accepts shared local rows through the existing import
         ],
     ])->assertCreated()
         ->assertJsonPath('data.imported_count', 1)
-        ->assertJsonPath('data.imported.0.name', 'Stored File Customer');
+        ->assertJsonPath('data.imported.0.name', 'Stored File Customer')
+        ->assertJsonPath('data.imported.0.customer_type', 'business');
 });
 
 it('16. missing woo connection returns json error', function () {
@@ -577,6 +603,7 @@ it('18. import creates new customers', function () {
     $this->assertDatabaseHas('customers', [
         'tenant_id' => $tenant->id,
         'name' => 'Avery Buyer',
+        'customer_type' => 'business',
     ]);
 
     $customerId = (int) DB::table('customers')

@@ -2,7 +2,7 @@ name: Task
 type: Tenant-Scoped Generated Record Rule
 location:
   - app/Actions/Tasks/CompleteTaskAction.php
-  - app/Actions/Workflows/GenerateSalesOrderWorkflowTasksAction.php
+  - app/Actions/Workflows/GenerateWorkflowStageTasksAction.php
   - app/Models/Task.php
   - database/migrations/2026_05_07_000004_create_tasks_table.php
   - docs/PR3_ROADMAP.md
@@ -26,10 +26,10 @@ rules:
   - Re-entering a stage or retrying a transition must not create duplicate generated tasks for the same template and stage-entry slice.
 public_interface:
   - CompleteTaskAction::execute()
-  - GenerateSalesOrderWorkflowTasksAction::execute()
+  - GenerateWorkflowStageTasksAction::execute()
   - Task::query()
   - docs/architecture/workflows/WorkflowTaskTemplate.yaml
-  - docs/architecture/workflows/SalesOrderWorkflowTaskGating.yaml
+  - docs/architecture/workflows/WorkflowStageTaskGating.yaml
 example_usage: |
   Generated task snapshot:
     domain = sales

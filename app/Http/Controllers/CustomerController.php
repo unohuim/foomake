@@ -54,6 +54,7 @@ class CustomerController extends Controller
             'navigationStateUrl' => route('navigation.state'),
             'csrfToken' => csrf_token(),
             'statuses' => Customer::statuses(),
+            'customerTypes' => Customer::typeLabels(),
             'sources' => $importConfig['sources'],
             'canManageImports' => $importConfig['permissions']['canManageImports'],
             'canManageConnections' => $importConfig['permissions']['canManageConnections'],
@@ -271,6 +272,7 @@ class CustomerController extends Controller
             'indexUrl' => route('sales.customers.index'),
             'csrfToken' => csrf_token(),
             'statuses' => Customer::statuses(),
+            'customerTypes' => Customer::typeLabels(),
         ];
 
         return view('sales.customers.show', [
@@ -292,6 +294,7 @@ class CustomerController extends Controller
             'tenant_id' => $request->user()->tenant_id,
             'name' => $validated['name'],
             'status' => $validated['status'] ?? Customer::STATUS_ACTIVE,
+            'customer_type' => $validated['customer_type'] ?? Customer::TYPE_BUSINESS,
             'notes' => $validated['notes'] ?? null,
         ]));
 
@@ -312,6 +315,7 @@ class CustomerController extends Controller
         $customer->update(array_merge($this->addressAttributes($validated), [
             'name' => $validated['name'],
             'status' => $validated['status'],
+            'customer_type' => $validated['customer_type'] ?? $customer->customer_type,
             'notes' => $validated['notes'] ?? null,
         ]));
 
@@ -349,6 +353,8 @@ class CustomerController extends Controller
             'name' => $customer->name,
             'email' => $customer->primaryContact?->email,
             'status' => $customer->status,
+            'customer_type' => $customer->customer_type,
+            'customer_type_label' => $customer->customerTypeLabel(),
             'notes' => $customer->notes,
             'address_line_1' => $customer->address_line_1,
             'address_line_2' => $customer->address_line_2,
@@ -378,6 +384,8 @@ class CustomerController extends Controller
             'name' => $customer->name,
             'email' => $customer->primaryContact?->email,
             'status' => $customer->status,
+            'customer_type' => $customer->customer_type,
+            'customer_type_label' => $customer->customerTypeLabel(),
             'notes' => null,
             'address_line_1' => $customer->address_line_1,
             'address_line_2' => $customer->address_line_2,
@@ -516,6 +524,7 @@ class CustomerController extends Controller
                     'tenant_id' => $tenantId,
                     'name' => (string) $row['name'],
                     'status' => Customer::STATUS_ACTIVE,
+                    'customer_type' => Customer::TYPE_BUSINESS,
                     'notes' => null,
                 ]
             ));
@@ -1008,6 +1017,7 @@ class CustomerController extends Controller
         return array_merge($this->addressRules(), [
             'name' => ['required', 'string', 'max:255'],
             'status' => ['nullable', 'string', Rule::in(Customer::statuses())],
+            'customer_type' => ['nullable', 'string', Rule::in(Customer::types())],
             'notes' => ['nullable', 'string'],
         ]);
     }
@@ -1022,6 +1032,7 @@ class CustomerController extends Controller
         return array_merge($this->addressRules(), [
             'name' => ['required', 'string', 'max:255'],
             'status' => ['required', 'string', Rule::in(Customer::statuses())],
+            'customer_type' => ['nullable', 'string', Rule::in(Customer::types())],
             'notes' => ['nullable', 'string'],
         ]);
     }
@@ -1094,6 +1105,7 @@ class CustomerController extends Controller
                 'email' => 'Email',
                 'address_summary' => 'Address',
             ],
+            'customerTypes' => Customer::typeLabels(),
             'sortable' => ['name', 'email'],
             'labels' => [
                 'searchPlaceholder' => 'Search customers',

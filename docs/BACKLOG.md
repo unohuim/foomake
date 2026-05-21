@@ -16,6 +16,7 @@ These items are not committed PR scope unless explicitly selected and approved.
 6. Costing and accounting depth
 7. Document generation
 8. Integrations, starting with QuickBooks Online
+9.
 
 ---
 
