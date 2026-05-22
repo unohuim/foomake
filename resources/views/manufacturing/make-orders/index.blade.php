@@ -29,54 +29,16 @@
                             <h3 class="text-lg font-medium text-gray-900">{{ __('Create make order') }}</h3>
                             <p class="text-sm text-gray-600">{{ __('Create a draft make order from an active recipe.') }}</p>
                         </div>
+                        <button
+                            type="button"
+                            class="inline-flex items-center rounded-md border border-transparent bg-blue-600 px-4 py-2 font-semibold text-xs uppercase tracking-widest text-white transition hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                            x-on:click="openMakeOrderCreate()"
+                            x-bind:disabled="!canExecute"
+                            x-bind:class="!canExecute ? 'opacity-50 cursor-not-allowed' : ''"
+                        >
+                            {{ __('Create') }}
+                        </button>
                     </div>
-
-                    <form class="grid gap-4 sm:grid-cols-3" x-on:submit.prevent="submitCreate()">
-                        <div class="sm:col-span-1">
-                            <label for="recipe_id" class="block text-sm font-medium text-gray-700">
-                                {{ __('Recipe') }}
-                            </label>
-                            <select
-                                id="recipe_id"
-                                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                                x-model="createForm.recipe_id"
-                            >
-                                <option value="">{{ __('Select a recipe') }}</option>
-                                <template x-for="recipe in recipes" :key="recipe.id">
-                                    <option x-bind:value="recipe.id" x-text="recipe.name"></option>
-                                </template>
-                            </select>
-                            <p class="mt-1 text-xs text-red-600" x-cloak x-show="createErrors.recipe_id.length" x-text="createErrors.recipe_id[0]"></p>
-                        </div>
-
-                        <div class="sm:col-span-1">
-                            <label for="runs" class="block text-sm font-medium text-gray-700">
-                                {{ __('Runs') }}
-                            </label>
-                            <input
-                                id="runs"
-                                type="text"
-                                inputmode="decimal"
-                                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                                x-model="createForm.runs"
-                                placeholder="0.000000"
-                            />
-                            <p class="mt-1 text-xs text-red-600" x-cloak x-show="createErrors.runs.length" x-text="createErrors.runs[0]"></p>
-                        </div>
-
-                        <div class="sm:col-span-1 flex items-end justify-end">
-                            <button
-                                type="submit"
-                                class="inline-flex items-center px-4 py-2 bg-blue-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition disabled:opacity-50 disabled:cursor-not-allowed"
-                                x-bind:disabled="isCreateSubmitting || !canExecute"
-                            >
-                                <span x-show="!isCreateSubmitting">{{ __('Create') }}</span>
-                                <span x-show="isCreateSubmitting">{{ __('Creating...') }}</span>
-                            </button>
-                        </div>
-                    </form>
-
-                    <p class="text-sm text-red-600" x-cloak x-show="createGeneralError" x-text="createGeneralError"></p>
                     <p class="text-xs text-gray-500" x-cloak x-show="!canExecute">
                         {{ __('You do not have permission to create make orders.') }}
                     </p>
@@ -90,6 +52,15 @@
                         <p class="mt-2 text-sm text-gray-600">
                             {{ __('Create a make order to track production runs.') }}
                         </p>
+                        <div class="mt-4" x-show="canExecute">
+                            <button
+                                type="button"
+                                class="inline-flex items-center rounded-md border border-transparent bg-blue-600 px-4 py-2 font-semibold text-xs uppercase tracking-widest text-white transition hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                                x-on:click="openMakeOrderCreate()"
+                            >
+                                {{ __('Create make order') }}
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -158,6 +129,8 @@
                     </div>
                 </div>
             </div>
+
+            @include('manufacturing.make-orders.partials.create-make-order-slide-over')
         </div>
     </div>
 </x-app-layout>

@@ -5,6 +5,7 @@ This file is the single source to paste at the beginning of new LLM chats for fu
 Paste the entire content (or as much as context allows) when starting a session.
 
 ## docs/AI_CHAT_CODEX.md
+
 # AI Chat Bootstrap (READ FIRST)
 
 You are assisting with development on this repository.
@@ -235,7 +236,9 @@ If unsure, **stop immediately and ask**.
   **not global model scopes**
 - The **smallest possible change per PR**
 
+
 ## docs/PR2_ROADMAP.md
+
 # PR2_ROADMAP — UI + Domain Completion (Post-PR-006)
 
 This roadmap defines the **second major phase** of work: completing **Items, Inventory, Suppliers, and Manufacturing**
@@ -1528,7 +1531,9 @@ Introduce a UoM-level display precision field and enforce consistent quantity fo
 - Any changes to storage precision or BCMath scale
 - JavaScript formatting or UI-only overrides per view
 
+
 ## docs/CONVENTIONS.md
+
 # Conventions
 
 This document defines the **mandatory development conventions** for this repository.  
@@ -1782,7 +1787,9 @@ These rules apply to:
 - Unit conversions
 - Any inventory-affecting calculations
 
+
 ## docs/ARCHITECTURE_INVENTORY.md
+
 # Architecture Inventory
 
 This document tracks **reusable abstractions, components, and architectural patterns**
@@ -1974,7 +1981,33 @@ Provide a shared expandable detail-section CRUD surface for record sublists such
 Notes:
 - Reusable CRUD detail sections must keep their outer shell `overflow-visible` so row-action dropdowns are not clipped.
 - Inventory Count detail uses this pattern with a `Materials` section and a read-only `Tasks` section that reuses the existing task completion route/payload contract.
+- Material detail uses this pattern for `Supplier Packages`, `Recipes`, `Purchase Orders`, and `Make Orders`; `Supplier Packages` and `Recipes` render near the top and default open, while `Purchase Orders` and `Make Orders` render near the bottom and default collapsed.
+- Material detail reuses the existing section abstraction for manufacturable-only `Recipes` and `Make Orders` sections rather than introducing a bespoke accordion/detail implementation.
+- Material detail section rows expose record detail links where an existing detail surface is available, using the shared row-action `View` contract rather than bespoke row-click behavior; this applies to Supplier Package rows, Purchase Order rows, Recipe rows, and Make Order rows.
+- Material detail `Recipes` plus opens the existing recipe create slide-over in place, prefilled with the current material as the output item, and successful recipe create redirects to the created recipe detail page.
+- Material detail recipe-row `Make` opens the existing make-order create slide-over in place, prefilled with the selected recipe, and successful make-order create redirects to the created make-order detail page.
 - Reusable detail sections may disable the vertical-dots row menu through `showRowActionsMenu: false`; the default remains enabled for existing section consumers, and disabled sections may surface their configured row actions inline instead.
+
+### Resource Detail Layout Pattern
+
+**Name:** Resource Detail Layout Pattern  
+**Type:** UI Architectural Pattern  
+**Location:**  
+- [docs/architecture/ui/ResourceDetailLayoutPattern.yaml](docs/architecture/ui/ResourceDetailLayoutPattern.yaml)
+
+**Purpose:**  
+Provide a shared resource-detail shell where top navigation and the page header remain sticky while only the detail content pane scrolls.
+
+**Rules:**  
+- Resource detail pages that need sticky shell behavior must use `x-resource-detail-layout` rather than duplicating page-local sticky wrappers.  
+- The top navigation remains sticky above the page header.  
+- The page header remains sticky beneath the navigation bar.  
+- The detail content pane is the only scrollable region owned by the resource detail shell.  
+- Sticky shell behavior remains opt-in through the shared app layout and does not become the default for non-detail pages.  
+- Resource detail pages keep sticky chrome with a scrollable content area; top navigation and page header remain visible while only the detail content pane scrolls.  
+- Slide-over overlays used by resource detail pages must render outside the detail scroll container so sticky chrome and overflow contexts do not clip the backdrop or panel.  
+- Slide-over overlays used by resource detail pages must appear above sticky navigation and page headers.  
+- Resource-detail slide-over backdrops cover the viewport and support backdrop or outside-click close behavior.  
 
 ### Workflow Stage Inventory Effect Invariant
 
@@ -2937,6 +2970,43 @@ Non-quantity calculations.
 **Example Usage:**  
 ```php
 $total = bcadd($a, $b, 6);
+```
+
+---
+
+### Inventory Availability Read Model
+
+**Name:** Inventory Availability Read Model  
+**Type:** Read Model / Domain Rule  
+**Location:**  
+- `docs/architecture/inventory/InventoryAvailabilityReadModel.yaml`  
+- `app/Support/Inventory/InventoryAvailabilityIndexReadModel.php`  
+- `app/Support/Inventory/InventoryAvailabilityCalculator.php`  
+- `app/Http/Controllers/InventoryController.php`
+
+**Purpose:**  
+Provide one tenant-scoped availability contract for the inventory index and single-item availability reads.
+
+**When to Use:**  
+Rendering inventory availability columns or resolving availability for one item.
+
+**When Not to Use:**  
+Posting stock moves or mutating operational records.
+
+**Public Interface:**  
+- `InventoryAvailabilityIndexReadModel::rows()`  
+- `InventoryAvailabilityIndexReadModel::rowForItem()`  
+- `InventoryAvailabilityCalculator::forItem(Item $item)`
+
+**Rules:**  
+- Availability math remains canonical BCMath at scale 6.  
+- UI-facing inventory quantities must render using the item base UoM `display_precision`.  
+- The read model may expose both canonical quantity fields and backend-formatted display fields for the same row.  
+
+**Example Usage:**  
+```php
+$rows = $indexReadModel->rows($tenantId, 'flour');
+$availability = $calculator->forItem($item);
 ```
 
 ---
@@ -4346,7 +4416,9 @@ it('creates a material', function () {
 
 ---
 
+
 ## docs/PERMISSIONS_MATRIX.md
+
 # Permissions Matrix
 
 This document is the source-of-truth for **authorization intent** in this repository.
@@ -4541,7 +4613,9 @@ return [
 ];
 ```
 
+
 ## docs/ENUMS.md
+
 # ENUMS — Canonical Enum Authority
 
 This document defines the canonical, normative enum-like values used throughout the system.
@@ -4846,7 +4920,9 @@ Do not introduce new enum values without updating this document.
 
 No conflicts or ambiguities were found at time of creation based on existing migrations, models, actions, and tests.
 
+
 ## docs/DB_SCHEMA.md
+
 # Database Schema Inventory (DB_SCHEMA)
 
 This document inventories **all database tables and columns** as defined by migrations.
@@ -6166,7 +6242,9 @@ Migrations remain the **sole source of truth**.
 
 **End of DB_SCHEMA**
 
+
 ## docs/UI_DESIGN.md
+
 # UI_DESIGN.md — Canonical UI Direction & Constraints
 
 This document defines the **authoritative UI design rules** for this repository.
@@ -6821,7 +6899,9 @@ They are mandatory, not stylistic.
 
 ::contentReference[oaicite:0]{index=0}
 
+
 ## routes/web.php
+
 <?php
 
 use App\Http\Controllers\InventoryController;
@@ -6872,6 +6952,7 @@ Route::middleware('auth')->group(function () {
         ->name('navigation.state');
 
     Route::get('/inventory', [InventoryController::class, 'index'])->name('inventory.index');
+    Route::get('/inventory/list', [InventoryController::class, 'list'])->name('inventory.list');
     Route::get('/manufacturing/inventory', [InventoryController::class, 'index']);
 
     Route::get('/inventory/counts', [InventoryCountController::class, 'index'])
@@ -6930,6 +7011,10 @@ Route::middleware('auth')->group(function () {
         ->name('materials.supplier-packages.index');
     Route::get('/materials/{item}/purchase-orders', [MaterialPurchaseOrderController::class, 'index'])
         ->name('materials.purchase-orders.index');
+    Route::get('/materials/{item}/recipes', [RecipeController::class, 'listForMaterial'])
+        ->name('materials.recipes.index');
+    Route::get('/materials/{item}/make-orders', [MakeOrderController::class, 'listForMaterial'])
+        ->name('materials.make-orders.index');
     Route::post('/materials/{item}/purchase-orders', [MaterialDraftPurchaseOrderController::class, 'store'])
         ->name('materials.purchase-orders.store');
     Route::post('/materials/{item}/supplier-packages', [MaterialSupplierPackageController::class, 'store'])
@@ -6988,6 +7073,8 @@ Route::middleware('auth')->group(function () {
 
     Route::get('/manufacturing/make-orders', [MakeOrderController::class, 'index'])
         ->name('manufacturing.make-orders.index');
+    Route::get('/manufacturing/make-orders/{makeOrder}', [MakeOrderController::class, 'show'])
+        ->name('manufacturing.make-orders.show');
     Route::post('/manufacturing/make-orders', [MakeOrderController::class, 'store'])
         ->name('manufacturing.make-orders.store');
     Route::post('/manufacturing/make-orders/{makeOrder}/schedule', [MakeOrderController::class, 'schedule'])
@@ -7147,7 +7234,9 @@ Route::delete('/manufacturing/uom-conversions/items/{itemConversion}', [UomConve
 
 require __DIR__ . '/auth.php';
 
+
 ## docs/PR3_ROADMAP.md
+
 # PR3_ROADMAP — Sales + CRM Foundations
 
 This roadmap defines the third major phase of work: introducing the **Sales domain (CRM foundations + Sales Orders)**, fully integrated with inventory before any external integrations.
@@ -7887,7 +7976,9 @@ After PR3 completion:
 - Sales orders impact inventory correctly
 - System ready for external integrations
 
+
 ## docs/BACKLOG.md
+
 # BACKLOG
 
 This backlog captures outstanding product capabilities identified from competitive feature review and QuickBooks Online integration planning.
@@ -8258,3 +8349,4 @@ QuickBooks Online integration reduces admin work, improves bookkeeping accuracy,
 - Each PR should remain small, test-first, and tenant-safe.
 - Documentation updates should only happen when explicitly required and approved.
 - Any reusable abstraction introduced by these PRs must be recorded in the architecture inventory when applicable.
+

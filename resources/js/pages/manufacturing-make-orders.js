@@ -16,19 +16,20 @@ export function mount(rootEl, payload) {
 
     Alpine.data('manufacturingMakeOrders', () => ({
         makeOrders: safePayload.make_orders || [],
-        recipes: safePayload.recipes || [],
+        makeOrderCreateRecipes: safePayload.recipes || [],
         storeUrl: safePayload.store_url || '',
         scheduleUrlBase: safePayload.schedule_url_base || '',
         makeUrlBase: safePayload.make_url_base || '',
         csrfToken: safePayload.csrf_token || '',
         canExecute: Boolean(safePayload.can_execute),
-        createForm: {
+        isMakeOrderCreateOpen: false,
+        makeOrderCreateForm: {
             recipe_id: '',
             runs: '',
         },
-        createErrors: emptyCreateErrors(),
-        createGeneralError: '',
-        isCreateSubmitting: false,
+        makeOrderCreateErrors: emptyCreateErrors(),
+        makeOrderCreateGeneralError: '',
+        isMakeOrderCreateSubmitting: false,
         scheduleDates: {},
         scheduleErrors: {},
         scheduleSubmitting: {},
@@ -39,6 +40,35 @@ export function mount(rootEl, payload) {
             message: '',
             type: 'success',
             timeoutId: null,
+        },
+        init() {
+            if (safePayload.prefill_recipe_id) {
+                this.openMakeOrderCreate({
+                    recipe_id: safePayload.prefill_recipe_id,
+                });
+            }
+        },
+        openMakeOrderCreate(prefill = {}) {
+            this.makeOrderCreateErrors = emptyCreateErrors();
+            this.makeOrderCreateGeneralError = '';
+            this.makeOrderCreateForm = {
+                recipe_id: prefill.recipe_id ? String(prefill.recipe_id) : '',
+                runs: '',
+            };
+            this.isMakeOrderCreateOpen = true;
+            this.$nextTick(() => {
+                this.$refs.makeOrderRecipeSelect?.focus();
+            });
+        },
+        closeMakeOrderCreate() {
+            this.isMakeOrderCreateOpen = false;
+            this.isMakeOrderCreateSubmitting = false;
+            this.makeOrderCreateErrors = emptyCreateErrors();
+            this.makeOrderCreateGeneralError = '';
+            this.makeOrderCreateForm = {
+                recipe_id: '',
+                runs: '',
+            };
         },
         normalizeCreateErrors(errors) {
             if (!errors || typeof errors !== 'object') {
@@ -114,15 +144,15 @@ export function mount(rootEl, payload) {
                 ...order,
             });
         },
-        async submitCreate() {
+        async submitMakeOrderCreate() {
             if (!this.canExecute) {
-                this.createGeneralError = 'You do not have permission to create make orders.';
+                this.makeOrderCreateGeneralError = 'You do not have permission to create make orders.';
                 return;
             }
 
-            this.isCreateSubmitting = true;
-            this.createGeneralError = '';
-            this.createErrors = emptyCreateErrors();
+            this.isMakeOrderCreateSubmitting = true;
+            this.makeOrderCreateGeneralError = '';
+            this.makeOrderCreateErrors = emptyCreateErrors();
 
             const response = await fetch(this.storeUrl, {
                 method: 'POST',
@@ -132,23 +162,25 @@ export function mount(rootEl, payload) {
                     'X-CSRF-TOKEN': this.csrfToken,
                 },
                 body: JSON.stringify({
-                    recipe_id: this.createForm.recipe_id ? Number(this.createForm.recipe_id) : this.createForm.recipe_id,
-                    runs: this.createForm.runs,
+                    recipe_id: this.makeOrderCreateForm.recipe_id
+                        ? Number(this.makeOrderCreateForm.recipe_id)
+                        : this.makeOrderCreateForm.recipe_id,
+                    runs: this.makeOrderCreateForm.runs,
                 }),
             });
 
             if (response.status === 422) {
                 const data = await response.json();
-                this.createErrors = this.normalizeCreateErrors(data.errors);
-                this.createGeneralError = data.message || 'Validation failed.';
-                this.isCreateSubmitting = false;
+                this.makeOrderCreateErrors = this.normalizeCreateErrors(data.errors);
+                this.makeOrderCreateGeneralError = data.message || 'Validation failed.';
+                this.isMakeOrderCreateSubmitting = false;
                 return;
             }
 
             if (!response.ok) {
-                this.createGeneralError = 'Something went wrong. Please try again.';
-                this.showToast('error', this.createGeneralError);
-                this.isCreateSubmitting = false;
+                this.makeOrderCreateGeneralError = 'Something went wrong. Please try again.';
+                this.showToast('error', this.makeOrderCreateGeneralError);
+                this.isMakeOrderCreateSubmitting = false;
                 return;
             }
 
@@ -158,8 +190,7 @@ export function mount(rootEl, payload) {
             }
 
             this.showToast('success', 'Make order created.');
-            this.createForm = { recipe_id: '', runs: '' };
-            this.isCreateSubmitting = false;
+            this.closeMakeOrderCreate();
         },
         async scheduleOrder(orderId) {
             if (!this.canExecute) {

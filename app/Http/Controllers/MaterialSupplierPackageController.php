@@ -228,7 +228,7 @@ class MaterialSupplierPackageController extends Controller
         $hasHistory = $this->hasHistory($request, $option);
         $canManage = Gate::allows('purchasing-suppliers-manage');
         $canCreatePurchaseOrders = Gate::allows('purchasing-purchase-orders-create');
-        $availableActions = [];
+        $availableActions = ['view'];
 
         if ($canCreatePurchaseOrders && (bool) $option->is_active) {
             $availableActions[] = 'purchase';
@@ -247,6 +247,7 @@ class MaterialSupplierPackageController extends Controller
             'item_purchase_option_id' => $option->id,
             'supplier_id' => $option->supplier_id,
             'supplier_name' => $option->supplier?->company_name,
+            'show_url' => $option->supplier_id ? route('purchasing.suppliers.show', $option->supplier_id) : null,
             'pack_quantity' => $packQuantity,
             'pack_quantity_display' => QuantityFormatter::format($packQuantity, $packPrecision),
             'pack_uom_id' => $option->pack_uom_id,

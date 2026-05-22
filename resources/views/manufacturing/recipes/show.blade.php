@@ -1,4 +1,4 @@
-<x-app-layout>
+<x-resource-detail-layout>
     @php
         $breadcrumbItems = [
             [
@@ -181,4 +181,4 @@
         @include('manufacturing.recipes.partials.line-form-slide-over')
         @include('manufacturing.recipes.partials.delete-line-modal')
     </div>
-</x-app-layout>
+</x-resource-detail-layout>

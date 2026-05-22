@@ -189,7 +189,33 @@ Provide a shared expandable detail-section CRUD surface for record sublists such
 Notes:
 - Reusable CRUD detail sections must keep their outer shell `overflow-visible` so row-action dropdowns are not clipped.
 - Inventory Count detail uses this pattern with a `Materials` section and a read-only `Tasks` section that reuses the existing task completion route/payload contract.
+- Material detail uses this pattern for `Supplier Packages`, `Recipes`, `Purchase Orders`, and `Make Orders`; `Supplier Packages` and `Recipes` render near the top and default open, while `Purchase Orders` and `Make Orders` render near the bottom and default collapsed.
+- Material detail reuses the existing section abstraction for manufacturable-only `Recipes` and `Make Orders` sections rather than introducing a bespoke accordion/detail implementation.
+- Material detail section rows expose record detail links where an existing detail surface is available, using the shared row-action `View` contract rather than bespoke row-click behavior; this applies to Supplier Package rows, Purchase Order rows, Recipe rows, and Make Order rows.
+- Material detail `Recipes` plus opens the existing recipe create slide-over in place, prefilled with the current material as the output item, and successful recipe create redirects to the created recipe detail page.
+- Material detail recipe-row `Make` opens the existing make-order create slide-over in place, prefilled with the selected recipe, and successful make-order create redirects to the created make-order detail page.
 - Reusable detail sections may disable the vertical-dots row menu through `showRowActionsMenu: false`; the default remains enabled for existing section consumers, and disabled sections may surface their configured row actions inline instead.
+
+### Resource Detail Layout Pattern
+
+**Name:** Resource Detail Layout Pattern  
+**Type:** UI Architectural Pattern  
+**Location:**  
+- [docs/architecture/ui/ResourceDetailLayoutPattern.yaml](docs/architecture/ui/ResourceDetailLayoutPattern.yaml)
+
+**Purpose:**  
+Provide a shared resource-detail shell where top navigation and the page header remain sticky while only the detail content pane scrolls.
+
+**Rules:**  
+- Resource detail pages that need sticky shell behavior must use `x-resource-detail-layout` rather than duplicating page-local sticky wrappers.  
+- The top navigation remains sticky above the page header.  
+- The page header remains sticky beneath the navigation bar.  
+- The detail content pane is the only scrollable region owned by the resource detail shell.  
+- Sticky shell behavior remains opt-in through the shared app layout and does not become the default for non-detail pages.  
+- Resource detail pages keep sticky chrome with a scrollable content area; top navigation and page header remain visible while only the detail content pane scrolls.  
+- Slide-over overlays used by resource detail pages must render outside the detail scroll container so sticky chrome and overflow contexts do not clip the backdrop or panel.  
+- Slide-over overlays used by resource detail pages must appear above sticky navigation and page headers.  
+- Resource-detail slide-over backdrops cover the viewport and support backdrop or outside-click close behavior.  
 
 ### Workflow Stage Inventory Effect Invariant
 

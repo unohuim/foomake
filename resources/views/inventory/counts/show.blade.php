@@ -1,4 +1,4 @@
-<x-app-layout>
+<x-resource-detail-layout>
     @php
         $isDraftSetup = $inventoryCount->workflow_stage_id === null && $inventoryCount->posted_at === null;
         $breadcrumbItems = [
@@ -183,4 +183,4 @@
             </div>
         </div>
     </div>
-</x-app-layout>
+</x-resource-detail-layout>

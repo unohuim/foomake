@@ -1,4 +1,11 @@
-<x-app-layout>
+<x-resource-detail-layout
+    class="relative"
+    data-page="materials-show"
+    data-payload="materials-show-payload"
+    x-data="materialsShowPage"
+    x-on:materials-show:open-recipe-create="openRecipeCreate($event.detail)"
+    x-on:materials-show:open-make-order-create="openMakeOrderCreate($event.detail)"
+>
     @php
         $breadcrumbItems = [
             [
@@ -67,23 +74,37 @@
 
     <script type="application/json" id="materials-show-payload">@json($payload)</script>
 
-    <div
-        class="py-8 sm:py-12"
-        data-page="materials-show"
-        data-payload="materials-show-payload"
-    >
-        <div class="max-w-5xl mx-auto px-1 sm:px-6 lg:px-8 space-y-4 sm:space-y-6">
-            @if ($payload['purchaseOrderCreate'] ?? null)
-                <div data-purchase-order-create-root></div>
+    <div class="max-w-5xl mx-auto px-1 sm:px-6 lg:px-8 py-8 sm:py-12 space-y-4 sm:space-y-6" data-material-detail-content>
+        @if ($payload['purchaseOrderCreate'] ?? null)
+            <div data-purchase-order-create-root></div>
+        @endif
+
+        @if (($payload['sections']['supplierPackages'] ?? null))
+            <div data-js-crud-section-root data-section-key="supplierPackages"></div>
+        @endif
+
+        @if (($payload['sections']['recipes'] ?? null))
+            <div data-js-crud-section-root data-section-key="recipes"></div>
+        @endif
+
+        @if (($payload['sections']['purchaseOrders'] ?? null))
+            <div data-js-crud-section-root data-section-key="purchaseOrders"></div>
+        @endif
+
+        @if (($payload['sections']['makeOrders'] ?? null))
+            <div data-js-crud-section-root data-section-key="makeOrders"></div>
+        @endif
+    </div>
+
+    <x-slot name="overlays">
+        <div data-material-detail-overlays>
+            @if ($payload['recipeCreate'] ?? null)
+                @include('manufacturing.recipes.partials.create-recipe-slide-over')
             @endif
 
-            @if (($payload['sections']['purchaseOrders'] ?? null))
-                <div data-js-crud-section-root data-section-key="purchaseOrders"></div>
-            @endif
-
-            @if (($payload['sections']['supplierPackages'] ?? null))
-                <div data-js-crud-section-root data-section-key="supplierPackages"></div>
+            @if ($payload['makeOrderCreate'] ?? null)
+                @include('manufacturing.make-orders.partials.create-make-order-slide-over')
             @endif
         </div>
-    </div>
-</x-app-layout>
+    </x-slot>
+</x-resource-detail-layout>

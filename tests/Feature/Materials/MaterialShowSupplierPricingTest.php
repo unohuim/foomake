@@ -367,7 +367,7 @@ it('3a. includes the purchase orders section config for purchasable materials wi
     expect($section['resource'] ?? null)->toBe('material-purchase-orders')
         ->and($section['endpoints']['list'] ?? null)->toBe(route('materials.purchase-orders.index', $item))
         ->and($section['permissions']['canCreate'] ?? null)->toBeFalse()
-        ->and($section['defaultOpen'] ?? null)->toBeTrue()
+        ->and($section['defaultOpen'] ?? null)->toBeFalse()
         ->and(array_key_exists('createUrl', $section))->toBeFalse()
         ->and($section['actions'][0]['id'] ?? null)->toBe('view')
         ->and($section['actions'][0]['label'] ?? null)->toBe('View')
@@ -436,7 +436,7 @@ it('3ca. renders the purchase order create package payload for purchasable mater
     $payload = ($this->extractPayload)($response, 'materials-show-payload');
     $package = collect($payload['purchaseOrderCreate']['packages'] ?? [])->firstWhere('id', $option->id);
 
-    expect($payload['sections']['purchaseOrders']['defaultOpen'] ?? null)->toBeTrue()
+    expect($payload['sections']['purchaseOrders']['defaultOpen'] ?? null)->toBeFalse()
         ->and($payload['sections']['purchaseOrders']['permissions']['canCreate'] ?? null)->toBeFalse()
         ->and(array_key_exists('createUrl', $payload['sections']['purchaseOrders'] ?? []))->toBeFalse()
         ->and($package)->not->toBeNull()
@@ -545,7 +545,7 @@ it('5a. omits the purchase orders section for non-purchasable materials', functi
     expect(($this->extractSectionConfig)($response, 'purchaseOrders'))->toBe([]);
 });
 
-it('5b. material detail source renders purchase orders before supplier packages', function (): void {
+it('5b. material detail source renders supplier packages before purchase orders', function (): void {
     $viewSource = file_get_contents(resource_path('views/materials/show.blade.php'));
 
     $purchaseOrdersPosition = strpos($viewSource, 'data-section-key="purchaseOrders"');
@@ -553,10 +553,10 @@ it('5b. material detail source renders purchase orders before supplier packages'
 
     expect($purchaseOrdersPosition)->not->toBeFalse()
         ->and($supplierPackagesPosition)->not->toBeFalse()
-        ->and($purchaseOrdersPosition)->toBeLessThan($supplierPackagesPosition);
+        ->and($supplierPackagesPosition)->toBeLessThan($purchaseOrdersPosition);
 });
 
-it('5c. material detail payload config defines purchase orders before supplier packages', function (): void {
+it('5c. material detail payload config defines supplier packages before purchase orders', function (): void {
     $controllerSource = file_get_contents(app_path('Http/Controllers/ItemController.php'));
 
     $purchaseOrdersPosition = strpos($controllerSource, "'purchaseOrders' =>");
@@ -564,7 +564,7 @@ it('5c. material detail payload config defines purchase orders before supplier p
 
     expect($purchaseOrdersPosition)->not->toBeFalse()
         ->and($supplierPackagesPosition)->not->toBeFalse()
-        ->and($purchaseOrdersPosition)->toBeLessThan($supplierPackagesPosition);
+        ->and($supplierPackagesPosition)->toBeLessThan($purchaseOrdersPosition);
 });
 
 it('6. removes the legacy supplier package payload and duplicated server rendered package list markup', function (): void {
@@ -915,6 +915,7 @@ it('23. returns paginated supplier package rows with supplier name quantity uom 
         ->and($response->json('data.0.supplier_name'))->toBe('List Supplier')
         ->and($response->json('data.0.pack_quantity'))->toBe('8.500000')
         ->and($response->json('data.0.pack_uom_symbol'))->toBe('kg-msp-23')
+        ->and($response->json('data.0.show_url'))->toBe(route('purchasing.suppliers.show', $supplier))
         ->and($response->json('data.0.current_price_display'))->toBe('USD 25.99')
         ->and($response->json('data.0.state'))->toBe('active')
         ->and($response->json('data.0.is_active'))->toBeTrue()
@@ -949,6 +950,45 @@ it('24. excludes cross tenant supplier package rows even if rogue records refere
 
     expect($ids)->toContain($visible->id)
         ->and($skus)->not->toContain('ROGUE-24');
+});
+
+it('24a. supplier package rows expose tenant scoped supplier detail links only for visible records', function (): void {
+    $tenant = ($this->makeTenant)();
+    $otherTenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $uom = ($this->makeUom)($tenant, ['symbol' => 'kg-msp-24a']);
+    $otherUom = ($this->makeUom)($otherTenant, ['symbol' => 'kg-msp-24a-other']);
+    $item = ($this->makeItem)($tenant, $uom);
+    $supplier = ($this->makeSupplier)($tenant, ['company_name' => 'Visible Supplier']);
+    $visibleOption = ($this->makeOption)($tenant, $supplier, $item, $uom, ['supplier_sku' => 'VISIBLE-LINK']);
+    $otherSupplier = ($this->makeSupplier)($otherTenant, ['company_name' => 'Hidden Supplier']);
+    $otherItem = ($this->makeItem)($otherTenant, $otherUom);
+    ($this->makeOption)($otherTenant, $otherSupplier, $otherItem, $otherUom, ['supplier_sku' => 'HIDDEN-LINK']);
+
+    ($this->grantPermissions)($user, ['inventory-materials-view', 'purchasing-suppliers-view']);
+
+    $response = ($this->getPackages)($user, $item)->assertOk();
+    $row = collect($response->json('data'))->firstWhere('id', $visibleOption->id);
+
+    expect($row['show_url'] ?? null)->toBe(route('purchasing.suppliers.show', $supplier))
+        ->and(collect($response->json('data'))->pluck('show_url')->filter()->all())
+        ->not->toContain(route('purchasing.suppliers.show', $otherSupplier));
+});
+
+it('24b. supplier packages section exposes a view row action that uses the supplier detail link', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $uom = ($this->makeUom)($tenant);
+    $item = ($this->makeItem)($tenant, $uom);
+
+    ($this->grantPermissions)($user, ['inventory-materials-view', 'purchasing-suppliers-view']);
+
+    $response = ($this->getShow)($user, $item)->assertOk();
+    $section = ($this->extractSectionConfig)($response, 'supplierPackages');
+
+    expect($section['actions'][0]['id'] ?? null)->toBe('view')
+        ->and($section['actions'][0]['type'] ?? null)->toBe('view')
+        ->and($section['actions'][0]['urlField'] ?? null)->toBe('display.showUrl');
 });
 
 it('25. returns an empty data set and pagination metadata when no supplier packages exist', function (): void {

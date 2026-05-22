@@ -1,0 +1,69 @@
+name: Resource Detail Layout Pattern
+type: UI Architectural Pattern
+location:
+  - app/View/Components/AppLayout.php
+  - resources/views/layouts/app.blade.php
+  - resources/views/components/resource-detail-layout.blade.php
+  - resources/views/materials/show.blade.php
+  - resources/views/manufacturing/recipes/show.blade.php
+  - resources/views/manufacturing/make-orders/show.blade.php
+  - resources/views/purchasing/orders/show.blade.php
+  - resources/views/purchasing/suppliers/show.blade.php
+  - resources/views/sales/orders/show.blade.php
+  - resources/views/sales/customers/show.blade.php
+  - resources/views/inventory/counts/show.blade.php
+purpose: Define a shared resource-detail page shell where top navigation and the page header remain sticky while only the detail content pane scrolls.
+when_to_use:
+  - Building or refactoring a resource detail page that should keep navigation and page-identifying header chrome visible while browsing long detail content
+  - Reusing one detail-page scroll shell across multiple Blade detail pages without introducing global JavaScript state or client-side routing
+  - Converting full-page document scrolling on resource detail pages into a bounded content scroller while preserving the existing Breeze-aligned app shell
+when_not_to_use:
+  - CRUD index pages that already use the configured CRUD page shell
+  - Static pages where full-document scrolling is acceptable and no sticky detail header behavior is needed
+  - Pages that require custom nested scroll regions beyond the single approved detail content scroller
+rules:
+  - Resource detail pages that need sticky navigation and sticky page headers must use the shared resource detail layout component rather than duplicating page-local sticky shells.
+  - The shared resource detail layout must opt into sticky shell behavior through the existing app layout rather than replacing the global application shell.
+  - The top navigation remains sticky above the page header.
+  - The page header remains sticky beneath the navigation bar.
+  - The detail content pane is the only scrollable region owned by the detail shell.
+  - Resource detail pages may keep internal horizontal overflow containers for tables, but they must not create competing full-height vertical page scrollers outside the shared detail content pane.
+  - The resource detail layout must preserve min-height propagation so nested detail modules can size themselves correctly inside the scroll pane.
+  - Resource detail layout behavior must remain opt-in and must not force sticky shell behavior onto non-detail pages through the shared app layout by default.
+  - No global JavaScript state may be introduced to implement this layout pattern.
+public_interface:
+  - docs/architecture/ui/ResourceDetailLayoutPattern.yaml
+  - x-resource-detail-layout
+  - sticky-shell
+  - data-resource-detail-layout
+  - data-resource-detail-scroll
+example_usage: |
+  Blade detail page:
+    <x-resource-detail-layout>
+        <x-slot name="header">
+            <div>
+                <h2 class="font-semibold text-xl text-gray-800 leading-tight">Material</h2>
+            </div>
+        </x-slot>
+
+        <div class="py-8 sm:py-12">
+            <div class="mx-auto max-w-5xl space-y-6 sm:px-6 lg:px-8">
+                <div class="rounded-lg border border-gray-100 bg-white shadow-sm">
+                    ...
+                </div>
+            </div>
+        </div>
+    </x-resource-detail-layout>
+
+  Shared shell:
+    <x-app-layout :sticky-shell="true">
+        <x-slot name="header">
+            {{ $header ?? '' }}
+        </x-slot>
+
+        <div class="h-full min-h-0" data-resource-detail-layout>
+            <div class="h-full min-h-0 overflow-y-auto" data-resource-detail-scroll>
+                {{ $slot }}
+            </div>
+        </div>
+    </x-app-layout>

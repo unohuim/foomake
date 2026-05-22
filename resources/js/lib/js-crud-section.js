@@ -82,6 +82,8 @@ const normalizeSectionConfig = (config) => {
     const endpoints = asRecord(safeConfig.endpoints);
     const permissions = asRecord(safeConfig.permissions);
     const rowLayout = asRecord(safeConfig.rowLayout);
+    const createAction = asRecord(safeConfig.createAction);
+    const createActionPrefill = asRecord(createAction.prefill);
 
     return {
         resource: asString(safeConfig.resource),
@@ -93,6 +95,12 @@ const normalizeSectionConfig = (config) => {
         showRowActionsMenu: safeConfig.showRowActionsMenu !== false,
         permissions: {
             canCreate: Boolean(permissions.canCreate),
+        },
+        createAction: {
+            type: asString(createAction.type),
+            url: asString(createAction.url),
+            handlerKey: asString(createAction.handlerKey),
+            prefill: createActionPrefill,
         },
         endpoints: {
             list: asString(endpoints.list),
@@ -523,7 +531,7 @@ const buildLayoutText = (record, entry) => {
     return parts.join(' ');
 };
 
-const createSectionState = (section, adapters) => ({
+const createSectionState = (section, adapters, hostEl) => ({
     section,
     adapters,
     isOpen: asBoolean(section.defaultOpen),
@@ -550,6 +558,16 @@ const createSectionState = (section, adapters) => ({
     inlineCreateFormError: '',
     inlineCreateSubmitting: false,
     init() {
+        const rootEl = hostEl?.closest('[data-js-crud-section-root]');
+
+        if (rootEl) {
+            rootEl._jsCrudSectionApi = {
+                refresh: async (page = 1) => {
+                    await this.fetchPage(page);
+                },
+            };
+        }
+
         if (this.isOpen && !this.hasLoaded) {
             this.fetchPage(1);
         }
@@ -798,6 +816,19 @@ const createSectionState = (section, adapters) => ({
             return;
         }
 
+        if (this.section.createAction.type === 'view' && this.section.createAction.url !== '') {
+            globalThis.location.assign(this.section.createAction.url);
+            return;
+        }
+
+        if (this.section.createAction.type === 'custom' && typeof this.adapters.handleCreateAction === 'function') {
+            this.adapters.handleCreateAction({
+                section: this.section,
+                component: this,
+            });
+            return;
+        }
+
         this.formMode = 'create';
         this.editingId = null;
         this.form = buildEmptyForm(this.section);
@@ -979,6 +1010,7 @@ export function mountCrudSection(targetEl, input) {
 
     Alpine.data('jsCrudSection', (el) => createSectionState(
         el.closest('[data-js-crud-section-root]')?._jsCrudSectionConfig || section,
-        el.closest('[data-js-crud-section-root]')?._jsCrudSectionAdapters || adapters
+        el.closest('[data-js-crud-section-root]')?._jsCrudSectionAdapters || adapters,
+        el
     ));
 }

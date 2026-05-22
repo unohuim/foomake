@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Actions\Inventory\ExecuteRecipeAction;
+use App\Models\Item;
 use App\Models\MakeOrder;
 use App\Models\Recipe;
 use App\Support\QuantityFormatter;
@@ -53,10 +54,69 @@ class MakeOrderController extends Controller
             'make_url_base' => url('/manufacturing/make-orders'),
             'csrf_token' => $request->session()->token(),
             'can_execute' => Gate::allows('inventory-make-orders-execute'),
+            'prefill_recipe_id' => $this->prefillRecipeId($request),
         ];
 
         return view('manufacturing.make-orders.index', [
             'payload' => $payload,
+        ]);
+    }
+
+    /**
+     * Display a minimal read-only make order detail page.
+     */
+    public function show(Request $request, MakeOrder $makeOrder): View
+    {
+        Gate::authorize('inventory-make-orders-view');
+        abort_unless((int) $makeOrder->tenant_id === (int) $request->user()->tenant_id, 404);
+
+        $makeOrder->load(['recipe.item.baseUom', 'outputItem.baseUom']);
+
+        $totalOutputQuantity = $this->totalOutputQuantity($makeOrder);
+
+        return view('manufacturing.make-orders.show', [
+            'makeOrder' => $makeOrder,
+            'totalOutputQuantity' => $totalOutputQuantity,
+            'totalOutputQuantityDisplay' => QuantityFormatter::formatForUom(
+                $totalOutputQuantity,
+                $makeOrder->outputItem?->baseUom,
+                1
+            ),
+            'runsDisplay' => QuantityFormatter::format((string) $makeOrder->output_quantity, 0),
+        ]);
+    }
+
+    /**
+     * Return a paginated material-scoped make order list for the material detail page.
+     */
+    public function listForMaterial(Request $request, Item $item): JsonResponse
+    {
+        Gate::authorize('inventory-materials-view');
+        Gate::authorize('inventory-make-orders-view');
+
+        $paginator = MakeOrder::query()
+            ->where('tenant_id', $request->user()->tenant_id)
+            ->with(['recipe', 'outputItem.baseUom'])
+            ->whereHas('recipe', function ($query) use ($item): void {
+                $query->where('item_id', $item->id);
+            })
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->paginate(10);
+
+        $data = $paginator->getCollection()
+            ->map(fn (MakeOrder $makeOrder): array => $this->makeOrderPayload($makeOrder))
+            ->values()
+            ->all();
+
+        return response()->json([
+            'data' => $data,
+            'meta' => [
+                'current_page' => $paginator->currentPage(),
+                'last_page' => $paginator->lastPage(),
+                'per_page' => $paginator->perPage(),
+                'total' => $paginator->total(),
+            ],
         ]);
     }
 
@@ -228,15 +288,24 @@ class MakeOrderController extends Controller
      */
     private function makeOrderPayload(MakeOrder $makeOrder): array
     {
+        $totalOutputQuantity = $this->totalOutputQuantity($makeOrder);
+
         return [
             'id' => $makeOrder->id,
             'recipe_id' => $makeOrder->recipe_id,
+            'recipe_name' => $makeOrder->recipe?->name ?? '—',
             'output_item_id' => $makeOrder->output_item_id,
             'output_item_name' => $makeOrder->outputItem?->name ?? '—',
             'runs' => (string) $makeOrder->output_quantity,
             'runs_display' => QuantityFormatter::format(
                 (string) $makeOrder->output_quantity,
-                6
+                0
+            ),
+            'total_output_quantity' => $totalOutputQuantity,
+            'total_output_quantity_display' => QuantityFormatter::formatForUom(
+                $totalOutputQuantity,
+                $makeOrder->outputItem?->baseUom,
+                1
             ),
             'status' => $makeOrder->status,
             'due_date' => $makeOrder->due_date?->format('Y-m-d'),
@@ -244,6 +313,7 @@ class MakeOrderController extends Controller
             'made_at' => $makeOrder->made_at?->format('Y-m-d H:i'),
             'created_by_user_id' => $makeOrder->created_by_user_id,
             'made_by_user_id' => $makeOrder->made_by_user_id,
+            'show_url' => route('manufacturing.make-orders.show', $makeOrder),
         ];
     }
 
@@ -297,6 +367,36 @@ class MakeOrderController extends Controller
         }
 
         return null;
+    }
+
+    /**
+     * Calculate total produced quantity as runs multiplied by recipe output quantity.
+     */
+    private function totalOutputQuantity(MakeOrder $makeOrder): string
+    {
+        $recipeOutputQuantity = (string) ($makeOrder->recipe?->output_quantity ?? '0.000000');
+
+        return bcmul((string) $makeOrder->output_quantity, $recipeOutputQuantity, 6);
+    }
+
+    /**
+     * Resolve an active manufacturing recipe prefill id for the create form.
+     */
+    private function prefillRecipeId(Request $request): ?int
+    {
+        $recipeId = $request->query('recipe_id');
+
+        if (! is_numeric($recipeId)) {
+            return null;
+        }
+
+        $recipe = Recipe::query()
+            ->where('tenant_id', $request->user()->tenant_id)
+            ->where('is_active', true)
+            ->where('recipe_type', Recipe::TYPE_MANUFACTURING)
+            ->find((int) $recipeId);
+
+        return $recipe?->id;
     }
 
     /**

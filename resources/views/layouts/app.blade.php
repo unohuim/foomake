@@ -15,12 +15,14 @@
         @vite(['resources/css/app.css', 'resources/js/app.js'])
     </head>
     <body class="font-sans antialiased">
-        <div class="min-h-screen bg-gray-100">
-            @include('layouts.navigation')
+        <div class="{{ $stickyShell ? 'flex h-screen flex-col overflow-hidden bg-gray-100' : 'min-h-screen bg-gray-100' }}">
+            <div class="{{ $stickyShell ? 'sticky top-0 z-40 shrink-0' : '' }}">
+                @include('layouts.navigation')
+            </div>
 
             <!-- Page Heading -->
             @isset($header)
-                <header class="bg-white shadow">
+                <header class="{{ $stickyShell ? 'sticky top-16 z-30 shrink-0 bg-white shadow' : 'bg-white shadow' }}">
                     <div class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
                         {{ $header }}
                     </div>
@@ -28,7 +30,7 @@
             @endisset
 
             <!-- Page Content -->
-            <main>
+            <main class="{{ $stickyShell ? 'min-h-0 flex-1 overflow-hidden' : '' }}">
                 {{ $slot }}
             </main>
         </div>

@@ -1,4 +1,4 @@
-<x-app-layout>
+<x-resource-detail-layout>
     @php
         $breadcrumbItems = [
             [
@@ -792,4 +792,4 @@
             @endif
         </div>
     </div>
-</x-app-layout>
+</x-resource-detail-layout>

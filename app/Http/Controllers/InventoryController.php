@@ -99,6 +99,7 @@ class InventoryController extends Controller
                 'columns' => [
                     'item' => [
                         'kind' => 'stacked-text',
+                        'urlExpression' => "record.show_url || ''",
                         'subtitleExpression' => "record.item_uom_name || '—'",
                     ],
                     'on_hand' => ['kind' => 'text'],

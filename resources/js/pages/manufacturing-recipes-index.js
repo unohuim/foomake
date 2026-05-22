@@ -62,6 +62,15 @@ export function mount(rootEl, payload) {
             type: 'success',
             timeoutId: null,
         },
+        init() {
+            const prefillCreate = safePayload.prefill_create || {};
+
+            if (prefillCreate.open === true) {
+                this.openCreate({
+                    item_id: prefillCreate.item_id || '',
+                });
+            }
+        },
         normalizeErrors(errors) {
             if (!errors || typeof errors !== 'object') {
                 return emptyErrors();
@@ -99,13 +108,16 @@ export function mount(rootEl, payload) {
                 is_active: true,
             };
         },
-        openCreate() {
+        openCreate(prefill = {}) {
             this.createErrors = emptyErrors();
             this.createGeneralError = '';
-            this.createOnlyWithoutRecipe = true;
+            this.createOnlyWithoutRecipe = !prefill.item_id;
             this.createForm = this.defaultCreateForm();
-            this.createManufacturingOutputQuantity = this.createForm.output_quantity;
+            this.createForm.item_id = prefill.item_id ? String(prefill.item_id) : '';
             this.syncCreateRecipeType();
+            this.syncCreateNameFromSelectedItem();
+            this.createForm.output_quantity = this.defaultQuantityForItem(this.createForm.item_id);
+            this.createManufacturingOutputQuantity = this.createForm.output_quantity;
             this.isCreateOpen = true;
             this.$nextTick(() => {
                 const input = this.$refs.createOutputItemCombobox?.querySelector('input[role="combobox"]');

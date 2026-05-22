@@ -27,6 +27,7 @@ class RecipeController extends Controller
         Gate::authorize('inventory-recipes-view');
 
         $selectedRecipeType = $this->normalizeRecipeTypeFilter($request->query('recipe_type'));
+        $prefillCreate = $this->prefillCreatePayload($request);
 
         $recipes = Recipe::query()
             ->with('item.baseUom')
@@ -63,6 +64,7 @@ class RecipeController extends Controller
             'can_manage' => Gate::allows('inventory-make-orders-manage'),
             'selected_recipe_type' => $selectedRecipeType ?? '',
             'recipe_type_options' => $this->recipeTypeOptions(),
+            'prefill_create' => $prefillCreate,
         ];
 
         return view('manufacturing.recipes.index', [
@@ -135,6 +137,39 @@ class RecipeController extends Controller
         return view('manufacturing.recipes.show', [
             'recipe' => $recipe,
             'payload' => $payload,
+        ]);
+    }
+
+    /**
+     * Return a paginated material-scoped recipe list for the material detail page.
+     */
+    public function listForMaterial(Request $request, Item $item): JsonResponse
+    {
+        Gate::authorize('inventory-materials-view');
+        Gate::authorize('inventory-recipes-view');
+
+        $paginator = Recipe::query()
+            ->where('tenant_id', $request->user()->tenant_id)
+            ->with('item.baseUom')
+            ->withCount('lines')
+            ->where('item_id', $item->id)
+            ->orderByDesc('updated_at')
+            ->orderByDesc('id')
+            ->paginate(10);
+
+        $data = $paginator->getCollection()
+            ->map(fn (Recipe $recipe): array => $this->recipePayload($recipe))
+            ->values()
+            ->all();
+
+        return response()->json([
+            'data' => $data,
+            'meta' => [
+                'current_page' => $paginator->currentPage(),
+                'last_page' => $paginator->lastPage(),
+                'per_page' => $paginator->perPage(),
+                'total' => $paginator->total(),
+            ],
         ]);
     }
 
@@ -409,6 +444,12 @@ class RecipeController extends Controller
      */
     private function recipePayload(Recipe $recipe): array
     {
+        $availableActions = ['view'];
+
+        if (Gate::allows('inventory-make-orders-execute')) {
+            $availableActions[] = 'make';
+        }
+
         return [
             'id' => $recipe->id,
             'item_id' => $recipe->item_id,
@@ -427,6 +468,10 @@ class RecipeController extends Controller
             'updated_at' => $recipe->updated_at?->format('Y-m-d H:i') ?? '—',
             'lines_count' => $recipe->lines_count ?? 0,
             'show_url' => route('manufacturing.recipes.show', $recipe),
+            'make_prefill' => [
+                'recipe_id' => $recipe->id,
+            ],
+            'available_actions' => $availableActions,
         ];
     }
 
@@ -506,6 +551,35 @@ class RecipeController extends Controller
         }
 
         return $recipeType;
+    }
+
+    /**
+     * @return array<string, bool|int|null>
+     */
+    private function prefillCreatePayload(Request $request): array
+    {
+        $open = $request->boolean('open_create');
+        $itemId = $request->query('item_id');
+
+        if (! $open || ! is_numeric($itemId)) {
+            return [
+                'open' => false,
+                'item_id' => null,
+            ];
+        }
+
+        $item = Item::query()
+            ->where('tenant_id', $request->user()->tenant_id)
+            ->where(function ($query) {
+                $query->where('is_manufacturable', true)
+                    ->orWhere('is_sellable', true);
+            })
+            ->find((int) $itemId);
+
+        return [
+            'open' => $item !== null,
+            'item_id' => $item?->id,
+        ];
     }
 
     /**

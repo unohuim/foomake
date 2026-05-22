@@ -519,6 +519,32 @@ it('18. inventory list rows include the uom name inside the item display contrac
         ->and($config['rowDisplay']['columns']['item']['subtitleExpression'] ?? null)->toBe("record.item_uom_name || '—'");
 });
 
+it('18aa. inventory item rows expose the material detail link inside the stacked item cell contract', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $uom = ($this->makeUom)($tenant, 'Each', 'ea');
+    $item = ($this->makeItem)($tenant, $uom, ['name' => 'Linked Inventory Item']);
+    ($this->grantPermission)($user, 'inventory-adjustments-view');
+
+    $response = ($this->inventoryIndex)($user)->assertOk();
+    $config = ($this->extractCrudConfig)($response);
+    $rows = ($this->inventoryList)($user)->assertOk()->json('data');
+    $row = ($this->inventoryRow)($rows, $item->id);
+
+    expect($config['rowDisplay']['columns']['item']['kind'] ?? null)->toBe('stacked-text')
+        ->and($config['rowDisplay']['columns']['item']['urlExpression'] ?? null)->toBe("record.show_url || ''")
+        ->and($row['show_url'] ?? null)->toBe(route('materials.show', $item));
+});
+
+it('18ab. inventory page renderer keeps the stacked item link and uom subtext without a dedicated uom column', function (): void {
+    $source = file_get_contents(resource_path('js/lib/crud-page.js'));
+
+    expect($source)->toContain("if (kind === 'stacked-text')")
+        ->and($source)->toContain(':href="${urlExpression}"')
+        ->and($source)->toContain('x-text="${cellTextExpression}"')
+        ->and($source)->toContain('x-text="${subtitleExpression}"');
+});
+
 it('18a. inventory page module exposes the desktop crud state contract expected by the shared renderer', function (): void {
     $source = file_get_contents(resource_path('js/pages/inventory-index.js'));
 

@@ -107,6 +107,10 @@ Route::middleware('auth')->group(function () {
         ->name('materials.supplier-packages.index');
     Route::get('/materials/{item}/purchase-orders', [MaterialPurchaseOrderController::class, 'index'])
         ->name('materials.purchase-orders.index');
+    Route::get('/materials/{item}/recipes', [RecipeController::class, 'listForMaterial'])
+        ->name('materials.recipes.index');
+    Route::get('/materials/{item}/make-orders', [MakeOrderController::class, 'listForMaterial'])
+        ->name('materials.make-orders.index');
     Route::post('/materials/{item}/purchase-orders', [MaterialDraftPurchaseOrderController::class, 'store'])
         ->name('materials.purchase-orders.store');
     Route::post('/materials/{item}/supplier-packages', [MaterialSupplierPackageController::class, 'store'])
@@ -165,6 +169,8 @@ Route::middleware('auth')->group(function () {
 
     Route::get('/manufacturing/make-orders', [MakeOrderController::class, 'index'])
         ->name('manufacturing.make-orders.index');
+    Route::get('/manufacturing/make-orders/{makeOrder}', [MakeOrderController::class, 'show'])
+        ->name('manufacturing.make-orders.show');
     Route::post('/manufacturing/make-orders', [MakeOrderController::class, 'store'])
         ->name('manufacturing.make-orders.store');
     Route::post('/manufacturing/make-orders/{makeOrder}/schedule', [MakeOrderController::class, 'schedule'])

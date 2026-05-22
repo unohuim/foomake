@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Item;
+use App\Models\Recipe;
 use App\Models\Supplier;
 use App\Models\Uom;
 use Illuminate\Http\JsonResponse;
@@ -40,6 +41,10 @@ class ItemController extends Controller
         $canViewPurchasing = Gate::allows('purchasing-suppliers-view');
         $canManagePurchasing = Gate::allows('purchasing-suppliers-manage');
         $canViewPurchaseOrders = Gate::allows('purchasing-purchase-orders-create');
+        $canViewRecipes = Gate::allows('inventory-recipes-view');
+        $canViewMakeOrders = Gate::allows('inventory-make-orders-view');
+        $canManageRecipes = Gate::allows('inventory-make-orders-manage');
+        $canExecuteMakeOrders = Gate::allows('inventory-make-orders-execute');
         $canCreatePurchaseOrdersFromPackages = $canViewPurchasing
             && Gate::allows('purchasing-purchase-orders-create');
 
@@ -49,16 +54,29 @@ class ItemController extends Controller
                 'name' => $item->name,
             ],
             'tenantCurrency' => strtoupper($this->resolveTenantCurrency($request)),
+            'navigationStateUrl' => route('navigation.state'),
             'canViewPurchasing' => $canViewPurchasing,
             'purchaseOrderCreate' => $canCreatePurchaseOrdersFromPackages && $item->is_purchasable
                 ? $this->purchaseOrderCreateConfig($request, $item)
                 : null,
+            'recipeCreate' => $canViewRecipes && $item->is_manufacturable
+                ? $this->recipeCreateConfig($request, $item, $canManageRecipes)
+                : null,
+            'makeOrderCreate' => $canViewMakeOrders && $item->is_manufacturable
+                ? $this->makeOrderCreateConfig($request, $item, $canExecuteMakeOrders)
+                : null,
             'sections' => [
+                'supplierPackages' => $canViewPurchasing && $item->is_purchasable
+                    ? $this->supplierPackagesSectionConfig($request, $item, $canManagePurchasing)
+                    : null,
+                'recipes' => $canViewRecipes && $item->is_manufacturable
+                    ? $this->recipesSectionConfig($item, $canManageRecipes)
+                    : null,
                 'purchaseOrders' => $canViewPurchaseOrders && $item->is_purchasable
                     ? $this->purchaseOrdersSectionConfig($item)
                     : null,
-                'supplierPackages' => $canViewPurchasing && $item->is_purchasable
-                    ? $this->supplierPackagesSectionConfig($request, $item, $canManagePurchasing)
+                'makeOrders' => $canViewMakeOrders && $item->is_manufacturable
+                    ? $this->makeOrdersSectionConfig($item)
                     : null,
             ],
         ];
@@ -272,7 +290,7 @@ class ItemController extends Controller
             'description' => 'Linked purchasing options for this material.',
             'emptyState' => 'No supplier packages have been added for this material.',
             'csrfToken' => csrf_token(),
-            'defaultOpen' => false,
+            'defaultOpen' => true,
             'permissions' => [
                 'canCreate' => $canManagePurchasing,
             ],
@@ -403,6 +421,13 @@ class ItemController extends Controller
             ],
             'actions' => [
                 [
+                    'id' => 'view',
+                    'label' => 'View',
+                    'type' => 'view',
+                    'tone' => 'default',
+                    'urlField' => 'display.showUrl',
+                ],
+                [
                     'id' => 'purchase',
                     'label' => 'Purchase',
                     'type' => 'custom',
@@ -446,7 +471,7 @@ class ItemController extends Controller
             'description' => 'Purchase orders that include this material.',
             'emptyState' => 'No purchase orders include this material yet.',
             'csrfToken' => csrf_token(),
-            'defaultOpen' => true,
+            'defaultOpen' => false,
             'permissions' => [
                 'canCreate' => false,
             ],
@@ -553,6 +578,245 @@ class ItemController extends Controller
             'suppliers' => $suppliers,
             'packages' => $packages,
         ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function recipesSectionConfig(Item $item, bool $canManageRecipes): array
+    {
+        return [
+            'resource' => 'material-recipes',
+            'title' => 'Recipes',
+            'description' => 'Recipes that produce this material.',
+            'emptyState' => 'No recipes produce this material yet.',
+            'csrfToken' => csrf_token(),
+            'defaultOpen' => true,
+            'permissions' => [
+                'canCreate' => $canManageRecipes,
+            ],
+            'createAction' => [
+                'type' => 'custom',
+                'handlerKey' => 'openRecipeCreate',
+                'prefill' => [
+                    'itemId' => $item->id,
+                ],
+            ],
+            'endpoints' => [
+                'list' => route('materials.recipes.index', $item),
+            ],
+            'fields' => [],
+            'rowLayout' => [
+                'primaryText' => [
+                    'field' => 'display.nameText',
+                    'fallback' => 'Unnamed recipe',
+                ],
+                'secondaryFields' => [
+                    [
+                        'label' => 'Type',
+                        'field' => 'display.recipeTypeText',
+                        'fallback' => '—',
+                    ],
+                    [
+                        'label' => 'Updated',
+                        'field' => 'display.updatedAtText',
+                        'fallback' => '—',
+                    ],
+                ],
+                'badges' => [
+                    [
+                        'field' => 'display.stateText',
+                        'toneField' => 'display.stateTone',
+                        'fallback' => '',
+                    ],
+                ],
+                'rightMeta' => [
+                    [
+                        'label' => 'Output',
+                        'field' => 'display.outputQuantityText',
+                        'fallback' => '—',
+                        'strong' => true,
+                    ],
+                ],
+            ],
+            'actions' => [
+                [
+                    'id' => 'view',
+                    'label' => 'View',
+                    'type' => 'view',
+                    'tone' => 'default',
+                    'urlField' => 'display.showUrl',
+                ],
+                [
+                    'id' => 'make',
+                    'label' => 'Make',
+                    'type' => 'custom',
+                    'tone' => 'default',
+                    'handlerKey' => 'openMakeOrderCreate',
+                ],
+            ],
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function makeOrdersSectionConfig(Item $item): array
+    {
+        return [
+            'resource' => 'material-make-orders',
+            'title' => 'Make Orders',
+            'description' => 'Make orders for recipes that produce this material.',
+            'emptyState' => 'No make orders produce this material yet.',
+            'csrfToken' => csrf_token(),
+            'defaultOpen' => false,
+            'permissions' => [
+                'canCreate' => false,
+            ],
+            'endpoints' => [
+                'list' => route('materials.make-orders.index', $item),
+            ],
+            'fields' => [],
+            'rowLayout' => [
+                'primaryText' => [
+                    'field' => 'display.recipeNameText',
+                    'fallback' => 'Unnamed recipe',
+                ],
+                'secondaryFields' => [
+                    [
+                        'label' => 'Runs',
+                        'field' => 'display.runsText',
+                        'fallback' => '—',
+                    ],
+                    [
+                        'label' => 'Due',
+                        'field' => 'display.dueDateText',
+                        'fallback' => 'No due date',
+                    ],
+                ],
+                'badges' => [
+                    [
+                        'field' => 'display.statusText',
+                        'toneField' => 'display.statusTone',
+                        'fallback' => '',
+                    ],
+                ],
+                'rightMeta' => [
+                    [
+                        'label' => 'Output',
+                        'field' => 'display.totalOutputQuantityText',
+                        'fallback' => '—',
+                        'strong' => true,
+                    ],
+                ],
+            ],
+            'actions' => [
+                [
+                    'id' => 'view',
+                    'label' => 'View',
+                    'type' => 'view',
+                    'tone' => 'default',
+                    'urlField' => 'display.showUrl',
+                ],
+            ],
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function recipeCreateConfig(Request $request, Item $item, bool $canManageRecipes): array
+    {
+        $manufacturableItems = Item::query()
+            ->where('tenant_id', $request->user()->tenant_id)
+            ->where(function ($query) {
+                $query->where('is_manufacturable', true)
+                    ->orWhere('is_sellable', true);
+            })
+            ->withCount('recipes')
+            ->with(['baseUom:id,name,symbol,display_precision'])
+            ->orderBy('name')
+            ->get(['id', 'name', 'base_uom_id', 'is_manufacturable', 'is_sellable']);
+
+        return [
+            'storeUrl' => route('manufacturing.recipes.store'),
+            'csrfToken' => $request->session()->token(),
+            'canManage' => $canManageRecipes,
+            'prefillItemId' => $item->id,
+            'manufacturableItems' => $manufacturableItems->map(function (Item $manufacturableItem) {
+                return $this->recipeCreateItemPayload($manufacturableItem);
+            })->all(),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function makeOrderCreateConfig(Request $request, Item $item, bool $canExecuteMakeOrders): array
+    {
+        $recipes = Recipe::query()
+            ->where('tenant_id', $request->user()->tenant_id)
+            ->where('item_id', $item->id)
+            ->where('is_active', true)
+            ->where('recipe_type', Recipe::TYPE_MANUFACTURING)
+            ->with('item.baseUom')
+            ->orderBy('name')
+            ->get();
+
+        return [
+            'storeUrl' => route('manufacturing.make-orders.store'),
+            'csrfToken' => $request->session()->token(),
+            'canExecute' => $canExecuteMakeOrders,
+            'recipes' => $recipes->map(function (Recipe $recipe) {
+                return [
+                    'id' => $recipe->id,
+                    'name' => $recipe->name,
+                    'item_id' => $recipe->item_id,
+                    'item_name' => $recipe->item?->name ?? '—',
+                ];
+            })->all(),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function recipeCreateItemPayload(Item $item): array
+    {
+        $uomDisplay = $item->baseUom
+            ? $item->baseUom->name . ' (' . $item->baseUom->symbol . ')'
+            : '—';
+
+        return [
+            'id' => $item->id,
+            'name' => $item->name,
+            'uom_display' => $uomDisplay,
+            'display_text' => $item->name . ' ' . $uomDisplay,
+            'search_text' => strtolower($item->name . ' ' . $uomDisplay),
+            'has_recipe' => $item->recipes_count > 0,
+            'is_manufacturable' => (bool) $item->is_manufacturable,
+            'is_sellable' => (bool) $item->is_sellable,
+            'uom_display_precision' => (int) ($item->baseUom?->display_precision ?? 6),
+            'allowed_recipe_types' => $this->allowedRecipeTypesForItem($item),
+        ];
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function allowedRecipeTypesForItem(Item $item): array
+    {
+        $allowedRecipeTypes = [];
+
+        if ($item->is_manufacturable) {
+            $allowedRecipeTypes[] = Recipe::TYPE_MANUFACTURING;
+        }
+
+        if ($item->is_sellable) {
+            $allowedRecipeTypes[] = Recipe::TYPE_FULFILLMENT;
+        }
+
+        return $allowedRecipeTypes;
     }
 
     /**
