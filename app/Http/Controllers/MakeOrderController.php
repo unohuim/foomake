@@ -21,18 +21,14 @@ use InvalidArgumentException;
  */
 class MakeOrderController extends Controller
 {
+    private const SCALE = 6;
+
     /**
      * Display the make orders index.
      */
     public function index(Request $request): View
     {
         Gate::authorize('inventory-make-orders-view');
-
-        $makeOrders = MakeOrder::query()
-            ->where('tenant_id', $request->user()->tenant_id)
-            ->with(['recipe', 'outputItem.baseUom'])
-            ->orderByDesc('created_at')
-            ->get();
 
         $recipes = Recipe::query()
             ->where('tenant_id', $request->user()->tenant_id)
@@ -42,23 +38,59 @@ class MakeOrderController extends Controller
             ->orderBy('id')
             ->get();
 
+        $canExecute = Gate::allows('inventory-make-orders-execute');
+        $crudConfig = $this->crudConfig($canExecute);
         $payload = [
-            'make_orders' => $makeOrders->map(function (MakeOrder $makeOrder) {
-                return $this->makeOrderPayload($makeOrder);
-            })->all(),
             'recipes' => $recipes->map(function (Recipe $recipe) {
                 return $this->recipePayload($recipe);
             })->all(),
-            'store_url' => route('manufacturing.make-orders.store'),
-            'schedule_url_base' => url('/manufacturing/make-orders'),
-            'make_url_base' => url('/manufacturing/make-orders'),
-            'csrf_token' => $request->session()->token(),
-            'can_execute' => Gate::allows('inventory-make-orders-execute'),
-            'prefill_recipe_id' => $this->prefillRecipeId($request),
+            'storeUrl' => route('manufacturing.make-orders.store'),
+            'csrfToken' => $request->session()->token(),
+            'canExecute' => $canExecute,
+            'prefillRecipeId' => $this->prefillRecipeId($request),
         ];
 
         return view('manufacturing.make-orders.index', [
+            'crudConfig' => $crudConfig,
             'payload' => $payload,
+        ]);
+    }
+
+    /**
+     * Return the make orders list read model for the shared CRUD page module.
+     */
+    public function list(Request $request): JsonResponse
+    {
+        Gate::authorize('inventory-make-orders-view');
+
+        $crudConfig = $this->crudConfig(Gate::allows('inventory-make-orders-execute'));
+        $validated = $request->validate([
+            'search' => ['nullable', 'string'],
+            'sort' => ['nullable', 'string'],
+            'direction' => ['nullable', 'in:asc,desc'],
+        ]);
+
+        $search = trim((string) ($validated['search'] ?? ''));
+        $sortColumn = (string) ($validated['sort'] ?? 'due_date');
+        $direction = (string) ($validated['direction'] ?? 'asc');
+        $rows = $this->makeOrdersListRows(
+            (int) $request->user()->tenant_id,
+            $search,
+            $sortColumn,
+            $direction
+        );
+
+        return response()->json([
+            'data' => $rows,
+            'meta' => [
+                'search' => $search,
+                'sort' => [
+                    'column' => $sortColumn,
+                    'direction' => $direction,
+                ],
+                'allowed_sort_columns' => $crudConfig['sortable'],
+                'total' => count($rows),
+            ],
         ]);
     }
 
@@ -96,6 +128,7 @@ class MakeOrderController extends Controller
 
         $paginator = MakeOrder::query()
             ->where('tenant_id', $request->user()->tenant_id)
+            ->where('status', '!=', MakeOrder::STATUS_CANCELLED)
             ->with(['recipe', 'outputItem.baseUom'])
             ->whereHas('recipe', function ($query) use ($item): void {
                 $query->where('item_id', $item->id);
@@ -174,6 +207,72 @@ class MakeOrderController extends Controller
     }
 
     /**
+     * Update an existing editable make order.
+     */
+    public function update(Request $request, int $makeOrder): JsonResponse
+    {
+        Gate::authorize('inventory-make-orders-execute');
+
+        $validated = $request->validate([
+            'recipe_id' => [
+                'required',
+                'integer',
+                Rule::exists('recipes', 'id')->where('tenant_id', $request->user()->tenant_id),
+            ],
+            'runs' => ['required', 'string', 'regex:/^\d+(?:\.\d{1,6})?$/'],
+            'due_date' => ['nullable', 'date'],
+        ]);
+
+        if (bccomp($validated['runs'], '0.000000', self::SCALE) !== 1) {
+            return $this->validationError([
+                'runs' => ['Runs must be greater than zero.'],
+            ], 'Runs must be greater than zero.');
+        }
+
+        $makeOrderModel = MakeOrder::query()
+            ->where('tenant_id', $request->user()->tenant_id)
+            ->with(['recipe', 'outputItem.baseUom'])
+            ->findOrFail($makeOrder);
+
+        if ($makeOrderModel->status === MakeOrder::STATUS_MADE || $makeOrderModel->status === MakeOrder::STATUS_CANCELLED) {
+            return response()->json([
+                'message' => 'Only draft or scheduled make orders can be edited.',
+            ], 422);
+        }
+
+        $recipe = Recipe::query()
+            ->where('tenant_id', $request->user()->tenant_id)
+            ->with('item')
+            ->findOrFail($validated['recipe_id']);
+
+        if ($recipeTypeError = $this->manufacturingRecipeValidationError($recipe)) {
+            return $recipeTypeError;
+        }
+
+        if (! $recipe->is_active) {
+            return $this->validationError([
+                'recipe_id' => ['Recipe must be active to execute.'],
+            ], 'Recipe must be active to execute.');
+        }
+
+        $dueDate = $validated['due_date'] ?? null;
+
+        $makeOrderModel->recipe_id = $recipe->id;
+        $makeOrderModel->output_item_id = $recipe->item_id;
+        $makeOrderModel->output_quantity = $validated['runs'];
+        $makeOrderModel->due_date = $dueDate ? Carbon::parse($dueDate)->startOfDay() : null;
+        $makeOrderModel->status = $dueDate ? MakeOrder::STATUS_SCHEDULED : MakeOrder::STATUS_DRAFT;
+        $makeOrderModel->scheduled_at = $dueDate ? ($makeOrderModel->scheduled_at ?? now()) : null;
+        $makeOrderModel->save();
+
+        $makeOrderModel->load(['recipe', 'outputItem.baseUom']);
+
+        return response()->json([
+            'data' => $this->makeOrderPayload($makeOrderModel),
+        ]);
+    }
+
+    /**
      * Schedule a draft make order.
      */
     public function schedule(Request $request, int $makeOrder): JsonResponse
@@ -192,6 +291,12 @@ class MakeOrderController extends Controller
         if ($makeOrderModel->status === MakeOrder::STATUS_MADE) {
             return response()->json([
                 'message' => 'Make order is already made.',
+            ], 422);
+        }
+
+        if ($makeOrderModel->status === MakeOrder::STATUS_CANCELLED) {
+            return response()->json([
+                'message' => 'Cancelled make orders cannot be scheduled.',
             ], 422);
         }
 
@@ -233,6 +338,14 @@ class MakeOrderController extends Controller
                     return [
                         'error' => response()->json([
                             'message' => 'Make order is already made.',
+                        ], 422),
+                    ];
+                }
+
+                if ($makeOrderModel->status === MakeOrder::STATUS_CANCELLED) {
+                    return [
+                        'error' => response()->json([
+                            'message' => 'Cancelled make orders cannot be made.',
                         ], 422),
                     ];
                 }
@@ -284,6 +397,39 @@ class MakeOrderController extends Controller
     }
 
     /**
+     * Archive an eligible make order by transitioning it to cancelled.
+     */
+    public function destroy(Request $request, int $makeOrder): JsonResponse
+    {
+        Gate::authorize('inventory-make-orders-execute');
+
+        $makeOrderModel = MakeOrder::query()
+            ->where('tenant_id', $request->user()->tenant_id)
+            ->with(['recipe', 'outputItem.baseUom'])
+            ->findOrFail($makeOrder);
+
+        if ($makeOrderModel->status === MakeOrder::STATUS_MADE) {
+            return response()->json([
+                'message' => 'Made make orders cannot be archived.',
+            ], 422);
+        }
+
+        if ($makeOrderModel->status === MakeOrder::STATUS_CANCELLED) {
+            return response()->json([
+                'message' => 'Make order is already archived.',
+            ], 422);
+        }
+
+        $makeOrderModel->status = MakeOrder::STATUS_CANCELLED;
+        $makeOrderModel->save();
+
+        return response()->json([
+            'data' => $this->makeOrderPayload($makeOrderModel->fresh(['recipe', 'outputItem.baseUom'])),
+            'message' => 'Archived.',
+        ]);
+    }
+
+    /**
      * Build JSON payload for a make order list entry.
      */
     private function makeOrderPayload(MakeOrder $makeOrder): array
@@ -300,6 +446,12 @@ class MakeOrderController extends Controller
             'runs_display' => QuantityFormatter::format(
                 (string) $makeOrder->output_quantity,
                 0
+            ),
+            'qty' => $totalOutputQuantity,
+            'qty_display' => QuantityFormatter::formatForUom(
+                $totalOutputQuantity,
+                $makeOrder->outputItem?->baseUom,
+                1
             ),
             'total_output_quantity' => $totalOutputQuantity,
             'total_output_quantity_display' => QuantityFormatter::formatForUom(
@@ -377,6 +529,153 @@ class MakeOrderController extends Controller
         $recipeOutputQuantity = (string) ($makeOrder->recipe?->output_quantity ?? '0.000000');
 
         return bcmul((string) $makeOrder->output_quantity, $recipeOutputQuantity, 6);
+    }
+
+    /**
+     * Return the shared CRUD config for the make orders page module.
+     *
+     * @return array<string, mixed>
+     */
+    private function crudConfig(bool $canExecute): array
+    {
+        $actions = [
+            [
+                'id' => 'view',
+                'label' => 'View',
+                'tone' => 'default',
+            ],
+        ];
+
+        if ($canExecute) {
+            $actions[] = [
+                'id' => 'edit',
+                'label' => 'Edit',
+                'tone' => 'default',
+            ];
+            $actions[] = [
+                'id' => 'archive',
+                'label' => 'Archive',
+                'tone' => 'warning',
+            ];
+        }
+
+        return [
+            'resource' => 'make-orders',
+            'endpoints' => [
+                'list' => route('manufacturing.make-orders.list'),
+                'create' => route('manufacturing.make-orders.store'),
+                'update' => url('/manufacturing/make-orders/{id}'),
+                'delete' => url('/manufacturing/make-orders/{id}'),
+            ],
+            'detailUrlTemplate' => url('/manufacturing/make-orders/{id}'),
+            'columns' => ['due_date', 'recipe_name', 'runs', 'output_item_name', 'qty', 'status'],
+            'headers' => [
+                'due_date' => 'Due Date',
+                'recipe_name' => 'Recipe Name',
+                'runs' => 'Runs',
+                'output_item_name' => 'Output Item',
+                'qty' => 'Qty',
+                'status' => 'Status',
+            ],
+            'sortable' => ['due_date', 'recipe_name', 'runs', 'output_item_name', 'qty', 'status'],
+            'labels' => [
+                'searchPlaceholder' => 'Search make orders',
+                'createTitle' => 'Create Make Order',
+                'createAriaLabel' => 'Create Make Order',
+                'emptyState' => 'No make orders found.',
+                'actionsAriaLabel' => 'Make order actions',
+            ],
+            'permissions' => [
+                'showExport' => false,
+                'showImport' => false,
+                'showCreate' => $canExecute,
+            ],
+            'rowDisplay' => [
+                'columns' => [
+                    'due_date' => ['kind' => 'text'],
+                    'recipe_name' => ['kind' => 'text'],
+                    'runs' => ['kind' => 'text'],
+                    'output_item_name' => ['kind' => 'text'],
+                    'qty' => ['kind' => 'text'],
+                    'status' => ['kind' => 'text'],
+                ],
+            ],
+            'mobileCard' => [
+                'titleExpression' => "record.recipe_name || '—'",
+                'subtitleExpression' => "record.output_item_name || '—'",
+                'bodyExpression' => 'makeOrderMobileSummary(record)',
+            ],
+            'actions' => $actions,
+        ];
+    }
+
+    /**
+     * Build active list rows for the make orders shared CRUD page.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function makeOrdersListRows(int $tenantId, string $search, string $sortColumn, string $direction): array
+    {
+        $rows = MakeOrder::query()
+            ->where('tenant_id', $tenantId)
+            ->where('status', '!=', MakeOrder::STATUS_CANCELLED)
+            ->with(['recipe', 'outputItem.baseUom'])
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->get()
+            ->map(fn (MakeOrder $makeOrder): array => $this->makeOrderPayload($makeOrder))
+            ->values()
+            ->all();
+
+        if ($search !== '') {
+            $needle = mb_strtolower($search);
+
+            $rows = array_values(array_filter($rows, function (array $row) use ($needle): bool {
+                $haystacks = [
+                    (string) ($row['due_date'] ?? ''),
+                    (string) ($row['recipe_name'] ?? ''),
+                    (string) ($row['runs'] ?? ''),
+                    (string) ($row['output_item_name'] ?? ''),
+                    (string) ($row['qty'] ?? ''),
+                    (string) ($row['status'] ?? ''),
+                ];
+
+                foreach ($haystacks as $haystack) {
+                    if (str_contains(mb_strtolower($haystack), $needle)) {
+                        return true;
+                    }
+                }
+
+                return false;
+            }));
+        }
+
+        usort($rows, function (array $left, array $right) use ($sortColumn, $direction): int {
+            $comparison = $this->compareListRows($left, $right, $sortColumn);
+
+            return $direction === 'desc' ? $comparison * -1 : $comparison;
+        });
+
+        return $rows;
+    }
+
+    /**
+     * Compare two make order list rows for sort operations.
+     */
+    private function compareListRows(array $left, array $right, string $sortColumn): int
+    {
+        if (in_array($sortColumn, ['runs', 'qty'], true)) {
+            return bccomp(
+                (string) ($left[$sortColumn] ?? '0.000000'),
+                (string) ($right[$sortColumn] ?? '0.000000'),
+                self::SCALE
+            );
+        }
+
+        return strcmp(
+            mb_strtolower((string) ($left[$sortColumn] ?? '')),
+            mb_strtolower((string) ($right[$sortColumn] ?? ''))
+        );
     }
 
     /**

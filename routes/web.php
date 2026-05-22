@@ -169,10 +169,16 @@ Route::middleware('auth')->group(function () {
 
     Route::get('/manufacturing/make-orders', [MakeOrderController::class, 'index'])
         ->name('manufacturing.make-orders.index');
+    Route::get('/manufacturing/make-orders/list', [MakeOrderController::class, 'list'])
+        ->name('manufacturing.make-orders.list');
     Route::get('/manufacturing/make-orders/{makeOrder}', [MakeOrderController::class, 'show'])
         ->name('manufacturing.make-orders.show');
     Route::post('/manufacturing/make-orders', [MakeOrderController::class, 'store'])
         ->name('manufacturing.make-orders.store');
+    Route::patch('/manufacturing/make-orders/{makeOrder}', [MakeOrderController::class, 'update'])
+        ->name('manufacturing.make-orders.update');
+    Route::delete('/manufacturing/make-orders/{makeOrder}', [MakeOrderController::class, 'destroy'])
+        ->name('manufacturing.make-orders.destroy');
     Route::post('/manufacturing/make-orders/{makeOrder}/schedule', [MakeOrderController::class, 'schedule'])
         ->name('manufacturing.make-orders.schedule');
     Route::post('/manufacturing/make-orders/{makeOrder}/make', [MakeOrderController::class, 'make'])

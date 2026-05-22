@@ -110,6 +110,7 @@ class StockMove extends Model
 - `resources/views/sales/customers/index.blade.php`  
 - `resources/views/materials/index.blade.php`  
 - `resources/views/inventory/counts/index.blade.php`  
+- `resources/views/manufacturing/make-orders/index.blade.php`  
 - `resources/js/lib/crud-config.js`  
 - `resources/js/lib/generic-crud.js`  
 - `resources/js/lib/crud-page.js`  
@@ -117,6 +118,7 @@ class StockMove extends Model
 - `resources/js/pages/sales-customers-index.js`  
 - `resources/js/pages/materials-index.js`
 - `resources/js/pages/inventory-counts-index.js`
+- `resources/js/pages/manufacturing-make-orders.js`
 
 **Purpose:**  
 Provide a mount-only Blade shell plus server-configured shared CRUD renderer so index pages reuse one toolbar, list, empty-state, and row-action pattern without global JavaScript state.
@@ -149,7 +151,7 @@ $crudConfig = [
 ```
 
 Notes:
-- Products, Customers, Materials, and Inventory Counts are current reference implementations.
+- Products, Customers, Materials, Inventory Counts, and Make Orders are current reference implementations.
 - `detailUrlTemplate` is optional. When present, create flows may redirect to the created record detail page after success.
 - When `detailUrlTemplate` is absent, the existing inline success behavior such as list refresh remains the fallback.
 

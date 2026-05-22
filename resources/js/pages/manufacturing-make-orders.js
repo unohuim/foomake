@@ -1,40 +1,92 @@
 import Alpine from 'alpinejs';
+import { parseCrudConfig } from '../lib/crud-config';
+import { mountCrudRenderer } from '../lib/crud-page';
+import { createGenericCrud } from '../lib/generic-crud';
 
 export function mount(rootEl, payload) {
     const safePayload = payload || {};
-    const emptyCreateErrors = () => ({
+    const crud = createGenericCrud(parseCrudConfig(rootEl));
+    const crudRootEl = rootEl.querySelector('[data-crud-root]');
+    const actionDefinitions = (Array.isArray(crud.actions) ? crud.actions : []).map((action) => ({
+        ...action,
+        handler: action.id === 'view'
+            ? 'view(record)'
+            : action.id === 'edit'
+                ? 'openEdit(record)'
+                : action.id === 'archive'
+                    ? 'archive(record)'
+                    : '',
+    }));
+    const rendererConfig = {
+        ...crud,
+        state: {
+            records: 'makeOrders',
+            loading: 'isLoadingList',
+            error: 'listError',
+            search: 'search',
+            sort: 'sort',
+        },
+        handlers: {
+            searchInput: 'handleSearchInput()',
+            toggleSort: 'toggleSort(column)',
+            create: 'openCreate()',
+        },
+        rowDisplay: {
+            ...crud.rowDisplay,
+            cellTextExpression: 'makeOrderCellText(record, column)',
+        },
+        mobileCard: {
+            ...crud.mobileCard,
+        },
+        actions: actionDefinitions,
+    };
+
+    mountCrudRenderer(crudRootEl, rendererConfig);
+
+    const emptyForm = () => ({
+        recipe_id: '',
+        runs: '',
+        due_date: '',
+    });
+    const emptyErrors = () => ({
         recipe_id: [],
         runs: [],
-    });
-    const emptyScheduleErrors = () => ({
         due_date: [],
-        recipe_id: [],
     });
-    const emptyMakeErrors = () => ({
-        recipe_id: [],
-    });
+    const buildEndpoint = (template, recordId) => {
+        if (!template || recordId === null || recordId === undefined) {
+            return '';
+        }
+
+        return template.replace('{id}', encodeURIComponent(String(recordId)));
+    };
 
     Alpine.data('manufacturingMakeOrders', () => ({
-        makeOrders: safePayload.make_orders || [],
-        makeOrderCreateRecipes: safePayload.recipes || [],
-        storeUrl: safePayload.store_url || '',
-        scheduleUrlBase: safePayload.schedule_url_base || '',
-        makeUrlBase: safePayload.make_url_base || '',
-        csrfToken: safePayload.csrf_token || '',
-        canExecute: Boolean(safePayload.can_execute),
-        isMakeOrderCreateOpen: false,
-        makeOrderCreateForm: {
-            recipe_id: '',
-            runs: '',
+        crud,
+        endpoints: crud.endpoints || {},
+        columns: Array.isArray(crud.columns) ? crud.columns : [],
+        headers: crud.headers || {},
+        sortable: Array.isArray(crud.sortable) ? crud.sortable : [],
+        makeOrders: [],
+        makeOrderRecipes: Array.isArray(safePayload.recipes) ? safePayload.recipes : [],
+        storeUrl: safePayload.storeUrl || '',
+        csrfToken: safePayload.csrfToken || '',
+        canExecute: Boolean(safePayload.canExecute),
+        prefillRecipeId: safePayload.prefillRecipeId || null,
+        isLoadingList: false,
+        listError: '',
+        search: '',
+        sort: {
+            column: 'due_date',
+            direction: 'asc',
         },
-        makeOrderCreateErrors: emptyCreateErrors(),
-        makeOrderCreateGeneralError: '',
-        isMakeOrderCreateSubmitting: false,
-        scheduleDates: {},
-        scheduleErrors: {},
-        scheduleSubmitting: {},
-        makeErrors: {},
-        makeSubmitting: {},
+        isMakeOrderFormOpen: false,
+        isMakeOrderEditMode: false,
+        isMakeOrderFormSubmitting: false,
+        makeOrderFormRecordId: null,
+        makeOrderForm: emptyForm(),
+        makeOrderFormErrors: emptyErrors(),
+        makeOrderFormGeneralError: '',
         toast: {
             visible: false,
             message: '',
@@ -42,82 +94,68 @@ export function mount(rootEl, payload) {
             timeoutId: null,
         },
         init() {
-            if (safePayload.prefill_recipe_id) {
+            this.fetchMakeOrders();
+
+            if (this.prefillRecipeId) {
                 this.openMakeOrderCreate({
-                    recipe_id: safePayload.prefill_recipe_id,
+                    recipe_id: this.prefillRecipeId,
                 });
             }
         },
-        openMakeOrderCreate(prefill = {}) {
-            this.makeOrderCreateErrors = emptyCreateErrors();
-            this.makeOrderCreateGeneralError = '';
-            this.makeOrderCreateForm = {
-                recipe_id: prefill.recipe_id ? String(prefill.recipe_id) : '',
-                runs: '',
-            };
-            this.isMakeOrderCreateOpen = true;
-            this.$nextTick(() => {
-                this.$refs.makeOrderRecipeSelect?.focus();
-            });
+        columnHeader(column) {
+            return this.headers[column] || column;
         },
-        closeMakeOrderCreate() {
-            this.isMakeOrderCreateOpen = false;
-            this.isMakeOrderCreateSubmitting = false;
-            this.makeOrderCreateErrors = emptyCreateErrors();
-            this.makeOrderCreateGeneralError = '';
-            this.makeOrderCreateForm = {
-                recipe_id: '',
-                runs: '',
-            };
+        isSortableColumn(column) {
+            return this.sortable.includes(column);
         },
-        normalizeCreateErrors(errors) {
+        makeOrderCellText(record, column) {
+            if (column === 'runs') {
+                return record?.runs_display || record?.runs || '—';
+            }
+
+            if (column === 'qty') {
+                return record?.qty_display || record?.qty || '—';
+            }
+
+            if (column === 'due_date') {
+                return record?.due_date || '—';
+            }
+
+            return record?.[column] || '—';
+        },
+        makeOrderMobileSummary(record) {
+            const parts = [];
+
+            if (record?.due_date) {
+                parts.push(`Due ${record.due_date}`);
+            }
+
+            if (record?.runs_display || record?.runs) {
+                parts.push(`Runs ${record.runs_display || record.runs}`);
+            }
+
+            if (record?.qty_display || record?.qty) {
+                parts.push(`Qty ${record.qty_display || record.qty}`);
+            }
+
+            if (record?.status) {
+                parts.push(record.status);
+            }
+
+            return parts.join(' · ');
+        },
+        normalizeErrors(errors) {
             if (!errors || typeof errors !== 'object') {
-                return emptyCreateErrors();
+                return emptyErrors();
             }
 
             return {
-                ...emptyCreateErrors(),
+                ...emptyErrors(),
                 ...errors,
                 recipe_id: Array.isArray(errors.recipe_id) ? errors.recipe_id : [],
                 runs: Array.isArray(errors.runs) ? errors.runs : [],
-            };
-        },
-        normalizeScheduleErrors(errors) {
-            if (!errors || typeof errors !== 'object') {
-                return emptyScheduleErrors();
-            }
-
-            return {
-                ...emptyScheduleErrors(),
-                ...errors,
                 due_date: Array.isArray(errors.due_date) ? errors.due_date : [],
-                recipe_id: Array.isArray(errors.recipe_id) ? errors.recipe_id : [],
             };
-        },
-        normalizeMakeErrors(errors) {
-            if (!errors || typeof errors !== 'object') {
-                return emptyMakeErrors();
-            }
-
-            return {
-                ...emptyMakeErrors(),
-                ...errors,
-                recipe_id: Array.isArray(errors.recipe_id) ? errors.recipe_id : [],
-            };
-        },
-        getScheduleErrors(id) {
-            if (!this.scheduleErrors[id]) {
-                this.scheduleErrors[id] = emptyScheduleErrors();
-            }
-
-            return this.scheduleErrors[id];
-        },
-        getMakeErrors(id) {
-            if (!this.makeErrors[id]) {
-                this.makeErrors[id] = emptyMakeErrors();
-            }
-
-            return this.makeErrors[id];
         },
         showToast(type, message) {
             this.toast.type = type;
@@ -132,149 +170,216 @@ export function mount(rootEl, payload) {
                 this.toast.visible = false;
             }, 2500);
         },
-        updateOrderInList(order) {
-            const index = this.makeOrders.findIndex((item) => item.id === order.id);
-
-            if (index === -1) {
-                return;
-            }
-
-            this.makeOrders.splice(index, 1, {
-                ...this.makeOrders[index],
-                ...order,
-            });
-        },
-        async submitMakeOrderCreate() {
-            if (!this.canExecute) {
-                this.makeOrderCreateGeneralError = 'You do not have permission to create make orders.';
-                return;
-            }
-
-            this.isMakeOrderCreateSubmitting = true;
-            this.makeOrderCreateGeneralError = '';
-            this.makeOrderCreateErrors = emptyCreateErrors();
-
-            const response = await fetch(this.storeUrl, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Accept: 'application/json',
-                    'X-CSRF-TOKEN': this.csrfToken,
+        async fetchMakeOrders() {
+            await this.crud.fetchList({
+                search: this.search,
+                sort: this.sort,
+                onStart: () => {
+                    this.isLoadingList = true;
+                    this.listError = '';
                 },
-                body: JSON.stringify({
-                    recipe_id: this.makeOrderCreateForm.recipe_id
-                        ? Number(this.makeOrderCreateForm.recipe_id)
-                        : this.makeOrderCreateForm.recipe_id,
-                    runs: this.makeOrderCreateForm.runs,
-                }),
-            });
+                onSuccess: (data) => {
+                    this.makeOrders = Array.isArray(data?.data) ? data.data : [];
 
-            if (response.status === 422) {
-                const data = await response.json();
-                this.makeOrderCreateErrors = this.normalizeCreateErrors(data.errors);
-                this.makeOrderCreateGeneralError = data.message || 'Validation failed.';
-                this.isMakeOrderCreateSubmitting = false;
-                return;
-            }
-
-            if (!response.ok) {
-                this.makeOrderCreateGeneralError = 'Something went wrong. Please try again.';
-                this.showToast('error', this.makeOrderCreateGeneralError);
-                this.isMakeOrderCreateSubmitting = false;
-                return;
-            }
-
-            const data = await response.json();
-            if (data.data) {
-                this.makeOrders.unshift(data.data);
-            }
-
-            this.showToast('success', 'Make order created.');
-            this.closeMakeOrderCreate();
-        },
-        async scheduleOrder(orderId) {
-            if (!this.canExecute) {
-                this.showToast('error', 'You do not have permission to schedule make orders.');
-                return;
-            }
-
-            this.scheduleSubmitting[orderId] = true;
-            this.scheduleErrors[orderId] = emptyScheduleErrors();
-
-            const dueDate = this.scheduleDates[orderId] || '';
-            const response = await fetch(`${this.scheduleUrlBase}/${orderId}/schedule`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Accept: 'application/json',
-                    'X-CSRF-TOKEN': this.csrfToken,
+                    if (data?.meta?.sort?.column && data?.meta?.sort?.direction) {
+                        this.sort = {
+                            column: data.meta.sort.column,
+                            direction: data.meta.sort.direction,
+                        };
+                    }
                 },
-                body: JSON.stringify({
-                    due_date: dueDate,
-                }),
-            });
-
-            if (response.status === 422) {
-                const data = await response.json();
-                this.scheduleErrors[orderId] = this.normalizeScheduleErrors(data.errors);
-                this.showToast('error', data.message || 'Unable to schedule make order.');
-                this.scheduleSubmitting[orderId] = false;
-                return;
-            }
-
-            if (!response.ok) {
-                this.showToast('error', 'Unable to schedule make order.');
-                this.scheduleSubmitting[orderId] = false;
-                return;
-            }
-
-            const data = await response.json();
-            if (data.data) {
-                this.updateOrderInList(data.data);
-                this.scheduleDates[orderId] = data.data.due_date || '';
-            }
-
-            this.showToast('success', 'Make order scheduled.');
-            this.scheduleSubmitting[orderId] = false;
-        },
-        async makeOrder(orderId) {
-            if (!this.canExecute) {
-                this.showToast('error', 'You do not have permission to make orders.');
-                return;
-            }
-
-            this.makeSubmitting[orderId] = true;
-            this.makeErrors[orderId] = emptyMakeErrors();
-
-            const response = await fetch(`${this.makeUrlBase}/${orderId}/make`, {
-                method: 'POST',
-                headers: {
-                    Accept: 'application/json',
-                    'X-CSRF-TOKEN': this.csrfToken,
+                onValidationError: () => {
+                    this.listError = 'Unable to load make orders.';
+                },
+                onError: () => {
+                    this.listError = 'Unable to load make orders.';
+                },
+                onFinally: () => {
+                    this.isLoadingList = false;
                 },
             });
-
-            if (response.status === 422) {
-                const data = await response.json();
-                this.makeErrors[orderId] = this.normalizeMakeErrors(data.errors);
-                this.showToast('error', data.message || 'Unable to make order.');
-                this.makeSubmitting[orderId] = false;
+        },
+        handleSearchInput() {
+            this.fetchMakeOrders();
+        },
+        toggleSort(column) {
+            if (!this.isSortableColumn(column)) {
                 return;
             }
 
-            if (!response.ok) {
-                this.showToast('error', 'Unable to make order.');
-                this.makeSubmitting[orderId] = false;
+            this.sort = this.crud.nextSort(this.sort, column);
+            this.fetchMakeOrders();
+        },
+        openCreate() {
+            this.openMakeOrderCreate();
+        },
+        openMakeOrderCreate(prefill = {}) {
+            if (!this.canExecute) {
                 return;
             }
 
-            const data = await response.json();
-            if (data.data) {
-                this.updateOrderInList(data.data);
+            this.isMakeOrderEditMode = false;
+            this.makeOrderFormRecordId = null;
+            this.makeOrderFormErrors = emptyErrors();
+            this.makeOrderFormGeneralError = '';
+            this.makeOrderForm = {
+                recipe_id: prefill.recipe_id ? String(prefill.recipe_id) : '',
+                runs: '',
+                due_date: '',
+            };
+            this.isMakeOrderFormOpen = true;
+            this.$nextTick(() => {
+                this.$refs.makeOrderRecipeSelect?.focus();
+            });
+        },
+        openEdit(record) {
+            if (!this.canExecute) {
+                return;
             }
 
-            this.showToast('success', 'Make order completed.');
-            this.makeSubmitting[orderId] = false;
+            this.isMakeOrderEditMode = true;
+            this.makeOrderFormRecordId = record.id;
+            this.makeOrderFormErrors = emptyErrors();
+            this.makeOrderFormGeneralError = '';
+            this.makeOrderForm = {
+                recipe_id: record.recipe_id ? String(record.recipe_id) : '',
+                runs: record.runs || '',
+                due_date: record.due_date || '',
+            };
+            this.isMakeOrderFormOpen = true;
+            this.$nextTick(() => {
+                this.$refs.makeOrderRecipeSelect?.focus();
+            });
+        },
+        closeMakeOrderForm() {
+            this.isMakeOrderFormOpen = false;
+            this.isMakeOrderEditMode = false;
+            this.isMakeOrderFormSubmitting = false;
+            this.makeOrderFormRecordId = null;
+            this.makeOrderFormErrors = emptyErrors();
+            this.makeOrderFormGeneralError = '';
+            this.makeOrderForm = emptyForm();
+        },
+        async submitMakeOrderForm() {
+            if (!this.canExecute) {
+                this.makeOrderFormGeneralError = 'You do not have permission to create make orders.';
+                return;
+            }
+
+            this.isMakeOrderFormSubmitting = true;
+            this.makeOrderFormErrors = emptyErrors();
+            this.makeOrderFormGeneralError = '';
+
+            if (!this.isMakeOrderEditMode) {
+                await this.crud.submitCreate({
+                    body: {
+                        recipe_id: this.makeOrderForm.recipe_id ? Number(this.makeOrderForm.recipe_id) : '',
+                        runs: this.makeOrderForm.runs,
+                    },
+                    csrfToken: this.csrfToken,
+                    onValidationError: (data) => {
+                        this.makeOrderFormErrors = this.normalizeErrors(data.errors);
+                        this.makeOrderFormGeneralError = data.message || 'Validation failed.';
+                    },
+                    onError: () => {
+                        this.makeOrderFormGeneralError = 'Something went wrong. Please try again.';
+                        this.showToast('error', this.makeOrderFormGeneralError);
+                    },
+                    onSuccess: async () => {
+                        await this.fetchMakeOrders();
+                        this.closeMakeOrderForm();
+                        this.showToast('success', 'Make order created.');
+                    },
+                    onFinally: () => {
+                        this.isMakeOrderFormSubmitting = false;
+                    },
+                });
+
+                return;
+            }
+
+            const endpoint = buildEndpoint(this.endpoints.update, this.makeOrderFormRecordId);
+
+            try {
+                const response = await fetch(endpoint, {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        Accept: 'application/json',
+                        'X-CSRF-TOKEN': this.csrfToken,
+                    },
+                    body: JSON.stringify({
+                        recipe_id: this.makeOrderForm.recipe_id ? Number(this.makeOrderForm.recipe_id) : '',
+                        runs: this.makeOrderForm.runs,
+                        due_date: this.makeOrderForm.due_date || null,
+                    }),
+                });
+
+                if (response.status === 422) {
+                    const data = await response.json();
+                    this.makeOrderFormErrors = this.normalizeErrors(data.errors);
+                    this.makeOrderFormGeneralError = data.message || 'Validation failed.';
+                    this.isMakeOrderFormSubmitting = false;
+                    return;
+                }
+
+                if (!response.ok) {
+                    this.makeOrderFormGeneralError = 'Something went wrong. Please try again.';
+                    this.showToast('error', this.makeOrderFormGeneralError);
+                    this.isMakeOrderFormSubmitting = false;
+                    return;
+                }
+
+                await this.fetchMakeOrders();
+                this.closeMakeOrderForm();
+                this.showToast('success', 'Make order updated.');
+            } catch (error) {
+                this.makeOrderFormGeneralError = 'Something went wrong. Please try again.';
+                this.showToast('error', this.makeOrderFormGeneralError);
+            } finally {
+                this.isMakeOrderFormSubmitting = false;
+            }
+        },
+        view(record) {
+            if (!record?.show_url) {
+                return;
+            }
+
+            window.location.assign(record.show_url);
+        },
+        async archive(record) {
+            if (!this.canExecute) {
+                this.showToast('error', 'You do not have permission to archive make orders.');
+                return;
+            }
+
+            const endpoint = buildEndpoint(this.endpoints.delete, record?.id);
+
+            try {
+                const response = await fetch(endpoint, {
+                    method: 'DELETE',
+                    headers: {
+                        Accept: 'application/json',
+                        'X-CSRF-TOKEN': this.csrfToken,
+                    },
+                });
+
+                if (response.status === 422) {
+                    const data = await response.json();
+                    this.showToast('error', data.message || 'Unable to archive make order.');
+                    return;
+                }
+
+                if (!response.ok) {
+                    this.showToast('error', 'Unable to archive make order.');
+                    return;
+                }
+
+                await this.fetchMakeOrders();
+                this.showToast('success', 'Make order archived.');
+            } catch (error) {
+                this.showToast('error', 'Unable to archive make order.');
+            }
         },
     }));
 }

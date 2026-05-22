@@ -696,7 +696,7 @@ Migrations remain the **sole source of truth**.
 | recipe_id          | bigint        | No       | FK → recipes.id (CASCADE)             |
 | output_item_id     | bigint        | No       | FK → items.id (CASCADE)               |
 | output_quantity    | decimal(18,6) | No       | Stored runs; canonical scale          |
-| status             | string        | No       | DRAFT, SCHEDULED, MADE                |
+| status             | string        | No       | DRAFT, SCHEDULED, MADE, CANCELLED     |
 | due_date           | date          | Yes      | Set on schedule                       |
 | scheduled_at       | timestamp     | Yes      | Set on schedule                       |
 | made_at            | timestamp     | Yes      | Set on make                           |

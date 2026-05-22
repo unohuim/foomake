@@ -77,17 +77,19 @@ Do not introduce new enum values without updating this document.
 - `DRAFT`
 - `SCHEDULED`
 - `MADE`
+- `CANCELLED`
 
 **Semantic meaning:**
 
 - `DRAFT`: Planned make order with no scheduled date.
 - `SCHEDULED`: Due date set; still no stock moves.
 - `MADE`: Executed; stock moves have been posted.
+- `CANCELLED`: Archived or cancelled make order. No stock moves are posted by cancellation.
 
 **Notes:**
 
-- Status transitions are DRAFT → SCHEDULED → MADE.
-- MADE is terminal.
+- Status transitions are DRAFT → SCHEDULED → MADE, with archive/cancel transitions from eligible non-MADE orders to CANCELLED.
+- MADE and CANCELLED are terminal.
 
 ---
 
