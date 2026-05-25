@@ -1,103 +1,109 @@
 import Alpine from 'alpinejs';
+import { mountCrudSection } from '../lib/js-crud-section';
+
+const emptyRecipeErrors = () => ({
+    name: [],
+    is_active: [],
+    is_default: [],
+});
+
+const emptyVersionErrors = () => ({
+    recipe_type: [],
+    output_quantity: [],
+});
+
+const asRecord = (value) => (value && typeof value === 'object' && !Array.isArray(value) ? value : {});
+const asArray = (value) => (Array.isArray(value) ? value : []);
+const asString = (value, fallback = '') => (typeof value === 'string' && value.trim() !== '' ? value : fallback);
 
 export function mount(rootEl, payload) {
     const safePayload = payload || {};
-    const emptyRecipeErrors = () => ({
-        item_id: [],
-        recipe_type: [],
-        name: [],
-        output_quantity: [],
-        is_active: [],
-    });
-    const emptyLineErrors = () => ({
-        item_id: [],
-        quantity: [],
+    const sectionRootsByKey = new Map();
+    let pageState = null;
+
+    rootEl.querySelectorAll('[data-js-crud-section-root]').forEach((sectionRootEl) => {
+        const sectionKey = sectionRootEl.dataset.sectionKey || '';
+        sectionRootsByKey.set(sectionKey, sectionRootEl);
     });
 
+    const refreshSection = async (sectionKey) => {
+        const sectionRootEl = sectionRootsByKey.get(sectionKey);
+
+        if (!sectionRootEl?._jsCrudSectionApi?.refresh) {
+            return;
+        }
+
+        await sectionRootEl._jsCrudSectionApi.refresh(1);
+    };
+
+    const updateSectionConfig = (sectionKey, sectionConfig) => {
+        const sectionRootEl = sectionRootsByKey.get(sectionKey);
+
+        if (!sectionRootEl?._jsCrudSectionApi?.updateSectionConfig) {
+            return;
+        }
+
+        sectionRootEl._jsCrudSectionApi.updateSectionConfig(sectionConfig);
+    };
+
     Alpine.data('manufacturingRecipesShow', () => ({
-        recipe: safePayload.recipe || {
-            id: null,
-            item_id: '',
-            recipe_type: 'manufacturing',
-            recipe_type_label: 'Manufacturing',
-            name: '',
-            item_name: '',
-            output_quantity: '0.000000',
-            output_quantity_display: '0.0',
-            item_uom: '—',
-            is_active: false,
-            update_url: '',
-            delete_url: '',
-            has_lines: false,
+        recipe: safePayload.recipe || {},
+        sections: safePayload.sections || {},
+        ingredients: safePayload.ingredients || {
+            can_edit: false,
+            display_version_id: null,
+            display_version_number: '—',
+            item_options: [],
+            lines: [],
+            store_url: null,
+            update_url_template: null,
         },
-        manufacturableItems: safePayload.manufacturable_items || [],
-        items: safePayload.items || [],
-        lines: safePayload.lines || [],
-        lineStoreUrl: safePayload.line_store_url || '',
-        indexUrl: safePayload.index_url || '',
         csrfToken: safePayload.csrf_token || '',
+        indexUrl: safePayload.index_url || '',
+        recipeTypeOptions: Array.isArray(safePayload.recipe_type_options) ? safePayload.recipe_type_options : [],
+        selectedIngredientItemId: '',
+        ingredientsSaving: false,
+        ingredientSavedState: {},
         isEditOpen: false,
         isEditSubmitting: false,
-        editOnlyWithoutRecipe: true,
         editForm: {
-            item_id: '',
-            recipe_type: 'manufacturing',
             name: '',
-            output_quantity: '',
             is_active: true,
+            is_default: false,
         },
-        editManufacturingOutputQuantity: '',
         editErrors: emptyRecipeErrors(),
         editGeneralError: '',
-        editOutputLocked: false,
         isDeleteOpen: false,
         isDeleteSubmitting: false,
         deleteError: '',
         deleteRecipeName: '',
-        isLineFormOpen: false,
-        isLineEditing: false,
-        isLineSubmitting: false,
-        lineForm: { item_id: '', quantity: '' },
-        lineErrors: emptyLineErrors(),
-        lineGeneralError: '',
-        editLineId: null,
-        isLineDeleteOpen: false,
-        isLineDeleteSubmitting: false,
-        deleteLineError: '',
-        deleteLineId: null,
-        deleteLineItemName: '',
-        deleteLineUrl: '',
+        isVersionOpen: false,
+        isVersionSubmitting: false,
+        versionRecipeName: '',
+        versionForm: {
+            recipe_type: 'manufacturing',
+            output_quantity: '1.000000',
+        },
+        versionErrors: emptyVersionErrors(),
+        versionGeneralError: '',
         toast: {
             visible: false,
             message: '',
             type: 'success',
             timeoutId: null,
         },
+        recentlyPublishedVersionId: null,
+        recentlyPublishedHighlightTimeoutId: null,
         normalizeRecipeErrors(errors) {
-            if (!errors || typeof errors !== 'object') {
-                return emptyRecipeErrors();
-            }
-
             return {
                 ...emptyRecipeErrors(),
-                ...errors,
-                item_id: Array.isArray(errors.item_id) ? errors.item_id : [],
-                recipe_type: Array.isArray(errors.recipe_type) ? errors.recipe_type : [],
-                name: Array.isArray(errors.name) ? errors.name : [],
-                output_quantity: Array.isArray(errors.output_quantity) ? errors.output_quantity : [],
-                is_active: Array.isArray(errors.is_active) ? errors.is_active : [],
+                ...asRecord(errors),
             };
         },
-        normalizeLineErrors(errors) {
-            if (!errors || typeof errors !== 'object') {
-                return emptyLineErrors();
-            }
-
+        normalizeVersionErrors(errors) {
             return {
-                ...emptyLineErrors(),
-                ...errors,
-                item_id: Array.isArray(errors.item_id) ? errors.item_id : [],
-                quantity: Array.isArray(errors.quantity) ? errors.quantity : [],
+                ...emptyVersionErrors(),
+                ...asRecord(errors),
             };
         },
         showToast(type, message) {
@@ -113,167 +119,66 @@ export function mount(rootEl, payload) {
                 this.toast.visible = false;
             }, 2500);
         },
-        resolveItemUom(itemId) {
-            const match = this.items.find((item) => String(item.id) === String(itemId));
-
-            return match ? match.uom_display : '—';
-        },
-        lineItemOptions() {
-            const outputId = String(this.recipe.item_id || '');
-
-            return this.items.filter((item) => String(item.id) !== outputId);
-        },
-        recipeTypeLabel(value) {
-            if (value === 'fulfillment') {
-                return 'Fulfillment';
+        hydrateRecipeResponse(data) {
+            if (data.recipe && typeof data.recipe === 'object') {
+                this.recipe = {
+                    ...this.recipe,
+                    ...data.recipe,
+                };
             }
 
-            return 'Manufacturing';
-        },
-        allRecipeTypeOptions() {
-            return [
-                { value: 'manufacturing', label: 'Manufacturing' },
-                { value: 'fulfillment', label: 'Fulfillment' },
-            ];
-        },
-        findOutputItem(itemId) {
-            return this.manufacturableItems.find((item) => String(item.id) === String(itemId)) || null;
-        },
-        selectedOutputItemPrecision(itemId) {
-            const outputItem = this.findOutputItem(itemId);
-
-            return Number.isInteger(Number(outputItem?.uom_display_precision))
-                ? Number(outputItem.uom_display_precision)
-                : 6;
-        },
-        normalizeQuantityValue(value, precision) {
-            const normalizedPrecision = Math.max(0, Math.min(6, Number(precision ?? 6)));
-            const parsedValue = Number.parseFloat(String(value ?? '').trim());
-
-            if (Number.isNaN(parsedValue)) {
-                return normalizedPrecision === 0 ? '1' : (1).toFixed(normalizedPrecision);
+            if (data.ingredients && typeof data.ingredients === 'object') {
+                this.ingredients = {
+                    ...this.ingredients,
+                    ...data.ingredients,
+                    item_options: asArray(data.ingredients.item_options),
+                    lines: asArray(data.ingredients.lines),
+                };
             }
 
-            return normalizedPrecision === 0
-                ? String(Math.round(parsedValue))
-                : parsedValue.toFixed(normalizedPrecision);
-        },
-        defaultQuantityForItem(itemId) {
-            return this.normalizeQuantityValue('1', this.selectedOutputItemPrecision(itemId));
-        },
-        recipeTypeOptionsForItem(itemId) {
-            const outputItem = this.findOutputItem(itemId);
+            if (data.sections && typeof data.sections === 'object') {
+                this.sections = {
+                    ...this.sections,
+                    ...data.sections,
+                };
 
-            if (!outputItem || !Array.isArray(outputItem.allowed_recipe_types) || outputItem.allowed_recipe_types.length === 0) {
-                return this.allRecipeTypeOptions();
+                Object.entries(data.sections).forEach(([sectionKey, sectionConfig]) => {
+                    if (sectionConfig && typeof sectionConfig === 'object') {
+                        updateSectionConfig(sectionKey, sectionConfig);
+                    }
+                });
             }
 
-            return outputItem.allowed_recipe_types.map((recipeType) => ({
-                value: recipeType,
-                label: this.recipeTypeLabel(recipeType),
-            }));
+            this.applyPublishUiState(data.ui);
         },
-        normalizeRecipeTypeSelection(selectedValue, allowedOptions) {
-            if (!Array.isArray(allowedOptions) || allowedOptions.length === 0) {
-                return 'manufacturing';
-            }
+        applyPublishUiState(ui) {
+            const versionId = Number(ui?.recently_published_version_id || 0);
+            const highlightDurationMs = Number(ui?.recently_published_highlight_ms || 1000);
 
-            const selectedRecipeType = String(selectedValue || '');
-            const allowedValues = allowedOptions.map((option) => option.value);
-
-            if (allowedValues.includes(selectedRecipeType)) {
-                return selectedRecipeType;
-            }
-
-            if (allowedValues.includes('manufacturing')) {
-                return 'manufacturing';
-            }
-
-            return allowedValues[0];
-        },
-        availableEditRecipeTypeOptions() {
-            return this.recipeTypeOptionsForItem(this.editForm.item_id);
-        },
-        isFulfillmentRecipeType(recipeType) {
-            return String(recipeType || '') === 'fulfillment';
-        },
-        resolvedEditOutputQuantity() {
-            return this.isFulfillmentRecipeType(this.editForm.recipe_type)
-                ? '1.000000'
-                : this.editForm.output_quantity;
-        },
-        editOutputQuantityDisplayValue() {
-            return this.isFulfillmentRecipeType(this.editForm.recipe_type)
-                ? this.defaultQuantityForItem(this.editForm.item_id)
-                : this.editForm.output_quantity;
-        },
-        syncEditOutputQuantity() {
-            if (this.isFulfillmentRecipeType(this.editForm.recipe_type)) {
-                if (this.editForm.output_quantity !== '' && this.editForm.output_quantity !== this.defaultQuantityForItem(this.editForm.item_id)) {
-                    this.editManufacturingOutputQuantity = this.editForm.output_quantity;
-                }
-
-                this.editForm.output_quantity = this.defaultQuantityForItem(this.editForm.item_id);
+            if (versionId <= 0) {
                 return;
             }
 
-            const fallbackValue = this.editManufacturingOutputQuantity || this.defaultQuantityForItem(this.editForm.item_id);
-            this.editForm.output_quantity = this.normalizeQuantityValue(
-                fallbackValue,
-                this.selectedOutputItemPrecision(this.editForm.item_id)
-            );
-            this.editManufacturingOutputQuantity = this.editForm.output_quantity;
-        },
-        normalizeEditOutputQuantity() {
-            if (this.isFulfillmentRecipeType(this.editForm.recipe_type)) {
-                this.editForm.output_quantity = this.defaultQuantityForItem(this.editForm.item_id);
-                return;
+            this.recentlyPublishedVersionId = versionId;
+
+            if (this.recentlyPublishedHighlightTimeoutId) {
+                clearTimeout(this.recentlyPublishedHighlightTimeoutId);
             }
 
-            this.editForm.output_quantity = this.normalizeQuantityValue(
-                this.editForm.output_quantity,
-                this.selectedOutputItemPrecision(this.editForm.item_id)
-            );
-            this.editManufacturingOutputQuantity = this.editForm.output_quantity;
-        },
-        syncEditRecipeType() {
-            this.editForm.recipe_type = this.normalizeRecipeTypeSelection(
-                this.editForm.recipe_type,
-                this.availableEditRecipeTypeOptions()
-            );
-            this.syncEditOutputQuantity();
-        },
-        filteredEditItems() {
-            return this.manufacturableItems.filter((item) => {
-                const isSelectedItem = item.id === Number(this.editForm.item_id);
-
-                if (
-                    this.editOnlyWithoutRecipe
-                    && Boolean(item.has_recipe)
-                    && !isSelectedItem
-                ) {
-                    return false;
-                }
-
-                return true;
-            });
+            this.recentlyPublishedHighlightTimeoutId = setTimeout(async () => {
+                this.recentlyPublishedVersionId = null;
+                this.recentlyPublishedHighlightTimeoutId = null;
+                await refreshSection('versions');
+            }, highlightDurationMs);
         },
         openEditRecipe() {
             this.editErrors = emptyRecipeErrors();
             this.editGeneralError = '';
-            this.editOnlyWithoutRecipe = true;
             this.editForm = {
-                item_id: this.recipe.item_id,
-                recipe_type: this.recipe.recipe_type || 'manufacturing',
-                name: this.recipe.name,
-                output_quantity: this.recipe.output_quantity,
-                is_active: this.recipe.is_active,
+                name: this.recipe.name || '',
+                is_active: this.recipe.version_status !== 'ARCHIVED',
+                is_default: Boolean(this.recipe.is_default),
             };
-            this.editManufacturingOutputQuantity = this.recipe.recipe_type === 'manufacturing'
-                ? this.recipe.output_quantity
-                : this.defaultQuantityForItem(this.recipe.item_id);
-            this.syncEditRecipeType();
-            this.editOutputLocked = Boolean(this.recipe.has_lines);
             this.isEditOpen = true;
         },
         closeEdit() {
@@ -281,12 +186,9 @@ export function mount(rootEl, payload) {
             this.isEditSubmitting = false;
             this.editErrors = emptyRecipeErrors();
             this.editGeneralError = '';
-            this.editOutputLocked = false;
-            this.editOnlyWithoutRecipe = true;
-            this.editManufacturingOutputQuantity = '';
         },
         openDeleteRecipe() {
-            this.deleteRecipeName = this.recipe.item_name || '';
+            this.deleteRecipeName = this.recipe.name || this.recipe.output_item_name || '';
             this.deleteError = '';
             this.isDeleteOpen = true;
         },
@@ -294,6 +196,59 @@ export function mount(rootEl, payload) {
             this.isDeleteOpen = false;
             this.isDeleteSubmitting = false;
             this.deleteError = '';
+        },
+        openVersion() {
+            this.versionRecipeName = this.recipe.name || '';
+            this.versionErrors = emptyVersionErrors();
+            this.versionGeneralError = '';
+            this.versionForm = {
+                recipe_type: this.recipe.display_recipe_type || 'manufacturing',
+                output_quantity: this.recipe.display_output_quantity || '1.000000',
+            };
+            this.isVersionOpen = true;
+        },
+        closeVersion() {
+            this.isVersionOpen = false;
+            this.isVersionSubmitting = false;
+            this.versionErrors = emptyVersionErrors();
+            this.versionGeneralError = '';
+        },
+        versionRecipeTypeOptions() {
+            return this.recipeTypeOptions;
+        },
+        async submitVersion() {
+            this.isVersionSubmitting = true;
+            this.versionErrors = emptyVersionErrors();
+            this.versionGeneralError = '';
+
+            const response = await fetch(this.recipe.version_store_url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Accept: 'application/json',
+                    'X-CSRF-TOKEN': this.csrfToken,
+                },
+                body: JSON.stringify(this.versionForm),
+            });
+
+            if (response.status === 422) {
+                const data = await response.json();
+                this.versionErrors = this.normalizeVersionErrors(data.errors);
+                this.versionGeneralError = data.message || 'Validation failed.';
+                this.isVersionSubmitting = false;
+                return;
+            }
+
+            if (!response.ok) {
+                this.versionGeneralError = 'Something went wrong. Please try again.';
+                this.isVersionSubmitting = false;
+                return;
+            }
+
+            this.hydrateRecipeResponse(await response.json());
+            await refreshSection('versions');
+            this.closeVersion();
+            this.showToast('success', 'Recipe version created.');
         },
         async submitDelete() {
             this.isDeleteSubmitting = true;
@@ -332,17 +287,16 @@ export function mount(rootEl, payload) {
                     'X-CSRF-TOKEN': this.csrfToken,
                 },
                 body: JSON.stringify({
-                    item_id: this.editForm.item_id,
-                    recipe_type: this.editForm.recipe_type,
                     name: this.editForm.name,
-                    output_quantity: this.resolvedEditOutputQuantity(),
                     is_active: this.editForm.is_active,
+                    is_default: this.editForm.is_default,
                 }),
             });
 
             if (response.status === 422) {
                 const data = await response.json();
                 this.editErrors = this.normalizeRecipeErrors(data.errors);
+                this.editGeneralError = data.message || 'Validation failed.';
                 this.isEditSubmitting = false;
                 return;
             }
@@ -354,153 +308,241 @@ export function mount(rootEl, payload) {
                 return;
             }
 
-            const data = await response.json();
             this.recipe = {
                 ...this.recipe,
-                ...data.data,
-                item_uom: this.resolveItemUom(data.data.item_id),
+                ...(await response.json()).data,
             };
 
-            this.showToast('success', 'Recipe updated.');
             this.closeEdit();
+            this.showToast('success', 'Recipe updated.');
         },
-        openCreateLine() {
-            this.lineErrors = emptyLineErrors();
-            this.lineGeneralError = '';
-            this.lineForm = { item_id: '', quantity: '' };
-            this.editLineId = null;
-            this.isLineEditing = false;
-            this.isLineFormOpen = true;
-        },
-        openEditLine(line) {
-            this.lineErrors = emptyLineErrors();
-            this.lineGeneralError = '';
-            this.lineForm = {
-                item_id: line.item_id,
-                quantity: line.quantity,
-            };
-            this.editLineId = line.id;
-            this.isLineEditing = true;
-            this.isLineFormOpen = true;
-        },
-        closeLineForm() {
-            this.isLineFormOpen = false;
-            this.isLineSubmitting = false;
-            this.lineErrors = emptyLineErrors();
-            this.lineGeneralError = '';
-            this.lineForm = { item_id: '', quantity: '' };
-            this.editLineId = null;
-            this.isLineEditing = false;
-        },
-        openDeleteLine(line) {
-            this.deleteLineId = line.id;
-            this.deleteLineItemName = line.item_name || '';
-            this.deleteLineError = '';
-            this.deleteLineUrl = line.delete_url || '';
-            this.isLineDeleteOpen = true;
-        },
-        closeDeleteLine() {
-            this.isLineDeleteOpen = false;
-            this.isLineDeleteSubmitting = false;
-            this.deleteLineError = '';
-            this.deleteLineId = null;
-            this.deleteLineItemName = '';
-            this.deleteLineUrl = '';
-        },
-        async submitLineForm() {
-            this.isLineSubmitting = true;
-            this.lineErrors = emptyLineErrors();
-            this.lineGeneralError = '';
-
-            const url = this.isLineEditing
-                ? this.lines.find((line) => line.id === this.editLineId)?.update_url
-                : this.lineStoreUrl;
-
-            if (!url) {
-                this.lineGeneralError = 'Unable to locate the line endpoint.';
-                this.isLineSubmitting = false;
+        async addIngredient() {
+            if (!this.ingredients.can_edit || !this.ingredients.store_url || !this.selectedIngredientItemId) {
                 return;
             }
 
-            const method = this.isLineEditing ? 'PATCH' : 'POST';
+            this.ingredientsSaving = true;
 
-            const response = await fetch(url, {
-                method,
+            const response = await fetch(this.ingredients.store_url, {
+                method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     Accept: 'application/json',
                     'X-CSRF-TOKEN': this.csrfToken,
                 },
                 body: JSON.stringify({
-                    item_id: this.lineForm.item_id,
-                    quantity: this.lineForm.quantity,
+                    item_id: Number(this.selectedIngredientItemId),
                 }),
             });
 
-            if (response.status === 422) {
-                const data = await response.json();
-                this.lineErrors = this.normalizeLineErrors(data.errors);
-                this.isLineSubmitting = false;
+            this.ingredientsSaving = false;
+
+            if (!response.ok) {
+                this.showToast('error', 'Unable to add ingredient.');
                 return;
             }
 
+            const data = await response.json();
+            this.ingredients.lines.push(data.data);
+            this.selectedIngredientItemId = '';
+            this.showToast('success', 'Ingredient added.');
+        },
+        async saveIngredientQuantity(line) {
+            if (!this.ingredients.can_edit || !this.ingredients.update_url_template) {
+                return;
+            }
+
+            this.ingredientSavedState[line.id] = 'saving';
+
+            const response = await fetch(this.ingredients.update_url_template.replace('__LINE__', encodeURIComponent(String(line.id))), {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Accept: 'application/json',
+                    'X-CSRF-TOKEN': this.csrfToken,
+                },
+                body: JSON.stringify({
+                    quantity: line.quantity_input,
+                }),
+            });
+
             if (!response.ok) {
-                this.lineGeneralError = 'Something went wrong. Please try again.';
-                this.isLineSubmitting = false;
+                this.ingredientSavedState[line.id] = 'error';
+                this.showToast('error', 'Unable to save ingredient quantity.');
+                return;
+            }
+
+            const data = await response.json();
+            const nextLine = data.data || {};
+            this.ingredients.lines = this.ingredients.lines.map((entry) => (entry.id === line.id ? nextLine : entry));
+            this.ingredientSavedState[line.id] = data.meta?.saved ? 'saved' : '';
+            this.showToast('success', 'Ingredient saved.');
+
+            setTimeout(() => {
+                if (this.ingredientSavedState[line.id] === 'saved') {
+                    this.ingredientSavedState[line.id] = '';
+                }
+            }, 1500);
+        },
+        async createMakeOrder(makeUrl) {
+            if (!makeUrl) {
+                return;
+            }
+
+            const response = await fetch(makeUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Accept: 'application/json',
+                    'X-CSRF-TOKEN': this.csrfToken,
+                },
+                body: JSON.stringify({
+                    runs: '1.000000',
+                }),
+            });
+
+            if (!response.ok) {
+                this.showToast('error', 'Unable to create make order.');
                 return;
             }
 
             const data = await response.json();
 
-            if (this.isLineEditing) {
-                const index = this.lines.findIndex((line) => line.id === data.data.id);
-
-                if (index !== -1) {
-                    this.lines.splice(index, 1, data.data);
-                }
-
-                this.showToast('success', 'Line updated.');
-            } else {
-                this.lines.push(data.data);
-                this.showToast('success', 'Line added.');
+            if (data?.data?.show_url) {
+                window.location.assign(data.data.show_url);
             }
-
-            this.recipe.has_lines = this.lines.length > 0;
-            this.closeLineForm();
-        },
-        async submitDeleteLine() {
-            this.isLineDeleteSubmitting = true;
-            this.deleteLineError = '';
-
-            const response = await fetch(this.deleteLineUrl, {
-                method: 'DELETE',
-                headers: {
-                    Accept: 'application/json',
-                    'X-CSRF-TOKEN': this.csrfToken,
-                },
-            });
-
-            if (!response.ok) {
-                const data = await response.json().catch(() => ({}));
-                this.deleteLineError = data.message || 'Unable to delete line.';
-                this.showToast('error', this.deleteLineError);
-                this.isLineDeleteSubmitting = false;
-                return;
-            }
-
-            this.lines = this.lines.filter((line) => line.id !== this.deleteLineId);
-            this.recipe.has_lines = this.lines.length > 0;
-            this.showToast('success', 'Line deleted.');
-            this.closeDeleteLine();
         },
         init() {
-            this.$watch('editForm.item_id', () => {
-                this.syncEditRecipeType();
-            });
-
-            this.$watch('editForm.recipe_type', () => {
-                this.syncEditOutputQuantity();
-            });
+            pageState = this;
+            return undefined;
         },
     }));
+
+    const adaptersBySectionKey = {
+        versions: {
+            normalizeRow: (record) => ({
+                ...record,
+                rowClass: (pageState ? pageState.recentlyPublishedVersionId : null) === Number(record.id)
+                    ? 'border-l-4 border-lime-500'
+                    : '',
+                display: {
+                    versionText: asString(record.display?.versionText, record.version_number_display || '—'),
+                    typeText: asString(record.display?.typeText, record.recipe_type || '—'),
+                    contextText: asString(record.display?.contextText, '—'),
+                    statusText: asString(record.display?.statusText, record.status || '—'),
+                    statusTone: asString(record.display?.statusTone, 'muted'),
+                    outputQuantityText: asString(record.display?.outputQuantityText, record.output_quantity || '—'),
+                    updatedAtText: asString(record.display?.updatedAtText, record.updated_at || '—'),
+                },
+                formValues: {
+                    recipe_type: asString(record.formValues?.recipe_type, 'manufacturing'),
+                    output_quantity: asString(record.formValues?.output_quantity, '1.000000'),
+                },
+            }),
+            buildListParams: (toggleValues) => ({
+                include_archived: toggleValues.include_archived ? '1' : '',
+            }),
+            buildUpdatePayload: (form) => ({
+                recipe_type: asString(form.recipe_type, 'manufacturing'),
+                output_quantity: asString(form.output_quantity, '1.000000'),
+            }),
+            handleCreateAction: () => {
+                pageState?.openVersion();
+            },
+            handleAction: async ({ action, record, component }) => {
+                const actionToUrl = {
+                    checkoutVersion: record.checkout_url,
+                    checkInVersion: record.check_in_url,
+                    publishVersion: record.publish_url,
+                    duplicateVersion: record.duplicate_url,
+                    archiveVersion: record.archive_url,
+                };
+                const actionToMethod = {
+                    checkoutVersion: 'POST',
+                    checkInVersion: 'POST',
+                    publishVersion: 'PATCH',
+                    duplicateVersion: 'POST',
+                    archiveVersion: 'PATCH',
+                };
+
+                if (action.handlerKey === 'viewVersion') {
+                    return;
+                }
+
+                if (action.handlerKey === 'makeVersion') {
+                    await pageState?.createMakeOrder(record.make_url || '');
+                    return;
+                }
+
+                const endpoint = actionToUrl[action.handlerKey];
+
+                if (!endpoint) {
+                    return;
+                }
+
+                const response = await fetch(endpoint, {
+                    method: actionToMethod[action.handlerKey] || 'POST',
+                    headers: {
+                        Accept: 'application/json',
+                        'X-CSRF-TOKEN': safePayload.csrf_token || '',
+                    },
+                });
+
+                if (!response.ok) {
+                    pageState?.showToast('error', 'Unable to update recipe version.');
+                    return;
+                }
+
+                pageState?.hydrateRecipeResponse(await response.json());
+                await component.fetchPage(component.meta.current_page || 1);
+                pageState?.showToast('success', 'Recipe version updated.');
+            },
+        },
+        makeOrders: {
+            normalizeRow: (record) => ({
+                ...record,
+                display: {
+                    recipeNameText: asString(record.recipe_name, 'Unnamed recipe'),
+                    runsText: asString(record.runs_display, '—'),
+                    dueDateText: asString(record.due_date, 'No due date'),
+                    totalOutputQuantityText: asString(record.qty_display, '—'),
+                    statusText: asString(record.workflow_state, '—'),
+                    statusTone: record.workflow_state === 'DRAFT' ? 'muted' : 'default',
+                    showUrl: asString(record.show_url, ''),
+                },
+            }),
+            buildListParams: (_toggleValues, section) => ({
+                mobile_page_size: section?.mobilePageSize || '',
+            }),
+            buildCreatePayload: (form) => ({
+                runs: asString(form.runs),
+            }),
+            handleCreateSuccess: async ({ data }) => {
+                const showUrl = asString(data?.data?.show_url);
+
+                if (showUrl === '') {
+                    return false;
+                }
+
+                window.location.assign(showUrl);
+
+                return true;
+            },
+            handleAction: async () => {},
+        },
+    };
+
+    rootEl.querySelectorAll('[data-js-crud-section-root]').forEach((sectionRootEl) => {
+        const sectionKey = sectionRootEl.dataset.sectionKey || '';
+        const sectionConfig = safePayload.sections?.[sectionKey];
+
+        if (!sectionConfig) {
+            return;
+        }
+
+        mountCrudSection(sectionRootEl, {
+            section: sectionConfig,
+            adapters: adaptersBySectionKey[sectionKey] || {},
+        });
+    });
 }

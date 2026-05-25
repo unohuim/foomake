@@ -1,0 +1,60 @@
+name: Recipe Versioning
+type: Manufacturing Domain Pattern
+location:
+  - app/Models/Recipe.php
+  - app/Models/RecipeVersion.php
+  - app/Models/RecipeVersionLine.php
+  - app/Http/Controllers/RecipeController.php
+purpose: Separate stable recipe identity from versioned execution data so historical Make Orders remain reproducible while currentness, lifecycle, and draft editing stay distinct.
+when_to_use:
+  - Creating or revising recipe execution behavior
+  - Publishing a new execution template for future Make Orders
+  - Reading the current published version for manufacturing or fulfillment planning
+when_not_to_use:
+  - Editing the parent recipe name
+  - Editing parent default or active-style metadata
+  - Treating lifecycle status, currentness, and checkout context as the same thing
+rules:
+  - recipes is the stable parent identity and owns the main displayed recipe name.
+  - recipes.current_version_id is the single pointer to the current recipe version.
+  - recipe_versions owns execution fields such as recipe_type and output_quantity.
+  - recipe_version_lines owns versioned input lines.
+  - Version status is lifecycle only and must use the canonical values from docs/ENUMS.md.
+  - Checkout controls user editing context only and must not determine currentness.
+  - Only the version referenced by recipes.current_version_id is current.
+  - Recipe creation must auto-create version `1.00` as a `DRAFT`.
+  - The auto-created draft must not be checked out automatically.
+  - Recipe creation must not set `recipes.current_version_id` until a version is published.
+  - Publishing a draft must set the draft lifecycle to published and move recipes.current_version_id to that version.
+  - Publishing does not require older published versions to become archived automatically.
+  - New Make Orders must resolve the manufacturing recipe version referenced by recipes.current_version_id.
+  - Parent recipe edits must not mutate version-owned execution fields.
+  - Ingredients are owned by recipe_version_lines and are editable only through a checked-out draft owned by the current user.
+  - Recipe detail section order is Make Orders, Ingredients, then Versions.
+  - Recipe detail defaults Make Orders open, Ingredients collapsed, and Versions collapsed.
+  - Drafts checked out by the current user expose Check In, Publish, Duplicate, and Delete.
+  - Drafts not checked out by the current user expose Check Out, Publish, Duplicate, and Delete.
+  - Draft versions do not create Make Orders.
+  - The current published version exposes Make Order, Duplicate, and Archive.
+  - Published non-current versions expose Duplicate and Archive.
+  - Archived versions expose View and Duplicate.
+  - Checked-out drafts may be checked in explicitly.
+  - Published versions must not be checked out.
+  - Published versions must not expose Checkout or direct Edit.
+  - Draft versions must not expose Archive in the Versions list action menu.
+  - Archived versions are hidden by default and appear only when the View Archived toggle is enabled.
+  - Version numbers must display in x.xx format.
+  - Recipe detail Make Orders entry points, Recipes index Make actions, and Material detail recipe-row Make actions all create from recipes.current_version_id only.
+public_interface:
+  - Recipe::currentVersion()
+  - Recipe::displayVersionForUser()
+  - Recipe::versions()
+  - RecipeVersion::lines()
+example_usage: |
+  $recipe->versions()->create([
+      'tenant_id' => $recipe->tenant_id,
+      'version_number' => 101,
+      'recipe_type' => 'manufacturing',
+      'output_quantity' => '54.000000',
+      'status' => 'DRAFT',
+  ]);

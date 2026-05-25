@@ -18,13 +18,14 @@
     @endphp
 
     <x-slot name="header">
-        <div class="space-y-4">
-            <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <x-resource-detail-header-breadcrumb
+            :items="$breadcrumbItems"
+            :title="__('Inventory Count')"
+            title-class="font-semibold text-xl text-gray-800 leading-tight"
+        >
+            <x-slot name="metadata">
                 <div class="space-y-2">
                     <div class="flex items-center gap-3">
-                        <h2 class="font-semibold text-xl text-gray-800 leading-tight">
-                            {{ __('Inventory Count') }}
-                        </h2>
                         <span class="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-600">
                             #{{ $inventoryCount->id }}
                         </span>
@@ -46,9 +47,11 @@
                         {{ $inventoryCount->notes ?: __('No notes') }}
                     </p>
                 </div>
+            </x-slot>
 
-                @can('inventory-adjustments-execute')
-                    @if ($previousWorkflowActionLabel || $nextWorkflowActionLabel)
+            @can('inventory-adjustments-execute')
+                @if ($previousWorkflowActionLabel || $nextWorkflowActionLabel)
+                    <x-slot name="actions">
                         <div x-data="{}" class="flex items-center justify-end gap-3">
                             @if ($previousWorkflowActionLabel && $previousWorkflowActionEvent)
                                 <button
@@ -61,21 +64,19 @@
                             @endif
 
                             @if ($nextWorkflowActionLabel && $nextWorkflowActionEvent)
-                            <button
-                                type="button"
-                                class="inline-flex items-center justify-center rounded-md border border-transparent bg-slate-900 px-4 py-2 text-xs font-semibold uppercase tracking-widest text-white transition hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-500 focus:ring-offset-2"
-                                x-on:click.prevent="window.dispatchEvent(new CustomEvent('{{ $nextWorkflowActionEvent }}'))"
-                            >
-                                {{ $nextWorkflowActionLabel }}
-                            </button>
+                                <button
+                                    type="button"
+                                    class="inline-flex items-center justify-center rounded-md border border-transparent bg-slate-900 px-4 py-2 text-xs font-semibold uppercase tracking-widest text-white transition hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-500 focus:ring-offset-2"
+                                    x-on:click.prevent="window.dispatchEvent(new CustomEvent('{{ $nextWorkflowActionEvent }}'))"
+                                >
+                                    {{ $nextWorkflowActionLabel }}
+                                </button>
                             @endif
                         </div>
-                    @endif
-                @endcan
-            </div>
-
-            <x-resource-breadcrumbs :items="$breadcrumbItems" />
-        </div>
+                    </x-slot>
+                @endif
+            @endcan
+        </x-resource-detail-header-breadcrumb>
     </x-slot>
 
     <script type="application/json" id="inventory-count-show-payload">@json($payload)</script>

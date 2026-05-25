@@ -4,11 +4,12 @@ location:
   - app/Actions/Inventory/ExecuteRecipeAction.php
 purpose: Execute a recipe to issue inputs and receipt outputs as stock moves.
 when_to_use:
-  - Manufacturing or make-order execution
+  - Direct recipe execution outside Make Orders
   - Converting input items into an output item via a recipe
 when_not_to_use:
   - Inventory adjustments or corrections
   - Costing or planning calculations
+  - Make-order execution from snapshotted make_order_lines
 rules:
   - Recipe must be active.
   - Recipe type must be manufacturing.
@@ -19,6 +20,7 @@ rules:
   - Input stock move quantity is recipe line quantity multiplied by runs.
   - Output stock move quantity is recipe output_quantity multiplied by runs.
   - Quantities are recorded in each item base UoM.
+  - Make Orders do not execute from live recipe lines in this phase; they execute from snapshotted make_order_lines.
   - Enum-like values must use values defined in docs/ENUMS.md.
   - Fulfillment recipes are never eligible for Make Orders or recipe execution in this phase.
 public_interface:

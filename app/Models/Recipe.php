@@ -10,25 +10,20 @@ use Illuminate\Database\Eloquent\Relations\MorphMany;
 use InvalidArgumentException;
 
 /**
- * Class Recipe
- *
- * Represents a bill of materials (BOM) for a manufacturable item.
- *
- * @property string $recipe_type
+ * Represents the stable parent identity for a versioned recipe.
  */
 class Recipe extends Model
 {
     use HasTenantScope;
 
     public const TYPE_MANUFACTURING = 'manufacturing';
-
     public const TYPE_FULFILLMENT = 'fulfillment';
-
     public const FULFILLMENT_OUTPUT_QUANTITY = '1.000000';
 
     protected $fillable = [
         'tenant_id',
         'item_id',
+        'current_version_id',
         'recipe_type',
         'name',
         'output_quantity',
@@ -85,22 +80,6 @@ class Recipe extends Model
     }
 
     /**
-     * Resolve this recipe's type label.
-     */
-    public function recipeTypeLabel(): string
-    {
-        return self::labelForRecipeType($this->recipe_type);
-    }
-
-    /**
-     * Determine whether this recipe is manufacturing-scoped.
-     */
-    public function isManufacturingType(): bool
-    {
-        return $this->recipe_type === self::TYPE_MANUFACTURING;
-    }
-
-    /**
      * Resolve an eligibility error for a recipe type and output item pairing.
      */
     public static function recipeTypeEligibilityError(Item $item, ?string $recipeType): ?string
@@ -136,7 +115,7 @@ class Recipe extends Model
     }
 
     /**
-     * @return BelongsTo
+     * Owning tenant.
      */
     public function tenant(): BelongsTo
     {
@@ -145,8 +124,6 @@ class Recipe extends Model
 
     /**
      * Output item produced by the recipe.
-     *
-     * @return BelongsTo
      */
     public function item(): BelongsTo
     {
@@ -154,9 +131,23 @@ class Recipe extends Model
     }
 
     /**
-     * Input lines consumed by the recipe.
-     *
-     * @return HasMany
+     * Current published execution template.
+     */
+    public function currentVersion(): BelongsTo
+    {
+        return $this->belongsTo(RecipeVersion::class, 'current_version_id');
+    }
+
+    /**
+     * All version records for the recipe.
+     */
+    public function versions(): HasMany
+    {
+        return $this->hasMany(RecipeVersion::class);
+    }
+
+    /**
+     * Legacy mirrored lines on the parent recipe.
      */
     public function lines(): HasMany
     {
@@ -164,9 +155,15 @@ class Recipe extends Model
     }
 
     /**
+     * User checkout records for this recipe.
+     */
+    public function versionCheckouts(): HasMany
+    {
+        return $this->hasMany(RecipeVersionCheckout::class);
+    }
+
+    /**
      * Stock moves created from executing the recipe.
-     *
-     * @return MorphMany
      */
     public function stockMoves(): MorphMany
     {
@@ -174,11 +171,99 @@ class Recipe extends Model
     }
 
     /**
+     * Resolve the currently published version when one exists.
+     */
+    public function currentPublishedVersion(): ?RecipeVersion
+    {
+        $currentVersion = $this->currentVersion;
+
+        if (! $currentVersion || ! $currentVersion->isPublished()) {
+            return null;
+        }
+
+        return $currentVersion;
+    }
+
+    /**
+     * Resolve the most recent open checkout for a user on this recipe.
+     */
+    public function openCheckoutForUser(int $userId): ?RecipeVersionCheckout
+    {
+        return $this->versionCheckouts()
+            ->where('user_id', $userId)
+            ->whereNull('checked_in_at')
+            ->latest('checked_out_at')
+            ->latest('id')
+            ->first();
+    }
+
+    /**
+     * Resolve the version shown to a specific user.
+     */
+    public function displayVersionForUser(int $userId): ?RecipeVersion
+    {
+        $checkout = $this->openCheckoutForUser($userId);
+
+        if ($checkout?->recipeVersion) {
+            return $checkout->recipeVersion;
+        }
+
+        $currentPublishedVersion = $this->currentPublishedVersion();
+
+        if ($currentPublishedVersion) {
+            return $currentPublishedVersion;
+        }
+
+        return $this->versions()
+            ->orderByRaw(
+                'CASE WHEN status = ? THEN 1 ELSE 0 END',
+                [RecipeVersion::STATUS_ARCHIVED]
+            )
+            ->orderByDesc('version_number')
+            ->orderByDesc('id')
+            ->first();
+    }
+
+    /**
+     * Resolve the current published output quantity.
+     */
+    public function currentOutputQuantity(): string
+    {
+        return (string) ($this->currentPublishedVersion()?->output_quantity ?? $this->output_quantity ?? '0.000000');
+    }
+
+    /**
+     * Resolve the current version lifecycle status.
+     */
+    public function currentVersionStatus(): ?string
+    {
+        return RecipeVersion::normalizeStatus($this->currentVersion?->status);
+    }
+
+    /**
+     * Determine the next stored version number, with legacy-safe upgrading.
+     */
+    public function nextVersionNumber(): int
+    {
+        $maxVersionNumber = (int) ($this->versions()->max('version_number') ?? 0);
+
+        if ($maxVersionNumber === 0) {
+            return 100;
+        }
+
+        if ($maxVersionNumber < 100) {
+            return ($maxVersionNumber * 100) + 1;
+        }
+
+        return $maxVersionNumber + 1;
+    }
+
+    /**
      * Booted model events.
      */
     protected static function booted(): void
     {
-        static::saving(function (Recipe $recipe) {
+        static::saving(function (Recipe $recipe): void {
             if (
                 ! array_key_exists('recipe_type', $recipe->getAttributes())
                 || $recipe->getAttribute('recipe_type') === null
@@ -197,11 +282,11 @@ class Recipe extends Model
                 throw new InvalidArgumentException('Recipe type is invalid.');
             }
 
-            if (!$item) {
+            if (! $item) {
                 throw new InvalidArgumentException('Recipe requires a valid output item.');
             }
 
-            if ($item->tenant_id !== $recipe->tenant_id) {
+            if ((int) $item->tenant_id !== (int) $recipe->tenant_id) {
                 throw new InvalidArgumentException('Recipe tenant must match item tenant.');
             }
 

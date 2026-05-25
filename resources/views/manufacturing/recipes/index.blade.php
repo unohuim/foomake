@@ -8,9 +8,10 @@
     <script type="application/json" id="manufacturing-recipes-index-payload">@json($payload)</script>
 
     <div
-        class="py-12"
+        class="flex h-[calc(100vh-8rem)] min-h-0 flex-col overflow-hidden py-6"
         data-page="manufacturing-recipes-index"
         data-payload="manufacturing-recipes-index-payload"
+        data-crud-config='@json($crudConfig)'
         x-data="manufacturingRecipesIndex"
     >
         <div class="fixed top-6 right-6 z-50" x-show="toast.visible">
@@ -21,172 +22,13 @@
             ></div>
         </div>
 
-        <div class="max-w-7xl mx-auto space-y-6 sm:px-6 lg:px-8">
-            <div class="flex items-center justify-between">
-                <h3 class="text-lg font-medium text-gray-900">{{ __('All recipes') }}</h3>
-                @can('inventory-make-orders-manage')
-                    <button
-                        type="button"
-                        class="inline-flex items-center rounded-md border border-transparent bg-blue-600 px-4 py-2 font-semibold text-xs uppercase tracking-widest text-white transition hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-                        x-on:click="openCreate()"
-                    >
-                        {{ __('Create Recipe') }}
-                    </button>
-                @endcan
-            </div>
-
-            <div class="rounded-lg border border-gray-100 bg-white p-4 shadow-sm">
-                <form method="GET" action="{{ route('manufacturing.recipes.index') }}" class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-                    <div>
-                        <label for="recipe_type" class="block text-sm font-medium text-gray-700">{{ __('Type filter') }}</label>
-                        <select
-                            id="recipe_type"
-                            name="recipe_type"
-                            class="mt-1 block w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:w-64"
-                        >
-                            <option value="">{{ __('All Types') }}</option>
-                            @foreach ($recipeTypeOptions as $recipeTypeOption)
-                                <option
-                                    value="{{ $recipeTypeOption['value'] }}"
-                                    @selected($selectedRecipeType === $recipeTypeOption['value'])
-                                >
-                                    {{ __($recipeTypeOption['label']) }}
-                                </option>
-                            @endforeach
-                        </select>
-                    </div>
-
-                    <div class="flex items-center gap-3">
-                        <button
-                            type="submit"
-                            class="inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 font-semibold text-xs uppercase tracking-widest text-gray-700 shadow-sm transition hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-                        >
-                            {{ __('Filter') }}
-                        </button>
-                        @if ($selectedRecipeType)
-                            <a
-                                href="{{ route('manufacturing.recipes.index') }}"
-                                class="text-sm text-blue-600 hover:text-blue-500"
-                            >
-                                {{ __('Clear') }}
-                            </a>
-                        @endif
-                    </div>
-                </form>
-            </div>
-
-            <div x-cloak x-show="recipes.length === 0">
-                <div class="bg-white border border-gray-100 shadow-sm sm:rounded-lg">
-                    <div class="p-6">
-                        <h3 class="text-lg font-medium text-gray-900">{{ __('No recipes yet') }}</h3>
-                        <p class="mt-2 text-sm text-gray-600">
-                            {{ __('Recipes will appear here once you add them.') }}
-                        </p>
-                        @can('inventory-make-orders-manage')
-                            <div class="mt-4">
-                                <button
-                                    type="button"
-                                    class="inline-flex items-center px-4 py-2 bg-blue-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition"
-                                    x-on:click="openCreate()"
-                                >
-                                    {{ __('Create Recipe') }}
-                                </button>
-                            </div>
-                        @endcan
-                    </div>
-                </div>
-            </div>
-
-            <div x-cloak x-show="recipes.length > 0">
-                <div class="bg-white border border-gray-100 shadow-sm sm:rounded-lg">
-                    <div class="p-6">
-                        <div class="overflow-x-auto">
-                            <table class="min-w-full text-sm">
-                                <thead class="text-left text-gray-500">
-                                    <tr class="border-b border-gray-100">
-                                        <th class="px-3 py-2 font-medium">{{ __('Recipe Name') }}</th>
-                                        <th class="px-3 py-2 font-medium">{{ __('Type') }}</th>
-                                        <th class="px-3 py-2 font-medium">{{ __('Output Item') }}</th>
-                                        <th class="px-3 py-2 font-medium">{{ __('Output per Run') }}</th>
-                                        <th class="px-3 py-2 font-medium">{{ __('Active') }}</th>
-                                        <th class="px-3 py-2 font-medium">{{ __('Updated') }}</th>
-                                        <th class="px-3 py-2 text-right font-medium">{{ __('Actions') }}</th>
-                                    </tr>
-                                </thead>
-                                <tbody class="divide-y divide-gray-100">
-                                    <template x-for="recipe in recipes" :key="recipe.id">
-                                        <tr>
-                                            <td class="px-3 py-3 text-gray-900" x-text="recipe.name"></td>
-                                            <td class="px-3 py-3 text-gray-600" x-text="recipe.recipe_type_label"></td>
-                                            <td class="px-3 py-3 text-gray-900">
-                                                <a
-                                                    class="text-gray-900 hover:text-blue-600"
-                                                    x-bind:href="recipe.show_url"
-                                                    x-text="recipe.item_name"
-                                                ></a>
-                                            </td>
-                                            <td class="px-3 py-3 text-gray-600" x-text="recipe.output_quantity_display"></td>
-                                            <td class="px-3 py-3 text-gray-600" x-text="recipe.is_active ? 'Yes' : 'No'"></td>
-                                            <td class="px-3 py-3 text-gray-600" x-text="recipe.updated_at"></td>
-                                            <td class="px-3 py-3 text-right text-sm">
-                                                @can('inventory-make-orders-manage')
-                                                    <div
-                                                        class="relative inline-block text-left"
-                                                        x-on:keydown.escape.window="closeActionMenu()"
-                                                    >
-                                                        <button
-                                                            type="button"
-                                                            class="inline-flex h-8 w-8 items-center justify-center text-gray-500 hover:text-gray-700"
-                                                            aria-label="Recipe actions"
-                                                            x-on:click="toggleActionMenu($event, recipe.id)"
-                                                        >
-                                                            ⋮
-                                                        </button>
-
-                                                        <template x-teleport="body">
-                                                            <div
-                                                                x-show="isActionMenuOpenFor(recipe.id)"
-                                                                x-on:click.outside="closeActionMenu()"
-                                                                x-transition
-                                                                class="fixed z-50 mt-2 w-40 rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5"
-                                                                x-bind:style="'top:' + actionMenuTop + 'px; left:' + (actionMenuLeft - 160) + 'px;'"
-                                                            >
-                                                                <div class="py-1">
-                                                                    <button
-                                                                        type="button"
-                                                                        class="block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100"
-                                                                        x-on:click="closeActionMenu(); openEdit(recipe)"
-                                                                    >
-                                                                        {{ __('Edit') }}
-                                                                    </button>
-                                                                    <button
-                                                                        type="button"
-                                                                        class="block w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50"
-                                                                        x-on:click="closeActionMenu(); openDelete(recipe)"
-                                                                    >
-                                                                        {{ __('Delete') }}
-                                                                    </button>
-                                                                </div>
-                                                            </div>
-                                                        </template>
-                                                    </div>
-                                                @endcan
-                                                @cannot('inventory-make-orders-manage')
-                                                    <span class="text-gray-400">—</span>
-                                                @endcannot
-                                            </td>
-                                        </tr>
-                                    </template>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            @include('manufacturing.recipes.partials.delete-recipe-modal')
-            @include('manufacturing.recipes.partials.create-recipe-slide-over')
-            @include('manufacturing.recipes.partials.edit-recipe-slide-over')
+        <div class="mx-auto flex h-full min-h-0 w-full max-w-7xl flex-1 flex-col overflow-hidden sm:px-6 lg:px-8">
+            <div class="flex h-full min-h-0 flex-1 flex-col" data-crud-root></div>
         </div>
+
+        @include('manufacturing.recipes.partials.delete-recipe-modal')
+        @include('manufacturing.recipes.partials.create-recipe-slide-over')
+        @include('manufacturing.recipes.partials.edit-recipe-slide-over')
+        @include('manufacturing.recipes.partials.create-recipe-version-slide-over')
     </div>
 </x-app-layout>

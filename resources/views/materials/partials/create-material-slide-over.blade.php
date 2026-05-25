@@ -91,6 +91,19 @@
                             </div>
 
                             <div>
+                                <label for="material-starting-quantity" class="block text-sm font-medium text-gray-700">Starting Quantity</label>
+                                <input
+                                    id="material-starting-quantity"
+                                    type="text"
+                                    inputmode="decimal"
+                                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                                    x-model="form.starting_quantity"
+                                />
+                                <p class="mt-1 text-sm text-gray-500">Leave blank or zero to create the material without initial stock.</p>
+                                <p class="mt-1 text-sm text-red-600" x-show="errors.starting_quantity" x-text="errors.starting_quantity[0]"></p>
+                            </div>
+
+                            <div>
                                 <p class="text-sm font-medium text-gray-700">Flags</p>
                                 <div class="mt-3 space-y-2">
                                     <label class="flex items-center gap-2 text-sm text-gray-700">

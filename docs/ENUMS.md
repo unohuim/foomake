@@ -93,6 +93,31 @@ Do not introduce new enum values without updating this document.
 
 ---
 
+### Recipe Version Status
+
+**Name:** RecipeVersion status  
+**Storage location(s):** `recipe_versions.status` (string column)  
+**Allowed values:**
+
+- `DRAFT`
+- `PUBLISHED`
+- `ARCHIVED`
+
+**Semantic meaning:**
+
+- `DRAFT`: Editable execution template that is not eligible for new Make Orders.
+- `PUBLISHED`: Published execution template. Multiple versions may be published historically, but only `recipes.current_version_id` is current.
+- `ARCHIVED`: Inactive execution template kept for historical reference only.
+
+**Notes:**
+
+- Legacy persisted `APPROVED` values must be treated as `PUBLISHED` during migration and read-model normalization until old records are rewritten safely.
+- Recipe parent names remain on `recipes.name`; version names are optional internal labels only.
+- Version status is lifecycle only. Currentness is controlled only by `recipes.current_version_id`.
+- Make Orders must reference the recipe version pointed to by `recipes.current_version_id`.
+
+---
+
 ## Purchasing
 
 ### Purchase Order Status

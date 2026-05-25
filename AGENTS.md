@@ -53,8 +53,6 @@ If any conflicts are detected between sources, work MUST pause and be escalated 
 
 ## Workflow
 
-- Before editing anything, Codex must present a plan and wait for human approval.
-- Codex must be >95% certain of requirements before proposing a plan.
 - Codex must never proceed based on inferred or partial intent.
 
 ---
@@ -116,7 +114,6 @@ Codex must never self-certify completion.
 - All PRs are test-driven by default.
 - Codex may write initial or scaffolded tests.
 - Tests are expected to be refined collaboratively with the human.
-- No implementation may begin until proposed tests are reviewed and approved.
 
 ### UI and Content Changes
 

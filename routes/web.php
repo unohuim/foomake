@@ -152,6 +152,14 @@ Route::middleware('auth')->group(function () {
         ->name('manufacturing.uom-conversions.destroy');
     Route::get('/manufacturing/recipes', [RecipeController::class, 'index'])
         ->name('manufacturing.recipes.index');
+    Route::get('/manufacturing/recipes/list', [RecipeController::class, 'list'])
+        ->name('manufacturing.recipes.list');
+    Route::get('/manufacturing/recipes/{recipe}/versions/list', [RecipeController::class, 'listVersions'])
+        ->name('manufacturing.recipes.versions.index');
+    Route::get('/manufacturing/recipes/{recipe}/make-orders', [MakeOrderController::class, 'listForRecipe'])
+        ->name('manufacturing.recipes.make-orders.index');
+    Route::post('/manufacturing/recipes/{recipe}/make-orders', [MakeOrderController::class, 'storeForRecipe'])
+        ->name('manufacturing.recipes.make-orders.store');
     Route::get('/manufacturing/recipes/{recipe}', [RecipeController::class, 'show'])
         ->name('manufacturing.recipes.show');
     Route::post('/manufacturing/recipes', [RecipeController::class, 'store'])
@@ -160,6 +168,28 @@ Route::middleware('auth')->group(function () {
         ->name('manufacturing.recipes.update');
     Route::delete('/manufacturing/recipes/{recipe}', [RecipeController::class, 'destroy'])
         ->name('manufacturing.recipes.destroy');
+    Route::post('/manufacturing/recipes/{recipe}/versions', [RecipeController::class, 'storeVersion'])
+        ->name('manufacturing.recipes.versions.store');
+    Route::patch('/manufacturing/recipes/{recipe}/versions/{version}', [RecipeController::class, 'updateVersion'])
+        ->name('manufacturing.recipes.versions.update');
+    Route::delete('/manufacturing/recipes/{recipe}/versions/{version}', [RecipeController::class, 'destroyVersion'])
+        ->name('manufacturing.recipes.versions.destroy');
+    Route::post('/manufacturing/recipes/{recipe}/versions/{version}/checkout', [RecipeController::class, 'checkoutVersion'])
+        ->name('manufacturing.recipes.versions.checkout');
+    Route::post('/manufacturing/recipes/{recipe}/versions/{version}/check-in', [RecipeController::class, 'checkInVersion'])
+        ->name('manufacturing.recipes.versions.check-in');
+    Route::patch('/manufacturing/recipes/{recipe}/versions/{version}/publish', [RecipeController::class, 'publishVersion'])
+        ->name('manufacturing.recipes.versions.publish');
+    Route::patch('/manufacturing/recipes/{recipe}/versions/{version}/approve', [RecipeController::class, 'publishVersion'])
+        ->name('manufacturing.recipes.versions.approve');
+    Route::post('/manufacturing/recipes/{recipe}/versions/{version}/duplicate', [RecipeController::class, 'duplicateVersion'])
+        ->name('manufacturing.recipes.versions.duplicate');
+    Route::patch('/manufacturing/recipes/{recipe}/versions/{version}/archive', [RecipeController::class, 'archiveVersion'])
+        ->name('manufacturing.recipes.versions.archive');
+    Route::post('/manufacturing/recipes/{recipe}/versions/{version}/ingredients', [RecipeController::class, 'storeIngredient'])
+        ->name('manufacturing.recipes.ingredients.store');
+    Route::patch('/manufacturing/recipes/{recipe}/versions/{version}/ingredients/{line}', [RecipeController::class, 'updateIngredient'])
+        ->name('manufacturing.recipes.ingredients.update');
     Route::post('/manufacturing/recipes/{recipe}/lines', [RecipeController::class, 'storeLine'])
         ->name('manufacturing.recipes.lines.store');
     Route::patch('/manufacturing/recipes/{recipe}/lines/{line}', [RecipeController::class, 'updateLine'])
@@ -177,8 +207,18 @@ Route::middleware('auth')->group(function () {
         ->name('manufacturing.make-orders.store');
     Route::patch('/manufacturing/make-orders/{makeOrder}', [MakeOrderController::class, 'update'])
         ->name('manufacturing.make-orders.update');
+    Route::patch('/manufacturing/make-orders/{makeOrder}/assignment', [MakeOrderController::class, 'updateAssignment'])
+        ->name('manufacturing.make-orders.assignment.update');
+    Route::patch('/manufacturing/make-orders/{makeOrder}/workflow-stage', [MakeOrderController::class, 'updateWorkflowStage'])
+        ->name('manufacturing.make-orders.workflow-stage.update');
     Route::delete('/manufacturing/make-orders/{makeOrder}', [MakeOrderController::class, 'destroy'])
         ->name('manufacturing.make-orders.destroy');
+    Route::post('/manufacturing/make-orders/{makeOrder}/lines', [MakeOrderController::class, 'storeLine'])
+        ->name('manufacturing.make-orders.lines.store');
+    Route::patch('/manufacturing/make-orders/{makeOrder}/lines/{line}', [MakeOrderController::class, 'updateLine'])
+        ->name('manufacturing.make-orders.lines.update');
+    Route::delete('/manufacturing/make-orders/{makeOrder}/lines/{line}', [MakeOrderController::class, 'destroyLine'])
+        ->name('manufacturing.make-orders.lines.destroy');
     Route::post('/manufacturing/make-orders/{makeOrder}/schedule', [MakeOrderController::class, 'schedule'])
         ->name('manufacturing.make-orders.schedule');
     Route::post('/manufacturing/make-orders/{makeOrder}/make', [MakeOrderController::class, 'make'])

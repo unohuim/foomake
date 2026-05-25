@@ -1,0 +1,52 @@
+name: Make Order Recipe Snapshot
+type: Manufacturing Domain Pattern
+location:
+  - app/Models/MakeOrder.php
+  - app/Models/MakeOrderLine.php
+  - app/Http/Controllers/MakeOrderController.php
+purpose: Snapshot the current published recipe version and its lines onto each Make Order so execution is isolated from later recipe changes.
+when_to_use:
+  - Creating a Make Order from a recipe
+  - Executing a Make Order
+  - Reading planned Make Order inputs or output quantities
+  - Reading Make Order detail sections in the order Workflow, then Ingredients
+when_not_to_use:
+  - Mutating live recipe versions after a Make Order already exists
+  - Deriving execution inputs from the current recipe lines at make time
+  - Treating make_orders.output_quantity as produced quantity instead of runs
+rules:
+  - A Make Order stores both recipe_id and recipe_version_id.
+  - Creating or editing a Make Order must resolve recipe_version_id from recipes.current_version_id.
+  - Make Order creation is blocked when recipes.current_version_id is null.
+  - Recipe detail Make Orders section create actions must resolve recipe_version_id from recipes.current_version_id.
+  - Recipe detail Make Orders section create actions must use the shared section create slide-over rather than posting directly from the plus button.
+  - Recipe detail Make Orders section create forms must not expose a recipe selector because the route is already recipe-scoped.
+  - Publishing a recipe version must refresh Recipe detail Make Orders create eligibility reactively through the page module contract.
+  - Recipes index Make actions must resolve recipe_version_id from recipes.current_version_id.
+  - Current published version row Make Order actions must resolve recipe_version_id from recipes.current_version_id.
+  - Material detail recipe-row Make actions must resolve recipe_version_id from recipes.current_version_id.
+  - User checked-out recipe versions must never be used for Make Orders.
+  - Creating a Make Order copies recipe version lines into make_order_lines.
+  - Successful recipe-scoped Make Order create should redirect to the created Make Order detail page when `show_url` is returned.
+  - Make Order execution must use make_order_lines, not live recipe_version_lines or recipe_lines.
+  - Make Order detail Ingredients must use the shared Ingredients detail section abstraction.
+  - Make Order detail Ingredients rows are editable snapshots owned by make_order_lines and may be adjusted after creation without mutating recipe versions.
+  - Make Order detail Workflow renders before Ingredients and uses the shared resource header plus reusable detail-section shell.
+  - Make Order workflow movement is stage-driven through `workflow_stage_id` and configured manufacturing workflow stages, not recipe-version-driven.
+  - Make Order workflow movement must not mutate `make_order_lines` snapshot rows.
+  - Make Order detail must use the shared resource detail header and reusable detail-section card contracts instead of a bespoke Core card.
+  - Produced output quantity is recipe_version.output_quantity multiplied by make_orders.output_quantity runs using BCMath string math.
+  - Later recipe or current-version changes must not mutate existing make_orders or make_order_lines.
+  - Make Order snapshots must come from the current published version lines referenced by recipes.current_version_id at creation time.
+  - Recipe-scoped Make Order creation must not auto-enter workflow; created records stay pre-workflow with `workflow_stage_id = null`.
+  - make_order_lines may contain manual_adjustment or substitution rows in addition to recipe snapshot rows.
+public_interface:
+  - MakeOrder::recipeVersion()
+  - MakeOrder::lines()
+example_usage: |
+  $makeOrder->lines()->create([
+      'tenant_id' => $makeOrder->tenant_id,
+      'input_item_id' => $item->id,
+      'planned_quantity' => '4.000000',
+      'line_type' => 'recipe',
+  ]);

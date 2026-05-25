@@ -6,12 +6,15 @@ use App\Models\Item;
 use App\Models\MakeOrder;
 use App\Models\Permission;
 use App\Models\Recipe;
+use App\Models\RecipeVersion;
+use App\Models\RecipeVersionLine;
 use App\Models\Role;
 use App\Models\Tenant;
 use App\Models\Uom;
 use App\Models\UomCategory;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 uses(RefreshDatabase::class);
@@ -120,10 +123,40 @@ beforeEach(function (): void {
         return $recipe;
     };
 
+    $this->makeRecipeVersion = function (Tenant $tenant, Recipe $recipe, array $attributes = []): RecipeVersion {
+        return RecipeVersion::query()->create(array_merge([
+            'tenant_id' => $tenant->id,
+            'recipe_id' => $recipe->id,
+            'version_number' => $attributes['version_number'] ?? 100,
+            'status' => $attributes['status'] ?? RecipeVersion::STATUS_DRAFT,
+            'recipe_type' => $attributes['recipe_type'] ?? Recipe::TYPE_MANUFACTURING,
+            'output_quantity' => $attributes['output_quantity'] ?? '1.000000',
+        ], $attributes));
+    };
+
+    $this->publishRecipeVersion = function (Recipe $recipe, RecipeVersion $version): void {
+        $version->status = RecipeVersion::STATUS_PUBLISHED;
+        $version->save();
+        $recipe->current_version_id = $version->id;
+        $recipe->save();
+    };
+
+    $this->addRecipeVersionLine = function (Tenant $tenant, RecipeVersion $version, Item $inputItem, string $quantity): RecipeVersionLine {
+        return RecipeVersionLine::query()->create([
+            'tenant_id' => $tenant->id,
+            'recipe_version_id' => $version->id,
+            'input_item_id' => $inputItem->id,
+            'uom_id' => $inputItem->base_uom_id,
+            'quantity' => $quantity,
+            'sort_order' => 1,
+        ]);
+    };
+
     $this->makeMakeOrder = function (Tenant $tenant, Recipe $recipe, array $attributes = []): MakeOrder {
         $makeOrder = MakeOrder::query()->create(array_merge([
             'tenant_id' => $tenant->id,
             'recipe_id' => $recipe->id,
+            'recipe_version_id' => $recipe->current_version_id,
             'output_item_id' => $recipe->item_id,
             'output_quantity' => $attributes['output_quantity'] ?? '2.000000',
             'status' => $attributes['status'] ?? MakeOrder::STATUS_DRAFT,
@@ -615,12 +648,15 @@ it('24a. recipe create success redirects to the created recipe detail view after
         ->and($pageSource)->toContain("window.location.assign(data.data.show_url);");
 });
 
-it('25. recipe row menu includes make when the user can execute make orders', function (): void {
+it('25. material detail recipe row menu includes make when the recipe has a current published version', function (): void {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
     $uom = ($this->makeUom)($tenant);
     $item = ($this->makeItem)($tenant, $uom, ['is_manufacturable' => true]);
-    ($this->makeRecipe)($tenant, $item);
+    $recipe = ($this->makeRecipe)($tenant, $item);
+    ($this->publishRecipeVersion)($recipe, ($this->makeRecipeVersion)($tenant, $recipe, [
+        'status' => RecipeVersion::STATUS_PUBLISHED,
+    ]));
 
     ($this->grantPermissions)($user, [
         'inventory-materials-view',
@@ -633,10 +669,48 @@ it('25. recipe row menu includes make when the user can execute make orders', fu
         ($this->extractSection)(($this->getShow)($user, $item), 'recipes')
     )->assertOk();
 
-    expect($response->json('data.0.available_actions'))->toContain('make');
+    expect($response->json('data.0.id'))->toBe($recipe->id)
+        ->and($response->json('data.0.available_actions'))->toContain('make')
+        ->and($response->json('data.0.make_url'))->toBe(route('manufacturing.recipes.make-orders.store', $recipe));
 });
 
-it('26. make action opens the existing make order slide over with the recipe prefilled', function (): void {
+it('26. material detail recipe make action creates a make order directly and returns the created detail url', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $uom = ($this->makeUom)($tenant);
+    $item = ($this->makeItem)($tenant, $uom, ['is_manufacturable' => true]);
+    $recipe = ($this->makeRecipe)($tenant, $item);
+    $version = ($this->makeRecipeVersion)($tenant, $recipe, [
+        'status' => RecipeVersion::STATUS_PUBLISHED,
+        'output_quantity' => '4.000000',
+    ]);
+    ($this->publishRecipeVersion)($recipe, $version);
+    $input = ($this->makeItem)($tenant, $uom, ['name' => 'Salt']);
+    ($this->addRecipeVersionLine)($tenant, $version, $input, '1.500000');
+
+    ($this->grantPermissions)($user, [
+        'inventory-materials-view',
+        'inventory-recipes-view',
+        'inventory-make-orders-execute',
+    ]);
+
+    $response = $this->actingAs($user)
+        ->postJson(route('manufacturing.recipes.make-orders.store', $recipe), [
+            'runs' => '2.000000',
+        ])
+        ->assertCreated();
+
+    $makeOrderId = (int) $response->json('data.id');
+
+    expect($response->json('data.recipe_id'))->toBe($recipe->id)
+        ->and($response->json('data.recipe_version_id'))->toBe($version->id)
+        ->and($response->json('data.show_url'))->toBe(route('manufacturing.make-orders.show', $makeOrderId));
+
+    expect(DB::table('make_order_lines')->where('make_order_id', $makeOrderId)->count())->toBe(1)
+        ->and(bcadd((string) DB::table('make_order_lines')->where('make_order_id', $makeOrderId)->value('planned_quantity'), '0', 6))->toBe('3.000000');
+});
+
+it('26a. material detail recipe make is hidden when the recipe has no current published version', function (): void {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
     $uom = ($this->makeUom)($tenant);
@@ -647,7 +721,6 @@ it('26. make action opens the existing make order slide over with the recipe pre
         'inventory-materials-view',
         'inventory-recipes-view',
         'inventory-make-orders-execute',
-        'inventory-make-orders-view',
     ]);
 
     $response = ($this->getSectionList)(
@@ -655,41 +728,14 @@ it('26. make action opens the existing make order slide over with the recipe pre
         ($this->extractSection)(($this->getShow)($user, $item), 'recipes')
     )->assertOk();
 
-    $section = ($this->extractSection)(($this->getShow)($user, $item), 'recipes');
-    $makeOrdersViewSource = file_get_contents(resource_path('views/manufacturing/make-orders/index.blade.php'));
-    $materialsViewSource = file_get_contents(resource_path('views/materials/show.blade.php'));
+    expect($response->json('data.0.available_actions'))->not->toContain('make')
+        ->and(array_key_exists('make_url', $response->json('data.0') ?? []))->toBeFalse();
 
-    expect($section['actions'][1]['id'] ?? null)->toBe('make')
-        ->and($section['actions'][1]['type'] ?? null)->toBe('custom')
-        ->and($section['actions'][1]['handlerKey'] ?? null)->toBe('openMakeOrderCreate')
-        ->and($response->json('data.0.make_prefill.recipe_id'))->toBe($recipe->id)
-        ->and(array_key_exists('make_url', $response->json('data.0') ?? []))->toBeFalse()
-        ->and($makeOrdersViewSource)->toContain('Create make order')
-        ->and($materialsViewSource)->toContain("@include('manufacturing.make-orders.partials.create-make-order-slide-over')");
-});
-
-it('26a. make order create success redirects to the created make order detail view after in place create', function (): void {
-    $tenant = ($this->makeTenant)();
-    $user = ($this->makeUser)($tenant);
-    $uom = ($this->makeUom)($tenant);
-    $item = ($this->makeItem)($tenant, $uom, ['is_manufacturable' => true]);
-    $recipe = ($this->makeRecipe)($tenant, $item);
-    $pageSource = file_get_contents(resource_path('js/pages/materials-show.js'));
-
-    ($this->grantPermissions)($user, [
-        'inventory-materials-view',
-        'inventory-make-orders-execute',
-    ]);
-
-    $response = ($this->postMakeOrder)($user, [
-        'recipe_id' => $recipe->id,
-        'runs' => '2.000000',
-    ])->assertCreated();
-
-    $makeOrderId = $response->json('data.id');
-
-    expect($response->json('data.show_url'))->toBe(route('manufacturing.make-orders.show', $makeOrderId))
-        ->and($pageSource)->toContain("window.location.assign(data.data.show_url);");
+    $this->actingAs($user)
+        ->postJson(route('manufacturing.recipes.make-orders.store', $recipe), [
+            'runs' => '2.000000',
+        ])
+        ->assertStatus(422);
 });
 
 it('27. make orders section lists only make orders whose recipe outputs this material', function (): void {
@@ -838,6 +884,11 @@ it('32. make order rows show total output quantity as runs multiplied by recipe 
     $uom = ($this->makeUom)($tenant, ['display_precision' => 2]);
     $material = ($this->makeItem)($tenant, $uom, ['is_manufacturable' => true]);
     $recipe = ($this->makeRecipe)($tenant, $material, ['output_quantity' => '1.250000']);
+    $version = ($this->makeRecipeVersion)($tenant, $recipe, [
+        'status' => RecipeVersion::STATUS_PUBLISHED,
+        'output_quantity' => '1.250000',
+    ]);
+    ($this->publishRecipeVersion)($recipe, $version);
     ($this->makeMakeOrder)($tenant, $recipe, ['output_quantity' => '2.000000']);
 
     ($this->grantPermissions)($user, ['inventory-materials-view', 'inventory-make-orders-view']);
@@ -941,7 +992,7 @@ it('40. make order create slide over stays fixed above sticky shell chrome and c
 
     expect($source)->toContain('fixed inset-0 z-50')
         ->and($source)->toContain('absolute inset-0 bg-gray-500 bg-opacity-25 transition-opacity')
-        ->and($source)->toContain('x-on:click="closeMakeOrderCreate()"');
+        ->and($source)->toContain('x-on:click="closeMakeOrderForm()"');
 });
 
 it('41. material detail renders slide over layers outside the scrollable detail content container', function (): void {
@@ -956,4 +1007,26 @@ it('41. material detail renders slide over layers outside the scrollable detail 
     expect($contentPosition)->not->toBeFalse()
         ->and($overlayPosition)->not->toBeFalse()
         ->and($overlayPosition)->toBeGreaterThan($contentPosition);
+});
+
+it('42. material detail uses the shared resource detail header breadcrumb component', function (): void {
+    $source = file_get_contents(resource_path('views/materials/show.blade.php'));
+
+    expect($source)->toContain('x-resource-detail-header-breadcrumb')
+        ->and($source)->not->toContain('<x-resource-breadcrumbs :items="$breadcrumbItems" />');
+});
+
+it('43. shared resource detail header breadcrumb component keeps the breadcrumb below the material header body', function (): void {
+    $source = file_get_contents(resource_path('views/components/resource-detail-header-breadcrumb.blade.php'));
+
+    expect($source)->toContain('data-resource-detail-header-body')
+        ->and($source)->toContain('data-resource-detail-breadcrumb')
+        ->and($source)->toContain('order-last');
+});
+
+it('43b. shared breadcrumb component preserves connected chevron separator line styling', function (): void {
+    $source = file_get_contents(resource_path('views/components/resource-breadcrumbs.blade.php'));
+
+    expect($source)->toContain('border-y border-gray-200')
+        ->and($source)->toContain('data-breadcrumb-chevron-separator');
 });

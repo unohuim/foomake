@@ -735,7 +735,7 @@ it('21. the created empty fulfillment recipe appears in recipe listing query beh
         ->assertSee('Recipe List Product');
 
     $payload = ($this->extractPayload)($response, 'manufacturing-recipes-index-payload');
-    $recipe = collect($payload['recipes'] ?? [])->firstWhere('name', 'Recipe List Product');
+    $recipe = collect($payload['initial_rows'] ?? [])->firstWhere('name', 'Recipe List Product');
 
     expect($recipe['recipe_type'] ?? null)->toBe(Recipe::TYPE_FULFILLMENT);
 });

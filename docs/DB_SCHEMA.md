@@ -694,14 +694,17 @@ Migrations remain the **sole source of truth**.
 | id                 | bigint        | No       | Primary key                           |
 | tenant_id          | bigint        | No       | FK → tenants.id (CASCADE)             |
 | recipe_id          | bigint        | No       | FK → recipes.id (CASCADE)             |
+| recipe_version_id  | bigint        | Yes      | FK → recipe_versions.id (SET NULL)    |
 | output_item_id     | bigint        | No       | FK → items.id (CASCADE)               |
 | output_quantity    | decimal(18,6) | No       | Stored runs; canonical scale          |
 | status             | string        | No       | DRAFT, SCHEDULED, MADE, CANCELLED     |
 | due_date           | date          | Yes      | Set on schedule                       |
+| workflow_stage_id  | bigint        | Yes      | FK → workflow_stages.id (SET NULL); operational stage only |
+| tasked_by_user_id  | bigint        | Yes      | FK → users.id (SET NULL); workflow-stage transition audit |
 | scheduled_at       | timestamp     | Yes      | Set on schedule                       |
 | made_at            | timestamp     | Yes      | Set on make                           |
 | created_by_user_id | bigint        | Yes      | FK → users.id (SET NULL)              |
-| made_by_user_id    | bigint        | Yes      | FK → users.id (SET NULL)              |
+| made_by_user_id    | bigint        | Yes      | FK → users.id (SET NULL); current Make Order owner/assignment |
 | created_at         | timestamp     | Yes      | —                                     |
 | updated_at         | timestamp     | Yes      | —                                     |
 
@@ -712,11 +715,23 @@ Migrations remain the **sole source of truth**.
 - Index: `(tenant_id, due_date)`
 - Index: `(tenant_id, recipe_id)`
 - Index: `(tenant_id, output_item_id)`
+- Index: `(tenant_id, workflow_stage_id)` (`mkord_tenant_stage_idx`)
 - Implicit (FK index): `tenant_id`
 - Implicit (FK index): `recipe_id`
+- Implicit (FK index): `recipe_version_id`
 - Implicit (FK index): `output_item_id`
+- Implicit (FK index): `workflow_stage_id`
+- Implicit (FK index): `tasked_by_user_id`
 - Implicit (FK index): `created_by_user_id`
 - Implicit (FK index): `made_by_user_id`
+
+### Behavioral Notes
+
+- `output_quantity` stores runs, not produced quantity.
+- `status` remains lifecycle only; `workflow_stage_id` stores the current operational stage when the Make Order adopts tenant-configured manufacturing workflow stages.
+- Make Order ownership uses `made_by_user_id`; `make_orders` does not include `assigned_to_user_id`.
+- Produced quantity is `runs × recipe_version.output_quantity`.
+- Existing Make Orders keep their `recipe_id`, `recipe_version_id`, and `make_order_lines` snapshots even when later recipe versions change.
 
 ---
 
@@ -1000,9 +1015,10 @@ Migrations remain the **sole source of truth**.
 | id              | bigint        | No       | Primary key               |
 | tenant_id       | bigint        | No       | FK → tenants.id (CASCADE) |
 | item_id         | bigint        | No       | FK → items.id (CASCADE)   |
-| recipe_type     | string        | No       | Allowed values defined in `docs/ENUMS.md` |
-| name            | string        | No       | User-defined recipe name  |
-| output_quantity | decimal(18,6) | No       | Canonical scale           |
+| current_version_id | bigint     | Yes      | FK → recipe_versions.id (SET NULL) |
+| recipe_type     | string        | No       | Legacy mirror of current version type |
+| name            | string        | No       | Stable parent recipe name |
+| output_quantity | decimal(18,6) | No       | Legacy mirror of current version output qty |
 | is_active       | boolean       | No       | Default true              |
 | is_default      | boolean       | No       | Default false             |
 | created_at      | timestamp     | Yes      | —                         |
@@ -1012,7 +1028,7 @@ Migrations remain the **sole source of truth**.
 
 - PK: `id`
 - Unique: `(id, tenant_id)`
-- Unique: `(tenant_id, item_id)` where `is_default = 1` (partial/filtered; driver-specific)
+- Index: `recipes_default_lookup_idx (tenant_id, item_id, is_default)`
 - Index: `(tenant_id, item_id)`
 - Index: `(tenant_id, recipe_type)`
 - Implicit (FK index): `tenant_id`
@@ -1021,10 +1037,12 @@ Migrations remain the **sole source of truth**.
 ### Behavioral Notes
 
 - `recipe_type` is required and must use values defined in `docs/ENUMS.md`.
+- `name` is parent-level identity, not a version label.
 - Recipe output candidates are normal `items` where `is_manufacturable = true` or `is_sellable = true`.
 - Output items where both flags are false are invalid for recipes.
 - Fulfillment recipes normalize `output_quantity` to `1.000000` on save.
 - Output quantity storage remains canonical scale `6`; UI display precision is derived from the output item base UoM.
+- `current_version_id` points at the single current published execution template when one exists.
 
 ---
 
@@ -1056,6 +1074,158 @@ Migrations remain the **sole source of truth**.
 - Index: `(recipe_id, item_id)`
 - Implicit (FK index): `tenant_id`
 - Implicit (FK index): `item_id`
+
+### Behavioral Notes
+
+- `recipe_lines` is retained as a transitional compatibility mirror for legacy line APIs.
+- Versioned execution authority lives in `recipe_versions` and `recipe_version_lines`.
+
+---
+
+## recipe_versions
+
+**Tenant-owned:** Yes  
+**Purpose:** Versioned execution templates owned by a recipe parent
+
+### Columns
+
+| Name       | Type          | Nullable | Notes                     |
+| ---------- | ------------- | -------- | ------------------------- |
+| id         | bigint        | No       | Primary key               |
+| tenant_id  | bigint        | No       | FK → tenants.id (CASCADE) |
+| recipe_id  | bigint        | No       | FK → recipes.id (CASCADE) |
+| version_number | integer   | No       | Scoped per tenant + recipe |
+| name       | string        | Yes      | Optional internal version label |
+| output_quantity | decimal(18,6) | No  | Canonical scale           |
+| recipe_type | string       | No       | Allowed values defined in `docs/ENUMS.md` |
+| status     | string        | No       | Allowed values defined in `docs/ENUMS.md` |
+| effective_from | timestamp | Yes      | —                         |
+| effective_until | timestamp | Yes     | —                         |
+| approved_at | timestamp    | Yes      | —                         |
+| approved_by_user_id | bigint | Yes    | FK → users.id (SET NULL)  |
+| notes      | text          | Yes      | —                         |
+| created_at | timestamp     | Yes      | —                         |
+| updated_at | timestamp     | Yes      | —                         |
+
+### Keys & Indexes
+
+- PK: `id`
+- Unique: `(tenant_id, recipe_id, version_number)`
+- Index: `(tenant_id, recipe_id, status)`
+- Implicit (FK index): `tenant_id`
+- Implicit (FK index): `recipe_id`
+
+### Behavioral Notes
+
+- Lifecycle statuses are `DRAFT`, `PUBLISHED`, and `ARCHIVED` per `docs/ENUMS.md`.
+- Legacy persisted `APPROVED` values must be normalized as `PUBLISHED` until rewritten safely.
+- New recipes auto-create version `1.00` as a `DRAFT` and do not set `recipes.current_version_id` until publish.
+- `recipes.current_version_id` is the single currentness pointer and is independent from lifecycle status history.
+- Multiple historical versions may remain published, but only `recipes.current_version_id` is current.
+- DRAFT and ARCHIVED versions are not eligible for new Make Orders.
+- Version numbers are stored as sortable integers and displayed in `x.xx` format.
+
+---
+
+## recipe_version_lines
+
+**Tenant-owned:** Yes  
+**Purpose:** Version-owned input lines for a recipe execution template
+
+### Columns
+
+| Name       | Type          | Nullable | Notes                     |
+| ---------- | ------------- | -------- | ------------------------- |
+| id         | bigint        | No       | Primary key               |
+| tenant_id  | bigint        | No       | FK → tenants.id (CASCADE) |
+| recipe_version_id | bigint | No       | FK → recipe_versions.id (CASCADE) |
+| input_item_id | bigint     | No       | FK → items.id (CASCADE)   |
+| uom_id     | bigint        | Yes      | FK → uoms.id (SET NULL)   |
+| quantity   | decimal(18,6) | No       | Canonical scale           |
+| sort_order | integer       | No       | Default 1                 |
+| created_at | timestamp     | Yes      | —                         |
+| updated_at | timestamp     | Yes      | —                         |
+
+### Keys & Indexes
+
+- PK: `id`
+- Index: `(recipe_version_id, sort_order)`
+- Implicit (FK index): `tenant_id`
+- Implicit (FK index): `input_item_id`
+
+### Behavioral Notes
+
+- `recipe_version_lines` is the canonical ingredient source for recipe detail display and Make Order snapshots.
+- Parent-level `recipe_lines` is a transitional compatibility mirror and is not the authoritative ingredient source.
+
+---
+
+## recipe_version_checkouts
+
+**Tenant-owned:** Yes  
+**Purpose:** Persist the current user editing context for recipe versions
+
+### Columns
+
+| Name       | Type      | Nullable | Notes                     |
+| ---------- | --------- | -------- | ------------------------- |
+| id         | bigint    | No       | Primary key               |
+| tenant_id  | bigint    | No       | FK → tenants.id (CASCADE) |
+| recipe_id  | bigint    | No       | FK → recipes.id (CASCADE) |
+| recipe_version_id | bigint | No   | FK → recipe_versions.id (CASCADE) |
+| user_id    | bigint    | No       | FK → users.id (CASCADE)   |
+| checked_out_at | timestamp | No   | Checkout timestamp        |
+| checked_in_at | timestamp | Yes   | Null while open           |
+| created_at | timestamp | Yes      | —                         |
+| updated_at | timestamp | Yes      | —                         |
+
+### Keys & Indexes
+
+- PK: `id`
+- Index: `(tenant_id, recipe_id, user_id, checked_in_at)`
+- Index: `(tenant_id, recipe_version_id, user_id, checked_in_at)`
+- Implicit (FK index): `tenant_id`
+- Implicit (FK index): `recipe_id`
+- Implicit (FK index): `recipe_version_id`
+- Implicit (FK index): `user_id`
+
+### Behavioral Notes
+
+- Checkout controls user editing context only.
+- Only the checkout owner may edit the checked-out draft version.
+- A user without an open checkout sees the current published version from `recipes.current_version_id`.
+- Different users may check out different versions of the same recipe at the same time.
+- Explicit index names are `rvco_recipe_user_open_idx` and `rvco_open_user_version_idx`.
+
+---
+
+## make_order_lines
+
+**Tenant-owned:** Yes  
+**Purpose:** Snapshotted execution lines owned by a Make Order
+
+### Columns
+
+| Name       | Type          | Nullable | Notes                     |
+| ---------- | ------------- | -------- | ------------------------- |
+| id         | bigint        | No       | Primary key               |
+| tenant_id  | bigint        | No       | FK → tenants.id (CASCADE) |
+| make_order_id | bigint     | No       | FK → make_orders.id (CASCADE) |
+| source_recipe_version_line_id | bigint | Yes | FK → recipe_version_lines.id (SET NULL) |
+| input_item_id | bigint     | No       | FK → items.id (CASCADE)   |
+| uom_id     | bigint        | Yes      | FK → uoms.id (SET NULL)   |
+| planned_quantity | decimal(18,6) | No | Canonical scale snapshot  |
+| actual_quantity | decimal(18,6) | Yes | Runtime override / actual |
+| line_type  | string        | No       | `recipe`, `manual_adjustment`, or `substitution` |
+| created_at | timestamp     | Yes      | —                         |
+| updated_at | timestamp     | Yes      | —                         |
+
+### Keys & Indexes
+
+- PK: `id`
+- Index: `(make_order_id, line_type)`
+- Implicit (FK index): `tenant_id`
+- Implicit (FK index): `input_item_id`
 
 ---
 

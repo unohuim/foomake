@@ -37,10 +37,12 @@ beforeEach(function (): void {
 
     $this->makeUom = function (): Uom {
         $category = UomCategory::query()->create([
+            'tenant_id' => $this->tenant->id,
             'name' => Str::uuid()->toString(),
         ]);
 
         return Uom::query()->create([
+            'tenant_id' => $this->tenant->id,
             'uom_category_id' => $category->id,
             'name' => Str::uuid()->toString(),
             'symbol' => Str::upper(Str::random(6)),

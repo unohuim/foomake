@@ -65,7 +65,7 @@ rules:
   - Resource pages may provide export differences only through the server-generated CRUD contract; export-specific copy, endpoint, and visibility must not be hardcoded in page-local Blade or page-local JavaScript.
   - Resource pages must not contain export slide-over form markup or page-local export UX overrides.
   - Page-specific behavior such as create/edit form markup, row-to-form mapping, toasts, non-import/non-export validation UX, success callbacks outside import, and non-import/non-export domain-specific rendering remains in the page module.
-  - Products, Customers, Materials, and Make Orders are current reference implementations for this pattern.
+  - Products, Customers, Materials, Make Orders, and Recipes are current reference implementations for this pattern.
   - Products and Customers both use the shared export module as the render-owning export component and do not keep export slide-over markup in Blade.
   - Materials uses the same shared CRUD renderer and mount-only Blade shell pattern without shared import or export.
   - Missing or invalid CRUD config must fail safely without breaking initial page load.

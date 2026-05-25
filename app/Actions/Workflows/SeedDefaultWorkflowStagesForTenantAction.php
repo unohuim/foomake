@@ -36,7 +36,7 @@ class SeedDefaultWorkflowStagesForTenantAction
             }
 
             foreach ($stages as $stage) {
-                WorkflowStage::withoutGlobalScopes()->updateOrCreate([
+                WorkflowStage::withoutGlobalScopes()->firstOrCreate([
                     'tenant_id' => $tenant->id,
                     'workflow_domain_id' => $domainId,
                     'key' => $stage['key'],

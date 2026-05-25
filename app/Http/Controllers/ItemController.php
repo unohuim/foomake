@@ -2,17 +2,24 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\InventoryCount;
+use App\Models\InventoryCountLine;
 use App\Models\Item;
 use App\Models\Recipe;
 use App\Models\Supplier;
+use App\Models\StockMove;
 use App\Models\Uom;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 class ItemController extends Controller
 {
+    private const QUANTITY_SCALE = 6;
+
     /**
      * Display a material (item) detail page.
      *
@@ -70,7 +77,7 @@ class ItemController extends Controller
                     ? $this->supplierPackagesSectionConfig($request, $item, $canManagePurchasing)
                     : null,
                 'recipes' => $canViewRecipes && $item->is_manufacturable
-                    ? $this->recipesSectionConfig($item, $canManageRecipes)
+                    ? $this->recipesSectionConfig($item, $canManageRecipes, $canExecuteMakeOrders)
                     : null,
                 'purchaseOrders' => $canViewPurchaseOrders && $item->is_purchasable
                     ? $this->purchaseOrdersSectionConfig($item)
@@ -107,27 +114,71 @@ class ItemController extends Controller
         }
 
         $this->normalizeDefaultPriceInputs($request);
+        $this->normalizeStartingQuantityInput($request);
 
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
-            'base_uom_id' => ['required', 'integer', 'exists:uoms,id'],
+            'base_uom_id' => [
+                'required',
+                'integer',
+                Rule::exists('uoms', 'id')->where('tenant_id', $request->user()->tenant_id),
+            ],
             'is_purchasable' => ['nullable', 'boolean'],
             'is_sellable' => ['nullable', 'boolean'],
             'is_manufacturable' => ['nullable', 'boolean'],
             'default_price_amount' => ['nullable', 'regex:/^\\d+(\\.\\d{1,2})?$/'],
             'default_price_currency_code' => ['nullable', 'regex:/^[A-Za-z]{3}$/'],
+            'starting_quantity' => ['nullable', 'string', 'regex:/^\\d+(?:\\.\\d{1,6})?$/'],
         ]);
 
         $defaultPriceData = $this->resolveDefaultPriceData($request, null);
+        $startingQuantity = $this->normalizeStartingQuantity($validated['starting_quantity'] ?? null);
 
-        $item = Item::query()->create(array_merge([
-            'tenant_id' => $request->user()->tenant_id,
-            'name' => $validated['name'],
-            'base_uom_id' => $validated['base_uom_id'],
-            'is_purchasable' => $request->boolean('is_purchasable'),
-            'is_sellable' => $request->boolean('is_sellable'),
-            'is_manufacturable' => $request->boolean('is_manufacturable'),
-        ], $defaultPriceData));
+        $item = DB::transaction(function () use ($request, $validated, $defaultPriceData, $startingQuantity): Item {
+            $item = Item::query()->create(array_merge([
+                'tenant_id' => $request->user()->tenant_id,
+                'name' => $validated['name'],
+                'base_uom_id' => $validated['base_uom_id'],
+                'is_purchasable' => $request->boolean('is_purchasable'),
+                'is_sellable' => $request->boolean('is_sellable'),
+                'is_manufacturable' => $request->boolean('is_manufacturable'),
+            ], $defaultPriceData));
+
+            if ($startingQuantity !== null && bccomp($startingQuantity, '0.000000', self::QUANTITY_SCALE) === 1) {
+                $inventoryCount = InventoryCount::query()->create([
+                    'tenant_id' => $item->tenant_id,
+                    'created_by_user_id' => $request->user()->id,
+                    'tasked_by_user_id' => $request->user()->id,
+                    'assigned_to_user_id' => $request->user()->id,
+                    'counted_at' => now(),
+                    'workflow_stage_id' => null,
+                    'posted_at' => now(),
+                    'posted_by_user_id' => $request->user()->id,
+                    'notes' => 'Initial Stock',
+                ]);
+
+                InventoryCountLine::query()->create([
+                    'tenant_id' => $item->tenant_id,
+                    'inventory_count_id' => $inventoryCount->id,
+                    'item_id' => $item->id,
+                    'counted_quantity' => $startingQuantity,
+                    'notes' => 'Initial Stock',
+                ]);
+
+                StockMove::query()->create([
+                    'tenant_id' => $item->tenant_id,
+                    'source_type' => InventoryCount::class,
+                    'source_id' => $inventoryCount->id,
+                    'item_id' => $item->id,
+                    'uom_id' => $item->base_uom_id,
+                    'quantity' => $startingQuantity,
+                    'type' => 'inventory_count_adjustment',
+                    'status' => 'POSTED',
+                ]);
+            }
+
+            return $item;
+        });
 
         return response()->json([
             'data' => [
@@ -155,10 +206,15 @@ class ItemController extends Controller
         Gate::authorize('inventory-materials-manage');
 
         $this->normalizeDefaultPriceInputs($request);
+        $this->normalizeStartingQuantityInput($request);
 
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
-            'base_uom_id' => ['required', 'integer', 'exists:uoms,id'],
+            'base_uom_id' => [
+                'required',
+                'integer',
+                Rule::exists('uoms', 'id')->where('tenant_id', $request->user()->tenant_id),
+            ],
             'is_purchasable' => ['nullable', 'boolean'],
             'is_sellable' => ['nullable', 'boolean'],
             'is_manufacturable' => ['nullable', 'boolean'],
@@ -583,8 +639,28 @@ class ItemController extends Controller
     /**
      * @return array<string, mixed>
      */
-    private function recipesSectionConfig(Item $item, bool $canManageRecipes): array
+    private function recipesSectionConfig(Item $item, bool $canManageRecipes, bool $canExecuteMakeOrders): array
     {
+        $actions = [
+            [
+                'id' => 'view',
+                'label' => 'View',
+                'type' => 'view',
+                'tone' => 'default',
+                'urlField' => 'display.showUrl',
+            ],
+        ];
+
+        if ($canExecuteMakeOrders) {
+            $actions[] = [
+                'id' => 'make',
+                'label' => 'Make',
+                'type' => 'custom',
+                'tone' => 'default',
+                'handlerKey' => 'createMakeOrder',
+            ];
+        }
+
         return [
             'resource' => 'material-recipes',
             'title' => 'Recipes',
@@ -639,22 +715,7 @@ class ItemController extends Controller
                     ],
                 ],
             ],
-            'actions' => [
-                [
-                    'id' => 'view',
-                    'label' => 'View',
-                    'type' => 'view',
-                    'tone' => 'default',
-                    'urlField' => 'display.showUrl',
-                ],
-                [
-                    'id' => 'make',
-                    'label' => 'Make',
-                    'type' => 'custom',
-                    'tone' => 'default',
-                    'handlerKey' => 'openMakeOrderCreate',
-                ],
-            ],
+            'actions' => $actions,
         ];
     }
 
@@ -860,6 +921,24 @@ class ItemController extends Controller
     }
 
     /**
+     * Normalize a starting quantity input to canonical scale-safe text.
+     */
+    private function normalizeStartingQuantity(mixed $value): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        $normalized = trim((string) $value);
+
+        if ($normalized === '') {
+            return null;
+        }
+
+        return bcadd($normalized, '0', self::QUANTITY_SCALE);
+    }
+
+    /**
      * Normalize empty string inputs for default price fields to null.
      *
      * @param Request $request
@@ -873,6 +952,16 @@ class ItemController extends Controller
 
         if ($request->has('default_price_currency_code') && $request->input('default_price_currency_code') === '') {
             $request->merge(['default_price_currency_code' => null]);
+        }
+    }
+
+    /**
+     * Normalize empty string starting quantity input to null.
+     */
+    private function normalizeStartingQuantityInput(Request $request): void
+    {
+        if ($request->has('starting_quantity') && $request->input('starting_quantity') === '') {
+            $request->merge(['starting_quantity' => null]);
         }
     }
 

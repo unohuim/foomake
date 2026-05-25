@@ -1,0 +1,50 @@
+name: Reusable Detail Section
+type: UI Pattern
+location:
+  - resources/views/components/detail-section-card.blade.php
+  - resources/views/components/ingredients-detail-section.blade.php
+  - resources/js/lib/js-crud-section.js
+purpose: Provide a shared collapsible detail section shell with consistent header actions, dropdown-safe overflow behavior, and reusable child-content patterns.
+when_to_use:
+  - Rendering resource detail subsections with collapsible content
+  - Rendering section header create actions such as plus buttons
+  - Rendering detail subsections that contain comboboxes or row-action menus
+when_not_to_use:
+  - Page headers or top-level resource breadcrumbs
+  - CRUD index pages already handled by the shared CRUD page renderer
+rules:
+  - Detail subsections must use the shared detail-section shell or match its exact contract.
+  - Section header actions must align to the right through the shared create-wrapper contract.
+  - Section-level add/create buttons must live in the shared header/action area rather than inside empty-state boxes.
+  - Section action eligibility may update reactively after related row actions when the page module refreshes the shared section config.
+  - Shared CRUD add rows must use a dedicated shared add-row contract rather than overloading the actions slot.
+  - In the shared add-row contract, search or select controls belong in the left region and add buttons belong in the right region.
+  - Shared compact add/search rows must not render a visible field label unless a future screen explicitly opts into one.
+  - Shared detail-section controls should avoid unnecessary extra rows when one compact inline control can satisfy the interaction.
+  - Single-field selects should autosave on change when the update is safe, localized, and already follows the existing fetch/CSRF/toast contract.
+  - Shared detail sections must not add separate save buttons for safe single-field dropdown/select updates.
+  - Shared detail-section buttons should be reserved for destructive actions, workflow transitions, multi-field commits, or expensive explicit actions.
+  - Shared CRUD detail sections may use the built-in slide-over create form for scoped create flows instead of page-local bespoke create overlays.
+  - Detail subsections that contain comboboxes or row-action menus must preserve non-clipping overflow behavior.
+  - Short-lived row success highlights may be applied after row actions when the page module drives them from local state.
+  - Temporary row highlights must use Tailwind classes, must be state-driven, and must not persist after refresh.
+  - Shared CRUD-backed detail sections may opt into a mobile-limited initial page size through shared section config rather than bespoke mobile-only markup.
+  - Page-local CRUD add-row alignment markup is prohibited when the reusable detail section contract applies.
+  - Page-local accordion, header-action, or overflow workarounds are prohibited when the reusable detail section applies.
+  - Shared subsection abstractions such as Ingredients must compose the shared detail-section shell rather than reimplementing it.
+public_interface:
+  - resources/views/components/detail-section-card.blade.php
+  - resources/views/components/ingredients-detail-section.blade.php
+  - data-js-crud-section-create-wrapper
+  - data-detail-section-add-row
+  - data-detail-section-add-row-left
+  - data-detail-section-add-row-right
+  - mobilePageSize
+example_usage: |
+  <x-ingredients-detail-section
+      title="Ingredients"
+      :default-open="true"
+      :show-on-hand="true"
+      :show-actions="true"
+      :context-text-expression="'ingredients.can_edit ? \'Editing snapshot lines.\' : \'Viewing snapshot lines.\''"
+  />

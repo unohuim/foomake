@@ -7,9 +7,9 @@
     <div class="fixed inset-0 bg-gray-900/30" x-on:click="closeDelete()"></div>
     <div class="relative z-50 w-full max-w-md mx-4 bg-white rounded-lg shadow-xl">
         <div class="p-6">
-            <h3 class="text-lg font-medium text-gray-900">{{ __('Delete recipe?') }}</h3>
+            <h3 class="text-lg font-medium text-gray-900">{{ __('Archive recipe?') }}</h3>
             <p class="mt-2 text-sm text-gray-600">
-                {{ __('This will permanently remove') }} <span class="font-medium" x-text="deleteRecipeName"></span>.
+                {{ __('This will archive') }} <span class="font-medium" x-text="deleteRecipeName"></span>.
             </p>
             <p class="mt-3 text-sm text-red-600" x-show="deleteError" x-text="deleteError"></p>
             <div class="mt-6 flex justify-end gap-3">
@@ -27,7 +27,7 @@
                     :disabled="isDeleteSubmitting"
                     :class="isDeleteSubmitting ? 'opacity-50 cursor-not-allowed' : ''"
                 >
-                    {{ __('Delete') }}
+                    {{ __('Archive') }}
                 </button>
             </div>
         </div>

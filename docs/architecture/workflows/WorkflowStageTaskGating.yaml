@@ -6,19 +6,29 @@ location:
   - app/Actions/Sales/MoveSalesOrderToPackingAction.php
   - app/Actions/Sales/PackSalesOrderAction.php
   - app/Actions/Inventory/AdvanceInventoryCountWorkflowStageAction.php
+  - app/Actions/Manufacturing/MoveMakeOrderWorkflowStageAction.php
 purpose: Define the shared rule that workflow-stage entry creates configured tasks and leaving the current stage is blocked until required tasks are complete.
 when_to_use:
   - Sales-order operational stage transitions
   - Inventory-count workflow stage transitions
+  - Make-order operational stage transitions
   - Any future workflow-domain runtime that adopts generated stage tasks
 when_not_to_use:
   - Draft setup that remains outside workflow stages
-  - Purchase-order or make-order runtime integration before explicit approval
+  - Purchase-order runtime integration before explicit approval
 rules:
   - Entering a workflow stage generates tasks from active templates matching the tenant, workflow domain, and entered stage.
   - Task generation is idempotent for the same domain record, stage, and template.
   - If no active templates exist for the entered stage, no tasks are generated and the transition remains allowed.
   - Leaving the current workflow stage must fail while any generated tasks for that current stage remain open.
+  - Make Orders adopt workflow-stage task gating through `workflow_stage_id`; lifecycle `status` remains separate and must not be used as the operational stage field.
+  - Make Orders enter workflow from `DRAFT` by assigning the first active configured manufacturing workflow stage.
+  - After Make Order workflow entry, all further transitions must follow configured `workflow_stages` ordering and labels.
+  - Shared header next-stage buttons are UI entry points only and must call the same configured workflow transition actions and gating rules as other transition surfaces.
+  - Shared draft workflow-entry buttons are UI entry points only and must call the same configured workflow transition actions and task-generation rules as other entry surfaces.
+  - Task gating applies to workflow-stage transitions and does not block the passive pre-workflow `DRAFT` state by itself.
+  - Make Order workflow ownership metadata in `make_orders.made_by_user_id` is not the same as generated workflow task assignment.
+  - Make Order workflow task generation must continue to respect task-template/default task assignment rules independently from Make Order assignee changes.
   - Task gating applies generically across adopted workflow domains and must not be re-implemented separately per domain.
   - Assigned users may complete their assigned tasks without inheriting domain-manage permissions solely for task completion.
 public_interface:

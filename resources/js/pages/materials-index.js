@@ -43,6 +43,7 @@ export function mount(rootEl, payload) {
         base_uom_id: [],
         default_price_amount: [],
         default_price_currency_code: [],
+        starting_quantity: [],
     });
 
     const emptyForm = () => ({
@@ -52,6 +53,7 @@ export function mount(rootEl, payload) {
         is_sellable: false,
         is_manufacturable: false,
         default_price_amount: '',
+        starting_quantity: '',
     });
 
     const buildItemEndpoint = (template, itemId) => {
@@ -223,6 +225,7 @@ export function mount(rootEl, payload) {
                 default_price_currency_code: Array.isArray(errors.default_price_currency_code)
                     ? errors.default_price_currency_code
                     : [],
+                starting_quantity: Array.isArray(errors.starting_quantity) ? errors.starting_quantity : [],
             };
         },
         openCreate() {

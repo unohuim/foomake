@@ -241,7 +241,7 @@ test('creates recipes with default active flag, default is_default false, and re
     expect(Recipe::query()->where('item_id', $nonManufacturable->id)->exists())->toBeFalse();
 });
 
-test('prevents changing output item when recipe has lines and returns stable error shape', function () {
+test('parent recipe metadata update ignores versioned item and quantity fields when recipe has lines', function () {
     $tenant = ($this->makeTenant)('Tenant A');
     $user = User::factory()->for($tenant)->create();
     ($this->grantMakeOrdersManage)($user);
@@ -263,16 +263,13 @@ test('prevents changing output item when recipe has lines and returns stable err
             'is_active' => true,
             'is_default' => false,
         ])
-        ->assertStatus(422)
-        ->assertJsonStructure([
-            'message',
-            'errors' => [
-                'item_id',
-            ],
-        ]);
+        ->assertOk()
+        ->assertJsonPath('data.item_id', $output->id)
+        ->assertJsonPath('data.output_quantity', '1.000000')
+        ->assertJsonPath('data.name', 'Batch B');
 });
 
-test('allows changing output item when recipe has zero lines', function () {
+test('parent recipe metadata update leaves output item and quantity unchanged when recipe has zero lines', function () {
     $tenant = ($this->makeTenant)('Tenant A');
     $user = User::factory()->for($tenant)->create();
     ($this->grantMakeOrdersManage)($user);
@@ -293,7 +290,8 @@ test('allows changing output item when recipe has zero lines', function () {
             'is_default' => false,
         ])
         ->assertOk()
-        ->assertJsonPath('data.item_id', $otherOutput->id)
+        ->assertJsonPath('data.item_id', $output->id)
+        ->assertJsonPath('data.output_quantity', '1.000000')
         ->assertJsonPath('data.name', 'Batch B');
 });
 
@@ -465,7 +463,7 @@ test('recipe create accepts zero output_quantity for legacy-compatible save flow
     expect($recipe->output_quantity)->toBe('0.000000');
 });
 
-test('recipe update persists exact output_quantity string with canonical scale', function () {
+test('recipe update preserves parent output_quantity because execution quantity is version-owned', function () {
     $tenant = ($this->makeTenant)('Tenant A');
     $user = User::factory()->for($tenant)->create();
     ($this->grantMakeOrdersManage)($user);
@@ -485,12 +483,12 @@ test('recipe update persists exact output_quantity string with canonical scale',
         ])
         ->assertOk()
         ->assertJsonPath('data.name', 'Drum of Patties')
-        ->assertJsonPath('data.output_quantity', '324.500000');
+        ->assertJsonPath('data.output_quantity', '10.000000');
 
     $recipe->refresh();
 
     expect($recipe->name)->toBe('Drum of Patties');
-    expect($recipe->output_quantity)->toBe('324.500000');
+    expect($recipe->output_quantity)->toBe('10.000000');
 });
 
 test('recipe update requires name', function () {
@@ -514,7 +512,7 @@ test('recipe update requires name', function () {
         ->assertJsonValidationErrors(['name']);
 });
 
-test('recipe update accepts zero output_quantity for legacy-compatible save flows', function () {
+test('recipe update ignores submitted output_quantity changes on the parent metadata endpoint', function () {
     $tenant = ($this->makeTenant)('Tenant A');
     $user = User::factory()->for($tenant)->create();
     ($this->grantMakeOrdersManage)($user);
@@ -534,11 +532,11 @@ test('recipe update accepts zero output_quantity for legacy-compatible save flow
         ])
         ->assertOk()
         ->assertJsonPath('data.name', 'Zero Output Batch')
-        ->assertJsonPath('data.output_quantity', '0.000000');
+        ->assertJsonPath('data.output_quantity', '10.000000');
 
     $recipe->refresh();
 
-    expect($recipe->output_quantity)->toBe('0.000000');
+    expect($recipe->output_quantity)->toBe('10.000000');
 });
 
 test('recipe create validation rejects invalid name payloads', function (?string $name) {
@@ -679,7 +677,7 @@ test('recipe update validation rejects invalid name payloads', function (string 
     str_repeat('a', 256),
 ]);
 
-test('recipe output_quantity validation rejects invalid update payloads', function (string $outputQuantity) {
+test('recipe metadata update ignores invalid output_quantity payloads because quantity is version-owned', function (string $outputQuantity) {
     $tenant = ($this->makeTenant)('Tenant A');
     $user = User::factory()->for($tenant)->create();
     ($this->grantMakeOrdersManage)($user);
@@ -697,8 +695,8 @@ test('recipe output_quantity validation rejects invalid update payloads', functi
             'is_active' => true,
             'is_default' => false,
         ])
-        ->assertStatus(422)
-        ->assertJsonValidationErrors(['output_quantity']);
+        ->assertOk()
+        ->assertJsonPath('data.output_quantity', '10.000000');
 })->with([
     '-1.000000',
     'abc',
@@ -853,7 +851,7 @@ test('returns 404 for cross-tenant recipe and line writes', function () {
         ->assertNotFound();
 });
 
-test('deleting a recipe removes its lines', function () {
+test('archiving a recipe deactivates it, clears current_version_id, and preserves legacy lines', function () {
     $tenant = ($this->makeTenant)('Tenant A');
     $user = User::factory()->for($tenant)->create();
     ($this->grantMakeOrdersManage)($user);
@@ -869,8 +867,11 @@ test('deleting a recipe removes its lines', function () {
         ->deleteJson(route('manufacturing.recipes.destroy', $recipe))
         ->assertOk();
 
-    expect(Recipe::query()->whereKey($recipe->id)->exists())->toBeFalse();
-    expect(RecipeLine::query()->whereKey($line->id)->exists())->toBeFalse();
+    $recipe->refresh();
+
+    expect($recipe->is_active)->toBeFalse();
+    expect($recipe->current_version_id)->toBeNull();
+    expect(RecipeLine::query()->whereKey($line->id)->exists())->toBeTrue();
 });
 
 test('allows multiple recipes for the same output item when names differ', function () {
@@ -1011,7 +1012,7 @@ test('is_default: setting default does not affect other tenants', function () {
     expect((bool) $b1->is_default)->toBeTrue();
 });
 
-test('is_default: deleting the default recipe leaves no default (no auto-promotion)', function () {
+test('is_default: archiving the default recipe leaves no other default active recipe (no auto-promotion)', function () {
     $tenant = ($this->makeTenant)('Tenant A');
     $user = User::factory()->for($tenant)->create();
     ($this->grantMakeOrdersManage)($user);
@@ -1026,13 +1027,17 @@ test('is_default: deleting the default recipe leaves no default (no auto-promoti
         ->deleteJson(route('manufacturing.recipes.destroy', $defaultRecipe))
         ->assertOk();
 
+    $defaultRecipe->refresh();
     $otherRecipe->refresh();
 
+    expect((bool) $defaultRecipe->is_default)->toBeTrue();
+    expect((bool) $defaultRecipe->is_active)->toBeFalse();
     expect((bool) $otherRecipe->is_default)->toBeFalse();
     expect(Recipe::query()
         ->where('tenant_id', $tenant->id)
         ->where('item_id', $output->id)
         ->where('is_default', true)
+        ->where('is_active', true)
         ->exists()
     )->toBeFalse();
 });

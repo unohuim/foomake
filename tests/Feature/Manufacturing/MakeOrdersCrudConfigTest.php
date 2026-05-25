@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Models\Item;
 use App\Models\Permission;
 use App\Models\Recipe;
+use App\Models\RecipeVersion;
 use App\Models\Role;
 use App\Models\Tenant;
 use App\Models\Uom;
@@ -60,7 +61,7 @@ beforeEach(function (): void {
             'tenant_id' => $tenant->id,
             'uom_category_id' => $category->id,
             'name' => $name,
-            'symbol' => $symbol,
+            'symbol' => $symbol . '-' . substr(str_replace('-', '', $suffix), 0, 8),
         ]);
     };
 
@@ -80,9 +81,10 @@ beforeEach(function (): void {
         Item $item,
         bool $isActive = true,
         string $name = 'Recipe A',
-        string $outputQuantity = '1.000000'
+        string $outputQuantity = '1.000000',
+        bool $publishCurrent = true
     ): Recipe {
-        return Recipe::query()->create([
+        $recipe = Recipe::query()->create([
             'tenant_id' => $tenant->id,
             'item_id' => $item->id,
             'recipe_type' => Recipe::TYPE_MANUFACTURING,
@@ -90,6 +92,27 @@ beforeEach(function (): void {
             'is_active' => $isActive,
             'output_quantity' => $outputQuantity,
         ]);
+
+        $version = RecipeVersion::query()->create([
+            'tenant_id' => $tenant->id,
+            'recipe_id' => $recipe->id,
+            'version_number' => 100,
+            'name' => null,
+            'output_quantity' => $outputQuantity,
+            'recipe_type' => Recipe::TYPE_MANUFACTURING,
+            'status' => $publishCurrent ? RecipeVersion::STATUS_PUBLISHED : RecipeVersion::STATUS_DRAFT,
+            'effective_from' => $publishCurrent ? now() : null,
+            'effective_until' => null,
+            'approved_at' => $publishCurrent ? now() : null,
+            'approved_by_user_id' => null,
+            'notes' => null,
+        ]);
+
+        if ($publishCurrent) {
+            $recipe->forceFill(['current_version_id' => $version->id])->save();
+        }
+
+        return $recipe->fresh(['currentVersion', 'item.baseUom']);
     };
 
     $this->extractPayload = function ($response, string $payloadId): array {
@@ -260,7 +283,7 @@ it('12. crud config defines the required make order columns in the requested ord
         'runs',
         'output_item_name',
         'qty',
-        'status',
+        'workflow_state',
     ]);
 });
 
@@ -278,7 +301,21 @@ it('13. crud config defines the required headers', function (): void {
         'runs' => 'Runs',
         'output_item_name' => 'Output Item',
         'qty' => 'Qty',
-        'status' => 'Status',
+        'workflow_state' => 'Workflow Stage',
+    ]);
+});
+
+it('13b. make orders index recipe name uses the linked text contract to the detail route', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermissions)($user, ['inventory-make-orders-view']);
+
+    $config = ($this->extractCrudConfig)(($this->getIndex)($user));
+
+    expect($config['rowDisplay']['columns']['recipe_name'] ?? [])->toBe([
+        'kind' => 'linked-text',
+        'urlExpression' => 'record.show_url',
     ]);
 });
 
@@ -296,7 +333,7 @@ it('14. crud config exposes sortable columns for the shared list renderer', func
         'runs',
         'output_item_name',
         'qty',
-        'status',
+        'workflow_state',
     ]);
 });
 
@@ -353,7 +390,7 @@ it('18. page blade does not render bespoke toolbar or table markup anymore', fun
 });
 
 it('19. page module mounts the shared crud renderer', function (): void {
-    $source = file_get_contents(resource_path('resources/js/pages/manufacturing-make-orders.js'));
+    $source = file_get_contents(resource_path('js/pages/manufacturing-make-orders.js'));
 
     expect($source)->toContain("import { parseCrudConfig } from '../lib/crud-config';")
         ->and($source)->toContain("import { mountCrudRenderer } from '../lib/crud-page';")
@@ -362,7 +399,7 @@ it('19. page module mounts the shared crud renderer', function (): void {
 });
 
 it('20. page module maps the row actions to view edit and archive handlers', function (): void {
-    $source = file_get_contents(resource_path('resources/js/pages/manufacturing-make-orders.js'));
+    $source = file_get_contents(resource_path('js/pages/manufacturing-make-orders.js'));
 
     expect($source)->toContain("action.id === 'view'")
         ->and($source)->toContain("action.id === 'edit'")
@@ -373,7 +410,7 @@ it('20. page module maps the row actions to view edit and archive handlers', fun
 });
 
 it('21. shared renderer remains the owner of search create and row action markup', function (): void {
-    $rendererSource = file_get_contents(resource_path('resources/js/lib/crud-page.js'));
+    $rendererSource = file_get_contents(resource_path('js/lib/crud-page.js'));
 
     expect($rendererSource)->toContain('data-crud-toolbar-create-button')
         ->and($rendererSource)->toContain('data-crud-action-trigger')

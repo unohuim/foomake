@@ -4,6 +4,8 @@ use App\Models\Item;
 use App\Models\Permission;
 use App\Models\Recipe;
 use App\Models\RecipeLine;
+use App\Models\RecipeVersion;
+use App\Models\RecipeVersionLine;
 use App\Models\Role;
 use App\Models\Tenant;
 use App\Models\Uom;
@@ -58,24 +60,58 @@ beforeEach(function () {
         Item $outputItem,
         bool $isActive = true,
         string $name = 'Recipe A',
-        string $outputQuantity = '1.000000'
+        string $outputQuantity = '1.000000',
+        string $recipeType = Recipe::TYPE_MANUFACTURING,
+        bool $publishCurrent = true
     ): Recipe {
-        return Recipe::query()->forceCreate([
+        $recipe = Recipe::query()->forceCreate([
             'tenant_id' => $tenant->id,
             'item_id' => $outputItem->id,
-            'recipe_type' => 'manufacturing',
+            'recipe_type' => $recipeType,
             'name' => $name,
             'is_active' => $isActive,
             'output_quantity' => $outputQuantity,
         ]);
+
+        $version = RecipeVersion::query()->forceCreate([
+            'tenant_id' => $tenant->id,
+            'recipe_id' => $recipe->id,
+            'version_number' => 100,
+            'name' => null,
+            'output_quantity' => $outputQuantity,
+            'recipe_type' => $recipeType,
+            'status' => $publishCurrent ? RecipeVersion::STATUS_PUBLISHED : RecipeVersion::STATUS_DRAFT,
+            'effective_from' => $publishCurrent ? now() : null,
+            'effective_until' => null,
+            'approved_at' => $publishCurrent ? now() : null,
+            'approved_by_user_id' => null,
+            'notes' => null,
+        ]);
+
+        if ($publishCurrent) {
+            $recipe->forceFill(['current_version_id' => $version->id])->save();
+        }
+
+        return $recipe->fresh(['currentVersion', 'item.baseUom']);
     };
 
-    $this->addRecipeLine = function (Tenant $tenant, Recipe $recipe, Item $inputItem, string $quantity): RecipeLine {
-        return RecipeLine::query()->forceCreate([
+    $this->addRecipeLine = function (Tenant $tenant, Recipe $recipe, Item $inputItem, string $quantity): RecipeVersionLine {
+        RecipeLine::query()->forceCreate([
             'tenant_id' => $tenant->id,
             'recipe_id' => $recipe->id,
             'item_id' => $inputItem->id,
             'quantity' => $quantity,
+        ]);
+
+        $version = $recipe->currentVersion ?? $recipe->versions()->latest('id')->firstOrFail();
+
+        return RecipeVersionLine::query()->forceCreate([
+            'tenant_id' => $tenant->id,
+            'recipe_version_id' => $version->id,
+            'input_item_id' => $inputItem->id,
+            'uom_id' => $inputItem->base_uom_id,
+            'quantity' => $quantity,
+            'sort_order' => ((int) $version->lines()->max('sort_order')) + 1,
         ]);
     };
 
@@ -190,7 +226,6 @@ test('allows users with inventory-recipes-view permission to view recipes and re
         ->assertOk()
         ->assertSee('Recipes')
         ->assertSee('Batch of Patties')
-        ->assertSee('Output per Run')
         ->assertSee('54.0');
 
     $showResponse = $this->actingAs($user)
@@ -204,7 +239,6 @@ test('allows users with inventory-recipes-view permission to view recipes and re
         ->assertSee(route('manufacturing.recipes.index'), false)
         ->assertDontSee('Back to Recipes')
         ->assertSee($input->name)
-        ->assertSee('Output per Run')
         ->assertSee('54.0');
 
     $payload = ($this->extractPayload)($showResponse, 'manufacturing-recipes-show-payload');
@@ -212,9 +246,9 @@ test('allows users with inventory-recipes-view permission to view recipes and re
     expect($payload['recipe']['name'] ?? null)->toBe('Batch of Patties');
     expect($payload['recipe']['output_quantity'] ?? null)->toBe('54.000000');
     expect($payload['recipe']['output_quantity_display'] ?? null)->toBe('54.0');
-    expect($payload['lines'][0]['item_name'] ?? null)->toBe('Input Flour');
-    expect($payload['lines'][0])->toHaveKey('quantity_display');
-    expect($payload['lines'][0]['quantity_display'] ?? null)->toBe('2.000');
+    expect(data_get($payload, 'ingredients.lines.0.item_name'))->toBe('Input Flour');
+    expect(data_get($payload, 'ingredients.lines.0'))->toHaveKey('quantity_display');
+    expect(data_get($payload, 'ingredients.lines.0.quantity_display'))->toBe('2.000');
 });
 
 test('view permission shows pages but not manage controls and can_manage payload is false', function () {
@@ -268,7 +302,7 @@ test('view and manage permissions include can_manage true in payload', function 
         ->assertSee('"can_manage":true', false);
 });
 
-test('recipes index payload includes the shared navigation state refresh url', function () {
+test('recipes index payload includes the shared initial rows and item options payloads', function () {
     $tenant = ($this->makeTenant)('Tenant A');
     $user = User::factory()->for($tenant)->create();
     ($this->grantInventoryRecipesView)($user);
@@ -281,7 +315,7 @@ test('recipes index payload includes the shared navigation state refresh url', f
 
     $payload = ($this->extractPayload)($response, 'manufacturing-recipes-index-payload');
 
-    expect($payload['navigationStateUrl'] ?? null)->toBe(url('/navigation/state'));
+    expect($payload)->toHaveKeys(['initial_rows', 'manufacturable_items']);
 });
 
 test('index payload includes recipe output quantity per run display', function () {
@@ -299,9 +333,9 @@ test('index payload includes recipe output quantity per run display', function (
 
     $payload = ($this->extractPayload)($response, 'manufacturing-recipes-index-payload');
 
-    expect($payload['recipes'][0]['name'] ?? null)->toBe('Drum of Patties');
-    expect($payload['recipes'][0]['output_quantity'] ?? null)->toBe('324.125000');
-    expect($payload['recipes'][0]['output_quantity_display'] ?? null)->toBe('324.125');
+    expect($payload['initial_rows'][0]['name'] ?? null)->toBe('Drum of Patties');
+    expect($payload['initial_rows'][0]['output_quantity'] ?? null)->toBe('324.125000');
+    expect($payload['initial_rows'][0]['output_quantity_display'] ?? null)->toBe('324.125');
 });
 
 test('recipes index can distinguish multiple recipes for the same output item by name', function () {
@@ -323,7 +357,7 @@ test('recipes index can distinguish multiple recipes for the same output item by
 
     $payload = ($this->extractPayload)($response, 'manufacturing-recipes-index-payload');
 
-    expect(collect($payload['recipes'] ?? [])->pluck('name')->all())
+    expect(collect($payload['initial_rows'] ?? [])->pluck('name')->all())
         ->toContain('Batch of Patties', 'Drum of Patties');
 });
 
@@ -371,7 +405,7 @@ test('show page payload renders line quantities using each line item uom display
 
     $payload = ($this->extractPayload)($showResponse, 'manufacturing-recipes-show-payload');
 
-    $lineByItem = collect($payload['lines'] ?? [])->mapWithKeys(function (array $line): array {
+    $lineByItem = collect(data_get($payload, 'ingredients.lines', []))->mapWithKeys(function (array $line): array {
         return [($line['item_name'] ?? '') => ($line['quantity_display'] ?? null)];
     });
 
@@ -396,7 +430,7 @@ test('show payload includes quantity_display key for every recipe line', functio
     $response = $this->actingAs($user)->get(route('manufacturing.recipes.show', $recipe))->assertOk();
     $payload = ($this->extractPayload)($response, 'manufacturing-recipes-show-payload');
 
-    foreach ($payload['lines'] as $line) {
+    foreach (data_get($payload, 'ingredients.lines', []) as $line) {
         expect($line)->toHaveKey('quantity_display');
     }
 });
@@ -416,7 +450,7 @@ test('show payload renders precision 0 for recipe line quantity', function () {
     $response = $this->actingAs($user)->get(route('manufacturing.recipes.show', $recipe))->assertOk();
     $payload = ($this->extractPayload)($response, 'manufacturing-recipes-show-payload');
 
-    expect($payload['lines'][0]['quantity_display'] ?? null)->toBe('3');
+    expect(data_get($payload, 'ingredients.lines.0.quantity_display'))->toBe('3');
 });
 
 test('show payload renders precision 1 for recipe line quantity', function () {
@@ -434,7 +468,7 @@ test('show payload renders precision 1 for recipe line quantity', function () {
     $response = $this->actingAs($user)->get(route('manufacturing.recipes.show', $recipe))->assertOk();
     $payload = ($this->extractPayload)($response, 'manufacturing-recipes-show-payload');
 
-    expect($payload['lines'][0]['quantity_display'] ?? null)->toBe('2.1');
+    expect(data_get($payload, 'ingredients.lines.0.quantity_display'))->toBe('2.1');
 });
 
 test('show payload rounds up at precision 2 for recipe line quantity', function () {
@@ -452,7 +486,7 @@ test('show payload rounds up at precision 2 for recipe line quantity', function 
     $response = $this->actingAs($user)->get(route('manufacturing.recipes.show', $recipe))->assertOk();
     $payload = ($this->extractPayload)($response, 'manufacturing-recipes-show-payload');
 
-    expect($payload['lines'][0]['quantity_display'] ?? null)->toBe('2.35');
+    expect(data_get($payload, 'ingredients.lines.0.quantity_display'))->toBe('2.35');
 });
 
 test('show payload rounds down at precision 2 for recipe line quantity', function () {
@@ -470,7 +504,7 @@ test('show payload rounds down at precision 2 for recipe line quantity', functio
     $response = $this->actingAs($user)->get(route('manufacturing.recipes.show', $recipe))->assertOk();
     $payload = ($this->extractPayload)($response, 'manufacturing-recipes-show-payload');
 
-    expect($payload['lines'][0]['quantity_display'] ?? null)->toBe('2.34');
+    expect(data_get($payload, 'ingredients.lines.0.quantity_display'))->toBe('2.34');
 });
 
 test('show payload preserves trailing zeros at precision 3 for recipe line quantity', function () {
@@ -488,7 +522,7 @@ test('show payload preserves trailing zeros at precision 3 for recipe line quant
     $response = $this->actingAs($user)->get(route('manufacturing.recipes.show', $recipe))->assertOk();
     $payload = ($this->extractPayload)($response, 'manufacturing-recipes-show-payload');
 
-    expect($payload['lines'][0]['quantity_display'] ?? null)->toBe('2.100');
+    expect(data_get($payload, 'ingredients.lines.0.quantity_display'))->toBe('2.100');
 });
 
 test('show payload preserves trailing zeros at precision 6 for recipe line quantity', function () {
@@ -506,7 +540,7 @@ test('show payload preserves trailing zeros at precision 6 for recipe line quant
     $response = $this->actingAs($user)->get(route('manufacturing.recipes.show', $recipe))->assertOk();
     $payload = ($this->extractPayload)($response, 'manufacturing-recipes-show-payload');
 
-    expect($payload['lines'][0]['quantity_display'] ?? null)->toBe('0.005000');
+    expect(data_get($payload, 'ingredients.lines.0.quantity_display'))->toBe('0.005000');
 });
 
 test('show payload renders zero quantity with configured precision 3', function () {
@@ -524,7 +558,7 @@ test('show payload renders zero quantity with configured precision 3', function 
     $response = $this->actingAs($user)->get(route('manufacturing.recipes.show', $recipe))->assertOk();
     $payload = ($this->extractPayload)($response, 'manufacturing-recipes-show-payload');
 
-    expect($payload['lines'][0]['quantity_display'] ?? null)->toBe('0.000');
+    expect(data_get($payload, 'ingredients.lines.0.quantity_display'))->toBe('0.000');
 });
 
 test('recipe create ui includes only show items without a recipe checkbox and defaults it to checked', function () {
@@ -543,7 +577,7 @@ test('recipe create ui includes only show items without a recipe checkbox and de
 
     expect($createPartialSource)->toContain('<x-combobox')
         ->and($pageModuleSource)->toContain('createOnlyWithoutRecipe: true')
-        ->and($pageModuleSource)->toContain('editOnlyWithoutRecipe: true');
+        ->and($pageModuleSource)->not->toContain('editOnlyWithoutRecipe');
 });
 
 test('recipe index payload marks items with existing recipes and items without recipes', function () {
@@ -593,14 +627,13 @@ test('recipe picker filtering remains tenant isolated when determining whether a
     expect($items[$tenantAItem->id]['has_recipe'] ?? null)->toBeFalse();
 });
 
-test('recipe picker page module filters items with existing recipes by default and restores them when disabled', function () {
+test('recipe picker page module filters create items with existing recipes by default and restores them when disabled', function () {
     $pageModuleSource = File::get(resource_path('js/pages/manufacturing-recipes-index.js'));
 
     expect($pageModuleSource)->toContain('filteredCreateItems()')
-        ->and($pageModuleSource)->toContain('filteredEditItems()')
         ->and($pageModuleSource)->toContain('item.has_recipe')
         ->and($pageModuleSource)->toContain('this.createOnlyWithoutRecipe')
-        ->and($pageModuleSource)->toContain('this.editOnlyWithoutRecipe');
+        ->and($pageModuleSource)->not->toContain('filteredEditItems()');
 });
 
 test('recipe create ui uses the reusable combobox and no longer renders a native output item select', function () {
@@ -611,10 +644,10 @@ test('recipe create ui uses the reusable combobox and no longer renders a native
         ->and($createPartialSource)->toContain('name="item_id"');
 });
 
-test('recipe edit picker always keeps the current output item visible even when the no recipe filter is enabled', function () {
+test('recipe detail editing no longer exposes a mutable output item picker on the index page module', function () {
     $pageModuleSource = File::get(resource_path('js/pages/manufacturing-recipes-index.js'));
 
-    expect($pageModuleSource)->toContain('item.id === Number(this.editForm.item_id)');
+    expect($pageModuleSource)->not->toContain('item.id === Number(this.editForm.item_id)');
 });
 
 test('recipe picker search is handled by the reusable combobox instead of a separate search field and native select pair', function () {
@@ -643,7 +676,7 @@ test('show payload uses line item uom precision instead of output item uom preci
     $response = $this->actingAs($user)->get(route('manufacturing.recipes.show', $recipe))->assertOk();
     $payload = ($this->extractPayload)($response, 'manufacturing-recipes-show-payload');
 
-    expect($payload['lines'][0]['quantity_display'] ?? null)->toBe('2');
+    expect(data_get($payload, 'ingredients.lines.0.quantity_display'))->toBe('2');
 });
 
 test('show payload defaults recipe line quantity display to one decimal when uom precision omitted', function () {
@@ -661,7 +694,7 @@ test('show payload defaults recipe line quantity display to one decimal when uom
     $response = $this->actingAs($user)->get(route('manufacturing.recipes.show', $recipe))->assertOk();
     $payload = ($this->extractPayload)($response, 'manufacturing-recipes-show-payload');
 
-    expect($payload['lines'][0]['quantity_display'] ?? null)->toBe('2.1');
+    expect(data_get($payload, 'ingredients.lines.0.quantity_display'))->toBe('2.1');
 });
 
 test('show payload can render three recipe lines with distinct precision outputs', function () {
@@ -686,7 +719,7 @@ test('show payload can render three recipe lines with distinct precision outputs
     $response = $this->actingAs($user)->get(route('manufacturing.recipes.show', $recipe))->assertOk();
     $payload = ($this->extractPayload)($response, 'manufacturing-recipes-show-payload');
 
-    $lineByItem = collect($payload['lines'] ?? [])->mapWithKeys(function (array $line): array {
+    $lineByItem = collect(data_get($payload, 'ingredients.lines', []))->mapWithKeys(function (array $line): array {
         return [($line['item_name'] ?? '') => ($line['quantity_display'] ?? null)];
     });
 

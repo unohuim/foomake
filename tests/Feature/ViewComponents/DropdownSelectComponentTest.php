@@ -196,12 +196,14 @@ it('19. create recipe form uses dropdown select and not a native recipe_type sel
         ->and($source)->not->toContain('<select id="recipe_type"');
 });
 
-it('20. edit recipe form uses dropdown select and not a native recipe_type select', function () {
+it('20. edit recipe form stays metadata only and does not render recipe_type controls', function () {
     $source = File::get(resource_path('views/manufacturing/recipes/partials/edit-recipe-slide-over.blade.php'));
 
-    expect($source)->toContain('<x-dropdown-select')
-        ->and($source)->not->toContain('<select name="recipe_type"')
-        ->and($source)->not->toContain('<select id="recipe_type"');
+    expect($source)->toContain('Update parent-level recipe metadata.')
+        ->and($source)->toContain('Use New Version to change execution behavior.')
+        ->and($source)->not->toContain('<x-dropdown-select')
+        ->and($source)->not->toContain('name="recipe_type"')
+        ->and($source)->not->toContain('id="recipe_type"');
 });
 
 it('21. component renders hidden input with configured name and selected label for recipe type', function () {

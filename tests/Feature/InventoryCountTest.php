@@ -1632,6 +1632,19 @@ it('detail page shows breadcrumb workflow metadata materials tasks and no post u
         ->assertDontSee('data-crud-root', false);
 });
 
+it('inventory count detail uses the shared resource detail header breadcrumb component with metadata and workflow action slots', function () {
+    $source = file_get_contents(resource_path('views/inventory/counts/show.blade.php'));
+    $componentSource = file_get_contents(resource_path('views/components/resource-detail-header-breadcrumb.blade.php'));
+
+    expect($source)->toContain('x-resource-detail-header-breadcrumb')
+        ->and($source)->toContain('<x-slot name="metadata">')
+        ->and($source)->toContain('<x-slot name="actions">')
+        ->and($componentSource)->toContain('@isset($actions)')
+        ->and($componentSource)->toContain('@isset($metadata)')
+        ->and($componentSource)->toContain('data-resource-detail-header-actions')
+        ->and($componentSource)->toContain('data-resource-detail-header-metadata');
+});
+
 it('first active workflow stage hides the previous-stage button and shows the next stage button only', function () {
     $tenant = Tenant::factory()->create();
     $user = ($this->makeUser)($tenant);

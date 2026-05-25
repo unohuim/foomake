@@ -68,6 +68,7 @@ const normalizeLayoutEntry = (entry) => {
     return {
         label: asString(safeEntry.label),
         field: asString(safeEntry.field),
+        urlField: asString(safeEntry.urlField),
         suffixField: asString(safeEntry.suffixField),
         fallback: Object.prototype.hasOwnProperty.call(safeEntry, 'fallback')
             ? String(safeEntry.fallback ?? '')
@@ -92,7 +93,13 @@ const normalizeSectionConfig = (config) => {
         emptyState: asString(safeConfig.emptyState, 'No records found.'),
         csrfToken: asString(safeConfig.csrfToken),
         defaultOpen: asBoolean(safeConfig.defaultOpen),
+        mobilePageSize: Number.isInteger(safeConfig.mobilePageSize) ? safeConfig.mobilePageSize : null,
         showRowActionsMenu: safeConfig.showRowActionsMenu !== false,
+        toolbarToggles: asArray(safeConfig.toolbarToggles).map((toggle) => ({
+            key: asString(toggle?.key),
+            label: asString(toggle?.label),
+            checked: asBoolean(toggle?.checked),
+        })).filter((toggle) => toggle.key !== ''),
         permissions: {
             canCreate: Boolean(permissions.canCreate),
         },
@@ -100,6 +107,9 @@ const normalizeSectionConfig = (config) => {
             type: asString(createAction.type),
             url: asString(createAction.url),
             handlerKey: asString(createAction.handlerKey),
+            title: asString(createAction.title),
+            description: asString(createAction.description),
+            submitLabel: asString(createAction.submitLabel),
             prefill: createActionPrefill,
         },
         endpoints: {
@@ -382,29 +392,60 @@ const renderCrudSection = () => `
         <div class="border-t border-gray-100 px-3 sm:px-6 py-4 sm:py-5" x-show="isOpen" x-cloak>
             <div class="mb-4 flex flex-col gap-3">
                 <p class="text-sm text-red-600" x-show="sectionError" x-text="sectionError"></p>
-                <div class="flex justify-end" data-js-crud-section-create-wrapper>
-                    <button
-                        type="button"
-                        class="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-gray-300 text-gray-600 transition hover:bg-gray-50 hover:text-gray-900"
-                        x-show="section.permissions.canCreate"
-                        x-on:click.stop.prevent="openCreateForm()"
-                        aria-label="Create"
-                        data-js-crud-section-create-button
-                    >
-                        <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-                        </svg>
-                    </button>
+                <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div class="flex flex-wrap items-center gap-3" x-show="section.toolbarToggles.length > 0">
+                        <template x-for="toggle in section.toolbarToggles" :key="toggle.key">
+                            <label class="inline-flex items-center gap-3 text-sm text-gray-700">
+                                <span x-text="toggle.label"></span>
+                                <button
+                                    type="button"
+                                    class="relative inline-flex h-6 w-11 items-center rounded-full transition"
+                                    :class="toggleValues[toggle.key] ? 'bg-slate-900' : 'bg-gray-200'"
+                                    role="switch"
+                                    :aria-checked="toggleValues[toggle.key] ? 'true' : 'false'"
+                                    x-on:click="toggleToolbar(toggle.key)"
+                                >
+                                    <span
+                                        class="inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition"
+                                        :class="toggleValues[toggle.key] ? 'translate-x-5' : 'translate-x-1'"
+                                    ></span>
+                                </button>
+                            </label>
+                        </template>
+                    </div>
+                    <div class="flex w-full justify-end sm:ml-auto sm:w-auto" data-js-crud-section-create-wrapper>
+                        <button
+                            type="button"
+                            class="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-gray-300 text-gray-600 transition hover:bg-gray-50 hover:text-gray-900"
+                            x-show="section.permissions.canCreate"
+                            x-on:click.stop.prevent="openCreateForm()"
+                            aria-label="Create"
+                            data-js-crud-section-create-button
+                        >
+                            <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                            </svg>
+                        </button>
+                    </div>
                 </div>
             </div>
 
             <div class="space-y-3" x-show="records.length > 0">
                 <template x-for="record in records" :key="record.id">
-                    <article class="rounded-xl border border-gray-100 bg-gray-50 p-3 sm:p-4">
+                    <article :class="recordClass(record)">
                         <div class="flex flex-col sm:flex-row gap-4 sm:items-center sm:justify-between">
                             <div class="min-w-0 flex-1">
                                 <div class="flex items-center gap-3">
-                                    <p class="truncate text-sm font-semibold text-gray-900" x-text="primaryText(record)"></p>
+                                    <template x-if="primaryTextUrl(record) !== ''">
+                                        <a
+                                            class="truncate text-sm font-semibold text-blue-700 transition hover:text-blue-600 hover:underline"
+                                            x-bind:href="primaryTextUrl(record)"
+                                            x-text="primaryText(record)"
+                                        ></a>
+                                    </template>
+                                    <template x-if="primaryTextUrl(record) === ''">
+                                        <p class="truncate text-sm font-semibold text-gray-900" x-text="primaryText(record)"></p>
+                                    </template>
                                     <template x-for="badge in badgeItems(record)" :key="\`\${record.id}-\${badge.text}-badge\`">
                                         <span
                                             class="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium"
@@ -481,8 +522,8 @@ const renderCrudSection = () => `
             <div class="flex h-full w-full max-w-xl flex-col overflow-y-auto bg-white shadow-xl">
                 <div class="flex items-center justify-between border-b border-gray-100 px-4 py-4 sm:px-6">
                     <div>
-                        <h4 class="text-lg font-semibold text-gray-900" x-text="formMode === 'create' ? 'Create record' : 'Edit record'"></h4>
-                        <p class="mt-1 text-sm text-gray-500" x-text="section.title"></p>
+                        <h4 class="text-lg font-semibold text-gray-900" x-text="createFormTitle()"></h4>
+                        <p class="mt-1 text-sm text-gray-500" x-show="createFormDescription() !== ''" x-text="createFormDescription()"></p>
                     </div>
                     <button type="button" class="text-sm text-gray-500 transition hover:text-gray-700" x-on:click="closeForm()">Close</button>
                 </div>
@@ -494,9 +535,13 @@ const renderCrudSection = () => `
 
                 <div class="flex items-center justify-end gap-3 border-t border-gray-100 px-4 py-4 sm:px-6">
                     <button type="button" class="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 transition hover:bg-gray-50" x-on:click="closeForm()">Cancel</button>
-                    <button type="button" class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50" x-bind:disabled="isSubmitting" x-on:click="submitForm()">
-                        Save
-                    </button>
+                    <button
+                        type="button"
+                        class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+                        x-bind:disabled="isSubmitting"
+                        x-on:click="submitForm()"
+                        x-text="createFormSubmitLabel()"
+                    ></button>
                 </div>
             </div>
         </div>
@@ -557,6 +602,11 @@ const createSectionState = (section, adapters, hostEl) => ({
     inlineCreateErrors: {},
     inlineCreateFormError: '',
     inlineCreateSubmitting: false,
+    toggleValues: section.toolbarToggles.reduce((carry, toggle) => {
+        carry[toggle.key] = Boolean(toggle.checked);
+
+        return carry;
+    }, {}),
     init() {
         const rootEl = hostEl?.closest('[data-js-crud-section-root]');
 
@@ -564,6 +614,9 @@ const createSectionState = (section, adapters, hostEl) => ({
             rootEl._jsCrudSectionApi = {
                 refresh: async (page = 1) => {
                     await this.fetchPage(page);
+                },
+                updateSectionConfig: (nextSection) => {
+                    this.updateSectionConfig(nextSection);
                 },
             };
         }
@@ -592,6 +645,9 @@ const createSectionState = (section, adapters, hostEl) => ({
     },
     primaryText(record) {
         return buildLayoutText(record, this.section.rowLayout.primaryText);
+    },
+    primaryTextUrl(record) {
+        return asString(resolvePathValue(record, this.section.rowLayout.primaryText.urlField));
     },
     secondaryFieldItems(record) {
         return this.section.rowLayout.secondaryFields.map((entry) => ({
@@ -705,6 +761,42 @@ const createSectionState = (section, adapters, hostEl) => ({
     rowClass(row) {
         return row.length > 1 ? 'grid grid-cols-1 gap-4 sm:grid-cols-2' : '';
     },
+    recordClass(record) {
+        const baseClass = 'rounded-xl border border-gray-100 bg-gray-50 p-3 sm:p-4';
+        const adapterClass = typeof this.adapters.recordClass === 'function'
+            ? asString(this.adapters.recordClass({
+                record,
+                component: this,
+                section: this.section,
+            }))
+            : '';
+        const recordLevelClass = asString(record.rowClass);
+
+        return [baseClass, adapterClass, recordLevelClass]
+            .filter((value) => value !== '')
+            .join(' ');
+    },
+    updateSectionConfig(nextSection) {
+        if (!nextSection || typeof nextSection !== 'object') {
+            return;
+        }
+
+        const normalizedSection = normalizeSectionConfig(nextSection);
+        const currentToggleValues = asRecord(this.toggleValues);
+
+        this.section = normalizedSection;
+        this.toggleValues = normalizedSection.toolbarToggles.reduce((carry, toggle) => {
+            carry[toggle.key] = Object.prototype.hasOwnProperty.call(currentToggleValues, toggle.key)
+                ? Boolean(currentToggleValues[toggle.key])
+                : Boolean(toggle.checked);
+
+            return carry;
+        }, {});
+
+        if (!this.section.permissions.canCreate && this.isFormOpen && this.formMode === 'create') {
+            this.closeForm();
+        }
+    },
     findField(fieldName) {
         return this.section.fields.find((field) => field.name === fieldName) || null;
     },
@@ -781,6 +873,28 @@ const createSectionState = (section, adapters, hostEl) => ({
 
         const params = new URLSearchParams();
         params.set('page', String(page));
+        const mobilePageSize = Number.isInteger(this.section.mobilePageSize) ? this.section.mobilePageSize : null;
+
+        if (
+            mobilePageSize !== null
+            && mobilePageSize > 0
+            && typeof globalThis.matchMedia === 'function'
+            && globalThis.matchMedia('(max-width: 639px)').matches
+        ) {
+            params.set('per_page', String(mobilePageSize));
+        }
+
+        if (typeof this.adapters.buildListParams === 'function') {
+            const adapterParams = this.adapters.buildListParams(this.toggleValues, this.section);
+
+            Object.entries(asRecord(adapterParams)).forEach(([key, value]) => {
+                if (value === null || value === undefined || value === '') {
+                    return;
+                }
+
+                params.set(key, String(value));
+            });
+        }
         this.isLoading = true;
         this.sectionError = '';
 
@@ -837,6 +951,10 @@ const createSectionState = (section, adapters, hostEl) => ({
         this.resetInlineCreateState();
         this.isFormOpen = true;
     },
+    async toggleToolbar(key) {
+        this.toggleValues[key] = !this.toggleValues[key];
+        await this.fetchPage(1);
+    },
     openEditForm(record) {
         this.formMode = 'edit';
         this.editingId = record.id;
@@ -858,6 +976,27 @@ const createSectionState = (section, adapters, hostEl) => ({
         this.errors = {};
         this.formError = '';
         this.resetInlineCreateState();
+    },
+    createFormTitle() {
+        if (this.formMode === 'create') {
+            return asString(this.section.createAction.title, 'Create record');
+        }
+
+        return 'Edit record';
+    },
+    createFormDescription() {
+        if (this.formMode === 'create') {
+            return asString(this.section.createAction.description, this.section.title);
+        }
+
+        return asString(this.section.title);
+    },
+    createFormSubmitLabel() {
+        if (this.formMode === 'create') {
+            return asString(this.section.createAction.submitLabel, 'Save');
+        }
+
+        return 'Save';
     },
     buildCreatePayload() {
         if (typeof this.adapters.buildCreatePayload === 'function') {
@@ -912,6 +1051,20 @@ const createSectionState = (section, adapters, hostEl) => ({
             if (!response.ok) {
                 this.formError = 'Unable to save record.';
                 return;
+            }
+
+            const data = await response.json();
+
+            if (this.formMode === 'create' && typeof this.adapters.handleCreateSuccess === 'function') {
+                const handled = await this.adapters.handleCreateSuccess({
+                    data,
+                    component: this,
+                    section: this.section,
+                });
+
+                if (handled === true) {
+                    return;
+                }
             }
 
             this.isFormOpen = false;

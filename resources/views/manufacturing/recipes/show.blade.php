@@ -1,4 +1,9 @@
-<x-resource-detail-layout>
+<x-resource-detail-layout
+    class="relative"
+    data-page="manufacturing-recipes-show"
+    data-payload="manufacturing-recipes-show-payload"
+    x-data="manufacturingRecipesShow"
+>
     @php
         $breadcrumbItems = [
             [
@@ -14,171 +19,88 @@
                 'url' => null,
             ],
         ];
+
+        $recipePayload = $payload['recipe'] ?? [];
     @endphp
 
     <x-slot name="header">
-        <div>
-            <div class="flex flex-col gap-2">
-                <div>
-                    <h2 class="font-semibold text-xl text-gray-800 leading-tight">Recipe</h2>
-                    <div class="mt-1 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-gray-500">
-                        <p class="font-medium text-gray-800" x-text="recipe.name || 'Recipe'"></p>
-                        <span class="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-600">
-                            {{ $recipe->item?->name ?? '—' }}
-                        </span>
-                        <span class="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-600" x-text="recipe.recipe_type_label || '—'"></span>
-                    </div>
-                </div>
+        <x-resource-detail-header-breadcrumb :items="$breadcrumbItems" :title="$recipePayload['name'] ?? $recipe->name">
+            <div class="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-gray-500">
+                <span class="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700">{{ $recipePayload['output_item_name'] ?? '—' }}</span>
+                <span class="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700">{{ $recipePayload['display_version_number'] ?? '—' }}</span>
+                @if (($recipePayload['display_recipe_type_icon'] ?? null) === 'shopping-cart')
+                    <span class="inline-flex items-center gap-2 text-gray-700" aria-label="Fulfillment recipe" title="{{ $recipePayload['display_recipe_type_label'] ?? 'Fulfillment' }}">
+                        <span class="sr-only">{{ $recipePayload['display_recipe_type_label'] ?? 'Fulfillment' }}</span>
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-5">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437M7.5 14.25a3 3 0 0 0-3 3h15.75m-12.75-3h11.218c1.121-2.3 2.1-4.684 2.924-7.138a60.114 60.114 0 0 0-16.536-1.84M7.5 14.25 5.106 5.272M6 20.25a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0Zm12.75 0a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0Z" />
+                        </svg>
+                    </span>
+                @elseif (($recipePayload['display_recipe_type_icon'] ?? null) === 'cog')
+                    <span class="inline-flex items-center gap-2 text-gray-700" aria-label="Manufacturing recipe" title="{{ $recipePayload['display_recipe_type_label'] ?? 'Manufacturing' }}">
+                        <span class="sr-only">{{ $recipePayload['display_recipe_type_label'] ?? 'Manufacturing' }}</span>
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-5">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M11.42 3.752a1.5 1.5 0 0 1 1.16 0l.497.207a1.5 1.5 0 0 0 1.314-.07l.468-.292a1.5 1.5 0 0 1 1.52-.057l.526.304a1.5 1.5 0 0 0 1.318.047l.527-.243a1.5 1.5 0 0 1 2.05 1.356v.608a1.5 1.5 0 0 0 .43 1.05l.43.442a1.5 1.5 0 0 1 .338 1.573l-.214.565a1.5 1.5 0 0 0 .083 1.31l.306.53a1.5 1.5 0 0 1-.056 1.518l-.293.47a1.5 1.5 0 0 0-.07 1.313l.208.498a1.5 1.5 0 0 1-.745 1.928l-.553.267a1.5 1.5 0 0 0-.826 1.02l-.122.539a1.5 1.5 0 0 1-1.46 1.17h-.548a1.5 1.5 0 0 0-1.14.525l-.36.428a1.5 1.5 0 0 1-1.466.49l-.58-.145a1.5 1.5 0 0 0-1.22.196l-.456.325a1.5 1.5 0 0 1-1.564 0l-.456-.325a1.5 1.5 0 0 0-1.22-.196l-.58.144a1.5 1.5 0 0 1-1.466-.49l-.36-.427a1.5 1.5 0 0 0-1.14-.526h-.548a1.5 1.5 0 0 1-1.46-1.17l-.122-.538a1.5 1.5 0 0 0-.826-1.02l-.553-.268a1.5 1.5 0 0 1-.745-1.928l.208-.497a1.5 1.5 0 0 0-.07-1.314l-.293-.47a1.5 1.5 0 0 1-.056-1.518l.306-.53a1.5 1.5 0 0 0 .083-1.31l-.214-.566a1.5 1.5 0 0 1 .338-1.572l.43-.442a1.5 1.5 0 0 0 .43-1.05v-.608a1.5 1.5 0 0 1 2.05-1.356l.527.243a1.5 1.5 0 0 0 1.318-.047l.526-.304a1.5 1.5 0 0 1 1.52.057l.468.292a1.5 1.5 0 0 0 1.314.07l.497-.207Z" />
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+                        </svg>
+                    </span>
+                @endif
+                <span class="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700">{{ $recipePayload['display_output_quantity_text'] ?? '—' }}</span>
             </div>
-
-            <x-resource-breadcrumbs :items="$breadcrumbItems" />
-        </div>
+        </x-resource-detail-header-breadcrumb>
     </x-slot>
 
     <script type="application/json" id="manufacturing-recipes-show-payload">@json($payload)</script>
 
-    <div
-        class="py-12"
-        data-page="manufacturing-recipes-show"
-        data-payload="manufacturing-recipes-show-payload"
-        x-data="manufacturingRecipesShow"
-    >
-        <div class="fixed top-6 right-6 z-50" x-show="toast.visible">
-            <div
-                class="rounded-md px-4 py-3 text-sm shadow-md"
-                :class="toast.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'"
-                x-text="toast.message"
-            ></div>
-        </div>
-
-        <div class="max-w-5xl mx-auto sm:px-6 lg:px-8 space-y-6">
-            <div class="bg-white border border-gray-100 shadow-sm sm:rounded-lg">
-                <div class="p-6 flex flex-col gap-6">
-                    <div class="flex items-start justify-between">
-                        <div>
-                            <h3 class="text-lg font-medium text-gray-900">{{ __('Output Item') }}</h3>
-                            <p class="mt-1 text-sm text-gray-600">{{ __('The item produced by this recipe.') }}</p>
-                        </div>
-                        @can('inventory-make-orders-manage')
-                            <div class="flex items-center gap-2">
-                                <button
-                                    type="button"
-                                    class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md text-xs font-semibold text-gray-700 uppercase tracking-widest hover:bg-gray-50"
-                                    x-on:click="openEditRecipe()"
-                                >
-                                    {{ __('Edit Recipe') }}
-                                </button>
-                                <button
-                                    type="button"
-                                    class="inline-flex items-center px-4 py-2 bg-red-600 border border-transparent rounded-md text-xs font-semibold text-white uppercase tracking-widest hover:bg-red-500"
-                                    x-on:click="openDeleteRecipe()"
-                                >
-                                    {{ __('Delete') }}
-                                </button>
-                            </div>
-                        @endcan
-                    </div>
-
-                    <dl class="grid grid-cols-1 gap-6 text-sm sm:grid-cols-2">
-                        <div>
-                            <dt class="text-sm font-medium text-gray-500">{{ __('Recipe Name') }}</dt>
-                            <dd class="mt-1 text-gray-900" x-text="recipe.name"></dd>
-                        </div>
-                        <div>
-                            <dt class="text-sm font-medium text-gray-500">{{ __('Type') }}</dt>
-                            <dd class="mt-1 text-gray-900" x-text="recipe.recipe_type_label"></dd>
-                        </div>
-                        <div>
-                            <dt class="text-sm font-medium text-gray-500">{{ __('Name') }}</dt>
-                            <dd class="mt-1 text-gray-900" x-text="recipe.item_name"></dd>
-                        </div>
-                        <div>
-                            <dt class="text-sm font-medium text-gray-500">{{ __('Base UoM') }}</dt>
-                            <dd class="mt-1 text-gray-900" x-text="recipe.item_uom"></dd>
-                        </div>
-                        <div>
-                            <dt class="text-sm font-medium text-gray-500">{{ __('Output per Run') }}</dt>
-                            <dd class="mt-1 text-gray-900" x-text="recipe.output_quantity_display"></dd>
-                        </div>
-                    </dl>
-                </div>
-            </div>
-
-            <div class="bg-white border border-gray-100 shadow-sm sm:rounded-lg">
-                <div class="p-6">
-                    <h3 class="text-lg font-medium text-gray-900">{{ __('Active') }}</h3>
-                    <p class="mt-2 text-sm text-gray-700" x-text="recipe.is_active ? 'Yes' : 'No'"></p>
-                </div>
-            </div>
-
-            <div class="bg-white border border-gray-100 shadow-sm sm:rounded-lg">
-                <div class="p-6 space-y-4">
-                    <div class="flex items-center justify-between">
-                        <h3 class="text-lg font-medium text-gray-900">{{ __('Lines') }}</h3>
-                        @can('inventory-make-orders-manage')
-                            <button
-                                type="button"
-                                class="inline-flex items-center px-4 py-2 bg-blue-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition"
-                                x-on:click="openCreateLine()"
-                            >
-                                {{ __('Add Line') }}
-                            </button>
-                        @endcan
-                    </div>
-
-                    <div x-show="lines.length === 0">
-                        <p class="mt-2 text-sm text-gray-600">{{ __('No recipe lines yet.') }}</p>
-                    </div>
-
-                    <div class="overflow-x-auto" x-show="lines.length > 0">
-                        <table class="min-w-full text-sm">
-                            <thead class="text-left text-gray-500">
-                                <tr class="border-b border-gray-100">
-                                    <th class="px-3 py-2 font-medium">{{ __('Input Item') }}</th>
-                                    <th class="px-3 py-2 font-medium">{{ __('Quantity') }}</th>
-                                    <th class="px-3 py-2 font-medium">{{ __('UoM') }}</th>
-                                    <th class="px-3 py-2 text-right font-medium">{{ __('Actions') }}</th>
-                                </tr>
-                            </thead>
-                            <tbody class="divide-y divide-gray-100">
-                                <template x-for="line in lines" :key="line.id">
-                                    <tr>
-                                        <td class="px-3 py-3 text-gray-900" x-text="line.item_name"></td>
-                                        <td class="px-3 py-3 text-gray-600" x-text="line.quantity_display"></td>
-                                        <td class="px-3 py-3 text-gray-600" x-text="line.item_uom"></td>
-                                        <td class="px-3 py-3 text-right text-sm">
-                                            @can('inventory-make-orders-manage')
-                                                <button
-                                                    type="button"
-                                                    class="text-gray-700 hover:text-gray-900"
-                                                    x-on:click="openEditLine(line)"
-                                                >
-                                                    {{ __('Edit') }}
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    class="ml-3 text-red-600 hover:text-red-500"
-                                                    x-on:click="openDeleteLine(line)"
-                                                >
-                                                    {{ __('Delete') }}
-                                                </button>
-                                            @endcan
-                                            @cannot('inventory-make-orders-manage')
-                                                <span class="text-gray-400">—</span>
-                                            @endcannot
-                                        </td>
-                                    </tr>
-                                </template>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        @include('manufacturing.recipes.partials.delete-recipe-modal')
-        @include('manufacturing.recipes.partials.edit-recipe-slide-over')
-        @include('manufacturing.recipes.partials.line-form-slide-over')
-        @include('manufacturing.recipes.partials.delete-line-modal')
+    <div class="fixed right-6 top-6 z-50" x-show="toast.visible">
+        <div
+            class="rounded-md px-4 py-3 text-sm shadow-md"
+            :class="toast.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'"
+            x-text="toast.message"
+        ></div>
     </div>
+
+    <div class="mx-auto max-w-5xl space-y-4 px-1 py-8 sm:space-y-6 sm:px-6 sm:py-12 lg:px-8" data-recipe-detail-content>
+        @if (($payload['sections']['makeOrders'] ?? null))
+            <div data-js-crud-section-root data-section-key="makeOrders"></div>
+        @endif
+
+        <x-ingredients-detail-section
+            title="Ingredients"
+            :description="__('Ingredients are shown for the current display version.')"
+            :default-open="false"
+            item-header="Item Name"
+            :context-text-expression="'ingredients.can_edit ? \'Editing checked out version \' + ingredients.display_version_number : \'Showing version \' + ingredients.display_version_number'"
+        />
+
+        @if (($payload['sections']['versions'] ?? null))
+            <div data-js-crud-section-root data-section-key="versions"></div>
+        @endif
+
+        @can('inventory-make-orders-manage')
+            <div class="flex justify-end gap-2">
+                <button
+                    type="button"
+                    class="inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-widest text-gray-700 shadow-sm transition hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                    x-on:click="openEditRecipe()"
+                >
+                    {{ __('Edit Recipe') }}
+                </button>
+                <button
+                    type="button"
+                    class="inline-flex items-center rounded-md border border-transparent bg-red-600 px-4 py-2 text-xs font-semibold uppercase tracking-widest text-white transition hover:bg-red-500 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
+                    x-on:click="openDeleteRecipe()"
+                >
+                    {{ __('Delete') }}
+                </button>
+            </div>
+        @endcan
+    </div>
+
+    <x-slot name="overlays">
+        <div data-recipe-detail-overlays>
+            @include('manufacturing.recipes.partials.delete-recipe-modal')
+            @include('manufacturing.recipes.partials.edit-recipe-slide-over')
+            @include('manufacturing.recipes.partials.create-recipe-version-slide-over')
+        </div>
+    </x-slot>
 </x-resource-detail-layout>

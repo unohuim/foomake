@@ -109,17 +109,7 @@ const recipeStateDisplay = (record) => {
 };
 
 const makeOrderStatusDisplay = (record) => {
-    switch (record.status) {
-    case 'MADE':
-        return {
-            text: 'MADE',
-            tone: 'success',
-        };
-    case 'SCHEDULED':
-        return {
-            text: 'SCHEDULED',
-            tone: 'default',
-        };
+    switch (record.workflow_state) {
     case 'DRAFT':
         return {
             text: 'DRAFT',
@@ -127,8 +117,8 @@ const makeOrderStatusDisplay = (record) => {
         };
     default:
         return {
-            text: asString(record.status, '—'),
-            tone: 'muted',
+            text: asString(record.workflow_state, '—'),
+            tone: 'default',
         };
     }
 };
@@ -156,6 +146,7 @@ export function mount(rootEl, payload) {
     const purchaseOrderCreate = mountPurchaseOrderCreate(purchaseOrderCreateRootEl, safePayload.purchaseOrderCreate || {});
     const recipeCreate = safePayload.recipeCreate || {};
     const makeOrderCreate = safePayload.makeOrderCreate || {};
+    let pageState = null;
 
     rootEl.querySelectorAll('[data-js-crud-section-root]').forEach((sectionRootEl) => {
         const sectionKey = sectionRootEl.dataset.sectionKey || '';
@@ -203,6 +194,7 @@ export function mount(rootEl, payload) {
         makeOrderCreateErrors: emptyMakeOrderErrors(),
         makeOrderCreateGeneralError: '',
         init() {
+            pageState = this;
             this.createForm = this.defaultCreateForm();
             this.createManufacturingOutputQuantity = this.createForm.output_quantity;
 
@@ -562,6 +554,33 @@ export function mount(rootEl, payload) {
             }
             this.closeMakeOrderCreate();
         },
+        async createMakeOrderFromUrl(makeUrl) {
+            if (!this.canExecute || !makeUrl) {
+                return;
+            }
+
+            const response = await fetch(makeUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Accept: 'application/json',
+                    'X-CSRF-TOKEN': this.makeOrderCsrfToken,
+                },
+                body: JSON.stringify({
+                    runs: '1.000000',
+                }),
+            });
+
+            if (!response.ok) {
+                return;
+            }
+
+            const data = await response.json();
+
+            if (data?.data?.show_url) {
+                window.location.assign(data.data.show_url);
+            }
+        },
     }));
 
     const adaptersBySectionKey = {
@@ -608,11 +627,8 @@ export function mount(rootEl, payload) {
                 }));
             },
             handleAction: async ({ action, record }) => {
-                if (action.handlerKey === 'openMakeOrderCreate') {
-                    rootEl.dispatchEvent(new CustomEvent('materials-show:open-make-order-create', {
-                        detail: record.make_prefill || {},
-                        bubbles: true,
-                    }));
+                if (action.handlerKey === 'createMakeOrder') {
+                    await pageState?.createMakeOrderFromUrl(record.make_url || '');
                 }
             },
         },

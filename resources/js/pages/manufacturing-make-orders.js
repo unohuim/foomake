@@ -138,8 +138,8 @@ export function mount(rootEl, payload) {
                 parts.push(`Qty ${record.qty_display || record.qty}`);
             }
 
-            if (record?.status) {
-                parts.push(record.status);
+            if (record?.workflow_state) {
+                parts.push(record.workflow_state);
             }
 
             return parts.join(' · ');

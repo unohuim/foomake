@@ -1,0 +1,37 @@
+name: Recipe Version Checkout
+type: Manufacturing Domain Pattern
+location:
+  - app/Models/RecipeVersionCheckout.php
+  - app/Models/Recipe.php
+  - app/Http/Controllers/RecipeController.php
+purpose: Persist a per-user recipe-version editing context without making checkout state equivalent to lifecycle status or currentness.
+when_to_use:
+  - Allowing a user to edit a recipe version
+  - Resolving the recipe version a specific user should see on the detail page
+  - Checking in a user after publish or explicit check-in
+when_not_to_use:
+  - Deciding which recipe version is current for Make Orders
+  - Representing lifecycle status such as draft, published, or archived
+rules:
+  - Checkout controls user editing context only.
+  - Version status is lifecycle only.
+  - recipes.current_version_id is currentness only.
+  - Open checkout uniqueness is tenant_id + recipe_version_id + user_id where checked_in_at is null.
+  - A user may hold open checkouts for multiple different versions of the same recipe.
+  - A user may not open the same checkout twice on the same recipe version.
+  - Different users do not inherit each other's checkout display context.
+  - Only the checkout owner may edit the checked-out draft version.
+  - Only the checkout owner may check in that checkout.
+  - Check In closes the open checkout by setting checked_in_at.
+  - Users without an open checkout must see the current published version on recipe detail pages.
+  - Publishing a checked-out draft must check in the publishing user for that version.
+public_interface:
+  - Recipe::openCheckoutForUser()
+  - Recipe::displayVersionForUser()
+  - RecipeVersion::checkouts()
+example_usage: |
+  $displayVersion = $recipe->displayVersionForUser($user->id);
+
+  if ($displayVersion && $recipe->openCheckoutForUser($user->id)) {
+      // Show editable draft context.
+  }

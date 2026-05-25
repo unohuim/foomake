@@ -1,19 +1,28 @@
 @props([
     'items' => [],
+    'fullBleed' => true,
 ])
 
 @php
     $homeUrl = $items[0]['url'] ?? null;
     $trailItems = array_slice($items, 1);
+
+    $navClasses = $fullBleed
+        ? 'relative left-1/2 right-1/2 mt-4 flex w-screen -translate-x-1/2 border-y border-gray-200 bg-white'
+        : 'mt-0 flex w-full border-y border-gray-200 bg-white';
+
+    $listClasses = $fullBleed
+        ? 'mx-auto flex w-full max-w-7xl items-stretch px-4 sm:px-6 lg:px-8'
+        : 'flex w-full items-stretch';
 @endphp
 
 <nav
     aria-label="Breadcrumb"
-    {{ $attributes->class('relative left-1/2 right-1/2 mt-4 flex w-screen -translate-x-1/2 border-y border-gray-200 bg-white') }}
+    {{ $attributes->class($navClasses) }}
 >
     <ol
         role="list"
-        class="mx-auto flex w-full max-w-7xl items-stretch px-4 sm:px-6 lg:px-8"
+        class="{{ $listClasses }}"
     >
         <li class="flex items-stretch">
             @if ($homeUrl)
@@ -60,7 +69,7 @@
             @endphp
 
             <li class="flex items-stretch">
-                <div class="flex items-stretch px-2 sm:px-3" aria-hidden="true">
+                <div class="flex items-stretch px-2 sm:px-3" aria-hidden="true" data-breadcrumb-chevron-separator>
                     <svg
                         class="h-full w-6 shrink-0 text-gray-200"
                         xmlns="http://www.w3.org/2000/svg"

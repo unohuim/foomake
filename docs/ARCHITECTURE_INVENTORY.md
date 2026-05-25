@@ -190,13 +190,95 @@ Provide a shared expandable detail-section CRUD surface for record sublists such
 
 Notes:
 - Reusable CRUD detail sections must keep their outer shell `overflow-visible` so row-action dropdowns are not clipped.
+- Shared CRUD add/search rows use a dedicated layout contract rather than the generic actions slot: the search/select control belongs on the left and the add button belongs on the right.
+- Shared compact add/search rows do not render a visible field label unless a future screen explicitly opts into one.
 - Inventory Count detail uses this pattern with a `Materials` section and a read-only `Tasks` section that reuses the existing task completion route/payload contract.
 - Material detail uses this pattern for `Supplier Packages`, `Recipes`, `Purchase Orders`, and `Make Orders`; `Supplier Packages` and `Recipes` render near the top and default open, while `Purchase Orders` and `Make Orders` render near the bottom and default collapsed.
 - Material detail reuses the existing section abstraction for manufacturable-only `Recipes` and `Make Orders` sections rather than introducing a bespoke accordion/detail implementation.
 - Material detail section rows expose record detail links where an existing detail surface is available, using the shared row-action `View` contract rather than bespoke row-click behavior; this applies to Supplier Package rows, Purchase Order rows, Recipe rows, and Make Order rows.
 - Material detail `Recipes` plus opens the existing recipe create slide-over in place, prefilled with the current material as the output item, and successful recipe create redirects to the created recipe detail page.
-- Material detail recipe-row `Make` opens the existing make-order create slide-over in place, prefilled with the selected recipe, and successful make-order create redirects to the created make-order detail page.
+- Material detail recipe-row `Make` creates a draft Make Order directly from the selected recipe current version and redirects to the created make-order detail page when `show_url` is returned.
+- Recipe detail uses the same reusable CRUD detail-section pattern for a `Make Orders` accordion scoped to one recipe; the right-aligned shared `+` action opens the built-in shared section slide-over, create always uses the recipe current published version, and checked-out drafts are never used.
+- Recipe detail `Make Orders` create eligibility is reactive: publishing the first or current recipe version updates the shared section action contract immediately so the right-aligned `+` appears without a full page refresh.
+- Recipe detail `Versions` rows follow the shared row-action dropdown contract; draft rows expose `Publish`, and publish success may trigger a temporary row highlight when the newly current version re-sorts to the top.
+- Recipe detail section order is `Make Orders`, `Ingredients`, then `Versions`; `Make Orders` defaults open while `Ingredients` and `Versions` default collapsed.
+- Recipe detail `Make Orders` may opt into a shared mobile page-size contract so the same reusable section renders the latest `3` rows first on mobile while retaining shared pagination controls for remaining rows.
+- Recipes index row menus expose `Make` when the recipe has a current published manufacturing version and the current user can execute Make Orders.
+- Make Orders index primary recipe-name rows use the shared linked-text CRUD contract to open the Make Order detail page.
+- Make Order detail uses the shared resource detail header pattern plus a Workflow detail section followed by a shared `Ingredients` detail section for editable snapshot rows sourced from `make_order_lines`.
+- Shared workflow-enabled resource headers may expose one compact next-stage action through the shared header action slot when a valid configured transition exists.
+- Shared workflow-enabled resource headers may expose one compact draft-entry action through the same header action slot when a pre-workflow draft can enter the first configured stage.
+- Shared resource headers may render grouped metadata rows through the shared header metadata slot; Make Orders use recipe/runs on the first row and output item/expected output on the second row.
+- Make Order visible state is `DRAFT` while `workflow_stage_id` is null, then tenant-configured `workflow_stages.name` after workflow entry; lifecycle `status` remains lifecycle-only while `workflow_stage_id` tracks the operational workflow position.
+- Make Order workflow ownership metadata lives on `make_orders.made_by_user_id`, auto-assigns to the creator on Make Order creation, and is edited from the Workflow section through the shared dropdown-select pattern.
+- `make_orders.assigned_to_user_id` is not part of the Make Order schema and must not be used for Make Order ownership.
+- Make Order assignee options are tenant-scoped, include an explicit `Unassigned` choice, autosave on change, and reject cross-tenant assignment.
+- Make Order assignee changes must not mutate lifecycle `status`, operational `workflow_stage_id`, `make_order_lines`, `recipe_version_lines`, workflow tasks, or task templates.
+- Make Order stage transitions must preserve `made_by_user_id`.
+- Generated Make Order workflow task assignees remain independent from Make Order assignee metadata.
+- Shared detail-section UX should prefer compact inline autosave controls for safe single-field updates and avoid extra save-button rows.
+- Recipe-scoped Make Order create may redirect directly to the created Make Order detail page through the shared section create-success hook when `show_url` is returned.
+- Make Order header, index, Workflow section, and shared Material/Recipe detail rows all use the same workflow-stage-driven display rule after workflow entry.
 - Reusable detail sections may disable the vertical-dots row menu through `showRowActionsMenu: false`; the default remains enabled for existing section consumers, and disabled sections may surface their configured row actions inline instead.
+
+### Shared Ingredients Detail Section Pattern
+
+**Name:** Shared Ingredients Detail Section Pattern
+**Type:** Manufacturing UI Pattern
+**Location:**
+- `resources/views/components/ingredients-detail-section.blade.php`
+- `resources/views/manufacturing/recipes/show.blade.php`
+- `resources/views/manufacturing/make-orders/show.blade.php`
+
+**Purpose:**
+Keep Recipe Ingredients and Make Order Ingredients visually and behaviorally consistent through one shared detail-section abstraction.
+
+**When to Use:**
+- Rendering ingredient lines on Recipe detail
+- Rendering ingredient snapshot lines on Make Order detail
+
+**When Not to Use:**
+- Non-ingredient child collections
+- Resource index pages
+
+Notes:
+- The shared Ingredients section composes the reusable detail-section shell rather than reimplementing accordion markup.
+- The compact combobox plus plus-button add bar is shared between Recipe and Make Order detail.
+- The shared Ingredients add row inherits the shared detail-section add-row contract so the search/select control stays left-aligned and the add button stays right-aligned.
+- The shared compact Ingredients add row intentionally omits a visible field label.
+- The shared section preserves dropdown and row-action overflow visibility.
+- Recipe Ingredients persist to `recipe_version_lines`.
+- Make Order Ingredients persist to `make_order_lines`.
+- Recipe Ingredients stay version-aware and edit only through the checked-out draft context.
+- Make Order Ingredients are editable snapshots and must not mutate recipe version lines.
+- Make Order Workflow uses the shared detail-section shell, defaults open, and keeps operational stage data separate from lifecycle status.
+
+### Make Order Workflow Detail Section Pattern
+
+**Name:** Make Order Workflow Detail Section Pattern
+**Type:** Manufacturing UI Pattern
+**Location:**
+- `docs/architecture/manufacturing/MakeOrderWorkflowSection.yaml`
+- `app/Http/Controllers/MakeOrderController.php`
+- `resources/views/manufacturing/make-orders/show.blade.php`
+- `resources/js/pages/manufacturing-make-orders-show.js`
+
+**Purpose:**
+Render operational workflow-stage movement, assignee context, due date, and current-stage tasks on Make Order detail without overloading lifecycle status.
+
+**When to Use:**
+- Make Order detail workflow-stage transitions
+- Showing current manufacturing workflow stage tasks on a Make Order
+- Editing Make Order workflow ownership assignment
+
+**When Not to Use:**
+- Recipe versioning
+- Lifecycle status transitions such as making or cancelling
+
+**Public Interface:**
+- `manufacturing.make-orders.workflow-stage.update`
+- `MoveMakeOrderWorkflowStageAction::execute()`
+- `ResolveManufacturingWorkflowStageAction::availableTransitions()`
 
 ### Resource Detail Layout Pattern
 
@@ -1362,10 +1444,10 @@ $action->execute($inventoryCount, $userId);
 **Location:** `app/Models/Recipe.php`
 
 **Purpose:**  
-Represent named manufacturing recipes for items, including output quantity per run.
+Represent the stable parent identity for named recipes while delegating execution details to version records.
 
 **When to Use:**  
-Defining recipes and their line items.
+Defining recipe parents and parent-level metadata.
 
 **When Not to Use:**  
 Non-manufacturing inventory relationships.
@@ -1373,6 +1455,8 @@ Non-manufacturing inventory relationships.
 **Public Interface:**  
 - `tenant()`  
 - `item()`  
+- `currentVersion()`  
+- `versions()`  
 - `lines()`  
 - `stockMoves()`
 
@@ -1382,9 +1466,262 @@ $recipe = Recipe::create([
     'tenant_id' => $tenant->id,
     'item_id' => $item->id,
     'name' => 'Batch of Patties',
-    'output_quantity' => '54.000000',
+    'is_active' => true,
 ]);
 ```
+
+---
+
+### Recipe Versioning Pattern
+
+**Name:** Recipe Versioning Pattern  
+**Type:** Manufacturing Domain Pattern  
+**Location:**  
+- `docs/architecture/manufacturing/RecipeVersioning.yaml`  
+- `app/Models/Recipe.php`  
+- `app/Models/RecipeVersion.php`  
+- `app/Models/RecipeVersionLine.php`
+
+**Purpose:**  
+Separate stable recipe identity from version-owned execution templates and ingredient lines.
+
+**When to Use:**  
+Capturing or changing recipe execution behavior without mutating historical Make Orders.
+
+**When Not to Use:**  
+Parent-level display metadata such as the main recipe name or default flag.
+
+**Public Interface:**  
+- `Recipe::currentVersion()`  
+- `Recipe::versions()`  
+- `RecipeVersion::lines()`
+
+**Example Usage:**  
+```php
+$recipe->versions()->create([
+    'tenant_id' => $recipe->tenant_id,
+    'version_number' => 101,
+    'recipe_type' => 'manufacturing',
+    'output_quantity' => '54.000000',
+    'status' => 'DRAFT',
+]);
+```
+
+Notes:
+- `recipes.current_version_id` is the single pointer to the current version.
+- Version status is lifecycle, checkout is user editing context, and neither is a synonym for currentness.
+- Recipe detail headers and Make Order defaults must read type and output quantity from the displayed version context, with current published as fallback.
+- Recipe creation seeds version `1.00` as a draft, without auto-checkout and without setting `recipes.current_version_id`.
+- Published version actions are `View`, `Duplicate`, and `Archive`; published versions do not expose `Checkout` or direct `Edit`.
+- Draft version actions are `View/Edit`, `Duplicate`, and `Delete`.
+- Archived versions stay hidden by default behind the `View Archived` toggle.
+
+---
+
+### Recipe Version Checkout Pattern
+
+**Name:** Recipe Version Checkout Pattern  
+**Type:** Manufacturing Domain Pattern  
+**Location:**  
+- `docs/architecture/manufacturing/RecipeVersionCheckout.yaml`  
+- `app/Models/RecipeVersionCheckout.php`  
+- `app/Http/Controllers/RecipeController.php`
+
+**Purpose:**  
+Persist per-user recipe-version editing context without introducing a recipe-wide lock.
+
+**When to Use:**  
+Checking out, checking in, publishing, or resolving the version a user should see on the recipe detail page.
+
+**When Not to Use:**  
+Choosing the version for Make Orders or expressing lifecycle status.
+
+Notes:
+- Checkout controls editing context only.
+- Users without an open checkout must see the current published version.
+- Users without an open checkout fall back to the latest non-archived version when no current published version exists yet.
+
+**Public Interface:**  
+- `Recipe::openCheckoutForUser()`  
+- `Recipe::displayVersionForUser()`  
+- `RecipeVersion::checkouts()`
+
+---
+
+### Recipe Ingredients Editing Pattern
+
+**Name:** Recipe Ingredients Editing Pattern  
+**Type:** Manufacturing Domain Pattern  
+**Location:**  
+- `docs/architecture/manufacturing/RecipeIngredientsEditing.yaml`  
+- `app/Models/RecipeVersionLine.php`  
+- `app/Http/Controllers/RecipeController.php`  
+- `resources/views/manufacturing/recipes/show.blade.php`
+
+**Purpose:**  
+Keep recipe ingredients version-owned and editable only through a checked-out draft context on the recipe detail page.
+
+**When to Use:**  
+Displaying, adding, or editing recipe ingredients in the recipe detail view.
+
+**When Not to Use:**  
+Editing parent recipe lines directly or deriving Make Order inputs from live recipe data.
+
+Notes:
+- Ingredients come from `recipe_version_lines`.
+- The displayed ingredient section follows the current user's checkout context, otherwise the current published version.
+- Ingredient quantity formatting follows the ingredient item's UoM `display_precision`, while storage remains canonical scale 6.
+- The add bar uses the shared compact combobox-plus detail-section pattern and stays hidden in read-only mode.
+- The Ingredients section must use the shared detail-section card contract rather than page-local accordion markup.
+- Parent-level recipe line editing UI must stay hidden.
+
+---
+
+### Shared Resource Detail Header Breadcrumb Component
+
+**Name:** Shared Resource Detail Header Breadcrumb Component  
+**Type:** UI Layout Pattern  
+**Location:**  
+- `docs/architecture/ui/ResourceDetailHeaderBreadcrumb.yaml`  
+- `resources/views/components/resource-detail-header-breadcrumb.blade.php`  
+- `resources/views/materials/show.blade.php`  
+- `resources/views/manufacturing/recipes/show.blade.php`  
+
+**Purpose:**  
+Keep detail-page titles and breadcrumbs aligned through one reusable header contract with the breadcrumb rendered at the bottom of the header.
+
+**When to Use:**  
+Resource detail pages that render a title and breadcrumb trail.
+
+**When Not to Use:**  
+Index pages or standalone navigation bars.
+
+**Public Interface:**  
+- `<x-resource-detail-header-breadcrumb />`
+- `<x-resource-breadcrumbs />`
+
+Notes:
+- Recipes and Materials must not hand-roll their own resource header or breadcrumb wrappers.
+- Connected chevron separators and the horizontal border lines above and below the breadcrumb trail are part of the component contract.
+
+### Recipe Detail Make Orders Section
+
+**Name:** Recipe Detail Make Orders Section
+**Type:** Manufacturing UI Pattern
+**Location:**
+- `resources/views/manufacturing/recipes/show.blade.php`
+- `app/Http/Controllers/RecipeController.php`
+- `resources/js/lib/js-crud-section.js`
+
+**Purpose:**
+Expose recipe-scoped Make Order history and direct creation through the shared detail CRUD section.
+
+**When to Use:**
+Listing or creating Make Orders from a recipe detail page.
+
+**When Not to Use:**
+Creating Make Orders from drafts or from a checked-out display context.
+
+Notes:
+- The Recipe detail section order is Make Orders, Ingredients, then Versions.
+- The Make Orders section defaults open.
+- The plus button remains right-aligned through the shared CRUD section create-wrapper contract.
+- Row primary text links to the Make Order detail page through the shared primary-link contract.
+
+---
+
+### Starting Inventory Visibility Pattern
+
+**Name:** Starting Inventory Visibility Pattern  
+**Type:** Inventory Domain Pattern  
+**Location:**  
+- `app/Http/Controllers/ItemController.php`  
+- `app/Models/InventoryCount.php`  
+- `app/Models/StockMove.php`  
+
+**Purpose:**  
+Make material starting quantity visible through the user-facing inventory counts surface while preserving stock moves as the canonical append-only inventory ledger.
+
+**When to Use:**  
+Creating a material with a positive starting quantity.
+
+**When Not to Use:**  
+General receiving, purchase-order posting, or later stock adjustments.
+
+**Public Interface:**  
+- `ItemController::store()`  
+- `InventoryCount::stockMoves()`  
+
+**Public Interface:**  
+- `RecipeVersion::lines()`  
+- `RecipeController::storeIngredient()`  
+- `RecipeController::updateIngredient()`
+
+---
+
+### Make Order Recipe Snapshot Pattern
+
+**Name:** Make Order Recipe Snapshot Pattern  
+**Type:** Manufacturing Domain Pattern  
+**Location:**  
+- `docs/architecture/manufacturing/MakeOrderRecipeSnapshot.yaml`  
+- `app/Models/MakeOrder.php`  
+- `app/Models/MakeOrderLine.php`  
+- `app/Http/Controllers/MakeOrderController.php`
+
+**Purpose:**  
+Snapshot the current published recipe version and its lines onto each Make Order so later recipe changes do not mutate execution history.
+
+**When to Use:**  
+Creating or executing Make Orders.
+
+**When Not to Use:**  
+Live recipe planning queries that should resolve the current version directly.
+
+Notes:
+- Make Orders must resolve `recipe_version_id` from `recipes.current_version_id`.
+- User checked-out recipe versions are excluded from Make Order selection.
+
+**Public Interface:**  
+- `MakeOrder::recipeVersion()`  
+- `MakeOrder::lines()`
+
+**Example Usage:**  
+```php
+$makeOrder->lines()->create([
+    'tenant_id' => $makeOrder->tenant_id,
+    'input_item_id' => $item->id,
+    'planned_quantity' => '4.000000',
+    'line_type' => 'recipe',
+]);
+```
+
+---
+
+### Breadcrumb/Header Alignment Rule
+
+**Name:** Breadcrumb/Header Alignment Rule  
+**Type:** UI Layout Invariant  
+**Location:**  
+- `docs/architecture/ui/ResourceDetailBreadcrumbAlignment.yaml`  
+- `resources/views/manufacturing/recipes/show.blade.php`
+
+**Purpose:**  
+Keep resource-detail breadcrumbs and titles aligned within one container so the home icon and title share the same left edge.
+
+**When to Use:**  
+Rendering breadcrumbs above a resource detail title.
+
+**When Not to Use:**  
+Index pages or standalone navigation regions.
+
+Notes:
+- Breadcrumbs and the header title must share the same layout container.
+- Breadcrumbs must not drift in an independent max-width wrapper.
+
+**Public Interface:**  
+- `resources/views/components/resource-breadcrumbs.blade.php`  
+- `resources/views/manufacturing/recipes/show.blade.php`
 
 ---
 
@@ -2555,6 +2892,7 @@ Static pages, or domain workflows that exceed generic CRUD concerns.
 **Current Reference Implementations:**  
 - Sales Products  
 - Sales Customers
+- Recipes
 
 **Key Rules:**  
 - Blade index shells remain mount-only for CRUD concerns and must provide a bounded viewport-height container for the shared CRUD module.  

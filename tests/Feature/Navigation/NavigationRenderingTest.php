@@ -208,7 +208,8 @@ it('shows make orders link when the user has inventory make orders view permissi
 
     ($this->render)($user)
         ->assertOk()
-        ->assertSee('Orders (Make Orders)')
+        ->assertSee('Make Orders')
+        ->assertDontSee('Orders (Make Orders)')
         ->assertSee(route('manufacturing.make-orders.index'), false);
 });
 
@@ -702,7 +703,7 @@ it('hides unauthorized manufacturing and purchasing links', function () {
         ->assertOk()
         ->assertSee('Materials')
         ->assertDontSee('Suppliers')
-        ->assertDontSee('Orders (Make Orders)')
+        ->assertDontSee('Make Orders')
         ->assertDontSee('Recipes')
         ->assertDontSee('Units of Measure')
         ->assertDontSee('UoM Conversions')
@@ -794,7 +795,7 @@ it('allows super admin to see all permitted navigation groups and links', functi
         ->assertSee('Inventory Counts')
         ->assertSee('Materials')
         ->assertSee('Recipes')
-        ->assertSee('Orders (Make Orders)')
+        ->assertSee('Make Orders')
         ->assertSee('Units of Measure')
         ->assertSee('UoM Conversions')
         ->assertSee('UoM Categories');
@@ -915,7 +916,7 @@ it('marks the profile dropdown active on workflow pages', function () {
         ->assertOk()
         ->getContent();
 
-    expect($content)->toMatch('/class="inline-flex items-center gap-2 rounded-full border border-slate-600 bg-slate-800[^"]*"[^>]*>\\s*<span>' . preg_quote($user->name, '/') . '<\/span>/')
+    expect($content)->toMatch('/class="inline-flex items-center gap-2 rounded-full border border-slate-600 bg-slate-800[^"]*"[^>]*>\\s*<span>' . preg_quote(e($user->name), '/') . '<\/span>/')
         ->and($content)->toContain('data-profile-workflows-link="desktop"');
 });
 

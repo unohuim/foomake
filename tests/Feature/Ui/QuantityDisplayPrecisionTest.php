@@ -10,7 +10,8 @@ use App\Models\PurchaseOrderLine;
 use App\Models\PurchaseOrderReceipt;
 use App\Models\PurchaseOrderReceiptLine;
 use App\Models\Recipe;
-use App\Models\RecipeLine;
+use App\Models\RecipeVersion;
+use App\Models\RecipeVersionLine;
 use App\Models\Role;
 use App\Models\StockMove;
 use App\Models\Supplier;
@@ -122,21 +123,35 @@ beforeEach(function () {
     };
 
     $this->makeRecipe = function (Tenant $tenant, Item $output): Recipe {
-        return Recipe::query()->create([
+        $recipe = Recipe::query()->create([
             'tenant_id' => $tenant->id,
             'item_id' => $output->id,
             'name' => 'Simple Recipe',
             'is_active' => true,
             'is_default' => false,
         ]);
+
+        $recipe->versions()->create([
+            'tenant_id' => $tenant->id,
+            'version_number' => 100,
+            'output_quantity' => '1.000000',
+            'recipe_type' => 'manufacturing',
+            'status' => 'DRAFT',
+        ]);
+
+        return $recipe->fresh('versions');
     };
 
-    $this->addRecipeLine = function (Tenant $tenant, Recipe $recipe, Item $input, string $quantity): RecipeLine {
-        return RecipeLine::query()->create([
+    $this->addRecipeLine = function (Tenant $tenant, Recipe $recipe, Item $input, string $quantity): RecipeVersionLine {
+        /** @var RecipeVersion|null $version */
+        $version = $recipe->versions()->orderByDesc('version_number')->orderByDesc('id')->first();
+
+        return $version->lines()->create([
             'tenant_id' => $tenant->id,
-            'recipe_id' => $recipe->id,
-            'item_id' => $input->id,
+            'input_item_id' => $input->id,
+            'uom_id' => $input->base_uom_id,
             'quantity' => $quantity,
+            'sort_order' => (($version->lines()->max('sort_order') ?? 0) + 1),
         ]);
     };
 
@@ -492,7 +507,7 @@ it('recipe representative payload includes quantity_display key', function () {
     $response = $this->actingAs($user)->get(route('manufacturing.recipes.show', $recipe))->assertOk();
     $payload = ($this->extractPayload)($response, 'manufacturing-recipes-show-payload');
 
-    expect($payload['lines'][0])->toHaveKey('quantity_display');
+    expect($payload['ingredients']['lines'][0])->toHaveKey('quantity_display');
 });
 
 it('recipe representative payload displays precision 0 based on line item base uom', function () {
@@ -510,7 +525,7 @@ it('recipe representative payload displays precision 0 based on line item base u
     $response = $this->actingAs($user)->get(route('manufacturing.recipes.show', $recipe))->assertOk();
     $payload = ($this->extractPayload)($response, 'manufacturing-recipes-show-payload');
 
-    expect($payload['lines'][0]['quantity_display'] ?? null)->toBe('2');
+    expect($payload['ingredients']['lines'][0]['quantity_display'] ?? null)->toBe('2');
 });
 
 it('recipe representative payload displays precision 1 based on line item base uom', function () {
@@ -528,7 +543,7 @@ it('recipe representative payload displays precision 1 based on line item base u
     $response = $this->actingAs($user)->get(route('manufacturing.recipes.show', $recipe))->assertOk();
     $payload = ($this->extractPayload)($response, 'manufacturing-recipes-show-payload');
 
-    expect($payload['lines'][0]['quantity_display'] ?? null)->toBe('2.1');
+    expect($payload['ingredients']['lines'][0]['quantity_display'] ?? null)->toBe('2.1');
 });
 
 it('recipe representative payload displays precision 2 with half-up rounding', function () {
@@ -546,7 +561,7 @@ it('recipe representative payload displays precision 2 with half-up rounding', f
     $response = $this->actingAs($user)->get(route('manufacturing.recipes.show', $recipe))->assertOk();
     $payload = ($this->extractPayload)($response, 'manufacturing-recipes-show-payload');
 
-    expect($payload['lines'][0]['quantity_display'] ?? null)->toBe('2.35');
+    expect($payload['ingredients']['lines'][0]['quantity_display'] ?? null)->toBe('2.35');
 });
 
 it('recipe representative payload displays precision 3 with trailing zeros', function () {
@@ -564,7 +579,7 @@ it('recipe representative payload displays precision 3 with trailing zeros', fun
     $response = $this->actingAs($user)->get(route('manufacturing.recipes.show', $recipe))->assertOk();
     $payload = ($this->extractPayload)($response, 'manufacturing-recipes-show-payload');
 
-    expect($payload['lines'][0]['quantity_display'] ?? null)->toBe('2.100');
+    expect($payload['ingredients']['lines'][0]['quantity_display'] ?? null)->toBe('2.100');
 });
 
 it('recipe representative payload displays precision 6 with trailing zeros', function () {
@@ -582,7 +597,7 @@ it('recipe representative payload displays precision 6 with trailing zeros', fun
     $response = $this->actingAs($user)->get(route('manufacturing.recipes.show', $recipe))->assertOk();
     $payload = ($this->extractPayload)($response, 'manufacturing-recipes-show-payload');
 
-    expect($payload['lines'][0]['quantity_display'] ?? null)->toBe('0.005000');
+    expect($payload['ingredients']['lines'][0]['quantity_display'] ?? null)->toBe('0.005000');
 });
 
 it('recipe representative payload changes output when lines have different uom precision', function () {
@@ -604,9 +619,9 @@ it('recipe representative payload changes output when lines have different uom p
     $response = $this->actingAs($user)->get(route('manufacturing.recipes.show', $recipe))->assertOk();
     $payload = ($this->extractPayload)($response, 'manufacturing-recipes-show-payload');
 
-    expect($payload['lines'])->toHaveCount(2);
-    expect($payload['lines'][0]['quantity_display'] ?? null)->toBe('2');
-    expect($payload['lines'][1]['quantity_display'] ?? null)->toBe('2.100');
+    expect($payload['ingredients']['lines'])->toHaveCount(2);
+    expect($payload['ingredients']['lines'][0]['quantity_display'] ?? null)->toBe('2');
+    expect($payload['ingredients']['lines'][1]['quantity_display'] ?? null)->toBe('2.100');
 });
 
 it('purchase order representative payload includes display keys for quantity fields', function () {

@@ -15,11 +15,12 @@ when_not_to_use:
 rules:
   - Each recipe read view must display the recipe name.
   - Each recipe read view must display the output item name.
-  - Each recipe read view must display the recipe type label.
-  - Each recipe read view must display output quantity per run.
+  - Each recipe read view must display the current version recipe type label.
+  - Each recipe read view must display current-version output quantity per run.
+  - Recipe index may display current version number and current version status.
   - The output item base UoM may be displayed when available.
   - The active flag is displayed as a read-only status.
-  - Recipe lines list input item, quantity, and UoM when available.
+  - Recipe detail line lists resolve from the current version lines.
   - Recipe output quantity display uses the output item's base UoM display precision when available.
   - Recipe line quantity display uses each line item's base UoM display precision when available.
   - Recipe output item candidates are normal items where is_manufacturable is true or is_sellable is true.

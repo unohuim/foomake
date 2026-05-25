@@ -154,20 +154,20 @@
                                         data-make-orders-nav-link="desktop"
                                         data-nav-eligibility-key="makeOrdersEnabled"
                                         data-nav-href="{{ route('manufacturing.make-orders.index') }}"
-                                        data-nav-label="Orders (Make Orders)"
+                                        data-nav-label="Make Orders"
                                         data-nav-active="{{ request()->routeIs('manufacturing.make-orders.*') ? 'true' : 'false' }}"
                                     >
-                                        {{ __('Orders (Make Orders)') }}
+                                        {{ __('Make Orders') }}
                                     </x-nav-dropdown-link>
                                 @else
                                     <span
                                         class="block w-full cursor-not-allowed rounded-xl border border-transparent px-4 py-3 text-left text-sm font-medium text-slate-500 opacity-70"
                                         data-make-orders-nav-disabled="desktop"
                                         data-nav-eligibility-key="makeOrdersEnabled"
-                                        data-nav-label="Orders (Make Orders)"
+                                        data-nav-label="Make Orders"
                                         data-nav-active="{{ request()->routeIs('manufacturing.make-orders.*') ? 'true' : 'false' }}"
                                     >
-                                        {{ __('Orders (Make Orders)') }}
+                                        {{ __('Make Orders') }}
                                     </span>
                                 @endif
                             @endcan
@@ -419,20 +419,20 @@
                                     data-make-orders-nav-link="mobile"
                                     data-nav-eligibility-key="makeOrdersEnabled"
                                     data-nav-href="{{ route('manufacturing.make-orders.index') }}"
-                                    data-nav-label="Orders (Make Orders)"
+                                    data-nav-label="Make Orders"
                                     data-nav-active="{{ request()->routeIs('manufacturing.make-orders.*') ? 'true' : 'false' }}"
                                 >
-                                    {{ __('Orders (Make Orders)') }}
+                                    {{ __('Make Orders') }}
                                 </x-nav-dropdown-link>
                             @else
                                 <span
                                     class="block w-full cursor-not-allowed rounded-xl border border-transparent px-4 py-3 text-left text-sm font-medium text-slate-500 opacity-70"
                                     data-make-orders-nav-disabled="mobile"
                                     data-nav-eligibility-key="makeOrdersEnabled"
-                                    data-nav-label="Orders (Make Orders)"
+                                    data-nav-label="Make Orders"
                                     data-nav-active="{{ request()->routeIs('manufacturing.make-orders.*') ? 'true' : 'false' }}"
                                 >
-                                    {{ __('Orders (Make Orders)') }}
+                                    {{ __('Make Orders') }}
                                 </span>
                             @endif
                         @endcan

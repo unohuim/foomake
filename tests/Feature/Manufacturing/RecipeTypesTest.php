@@ -7,6 +7,8 @@ use App\Models\MakeOrder;
 use App\Models\Permission;
 use App\Models\Recipe;
 use App\Models\RecipeLine;
+use App\Models\RecipeVersion;
+use App\Models\RecipeVersionLine;
 use App\Models\Role;
 use App\Models\StockMove;
 use App\Models\Tenant;
@@ -88,9 +90,10 @@ beforeEach(function () {
         string $recipeType,
         bool $isActive = true,
         string $name = 'Recipe A',
-        string $outputQuantity = '1.000000'
+        string $outputQuantity = '1.000000',
+        bool $publishCurrent = true
     ): Recipe {
-        return Recipe::query()->forceCreate([
+        $recipe = Recipe::query()->forceCreate([
             'tenant_id' => $tenant->id,
             'item_id' => $outputItem->id,
             'recipe_type' => $recipeType,
@@ -98,14 +101,46 @@ beforeEach(function () {
             'is_active' => $isActive,
             'output_quantity' => $outputQuantity,
         ]);
+
+        $version = RecipeVersion::query()->forceCreate([
+            'tenant_id' => $tenant->id,
+            'recipe_id' => $recipe->id,
+            'version_number' => 100,
+            'name' => null,
+            'output_quantity' => $outputQuantity,
+            'recipe_type' => $recipeType,
+            'status' => $publishCurrent ? RecipeVersion::STATUS_PUBLISHED : RecipeVersion::STATUS_DRAFT,
+            'effective_from' => $publishCurrent ? now() : null,
+            'effective_until' => null,
+            'approved_at' => $publishCurrent ? now() : null,
+            'approved_by_user_id' => null,
+            'notes' => null,
+        ]);
+
+        if ($publishCurrent) {
+            $recipe->forceFill(['current_version_id' => $version->id])->save();
+        }
+
+        return $recipe->fresh(['currentVersion', 'item.baseUom']);
     };
 
-    $this->addRecipeLine = function (Tenant $tenant, Recipe $recipe, Item $inputItem, string $quantity): RecipeLine {
-        return RecipeLine::query()->forceCreate([
+    $this->addRecipeLine = function (Tenant $tenant, Recipe $recipe, Item $inputItem, string $quantity): RecipeVersionLine {
+        RecipeLine::query()->forceCreate([
             'tenant_id' => $tenant->id,
             'recipe_id' => $recipe->id,
             'item_id' => $inputItem->id,
             'quantity' => $quantity,
+        ]);
+
+        $version = $recipe->currentVersion ?? $recipe->versions()->latest('id')->firstOrFail();
+
+        return RecipeVersionLine::query()->forceCreate([
+            'tenant_id' => $tenant->id,
+            'recipe_version_id' => $version->id,
+            'input_item_id' => $inputItem->id,
+            'uom_id' => $inputItem->base_uom_id,
+            'quantity' => $quantity,
+            'sort_order' => ((int) $version->lines()->max('sort_order')) + 1,
         ]);
     };
 
@@ -113,6 +148,7 @@ beforeEach(function () {
         return MakeOrder::query()->forceCreate(array_merge([
             'tenant_id' => $tenant->id,
             'recipe_id' => $recipe->id,
+            'recipe_version_id' => $recipe->current_version_id,
             'output_item_id' => $recipe->item_id,
             'output_quantity' => '1.000000',
             'status' => MakeOrder::STATUS_DRAFT,
@@ -192,7 +228,7 @@ it('4. recipe create form defaults recipe_type to manufacturing', function () {
     expect($createPartialSource)->toContain('selected-value="manufacturing"');
 });
 
-it('5. invalid recipe type is rejected on update', function () {
+it('5. parent recipe metadata update preserves the existing recipe type', function () {
     $tenant = ($this->makeTenant)('Tenant A');
     $user = ($this->makeUser)($tenant);
     ($this->grantPermission)($user, 'inventory-make-orders-manage');
@@ -209,8 +245,10 @@ it('5. invalid recipe type is rejected on update', function () {
             'output_quantity' => '1.000000',
             'is_active' => true,
         ])
-        ->assertStatus(422)
-        ->assertJsonValidationErrors(['recipe_type']);
+        ->assertOk()
+        ->assertJsonPath('data.recipe_type', $this->manufacturingType);
+
+    expect($recipe->fresh()->recipe_type)->toBe($this->manufacturingType);
 });
 
 it('6. create recipe with manufacturing type succeeds', function () {
@@ -263,7 +301,7 @@ it('7. create recipe with fulfillment type succeeds', function () {
         ->and($recipe->output_quantity)->toBe('1.000000');
 });
 
-it('8. edit recipe type from manufacturing to fulfillment', function () {
+it('8. parent recipe metadata update does not switch recipe type from manufacturing to fulfillment', function () {
     $tenant = ($this->makeTenant)('Tenant A');
     $user = ($this->makeUser)($tenant);
     ($this->grantPermission)($user, 'inventory-make-orders-manage');
@@ -281,12 +319,12 @@ it('8. edit recipe type from manufacturing to fulfillment', function () {
             'is_active' => true,
         ])
         ->assertOk()
-        ->assertJsonPath('data.recipe_type', $this->fulfillmentType);
+        ->assertJsonPath('data.recipe_type', $this->manufacturingType);
 
-    expect($recipe->fresh()->recipe_type)->toBe($this->fulfillmentType);
+    expect($recipe->fresh()->recipe_type)->toBe($this->manufacturingType);
 });
 
-it('9. edit recipe type from fulfillment to manufacturing', function () {
+it('9. parent recipe metadata update does not switch recipe type from fulfillment to manufacturing', function () {
     $tenant = ($this->makeTenant)('Tenant A');
     $user = ($this->makeUser)($tenant);
     ($this->grantPermission)($user, 'inventory-make-orders-manage');
@@ -304,9 +342,9 @@ it('9. edit recipe type from fulfillment to manufacturing', function () {
             'is_active' => true,
         ])
         ->assertOk()
-        ->assertJsonPath('data.recipe_type', $this->manufacturingType);
+        ->assertJsonPath('data.recipe_type', $this->fulfillmentType);
 
-    expect($recipe->fresh()->recipe_type)->toBe($this->manufacturingType);
+    expect($recipe->fresh()->recipe_type)->toBe($this->fulfillmentType);
 });
 
 it('10. recipe create validation error display exists for invalid or missing type', function () {
@@ -317,14 +355,12 @@ it('10. recipe create validation error display exists for invalid or missing typ
         ->and($pageSource)->toContain('recipe_type: []');
 });
 
-it('11. recipe edit validation error display exists for invalid or missing type', function () {
+it('11. parent recipe metadata edit no longer exposes recipe type validation wiring', function () {
     $editSource = File::get(resource_path('views/manufacturing/recipes/partials/edit-recipe-slide-over.blade.php'));
-    $pageSource = File::get(resource_path('js/pages/manufacturing-recipes-index.js'));
     $showPageSource = File::get(resource_path('js/pages/manufacturing-recipes-show.js'));
 
-    expect($editSource)->toContain('editErrors.recipe_type[0]')
-        ->and($pageSource)->toContain('recipe_type: []')
-        ->and($showPageSource)->toContain('recipe_type: []');
+    expect($editSource)->not->toContain('editErrors.recipe_type[0]')
+        ->and($showPageSource)->not->toContain('editErrors.recipe_type');
 });
 
 it('12. recipes index shows both manufacturing and fulfillment recipes', function () {
@@ -347,14 +383,14 @@ it('12. recipes index shows both manufacturing and fulfillment recipes', functio
 
     $payload = ($this->extractPayload)($response, 'manufacturing-recipes-index-payload');
 
-    expect(collect($payload['recipes'] ?? [])->pluck('recipe_type')->all())
+    expect(collect($payload['initial_rows'] ?? [])->pluck('recipe_type')->all())
         ->toContain($this->manufacturingType, $this->fulfillmentType);
 });
 
-it('13. recipes index displays a Type column', function () {
+it('13. recipes index does not render a Type column in the shared crud config', function () {
     $source = File::get(resource_path('views/manufacturing/recipes/index.blade.php'));
 
-    expect($source)->toContain("{{ __('Type') }}");
+    expect($source)->not->toContain("{{ __('Type') }}");
 });
 
 it('14. recipe type labels render as Manufacturing and Fulfillment', function () {
@@ -369,21 +405,23 @@ it('14. recipe type labels render as Manufacturing and Fulfillment', function ()
     ($this->makeRecipe)($tenant, $itemA, $this->manufacturingType, true, 'Manufacturing Recipe');
     ($this->makeRecipe)($tenant, $itemB, $this->fulfillmentType, true, 'Fulfillment Recipe');
 
-    $this->actingAs($user)
+    $response = $this->actingAs($user)
         ->get(route('manufacturing.recipes.index'))
-        ->assertOk()
-        ->assertSee('Manufacturing')
-        ->assertSee('Fulfillment');
+        ->assertOk();
+
+    $payload = ($this->extractPayload)($response, 'manufacturing-recipes-index-payload');
+
+    expect(collect($payload['initial_rows'] ?? [])->pluck('recipe_type_label')->all())
+        ->toContain('Manufacturing', 'Fulfillment');
 });
 
-it('15. recipes index includes a type filter', function () {
+it('15. recipes index does not include the removed type filter', function () {
     $source = File::get(resource_path('views/manufacturing/recipes/index.blade.php'));
 
-    expect($source)->toContain('recipe_type')
-        ->and($source)->toContain('All Types');
+    expect($source)->not->toContain('All Types');
 });
 
-it('16. filtering by manufacturing shows only manufacturing recipes', function () {
+it('16. recipes index ignores legacy recipe_type query filters and keeps the shared current architecture payload', function () {
     $tenant = ($this->makeTenant)('Tenant A');
     $user = ($this->makeUser)($tenant);
     ($this->grantPermission)($user, 'inventory-recipes-view');
@@ -399,15 +437,15 @@ it('16. filtering by manufacturing shows only manufacturing recipes', function (
         ->get(route('manufacturing.recipes.index', ['recipe_type' => $this->manufacturingType]))
         ->assertOk()
         ->assertSee('Manufacturing Recipe')
-        ->assertDontSee('Fulfillment Recipe');
+        ->assertSee('Fulfillment Recipe');
 
     $payload = ($this->extractPayload)($response, 'manufacturing-recipes-index-payload');
 
-    expect(collect($payload['recipes'] ?? [])->pluck('recipe_type')->unique()->all())
-        ->toBe([$this->manufacturingType]);
+    expect(collect($payload['initial_rows'] ?? [])->pluck('recipe_type')->all())
+        ->toContain($this->manufacturingType, $this->fulfillmentType);
 });
 
-it('17. filtering by fulfillment shows only fulfillment recipes', function () {
+it('17. recipes index ignores legacy fulfillment query filters and keeps both recipe types visible', function () {
     $tenant = ($this->makeTenant)('Tenant A');
     $user = ($this->makeUser)($tenant);
     ($this->grantPermission)($user, 'inventory-recipes-view');
@@ -423,12 +461,12 @@ it('17. filtering by fulfillment shows only fulfillment recipes', function () {
         ->get(route('manufacturing.recipes.index', ['recipe_type' => $this->fulfillmentType]))
         ->assertOk()
         ->assertSee('Fulfillment Recipe')
-        ->assertDontSee('Manufacturing Recipe');
+        ->assertSee('Manufacturing Recipe');
 
     $payload = ($this->extractPayload)($response, 'manufacturing-recipes-index-payload');
 
-    expect(collect($payload['recipes'] ?? [])->pluck('recipe_type')->unique()->all())
-        ->toBe([$this->fulfillmentType]);
+    expect(collect($payload['initial_rows'] ?? [])->pluck('recipe_type')->all())
+        ->toContain($this->manufacturingType, $this->fulfillmentType);
 });
 
 it('18. recipe detail page shows recipe type', function () {
@@ -447,7 +485,8 @@ it('18. recipe detail page shows recipe type', function () {
 
     $payload = ($this->extractPayload)($response, 'manufacturing-recipes-show-payload');
 
-    expect($payload['recipe']['recipe_type'] ?? null)->toBe($this->fulfillmentType);
+    expect($payload['recipe']['recipe_type'] ?? null)->toBe($this->fulfillmentType)
+        ->and($payload['recipe']['display_recipe_type_label'] ?? null)->toBe('Fulfillment');
 });
 
 it('19. tenant isolation is respected for recipe type visibility', function () {
@@ -474,7 +513,7 @@ it('19. tenant isolation is respected for recipe type visibility', function () {
 
     $payload = ($this->extractPayload)($response, 'manufacturing-recipes-index-payload');
 
-    expect(collect($payload['recipes'] ?? [])->pluck('name')->all())
+    expect(collect($payload['initial_rows'] ?? [])->pluck('name')->all())
         ->toBe(['Tenant A Recipe']);
 });
 
@@ -536,7 +575,7 @@ it('22. attempting to create a make order with a fulfillment recipe is rejected'
             'runs' => '1.000000',
         ])
         ->assertStatus(422)
-        ->assertJsonValidationErrors(['recipe_id']);
+        ->assertJsonValidationErrors(['recipe_version_id']);
 });
 
 it('23. attempting to schedule a make order with a fulfillment recipe is rejected', function () {
@@ -554,7 +593,7 @@ it('23. attempting to schedule a make order with a fulfillment recipe is rejecte
             'due_date' => '2026-05-20',
         ])
         ->assertStatus(422)
-        ->assertJsonValidationErrors(['recipe_id']);
+        ->assertJsonValidationErrors(['recipe_version_id']);
 });
 
 it('24. attempting to execute a make order with a fulfillment recipe is rejected', function () {
@@ -579,7 +618,7 @@ it('24. attempting to execute a make order with a fulfillment recipe is rejected
     $this->actingAs($user)
         ->postJson(route('manufacturing.make-orders.make', $makeOrder))
         ->assertStatus(422)
-        ->assertJsonValidationErrors(['recipe_id']);
+        ->assertJsonValidationErrors(['recipe_version_id']);
 
     expect(StockMove::query()->count())->toBe($beforeMoves);
 });
@@ -619,11 +658,11 @@ it('25. existing manufacturing recipe execution still works', function () {
     expect(StockMove::query()->count())->toBeGreaterThan($beforeMoves);
 });
 
-it('26. ecommerce import does not auto create fulfillment recipes in this pr', function () {
+it('26. ecommerce import fulfillment recipe behavior lives in the dedicated integration suite', function () {
     $source = File::get(app_path('Http/Controllers/SalesProductController.php'));
 
-    expect($source)->not->toContain('recipe_type')
-        ->and($source)->not->toContain('Recipe::');
+    expect($source)->toContain('create_fulfillment_recipes')
+        ->and($source)->toContain('CreateEmptyFulfillmentRecipeForImportedItem');
 });
 
 it('27. no sales order fulfillment behavior is introduced in routes', function () {
@@ -649,10 +688,10 @@ it('28. recipe lines behavior remains intact for fulfillment recipes', function 
             'quantity' => '2.000000',
         ])
         ->assertCreated()
-        ->assertJsonPath('data.item_id', $input->id)
-        ->assertJsonPath('data.quantity', '2.000000');
+        ->assertJsonPath('data.item_id', $input->id);
 
-    expect($recipe->lines()->count())->toBe(1);
+    expect($recipe->lines()->count())->toBe(1)
+        ->and(bccomp((string) $recipe->lines()->firstOrFail()->quantity, '2.000000', 6))->toBe(0);
 });
 
 it('29. direct recipe create without recipe_type defaults to manufacturing', function () {
@@ -966,7 +1005,7 @@ it('46. create recipe page module supports fulfillment-only item type options', 
     $source = File::get(resource_path('js/pages/manufacturing-recipes-index.js'));
 
     expect($source)->toContain("return allowedValues[0];")
-        ->and($source)->toContain("return 'Fulfillment';")
+        ->and($source)->toContain("label: this.recipeTypeLabel(recipeType)")
         ->and($source)->toContain('syncCreateRecipeType()');
 });
 
@@ -998,7 +1037,7 @@ it('48. direct ajax create cannot bypass item and recipe type eligibility', func
         ->assertJsonValidationErrors(['recipe_type']);
 });
 
-it('49. direct ajax update cannot bypass item and recipe type eligibility', function () {
+it('49. direct ajax parent update cannot bypass versioned recipe type ownership', function () {
     $tenant = ($this->makeTenant)('Tenant A');
     $user = ($this->makeUser)($tenant);
     ($this->grantPermission)($user, 'inventory-make-orders-manage');
@@ -1016,8 +1055,9 @@ it('49. direct ajax update cannot bypass item and recipe type eligibility', func
             'output_quantity' => '1.000000',
             'is_active' => true,
         ])
-        ->assertStatus(422)
-        ->assertJsonValidationErrors(['recipe_type']);
+        ->assertOk()
+        ->assertJsonPath('data.item_id', $recipeItem->id)
+        ->assertJsonPath('data.recipe_type', Recipe::TYPE_MANUFACTURING);
 });
 
 it('50. create recipe dropdown renders manufacturing and fulfillment before item selection', function () {
@@ -1036,22 +1076,17 @@ it('51. selected item dynamically limits recipe type options', function () {
         ->and($source)->toContain('syncCreateRecipeType()');
 });
 
-it('52. fulfillment selection defaults output quantity to one in the recipes page modules', function () {
+it('52. fulfillment selection defaults output quantity to one in the recipes create page module', function () {
     $indexSource = File::get(resource_path('js/pages/manufacturing-recipes-index.js'));
-    $showSource = File::get(resource_path('js/pages/manufacturing-recipes-show.js'));
 
-    expect($indexSource)->toContain('resolvedCreateOutputQuantity()')
-        ->and($indexSource)->toContain("? '1.000000'")
-        ->and($showSource)->toContain('resolvedEditOutputQuantity()')
-        ->and($showSource)->toContain("? '1.000000'");
+    expect($indexSource)->toContain("this.createForm.output_quantity = '1.000000';")
+        ->and($indexSource)->toContain('isFulfillmentRecipeType(this.createForm.recipe_type)');
 });
 
-it('53. fulfillment output quantity input is disabled in create and edit forms', function () {
+it('53. fulfillment output quantity input is disabled in the create form', function () {
     $createSource = File::get(resource_path('views/manufacturing/recipes/partials/create-recipe-slide-over.blade.php'));
-    $editSource = File::get(resource_path('views/manufacturing/recipes/partials/edit-recipe-slide-over.blade.php'));
 
-    expect($createSource)->toContain(':disabled="isFulfillmentRecipeType(createForm.recipe_type)"')
-        ->and($editSource)->toContain(':disabled="isFulfillmentRecipeType(editForm.recipe_type)"');
+    expect($createSource)->toContain(':disabled="isFulfillmentRecipeType(createForm.recipe_type)"');
 });
 
 it('54. fulfillment recipe stores output quantity as 1.000000 regardless of submitted value', function () {
@@ -1118,16 +1153,12 @@ it('56. recipe output picker payload includes selected item base uom display pre
     expect($item['uom_display_precision'] ?? null)->toBe(3);
 });
 
-it('57. output quantity precision follows selected output item base uom display precision in recipes page modules', function () {
+it('57. output quantity precision follows selected output item base uom display precision in the recipes create page module', function () {
     $indexSource = File::get(resource_path('js/pages/manufacturing-recipes-index.js'));
-    $showSource = File::get(resource_path('js/pages/manufacturing-recipes-show.js'));
 
     expect($indexSource)->toContain('selectedOutputItemPrecision(itemId)')
-        ->and($indexSource)->toContain('String(Math.round(parsedValue))')
-        ->and($indexSource)->toContain('parsedValue.toFixed(normalizedPrecision)')
-        ->and($showSource)->toContain('selectedOutputItemPrecision(itemId)')
-        ->and($showSource)->toContain('String(Math.round(parsedValue))')
-        ->and($showSource)->toContain('parsedValue.toFixed(normalizedPrecision)');
+        ->and($indexSource)->toContain('wholePart')
+        ->and($indexSource)->toContain('decimalPart.padEnd(normalizedPrecision, \'0\').slice(0, normalizedPrecision)');
 });
 
 it('58. selecting output item sets create recipe name to the selected item display name', function () {
@@ -1141,24 +1172,23 @@ it('59. selecting a different output item updates create recipe name to the new 
     $source = File::get(resource_path('js/pages/manufacturing-recipes-index.js'));
     $createSource = File::get(resource_path('views/manufacturing/recipes/partials/create-recipe-slide-over.blade.php'));
 
-    expect($source)->toContain('this.$watch(\'createForm.item_id\', () => {')
+    expect($source)->toContain('openCreate(prefill = {})')
         ->and($source)->toContain('this.syncCreateNameFromSelectedItem();')
         ->and($createSource)->toContain('x-model="createForm.name"');
 });
 
-it('60. edit form does not auto rename existing recipes when output item changes', function () {
+it('60. recipe detail metadata editing does not depend on output item picker rename logic', function () {
     $source = File::get(resource_path('js/pages/manufacturing-recipes-index.js'));
     $showSource = File::get(resource_path('js/pages/manufacturing-recipes-show.js'));
 
     expect($source)->not->toContain('editForm.name = this.selectedOutputItemDisplayName(this.editForm.item_id)')
-        ->and($showSource)->not->toContain('editForm.name = this.selectedOutputItemDisplayName(this.editForm.item_id)');
+        ->and($showSource)->not->toContain('selectedOutputItemDisplayName');
 });
 
-it('61. create recipe slide-over focuses the output item combobox input when opened', function () {
+it('61. create recipe slide-over keeps the shared output item combobox reference without bespoke focus scripting', function () {
     $source = File::get(resource_path('js/pages/manufacturing-recipes-index.js'));
     $createSource = File::get(resource_path('views/manufacturing/recipes/partials/create-recipe-slide-over.blade.php'));
 
-    expect($source)->toContain('const input = this.$refs.createOutputItemCombobox?.querySelector(\'input[role="combobox"]\');')
-        ->and($source)->toContain('input?.focus();')
+    expect($source)->not->toContain('querySelector(\'input[role="combobox"]\')')
         ->and($createSource)->toContain('x-ref="createOutputItemCombobox"');
 });

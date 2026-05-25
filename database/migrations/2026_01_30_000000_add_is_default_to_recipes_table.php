@@ -19,11 +19,11 @@ return new class extends Migration
         $driver = DB::getDriverName();
 
         if ($driver === 'sqlite') {
-            DB::statement('CREATE UNIQUE INDEX recipes_default_unique ON recipes (tenant_id, item_id) WHERE is_default = 1');
+            DB::statement('CREATE INDEX recipes_default_lookup_idx ON recipes (tenant_id, item_id, is_default)');
         }
 
         if ($driver === 'mysql') {
-            DB::statement('CREATE UNIQUE INDEX recipes_default_unique ON recipes (tenant_id, (CASE WHEN is_default = 1 THEN item_id ELSE NULL END))');
+            DB::statement('CREATE INDEX recipes_default_lookup_idx ON recipes (tenant_id, item_id, is_default)');
         }
     }
 
@@ -35,11 +35,11 @@ return new class extends Migration
         $driver = DB::getDriverName();
 
         if ($driver === 'sqlite') {
-            DB::statement('DROP INDEX IF EXISTS recipes_default_unique');
+            DB::statement('DROP INDEX IF EXISTS recipes_default_lookup_idx');
         }
 
         if ($driver === 'mysql') {
-            DB::statement('DROP INDEX recipes_default_unique ON recipes');
+            DB::statement('DROP INDEX recipes_default_lookup_idx ON recipes');
         }
 
         Schema::table('recipes', function (Blueprint $table) {

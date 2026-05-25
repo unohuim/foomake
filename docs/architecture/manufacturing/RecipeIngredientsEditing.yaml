@@ -1,0 +1,40 @@
+name: Recipe Ingredients Editing
+type: Manufacturing Domain Pattern
+location:
+  - app/Http/Controllers/RecipeController.php
+  - app/Models/RecipeVersionLine.php
+  - resources/views/components/ingredients-detail-section.blade.php
+  - resources/views/manufacturing/recipes/show.blade.php
+  - resources/js/pages/manufacturing-recipes-show.js
+purpose: Define how recipe ingredients are displayed and edited as version-owned lines within the recipe detail page.
+when_to_use:
+  - Rendering recipe ingredients on a recipe detail page
+  - Adding or updating recipe inputs for a checked-out draft version
+  - Showing read-only ingredients for the current display version
+when_not_to_use:
+  - Editing parent recipe lines directly
+  - Executing Make Orders from live recipe lines
+rules:
+  - Ingredients are owned by recipe_version_lines.
+  - Recipe Ingredients must use the shared Ingredients detail section abstraction.
+  - The recipe detail page must show the current user's checked-out version ingredients when one exists, otherwise the current published version ingredients.
+  - Ingredient editing must be read-only unless the displayed version is checked out by the current user and is a draft.
+  - Ingredient creation must use the shared compact searchable combobox plus add action within the detail section.
+  - Ingredient quantity display and input formatting must honor the ingredient item's base UoM display_precision.
+  - Ingredient quantity storage must remain canonical decimal scale 6.
+  - Ingredient quantity changes must persist through version-owned line updates and provide inline saved feedback.
+  - The shared abstraction must support row-action menus, non-clipped dropdowns, and consistent compact table rendering.
+  - Parent-level recipe line editing UI must not be exposed.
+public_interface:
+  - RecipeVersion::lines()
+  - RecipeController::storeIngredient()
+  - RecipeController::updateIngredient()
+  - resources/views/components/ingredients-detail-section.blade.php
+example_usage: |
+  $version->lines()->create([
+      'tenant_id' => $version->tenant_id,
+      'input_item_id' => $item->id,
+      'uom_id' => $item->base_uom_id,
+      'quantity' => '1.000000',
+      'sort_order' => 1,
+  ]);
