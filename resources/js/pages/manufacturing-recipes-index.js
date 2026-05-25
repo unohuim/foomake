@@ -409,7 +409,14 @@ export function mount(rootEl, payload) {
                     this.createGeneralError = 'Something went wrong. Please try again.';
                     this.showToast('error', this.createGeneralError);
                 },
-                onSuccess: async () => {
+                onSuccess: async (data) => {
+                    const showUrl = data?.data?.show_url;
+
+                    if (showUrl) {
+                        window.location.assign(showUrl);
+                        return;
+                    }
+
                     await this.fetchRecipes();
                     await refreshNavigationState(this.navigationStateUrl);
                     this.closeCreate();

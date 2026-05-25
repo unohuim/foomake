@@ -207,6 +207,8 @@ Route::middleware('auth')->group(function () {
         ->name('manufacturing.make-orders.store');
     Route::patch('/manufacturing/make-orders/{makeOrder}', [MakeOrderController::class, 'update'])
         ->name('manufacturing.make-orders.update');
+    Route::patch('/manufacturing/make-orders/{makeOrder}/due-date', [MakeOrderController::class, 'updateDueDate'])
+        ->name('manufacturing.make-orders.due-date.update');
     Route::patch('/manufacturing/make-orders/{makeOrder}/assignment', [MakeOrderController::class, 'updateAssignment'])
         ->name('manufacturing.make-orders.assignment.update');
     Route::patch('/manufacturing/make-orders/{makeOrder}/workflow-stage', [MakeOrderController::class, 'updateWorkflowStage'])

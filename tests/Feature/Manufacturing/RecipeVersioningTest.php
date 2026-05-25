@@ -116,6 +116,17 @@ beforeEach(function (): void {
             'version' => $version instanceof RecipeVersion ? $version->id : $version,
         ]));
     };
+
+    $this->extractPayload = function ($response, string $payloadId): array {
+        $html = $response->getContent();
+        $pattern = '/<script type="application\\/json" id="' . preg_quote($payloadId, '/') . '">\\s*(.*?)\\s*<\\/script>/s';
+
+        preg_match($pattern, $html, $matches);
+
+        $payload = json_decode($matches[1] ?? '{}', true);
+
+        return is_array($payload) ? $payload : [];
+    };
 });
 
 it('1. recipe_versions table exists', function (): void {
@@ -211,7 +222,7 @@ it('9. next created draft increments to 1.01 and is checked out to creator', fun
         ->and(DB::table('recipe_version_checkouts')->whereNull('checked_in_at')->count())->toBe(1);
 });
 
-it('10. currentness comes from recipes current_version_id even when other published versions exist', function (): void {
+it('10. publishing a new version archives any previously published version and moves currentness', function (): void {
     $tenant = ($this->makeTenant)('Tenant A');
     $user = ($this->makeUser)($tenant);
     ($this->grantPermission)($user, 'inventory-make-orders-manage');
@@ -230,7 +241,8 @@ it('10. currentness comes from recipes current_version_id even when other publis
     ($this->publishVersion)($user, $recipe, $secondDraftId)->assertOk();
 
     expect((int) $recipe->fresh()->current_version_id)->toBe($secondDraftId)
-        ->and(RecipeVersion::query()->findOrFail($firstPublishedId)->status)->toBe(RecipeVersion::STATUS_PUBLISHED);
+        ->and(RecipeVersion::query()->findOrFail($firstPublishedId)->status)->toBe(RecipeVersion::STATUS_ARCHIVED)
+        ->and(RecipeVersion::query()->findOrFail($secondDraftId)->status)->toBe(RecipeVersion::STATUS_PUBLISHED);
 });
 
 it('11. same user can checkout multiple different draft versions of the same recipe', function (): void {
@@ -350,7 +362,7 @@ it('13. publishing a checked out draft sets the draft to published', function ()
     expect(RecipeVersion::query()->findOrFail($draftVersionId)->status)->toBe(RecipeVersion::STATUS_PUBLISHED);
 });
 
-it('14. publishing a draft keeps the old current version published but not current', function (): void {
+it('14. publishing a draft archives the old current version', function (): void {
     $tenant = ($this->makeTenant)('Tenant A');
     $user = ($this->makeUser)($tenant);
     ($this->grantPermission)($user, 'inventory-make-orders-manage');
@@ -372,7 +384,7 @@ it('14. publishing a draft keeps the old current version published but not curre
 
     ($this->publishVersion)($user, $recipe, $draftVersionId)->assertOk();
 
-    expect(RecipeVersion::query()->findOrFail($oldCurrentId)->status)->toBe(RecipeVersion::STATUS_PUBLISHED)
+    expect(RecipeVersion::query()->findOrFail($oldCurrentId)->status)->toBe(RecipeVersion::STATUS_ARCHIVED)
         ->and((int) $recipe->fresh()->current_version_id)->toBe($draftVersionId);
 });
 
@@ -392,7 +404,7 @@ it('15. publishing a draft updates recipes current_version_id', function (): voi
     expect((int) $recipe->fresh()->current_version_id)->toBe($draftVersionId);
 });
 
-it('16. publishing checks in the publishing users checkout when present', function (): void {
+it('15a. publishing archives all earlier published versions for the same recipe', function (): void {
     $tenant = ($this->makeTenant)('Tenant A');
     $user = ($this->makeUser)($tenant);
     ($this->grantPermission)($user, 'inventory-make-orders-manage');
@@ -401,14 +413,103 @@ it('16. publishing checks in the publishing users checkout when present', functi
     $output = ($this->makeItem)($tenant, $uom, 'Sauce', ['is_manufacturable' => true]);
     [, $recipe] = ($this->createRecipe)($user, $output);
 
-    $draftVersionId = (int) ($this->createDraftVersion)($user, $recipe)->assertCreated()->json('data.id');
+    $firstDraftId = (int) ($this->createDraftVersion)($user, $recipe, [
+        'output_quantity' => '7.000000',
+    ])->assertCreated()->json('data.id');
+    ($this->publishVersion)($user, $recipe, $firstDraftId)->assertOk();
 
-    ($this->publishVersion)($user, $recipe, $draftVersionId)->assertOk();
+    $secondDraftId = (int) ($this->createDraftVersion)($user, $recipe, [
+        'output_quantity' => '9.000000',
+    ])->assertCreated()->json('data.id');
+    ($this->publishVersion)($user, $recipe, $secondDraftId)->assertOk();
+
+    $thirdDraftId = (int) ($this->createDraftVersion)($user, $recipe, [
+        'output_quantity' => '11.000000',
+    ])->assertCreated()->json('data.id');
+    ($this->publishVersion)($user, $recipe, $thirdDraftId)->assertOk();
+
+    expect((int) $recipe->fresh()->current_version_id)->toBe($thirdDraftId)
+        ->and(RecipeVersion::query()->findOrFail($firstDraftId)->status)->toBe(RecipeVersion::STATUS_ARCHIVED)
+        ->and(RecipeVersion::query()->findOrFail($secondDraftId)->status)->toBe(RecipeVersion::STATUS_ARCHIVED)
+        ->and(RecipeVersion::query()->findOrFail($thirdDraftId)->status)->toBe(RecipeVersion::STATUS_PUBLISHED);
+});
+
+it('15b. publishing an older draft promotes it to the next highest version number before publishing', function (): void {
+    $tenant = ($this->makeTenant)('Tenant A');
+    $user = ($this->makeUser)($tenant);
+    ($this->grantPermission)($user, 'inventory-make-orders-manage');
+
+    $uom = ($this->makeUom)($tenant);
+    $output = ($this->makeItem)($tenant, $uom, 'Sauce', ['is_manufacturable' => true]);
+    [, $recipe] = ($this->createRecipe)($user, $output);
+
+    $draftVersionId101 = (int) ($this->createDraftVersion)($user, $recipe, [
+        'output_quantity' => '7.000000',
+    ])->assertCreated()->json('data.id');
+    ($this->checkInVersion)($user, $recipe, $draftVersionId101)->assertOk();
+
+    $draftVersionId102 = (int) ($this->createDraftVersion)($user, $recipe, [
+        'output_quantity' => '8.000000',
+    ])->assertCreated()->json('data.id');
+    ($this->checkInVersion)($user, $recipe, $draftVersionId102)->assertOk();
+
+    $draftVersionId103 = (int) ($this->createDraftVersion)($user, $recipe, [
+        'output_quantity' => '9.000000',
+    ])->assertCreated()->json('data.id');
+    ($this->checkInVersion)($user, $recipe, $draftVersionId103)->assertOk();
+
+    $draftVersionId104 = (int) ($this->createDraftVersion)($user, $recipe, [
+        'output_quantity' => '10.000000',
+    ])->assertCreated()->json('data.id');
+    ($this->publishVersion)($user, $recipe, $draftVersionId104)->assertOk();
+
+    ($this->publishVersion)($user, $recipe, $draftVersionId103)->assertOk();
+
+    $publishedOlderDraft = RecipeVersion::query()->findOrFail($draftVersionId103);
+    $archivedPublishedDraft = RecipeVersion::query()->findOrFail($draftVersionId104);
+
+    expect((int) $publishedOlderDraft->version_number)->toBe(105)
+        ->and($publishedOlderDraft->versionNumberDisplay())->toBe('1.05')
+        ->and($publishedOlderDraft->status)->toBe(RecipeVersion::STATUS_PUBLISHED)
+        ->and($archivedPublishedDraft->status)->toBe(RecipeVersion::STATUS_ARCHIVED)
+        ->and((int) $recipe->fresh()->current_version_id)->toBe($draftVersionId103);
+});
+
+it('16. publishing checks in all of the publishing users open checkouts for the same recipe', function (): void {
+    $tenant = ($this->makeTenant)('Tenant A');
+    $user = ($this->makeUser)($tenant);
+    ($this->grantPermission)($user, 'inventory-make-orders-manage');
+
+    $uom = ($this->makeUom)($tenant);
+    $output = ($this->makeItem)($tenant, $uom, 'Sauce', ['is_manufacturable' => true]);
+    [, $recipe] = ($this->createRecipe)($user, $output);
+
+    $firstDraftId = (int) ($this->createDraftVersion)($user, $recipe, [
+        'output_quantity' => '7.000000',
+    ])->assertCreated()->json('data.id');
+    ($this->checkInVersion)($user, $recipe, $firstDraftId)->assertOk();
+
+    $secondDraftId = (int) ($this->createDraftVersion)($user, $recipe, [
+        'output_quantity' => '9.000000',
+    ])->assertCreated()->json('data.id');
+
+    ($this->checkoutVersion)($user, $recipe, $firstDraftId)->assertCreated();
+    ($this->publishVersion)($user, $recipe, $secondDraftId)->assertOk();
 
     expect(DB::table('recipe_version_checkouts')
-        ->where('recipe_version_id', $draftVersionId)
+        ->where('recipe_version_id', $firstDraftId)
         ->where('user_id', $user->id)
         ->whereNull('checked_in_at')
+        ->exists())->toBeFalse()
+        ->and(DB::table('recipe_version_checkouts')
+            ->where('recipe_version_id', $secondDraftId)
+            ->where('user_id', $user->id)
+            ->whereNull('checked_in_at')
+            ->exists())->toBeFalse()
+        ->and(DB::table('recipe_version_checkouts')
+            ->where('recipe_id', $recipe->id)
+            ->where('user_id', $user->id)
+            ->whereNull('checked_in_at')
         ->exists())->toBeFalse();
 });
 
@@ -627,6 +728,152 @@ it('25. publishing an archived version is rejected', function (): void {
     actingAs($user)->patchJson(route('manufacturing.recipes.versions.publish', [$recipe, $draftVersionId]))
         ->assertStatus(422)
         ->assertJsonValidationErrors(['recipe_version_id']);
+});
+
+it('25a. recipe detail payload uses the checked out version as header identity when present', function (): void {
+    $tenant = ($this->makeTenant)('Tenant A');
+    $user = ($this->makeUser)($tenant);
+    ($this->grantPermission)($user, 'inventory-make-orders-manage');
+    ($this->grantPermission)($user, 'inventory-recipes-view');
+
+    $uom = ($this->makeUom)($tenant);
+    $output = ($this->makeItem)($tenant, $uom, 'Header Identity Sauce', ['is_manufacturable' => true]);
+    [, $recipe] = ($this->createRecipe)($user, $output);
+
+    $publishedDraftId = (int) ($this->createDraftVersion)($user, $recipe, [
+        'output_quantity' => '7.000000',
+    ])->assertCreated()->json('data.id');
+    ($this->publishVersion)($user, $recipe, $publishedDraftId)->assertOk();
+
+    $checkedOutDraftId = (int) ($this->createDraftVersion)($user, $recipe, [
+        'output_quantity' => '9.000000',
+    ])->assertCreated()->json('data.id');
+
+    $payload = ($this->extractPayload)(
+        actingAs($user)->get(route('manufacturing.recipes.show', $recipe))->assertOk(),
+        'manufacturing-recipes-show-payload'
+    );
+
+    expect(data_get($payload, 'recipe.display_version_id'))->toBe($checkedOutDraftId)
+        ->and(data_get($payload, 'recipe.active_version.id'))->toBe($checkedOutDraftId)
+        ->and(data_get($payload, 'recipe.active_version.status_label'))->toBe('Checked-Out')
+        ->and(data_get($payload, 'recipe.active_version.version_number_display'))->toBe('1.02')
+        ->and(data_get($payload, 'recipe.current_published_version_id'))->toBe($publishedDraftId);
+});
+
+it('25b. check in restores recipe detail header identity fallback to the current published version', function (): void {
+    $tenant = ($this->makeTenant)('Tenant A');
+    $user = ($this->makeUser)($tenant);
+    ($this->grantPermission)($user, 'inventory-make-orders-manage');
+    ($this->grantPermission)($user, 'inventory-recipes-view');
+
+    $uom = ($this->makeUom)($tenant);
+    $output = ($this->makeItem)($tenant, $uom, 'Check In Identity Sauce', ['is_manufacturable' => true]);
+    [, $recipe] = ($this->createRecipe)($user, $output);
+
+    $publishedDraftId = (int) ($this->createDraftVersion)($user, $recipe, [
+        'output_quantity' => '7.000000',
+    ])->assertCreated()->json('data.id');
+    ($this->publishVersion)($user, $recipe, $publishedDraftId)->assertOk();
+
+    $checkedOutDraftId = (int) ($this->createDraftVersion)($user, $recipe, [
+        'output_quantity' => '9.000000',
+    ])->assertCreated()->json('data.id');
+    ($this->checkInVersion)($user, $recipe, $checkedOutDraftId)->assertOk();
+
+    $payload = ($this->extractPayload)(
+        actingAs($user)->get(route('manufacturing.recipes.show', $recipe))->assertOk(),
+        'manufacturing-recipes-show-payload'
+    );
+
+    expect(data_get($payload, 'recipe.display_version_id'))->toBe($publishedDraftId)
+        ->and(data_get($payload, 'recipe.active_version.id'))->toBe($publishedDraftId)
+        ->and(data_get($payload, 'recipe.active_version.status_label'))->toBe('Published')
+        ->and(data_get($payload, 'recipe.active_version.version_number_display'))->toBe('1.01');
+});
+
+it('25c. recipe detail header falls back to the most recent version when no published version exists', function (): void {
+    $tenant = ($this->makeTenant)('Tenant A');
+    $user = ($this->makeUser)($tenant);
+    ($this->grantPermission)($user, 'inventory-make-orders-manage');
+    ($this->grantPermission)($user, 'inventory-recipes-view');
+
+    $uom = ($this->makeUom)($tenant);
+    $output = ($this->makeItem)($tenant, $uom, 'Most Recent Identity Sauce', ['is_manufacturable' => true]);
+    [, $recipe] = ($this->createRecipe)($user, $output);
+
+    $draftVersionId = (int) ($this->createDraftVersion)($user, $recipe, [
+        'output_quantity' => '9.000000',
+    ])->assertCreated()->json('data.id');
+    ($this->checkInVersion)($user, $recipe, $draftVersionId)->assertOk();
+
+    $payload = ($this->extractPayload)(
+        actingAs($user)->get(route('manufacturing.recipes.show', $recipe))->assertOk(),
+        'manufacturing-recipes-show-payload'
+    );
+
+    expect(data_get($payload, 'recipe.display_version_id'))->toBe($draftVersionId)
+        ->and(data_get($payload, 'recipe.active_version.id'))->toBe($draftVersionId)
+        ->and(data_get($payload, 'recipe.active_version.status_label'))->toBe('Draft')
+        ->and(data_get($payload, 'recipe.active_version.version_number_display'))->toBe('1.01')
+        ->and(data_get($payload, 'recipe.current_published_version_id'))->toBeNull();
+});
+
+it('25d. publish promotes the new current version and updates header identity rules accordingly', function (): void {
+    $tenant = ($this->makeTenant)('Tenant A');
+    $user = ($this->makeUser)($tenant);
+    ($this->grantPermission)($user, 'inventory-make-orders-manage');
+    ($this->grantPermission)($user, 'inventory-recipes-view');
+
+    $uom = ($this->makeUom)($tenant);
+    $output = ($this->makeItem)($tenant, $uom, 'Publish Identity Sauce', ['is_manufacturable' => true]);
+    [, $recipe] = ($this->createRecipe)($user, $output);
+
+    $firstDraftId = (int) ($this->createDraftVersion)($user, $recipe)->assertCreated()->json('data.id');
+    ($this->publishVersion)($user, $recipe, $firstDraftId)->assertOk();
+
+    $secondDraftId = (int) ($this->createDraftVersion)($user, $recipe, [
+        'output_quantity' => '9.000000',
+    ])->assertCreated()->json('data.id');
+    ($this->checkInVersion)($user, $recipe, $secondDraftId)->assertOk();
+
+    ($this->publishVersion)($user, $recipe, $secondDraftId)->assertOk();
+
+    $payload = ($this->extractPayload)(
+        actingAs($user)->get(route('manufacturing.recipes.show', $recipe))->assertOk(),
+        'manufacturing-recipes-show-payload'
+    );
+
+    expect((int) $recipe->fresh()->current_version_id)->toBe($secondDraftId)
+        ->and(data_get($payload, 'recipe.active_version.id'))->toBe($secondDraftId)
+        ->and(data_get($payload, 'recipe.active_version.status_label'))->toBe('Published')
+        ->and(collect(data_get($payload, 'recipe.active_version.header_menu.options', []))->pluck('label')->all())
+            ->toBe(['Make Order', 'Duplicate', 'Archive']);
+});
+
+it('25e. archived display identity reports archived state and archived row-equivalent action availability', function (): void {
+    $tenant = ($this->makeTenant)('Tenant A');
+    $user = ($this->makeUser)($tenant);
+    ($this->grantPermission)($user, 'inventory-make-orders-manage');
+    ($this->grantPermission)($user, 'inventory-recipes-view');
+
+    $uom = ($this->makeUom)($tenant);
+    $output = ($this->makeItem)($tenant, $uom, 'Archived Identity Sauce', ['is_manufacturable' => true]);
+    [, $recipe] = ($this->createRecipe)($user, $output);
+
+    $draftVersionId = (int) $recipe->versions()->orderBy('id')->value('id');
+    actingAs($user)->patchJson(route('manufacturing.recipes.versions.archive', [$recipe, $draftVersionId]))->assertOk();
+
+    $payload = ($this->extractPayload)(
+        actingAs($user)->get(route('manufacturing.recipes.show', $recipe))->assertOk(),
+        'manufacturing-recipes-show-payload'
+    );
+
+    expect(data_get($payload, 'recipe.active_version.id'))->toBe($draftVersionId)
+        ->and(data_get($payload, 'recipe.active_version.status'))->toBe('ARCHIVED')
+        ->and(data_get($payload, 'recipe.active_version.status_label'))->toBe('Archived')
+        ->and(collect(data_get($payload, 'recipe.active_version.header_menu.options', []))->pluck('label')->all())
+            ->toBe(['View', 'Duplicate']);
 });
 
 it('26. publishing an already published version is rejected and keeps current_version_id stable', function (): void {

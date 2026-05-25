@@ -9,27 +9,32 @@ location:
 purpose: Place operational workflow responsibilities on Make Order detail without overloading lifecycle status or mutating ingredient snapshots.
 when_to_use:
   - Rendering Make Order detail operational workflow controls
-  - Showing current manufacturing workflow stage, assignee, due date, and current-stage tasks
+  - Showing compact assignee and due date editing for manufacturing workflow detail
   - Entering workflow from a draft Make Order
-  - Moving an in-workflow Make Order between configured manufacturing workflow stages
+  - Moving an in-workflow Make Order between configured manufacturing workflow stages through the shared header action
 when_not_to_use:
   - Lifecycle status changes such as scheduling, making, or cancelling
   - Recipe-version selection or ingredient snapshot editing
 rules:
-  - Make Order detail section order is Workflow first, Ingredients second.
+  - Make Order detail section order is Workflow first, Tasks second, Ingredients third.
   - The Workflow section must use the shared detail-section shell and default open through the shared defaultOpen contract.
   - `make_orders.status` remains lifecycle only.
   - `DRAFT` is the only pre-workflow visible state.
   - `make_orders.workflow_stage_id` stores the current operational workflow stage when one is active.
   - `make_orders.made_by_user_id` stores Make Order workflow ownership metadata.
   - `make_orders.assigned_to_user_id` is not part of the Make Order schema and must not be used for Make Order ownership or workflow metadata.
-  - The Workflow section owns assignee editing for Make Orders.
+  - The Workflow section owns due-date and assignee editing for Make Orders.
+  - Make Order due-date editing must use one compact inline date input where available rather than a bespoke modal or multi-field form.
+  - Make Order due-date editing should autosave on change when the input updates one safe field.
+  - Make Order due-date editing must not render a separate `Save Due Date` button.
   - Make Order assignee editing must use the shared tenant-scoped user select/dropdown pattern where available rather than a bespoke page-local picker.
   - Make Order assignee editing should autosave on change when the selector updates one safe field.
   - Make Order assignee editing must not render a separate `Save Assignee` button.
   - Assignee options must include only users from the current tenant plus an explicit `Unassigned` option.
   - Cross-tenant assignee IDs must be rejected.
+  - Clearing Make Order due date back to empty is allowed when the domain still allows no due date.
   - Clearing Make Order assignment back to `Unassigned` is allowed.
+  - Updating Make Order due date must not mutate `workflow_stage_id`, lifecycle `status`, ingredient snapshot lines, recipe-version lines, workflow tasks, or task templates.
   - Updating Make Order assignment must not mutate `workflow_stage_id`, lifecycle `status`, ingredient snapshot lines, recipe-version lines, workflow tasks, or task templates.
   - Workflow-stage transitions must not erase `made_by_user_id`.
   - Entering workflow from `DRAFT` must assign the first active configured manufacturing workflow stage ordered by `sort_order`.
@@ -40,13 +45,19 @@ rules:
   - Index rows, detail headers, workflow panels, and shared detail-section rows must display `DRAFT` while `workflow_stage_id` is null, then switch to configured `workflow_stages.name` after workflow entry.
   - Workflow stage movement must use configured tenant `workflow_stages` in the `manufacturing` workflow domain.
   - Make Order workflow movement must reuse shared workflow task generation and current-stage task gating rather than bespoke status buttons.
+  - The Workflow section must not render a duplicate stage-movement select/button block when the shared header workflow action already exists.
   - Draft Make Orders remain outside operational workflow stages until they explicitly enter workflow.
-  - Workflow details such as due date, assigned user, current stage, and current-stage tasks belong in the Workflow section and must not be duplicated in the compact resource header.
+  - Workflow details such as due date and assigned user belong in the Workflow section and must not be duplicated in the compact resource header.
+  - The Workflow section must not duplicate passive current-stage display when the shared title chip already surfaces visible state.
+  - Related workflow metadata controls should align on one compact row when space allows and stack responsively on narrow screens.
+  - Current-stage tasks should render in their own shared detail-section shell rather than inside the Workflow metadata section.
+  - The Make Order Tasks section should default closed.
   - Generated workflow task assignees remain independent from `make_orders.made_by_user_id`.
   - The compact resource header should keep recipe name and runs together on the first metadata row, and output item plus expected output quantity together on the second row.
   - Ingredient snapshots in `make_order_lines` remain independent from workflow-stage movement.
 public_interface:
   - MakeOrderController::show()
+  - MakeOrderController::updateDueDate()
   - MakeOrderController::updateAssignment()
   - MakeOrderController::updateWorkflowStage()
   - MoveMakeOrderWorkflowStageAction::execute()
@@ -58,4 +69,4 @@ example_usage: |
     due_date = 2026-06-01
     owner_user_name = Jordan
     assignee_options = [Unassigned, Jordan, Casey]
-    current_stage_tasks = generated tasks for Production
+    current_stage_tasks = generated tasks for Production rendered in the separate Tasks section

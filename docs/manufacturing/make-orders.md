@@ -25,29 +25,32 @@ The Manufacturing navigation label is `Make Orders`.
 - The recipe-scoped slide-over does not ask the user to select the recipe again.
 - The Recipe detail `+` action appears only when the recipe has a current published version in `recipes.current_version_id`.
 - Publishing the first or current recipe version makes the Recipe detail `+` action available immediately without a full page refresh.
+- Publishing from the Recipe detail header active-version menu uses the same publish domain action and refreshes Recipe detail Make Order create eligibility immediately.
 - Recipe detail slide-over create submits to the recipe-scoped Make Order create endpoint and redirects to the created Make Order detail page when `show_url` is returned.
 - Recipe detail current published version row `Make Order` creates a draft Make Order directly from `recipes.current_version_id`.
 - Material detail `Recipes` section row `Make` creates a draft Make Order directly from the selected recipe and redirects to the created Make Order detail page when `show_url` is returned.
 - Draft-only recipes do not expose working Make entry points and backend creation is rejected until a current published version exists.
 - Recipe detail Make Orders rows link directly to the created Make Order detail page through the shared section row-title link contract.
+- Recipe detail Make Orders rows show the visible workflow-state badge and a compact `v{x.xx}` recipe-version badge on the same title row so the snapshot version is visible without opening the Make Order.
 - Make Orders index recipe-name rows link directly to the Make Order detail page through the shared CRUD linked-text contract.
 
 ## Detail Page
 
 - Make Order detail uses the shared resource detail header and breadcrumb component.
 - Title renders `Make Order {id}`.
+- The visible workflow/state chip sits beside the title:
+  - `DRAFT` while `workflow_stage_id` is `NULL`
+  - the current configured `workflow_stages.name` once workflow has started
 - Breadcrumb renders `Home / Make Orders / Make Order {id}`.
 - Core details live in the header chips and meta, not a separate `Core` section.
 - Header stays compact and surfaces:
-  - first metadata row: recipe name, runs, and the visible workflow state
-    - `DRAFT` while `workflow_stage_id` is `NULL`
-    - the current configured `workflow_stages.name` once workflow has started
+  - first metadata row: recipe name and runs
   - second metadata row: output item and expected output quantity
 - Make Order lifecycle `status` is lifecycle-only and must not be rendered as the visible workflow-stage chip in the workflow-enabled header.
 - When a draft Make Order can enter workflow, the header shows the shared workflow-entry action using the first active configured manufacturing workflow stage.
 - When a valid next configured workflow stage exists, the header shows a shared next-stage action button using the existing workflow transition system.
 - Header workflow-entry and next-stage button labels must come from configured `workflow_stages.name` values for the tenant manufacturing workflow domain.
-- Workflow-only details such as due date, assigned user, current stage, and current-stage tasks live in the Workflow section rather than being duplicated in the header.
+- Workflow-only details such as due date and assigned user live in the Workflow section rather than being duplicated in the header.
 
 ## Detail Sections
 
@@ -55,7 +58,8 @@ The Manufacturing navigation label is `Make Orders`.
 - Remaining mobile Recipe detail Make Orders rows stay accessible through shared pagination controls.
 - Make Order detail section order is:
   1. `Workflow`
-  2. `Ingredients`
+  2. `Tasks`
+  3. `Ingredients`
 
 ## Workflow Section
 
@@ -64,11 +68,13 @@ The Manufacturing navigation label is `Make Orders`.
 - Workflow reads configured tenant `workflow_stages` for the `manufacturing` workflow domain.
 - Workflow entry from `DRAFT` assigns the first active configured manufacturing workflow stage ordered by `sort_order`.
 - If no active manufacturing workflow stage exists, workflow entry must fail cleanly and must not invent a fallback stage.
-- Workflow stage movement uses the existing workflow-stage and task-gating system rather than bespoke status buttons.
+- Workflow stage movement uses the existing workflow-stage and task-gating system through the shared header action rather than a duplicate section-local move-stage control.
 - Lifecycle `status` remains separate from operational `workflow_stage_id`.
 - `workflow_stage_id` is the operational workflow position for the Make Order.
 - Draft Make Orders remain outside operational workflow stages until they explicitly enter workflow.
-- The Workflow section shows due date, assigned/current responsible user, current stage, available stage transitions, and current-stage tasks.
+- The Workflow section keeps due date and assigned/current responsible user on one compact row when space allows.
+- Due date is editable inline from the Workflow section and autosaves on change.
+- Due date may be cleared when business rules allow no due date.
 - Make Orders auto-assign ownership to the authenticated user on creation through `make_orders.made_by_user_id`.
 - Recipe-scoped Make Order create starts as `DRAFT` with `workflow_stage_id = NULL`.
 - Recipe-scoped Make Order create snapshots the current published recipe version lines into `make_order_lines`.
@@ -81,9 +87,20 @@ The Manufacturing navigation label is `Make Orders`.
 - Assignment options must be limited to users from the same tenant.
 - Assignment may be cleared back to `Unassigned`.
 - Assignment autosaves on dropdown/select change.
+- The Workflow section must not render a separate `Save Due Date` button.
 - The Workflow section must not render a separate `Save Assignee` button or an extra save-button row for this single-field update.
+- The Workflow section must not duplicate `Current Stage` display or render a duplicate `Move Stage` block when the shared header workflow action already exists.
+- Updating due date must not mutate `workflow_stage_id`, lifecycle `status`, `make_order_lines`, `recipe_version_lines`, workflow tasks, or task templates.
 - Updating assignment must not mutate `workflow_stage_id`, lifecycle `status`, `make_order_lines`, `recipe_version_lines`, workflow tasks, or task templates.
 - Moving workflow stage must not erase `made_by_user_id`.
+
+## Tasks Section
+
+- Make Order detail includes a separate `Tasks` accordion/detail section using the shared detail-section shell.
+- Tasks defaults closed through the shared detail-section `defaultOpen` contract.
+- The Tasks section renders current-stage workflow tasks only.
+- The Tasks section owns task completion actions and keeps them separate from workflow metadata editing.
+- Moving workflow stage must continue to respect current-stage task gating regardless of the Tasks section being collapsed.
 
 ## Ingredients Section
 

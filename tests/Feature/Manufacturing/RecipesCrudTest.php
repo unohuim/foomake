@@ -215,15 +215,20 @@ test('creates recipes with default active flag, default is_default false, and re
     $output = ($this->makeItem)($tenant, $uom, 'Output A', ['is_manufacturable' => true]);
     $nonManufacturable = ($this->makeItem)($tenant, $uom, 'Output B');
 
-    $this->actingAs($user)
+    $response = $this->actingAs($user)
         ->postJson(route('manufacturing.recipes.store'), [
             'item_id' => $output->id,
             'recipe_type' => 'manufacturing',
             'name' => 'Batch A',
             'output_quantity' => '10.000000',
         ])
-        ->assertCreated()
+        ->assertCreated();
+
+    $recipeId = (int) $response->json('data.id');
+
+    $response
         ->assertJsonPath('data.name', 'Batch A')
+        ->assertJsonPath('data.show_url', route('manufacturing.recipes.show', $recipeId))
         ->assertJsonPath('data.is_active', true)
         ->assertJsonPath('data.is_default', false)
         ->assertJsonPath('data.output_quantity', '10.000000');

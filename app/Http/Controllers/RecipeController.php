@@ -151,7 +151,7 @@ class RecipeController extends Controller
         $displayVersion?->loadMissing('lines.inputItem.baseUom');
 
         $payload = [
-            'recipe' => $this->recipeDetailPayload($recipe, $displayVersion, $canManage, $canExecute),
+            'recipe' => $this->recipeDetailPayload($recipe, $displayVersion, (int) $user->id, $canManage, $canExecute),
             'manufacturable_items' => $this->manufacturableItemsPayload((int) $user->tenant_id),
             'index_url' => route('manufacturing.recipes.index'),
             'csrf_token' => $request->session()->token(),
@@ -376,6 +376,7 @@ class RecipeController extends Controller
             'recipe' => $this->recipeDetailPayload(
                 $recipe,
                 $version,
+                $userId,
                 Gate::allows('inventory-make-orders-manage'),
                 Gate::allows('inventory-make-orders-execute')
             ),
@@ -430,6 +431,7 @@ class RecipeController extends Controller
             'recipe' => $this->recipeDetailPayload(
                 $recipe,
                 $versionModel,
+                (int) $request->user()->id,
                 Gate::allows('inventory-make-orders-manage'),
                 Gate::allows('inventory-make-orders-execute')
             ),
@@ -488,6 +490,7 @@ class RecipeController extends Controller
             'recipe' => $this->recipeDetailPayload(
                 $recipe,
                 $checkedOutVersion,
+                $userId,
                 Gate::allows('inventory-make-orders-manage'),
                 Gate::allows('inventory-make-orders-execute')
             ),
@@ -524,6 +527,7 @@ class RecipeController extends Controller
             'recipe' => $this->recipeDetailPayload(
                 $recipe,
                 $displayVersion,
+                (int) $request->user()->id,
                 Gate::allows('inventory-make-orders-manage'),
                 Gate::allows('inventory-make-orders-execute')
             ),
@@ -550,6 +554,26 @@ class RecipeController extends Controller
         }
 
         DB::transaction(function () use ($recipe, $versionModel, $request): void {
+            $previousPublishedVersionIds = $recipe->versions()
+                ->where('tenant_id', $recipe->tenant_id)
+                ->whereKeyNot($versionModel->id)
+                ->whereIn('status', [
+                    RecipeVersion::STATUS_PUBLISHED,
+                    RecipeVersion::STATUS_APPROVED_LEGACY,
+                ])
+                ->pluck('id');
+
+            $versionModel->version_number = $this->nextPublishVersionNumber($recipe, $versionModel);
+
+            if ($previousPublishedVersionIds->isNotEmpty()) {
+                $recipe->versions()
+                    ->whereIn('id', $previousPublishedVersionIds)
+                    ->update([
+                        'status' => RecipeVersion::STATUS_ARCHIVED,
+                        'effective_until' => now(),
+                    ]);
+            }
+
             $versionModel->status = RecipeVersion::STATUS_PUBLISHED;
             $versionModel->effective_from = now();
             $versionModel->effective_until = null;
@@ -560,7 +584,7 @@ class RecipeController extends Controller
             $recipe->current_version_id = $versionModel->id;
             $recipe->save();
 
-            $this->closeOpenCheckout($versionModel, (int) $request->user()->id);
+            $this->closeOpenCheckoutsForRecipeUser($recipe, (int) $request->user()->id);
             $this->syncRecipeMirror($recipe, $versionModel);
         });
 
@@ -575,6 +599,7 @@ class RecipeController extends Controller
             'recipe' => $this->recipeDetailPayload(
                 $recipe,
                 $displayVersion,
+                (int) $request->user()->id,
                 $canManage,
                 $canExecute
             ),
@@ -644,6 +669,7 @@ class RecipeController extends Controller
             'recipe' => $this->recipeDetailPayload(
                 $recipe,
                 $draftVersion,
+                (int) $request->user()->id,
                 Gate::allows('inventory-make-orders-manage'),
                 Gate::allows('inventory-make-orders-execute')
             ),
@@ -1054,16 +1080,7 @@ class RecipeController extends Controller
                     ],
                 ],
             ],
-            'actions' => [
-                ['id' => 'view', 'label' => 'View', 'type' => 'custom', 'tone' => 'default', 'handlerKey' => 'viewVersion'],
-                ['id' => 'make', 'label' => 'Make Order', 'type' => 'custom', 'tone' => 'default', 'handlerKey' => 'makeVersion'],
-                ['id' => 'check_in', 'label' => 'Check In', 'type' => 'custom', 'tone' => 'default', 'handlerKey' => 'checkInVersion'],
-                ['id' => 'checkout', 'label' => 'Check Out', 'type' => 'custom', 'tone' => 'default', 'handlerKey' => 'checkoutVersion'],
-                ['id' => 'publish', 'label' => 'Publish', 'type' => 'custom', 'tone' => 'default', 'handlerKey' => 'publishVersion'],
-                ['id' => 'duplicate', 'label' => 'Duplicate', 'type' => 'custom', 'tone' => 'default', 'handlerKey' => 'duplicateVersion'],
-                ['id' => 'delete', 'label' => 'Delete', 'type' => 'remove', 'tone' => 'warning', 'endpointKey' => 'remove', 'method' => 'DELETE'],
-                ['id' => 'archive', 'label' => 'Archive', 'type' => 'custom', 'tone' => 'warning', 'handlerKey' => 'archiveVersion'],
-            ],
+            'actions' => $this->recipeVersionSectionActions(),
         ];
     }
 
@@ -1143,6 +1160,11 @@ class RecipeController extends Controller
                     [
                         'field' => 'display.statusText',
                         'toneField' => 'display.statusTone',
+                        'fallback' => '',
+                    ],
+                    [
+                        'field' => 'display.versionBadgeText',
+                        'toneField' => 'display.versionBadgeTone',
                         'fallback' => '',
                     ],
                 ],
@@ -1244,27 +1266,30 @@ class RecipeController extends Controller
     private function recipeDetailPayload(
         Recipe $recipe,
         ?RecipeVersion $displayVersion,
+        int $userId,
         bool $canManage = false,
         bool $canExecute = false
     ): array
     {
-        $displayVersionNumber = $displayVersion?->versionNumberDisplay() ?? '—';
-        $displayOutputQuantity = $displayVersion ? (string) $displayVersion->output_quantity : null;
+        $resolvedDisplayVersion = $displayVersion ?? $this->resolveRecipeDetailDisplayVersion($recipe, $userId);
+        $displayVersionNumber = $resolvedDisplayVersion?->versionNumberDisplay() ?? '—';
+        $displayOutputQuantity = $resolvedDisplayVersion ? (string) $resolvedDisplayVersion->output_quantity : null;
         $currentVersion = $recipe->currentPublishedVersion();
 
         return array_merge($this->recipePayload($recipe, $canManage, $canExecute), [
             'item_uom' => $recipe->item?->baseUom
                 ? $recipe->item->baseUom->name . ' (' . $recipe->item->baseUom->symbol . ')'
                 : '—',
-            'display_version_id' => $displayVersion?->id,
+            'display_version_id' => $resolvedDisplayVersion?->id,
             'display_version_number' => $displayVersionNumber,
             'display_output_quantity' => $displayOutputQuantity,
             'display_output_quantity_text' => $displayOutputQuantity !== null
                 ? QuantityFormatter::formatForUom($displayOutputQuantity, $recipe->item?->baseUom, 2)
                 : '—',
-            'display_recipe_type' => $displayVersion?->recipe_type,
-            'display_recipe_type_label' => $displayVersion ? Recipe::labelForRecipeType($displayVersion->recipe_type) : '—',
-            'display_recipe_type_icon' => $this->recipeTypeIcon($displayVersion?->recipe_type),
+            'display_recipe_type' => $resolvedDisplayVersion?->recipe_type,
+            'display_recipe_type_label' => $resolvedDisplayVersion ? Recipe::labelForRecipeType($resolvedDisplayVersion->recipe_type) : '—',
+            'display_recipe_type_icon' => $this->recipeTypeIcon($resolvedDisplayVersion?->recipe_type),
+            'active_version' => $this->activeRecipeVersionSummary($recipe, $resolvedDisplayVersion, $userId, $canManage, $canExecute),
             'current_published_version_id' => $currentVersion?->id,
             'current_published_version_number' => $currentVersion?->versionNumberDisplay() ?? '—',
             'update_url' => route('manufacturing.recipes.update', $recipe),
@@ -1325,6 +1350,8 @@ class RecipeController extends Controller
             'version_number_display' => $version->versionNumberDisplay(),
             'name' => $version->name,
             'recipe_type' => $version->recipe_type,
+            'is_current' => $isCurrent,
+            'is_checked_out_by_user' => $isCheckedOutByUser,
             'status' => $normalizedStatus,
             'output_quantity' => (string) $version->output_quantity,
             'updated_at' => $version->updated_at?->format('Y-m-d H:i') ?? '—',
@@ -1341,10 +1368,12 @@ class RecipeController extends Controller
             'display' => [
                 'versionText' => $version->versionNumberDisplay(),
                 'typeText' => Recipe::labelForRecipeType($version->recipe_type),
+                'typeLabel' => Recipe::labelForRecipeType($version->recipe_type),
+                'typeIcon' => $this->recipeTypeIcon($version->recipe_type),
                 'contextText' => $isCurrent
                     ? 'Current'
                     : ($isCheckedOutByUser ? 'Checked out by you' : ($isCheckedOutByAnotherUser ? 'Checked out' : 'Read only')),
-                'statusText' => $normalizedStatus,
+                'statusText' => $this->versionStatusLabel($normalizedStatus),
                 'statusTone' => $this->versionStatusTone($normalizedStatus),
                 'outputQuantityText' => QuantityFormatter::formatForUom((string) $version->output_quantity, $recipe->item?->baseUom, 2),
                 'updatedAtText' => $version->updated_at?->format('Y-m-d H:i') ?? '—',
@@ -1682,6 +1711,37 @@ class RecipeController extends Controller
     }
 
     /**
+     * Close any open checkouts for the user across the same recipe.
+     */
+    private function closeOpenCheckoutsForRecipeUser(Recipe $recipe, int $userId): void
+    {
+        RecipeVersionCheckout::query()
+            ->where('tenant_id', $recipe->tenant_id)
+            ->where('recipe_id', $recipe->id)
+            ->where('user_id', $userId)
+            ->whereNull('checked_in_at')
+            ->update(['checked_in_at' => now()]);
+    }
+
+    /**
+     * Promote a published version to the next highest visible version number when needed.
+     */
+    private function nextPublishVersionNumber(Recipe $recipe, RecipeVersion $version): int
+    {
+        $currentVersionNumber = RecipeVersion::normalizeVersionNumberForOrdering((int) $version->version_number);
+        $highestOtherVersionNumber = RecipeVersion::normalizeVersionNumberForOrdering((int) ($recipe->versions()
+            ->where('tenant_id', $recipe->tenant_id)
+            ->whereKeyNot($version->id)
+            ->max('version_number') ?? 0));
+
+        if ($currentVersionNumber > $highestOtherVersionNumber) {
+            return (int) $version->version_number;
+        }
+
+        return $recipe->nextVersionNumber();
+    }
+
+    /**
      * Determine whether the user owns an open checkout for the version.
      */
     private function userOwnsOpenCheckout(Recipe $recipe, RecipeVersion $version, int $userId): bool
@@ -1941,6 +2001,131 @@ class RecipeController extends Controller
             RecipeVersion::STATUS_ARCHIVED => 'muted',
             default => 'default',
         };
+    }
+
+    /**
+     * Resolve the display label for a recipe version lifecycle status.
+     */
+    private function versionStatusLabel(string $status): string
+    {
+        return match ($status) {
+            RecipeVersion::STATUS_PUBLISHED => 'Published',
+            RecipeVersion::STATUS_ARCHIVED => 'Archived',
+            default => 'Draft',
+        };
+    }
+
+    /**
+     * Resolve the active recipe version for the detail header identity.
+     */
+    private function resolveRecipeDetailDisplayVersion(Recipe $recipe, int $userId): ?RecipeVersion
+    {
+        return $recipe->displayVersionForUser($userId) ?? $this->latestDisplayVersion($recipe);
+    }
+
+    /**
+     * Build the active recipe version summary used by the detail header.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function activeRecipeVersionSummary(
+        Recipe $recipe,
+        ?RecipeVersion $activeVersion,
+        int $userId,
+        bool $canManage,
+        bool $canExecute
+    ): ?array
+    {
+        if (! $activeVersion) {
+            return null;
+        }
+
+        $row = $this->recipeVersionListRow($recipe, $activeVersion, $userId, $canManage, $canExecute);
+        $normalizedStatus = RecipeVersion::normalizeStatus((string) $row['status']);
+        $currentLabel = $this->activeRecipeVersionHeaderLabel($row, $normalizedStatus);
+
+        return array_merge($row, [
+            'status_label' => $currentLabel,
+            'header_menu' => [
+                'currentLabel' => $currentLabel,
+                'options' => $this->recipeVersionHeaderMenuOptions(
+                    is_array($row['availableActions'] ?? null) ? $row['availableActions'] : [],
+                    $this->recipeVersionSectionActions(),
+                    $normalizedStatus
+                ),
+            ],
+        ]);
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function recipeVersionSectionActions(): array
+    {
+        return [
+            ['id' => 'view', 'label' => 'View', 'description' => 'Open this archived version read-only.', 'type' => 'custom', 'tone' => 'default', 'handlerKey' => 'viewVersion'],
+            ['id' => 'make', 'label' => 'Make Order', 'description' => 'Create a make order from this published version.', 'type' => 'custom', 'tone' => 'default', 'handlerKey' => 'makeVersion'],
+            ['id' => 'check_in', 'label' => 'Check In', 'description' => 'Finish editing this version.', 'type' => 'custom', 'tone' => 'default', 'handlerKey' => 'checkInVersion'],
+            ['id' => 'checkout', 'label' => 'Check Out', 'description' => 'Open this version for editing.', 'type' => 'custom', 'tone' => 'default', 'handlerKey' => 'checkoutVersion'],
+            ['id' => 'publish', 'label' => 'Publish', 'description' => 'Make this version current for new make orders.', 'type' => 'custom', 'tone' => 'default', 'handlerKey' => 'publishVersion'],
+            ['id' => 'duplicate', 'label' => 'Duplicate', 'description' => 'Copy this version into a new draft.', 'type' => 'custom', 'tone' => 'default', 'handlerKey' => 'duplicateVersion'],
+            ['id' => 'delete', 'label' => 'Delete', 'description' => 'Permanently remove this draft version.', 'type' => 'remove', 'tone' => 'warning', 'endpointKey' => 'remove', 'method' => 'DELETE'],
+            ['id' => 'archive', 'label' => 'Archive', 'description' => 'Retire this published version from active use.', 'type' => 'custom', 'tone' => 'warning', 'handlerKey' => 'archiveVersion'],
+        ];
+    }
+
+    /**
+     * @param  array<int, string>  $availableActions
+     * @param  array<int, array<string, mixed>>  $catalog
+     * @return array<int, array<string, mixed>>
+     */
+    private function recipeVersionHeaderMenuOptions(array $availableActions, array $catalog, string $normalizedStatus): array
+    {
+        return collect($availableActions)
+            ->map(function (string $actionId) use ($catalog, $normalizedStatus): ?array {
+                $action = collect($catalog)->firstWhere('id', $actionId);
+
+                if (! is_array($action)) {
+                    return null;
+                }
+
+                return [
+                    'label' => (string) $action['label'],
+                    'description' => $this->recipeVersionHeaderMenuDescription(
+                        $actionId,
+                        (string) ($action['description'] ?? ''),
+                        $normalizedStatus
+                    ),
+                    'action' => $action,
+                ];
+            })
+            ->filter()
+            ->values()
+            ->all();
+    }
+
+    private function recipeVersionHeaderMenuDescription(
+        string $actionId,
+        string $defaultDescription,
+        string $normalizedStatus
+    ): string {
+        if ($actionId === 'duplicate' && $normalizedStatus === RecipeVersion::STATUS_ARCHIVED) {
+            return 'Copy this archived version into a new draft.';
+        }
+
+        return $defaultDescription;
+    }
+
+    /**
+     * @param  array<string, mixed>  $row
+     */
+    private function activeRecipeVersionHeaderLabel(array $row, string $normalizedStatus): string
+    {
+        if (($row['is_checked_out_by_user'] ?? false) === true) {
+            return 'Checked-Out';
+        }
+
+        return $this->versionStatusLabel($normalizedStatus);
     }
 
     /**

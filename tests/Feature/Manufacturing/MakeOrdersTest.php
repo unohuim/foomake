@@ -251,6 +251,12 @@ beforeEach(function () {
             'made_by_user_id' => $madeByUserId,
         ]);
     };
+
+    $this->updateMakeOrderDueDate = function (User $user, MakeOrder $makeOrder, ?string $dueDate) {
+        return $this->actingAs($user)->patchJson(route('manufacturing.make-orders.due-date.update', $makeOrder), [
+            'due_date' => $dueDate,
+        ]);
+    };
 });
 
 test('guests are redirected to login for make orders routes', function () {
@@ -1699,6 +1705,176 @@ test('make order owner update is tenant scoped', function () {
     ]);
 
     ($this->updateMakeOrderAssignment)($userA, $makeOrderB, $assigneeB->id)
+        ->assertNotFound();
+});
+
+test('authorized user can update make order due date without mutating assignment workflow stage or snapshots', function () {
+    $tenant = ($this->makeTenant)('Tenant A');
+    $user = ($this->makeUser)($tenant);
+    $assignee = ($this->makeUser)($tenant);
+    ($this->grantPermissions)($user, ['inventory-make-orders-view', 'inventory-make-orders-execute']);
+
+    [$productionStage, $completedStage] = ($this->createManufacturingWorkflowStages)($tenant);
+
+    $uom = ($this->makeUom)($tenant);
+    $output = ($this->makeItem)($tenant, $uom, 'Bread', true);
+    $input = ($this->makeItem)($tenant, $uom, 'Salt');
+    $recipe = ($this->makeRecipe)($tenant, $output, true, 'Workflow Recipe', '5.000000');
+    ($this->addRecipeLine)($tenant, $recipe, $input, '1.250000');
+
+    $makeOrder = ($this->makeOrder)($tenant, $recipe, $user, [
+        'status' => MakeOrder::STATUS_SCHEDULED,
+        'workflow_stage_id' => $productionStage->id,
+        'made_by_user_id' => $assignee->id,
+        'due_date' => '2026-06-01',
+        'scheduled_at' => now(),
+    ]);
+
+    $lineSnapshot = $makeOrder->lines()->orderBy('id')->get(['input_item_id', 'planned_quantity'])->map(fn (MakeOrderLine $line): array => [
+        'input_item_id' => (int) $line->input_item_id,
+        'planned_quantity' => (string) $line->planned_quantity,
+    ])->all();
+    $recipeVersionSnapshot = RecipeVersionLine::query()
+        ->where('recipe_version_id', $makeOrder->recipe_version_id)
+        ->orderBy('id')
+        ->get(['input_item_id', 'quantity'])
+        ->map(fn (RecipeVersionLine $line): array => [
+            'input_item_id' => (int) $line->input_item_id,
+            'quantity' => (string) $line->quantity,
+        ])->all();
+
+    ($this->updateMakeOrderDueDate)($user, $makeOrder, '2026-06-15')
+        ->assertOk()
+        ->assertJsonPath('data.due_date', '2026-06-15')
+        ->assertJsonPath('data.made_by_user_id', $assignee->id)
+        ->assertJsonPath('data.workflow_stage_id', $productionStage->id)
+        ->assertJsonPath('workflow.due_date', '2026-06-15')
+        ->assertJsonPath('workflow.made_by_user_id', $assignee->id)
+        ->assertJsonPath('workflow.current_stage.id', $productionStage->id)
+        ->assertJsonPath('workflow.next_stage_action.id', $completedStage->id)
+        ->assertJsonPath('workflow.due_date_update_url', route('manufacturing.make-orders.due-date.update', $makeOrder))
+        ->assertJsonPath('workflow.assignment_update_url', route('manufacturing.make-orders.assignment.update', $makeOrder));
+
+    $makeOrder->refresh();
+
+    expect($makeOrder->due_date?->format('Y-m-d'))->toBe('2026-06-15')
+        ->and($makeOrder->made_by_user_id)->toBe($assignee->id)
+        ->and($makeOrder->workflow_stage_id)->toBe($productionStage->id)
+        ->and($makeOrder->status)->toBe(MakeOrder::STATUS_SCHEDULED)
+        ->and($makeOrder->lines()->orderBy('id')->get(['input_item_id', 'planned_quantity'])->map(fn (MakeOrderLine $line): array => [
+            'input_item_id' => (int) $line->input_item_id,
+            'planned_quantity' => (string) $line->planned_quantity,
+        ])->all())->toBe($lineSnapshot)
+        ->and(RecipeVersionLine::query()
+            ->where('recipe_version_id', $makeOrder->recipe_version_id)
+            ->orderBy('id')
+            ->get(['input_item_id', 'quantity'])
+            ->map(fn (RecipeVersionLine $line): array => [
+                'input_item_id' => (int) $line->input_item_id,
+                'quantity' => (string) $line->quantity,
+            ])->all())->toBe($recipeVersionSnapshot);
+});
+
+test('authorized user can clear make order due date when business rules allow it', function () {
+    $tenant = ($this->makeTenant)('Tenant A');
+    $user = ($this->makeUser)($tenant);
+    ($this->grantPermissions)($user, ['inventory-make-orders-view', 'inventory-make-orders-execute']);
+
+    [$productionStage] = ($this->createManufacturingWorkflowStages)($tenant);
+
+    $uom = ($this->makeUom)($tenant);
+    $output = ($this->makeItem)($tenant, $uom, 'Bread', true);
+    $recipe = ($this->makeRecipe)($tenant, $output, true, 'Workflow Recipe', '5.000000');
+    $makeOrder = ($this->makeOrder)($tenant, $recipe, $user, [
+        'status' => MakeOrder::STATUS_SCHEDULED,
+        'workflow_stage_id' => $productionStage->id,
+        'made_by_user_id' => $user->id,
+        'due_date' => '2026-06-01',
+        'scheduled_at' => now(),
+    ]);
+
+    ($this->updateMakeOrderDueDate)($user, $makeOrder, null)
+        ->assertOk()
+        ->assertJsonPath('data.due_date', null)
+        ->assertJsonPath('workflow.due_date', null)
+        ->assertJsonPath('workflow.made_by_user_id', $user->id)
+        ->assertJsonPath('workflow.current_stage.id', $productionStage->id);
+
+    expect($makeOrder->fresh()->due_date)->toBeNull()
+        ->and($makeOrder->fresh()->made_by_user_id)->toBe($user->id)
+        ->and($makeOrder->fresh()->workflow_stage_id)->toBe($productionStage->id)
+        ->and($makeOrder->fresh()->status)->toBe(MakeOrder::STATUS_SCHEDULED);
+});
+
+test('invalid make order due date update is rejected', function () {
+    $tenant = ($this->makeTenant)('Tenant A');
+    $user = ($this->makeUser)($tenant);
+    ($this->grantPermissions)($user, ['inventory-make-orders-view', 'inventory-make-orders-execute']);
+
+    [$productionStage] = ($this->createManufacturingWorkflowStages)($tenant);
+
+    $uom = ($this->makeUom)($tenant);
+    $output = ($this->makeItem)($tenant, $uom, 'Bread', true);
+    $recipe = ($this->makeRecipe)($tenant, $output, true, 'Workflow Recipe', '5.000000');
+    $makeOrder = ($this->makeOrder)($tenant, $recipe, $user, [
+        'status' => MakeOrder::STATUS_SCHEDULED,
+        'workflow_stage_id' => $productionStage->id,
+        'due_date' => '2026-06-01',
+        'scheduled_at' => now(),
+    ]);
+
+    ($this->actingAs($user)->patchJson(route('manufacturing.make-orders.due-date.update', $makeOrder), [
+        'due_date' => 'not-a-date',
+    ]))
+        ->assertStatus(422)
+        ->assertJsonValidationErrors(['due_date']);
+
+    expect($makeOrder->fresh()->due_date?->format('Y-m-d'))->toBe('2026-06-01')
+        ->and($makeOrder->fresh()->workflow_stage_id)->toBe($productionStage->id)
+        ->and($makeOrder->fresh()->status)->toBe(MakeOrder::STATUS_SCHEDULED);
+});
+
+test('make order due date update requires execute permission', function () {
+    $tenant = ($this->makeTenant)('Tenant A');
+    $viewer = ($this->makeUser)($tenant);
+    ($this->grantPermission)($viewer, 'inventory-make-orders-view');
+
+    [$productionStage] = ($this->createManufacturingWorkflowStages)($tenant);
+
+    $uom = ($this->makeUom)($tenant);
+    $output = ($this->makeItem)($tenant, $uom, 'Bread', true);
+    $recipe = ($this->makeRecipe)($tenant, $output, true, 'Workflow Recipe', '5.000000');
+    $makeOrder = ($this->makeOrder)($tenant, $recipe, $viewer, [
+        'status' => MakeOrder::STATUS_SCHEDULED,
+        'workflow_stage_id' => $productionStage->id,
+        'due_date' => '2026-06-01',
+        'scheduled_at' => now(),
+    ]);
+
+    ($this->updateMakeOrderDueDate)($viewer, $makeOrder, '2026-06-10')
+        ->assertForbidden();
+});
+
+test('make order due date update is tenant scoped', function () {
+    $tenantA = ($this->makeTenant)('Tenant A');
+    $tenantB = ($this->makeTenant)('Tenant B');
+    $userA = ($this->makeUser)($tenantA);
+    $userB = ($this->makeUser)($tenantB);
+    ($this->grantPermissions)($userA, ['inventory-make-orders-view', 'inventory-make-orders-execute']);
+
+    [$productionStageB] = ($this->createManufacturingWorkflowStages)($tenantB);
+
+    $uomB = ($this->makeUom)($tenantB);
+    $outputB = ($this->makeItem)($tenantB, $uomB, 'Bread B', true);
+    $recipeB = ($this->makeRecipe)($tenantB, $outputB, true, 'Recipe B', '5.000000');
+    $makeOrderB = ($this->makeOrder)($tenantB, $recipeB, $userB, [
+        'status' => MakeOrder::STATUS_SCHEDULED,
+        'workflow_stage_id' => $productionStageB->id,
+        'due_date' => '2026-06-01',
+        'scheduled_at' => now(),
+    ]);
+
+    ($this->updateMakeOrderDueDate)($userA, $makeOrderB, '2026-06-10')
         ->assertNotFound();
 });
 

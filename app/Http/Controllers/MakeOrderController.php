@@ -580,6 +580,57 @@ class MakeOrderController extends Controller
     }
 
     /**
+     * Update the due date metadata for one Make Order.
+     */
+    public function updateDueDate(Request $request, int $makeOrder): JsonResponse
+    {
+        Gate::authorize('inventory-make-orders-execute');
+
+        $makeOrderModel = MakeOrder::query()
+            ->where('tenant_id', $request->user()->tenant_id)
+            ->with([
+                'recipe',
+                'recipeVersion',
+                'outputItem.baseUom',
+                'lines.inputItem.baseUom',
+                'workflowStage',
+                'madeByUser',
+                'taskedByUser',
+            ])
+            ->findOrFail($makeOrder);
+
+        if (in_array($makeOrderModel->status, [MakeOrder::STATUS_MADE, MakeOrder::STATUS_CANCELLED], true)) {
+            return response()->json([
+                'message' => 'Only draft or scheduled make orders can be edited.',
+            ], 422);
+        }
+
+        $validated = $request->validate([
+            'due_date' => ['nullable', 'date'],
+        ]);
+
+        $makeOrderModel->due_date = isset($validated['due_date']) && $validated['due_date'] !== null
+            ? Carbon::parse($validated['due_date'])->startOfDay()
+            : null;
+        $makeOrderModel->save();
+
+        $makeOrderModel = $makeOrderModel->fresh([
+            'recipe.item.baseUom',
+            'recipeVersion',
+            'outputItem.baseUom',
+            'lines.inputItem.baseUom',
+            'workflowStage',
+            'madeByUser',
+            'taskedByUser',
+        ]);
+
+        return response()->json([
+            'data' => $this->makeOrderPayload($makeOrderModel),
+            'workflow' => $this->makeOrderWorkflowPayload($makeOrderModel, $request->user()),
+        ]);
+    }
+
+    /**
      * Execute a make order from its snapshotted lines.
      */
     public function make(Request $request, int $makeOrder): JsonResponse
@@ -879,11 +930,14 @@ class MakeOrderController extends Controller
             $makeOrder->outputItem?->baseUom,
             1
         );
+        $workflowState = $this->makeOrderWorkflowState($makeOrder);
+        $showUrl = route('manufacturing.make-orders.show', $makeOrder);
 
         return [
             'id' => $makeOrder->id,
             'recipe_id' => $makeOrder->recipe_id,
             'recipe_version_id' => $makeOrder->recipe_version_id,
+            'recipe_version_number_display' => $makeOrder->recipeVersion?->versionNumberDisplay() ?? '—',
             'recipe_name' => $makeOrder->recipe?->name ?? '—',
             'output_item_id' => $makeOrder->output_item_id,
             'output_item_name' => $makeOrder->outputItem?->name ?? '—',
@@ -894,14 +948,25 @@ class MakeOrderController extends Controller
             'total_output_quantity' => $totalOutputQuantity,
             'total_output_quantity_display' => $totalOutputQuantityDisplay,
             'status' => $makeOrder->status,
-            'workflow_state' => $this->makeOrderWorkflowState($makeOrder),
+            'workflow_state' => $workflowState,
             'workflow_stage_id' => $makeOrder->workflow_stage_id,
             'workflow_stage_name' => $makeOrder->workflowStage?->name,
             'made_by_user_id' => $makeOrder->made_by_user_id,
             'due_date' => $makeOrder->due_date?->format('Y-m-d'),
             'scheduled_at' => $makeOrder->scheduled_at?->format('Y-m-d H:i'),
             'made_at' => $makeOrder->made_at?->format('Y-m-d H:i'),
-            'show_url' => route('manufacturing.make-orders.show', $makeOrder),
+            'show_url' => $showUrl,
+            'display' => [
+                'recipeNameText' => $makeOrder->recipe?->name ?? 'Unnamed recipe',
+                'runsText' => QuantityFormatter::format((string) $makeOrder->output_quantity, 0),
+                'dueDateText' => $makeOrder->due_date?->format('Y-m-d') ?? 'No due date',
+                'totalOutputQuantityText' => $totalOutputQuantityDisplay,
+                'statusText' => $workflowState,
+                'statusTone' => $workflowState === 'DRAFT' ? 'muted' : 'default',
+                'versionBadgeText' => 'v' . ($makeOrder->recipeVersion?->versionNumberDisplay() ?? '—'),
+                'versionBadgeTone' => 'subtle',
+                'showUrl' => $showUrl,
+            ],
         ];
     }
 
@@ -1070,6 +1135,9 @@ class MakeOrderController extends Controller
                 ->all(),
             'next_stage_action' => $nextStageAction,
             'due_date' => $makeOrder->due_date?->format('Y-m-d'),
+            'due_date_update_url' => route('manufacturing.make-orders.due-date.update', $makeOrder),
+            'can_edit_due_date' => Gate::allows('inventory-make-orders-execute')
+                && ! in_array($makeOrder->status, [MakeOrder::STATUS_MADE, MakeOrder::STATUS_CANCELLED], true),
             'made_by_user_id' => $makeOrder->made_by_user_id,
             'owner_user_name' => $makeOrder->madeByUser?->name,
             'assignee_options' => $this->tenantAssigneeOptionsPayload($makeOrder->tenant_id),

@@ -746,7 +746,7 @@ it('31a. make order detail header renders recipe and runs before output item and
         ->and($source)->toContain('data-resource-detail-header-metadata-group="secondary"')
         ->and($source)->toContain("{{ \$makeOrderPayload['recipe_name'] ?? '—' }}")
         ->and($source)->toContain("{{ __('Runs') }} {{ \$makeOrderPayload['runs_text'] ?? '—' }}")
-        ->and($source)->toContain("{{ \$makeOrderPayload['workflow_state'] ?? 'DRAFT' }}")
+        ->and($source)->not->toContain("{{ \$makeOrderPayload['workflow_state'] ?? 'DRAFT' }}")
         ->and($source)->toContain("{{ \$makeOrderPayload['output_item_name'] ?? '—' }}")
         ->and($source)->toContain("{{ __('Expected Output') }} {{ \$makeOrderPayload['produced_quantity_text'] ?? '—' }}");
 });
@@ -762,8 +762,10 @@ it('31c. make order detail header renders the next valid workflow stage action f
     $source = File::get(resource_path('views/manufacturing/make-orders/show.blade.php'));
 
     expect($source)->toContain('<x-slot name="actions">')
+        ->and($source)->toContain('<x-slot name="titleSuffix">')
+        ->and($source)->toContain("x-show=\"nextStageAction && nextStageAction.label\"")
         ->and($source)->toContain("window.dispatchEvent(new CustomEvent('make-order-next-stage'")
-        ->and($source)->toContain("\$payload['workflow']['next_stage_action']['label'] ?? null")
+        ->and($source)->toContain("x-text=\"nextStageAction?.label || ''\"")
         ->and($source)->not->toContain('data-make-order-header-workflow-button')
         ->and($source)->not->toContain("\$makeOrderPayload['workflow_stage_name'] ?? \$makeOrderPayload['status'] ?? '—'");
 });
@@ -795,16 +797,19 @@ it('32. existing make order ingredient lines are visible on initial payload rend
         ->and(data_get($payload, 'ingredients.can_edit'))->toBeTrue();
 });
 
-it('33. make order detail renders workflow before ingredients through the shared detail section contract', function (): void {
+it('33. make order detail renders workflow then tasks then ingredients through the shared detail section contract', function (): void {
     $source = File::get(resource_path('views/manufacturing/make-orders/show.blade.php'));
 
     $workflowPosition = strpos($source, "title=\"Workflow\"");
+    $tasksPosition = strpos($source, "title=\"Tasks\"");
     $ingredientsPosition = strpos($source, 'x-ingredients-detail-section');
 
     expect($source)->toContain('x-detail-section-card')
         ->and($workflowPosition)->not->toBeFalse()
+        ->and($tasksPosition)->not->toBeFalse()
         ->and($ingredientsPosition)->not->toBeFalse()
-        ->and($workflowPosition)->toBeLessThan($ingredientsPosition);
+        ->and($workflowPosition)->toBeLessThan($tasksPosition)
+        ->and($tasksPosition)->toBeLessThan($ingredientsPosition);
 });
 
 it('34. make order detail workflow payload includes due date assignee and available stages without duplicating workflow details in the header', function (): void {
@@ -876,6 +881,8 @@ it('34. make order detail workflow payload includes due date assignee and availa
         ->and(data_get($payload, 'workflow.current_stage.name'))->toBe('Production')
         ->and(data_get($payload, 'workflow.made_by_user_id'))->toBe($assignee->id)
         ->and(data_get($payload, 'workflow.owner_user_name'))->toBe($assignee->name)
+        ->and(data_get($payload, 'workflow.can_edit_due_date'))->toBeTrue()
+        ->and(data_get($payload, 'workflow.due_date_update_url'))->toBe(route('manufacturing.make-orders.due-date.update', $makeOrder))
         ->and(data_get($payload, 'workflow.assignment_update_url'))->toBe(route('manufacturing.make-orders.assignment.update', $makeOrder))
         ->and(data_get($payload, 'workflow.assignee_options.0.label'))->toBe('Unassigned')
         ->and(data_get($payload, 'workflow.assignee_options.0.value'))->toBe('')
@@ -969,7 +976,7 @@ it('34a. make order workflow payload exposes editable tenant scoped assignee opt
         ->and($optionLabels)->not->toContain($foreignAssignee->name);
 });
 
-it('35. make order detail workflow tasks payload includes current stage tasks and completion links', function (): void {
+it('35. make order detail tasks payload includes current stage tasks and completion links', function (): void {
     $tenant = ($this->makeTenant)('Tenant A');
     $user = ($this->makeUser)($tenant);
     $assignee = ($this->makeUser)($tenant);
@@ -1161,22 +1168,39 @@ it('35b. make order detail header source and controller payload do not hardcode 
     expect($viewSource)->not->toContain("\$makeOrderPayload['workflow_stage_name'] ?? \$makeOrderPayload['status'] ?? '—'")
         ->and($viewSource)->not->toContain("{{ \$makeOrderPayload['status'] }}")
         ->and($viewSource)->toContain('<x-dropdown-select')
+        ->and($viewSource)->toContain("x-text=\"workflowState || 'DRAFT'\"")
         ->and($viewSource)->toContain('x-model="workflow.made_by_user_id"')
-        ->and($viewSource)->toContain('class="max-w-xs"')
+        ->and($viewSource)->toContain('type="date"')
+        ->and($viewSource)->toContain('x-model="workflow.due_date"')
+        ->and($viewSource)->toContain('data-make-order-workflow-metadata-row')
         ->and($viewSource)->not->toContain('Save Assignee')
+        ->and($viewSource)->not->toContain('Save Due Date')
+        ->and($viewSource)->not->toContain('{{ __(\'Move Stage\') }}')
+        ->and($viewSource)->not->toContain('{{ __(\'Current Stage\') }}')
         ->and($viewSource)->not->toContain('x-on:click="saveWorkflowAssignment()"')
+        ->and($viewSource)->not->toContain('x-on:click="moveWorkflowStage()"')
         ->and($controllerSource)->not->toContain("'status_tone'")
         ->and($controllerSource)->not->toContain("'workflow_stage_name' => 'Production'")
         ->and($controllerSource)->not->toContain("'workflow_stage_name' => 'Completed'")
         ->and($controllerSource)->not->toContain("'next_stage_action' => ['label' => 'Production']")
         ->and($controllerSource)->not->toContain("'next_stage_action' => ['label' => 'Completed']")
         ->and($controllerSource)->toContain("'assignment_update_url'")
+        ->and($controllerSource)->toContain("'due_date_update_url'")
         ->and($controllerSource)->toContain("'assignee_options'")
+        ->and($controllerSource)->toContain("'can_edit_due_date'")
         ->and($controllerSource)->toContain("'made_by_user_id'")
         ->and($controllerSource)->not->toContain("\$makeOrder->assigned_to_user_id")
+        ->and($pageModuleSource)->toContain('saveWorkflowDueDate')
+        ->and($pageModuleSource)->toContain('workflowDueDateSaving')
+        ->and($pageModuleSource)->toContain('workflow.due_date_update_url')
+        ->and($pageModuleSource)->toContain('syncHeaderState')
+        ->and($pageModuleSource)->toContain("new CustomEvent('make-order-header-sync'")
+        ->and($pageModuleSource)->toContain('next_stage_action: asRecord(workflowPayload.next_stage_action)')
+        ->and($pageModuleSource)->toContain('next_stage_action: asRecord(data.next_stage_action)')
         ->and($pageModuleSource)->toContain('saveWorkflowAssignment')
         ->and($pageModuleSource)->toContain('$watch(\'workflow.made_by_user_id\'')
         ->and($pageModuleSource)->not->toContain('Save Assignee')
+        ->and($pageModuleSource)->not->toContain('saveWorkflowStage')
         ->and($pageModuleSource)->not->toContain("this.workflow.current_stage =")
         ->and($detailSectionDocSource)->toContain('Single-field selects should autosave on change when the update is safe')
         ->and($detailSectionDocSource)->toContain('must not add separate save buttons for safe single-field dropdown/select updates');
@@ -1244,4 +1268,37 @@ it('35c. make order detail omits the header workflow action when no valid next s
     );
 
     expect(data_get($payload, 'workflow.next_stage_action'))->toBeNull();
+});
+
+it('35d. make order detail header renders visible workflow state beside the title instead of in metadata rows', function (): void {
+    $headerSource = File::get(resource_path('views/components/resource-detail-header-breadcrumb.blade.php'));
+    $showSource = File::get(resource_path('views/manufacturing/make-orders/show.blade.php'));
+
+    expect($headerSource)->toContain('@isset($titleSuffix)')
+        ->and($headerSource)->toContain('data-resource-detail-header-title-row')
+        ->and($showSource)->toContain("x-on:make-order-header-sync.window=\"syncHeader(\$event.detail)\"")
+        ->and($showSource)->toContain('<x-slot name="titleSuffix">')
+        ->and($showSource)->toContain("x-text=\"workflowState || 'DRAFT'\"");
+});
+
+it('35e. make order detail workflow section keeps due date and assignee on one compact shared row', function (): void {
+    $source = File::get(resource_path('views/manufacturing/make-orders/show.blade.php'));
+
+    expect($source)->toContain('data-make-order-workflow-metadata-row')
+        ->and($source)->toContain('sm:grid-cols-2')
+        ->and($source)->toContain("{{ __('Due Date') }}")
+        ->and($source)->toContain("{{ __('Assigned To') }}")
+        ->and($source)->not->toContain('{{ __(\'Move Stage\') }}')
+        ->and($source)->not->toContain('{{ __(\'Current Stage\') }}');
+});
+
+it('35f. make order detail renders current stage tasks in a separate tasks section that defaults closed', function (): void {
+    $source = File::get(resource_path('views/manufacturing/make-orders/show.blade.php'));
+
+    expect($source)->toContain("title=\"Tasks\"")
+        ->and($source)->toContain(":description=\"__('Complete current stage tasks separately from workflow metadata editing.')\"")
+        ->and($source)->toContain(":default-open=\"false\"")
+        ->and($source)->toContain("{{ __('Current Stage Tasks') }}")
+        ->and($source)->toContain('workflow.current_stage_tasks.length === 0')
+        ->and($source)->toContain('x-on:click="completeWorkflowTask(task)"');
 });

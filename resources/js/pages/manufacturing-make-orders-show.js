@@ -14,10 +14,13 @@ export function mount(rootEl, payload) {
             default_open: Boolean(workflowPayload.default_open),
             transition_url: workflowPayload.transition_url || '',
             can_move_stage: Boolean(workflowPayload.can_move_stage),
+            due_date_update_url: workflowPayload.due_date_update_url || '',
+            can_edit_due_date: Boolean(workflowPayload.can_edit_due_date),
             assignment_update_url: workflowPayload.assignment_update_url || '',
             can_edit_assignment: Boolean(workflowPayload.can_edit_assignment),
             current_stage: asRecord(workflowPayload.current_stage),
             current_stage_label: workflowPayload.current_stage_label || '',
+            next_stage_action: asRecord(workflowPayload.next_stage_action),
             available_stages: asArray(workflowPayload.available_stages),
             assignee_options: asArray(workflowPayload.assignee_options),
             due_date: workflowPayload.due_date || '',
@@ -39,6 +42,9 @@ export function mount(rootEl, payload) {
         selectedIngredientItemId: '',
         selectedWorkflowStageId: '',
         ingredientsSaving: false,
+        workflowDueDateSaving: false,
+        workflowDueDateAutosaveReady: false,
+        lastSavedWorkflowDueDate: workflowPayload.due_date || '',
         workflowAssignmentSaving: false,
         workflowOwnerAutosaveReady: false,
         lastSavedWorkflowOwnerId: workflowPayload.made_by_user_id === null || workflowPayload.made_by_user_id === undefined
@@ -71,10 +77,12 @@ export function mount(rootEl, payload) {
                 ...asRecord(data),
                 current_stage: asRecord(data.current_stage),
                 current_stage_label: data.current_stage_label || '',
+                next_stage_action: asRecord(data.next_stage_action),
                 available_stages: asArray(data.available_stages),
                 assignee_options: asArray(data.assignee_options),
                 current_stage_tasks: asArray(data.current_stage_tasks),
             };
+            this.lastSavedWorkflowDueDate = this.workflow.due_date || '';
             this.lastSavedWorkflowOwnerId = this.normalizedWorkflowOwnerId(this.workflow.made_by_user_id);
         },
         init() {
@@ -93,6 +101,8 @@ export function mount(rootEl, payload) {
             });
 
             this.$nextTick(() => {
+                this.lastSavedWorkflowDueDate = this.workflow.due_date || '';
+                this.workflowDueDateAutosaveReady = true;
                 this.lastSavedWorkflowOwnerId = this.normalizedWorkflowOwnerId(this.workflow.made_by_user_id);
                 this.workflowOwnerAutosaveReady = true;
             });
@@ -114,6 +124,14 @@ export function mount(rootEl, payload) {
             this.toast.timeoutId = setTimeout(() => {
                 this.toast.visible = false;
             }, 2500);
+        },
+        syncHeaderState() {
+            window.dispatchEvent(new CustomEvent('make-order-header-sync', {
+                detail: {
+                    workflowState: this.makeOrder.workflow_state || 'DRAFT',
+                    nextStageAction: this.workflow.next_stage_action || null,
+                },
+            }));
         },
         goTo(url) {
             if (!url) {
@@ -150,6 +168,7 @@ export function mount(rootEl, payload) {
                 const data = await response.json();
                 this.hydrateMakeOrderResponse(data.data);
                 this.hydrateWorkflowResponse(data.workflow);
+                this.syncHeaderState();
                 this.selectedWorkflowStageId = '';
                 this.showToast('success', 'Workflow stage updated.');
             } catch (error) {
@@ -204,6 +223,50 @@ export function mount(rootEl, payload) {
                 this.showToast('error', 'Unable to save make order owner.');
             } finally {
                 this.workflowAssignmentSaving = false;
+            }
+        },
+        async saveWorkflowDueDate() {
+            if (!this.workflowDueDateAutosaveReady || !this.workflow.can_edit_due_date || !this.workflow.due_date_update_url) {
+                return;
+            }
+
+            const nextDueDate = this.workflow.due_date || '';
+
+            if (nextDueDate === this.lastSavedWorkflowDueDate || this.workflowDueDateSaving) {
+                return;
+            }
+
+            const previousDueDate = this.lastSavedWorkflowDueDate;
+            this.workflowDueDateSaving = true;
+
+            try {
+                const response = await fetch(this.workflow.due_date_update_url, {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        Accept: 'application/json',
+                        'X-CSRF-TOKEN': this.csrfToken,
+                    },
+                    body: JSON.stringify({
+                        due_date: nextDueDate === '' ? null : nextDueDate,
+                    }),
+                });
+
+                if (!response.ok) {
+                    this.workflow.due_date = previousDueDate;
+                    this.showToast('error', 'Unable to save due date.');
+                    return;
+                }
+
+                const data = await response.json();
+                this.hydrateMakeOrderResponse(data.data);
+                this.hydrateWorkflowResponse(data.workflow);
+                this.showToast('success', 'Due date updated.');
+            } catch (error) {
+                this.workflow.due_date = previousDueDate;
+                this.showToast('error', 'Unable to save due date.');
+            } finally {
+                this.workflowDueDateSaving = false;
             }
         },
         async completeWorkflowTask(task) {

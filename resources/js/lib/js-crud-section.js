@@ -393,24 +393,26 @@ const renderCrudSection = () => `
             <div class="mb-4 flex flex-col gap-3">
                 <p class="text-sm text-red-600" x-show="sectionError" x-text="sectionError"></p>
                 <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div class="flex flex-wrap items-center gap-3" x-show="section.toolbarToggles.length > 0">
+                    <div class="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center" x-show="section.toolbarToggles.length > 0">
                         <template x-for="toggle in section.toolbarToggles" :key="toggle.key">
-                            <label class="inline-flex items-center gap-3 text-sm text-gray-700">
-                                <span x-text="toggle.label"></span>
-                                <button
-                                    type="button"
-                                    class="relative inline-flex h-6 w-11 items-center rounded-full transition"
-                                    :class="toggleValues[toggle.key] ? 'bg-slate-900' : 'bg-gray-200'"
-                                    role="switch"
-                                    :aria-checked="toggleValues[toggle.key] ? 'true' : 'false'"
-                                    x-on:click="toggleToolbar(toggle.key)"
+                            <button
+                                type="button"
+                                class="flex items-center justify-between gap-4 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-500 focus-visible:ring-offset-2 sm:min-w-52"
+                                role="switch"
+                                :aria-checked="toggleValues[toggle.key] ? 'true' : 'false'"
+                                x-on:click="toggleToolbar(toggle.key)"
+                            >
+                                <span class="min-w-0 flex-1 text-sm font-medium leading-6 text-gray-900" x-text="toggle.label"></span>
+                                <span
+                                    class="inline-flex h-6 w-11 shrink-0 items-center rounded-full p-0.5 transition duration-200 ease-in-out"
+                                    :class="toggleValues[toggle.key] ? 'bg-slate-900' : 'bg-slate-300'"
                                 >
                                     <span
-                                        class="inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition"
-                                        :class="toggleValues[toggle.key] ? 'translate-x-5' : 'translate-x-1'"
+                                        class="inline-block h-5 w-5 rounded-full bg-white shadow-sm ring-1 ring-slate-900/10 transition duration-200 ease-in-out"
+                                        :class="toggleValues[toggle.key] ? 'translate-x-5' : 'translate-x-0'"
                                     ></span>
-                                </button>
-                            </label>
+                                </span>
+                            </button>
                         </template>
                     </div>
                     <div class="flex w-full justify-end sm:ml-auto sm:w-auto" data-js-crud-section-create-wrapper>
@@ -951,8 +953,10 @@ const createSectionState = (section, adapters, hostEl) => ({
         this.resetInlineCreateState();
         this.isFormOpen = true;
     },
-    async toggleToolbar(key) {
-        this.toggleValues[key] = !this.toggleValues[key];
+    async toggleToolbar(key, checked = null) {
+        this.toggleValues[key] = checked === null
+            ? !this.toggleValues[key]
+            : Boolean(checked);
         await this.fetchPage(1);
     },
     openEditForm(record) {

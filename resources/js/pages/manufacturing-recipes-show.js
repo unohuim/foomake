@@ -46,6 +46,33 @@ export function mount(rootEl, payload) {
         sectionRootEl._jsCrudSectionApi.updateSectionConfig(sectionConfig);
     };
 
+    Alpine.data('recipeActiveVersionHeaderMenu', (initialActiveVersion = {}) => ({
+        activeVersion: asRecord(initialActiveVersion),
+        init() {
+            window.addEventListener('recipe-active-version-sync', (event) => {
+                this.activeVersion = asRecord(event?.detail?.activeVersion);
+            });
+        },
+        versionLabel() {
+            return `Version ${asString(this.activeVersion.version_number_display, '—')}`;
+        },
+        statusLabel() {
+            return asString(this.activeVersion.status_label, asString(this.activeVersion.header_menu?.currentLabel));
+        },
+        menuOptions() {
+            return Array.isArray(this.activeVersion.header_menu?.options) ? this.activeVersion.header_menu.options : [];
+        },
+        dispatchAction(action) {
+            if (!action || typeof action !== 'object') {
+                return;
+            }
+
+            window.dispatchEvent(new CustomEvent('recipe-active-version-action', {
+                detail: { action },
+            }));
+        },
+    }));
+
     Alpine.data('manufacturingRecipesShow', () => ({
         recipe: safePayload.recipe || {},
         sections: safePayload.sections || {},
@@ -106,6 +133,21 @@ export function mount(rootEl, payload) {
                 ...asRecord(errors),
             };
         },
+        activeVersion() {
+            const activeVersion = asRecord(this.recipe.active_version);
+
+            return activeVersion.id ? activeVersion : null;
+        },
+        hasActiveVersionMenu() {
+            const activeVersion = this.activeVersion();
+
+            return Boolean(activeVersion && Array.isArray(activeVersion.header_menu?.options) && activeVersion.header_menu.options.length > 0);
+        },
+        activeVersionMenuOptions() {
+            const activeVersion = this.activeVersion();
+
+            return Array.isArray(activeVersion?.header_menu?.options) ? activeVersion.header_menu.options : [];
+        },
         showToast(type, message) {
             this.toast.type = type;
             this.toast.message = message;
@@ -125,6 +167,12 @@ export function mount(rootEl, payload) {
                     ...this.recipe,
                     ...data.recipe,
                 };
+
+                window.dispatchEvent(new CustomEvent('recipe-active-version-sync', {
+                    detail: {
+                        activeVersion: asRecord(data.recipe.active_version),
+                    },
+                }));
             }
 
             if (data.ingredients && typeof data.ingredients === 'object') {
@@ -249,6 +297,71 @@ export function mount(rootEl, payload) {
             await refreshSection('versions');
             this.closeVersion();
             this.showToast('success', 'Recipe version created.');
+        },
+        async performVersionAction(action, record, afterSuccess = null) {
+            if (!record || !action || typeof action !== 'object') {
+                return;
+            }
+
+            if (action.handlerKey === 'viewVersion') {
+                return;
+            }
+
+            if (action.handlerKey === 'makeVersion') {
+                await this.createMakeOrder(record.make_url || '');
+                return;
+            }
+
+            const actionToUrl = {
+                checkoutVersion: record.checkout_url,
+                checkInVersion: record.check_in_url,
+                publishVersion: record.publish_url,
+                duplicateVersion: record.duplicate_url,
+                archiveVersion: record.archive_url,
+            };
+            const actionToMethod = {
+                checkoutVersion: 'POST',
+                checkInVersion: 'POST',
+                publishVersion: 'PATCH',
+                duplicateVersion: 'POST',
+                archiveVersion: 'PATCH',
+            };
+
+            const endpoint = actionToUrl[action.handlerKey];
+
+            if (!endpoint) {
+                return;
+            }
+
+            const response = await fetch(endpoint, {
+                method: actionToMethod[action.handlerKey] || 'POST',
+                headers: {
+                    Accept: 'application/json',
+                    'X-CSRF-TOKEN': this.csrfToken,
+                },
+            });
+
+            if (!response.ok) {
+                this.showToast('error', 'Unable to update recipe version.');
+                return;
+            }
+
+            this.hydrateRecipeResponse(await response.json());
+            if (typeof afterSuccess === 'function') {
+                await afterSuccess();
+            }
+            this.showToast('success', 'Recipe version updated.');
+        },
+        async performHeaderVersionAction(action) {
+            const activeVersion = this.activeVersion();
+
+            if (!activeVersion) {
+                return;
+            }
+
+            await this.performVersionAction(action, activeVersion, async () => {
+                await refreshSection('versions');
+            });
         },
         async submitDelete() {
             this.isDeleteSubmitting = true;
@@ -450,52 +563,9 @@ export function mount(rootEl, payload) {
                 pageState?.openVersion();
             },
             handleAction: async ({ action, record, component }) => {
-                const actionToUrl = {
-                    checkoutVersion: record.checkout_url,
-                    checkInVersion: record.check_in_url,
-                    publishVersion: record.publish_url,
-                    duplicateVersion: record.duplicate_url,
-                    archiveVersion: record.archive_url,
-                };
-                const actionToMethod = {
-                    checkoutVersion: 'POST',
-                    checkInVersion: 'POST',
-                    publishVersion: 'PATCH',
-                    duplicateVersion: 'POST',
-                    archiveVersion: 'PATCH',
-                };
-
-                if (action.handlerKey === 'viewVersion') {
-                    return;
-                }
-
-                if (action.handlerKey === 'makeVersion') {
-                    await pageState?.createMakeOrder(record.make_url || '');
-                    return;
-                }
-
-                const endpoint = actionToUrl[action.handlerKey];
-
-                if (!endpoint) {
-                    return;
-                }
-
-                const response = await fetch(endpoint, {
-                    method: actionToMethod[action.handlerKey] || 'POST',
-                    headers: {
-                        Accept: 'application/json',
-                        'X-CSRF-TOKEN': safePayload.csrf_token || '',
-                    },
+                await pageState?.performVersionAction(action, record, async () => {
+                    await component.fetchPage(component.meta.current_page || 1);
                 });
-
-                if (!response.ok) {
-                    pageState?.showToast('error', 'Unable to update recipe version.');
-                    return;
-                }
-
-                pageState?.hydrateRecipeResponse(await response.json());
-                await component.fetchPage(component.meta.current_page || 1);
-                pageState?.showToast('success', 'Recipe version updated.');
             },
         },
         makeOrders: {
@@ -508,6 +578,8 @@ export function mount(rootEl, payload) {
                     totalOutputQuantityText: asString(record.qty_display, '—'),
                     statusText: asString(record.workflow_state, '—'),
                     statusTone: record.workflow_state === 'DRAFT' ? 'muted' : 'default',
+                    versionBadgeText: `v${asString(record.recipe_version_number_display, '—')}`,
+                    versionBadgeTone: 'subtle',
                     showUrl: asString(record.show_url, ''),
                 },
             }),

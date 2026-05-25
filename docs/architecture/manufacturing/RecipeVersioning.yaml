@@ -17,6 +17,11 @@ when_not_to_use:
 rules:
   - recipes is the stable parent identity and owns the main displayed recipe name.
   - recipes.current_version_id is the single pointer to the current recipe version.
+  - Recipe detail has one active/display version identity for the header action surface.
+  - Recipe detail display-version resolution order is:
+    - the current user's checked-out version for that recipe
+    - otherwise the current published version referenced by recipes.current_version_id
+    - otherwise the most recent version for that recipe
   - recipe_versions owns execution fields such as recipe_type and output_quantity.
   - recipe_version_lines owns versioned input lines.
   - Version status is lifecycle only and must use the canonical values from docs/ENUMS.md.
@@ -26,7 +31,9 @@ rules:
   - The auto-created draft must not be checked out automatically.
   - Recipe creation must not set `recipes.current_version_id` until a version is published.
   - Publishing a draft must set the draft lifecycle to published and move recipes.current_version_id to that version.
-  - Publishing does not require older published versions to become archived automatically.
+  - Publishing an older draft must first promote its version_number to the next highest recipe version number so newly published versions remain numerically newest.
+  - Publishing a draft must archive every previously published version for that same recipe.
+  - Publishing a draft must check in any open recipe-version checkouts that the publishing user still has for that same recipe.
   - New Make Orders must resolve the manufacturing recipe version referenced by recipes.current_version_id.
   - Parent recipe edits must not mutate version-owned execution fields.
   - Ingredients are owned by recipe_version_lines and are editable only through a checked-out draft owned by the current user.
@@ -38,11 +45,31 @@ rules:
   - The current published version exposes Make Order, Duplicate, and Archive.
   - Published non-current versions expose Duplicate and Archive.
   - Archived versions expose View and Duplicate.
+  - Recipe Version lifecycle state and row-equivalent actions should be surfaced through the Recipe detail header action menu for the resolved active/display version.
+  - The Recipe detail header should show `Version {x.xx}` beside that action menu using the same resolved active/display version.
+  - The Recipe detail header closed-state status or action button must visibly show the active/display version caption.
+  - When the active/display version is checked out by the current user, the closed header caption must read `Checked-Out`.
+  - Otherwise the closed header caption must follow lifecycle state such as Draft, Published, or Archived.
+  - Draft to Published transitions must use the existing Publish domain action rather than direct status mutation.
+  - Published to Draft is not supported unless an explicit unpublish action is later approved.
+  - Archived active/display versions remain read-only for lifecycle captioning and may expose only their existing valid row-equivalent actions.
+  - The Recipe detail header menu must mirror the active/display version row actions from the same shared action builder source.
+  - The Recipe detail header menu option descriptions must mirror the active/display version row-action intent:
+    - Check Out: Open this version for editing.
+    - Check In: Finish editing this version.
+    - Publish: Make this version current for new make orders.
+    - Make Order: Create a make order from this published version.
+    - Duplicate: Copy this version into a new draft.
+    - Delete: Permanently remove this draft version.
+    - Archive: Retire this published version from active use.
+    - View: Open this archived version read-only.
+  - Version rows keep their row-level vertical-dot action menus and must not render the header-style status/action select-button in every row.
   - Checked-out drafts may be checked in explicitly.
   - Published versions must not be checked out.
   - Published versions must not expose Checkout or direct Edit.
   - Draft versions must not expose Archive in the Versions list action menu.
   - Archived versions are hidden by default and appear only when the View Archived toggle is enabled.
+  - The Recipe detail Versions section must surface View Archived through the shared compact switch-style toolbar toggle contract rather than a visible native checkbox.
   - Version numbers must display in x.xx format.
   - Recipe detail Make Orders entry points, Recipes index Make actions, and Material detail recipe-row Make actions all create from recipes.current_version_id only.
 public_interface:

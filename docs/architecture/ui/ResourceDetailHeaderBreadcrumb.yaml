@@ -22,15 +22,26 @@ rules:
   - The shared component must support grouped metadata rows for compact resource headers.
   - Workflow-enabled resources may render a shared header action slot for next-stage actions when a valid configured workflow transition exists.
   - Workflow-enabled resources may render a shared header action slot for workflow entry when a pre-workflow draft state can move into the first configured workflow stage.
+  - Workflow-enabled resources may render a compact title-adjacent state chip through the shared header title row when that visible state is part of the resource identity.
   - Header workflow action buttons are only UI entry points into the existing workflow-stage transition system and must not hardcode lifecycle status transitions.
   - When a resource header displays a workflow-stage chip, the label must come from the resource's configured workflow-stage payload rather than a lifecycle status fallback.
   - Workflow-enabled headers may display a pre-workflow state such as `DRAFT`, but all post-entry labels and button text must come from configured workflow-stage payload data.
+  - Header workflow movement affordances belong in the shared header action area and must not be duplicated lower on the page.
+  - Resource detail headers may host compact right-aligned action or status menus in the shared header action slot when the header represents one active resource state.
+  - Recipe detail header owns the active-version status or action select-button for the page's active/display recipe version.
+  - Recipe detail header should render a compact `Version {x.xx}` label immediately beside the active-version status or action select-button in the right-side action area.
+  - Header select-button or action-menu captions should reflect the active/display state label while their menu options mirror the active resource's valid domain actions.
+  - Header status or action select-buttons must show a visible closed-state caption inside the button itself; icon-only closed states are not acceptable for active-state controls.
+  - Recipe detail active-version header captions use `Checked-Out` when the active/display version is checked out by the current user, otherwise they use the active/display version lifecycle label.
+  - Version-identity-driven detail pages must not keep a stale left-side version chip when the authoritative version identity is already rendered in the right-side header action cluster.
+  - Header select-button or action menus should use shared dropdown or button-menu contracts rather than page-local bespoke menu systems.
   - Header meta chips, icon chips, and optional actions must render inside the shared header component instead of page-local breadcrumb wrappers.
   - Materials, Recipes, and Make Orders must conform to this shared contract.
   - Inventory Counts must use the same shared header contract even when preserving their existing visual button treatment.
   - Resource breadcrumbs should use the Home / resource / record label pattern when a detail record label is available.
   - Make Order detail titles should use the `Make Order {id}` convention.
   - Header metadata chips should stay compact and avoid duplicative label noise.
+  - Make Order detail headers should keep recipe name and runs on the first metadata row and output item plus expected output quantity on the second metadata row.
 public_interface:
   - resources/views/components/resource-detail-header-breadcrumb.blade.php
   - resources/views/components/resource-breadcrumbs.blade.php

@@ -109,6 +109,13 @@ beforeEach(function (): void {
         ]));
     };
 
+    $this->checkInVersion = function (User $user, Recipe $recipe, RecipeVersion|int $version) {
+        return actingAs($user)->postJson(route('manufacturing.recipes.versions.check-in', [
+            'recipe' => $recipe,
+            'version' => $version instanceof RecipeVersion ? $version->id : $version,
+        ]));
+    };
+
     $this->extractPayload = function ($response, string $payloadId): array {
         $html = $response->getContent();
         $pattern = '/<script type="application\\/json" id="' . preg_quote($payloadId, '/') . '">\\s*(.*?)\\s*<\\/script>/s';
@@ -221,6 +228,15 @@ test('8. header shows the output item pill', function (): void {
 });
 
 test('9. header removes the old version label text', function (): void {
+    $source = File::get(resource_path('views/manufacturing/recipes/show.blade.php'));
+
+    expect($source)->not->toContain("{{ \$activeVersion['version_number_display'] ?? '—' }}")
+        ->and($source)->toContain('data-recipe-active-version-number-label')
+        ->and($source)->toContain('Version')
+        ->and($source)->not->toContain('rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700">{{ $activeVersion[\'version_number_display\'] ?? \'—\' }}');
+});
+
+test('10. header displays version number on the right in version x.xx format', function (): void {
     $tenant = ($this->makeTenant)('Tenant A');
     $user = ($this->makeUser)($tenant);
     ($this->grantPermission)($user, 'inventory-recipes-view');
@@ -232,25 +248,10 @@ test('9. header removes the old version label text', function (): void {
 
     actingAs($user)->get(route('manufacturing.recipes.show', $recipe))
         ->assertOk()
-        ->assertDontSee('Version 1.00');
+        ->assertSee('Version 1.00');
 });
 
-test('10. header displays version number in x.xx format', function (): void {
-    $tenant = ($this->makeTenant)('Tenant A');
-    $user = ($this->makeUser)($tenant);
-    ($this->grantPermission)($user, 'inventory-recipes-view');
-    ($this->grantPermission)($user, 'inventory-make-orders-manage');
-
-    $uom = ($this->makeUom)($tenant);
-    $output = ($this->makeItem)($tenant, $uom, 'Soup Output', ['is_manufacturable' => true]);
-    $recipe = ($this->createRecipe)($user, $output);
-
-    actingAs($user)->get(route('manufacturing.recipes.show', $recipe))
-        ->assertOk()
-        ->assertSee('1.00');
-});
-
-test('11. header uses current version metadata by default when one exists', function (): void {
+test('11. recipe detail header resolves to the checked out display version when one exists', function (): void {
     $tenant = ($this->makeTenant)('Tenant A');
     $user = ($this->makeUser)($tenant);
     ($this->grantPermission)($user, 'inventory-recipes-view');
@@ -263,61 +264,72 @@ test('11. header uses current version metadata by default when one exists', func
         'output_quantity' => '14.000000',
     ])->assertCreated()->json('data.id');
     ($this->publishVersion)($user, $recipe, $draftVersionId)->assertOk();
-
-    $payload = ($this->extractPayload)(
-        actingAs($user)->get(route('manufacturing.recipes.show', $recipe))->assertOk(),
-        'manufacturing-recipes-show-payload'
-    );
-
-    expect($payload['recipe']['display_version_number'] ?? null)->toBe('1.01')
-        ->and($payload['recipe']['display_output_quantity'] ?? null)->toBe('14.000000');
-});
-
-test('12. header falls back to the latest version metadata when no current version exists yet', function (): void {
-    $tenant = ($this->makeTenant)('Tenant A');
-    $user = ($this->makeUser)($tenant);
-    ($this->grantPermission)($user, 'inventory-recipes-view');
-    ($this->grantPermission)($user, 'inventory-make-orders-manage');
-
-    $uom = ($this->makeUom)($tenant);
-    $output = ($this->makeItem)($tenant, $uom, 'Soup Output', ['is_manufacturable' => true]);
-    $recipe = ($this->createRecipe)($user, $output);
-
-    $payload = ($this->extractPayload)(
-        actingAs($user)->get(route('manufacturing.recipes.show', $recipe))->assertOk(),
-        'manufacturing-recipes-show-payload'
-    );
-
-    expect($payload['recipe']['display_version_number'] ?? null)->toBe('1.00')
-        ->and($payload['recipe']['current_published_version_id'] ?? null)->toBeNull();
-});
-
-test('13. header uses current users checked out version metadata when present', function (): void {
-    $tenant = ($this->makeTenant)('Tenant A');
-    $user = ($this->makeUser)($tenant);
-    ($this->grantPermission)($user, 'inventory-recipes-view');
-    ($this->grantPermission)($user, 'inventory-make-orders-manage');
-
-    $uom = ($this->makeUom)($tenant);
-    $output = ($this->makeItem)($tenant, $uom, 'Soup Output', ['is_manufacturable' => true]);
-    $recipe = ($this->createRecipe)($user, $output);
-
-    $draftVersionId = (int) ($this->createDraftVersion)($user, $recipe, [
-        'output_quantity' => '14.000000',
+    $checkedOutDraftId = (int) ($this->createDraftVersion)($user, $recipe, [
+        'output_quantity' => '17.000000',
     ])->assertCreated()->json('data.id');
 
-    actingAs($user)->patchJson(route('manufacturing.recipes.versions.update', [$recipe, $draftVersionId]), [
-        'recipe_type' => 'manufacturing',
-        'output_quantity' => '14.500000',
-    ])->assertOk();
+    $payload = ($this->extractPayload)(
+        actingAs($user)->get(route('manufacturing.recipes.show', $recipe))->assertOk(),
+        'manufacturing-recipes-show-payload'
+    );
+
+    expect(data_get($payload, 'recipe.active_version.id'))->toBe($checkedOutDraftId)
+        ->and(data_get($payload, 'recipe.active_version.version_number_display'))->toBe('1.02')
+        ->and(data_get($payload, 'recipe.active_version.output_quantity'))->toBe('17.000000')
+        ->and(data_get($payload, 'recipe.active_version.status_label'))->toBe('Checked-Out')
+        ->and(data_get($payload, 'recipe.display_version_id'))->toBe($checkedOutDraftId);
+});
+
+test('12. recipe detail header falls back to the published current version when there is no checked out version', function (): void {
+    $tenant = ($this->makeTenant)('Tenant A');
+    $user = ($this->makeUser)($tenant);
+    ($this->grantPermission)($user, 'inventory-recipes-view');
+    ($this->grantPermission)($user, 'inventory-make-orders-manage');
+
+    $uom = ($this->makeUom)($tenant);
+    $output = ($this->makeItem)($tenant, $uom, 'Soup Output', ['is_manufacturable' => true]);
+    $recipe = ($this->createRecipe)($user, $output);
+    $publishedVersionId = (int) ($this->createDraftVersion)($user, $recipe, [
+        'output_quantity' => '14.000000',
+    ])->assertCreated()->json('data.id');
+    ($this->publishVersion)($user, $recipe, $publishedVersionId)->assertOk();
 
     $payload = ($this->extractPayload)(
         actingAs($user)->get(route('manufacturing.recipes.show', $recipe))->assertOk(),
         'manufacturing-recipes-show-payload'
     );
 
-    expect($payload['recipe']['display_version_number'] ?? null)->toBe('1.01')
-        ->and($payload['recipe']['display_output_quantity'] ?? null)->toBe('14.500000');
+    expect(data_get($payload, 'recipe.active_version.id'))->toBe($publishedVersionId)
+        ->and(data_get($payload, 'recipe.active_version.version_number_display'))->toBe('1.01')
+        ->and(data_get($payload, 'recipe.active_version.status'))->toBe('PUBLISHED')
+        ->and(data_get($payload, 'recipe.active_version.status_label'))->toBe('Published')
+        ->and(data_get($payload, 'recipe.current_published_version_id'))->not->toBeNull();
+});
+
+test('13. recipe detail header falls back to the most recent version when no published version exists', function (): void {
+    $tenant = ($this->makeTenant)('Tenant A');
+    $user = ($this->makeUser)($tenant);
+    ($this->grantPermission)($user, 'inventory-recipes-view');
+    ($this->grantPermission)($user, 'inventory-make-orders-manage');
+
+    $uom = ($this->makeUom)($tenant);
+    $output = ($this->makeItem)($tenant, $uom, 'Soup Output', ['is_manufacturable' => true]);
+    $recipe = ($this->createRecipe)($user, $output);
+    $draftVersionId = (int) ($this->createDraftVersion)($user, $recipe, [
+        'output_quantity' => '21.000000',
+    ])->assertCreated()->json('data.id');
+    ($this->checkInVersion)($user, $recipe, $draftVersionId)->assertOk();
+
+    $payload = ($this->extractPayload)(
+        actingAs($user)->get(route('manufacturing.recipes.show', $recipe))->assertOk(),
+        'manufacturing-recipes-show-payload'
+    );
+
+    expect(data_get($payload, 'recipe.active_version.id'))->toBe($draftVersionId)
+        ->and(data_get($payload, 'recipe.active_version.version_number_display'))->toBe('1.01')
+        ->and(data_get($payload, 'recipe.active_version.output_quantity'))->toBe('21.000000')
+        ->and(data_get($payload, 'recipe.active_version.status_label'))->toBe('Draft')
+        ->and(data_get($payload, 'recipe.current_published_version_id'))->toBeNull();
 });
 
 test('14. ingredients accordion renders on recipe detail', function (): void {
@@ -549,6 +561,287 @@ test('24. versions payload exposes state appropriate dropdown actions and view a
         ->and(data_get($payload, 'sections.versions.toolbarToggles.0.label'))->toBe('View Archived');
 });
 
+test('24aa. recipe detail payload exposes one active version header menu while version rows stay row focused', function (): void {
+    $tenant = ($this->makeTenant)('Tenant A');
+    $user = ($this->makeUser)($tenant);
+    ($this->grantPermission)($user, 'inventory-recipes-view');
+    ($this->grantPermission)($user, 'inventory-make-orders-manage');
+
+    $uom = ($this->makeUom)($tenant);
+    $output = ($this->makeItem)($tenant, $uom, 'Status Menu Output', ['is_manufacturable' => true]);
+    $recipe = ($this->createRecipe)($user, $output);
+
+    $publishedDraftId = (int) ($this->createDraftVersion)($user, $recipe)->assertCreated()->json('data.id');
+    ($this->publishVersion)($user, $recipe, $publishedDraftId)->assertOk();
+    $draftVersionId = (int) ($this->createDraftVersion)($user, $recipe, [
+        'output_quantity' => '11.000000',
+    ])->assertCreated()->json('data.id');
+    actingAs($user)->postJson(route('manufacturing.recipes.versions.check-in', [$recipe, $draftVersionId]))->assertOk();
+    $archivedDraftId = (int) ($this->createDraftVersion)($user, $recipe, [
+        'output_quantity' => '12.000000',
+    ])->assertCreated()->json('data.id');
+    actingAs($user)->patchJson(route('manufacturing.recipes.versions.archive', [$recipe, $archivedDraftId]))
+        ->assertOk();
+
+    $rows = actingAs($user)
+        ->getJson(route('manufacturing.recipes.versions.index', [$recipe, 'include_archived' => 1]))
+        ->assertOk()
+        ->json('data');
+
+    $publishedRow = collect($rows)->firstWhere('id', $publishedDraftId);
+    $draftRow = collect($rows)->firstWhere('id', $draftVersionId);
+    $archivedRow = collect($rows)->firstWhere('id', $archivedDraftId);
+
+    $payload = ($this->extractPayload)(
+        actingAs($user)->get(route('manufacturing.recipes.show', $recipe))->assertOk(),
+        'manufacturing-recipes-show-payload'
+    );
+
+    expect(data_get($payload, 'recipe.active_version.id'))->toBe($publishedDraftId)
+        ->and(data_get($payload, 'recipe.active_version.header_menu.currentLabel'))->toBe('Published')
+        ->and(data_get($payload, 'recipe.active_version.header_menu.options.0.label'))->toBe('Make Order')
+        ->and(data_get($payload, 'recipe.active_version.header_menu.options.0.description'))->toBe('Create a make order from this published version.')
+        ->and(data_get($payload, 'recipe.active_version.header_menu.options.1.description'))->toBe('Copy this version into a new draft.')
+        ->and(data_get($payload, 'recipe.active_version.header_menu.options.2.description'))->toBe('Retire this published version from active use.')
+        ->and(data_get($payload, 'recipe.active_version.availableActions'))->toBe($publishedRow['availableActions'])
+        ->and(data_get($draftRow, 'header_menu'))->toBeNull()
+        ->and(data_get($publishedRow, 'header_menu'))->toBeNull()
+        ->and(data_get($archivedRow, 'header_menu'))->toBeNull();
+});
+
+test('24aaa. recipe detail returns 200 when the shared dropdown renders the header active version menu', function (): void {
+    $tenant = ($this->makeTenant)('Tenant A');
+    $user = ($this->makeUser)($tenant);
+    ($this->grantPermission)($user, 'inventory-recipes-view');
+    ($this->grantPermission)($user, 'inventory-make-orders-manage');
+
+    $uom = ($this->makeUom)($tenant);
+    $output = ($this->makeItem)($tenant, $uom, 'Header Menu Output', ['is_manufacturable' => true]);
+    $recipe = ($this->createRecipe)($user, $output);
+    $draftVersionId = (int) ($this->createDraftVersion)($user, $recipe)->assertCreated()->json('data.id');
+    ($this->publishVersion)($user, $recipe, $draftVersionId)->assertOk();
+
+    $response = actingAs($user)->get(route('manufacturing.recipes.show', $recipe))
+        ->assertOk()
+        ->assertSee('data-recipe-active-version-menu', false)
+        ->assertSee('Version 1.01')
+        ->assertSee('Published');
+
+    $payload = ($this->extractPayload)($response, 'manufacturing-recipes-show-payload');
+
+    expect(data_get($payload, 'recipe.active_version.header_menu.currentLabel'))->toBe('Published')
+        ->and(collect(data_get($payload, 'recipe.active_version.header_menu.options', []))->pluck('label')->all())
+            ->toBe(['Make Order', 'Duplicate', 'Archive']);
+});
+
+test('24aaab. draft active version renders the header status action button with visible draft text', function (): void {
+    $tenant = ($this->makeTenant)('Tenant A');
+    $user = ($this->makeUser)($tenant);
+    ($this->grantPermission)($user, 'inventory-recipes-view');
+    ($this->grantPermission)($user, 'inventory-make-orders-manage');
+
+    $uom = ($this->makeUom)($tenant);
+    $output = ($this->makeItem)($tenant, $uom, 'Draft Header Output', ['is_manufacturable' => true]);
+    $recipe = ($this->createRecipe)($user, $output);
+
+    actingAs($user)->get(route('manufacturing.recipes.show', $recipe))
+        ->assertOk()
+        ->assertSee('Version 1.00')
+        ->assertSee('data-recipe-active-version-menu', false)
+        ->assertSee('data-recipe-active-version-label', false)
+        ->assertSee('Draft');
+});
+
+test('24aaac. checked out active draft uses checked-out as the closed header caption', function (): void {
+    $tenant = ($this->makeTenant)('Tenant A');
+    $user = ($this->makeUser)($tenant);
+    ($this->grantPermission)($user, 'inventory-recipes-view');
+    ($this->grantPermission)($user, 'inventory-make-orders-manage');
+
+    $uom = ($this->makeUom)($tenant);
+    $output = ($this->makeItem)($tenant, $uom, 'Checked Out Header Output', ['is_manufacturable' => true]);
+    $recipe = ($this->createRecipe)($user, $output);
+    $draftVersionId = (int) ($this->createDraftVersion)($user, $recipe)->assertCreated()->json('data.id');
+
+    $response = actingAs($user)->get(route('manufacturing.recipes.show', $recipe))
+        ->assertOk()
+        ->assertSee('Version 1.01')
+        ->assertSee('data-recipe-active-version-label', false)
+        ->assertSee('Checked-Out');
+
+    $payload = ($this->extractPayload)($response, 'manufacturing-recipes-show-payload');
+
+    expect(data_get($payload, 'recipe.active_version.id'))->toBe($draftVersionId)
+        ->and(data_get($payload, 'recipe.active_version.is_checked_out_by_user'))->toBeTrue()
+        ->and(data_get($payload, 'recipe.active_version.status'))->toBe('DRAFT')
+        ->and(data_get($payload, 'recipe.active_version.status_label'))->toBe('Checked-Out')
+        ->and(data_get($payload, 'recipe.active_version.header_menu.currentLabel'))->toBe('Checked-Out')
+        ->and(collect(data_get($payload, 'recipe.active_version.header_menu.options', []))->pluck('label')->all())
+            ->toBe(['Check In', 'Publish', 'Duplicate', 'Delete'])
+        ->and(collect(data_get($payload, 'recipe.active_version.header_menu.options', []))->pluck('description')->all())
+            ->toBe([
+                'Finish editing this version.',
+                'Make this version current for new make orders.',
+                'Copy this version into a new draft.',
+                'Permanently remove this draft version.',
+            ]);
+});
+
+test('24aaad. archived active version payload uses archived caption and archived row-equivalent descriptions', function (): void {
+    $tenant = ($this->makeTenant)('Tenant A');
+    $user = ($this->makeUser)($tenant);
+    ($this->grantPermission)($user, 'inventory-recipes-view');
+    ($this->grantPermission)($user, 'inventory-make-orders-manage');
+
+    $uom = ($this->makeUom)($tenant);
+    $output = ($this->makeItem)($tenant, $uom, 'Archived Header Output', ['is_manufacturable' => true]);
+    $recipe = ($this->createRecipe)($user, $output);
+
+    $draftVersionId = (int) $recipe->versions()->orderBy('id')->value('id');
+    actingAs($user)->patchJson(route('manufacturing.recipes.versions.archive', [$recipe, $draftVersionId]))->assertOk();
+
+    $response = actingAs($user)->get(route('manufacturing.recipes.show', $recipe))
+        ->assertOk()
+        ->assertSee('Version 1.00')
+        ->assertSee('Archived');
+
+    $payload = ($this->extractPayload)($response, 'manufacturing-recipes-show-payload');
+
+    expect(data_get($payload, 'recipe.active_version.status'))->toBe('ARCHIVED')
+        ->and(data_get($payload, 'recipe.active_version.status_label'))->toBe('Archived')
+        ->and(data_get($payload, 'recipe.active_version.header_menu.currentLabel'))->toBe('Archived')
+        ->and(collect(data_get($payload, 'recipe.active_version.header_menu.options', []))->pluck('label')->all())
+            ->toBe(['View', 'Duplicate'])
+        ->and(collect(data_get($payload, 'recipe.active_version.header_menu.options', []))->pluck('description')->all())
+            ->toBe([
+                'Open this archived version read-only.',
+                'Copy this archived version into a new draft.',
+            ]);
+});
+
+test('24ab. draft active version header menu publishes through the existing publish domain action contract', function (): void {
+    $tenant = ($this->makeTenant)('Tenant A');
+    $user = ($this->makeUser)($tenant);
+    ($this->grantPermission)($user, 'inventory-recipes-view');
+    ($this->grantPermission)($user, 'inventory-make-orders-view');
+    ($this->grantPermission)($user, 'inventory-make-orders-execute');
+    ($this->grantPermission)($user, 'inventory-make-orders-manage');
+
+    $uom = ($this->makeUom)($tenant);
+    $output = ($this->makeItem)($tenant, $uom, 'Status Publish Output', ['is_manufacturable' => true]);
+    $recipe = ($this->createRecipe)($user, $output);
+    $draftVersionId = (int) ($this->createDraftVersion)($user, $recipe)->assertCreated()->json('data.id');
+
+    $payload = ($this->extractPayload)(
+        actingAs($user)->get(route('manufacturing.recipes.show', $recipe))->assertOk(),
+        'manufacturing-recipes-show-payload'
+    );
+
+    $publishAction = data_get($payload, 'recipe.active_version.header_menu.options.1.action');
+
+    expect(data_get($publishAction, 'type'))->toBe('custom')
+        ->and(data_get($publishAction, 'handlerKey'))->toBe('publishVersion')
+        ->and(data_get($payload, 'recipe.active_version.publish_url'))->toBe(route('manufacturing.recipes.versions.publish', [$recipe, $draftVersionId]));
+
+    $response = actingAs($user)->patchJson(route('manufacturing.recipes.versions.publish', [$recipe, $draftVersionId]))
+        ->assertOk();
+
+    expect(data_get($response->json(), 'recipe.current_version_id'))->toBe($draftVersionId)
+        ->and(data_get($response->json(), 'data.status'))->toBe('PUBLISHED')
+        ->and(data_get($response->json(), 'sections.makeOrders.permissions.canCreate'))->toBeTrue()
+        ->and(data_get($response->json(), 'ui.recently_published_version_id'))->toBe($draftVersionId)
+        ->and(data_get($response->json(), 'recipe.active_version.header_menu.currentLabel'))->toBe('Published');
+});
+
+test('24a. versions section view archived toggle uses the shared tailwind switch markup', function (): void {
+    $source = File::get(resource_path('js/lib/js-crud-section.js'));
+
+    expect($source)->toContain('type="button"')
+        ->and($source)->toContain('role="switch"')
+        ->and($source)->toContain('flex items-center justify-between gap-4 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-500 focus-visible:ring-offset-2 sm:min-w-52')
+        ->and($source)->toContain('min-w-0 flex-1 text-sm font-medium leading-6 text-gray-900')
+        ->and($source)->toContain(':aria-checked="toggleValues[toggle.key] ? \'true\' : \'false\'"')
+        ->and($source)->toContain('inline-flex h-6 w-11 shrink-0 items-center rounded-full p-0.5 transition duration-200 ease-in-out')
+        ->and($source)->toContain(":class=\"toggleValues[toggle.key] ? 'bg-slate-900' : 'bg-slate-300'\"")
+        ->and($source)->toContain('inline-block h-5 w-5 rounded-full bg-white shadow-sm ring-1 ring-slate-900/10 transition duration-200 ease-in-out')
+        ->and($source)->toContain(":class=\"toggleValues[toggle.key] ? 'translate-x-5' : 'translate-x-0'\"")
+        ->and($source)->toContain('x-on:click="toggleToolbar(toggle.key)"')
+        ->and($source)->not->toContain('type="checkbox"')
+        ->and($source)->not->toContain('rounded border-gray-300 text-blue-600');
+});
+
+test('24b. tailwind scans shared js renderers so versions switch classes compile into css', function (): void {
+    $source = File::get(base_path('tailwind.config.js'));
+
+    expect($source)->toContain('./resources/views/**/*.blade.php')
+        ->and($source)->toContain('./resources/js/**/*.js');
+});
+
+test('24c. recipe versions toolbar is mounted through the shared js crud section renderer', function (): void {
+    $bladeSource = File::get(resource_path('views/manufacturing/recipes/show.blade.php'));
+    $pageSource = File::get(resource_path('js/pages/manufacturing-recipes-show.js'));
+
+    expect($bladeSource)->toContain('data-js-crud-section-root data-section-key="versions"')
+        ->and($pageSource)->toContain("import { mountCrudSection } from '../lib/js-crud-section';")
+        ->and($pageSource)->toContain('mountCrudSection(sectionRootEl, {');
+});
+
+test('24d. recipe header status action menu uses the shared header action slot and shared tailwind menu contract', function (): void {
+    $headerSource = File::get(resource_path('views/components/resource-detail-header-breadcrumb.blade.php'));
+    $dropdownSource = File::get(resource_path('views/components/dropdown.blade.php'));
+    $viewSource = File::get(resource_path('views/manufacturing/recipes/show.blade.php'));
+    $pageSource = File::get(resource_path('js/pages/manufacturing-recipes-show.js'));
+
+    expect($headerSource)->toContain('data-resource-detail-header-actions')
+        ->and($dropdownSource)->toContain('{{ $slot }}')
+        ->and($dropdownSource)->not->toContain('{{ $content }}')
+        ->and($viewSource)->toContain('<x-slot name="actions">')
+        ->and($viewSource)->toContain('data-recipe-active-version-number-label')
+        ->and($viewSource)->toContain('data-recipe-active-version-menu')
+        ->and($viewSource)->toContain('data-recipe-active-version-label')
+        ->and($viewSource)->toContain('text-sm font-semibold text-slate-700')
+        ->and($viewSource)->toContain('inline-flex items-stretch rounded-lg border border-slate-300 bg-white shadow-sm')
+        ->and($viewSource)->toContain('border-l border-slate-300 px-2.5 text-slate-500')
+        ->and($viewSource)->toContain('x-show="option.description"')
+        ->and($viewSource)->toContain('x-text="option.description"')
+        ->and($pageSource)->toContain("window.dispatchEvent(new CustomEvent('recipe-active-version-sync'")
+        ->and($pageSource)->toContain("window.dispatchEvent(new CustomEvent('recipe-active-version-action'")
+        ->and($pageSource)->toContain("Alpine.data('recipeActiveVersionHeaderMenu'")
+        ->and($viewSource)->not->toContain('<el-select')
+        ->and($viewSource)->not->toContain('<el-option')
+        ->and($viewSource)->not->toContain('@tailwindplus/elements')
+        ->and($viewSource)->not->toContain('[el-selectedcontent_&]:hidden')
+        ->and($viewSource)->not->toContain('rounded-full border border-slate-200 bg-slate-50');
+});
+
+test('24e. recipe header status action menu does not use a visible native select and version rows keep the vertical dot menu', function (): void {
+    $viewSource = File::get(resource_path('views/manufacturing/recipes/show.blade.php'));
+    $source = File::get(resource_path('js/lib/js-crud-section.js'));
+
+    expect($viewSource)->toContain('data-recipe-active-version-menu')
+        ->and($viewSource)->not->toContain('data-recipe-active-version-native-select')
+        ->and($viewSource)->not->toContain('<select')
+        ->and($viewSource)->not->toContain('sr-only">{{ data_get($activeVersion, \'status_label\'')
+        ->and($source)->toContain('aria-label="Actions"')
+        ->and($source)->toContain('section.showRowActionsMenu && visibleActions(record).length > 0');
+});
+
+test('24f. recipe header actions delegate to the same action builder source as version rows instead of duplicating rules', function (): void {
+    $controllerSource = File::get(app_path('Http/Controllers/RecipeController.php'));
+    $pageSource = File::get(resource_path('js/pages/manufacturing-recipes-show.js'));
+
+    expect($controllerSource)->toContain('private function recipeVersionListRow(')
+        ->and($controllerSource)->toContain('private function activeRecipeVersionSummary(')
+        ->and($controllerSource)->toContain('private function resolveRecipeDetailDisplayVersion(')
+        ->and($controllerSource)->toContain('private function activeRecipeVersionHeaderLabel(')
+        ->and($controllerSource)->toContain('$this->recipeVersionListRow(')
+        ->and($controllerSource)->toContain("'description' => 'Open this version for editing.'")
+        ->and($controllerSource)->toContain("'description' => 'Make this version current for new make orders.'")
+        ->and($pageSource)->toContain('performHeaderVersionAction(action)')
+        ->and($pageSource)->not->toContain('record.status =')
+        ->and($pageSource)->not->toContain('recipe.active_version.status =');
+});
+
 test('25. recipe detail renders the reusable make orders accordion crud section', function (): void {
     $tenant = ($this->makeTenant)('Tenant A');
     $user = ($this->makeUser)($tenant);
@@ -579,6 +872,8 @@ test('25. recipe detail renders the reusable make orders accordion crud section'
         ->and(data_get($payload, 'sections.makeOrders.createAction.submitLabel'))->toBe('Create Make Order')
         ->and(data_get($payload, 'sections.makeOrders.createAction.description'))->toContain('Soup Recipe')
         ->and(data_get($payload, 'sections.makeOrders.endpoints.create'))->toBe(route('manufacturing.recipes.make-orders.store', $recipe))
+        ->and(data_get($payload, 'sections.makeOrders.rowLayout.badges.0.field'))->toBe('display.statusText')
+        ->and(data_get($payload, 'sections.makeOrders.rowLayout.badges.1.field'))->toBe('display.versionBadgeText')
         ->and(data_get($payload, 'sections.makeOrders.fields'))->toBe([
             [
                 'name' => 'runs',
@@ -588,6 +883,47 @@ test('25. recipe detail renders the reusable make orders accordion crud section'
                 'rowGroup' => '',
             ],
         ]);
+});
+
+test('25a. recipe detail make orders rows include a compact version badge beside the workflow status badge', function (): void {
+    $tenant = ($this->makeTenant)('Tenant A');
+    $user = ($this->makeUser)($tenant);
+    ($this->grantPermission)($user, 'inventory-recipes-view');
+    ($this->grantPermission)($user, 'inventory-make-orders-view');
+    ($this->grantPermission)($user, 'inventory-make-orders-execute');
+    ($this->grantPermission)($user, 'inventory-make-orders-manage');
+
+    $uom = ($this->makeUom)($tenant);
+    $output = ($this->makeItem)($tenant, $uom, 'Soup Output', ['is_manufacturable' => true]);
+    $recipe = ($this->createRecipe)($user, $output);
+    $publishedDraftId = (int) ($this->createDraftVersion)($user, $recipe)->assertCreated()->json('data.id');
+    ($this->publishVersion)($user, $recipe, $publishedDraftId)->assertOk();
+    $currentVersion = RecipeVersion::query()->findOrFail((int) $recipe->fresh()->current_version_id);
+
+    $makeOrder = MakeOrder::query()->forceCreate([
+        'tenant_id' => $tenant->id,
+        'recipe_id' => $recipe->id,
+        'recipe_version_id' => $currentVersion->id,
+        'output_item_id' => $output->id,
+        'output_quantity' => '4.000000',
+        'status' => MakeOrder::STATUS_DRAFT,
+        'due_date' => null,
+        'scheduled_at' => null,
+        'made_at' => null,
+        'created_by_user_id' => $user->id,
+        'made_by_user_id' => null,
+    ]);
+
+    $row = actingAs($user)
+        ->getJson(route('manufacturing.recipes.make-orders.index', $recipe))
+        ->assertOk()
+        ->json('data.0');
+
+    expect(data_get($row, 'id'))->toBe($makeOrder->id)
+        ->and(data_get($row, 'display.statusText'))->toBe('DRAFT')
+        ->and(data_get($row, 'display.versionBadgeText'))->toBe('v1.01')
+        ->and(data_get($row, 'display.versionBadgeTone'))->toBe('subtle')
+        ->and(data_get($row, 'recipe_version_id'))->toBe($currentVersion->id);
 });
 
 test('25aa. recipe detail make orders section uses the shared mobile page size contract instead of bespoke mobile markup', function (): void {

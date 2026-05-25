@@ -201,22 +201,38 @@ Notes:
 - Recipe detail uses the same reusable CRUD detail-section pattern for a `Make Orders` accordion scoped to one recipe; the right-aligned shared `+` action opens the built-in shared section slide-over, create always uses the recipe current published version, and checked-out drafts are never used.
 - Recipe detail `Make Orders` create eligibility is reactive: publishing the first or current recipe version updates the shared section action contract immediately so the right-aligned `+` appears without a full page refresh.
 - Recipe detail `Versions` rows follow the shared row-action dropdown contract; draft rows expose `Publish`, and publish success may trigger a temporary row highlight when the newly current version re-sorts to the top.
+- Recipe detail `Versions` toolbar toggles use the shared compact switch contract in the reusable detail-section renderer, with left-aligned label text and a right-aligned pill track rather than a visible native checkbox.
+- Recipe detail header owns one active-version status or action menu, using a Tailwind-only split-button style through the shared header action slot rather than rendering one status-action button in every Version row.
+- That header split-button must show the active version caption visibly in the closed state; icon-only status or action controls are not acceptable.
+- Recipe detail header renders `Version {x.xx}` beside that split-button in the right-side action area and must not keep a stale standalone version chip in the left metadata group.
+- Recipe detail closed header captions use `Checked-Out` for the current user's checked-out active version, otherwise `Draft`, `Published`, or `Archived` from the active version lifecycle.
+- Recipe detail active-version identity uses the current user's checked-out version first, otherwise `recipes.current_version_id`, otherwise the most recent version, and the header plus Ingredients section should read from that same resolved display-version identity.
+- Header active-version menu options mirror the active Version row's valid actions from the same shared action builder source, and publish from that header menu refreshes Make Orders create eligibility immediately.
+- Header active-version menu helper descriptions also come from that shared action catalog so row-equivalent action intent does not drift.
+- Publishing a new recipe version archives all previously published versions for that same recipe before moving `recipes.current_version_id`.
+- Publishing an older recipe draft first promotes its version number to the next highest available recipe version number before it becomes current.
 - Recipe detail section order is `Make Orders`, `Ingredients`, then `Versions`; `Make Orders` defaults open while `Ingredients` and `Versions` default collapsed.
 - Recipe detail `Make Orders` may opt into a shared mobile page-size contract so the same reusable section renders the latest `3` rows first on mobile while retaining shared pagination controls for remaining rows.
+- Recipe detail `Make Orders` rows may reuse the shared badges row to show both workflow state and a compact `v{x.xx}` recipe-version snapshot badge on the same line.
 - Recipes index row menus expose `Make` when the recipe has a current published manufacturing version and the current user can execute Make Orders.
 - Make Orders index primary recipe-name rows use the shared linked-text CRUD contract to open the Make Order detail page.
-- Make Order detail uses the shared resource detail header pattern plus a Workflow detail section followed by a shared `Ingredients` detail section for editable snapshot rows sourced from `make_order_lines`.
+- Make Order detail uses the shared resource detail header pattern plus `Workflow`, `Tasks`, and `Ingredients` detail sections in that order.
 - Shared workflow-enabled resource headers may expose one compact next-stage action through the shared header action slot when a valid configured transition exists.
 - Shared workflow-enabled resource headers may expose one compact draft-entry action through the same header action slot when a pre-workflow draft can enter the first configured stage.
 - Shared resource headers may render grouped metadata rows through the shared header metadata slot; Make Orders use recipe/runs on the first row and output item/expected output on the second row.
+- Shared resource headers may render a compact visible-state chip beside the title when the resource uses a workflow-stage-driven status surface.
 - Make Order visible state is `DRAFT` while `workflow_stage_id` is null, then tenant-configured `workflow_stages.name` after workflow entry; lifecycle `status` remains lifecycle-only while `workflow_stage_id` tracks the operational workflow position.
+- Make Order detail keeps that visible state beside the `Make Order {id}` title rather than repeating it in the compact metadata rows.
 - Make Order workflow ownership metadata lives on `make_orders.made_by_user_id`, auto-assigns to the creator on Make Order creation, and is edited from the Workflow section through the shared dropdown-select pattern.
 - `make_orders.assigned_to_user_id` is not part of the Make Order schema and must not be used for Make Order ownership.
+- Make Order due date is edited inline from the Workflow section through a compact autosave date input.
 - Make Order assignee options are tenant-scoped, include an explicit `Unassigned` choice, autosave on change, and reject cross-tenant assignment.
+- Make Order due-date changes must not mutate lifecycle `status`, operational `workflow_stage_id`, `make_order_lines`, `recipe_version_lines`, workflow tasks, or task templates.
 - Make Order assignee changes must not mutate lifecycle `status`, operational `workflow_stage_id`, `make_order_lines`, `recipe_version_lines`, workflow tasks, or task templates.
 - Make Order stage transitions must preserve `made_by_user_id`.
 - Generated Make Order workflow task assignees remain independent from Make Order assignee metadata.
 - Shared detail-section UX should prefer compact inline autosave controls for safe single-field updates and avoid extra save-button rows.
+- Shared detail sections should not duplicate stage-movement controls already owned by the shared header workflow action.
 - Recipe-scoped Make Order create may redirect directly to the created Make Order detail page through the shared section create-success hook when `show_url` is returned.
 - Make Order header, index, Workflow section, and shared Material/Recipe detail rows all use the same workflow-stage-driven display rule after workflow entry.
 - Reusable detail sections may disable the vertical-dots row menu through `showRowActionsMenu: false`; the default remains enabled for existing section consumers, and disabled sections may surface their configured row actions inline instead.
@@ -264,18 +280,19 @@ Notes:
 - `resources/js/pages/manufacturing-make-orders-show.js`
 
 **Purpose:**
-Render operational workflow-stage movement, assignee context, due date, and current-stage tasks on Make Order detail without overloading lifecycle status.
+Render compact due-date and assignee editing on Make Order detail while keeping workflow-stage movement in the shared header action and current-stage tasks in a separate detail section.
 
 **When to Use:**
-- Make Order detail workflow-stage transitions
-- Showing current manufacturing workflow stage tasks on a Make Order
+- Editing Make Order due date
 - Editing Make Order workflow ownership assignment
+- Surfacing the shared header workflow transition action for a Make Order
 
 **When Not to Use:**
 - Recipe versioning
 - Lifecycle status transitions such as making or cancelling
 
 **Public Interface:**
+- `manufacturing.make-orders.due-date.update`
 - `manufacturing.make-orders.workflow-stage.update`
 - `MoveMakeOrderWorkflowStageAction::execute()`
 - `ResolveManufacturingWorkflowStageAction::availableTransitions()`
