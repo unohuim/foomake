@@ -149,6 +149,7 @@ The UI should feel:
 - No heavy borders
 - Subtle dividers only when necessary
 - Vertical “⋮” actions menu on the far right
+- Exception: when a row exposes only one destructive AJAX-first action, a compact rounded inline `x-mark` button may replace the vertical-dots menu
 - Row click ≠ edit (explicit actions only)
 - Reusable CRUD detail sections must not clip row-action menus; section/card shells and menu wrappers must allow dropdowns to escape with visible overflow and a stable elevated z-index
 - Mobile list summaries may truncate long secondary identifiers such as assigned-user emails when the full value would otherwise destabilize the card layout

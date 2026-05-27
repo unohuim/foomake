@@ -88,6 +88,27 @@ const purchaseOrderStatusDisplay = (record) => {
 };
 
 const recipeStateDisplay = (record) => {
+    if (record.version_status === 'PUBLISHED') {
+        return {
+            text: 'Published',
+            tone: 'success',
+        };
+    }
+
+    if (record.version_status === 'DRAFT') {
+        return {
+            text: 'Draft',
+            tone: 'default',
+        };
+    }
+
+    if (record.version_status === 'ARCHIVED') {
+        return {
+            text: 'Archived',
+            tone: 'muted',
+        };
+    }
+
     if (record.is_default) {
         return {
             text: 'Default',
@@ -97,13 +118,13 @@ const recipeStateDisplay = (record) => {
 
     if (record.is_active) {
         return {
-            text: 'Active',
+            text: 'Draft',
             tone: 'default',
         };
     }
 
     return {
-        text: 'Inactive',
+        text: 'Archived',
         tone: 'muted',
     };
 };
@@ -136,6 +157,13 @@ const emptyMakeOrderErrors = () => ({
     runs: [],
 });
 
+const emptyInventoryCountErrors = () => ({
+    counted_at: [],
+    notes: [],
+    assigned_to_user_id: [],
+    general: [],
+});
+
 export function mount(rootEl, payload) {
     const safePayload = payload || {};
     const tenantCurrency = asString(safePayload.tenantCurrency, 'USD');
@@ -146,12 +174,157 @@ export function mount(rootEl, payload) {
     const purchaseOrderCreate = mountPurchaseOrderCreate(purchaseOrderCreateRootEl, safePayload.purchaseOrderCreate || {});
     const recipeCreate = safePayload.recipeCreate || {};
     const makeOrderCreate = safePayload.makeOrderCreate || {};
+    const inventoryCountCreate = safePayload.inventoryCountCreate || {};
     let pageState = null;
+    let inventoryCountCreateState = null;
+    const openInventoryCountCreate = () => {
+        if (!inventoryCountCreateState || typeof inventoryCountCreateState.openCreate !== 'function') {
+            return;
+        }
+
+        inventoryCountCreateState.openCreate();
+    };
 
     rootEl.querySelectorAll('[data-js-crud-section-root]').forEach((sectionRootEl) => {
         const sectionKey = sectionRootEl.dataset.sectionKey || '';
         sectionRootsByKey.set(sectionKey, sectionRootEl);
     });
+
+    Alpine.data('materialInventoryCountCreate', () => ({
+        inventoryCountStoreUrl: asString(inventoryCountCreate.storeUrl),
+        inventoryCountCsrfToken: asString(inventoryCountCreate.csrfToken),
+        canCreateInventoryCounts: Boolean(inventoryCountCreate.canCreate),
+        inventoryCountUsers: Array.isArray(inventoryCountCreate.users) ? inventoryCountCreate.users : [],
+        showCountForm: false,
+        inventoryCountSubmitting: false,
+        form: {
+            id: null,
+            counted_at: '',
+            notes: '',
+            assigned_to_user_id: '',
+            action: '',
+            method: 'POST',
+        },
+        errors: emptyInventoryCountErrors(),
+        init() {
+            inventoryCountCreateState = this;
+        },
+        defaultInventoryCountForm() {
+            return {
+                id: null,
+                counted_at: '',
+                notes: '',
+                assigned_to_user_id: '',
+                action: this.inventoryCountStoreUrl || '',
+                method: 'POST',
+            };
+        },
+        focusCountedAtNextField(fieldId) {
+            if (!fieldId) {
+                return;
+            }
+
+            const nextField = document.getElementById(fieldId);
+
+            if (nextField instanceof HTMLElement && typeof nextField.focus === 'function') {
+                nextField.focus({ preventScroll: true });
+            }
+        },
+        handleCountedAtChange(event) {
+            this.form.counted_at = event.target.value;
+
+            if (!event?.target?.value) {
+                return;
+            }
+
+            requestAnimationFrame(() => {
+                event.target.blur();
+                this.focusCountedAtNextField('notes');
+            });
+        },
+        normalizeInventoryCountErrors(errors) {
+            if (!errors || typeof errors !== 'object') {
+                return emptyInventoryCountErrors();
+            }
+
+            return {
+                ...emptyInventoryCountErrors(),
+                ...errors,
+                counted_at: Array.isArray(errors.counted_at) ? errors.counted_at : [],
+                notes: Array.isArray(errors.notes) ? errors.notes : [],
+                assigned_to_user_id: Array.isArray(errors.assigned_to_user_id) ? errors.assigned_to_user_id : [],
+                general: Array.isArray(errors.general) ? errors.general : [],
+            };
+        },
+        openCreate() {
+            if (!this.canCreateInventoryCounts) {
+                return;
+            }
+
+            this.errors = emptyInventoryCountErrors();
+            this.form = this.defaultInventoryCountForm();
+            this.inventoryCountSubmitting = false;
+            this.showCountForm = Boolean(this.form.action);
+        },
+        closeCountForm() {
+            this.showCountForm = false;
+            this.inventoryCountSubmitting = false;
+            this.errors = emptyInventoryCountErrors();
+            this.form = this.defaultInventoryCountForm();
+        },
+        async submitCountForm() {
+            if (!this.canCreateInventoryCounts || asString(this.form.action) === '') {
+                return;
+            }
+
+            this.inventoryCountSubmitting = true;
+            this.errors = emptyInventoryCountErrors();
+
+            try {
+                const response = await fetch(this.form.action, {
+                    method: this.form.method || 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        Accept: 'application/json',
+                        'X-CSRF-TOKEN': this.inventoryCountCsrfToken,
+                    },
+                    body: JSON.stringify({
+                        counted_at: this.form.counted_at,
+                        notes: this.form.notes,
+                        assigned_to_user_id: this.form.assigned_to_user_id,
+                    }),
+                });
+
+                if (response.status === 422) {
+                    const data = await response.json();
+                    this.errors = this.normalizeInventoryCountErrors(data?.errors);
+
+                    if (!data?.errors) {
+                        this.errors.general = [data?.message || 'Unable to save count.'];
+                    }
+
+                    return;
+                }
+
+                if (!response.ok) {
+                    this.errors.general = ['Unable to save count.'];
+                    return;
+                }
+
+                const data = await response.json();
+                const showUrl = asString(data?.count?.show_url);
+
+                if (showUrl !== '') {
+                    window.location.assign(showUrl);
+                    return;
+                }
+
+                this.closeCountForm();
+            } finally {
+                this.inventoryCountSubmitting = false;
+            }
+        },
+    }));
 
     const refreshSection = async (sectionKey) => {
         const sectionRootEl = sectionRootsByKey.get(sectionKey);
@@ -606,6 +779,10 @@ export function mount(rootEl, payload) {
         recipes: {
             normalizeRow: (record) => {
                 const state = recipeStateDisplay(record);
+                const versionNumber = asString(
+                    record.display_version_number_display,
+                    asString(record.current_version_number_display, '—')
+                );
 
                 return {
                     ...record,
@@ -614,8 +791,10 @@ export function mount(rootEl, payload) {
                         recipeTypeText: asString(record.recipe_type_label, '—'),
                         updatedAtText: asString(record.updated_at, '—'),
                         outputQuantityText: asString(record.output_quantity_display, '—'),
-                        stateText: state.text,
-                        stateTone: state.tone,
+                        statusText: state.text,
+                        statusTone: state.tone,
+                        versionText: versionNumber === '—' ? 'v—' : `v${versionNumber}`,
+                        versionTone: 'muted',
                         showUrl: asString(record.show_url),
                     },
                 };
@@ -631,6 +810,26 @@ export function mount(rootEl, payload) {
                     await pageState?.createMakeOrderFromUrl(record.make_url || '');
                 }
             },
+        },
+        inventoryCounts: {
+            normalizeRow: (record) => ({
+                ...record,
+                display: {
+                    countedAtText: asString(record.counted_at, '—'),
+                    assignedToText: asString(record.assigned_to_user_name, 'Unassigned'),
+                    uomText: asString(record.uom_symbol, '—'),
+                    countedQuantityText: asString(record.counted_quantity_display, '—'),
+                    showUrl: asString(record.show_url),
+                },
+            }),
+            handleCreateAction: async ({ action }) => {
+                if (!action || action.handlerKey !== 'openInventoryCountCreate') {
+                    return;
+                }
+
+                openInventoryCountCreate();
+            },
+            handleAction: async () => {},
         },
         makeOrders: {
             normalizeRow: (record) => {

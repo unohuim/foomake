@@ -3,6 +3,8 @@
     'errorsVar' => 'errors',
     'errorsPrefix' => '',
     'users' => collect(),
+    'scopedItem' => null,
+    'showCountedQuantity' => false,
 ])
 
 @php
@@ -30,6 +32,18 @@
                         {{ __('Set the counted date and optional notes.') }}
                     </p>
                 </div>
+
+                @if ($scopedItem)
+                    <div class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                        <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Material') }}</p>
+                        <p class="mt-1 text-sm font-medium text-slate-900">
+                            {{ data_get($scopedItem, 'name', '—') }}
+                        </p>
+                        <p class="mt-1 text-xs text-slate-500">
+                            {{ __('Base UOM') }}: {{ data_get($scopedItem, 'baseUom.symbol', data_get($scopedItem, 'baseUom.name', '—')) }}
+                        </p>
+                    </div>
+                @endif
 
                 <div class="space-y-2">
                     <label class="text-sm font-medium text-gray-700" for="counted_at">
@@ -70,13 +84,28 @@
                     >
                         <option value="">{{ __('Select a user') }}</option>
                         @foreach ($users as $user)
-                            <option value="{{ $user->id }}">
-                                {{ $user->name }} ({{ $user->email }})
+                            <option value="{{ data_get($user, 'id') }}">
+                                {{ data_get($user, 'name') }} ({{ data_get($user, 'email') }})
                             </option>
                         @endforeach
                     </select>
                     <p class="text-sm text-red-600" x-show="{{ $errorsPath }}?.assigned_to_user_id" x-text="{{ $errorsPath }}?.assigned_to_user_id?.[0]"></p>
                 </div>
+
+                @if ($showCountedQuantity)
+                    <div class="space-y-2">
+                        <label class="text-sm font-medium text-gray-700" for="counted_quantity">
+                            {{ __('Counted Quantity') }}
+                        </label>
+                        <input
+                            id="counted_quantity"
+                            type="text"
+                            class="w-full rounded-md border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+                            x-model="{{ $formVar }}.counted_quantity"
+                        />
+                        <p class="text-sm text-red-600" x-show="{{ $errorsPath }}?.counted_quantity" x-text="{{ $errorsPath }}?.counted_quantity?.[0]"></p>
+                    </div>
+                @endif
 
                 <p class="text-sm text-red-600" x-show="{{ $errorsPath }}?.general" x-text="{{ $errorsPath }}?.general?.[0]"></p>
             </div>

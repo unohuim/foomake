@@ -129,6 +129,7 @@ beforeEach(function () {
         'name' => 'Item ' . $this->itemCounter++,
         'base_uom_id' => $uom->id,
         'is_active' => true,
+        'is_stockable' => true,
         'is_purchasable' => false,
         'is_sellable' => true,
         'is_manufacturable' => false,

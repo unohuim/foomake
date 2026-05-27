@@ -54,7 +54,7 @@ example_usage: |
           </div>
           <div class="flex flex-wrap items-center gap-x-3 gap-y-2" data-resource-detail-header-metadata-group="secondary">
               <span>{{ $makeOrder->output_item_name }}</span>
-              <span>{{ __('Expected Output') }} {{ $makeOrder->produced_quantity_text }}</span>
+              <span>{{ __('Expected Output') }} {{ $makeOrder->expected_output_qty_text }}</span>
           </div>
       </x-slot>
       <x-slot name="actions">

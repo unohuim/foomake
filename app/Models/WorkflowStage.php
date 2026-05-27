@@ -16,6 +16,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property int $workflow_domain_id
  * @property string $key
  * @property string $name
+ * @property string $button_text
  * @property string|null $description
  * @property int $sort_order
  * @property bool $is_active
@@ -34,6 +35,7 @@ class WorkflowStage extends Model
         'workflow_domain_id',
         'key',
         'name',
+        'button_text',
         'description',
         'sort_order',
         'is_active',
@@ -47,6 +49,18 @@ class WorkflowStage extends Model
         'is_active' => 'boolean',
         'is_inventory_effect_stage' => 'boolean',
     ];
+
+    /**
+     * Ensure legacy stage writes receive a safe button label.
+     */
+    protected static function booted(): void
+    {
+        static::saving(function (WorkflowStage $workflowStage): void {
+            if (trim((string) $workflowStage->button_text) === '') {
+                $workflowStage->button_text = (string) $workflowStage->name;
+            }
+        });
+    }
 
     /**
      * Get the tenant that owns the workflow stage.

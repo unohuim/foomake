@@ -107,6 +107,10 @@
                                 <p class="text-sm font-medium text-gray-700">Flags</p>
                                 <div class="mt-3 space-y-2">
                                     <label class="flex items-center gap-2 text-sm text-gray-700">
+                                        <input type="checkbox" class="rounded border-gray-300 text-blue-600 focus:ring-blue-500" x-model="form.is_stockable">
+                                        Stockable
+                                    </label>
+                                    <label class="flex items-center gap-2 text-sm text-gray-700">
                                         <input type="checkbox" class="rounded border-gray-300 text-blue-600 focus:ring-blue-500" x-model="form.is_purchasable">
                                         Purchasable
                                     </label>

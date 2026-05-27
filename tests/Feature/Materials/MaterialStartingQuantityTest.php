@@ -57,6 +57,10 @@ beforeEach(function (): void {
     };
 
     $this->postCreate = function (User $user, array $payload = []) {
+        if (array_key_exists('starting_quantity', $payload) && ! array_key_exists('is_stockable', $payload)) {
+            $payload['is_stockable'] = true;
+        }
+
         return $this->actingAs($user)->postJson(route('materials.store'), $payload);
     };
 });

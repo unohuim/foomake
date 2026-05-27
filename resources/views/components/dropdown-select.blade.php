@@ -8,6 +8,7 @@
     'errorMessages' => null,
     'errorExpression' => null,
     'disabledExpression' => '',
+    'buttonClass' => 'flex w-full items-center justify-between rounded-xl border border-gray-300 bg-white px-4 py-3 text-left text-sm text-gray-900 shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:cursor-not-allowed disabled:bg-gray-100',
 ])
 
 @php
@@ -46,7 +47,7 @@
         <button
             id="{{ $buttonId }}"
             type="button"
-            class="flex w-full items-center justify-between rounded-xl border border-gray-300 bg-white px-4 py-3 text-left text-sm text-gray-900 shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:cursor-not-allowed disabled:bg-gray-100"
+            class="{{ $buttonClass }}"
             aria-haspopup="listbox"
             x-bind:aria-expanded="open.toString()"
             x-bind:aria-controls="listId"

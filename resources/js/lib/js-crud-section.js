@@ -53,8 +53,10 @@ const normalizeAction = (action) => {
     return {
         id: asString(safeAction.id),
         label: asString(safeAction.label),
+        ariaLabel: asString(safeAction.ariaLabel),
         type: asString(safeAction.type, asString(safeAction.id)),
         tone: asString(safeAction.tone, 'default'),
+        icon: asString(safeAction.icon),
         urlField: asString(safeAction.urlField),
         endpointKey: asString(safeAction.endpointKey, 'remove'),
         method: asString(safeAction.method, 'DELETE').toUpperCase(),
@@ -85,12 +87,15 @@ const normalizeSectionConfig = (config) => {
     const rowLayout = asRecord(safeConfig.rowLayout);
     const createAction = asRecord(safeConfig.createAction);
     const createActionPrefill = asRecord(createAction.prefill);
+    const addRow = asRecord(safeConfig.addRow);
+    const addRowAction = asRecord(addRow.action);
 
     return {
         resource: asString(safeConfig.resource),
         title: asString(safeConfig.title, 'Section'),
         description: asString(safeConfig.description),
         emptyState: asString(safeConfig.emptyState, 'No records found.'),
+        recordClass: asString(safeConfig.recordClass),
         csrfToken: asString(safeConfig.csrfToken),
         defaultOpen: asBoolean(safeConfig.defaultOpen),
         mobilePageSize: Number.isInteger(safeConfig.mobilePageSize) ? safeConfig.mobilePageSize : null,
@@ -111,6 +116,22 @@ const normalizeSectionConfig = (config) => {
             description: asString(createAction.description),
             submitLabel: asString(createAction.submitLabel),
             prefill: createActionPrefill,
+        },
+        addRow: {
+            enabled: asBoolean(addRow.enabled),
+            type: asString(addRow.type),
+            fieldName: asString(addRow.fieldName),
+            placeholder: asString(addRow.placeholder, 'Search'),
+            noResultsText: asString(addRow.noResultsText, 'No items found.'),
+            options: asArray(addRow.options).map((option) => ({
+                value: asString(option?.value),
+                label: asString(option?.label),
+                description: asString(option?.description),
+            })),
+            action: {
+                handlerKey: asString(addRowAction.handlerKey),
+                ariaLabel: asString(addRowAction.ariaLabel),
+            },
         },
         endpoints: {
             list: asString(endpoints.list),
@@ -247,7 +268,7 @@ const fieldMarkup = `
 
                     <template x-if="field.type !== 'select' && field.type !== 'combobox'">
                         <input
-                            :type="field.type === 'email' || field.type === 'url' ? field.type : 'text'"
+                            :type="['email', 'url', 'date', 'datetime-local'].includes(field.type) ? field.type : 'text'"
                             class="mt-1 block w-full rounded-lg border-gray-300 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500"
                             :id="\`section-field-\${field.name}\`"
                             x-model="form[field.name]"
@@ -350,15 +371,29 @@ const inlineActionsMarkup = `
         x-show="!section.showRowActionsMenu && visibleActions(record).length > 0"
     >
         <template x-for="action in visibleActions(record)" :key="\`\${record.id}-inline-\${action.id}\`">
-            <button
-                type="button"
-                class="inline-flex items-center rounded-lg border px-3 py-1.5 text-xs font-semibold uppercase tracking-widest transition"
-                :class="action.tone === 'warning'
-                    ? 'border-yellow-300 text-yellow-700 hover:bg-yellow-50'
-                    : 'border-slate-300 text-slate-700 hover:bg-slate-50'"
-                x-text="actionLabel(record, action)"
-                x-on:click="performAction(record, action)"
-            ></button>
+            <template x-if="action.icon === 'x-mark'">
+                <button
+                    type="button"
+                    class="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-300 text-slate-500 transition hover:bg-slate-50 hover:text-slate-700"
+                    x-bind:aria-label="action.ariaLabel || actionLabel(record, action)"
+                    x-on:click="performAction(record, action)"
+                >
+                    <svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </template>
+            <template x-if="action.icon !== 'x-mark'">
+                <button
+                    type="button"
+                    class="inline-flex items-center rounded-lg border px-3 py-1.5 text-xs font-semibold uppercase tracking-widest transition"
+                    :class="action.tone === 'warning'
+                        ? 'border-yellow-300 text-yellow-700 hover:bg-yellow-50'
+                        : 'border-slate-300 text-slate-700 hover:bg-slate-50'"
+                    x-text="actionLabel(record, action)"
+                    x-on:click="performAction(record, action)"
+                ></button>
+            </template>
         </template>
     </div>
 `;
@@ -432,6 +467,112 @@ const renderCrudSection = () => `
                 </div>
             </div>
 
+            <div
+                class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"
+                x-show="section.addRow.enabled"
+                data-detail-section-add-row
+            >
+                <div class="min-w-0 flex-1" data-detail-section-add-row-left>
+                    <template x-if="section.addRow.type === 'combobox-add'">
+                        <div
+                            x-data="combobox({
+                                name: section.addRow.fieldName,
+                                options: section.addRow.options,
+                                selectedValue: addRowValue,
+                                placeholder: section.addRow.placeholder,
+                                noResultsText: section.addRow.noResultsText,
+                                inputId: \`section-add-row-\${section.resource}-input\`,
+                                listId: \`section-add-row-\${section.resource}-listbox\`,
+                            })"
+                            x-modelable="selectedValue"
+                            x-model="addRowValue"
+                            x-effect="configuredOptions = section.addRow.options"
+                            x-on:click.outside="closeDropdown()"
+                            x-on:keydown.arrow-down.prevent="highlightNext()"
+                            x-on:keydown.arrow-up.prevent="highlightPrevious()"
+                            x-on:keydown.enter.prevent="selectHighlighted()"
+                            x-on:keydown.escape.prevent="closeDropdown()"
+                            data-inventory-count-material-add-combobox
+                        >
+                            <div class="relative mt-1">
+                                <input
+                                    :id="\`section-add-row-\${section.resource}-input\`"
+                                    type="text"
+                                    role="combobox"
+                                    autocomplete="off"
+                                    class="block w-full rounded-xl border border-gray-300 bg-white px-4 py-3 pr-11 text-sm text-gray-900 shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                                    :placeholder="section.addRow.placeholder"
+                                    x-model="query"
+                                    x-on:focus="openDropdown()"
+                                    x-on:input="handleQueryInput($event.target.value)"
+                                    x-bind:aria-expanded="open.toString()"
+                                    x-bind:aria-controls="listId"
+                                    x-bind:aria-activedescendant="activeDescendantId()"
+                                />
+
+                                <input type="hidden" x-model="selectedValue" />
+
+                                <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400">
+                                    <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                        <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 11.168l3.71-3.938a.75.75 0 1 1 1.08 1.04l-4.25 4.5a.75.75 0 0 1-1.08 0l-4.25-4.5a.75.75 0 0 1 .02-1.06Z" clip-rule="evenodd" />
+                                    </svg>
+                                </div>
+
+                                <div
+                                    class="absolute z-20 mt-2 max-h-72 w-full overflow-auto rounded-2xl border border-gray-200 bg-white p-2 shadow-xl ring-1 ring-black/5"
+                                    x-cloak
+                                    x-show="open"
+                                    role="listbox"
+                                    x-bind:id="listId"
+                                >
+                                    <template x-if="filteredOptions().length === 0">
+                                        <div class="rounded-xl px-3 py-3 text-sm text-gray-500" x-text="section.addRow.noResultsText"></div>
+                                    </template>
+
+                                    <template x-for="(option, index) in filteredOptions()" :key="option.value">
+                                        <button
+                                            type="button"
+                                            class="flex w-full items-start justify-between rounded-xl px-3 py-3 text-left transition"
+                                            role="option"
+                                            x-bind:id="optionDomId(index)"
+                                            x-bind:aria-selected="isSelected(option).toString()"
+                                            x-on:mouseenter="highlightedIndex = index"
+                                            x-on:click="selectOption(option)"
+                                            x-bind:class="highlightedIndex === index ? 'bg-blue-50 text-blue-900' : 'text-gray-900 hover:bg-gray-50'"
+                                        >
+                                            <span class="min-w-0">
+                                                <span class="block truncate text-sm font-medium" x-text="option.label"></span>
+                                                <span class="mt-1 block truncate text-xs text-gray-500" x-show="option.description" x-text="option.description"></span>
+                                            </span>
+
+                                            <span class="ml-3 text-blue-600" x-show="isSelected(option)">
+                                                <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                                    <path fill-rule="evenodd" d="M16.704 5.29a1 1 0 0 1 .006 1.414l-8 8.07a1 1 0 0 1-1.42 0l-4-4.035a1 1 0 0 1 1.42-1.41l3.29 3.32 7.29-7.36a1 1 0 0 1 1.414 0Z" clip-rule="evenodd" />
+                                                </svg>
+                                            </span>
+                                        </button>
+                                    </template>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+
+                <div class="flex justify-end sm:shrink-0" data-detail-section-add-row-right>
+                    <button
+                        type="button"
+                        class="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-gray-300 text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                        x-bind:disabled="addRowValue === '' || addRowSubmitting"
+                        x-bind:aria-label="section.addRow.action.ariaLabel || 'Add record'"
+                        x-on:click.stop.prevent="submitAddRow()"
+                    >
+                        <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                        </svg>
+                    </button>
+                </div>
+            </div>
+
             <div class="space-y-3" x-show="records.length > 0">
                 <template x-for="record in records" :key="record.id">
                     <article :class="recordClass(record)">
@@ -471,12 +612,36 @@ const renderCrudSection = () => `
                             <div class="flex items-center justify-end gap-3 self-center">
                                 <div class="text-left sm:text-right">
                                     <template x-for="meta in rightMetaItems(record)" :key="\`\${record.id}-\${meta.label}-meta\`">
-                                        <p class="text-sm" :class="meta.strong ? 'font-semibold text-gray-900' : 'text-gray-600'">
-                                            <template x-if="meta.label">
-                                                <span class="text-gray-500" x-text="\`\${meta.label}: \`"></span>
+                                        <div>
+                                            <template x-if="meta.type === 'input'">
+                                                <label class="flex items-center gap-2.5 text-sm">
+                                                    <template x-if="meta.showSuccessIcon">
+                                                        <svg class="h-5 w-5 shrink-0 text-emerald-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75" />
+                                                            <path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                                                        </svg>
+                                                    </template>
+                                                    <template x-if="meta.label">
+                                                        <span class="text-gray-500" x-text="meta.labelBare ? meta.label : \`\${meta.label}: \`"></span>
+                                                    </template>
+                                                    <input
+                                                        type="text"
+                                                        class="w-24 rounded-lg border border-gray-300 px-3 py-1.5 text-right text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                                                        x-model="record[meta.field]"
+                                                        x-on:change="performInlineMetaAction(record, meta)"
+                                                        x-on:blur="performInlineMetaAction(record, meta)"
+                                                    />
+                                                </label>
                                             </template>
-                                            <span x-text="meta.text"></span>
-                                        </p>
+                                            <template x-if="meta.type !== 'input'">
+                                                <p class="text-sm" :class="meta.strong ? 'font-semibold text-gray-900' : 'text-gray-600'">
+                                                    <template x-if="meta.label">
+                                                        <span class="text-gray-500" x-text="meta.labelBare ? meta.label : \`\${meta.label}: \`"></span>
+                                                    </template>
+                                                    <span x-text="meta.text"></span>
+                                                </p>
+                                            </template>
+                                        </div>
                                     </template>
                                 </div>
                                 ${inlineActionsMarkup}
@@ -604,6 +769,8 @@ const createSectionState = (section, adapters, hostEl) => ({
     inlineCreateErrors: {},
     inlineCreateFormError: '',
     inlineCreateSubmitting: false,
+    addRowValue: '',
+    addRowSubmitting: false,
     toggleValues: section.toolbarToggles.reduce((carry, toggle) => {
         carry[toggle.key] = Boolean(toggle.checked);
 
@@ -666,6 +833,14 @@ const createSectionState = (section, adapters, hostEl) => ({
             .filter((badge) => badge.text !== '—' && badge.text !== '');
     },
     rightMetaItems(record) {
+        if (typeof this.adapters.rightMetaItems === 'function') {
+            return asArray(this.adapters.rightMetaItems({
+                record,
+                component: this,
+                section: this.section,
+            }));
+        }
+
         return this.section.rowLayout.rightMeta.map((entry) => ({
             label: entry.label,
             text: buildLayoutText(record, entry),
@@ -726,6 +901,29 @@ const createSectionState = (section, adapters, hostEl) => ({
     closeInlineCreate() {
         this.resetInlineCreateState();
     },
+    async submitAddRow() {
+        if (!this.section.addRow.enabled || this.addRowSubmitting || this.addRowValue === '') {
+            return;
+        }
+
+        if (typeof this.adapters.handleAddRow !== 'function') {
+            return;
+        }
+
+        this.addRowSubmitting = true;
+        this.sectionError = '';
+
+        try {
+            await this.adapters.handleAddRow({
+                action: this.section.addRow.action,
+                selectedValue: this.addRowValue,
+                component: this,
+                section: this.section,
+            });
+        } finally {
+            this.addRowSubmitting = false;
+        }
+    },
     fieldRows() {
         const rows = [];
         const consumedIndexes = new Set();
@@ -764,7 +962,7 @@ const createSectionState = (section, adapters, hostEl) => ({
         return row.length > 1 ? 'grid grid-cols-1 gap-4 sm:grid-cols-2' : '';
     },
     recordClass(record) {
-        const baseClass = 'rounded-xl border border-gray-100 bg-gray-50 p-3 sm:p-4';
+        const baseClass = asString(this.section.recordClass, 'rounded-xl border border-gray-100 bg-gray-50 p-3 sm:p-4');
         const adapterClass = typeof this.adapters.recordClass === 'function'
             ? asString(this.adapters.recordClass({
                 record,
@@ -939,6 +1137,7 @@ const createSectionState = (section, adapters, hostEl) => ({
 
         if (this.section.createAction.type === 'custom' && typeof this.adapters.handleCreateAction === 'function') {
             this.adapters.handleCreateAction({
+                action: this.section.createAction,
                 section: this.section,
                 component: this,
             });
@@ -1142,6 +1341,15 @@ const createSectionState = (section, adapters, hostEl) => ({
             await this.fetchPage(this.meta.current_page || 1);
         } catch (error) {
             this.sectionError = 'Unable to update record.';
+        }
+    },
+    async performInlineMetaAction(record, meta) {
+        if (typeof this.adapters.handleInlineMetaAction === 'function') {
+            await this.adapters.handleInlineMetaAction({
+                meta,
+                record,
+                component: this,
+            });
         }
     },
 });

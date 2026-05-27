@@ -41,6 +41,7 @@ rules:
   - data-crud-root must fill the available page-shell height and preserve min-height propagation so the shared renderer can size its internal records pane correctly.
   - The CRUD config must be valid JSON and must be server-generated in Blade.
   - The CRUD config must include resource, endpoints.list, endpoints.create, columns, headers, sortable, labels, permissions, rowDisplay, mobileCard, and actions.
+  - CRUD configs that need one direct inline row action may additionally provide a `rowActions` contract to choose the direct icon-button presentation instead of the default vertical-dots menu.
   - CRUD pages that use shared import must additionally provide endpoints.importPreview and endpoints.importStore.
   - CRUD pages that use shared edit or delete flows may provide endpoint templates such as endpoints.update and endpoints.delete.
   - CRUD pages may optionally provide detailUrlTemplate for post-create redirect behavior.
@@ -49,7 +50,8 @@ rules:
   - Resources that expose export through the shared toolbar must also provide endpoints.export plus labels and permissions for the export action.
   - sortable values must reference only configured column keys.
   - Shared CRUD helpers must remain stateless and must not introduce global JavaScript state.
-  - The shared CRUD renderer owns toolbar layout, search input, create/import/export buttons, sticky desktop headers, record table/cards, empty states, and the vertical-dots action menu.
+  - The shared CRUD renderer owns toolbar layout, search input, create/import/export buttons, sticky desktop headers, record table/cards, empty states, and row-level action rendering.
+  - The shared CRUD renderer may render either the default vertical-dots menu or a single direct inline icon button when the server-generated CRUD config opts into that row-action mode.
   - The shared CRUD renderer shell must use h-full and min-h-0-compatible layout rules so the records pane inherits usable height from the bounded Blade shell.
   - Toolbar actions must be config-driven; resource pages must not hardcode product-only or customer-only toolbar buttons in Blade.
   - The records/list area is the only scrollable region for CRUD list rendering; toolbar chrome remains outside that scroll container.

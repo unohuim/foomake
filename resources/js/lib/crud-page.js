@@ -32,6 +32,7 @@ const normalizeRendererConfig = (config) => {
     const permissions = recordDefinition(config.permissions);
     const rowDisplay = recordDefinition(config.rowDisplay);
     const mobileCard = recordDefinition(config.mobileCard);
+    const rowActions = recordDefinition(config.rowActions);
 
     return {
         columns: Array.isArray(config.columns) ? config.columns : [],
@@ -76,6 +77,11 @@ const normalizeRendererConfig = (config) => {
             titleExpression: sanitizeExpression(mobileCard.titleExpression, "record.name || '—'"),
             subtitleExpression: sanitizeExpression(mobileCard.subtitleExpression),
             bodyExpression: sanitizeExpression(mobileCard.bodyExpression),
+        },
+        rowActions: {
+            mode: sanitizeExpression(rowActions.mode, 'menu'),
+            icon: sanitizeExpression(rowActions.icon, 'ellipsis-vertical'),
+            ariaLabel: sanitizeExpression(rowActions.ariaLabel, labels.actionsAriaLabel || 'Actions'),
         },
         actions: sanitizeActions(config.actions),
     };
@@ -338,6 +344,27 @@ const renderActionItems = (config) => {
 function renderActionCell(config, wrapperClass = '') {
     const hasMenu = config.actions.length > 0;
     const containerClasses = ['relative', 'inline-flex', wrapperClass].filter(Boolean).join(' ');
+    const directIconButton = config.rowActions.mode === 'icon-button' && config.actions.length === 1;
+
+    if (directIconButton) {
+        const directAction = config.actions[0];
+
+        return `
+            <div class="${containerClasses}" data-crud-action-cell>
+                <button
+                    type="button"
+                    class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-gray-300 text-gray-500 transition hover:border-red-300 hover:bg-red-50 hover:text-red-600"
+                    aria-label="${escapeHtml(config.rowActions.ariaLabel)}"
+                    data-crud-direct-action-trigger
+                    x-on:click="${directAction.handler}"
+                >
+                    <svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.75" stroke="currentColor" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+        `;
+    }
 
     return `
         <div

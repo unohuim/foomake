@@ -43,6 +43,7 @@ beforeEach(function () {
             'tenant_id' => $tenant->id,
             'name' => 'Item ' . Str::random(12),
             'base_uom_id' => $uom->id,
+            'is_stockable' => true,
             'is_purchasable' => false,
             'is_sellable' => false,
             'is_manufacturable' => false,
@@ -101,6 +102,8 @@ beforeEach(function () {
                 'counted_at',
                 'counted_at_iso',
                 'notes',
+                'can_edit_details',
+                'assignee_options',
                 'status',
                 'lifecycle_status_label',
                 'created_by_user_id',
@@ -678,6 +681,7 @@ it('posts: creates adjustment moves, locks the count, blocks all future mutation
     expect($move->quantity)->toBe('3.000000');
 
     $expectedMessage = 'Inventory count is posted and cannot be modified.';
+    $expectedRemoveMessage = 'Inventory count is posted and materials can no longer be removed.';
 
     $this->actingAs($user)->patchJson('/inventory/counts/' . $count->id, [
         'counted_at' => now()->toISOString(),
@@ -702,7 +706,7 @@ it('posts: creates adjustment moves, locks the count, blocks all future mutation
 
     $this->actingAs($user)->deleteJson('/inventory/counts/' . $count->id . '/lines/' . $line->id)
         ->assertStatus(422)
-        ->assertJson(['message' => $expectedMessage]);
+        ->assertJson(['message' => $expectedRemoveMessage]);
 
     $before = ($this->countAdjustmentsFor)($tenant, $count);
 
@@ -732,14 +736,14 @@ it('submits a draft count into the first active inventory workflow stage', funct
 
     $count->refresh();
 
-    expect($count->workflowStage?->key)->toBe('open')
+    expect($count->workflowStage?->key)->toBe('scheduled')
         ->and($count->posted_at)->toBeNull()
-        ->and($response->json('count.workflow_stage_key'))->toBe('open')
-        ->and($response->json('count.workflow_status_label'))->toBe('Open')
+        ->and($response->json('count.workflow_stage_key'))->toBe('scheduled')
+        ->and($response->json('count.workflow_status_label'))->toBe('SCHEDULED')
         ->and($response->json('count.is_draft_setup'))->toBeFalse();
 });
 
-it('draft open action works without an assigned user and still moves the count into the first active stage', function () {
+it('draft schedule action works without an assigned user and still moves the count into the first active stage', function () {
     $tenant = Tenant::factory()->create();
     $user = ($this->makeUser)($tenant);
 
@@ -755,22 +759,22 @@ it('draft open action works without an assigned user and still moves the count i
     $this->actingAs($user)
         ->get('/inventory/counts/' . $count->id)
         ->assertOk()
-        ->assertSee('Open')
+        ->assertSee('SCHEDULE')
         ->assertDontSee('Post Count');
 
     $response = ($this->submitCount)($user, $count);
 
     $response->assertOk()
-        ->assertJsonPath('count.workflow_stage_key', 'open')
-        ->assertJsonPath('count.workflow_status_label', 'Open');
+        ->assertJsonPath('count.workflow_stage_key', 'scheduled')
+        ->assertJsonPath('count.workflow_status_label', 'SCHEDULED');
 
     $count->refresh();
 
-    expect($count->workflowStage?->key)->toBe('open')
+    expect($count->workflowStage?->key)->toBe('scheduled')
         ->and($count->assigned_to_user_id)->toBeNull();
 });
 
-it('draft detail page shows the next workflow stage name as the submit action', function () {
+it('draft detail page shows the next workflow stage button text as the submit action', function () {
     $tenant = Tenant::factory()->create();
     $user = ($this->makeUser)($tenant);
 
@@ -788,12 +792,59 @@ it('draft detail page shows the next workflow stage name as the submit action', 
         ->assertSee('Home')
         ->assertSee('Inventory Counts')
         ->assertSee('ID# ' . $count->id)
-        ->assertSee('Workflow Stage')
         ->assertSee('Draft')
-        ->assertSee('Open')
+        ->assertSee('SCHEDULE')
         ->assertDontSee('Submit Count')
         ->assertDontSee('Post Count')
-        ->assertDontSee('>Completed<', false);
+        ->assertDontSee('>COMPLETE<', false);
+});
+
+it('draft inventory count detail auto-resolves the next workflow stage button even before stages were manually seeded elsewhere', function () {
+    $tenant = Tenant::factory()->create();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermission)($user, 'inventory-adjustments-view');
+    ($this->grantPermission)($user, 'inventory-adjustments-execute');
+
+    $count = ($this->createDraftCountViaApi)($user, [
+        'notes' => 'Draft auto-stage detail',
+    ]);
+
+    $response = $this->actingAs($user)->get('/inventory/counts/' . $count->id)->assertOk();
+
+    expect($response->getContent())->toContain("window.dispatchEvent(new CustomEvent('inventory-count-submit'))")
+        ->and($response->getContent())->toContain('SCHEDULE')
+        ->and($response->getContent())->not->toContain("window.dispatchEvent(new CustomEvent('inventory-count-advance'))");
+});
+
+it('completed inventory count detail does not show a draft stage advancement button', function () {
+    $tenant = Tenant::factory()->create();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermission)($user, 'inventory-adjustments-view');
+    ($this->grantPermission)($user, 'inventory-adjustments-execute');
+    ($this->seedInventoryWorkflow)($tenant);
+
+    $count = ($this->createDraftCountViaApi)($user, [
+        'notes' => 'Completed detail header',
+    ]);
+
+    $uom = ($this->makeUom)($tenant);
+    $item = ($this->makeItem)($tenant, $uom);
+
+    ($this->createLineViaApi)($user, $count, [
+        'item_id' => $item->id,
+        'counted_quantity' => '2.000000',
+    ]);
+
+    ($this->submitCount)($user, $count)->assertOk();
+    ($this->advanceCount)($user, $count)->assertOk();
+
+    $response = $this->actingAs($user)->get('/inventory/counts/' . $count->id)->assertOk();
+
+    expect($response->getContent())->not->toContain("window.dispatchEvent(new CustomEvent('inventory-count-submit'))")
+        ->and($response->getContent())->not->toContain("window.dispatchEvent(new CustomEvent('inventory-count-advance'))")
+        ->and($response->getContent())->toContain('COMPLETED');
 });
 
 it('detail page mounts reusable sections for count lines and tasks', function () {
@@ -843,9 +894,16 @@ it('detail payload exposes Materials and Tasks section configs for inventory cou
 
     expect($countLinesSection['title'] ?? null)->toBe('Materials')
         ->and($countLinesSection['resource'] ?? null)->toBe('inventory-count-lines')
-        ->and($countLinesSection['permissions']['canCreate'] ?? null)->toBeTrue()
+        ->and($countLinesSection['permissions']['canCreate'] ?? null)->toBeFalse()
         ->and($countLinesSection['endpoints']['list'] ?? null)->toBe(route('inventory.counts.show', $count) . '/lines')
         ->and($countLinesSection['endpoints']['create'] ?? null)->toBe(route('inventory.counts.lines.store', $count))
+        ->and($countLinesSection['showRowActionsMenu'] ?? null)->toBeFalse()
+        ->and($countLinesSection['actions'][0]['handlerKey'] ?? null)->toBe('removeCountLine')
+        ->and($countLinesSection['actions'][0]['icon'] ?? null)->toBe('x-mark')
+        ->and($countLinesSection['addRow']['enabled'] ?? null)->toBeTrue()
+        ->and($countLinesSection['addRow']['type'] ?? null)->toBe('combobox-add')
+        ->and($countLinesSection['addRow']['fieldName'] ?? null)->toBe('item_id')
+        ->and($countLinesSection['addRow']['action']['handlerKey'] ?? null)->toBe('addSelectedCountLine')
         ->and($tasksSection['title'] ?? null)->toBe('Tasks')
         ->and($tasksSection['resource'] ?? null)->toBe('inventory-count-tasks')
         ->and($tasksSection['showRowActionsMenu'] ?? null)->toBeFalse()
@@ -854,7 +912,68 @@ it('detail payload exposes Materials and Tasks section configs for inventory cou
         ->and($countPayload['advance_url'] ?? null)->toBe(route('inventory.counts.advance', $count));
 });
 
-it('draft detail page renders the Open button wired to the submit workflow action only', function () {
+it('detail page cleans legacy header pills and renders a Details section with editable fields', function () {
+    $tenant = Tenant::factory()->create();
+    $user = ($this->makeUser)($tenant);
+    $assignee = ($this->makeUser)($tenant);
+
+    ($this->grantPermission)($user, 'inventory-adjustments-view');
+    ($this->grantPermission)($user, 'inventory-adjustments-execute');
+
+    $count = ($this->createDraftCountViaApi)($user, [
+        'counted_at' => Carbon::parse('2026-05-21 10:15:00')->toISOString(),
+        'assigned_to_user_id' => $assignee->id,
+        'notes' => '',
+    ]);
+
+    $response = $this->actingAs($user)->get('/inventory/counts/' . $count->id)->assertOk();
+
+    expect($response->getContent())->not->toContain('Counted:')
+        ->and($response->getContent())->not->toContain('Line Items:')
+        ->and($response->getContent())->not->toContain('Workflow Stage:')
+        ->and($response->getContent())->not->toContain('No notes')
+        ->and($response->getContent())->toContain('Details')
+        ->and($response->getContent())->toContain('Count Date')
+        ->and($response->getContent())->toContain('Assigned To')
+        ->and($response->getContent())->toContain('Notes')
+        ->and($response->getContent())->toContain('x-model="details.counted_at_iso"')
+        ->and($response->getContent())->toContain('x-model="details.notes"')
+        ->and($response->getContent())->toContain('workflow_status_badge')
+        ->and($response->getContent())->toContain('data-section-key="countLines"');
+});
+
+it('detail payload exposes editable details data and tenant assignee options', function () {
+    $tenant = Tenant::factory()->create();
+    $user = ($this->makeUser)($tenant);
+    $assignee = ($this->makeUser)($tenant);
+
+    ($this->grantPermission)($user, 'inventory-adjustments-view');
+    ($this->grantPermission)($user, 'inventory-adjustments-execute');
+
+    $count = ($this->createDraftCountViaApi)($user, [
+        'assigned_to_user_id' => $assignee->id,
+        'notes' => '',
+    ]);
+
+    $response = $this->actingAs($user)->get('/inventory/counts/' . $count->id)->assertOk();
+
+    preg_match(
+        '/<script type="application\\/json" id="inventory-count-show-payload">\\s*(.*?)\\s*<\\/script>/s',
+        $response->getContent(),
+        $matches
+    );
+
+    $payload = json_decode($matches[1] ?? '[]', true);
+    $countPayload = $payload['count'] ?? [];
+
+    expect($countPayload['can_edit_details'] ?? null)->toBeTrue()
+        ->and($countPayload['counted_at_iso'] ?? null)->toBeString()
+        ->and($countPayload['notes'] ?? null)->toBe('')
+        ->and($countPayload['assigned_to_user_id'] ?? null)->toBe($assignee->id)
+        ->and(collect($countPayload['assignee_options'] ?? [])->pluck('value')->contains((string) $assignee->id))->toBeTrue();
+});
+
+it('draft detail page renders the Schedule button wired to the submit workflow action only', function () {
     $tenant = Tenant::factory()->create();
     $user = ($this->makeUser)($tenant);
 
@@ -871,8 +990,8 @@ it('draft detail page renders the Open button wired to the submit workflow actio
     expect($response->getContent())->toContain("window.dispatchEvent(new CustomEvent('inventory-count-submit'))")
         ->and($response->getContent())->not->toContain("window.dispatchEvent(new CustomEvent('inventory-count-post'))")
         ->and($response->getContent())->not->toContain("window.dispatchEvent(new CustomEvent('inventory-count-advance'))")
-        ->and($response->getContent())->toContain('Open')
-        ->and($response->getContent())->not->toContain('>Completed<');
+        ->and($response->getContent())->toContain('SCHEDULE')
+        ->and($response->getContent())->not->toContain('>COMPLETE<');
 });
 
 it('create persists created by tasked by and assigned user fields', function () {
@@ -902,7 +1021,7 @@ it('submitting a draft count generates workflow tasks for the selected assigned 
     ($this->grantPermission)($creator, 'inventory-adjustments-execute');
     ($this->seedInventoryWorkflow)($tenant);
 
-    $openStage = ($this->inventoryStages)($tenant)->firstWhere('key', 'open');
+    $openStage = ($this->inventoryStages)($tenant)->firstWhere('key', 'scheduled');
     ($this->createInventoryTaskTemplate)($tenant, $openStage, $creator, [
         'title' => 'Count review',
     ]);
@@ -936,7 +1055,7 @@ it('detail payload shows current stage tasks with name status assigned user and 
     ($this->grantPermission)($assignee, 'inventory-adjustments-execute');
     ($this->seedInventoryWorkflow)($tenant);
 
-    $openStage = ($this->inventoryStages)($tenant)->firstWhere('key', 'open');
+    $openStage = ($this->inventoryStages)($tenant)->firstWhere('key', 'scheduled');
     ($this->createInventoryTaskTemplate)($tenant, $openStage, $assignee, [
         'title' => 'Review count lines',
     ]);
@@ -976,7 +1095,7 @@ it('detail page renders a Tasks section with generated task name status and open
     ($this->grantPermission)($assignee, 'inventory-adjustments-execute');
     ($this->seedInventoryWorkflow)($tenant);
 
-    $openStage = ($this->inventoryStages)($tenant)->firstWhere('key', 'open');
+    $openStage = ($this->inventoryStages)($tenant)->firstWhere('key', 'scheduled');
     ($this->createInventoryTaskTemplate)($tenant, $openStage, $assignee, [
         'title' => 'Task section item',
     ]);
@@ -1011,7 +1130,7 @@ it('tasks section rows expose a visible Complete button and disable the row acti
     ($this->grantPermission)($assignee, 'inventory-adjustments-execute');
     ($this->seedInventoryWorkflow)($tenant);
 
-    $openStage = ($this->inventoryStages)($tenant)->firstWhere('key', 'open');
+    $openStage = ($this->inventoryStages)($tenant)->firstWhere('key', 'scheduled');
     ($this->createInventoryTaskTemplate)($tenant, $openStage, $assignee, [
         'title' => 'Inline task completion',
     ]);
@@ -1050,14 +1169,548 @@ it('shared detail section source supports inline task actions when the row actio
     $source = file_get_contents(resource_path('js/lib/js-crud-section.js'));
 
     expect($source)->toContain('showRowActionsMenu: safeConfig.showRowActionsMenu !== false')
+        ->and($source)->toContain('icon: asString(safeAction.icon)')
+        ->and($source)->toContain('ariaLabel: asString(safeAction.ariaLabel)')
         ->and($source)->toContain("Object.prototype.hasOwnProperty.call(safeEntry, 'fallback')")
         ->and($source)->toContain('x-show="!section.showRowActionsMenu && visibleActions(record).length > 0"')
         ->and($source)->toContain('x-show="section.showRowActionsMenu && visibleActions(record).length > 0"')
         ->and($source)->toContain('flex flex-wrap items-center gap-4')
         ->and($source)->toContain('flex items-center justify-end gap-3 self-center')
         ->and($source)->toContain('items-center justify-end gap-2 self-center')
-        ->and($source)->toContain('inline-flex items-center rounded-lg')
+        ->and($source)->toContain("action.icon === 'x-mark'")
+        ->and($source)->toContain('rounded-full border border-slate-300')
         ->and($source)->toContain('flex flex-col sm:flex-row');
+});
+
+it('draft inventory count materials render the inline x-mark remove contract instead of the vertical dots menu', function () {
+    $tenant = Tenant::factory()->create();
+    $user = ($this->makeUser)($tenant);
+    $uom = ($this->makeUom)($tenant);
+    $item = ($this->makeItem)($tenant, $uom);
+
+    ($this->grantPermission)($user, 'inventory-adjustments-view');
+    ($this->grantPermission)($user, 'inventory-adjustments-execute');
+    ($this->seedInventoryWorkflow)($tenant);
+
+    $count = ($this->createDraftCountViaApi)($user);
+    ($this->createLineViaApi)($user, $count, [
+        'item_id' => $item->id,
+        'counted_quantity' => '3.000000',
+        'notes' => 'Draft removable line',
+    ]);
+
+    $response = $this->actingAs($user)->get('/inventory/counts/' . $count->id)->assertOk();
+    $payload = json_decode((string) preg_replace('/^.*<script type="application\\/json" id="inventory-count-show-payload">\\s*(.*?)\\s*<\\/script>.*$/s', '$1', $response->getContent()), true);
+    $countLinesSection = is_array($payload) ? ($payload['sections']['countLines'] ?? []) : [];
+
+    expect($countLinesSection['showRowActionsMenu'] ?? null)->toBeFalse()
+        ->and($countLinesSection['actions'][0]['icon'] ?? null)->toBe('x-mark')
+        ->and($countLinesSection['actions'][0]['ariaLabel'] ?? null)->toBe('Remove material line')
+        ->and($countLinesSection['addRow']['enabled'] ?? null)->toBeTrue()
+        ->and($countLinesSection['addRow']['placeholder'] ?? null)->toBe('Search materials')
+        ->and($countLinesSection['addRow']['action']['handlerKey'] ?? null)->toBe('addSelectedCountLine')
+        ->and($countLinesSection['recordClass'] ?? null)->toBe('rounded-xl border border-gray-100 bg-gray-50 px-3 py-3 sm:px-4 sm:py-3.5')
+        ->and($countLinesSection['rowLayout']['secondaryFields'] ?? [])->toBe([])
+        ->and($countLinesSection['rowLayout']['rightMeta'] ?? [])->toBe([])
+        ->and($response->getContent())->not->toContain('d="M12 6.75a.75.75 0 1 0 0-1.5');
+
+    $lines = $this->actingAs($user)
+        ->getJson(route('inventory.counts.lines.index', $count))
+        ->assertOk()
+        ->json('data');
+
+    expect($lines[0]['can_edit_counted_quantity'] ?? null)->toBeFalse()
+        ->and($response->getContent())->not->toContain('Draft removable line')
+        ->and(array_key_exists('counted_quantity_input', $lines[0]))->toBeTrue();
+});
+
+it('inventory counts in a workflow stage do not expose removable material row actions', function () {
+    $tenant = Tenant::factory()->create();
+    $user = ($this->makeUser)($tenant);
+    $uom = ($this->makeUom)($tenant);
+    $item = ($this->makeItem)($tenant, $uom);
+
+    ($this->grantPermission)($user, 'inventory-adjustments-view');
+    ($this->grantPermission)($user, 'inventory-adjustments-execute');
+    ($this->seedInventoryWorkflow)($tenant);
+
+    $count = ($this->createDraftCountViaApi)($user);
+    ($this->createLineViaApi)($user, $count, [
+        'item_id' => $item->id,
+        'counted_quantity' => '2.000000',
+    ]);
+    ($this->submitCount)($user, $count)->assertOk();
+
+    $response = $this->actingAs($user)->get('/inventory/counts/' . $count->id)->assertOk();
+    preg_match(
+        '/<script type="application\\/json" id="inventory-count-show-payload">\\s*(.*?)\\s*<\\/script>/s',
+        $response->getContent(),
+        $matches
+    );
+    $payload = json_decode($matches[1] ?? '[]', true);
+    $countLinesSection = $payload['sections']['countLines'] ?? [];
+
+    expect($countLinesSection['showRowActionsMenu'] ?? null)->toBeFalse()
+        ->and($countLinesSection['actions'] ?? [])->toBe([])
+        ->and($countLinesSection['addRow']['enabled'] ?? null)->toBeFalse()
+        ->and($response->getContent())->not->toContain('Remove material line')
+        ->and($countLinesSection['rowLayout']['rightMeta'][0]['label'] ?? null)->toBe('QTY')
+        ->and($countLinesSection['rowLayout']['rightMeta'][0]['field'] ?? null)->toBe('counted_quantity_input');
+
+    $lines = $this->actingAs($user)
+        ->getJson(route('inventory.counts.lines.index', $count))
+        ->assertOk()
+        ->json('data');
+
+    expect($lines[0]['can_edit_counted_quantity'] ?? null)->toBeTrue();
+});
+
+it('inventory count line payload omits the notes placeholder dash when notes are blank', function () {
+    $tenant = Tenant::factory()->create();
+    $user = ($this->makeUser)($tenant);
+    $uom = ($this->makeUom)($tenant);
+    $item = ($this->makeItem)($tenant, $uom);
+
+    ($this->grantPermission)($user, 'inventory-adjustments-view');
+    ($this->grantPermission)($user, 'inventory-adjustments-execute');
+
+    $count = ($this->createDraftCountViaApi)($user);
+    ($this->createLineViaApi)($user, $count, [
+        'item_id' => $item->id,
+        'counted_quantity' => '2.000000',
+        'notes' => null,
+    ]);
+
+    $lines = $this->actingAs($user)
+        ->getJson(route('inventory.counts.lines.index', $count))
+        ->assertOk()
+        ->json('data');
+
+    expect($lines[0]['notes_display'] ?? null)->toBe('')
+        ->and($lines[0]['item_display'] ?? null)->toBe($item->name . ' (' . $uom->symbol . ')');
+});
+
+it('inventory count materials rows never render notes text even when notes exist', function () {
+    $tenant = Tenant::factory()->create();
+    $user = ($this->makeUser)($tenant);
+    $uom = ($this->makeUom)($tenant);
+    $item = ($this->makeItem)($tenant, $uom);
+
+    ($this->grantPermission)($user, 'inventory-adjustments-view');
+    ($this->grantPermission)($user, 'inventory-adjustments-execute');
+
+    $count = ($this->createDraftCountViaApi)($user);
+    ($this->createLineViaApi)($user, $count, [
+        'item_id' => $item->id,
+        'counted_quantity' => '2.000000',
+        'notes' => 'Should stay hidden',
+    ]);
+
+    $response = $this->actingAs($user)->get('/inventory/counts/' . $count->id)->assertOk();
+    preg_match(
+        '/<script type="application\\/json" id="inventory-count-show-payload">\\s*(.*?)\\s*<\\/script>/s',
+        $response->getContent(),
+        $matches
+    );
+    $payload = json_decode($matches[1] ?? '[]', true);
+    $countLinesSection = $payload['sections']['countLines'] ?? [];
+
+    expect($countLinesSection['rowLayout']['secondaryFields'] ?? [])->toBe([])
+        ->and($response->getContent())->not->toContain('Should stay hidden')
+        ->and($response->getContent())->not->toContain('Notes:');
+});
+
+it('inventory count show page source handles inline draft line removal without a full page refresh', function () {
+    $pageSource = file_get_contents(resource_path('js/pages/inventory-count-show.js'));
+
+    expect($pageSource)->toContain("sectionKey === 'countLines'")
+        ->and($pageSource)->toContain("safeAction.handlerKey !== 'removeCountLine'")
+        ->and($pageSource)->toContain("method: 'DELETE'")
+        ->and($pageSource)->toContain("const deletedLineId = responseData.deleted_line_id ?? safeRecord.id;")
+        ->and($pageSource)->toContain('component.records = remainingLines;')
+        ->and($pageSource)->toContain("message: responseData.message || 'Unable to remove material line.'")
+        ->and($pageSource)->toContain("safeMeta.handlerKey !== 'updateCountedQuantity'")
+        ->and($pageSource)->toContain("message: responseData.message || 'Unable to update counted quantity.'");
+});
+
+it('shared detail section source supports workflow-stage qty inputs without showing remove and qty together', function () {
+    $source = file_get_contents(resource_path('js/lib/js-crud-section.js'));
+
+    expect($source)->toContain("if (typeof this.adapters.rightMetaItems === 'function')")
+        ->and($source)->toContain("meta.type === 'input'")
+        ->and($source)->toContain('x-on:change="performInlineMetaAction(record, meta)"')
+        ->and($source)->toContain('x-on:blur="performInlineMetaAction(record, meta)"')
+        ->and($source)->toContain("meta.showSuccessIcon")
+        ->and($source)->toContain('x-if="meta.showSuccessIcon"')
+        ->and($source)->toContain("text-emerald-500")
+        ->and($source)->toContain('section.addRow.enabled')
+        ->and($source)->toContain('data-detail-section-add-row')
+        ->and($source)->toContain("recordClass: asString(safeConfig.recordClass)")
+        ->and($source)->toContain("const baseClass = asString(this.section.recordClass, 'rounded-xl border border-gray-100 bg-gray-50 p-3 sm:p-4');")
+        ->and($source)->toContain('visibleActions(record).length > 0')
+        ->and($source)->toContain('handleInlineMetaAction');
+});
+
+it('inventory count materials source wires the draft add row through the reusable combobox add contract instead of the create slide-over', function () {
+    $pageSource = file_get_contents(resource_path('js/pages/inventory-count-show.js'));
+    $sectionSource = file_get_contents(resource_path('js/lib/js-crud-section.js'));
+
+    expect($pageSource)->toContain("safeAction.handlerKey !== 'addSelectedCountLine'")
+        ->and($pageSource)->toContain("component.sectionError = responseData.message || 'Unable to add material line.';")
+        ->and($sectionSource)->toContain("x-data=\"combobox({")
+        ->and($sectionSource)->toContain('x-model="addRowValue"')
+        ->and($sectionSource)->toContain('x-effect="configuredOptions = section.addRow.options"')
+        ->and($sectionSource)->toContain('x-on:click.stop.prevent="submitAddRow()"');
+});
+
+it('draft inventory count material delete endpoint removes the line and returns remaining lines for instant ui updates', function () {
+    $tenant = Tenant::factory()->create();
+    $user = ($this->makeUser)($tenant);
+    $uom = ($this->makeUom)($tenant);
+    $itemA = ($this->makeItem)($tenant, $uom, ['name' => 'Alpha material']);
+    $itemB = ($this->makeItem)($tenant, $uom, ['name' => 'Beta material']);
+
+    ($this->grantPermission)($user, 'inventory-adjustments-view');
+    ($this->grantPermission)($user, 'inventory-adjustments-execute');
+
+    $count = ($this->createDraftCountViaApi)($user);
+    $lineA = ($this->createLineViaApi)($user, $count, [
+        'item_id' => $itemA->id,
+        'counted_quantity' => '1.000000',
+    ]);
+    $lineB = ($this->createLineViaApi)($user, $count, [
+        'item_id' => $itemB->id,
+        'counted_quantity' => '2.000000',
+    ]);
+
+    $response = $this->actingAs($user)
+        ->deleteJson(route('inventory.counts.lines.destroy', ['inventoryCount' => $count, 'line' => $lineA]))
+        ->assertOk();
+
+    expect(InventoryCountLine::query()->whereKey($lineA->id)->exists())->toBeFalse()
+        ->and($response->json('deleted_line_id'))->toBe($lineA->id)
+        ->and(collect($response->json('lines'))->pluck('id')->all())->not->toContain($lineA->id)
+        ->and(collect($response->json('lines'))->pluck('id')->all())->toContain($lineB->id);
+});
+
+it('non-draft inventory counts reject material line removal server side', function () {
+    $tenant = Tenant::factory()->create();
+    $user = ($this->makeUser)($tenant);
+    $uom = ($this->makeUom)($tenant);
+    $item = ($this->makeItem)($tenant, $uom);
+
+    ($this->grantPermission)($user, 'inventory-adjustments-view');
+    ($this->grantPermission)($user, 'inventory-adjustments-execute');
+    ($this->seedInventoryWorkflow)($tenant);
+
+    $count = ($this->createDraftCountViaApi)($user);
+    $line = ($this->createLineViaApi)($user, $count, [
+        'item_id' => $item->id,
+        'counted_quantity' => '1.000000',
+    ]);
+    ($this->submitCount)($user, $count)->assertOk();
+
+    $this->actingAs($user)
+        ->deleteJson(route('inventory.counts.lines.destroy', ['inventoryCount' => $count, 'line' => $line]))
+        ->assertStatus(422)
+        ->assertJsonPath('message', 'Inventory count has been submitted and materials can no longer be removed.');
+
+    expect(InventoryCountLine::query()->whereKey($line->id)->exists())->toBeTrue();
+});
+
+it('workflow-stage inventory count line qty updates persist canonical scale six and return refreshed row data', function () {
+    $tenant = Tenant::factory()->create();
+    $user = ($this->makeUser)($tenant);
+    $uom = ($this->makeUom)($tenant);
+    $uom->forceFill(['display_precision' => 2])->save();
+    $item = ($this->makeItem)($tenant, $uom);
+
+    ($this->grantPermission)($user, 'inventory-adjustments-view');
+    ($this->grantPermission)($user, 'inventory-adjustments-execute');
+    ($this->seedInventoryWorkflow)($tenant);
+
+    $count = ($this->createDraftCountViaApi)($user);
+    $line = ($this->createLineViaApi)($user, $count, [
+        'item_id' => $item->id,
+        'counted_quantity' => '1.000000',
+        'notes' => 'Workflow editable line',
+    ]);
+    ($this->submitCount)($user, $count)->assertOk();
+
+    $response = $this->actingAs($user)->patchJson(route('inventory.counts.lines.update', [
+        'inventoryCount' => $count,
+        'line' => $line,
+    ]), [
+        'counted_quantity' => '2.5',
+    ])->assertOk();
+
+    $line->refresh();
+
+    expect($line->counted_quantity)->toBe('2.500000')
+        ->and($response->json('line.id'))->toBe($line->id)
+        ->and($response->json('line.counted_quantity'))->toBe('2.500000')
+        ->and($response->json('line.counted_quantity_display'))->toBe('2.50')
+        ->and($response->json('line.counted_quantity_input'))->toBe('2.50')
+        ->and($response->json('line.can_edit_counted_quantity'))->toBeTrue();
+});
+
+it('workflow-stage qty input display uses uom precision zero without decimals', function () {
+    $tenant = Tenant::factory()->create();
+    $user = ($this->makeUser)($tenant);
+    $uom = ($this->makeUom)($tenant);
+    $uom->forceFill(['display_precision' => 0])->save();
+    $item = ($this->makeItem)($tenant, $uom);
+
+    ($this->grantPermission)($user, 'inventory-adjustments-view');
+    ($this->grantPermission)($user, 'inventory-adjustments-execute');
+    ($this->seedInventoryWorkflow)($tenant);
+
+    $count = ($this->createDraftCountViaApi)($user);
+    ($this->createLineViaApi)($user, $count, [
+        'item_id' => $item->id,
+        'counted_quantity' => '2300.000000',
+    ]);
+    ($this->submitCount)($user, $count)->assertOk();
+
+    $line = $this->actingAs($user)
+        ->getJson(route('inventory.counts.lines.index', $count))
+        ->assertOk()
+        ->json('data.0');
+
+    expect($line['counted_quantity'])->toBe('2300.000000')
+        ->and($line['counted_quantity_input'])->toBe('2300')
+        ->and($line['counted_quantity_display'])->toBe('2300');
+});
+
+it('workflow-stage qty input display uses uom precision one with one decimal', function () {
+    $tenant = Tenant::factory()->create();
+    $user = ($this->makeUser)($tenant);
+    $uom = ($this->makeUom)($tenant);
+    $uom->forceFill(['display_precision' => 1])->save();
+    $item = ($this->makeItem)($tenant, $uom);
+
+    ($this->grantPermission)($user, 'inventory-adjustments-view');
+    ($this->grantPermission)($user, 'inventory-adjustments-execute');
+    ($this->seedInventoryWorkflow)($tenant);
+
+    $count = ($this->createDraftCountViaApi)($user);
+    ($this->createLineViaApi)($user, $count, [
+        'item_id' => $item->id,
+        'counted_quantity' => '2300.000000',
+    ]);
+    ($this->submitCount)($user, $count)->assertOk();
+
+    $line = $this->actingAs($user)
+        ->getJson(route('inventory.counts.lines.index', $count))
+        ->assertOk()
+        ->json('data.0');
+
+    expect($line['counted_quantity_input'])->toBe('2300.0')
+        ->and($line['counted_quantity_display'])->toBe('2300.0');
+});
+
+it('workflow-stage qty input display uses uom precision two with two decimals', function () {
+    $tenant = Tenant::factory()->create();
+    $user = ($this->makeUser)($tenant);
+    $uom = ($this->makeUom)($tenant);
+    $uom->forceFill(['display_precision' => 2])->save();
+    $item = ($this->makeItem)($tenant, $uom);
+
+    ($this->grantPermission)($user, 'inventory-adjustments-view');
+    ($this->grantPermission)($user, 'inventory-adjustments-execute');
+    ($this->seedInventoryWorkflow)($tenant);
+
+    $count = ($this->createDraftCountViaApi)($user);
+    ($this->createLineViaApi)($user, $count, [
+        'item_id' => $item->id,
+        'counted_quantity' => '2300.000000',
+    ]);
+    ($this->submitCount)($user, $count)->assertOk();
+
+    $line = $this->actingAs($user)
+        ->getJson(route('inventory.counts.lines.index', $count))
+        ->assertOk()
+        ->json('data.0');
+
+    expect($line['counted_quantity_input'])->toBe('2300.00')
+        ->and($line['counted_quantity_display'])->toBe('2300.00');
+});
+
+it('workflow-stage qty input display uses uom precision six with six decimals', function () {
+    $tenant = Tenant::factory()->create();
+    $user = ($this->makeUser)($tenant);
+    $uom = ($this->makeUom)($tenant);
+    $uom->forceFill(['display_precision' => 6])->save();
+    $item = ($this->makeItem)($tenant, $uom);
+
+    ($this->grantPermission)($user, 'inventory-adjustments-view');
+    ($this->grantPermission)($user, 'inventory-adjustments-execute');
+    ($this->seedInventoryWorkflow)($tenant);
+
+    $count = ($this->createDraftCountViaApi)($user);
+    ($this->createLineViaApi)($user, $count, [
+        'item_id' => $item->id,
+        'counted_quantity' => '2300.000000',
+    ]);
+    ($this->submitCount)($user, $count)->assertOk();
+
+    $line = $this->actingAs($user)
+        ->getJson(route('inventory.counts.lines.index', $count))
+        ->assertOk()
+        ->json('data.0');
+
+    expect($line['counted_quantity_input'])->toBe('2300.000000')
+        ->and($line['counted_quantity_display'])->toBe('2300.000000');
+});
+
+it('inventory count materials source uses QTY label and row scoped check-circle save feedback', function () {
+    $pageSource = file_get_contents(resource_path('js/pages/inventory-count-show.js'));
+    $sectionSource = file_get_contents(resource_path('js/lib/js-crud-section.js'));
+
+    expect($pageSource)->toContain("label: 'QTY'")
+        ->and($pageSource)->toContain("_countedQuantitySaved = true;")
+        ->and($pageSource)->toContain("window.setTimeout(() => {")
+        ->and($pageSource)->toContain("_countedQuantitySaved: false")
+        ->and($pageSource)->toContain("safeRecord._countedQuantitySaving = true;")
+        ->and($sectionSource)->toContain("meta.showSuccessIcon")
+        ->and($sectionSource)->toContain("d=\"M9 12.75 11.25 15 15 9.75\"")
+        ->and($sectionSource)->toContain("text-emerald-500")
+        ->and($sectionSource)->toContain("x-text=\"meta.labelBare ? meta.label :");
+});
+
+it('inventory count show page source does not use optional chaining on assignment left hand sides', function () {
+    $pageSource = file_get_contents(resource_path('js/pages/inventory-count-show.js'));
+
+    expect($pageSource)->not->toContain('?.')
+        ->and($pageSource)->not->toMatch('/\\?\\.[A-Za-z0-9_$\\.\\[\\]]+\\s*(?:\\+=|-=|\\*=|\\/=|\\?\\?=|\\|\\|=|&&=|=(?!=))/');
+});
+
+it('draft inventory count line qty updates are blocked server side', function () {
+    $tenant = Tenant::factory()->create();
+    $user = ($this->makeUser)($tenant);
+    $uom = ($this->makeUom)($tenant);
+    $item = ($this->makeItem)($tenant, $uom);
+
+    ($this->grantPermission)($user, 'inventory-adjustments-view');
+    ($this->grantPermission)($user, 'inventory-adjustments-execute');
+
+    $count = ($this->createDraftCountViaApi)($user);
+    $line = ($this->createLineViaApi)($user, $count, [
+        'item_id' => $item->id,
+        'counted_quantity' => '1.000000',
+    ]);
+
+    $this->actingAs($user)->patchJson(route('inventory.counts.lines.update', [
+        'inventoryCount' => $count,
+        'line' => $line,
+    ]), [
+        'counted_quantity' => '2.000000',
+    ])->assertStatus(422)
+        ->assertJsonPath('message', 'Inventory count is still in draft and counted quantity can be updated after submission.');
+});
+
+it('workflow-stage inventory count line qty updates reject invalid quantity formats', function () {
+    $tenant = Tenant::factory()->create();
+    $user = ($this->makeUser)($tenant);
+    $uom = ($this->makeUom)($tenant);
+    $item = ($this->makeItem)($tenant, $uom);
+
+    ($this->grantPermission)($user, 'inventory-adjustments-view');
+    ($this->grantPermission)($user, 'inventory-adjustments-execute');
+    ($this->seedInventoryWorkflow)($tenant);
+
+    $count = ($this->createDraftCountViaApi)($user);
+    $line = ($this->createLineViaApi)($user, $count, [
+        'item_id' => $item->id,
+        'counted_quantity' => '1.000000',
+    ]);
+    ($this->submitCount)($user, $count)->assertOk();
+
+    $this->actingAs($user)->patchJson(route('inventory.counts.lines.update', [
+        'inventoryCount' => $count,
+        'line' => $line,
+    ]), [
+        'counted_quantity' => 'not-a-number',
+    ])->assertStatus(422);
+});
+
+it('draft inventory count add selected material creates a line and returns row payload for immediate ui updates', function () {
+    $tenant = Tenant::factory()->create();
+    $user = ($this->makeUser)($tenant);
+    $uom = ($this->makeUom)($tenant);
+    $item = ($this->makeItem)($tenant, $uom, ['name' => 'Combobox add item']);
+    $remainingItem = ($this->makeItem)($tenant, $uom, ['name' => 'Still selectable item']);
+
+    ($this->grantPermission)($user, 'inventory-adjustments-view');
+    ($this->grantPermission)($user, 'inventory-adjustments-execute');
+
+    $count = ($this->createDraftCountViaApi)($user);
+
+    $response = $this->actingAs($user)->postJson(route('inventory.counts.lines.store', $count), [
+        'item_id' => $item->id,
+    ])->assertCreated();
+
+    expect($response->json('line.item_id'))->toBe($item->id)
+        ->and($response->json('line.item_display'))->toBe($item->name . ' (' . $uom->symbol . ')')
+        ->and(InventoryCountLine::query()->where('inventory_count_id', $count->id)->where('item_id', $item->id)->exists())->toBeTrue();
+
+    $refreshedLabels = collect($response->json('section.addRow.options'))->pluck('label')->all();
+
+    expect($refreshedLabels)->not->toContain('Combobox add item (' . $uom->symbol . ')')
+        ->and($refreshedLabels)->toContain('Still selectable item (' . $uom->symbol . ')');
+});
+
+it('inventory count materials add options stay tenant scoped and exclude already-added items from the draft combobox payload', function () {
+    $tenant = Tenant::factory()->create();
+    $otherTenant = Tenant::factory()->create();
+    $user = ($this->makeUser)($tenant);
+    $uom = ($this->makeUom)($tenant);
+    $otherUom = ($this->makeUom)($otherTenant);
+    $includedItem = ($this->makeItem)($tenant, $uom, ['name' => 'Eligible item']);
+    $alreadyAddedItem = ($this->makeItem)($tenant, $uom, ['name' => 'Already added item']);
+    ($this->makeItem)($otherTenant, $otherUom, ['name' => 'Cross tenant item']);
+
+    ($this->grantPermission)($user, 'inventory-adjustments-view');
+    ($this->grantPermission)($user, 'inventory-adjustments-execute');
+
+    $count = ($this->createDraftCountViaApi)($user);
+    ($this->createLineViaApi)($user, $count, [
+        'item_id' => $alreadyAddedItem->id,
+        'counted_quantity' => '1.000000',
+    ]);
+
+    $response = $this->actingAs($user)->get('/inventory/counts/' . $count->id)->assertOk();
+    preg_match(
+        '/<script type="application\\/json" id="inventory-count-show-payload">\\s*(.*?)\\s*<\\/script>/s',
+        $response->getContent(),
+        $matches
+    );
+    $payload = json_decode($matches[1] ?? '[]', true);
+    $options = $payload['sections']['countLines']['addRow']['options'] ?? [];
+    $labels = collect($options)->pluck('label')->all();
+
+    expect($labels)->toContain('Eligible item (' . $uom->symbol . ')')
+        ->and($labels)->not->toContain('Already added item (' . $uom->symbol . ')')
+        ->and(collect($labels)->contains(fn ($label) => str_contains($label, 'Cross tenant item')))->toBeFalse();
+});
+
+it('workflow-stage inventory counts reject adding additional material lines server side', function () {
+    $tenant = Tenant::factory()->create();
+    $user = ($this->makeUser)($tenant);
+    $uom = ($this->makeUom)($tenant);
+    $item = ($this->makeItem)($tenant, $uom);
+
+    ($this->grantPermission)($user, 'inventory-adjustments-view');
+    ($this->grantPermission)($user, 'inventory-adjustments-execute');
+    ($this->seedInventoryWorkflow)($tenant);
+
+    $count = ($this->createDraftCountViaApi)($user);
+    ($this->submitCount)($user, $count)->assertOk();
+
+    $this->actingAs($user)->postJson(route('inventory.counts.lines.store', $count), [
+        'item_id' => $item->id,
+    ])->assertStatus(422)
+        ->assertJsonPath('message', 'Inventory count has been submitted and cannot be modified.');
 });
 
 it('completed task rows do not render a Complete button in the tasks section payload', function () {
@@ -1071,7 +1724,7 @@ it('completed task rows do not render a Complete button in the tasks section pay
     ($this->grantPermission)($assignee, 'inventory-adjustments-execute');
     ($this->seedInventoryWorkflow)($tenant);
 
-    $openStage = ($this->inventoryStages)($tenant)->firstWhere('key', 'open');
+    $openStage = ($this->inventoryStages)($tenant)->firstWhere('key', 'scheduled');
     ($this->createInventoryTaskTemplate)($tenant, $openStage, $assignee, [
         'title' => 'Already done task',
     ]);
@@ -1128,7 +1781,7 @@ it('incomplete task rows expose a Complete button in the tasks section payload',
     ($this->grantPermission)($assignee, 'inventory-adjustments-execute');
     ($this->seedInventoryWorkflow)($tenant);
 
-    $openStage = ($this->inventoryStages)($tenant)->firstWhere('key', 'open');
+    $openStage = ($this->inventoryStages)($tenant)->firstWhere('key', 'scheduled');
     ($this->createInventoryTaskTemplate)($tenant, $openStage, $assignee, [
         'title' => 'Still open task',
     ]);
@@ -1167,7 +1820,7 @@ it('advance requires current inventory workflow tasks to be completed before mov
     ($this->grantPermission)($creator, 'inventory-adjustments-execute');
     ($this->seedInventoryWorkflow)($tenant);
 
-    $openStage = ($this->inventoryStages)($tenant)->firstWhere('key', 'open');
+    $openStage = ($this->inventoryStages)($tenant)->firstWhere('key', 'scheduled');
     ($this->createInventoryTaskTemplate)($tenant, $openStage, $assignee, [
         'title' => 'Count check',
     ]);
@@ -1190,7 +1843,7 @@ it('advance requires current inventory workflow tasks to be completed before mov
 
     $count->refresh();
 
-    expect($count->workflowStage?->key)->toBe('open')
+    expect($count->workflowStage?->key)->toBe('scheduled')
         ->and($count->posted_at)->toBeNull();
 });
 
@@ -1203,7 +1856,7 @@ it('completing the assigned current stage task removes the gating block and allo
     ($this->grantPermission)($assignee, 'inventory-adjustments-execute');
     ($this->seedInventoryWorkflow)($tenant);
 
-    $openStage = ($this->inventoryStages)($tenant)->firstWhere('key', 'open');
+    $openStage = ($this->inventoryStages)($tenant)->firstWhere('key', 'scheduled');
     ($this->createInventoryTaskTemplate)($tenant, $openStage, $assignee, [
         'title' => 'Complete me',
     ]);
@@ -1255,7 +1908,7 @@ it('submitting uses the configured first active inventory stage rather than a ha
     WorkflowStage::withoutGlobalScopes()
         ->where('tenant_id', $tenant->id)
         ->where('workflow_domain_id', ($this->inventoryDomain)()->id)
-        ->where('key', 'open')
+        ->where('key', 'scheduled')
         ->update([
             'sort_order' => 20,
         ]);
@@ -1280,16 +1933,16 @@ it('submitting uses the configured first active inventory stage rather than a ha
     expect($count->workflowStage?->key)->toBe('completed');
 });
 
-it('open stage keeps line mutations available while still blocking header edits and count deletion', function () {
+it('open stage blocks new material adds while still allowing counted qty updates detail edits and blocking count deletion', function () {
     $tenant = Tenant::factory()->create();
     $user = ($this->makeUser)($tenant);
+    $assignee = ($this->makeUser)($tenant);
 
     ($this->grantPermission)($user, 'inventory-adjustments-execute');
     ($this->seedInventoryWorkflow)($tenant);
 
     $uom = ($this->makeUom)($tenant);
     $item = ($this->makeItem)($tenant, $uom);
-    $secondItem = ($this->makeItem)($tenant, $uom);
     $count = ($this->createDraftCountViaApi)($user);
     $line = ($this->createLineViaApi)($user, $count, [
         'item_id' => $item->id,
@@ -1299,36 +1952,80 @@ it('open stage keeps line mutations available while still blocking header edits 
 
     ($this->submitCount)($user, $count)->assertOk();
 
-    $expectedMessage = 'Inventory count has been submitted and cannot be modified.';
+    $expectedRemoveMessage = 'Inventory count has been submitted and materials can no longer be removed.';
+
+    $updatedAt = now()->addDay();
 
     $this->actingAs($user)->patchJson('/inventory/counts/' . $count->id, [
-        'counted_at' => now()->addDay()->toISOString(),
-        'notes' => 'Blocked',
-    ])->assertStatus(422)->assertJson(['message' => $expectedMessage]);
+        'counted_at' => $updatedAt->toISOString(),
+        'notes' => 'Updated while open',
+        'assigned_to_user_id' => $assignee->id,
+    ])->assertOk()
+        ->assertJsonPath('count.counted_at', $updatedAt->format('Y-m-d H:i'))
+        ->assertJsonPath('count.notes', 'Updated while open')
+        ->assertJsonPath('count.assigned_to_user_id', $assignee->id);
 
     $this->actingAs($user)->deleteJson('/inventory/counts/' . $count->id)
         ->assertStatus(422)
-        ->assertJson(['message' => $expectedMessage]);
-
-    $lineCreate = $this->actingAs($user)->postJson('/inventory/counts/' . $count->id . '/lines', [
-        'item_id' => $secondItem->id,
-        'counted_quantity' => '2.000000',
-        'notes' => 'Open stage add',
-    ]);
-
-    $lineCreate->assertCreated()->assertJsonPath('line.item_id', $secondItem->id);
+        ->assertJson(['message' => 'Inventory count has been submitted and cannot be modified.']);
 
     $this->actingAs($user)->patchJson('/inventory/counts/' . $count->id . '/lines/' . $line->id, [
+        'counted_quantity' => '2.000000',
+    ])->assertOk()->assertJsonPath('line.counted_quantity', '2.000000');
+
+    $this->actingAs($user)->postJson('/inventory/counts/' . $count->id . '/lines', [
         'item_id' => $item->id,
         'counted_quantity' => '2.000000',
-        'notes' => 'Open stage edit',
-    ])->assertOk()->assertJsonPath('line.notes', 'Open stage edit');
+        'notes' => 'Open stage add',
+    ])->assertStatus(422)->assertJson(['message' => 'Inventory count has been submitted and cannot be modified.']);
 
-    $createdLineId = (int) $lineCreate->json('line.id');
+    $this->actingAs($user)->deleteJson('/inventory/counts/' . $count->id . '/lines/' . $line->id)
+        ->assertStatus(422)
+        ->assertJson(['message' => $expectedRemoveMessage]);
+});
 
-    $this->actingAs($user)->deleteJson('/inventory/counts/' . $count->id . '/lines/' . $createdLineId)
-        ->assertOk()
-        ->assertJson(['deleted' => true]);
+it('inventory count details ajax updates persist in draft and reject invalid date or cross-tenant assignment', function () {
+    $tenant = Tenant::factory()->create();
+    $otherTenant = Tenant::factory()->create();
+    $user = ($this->makeUser)($tenant);
+    $assignee = ($this->makeUser)($tenant);
+    $otherTenantUser = ($this->makeUser)($otherTenant);
+
+    ($this->grantPermission)($user, 'inventory-adjustments-execute');
+
+    $count = ($this->createDraftCountViaApi)($user, [
+        'assigned_to_user_id' => null,
+        'notes' => '',
+    ]);
+
+    $updatedAt = Carbon::parse('2026-05-23 14:45:00');
+
+    $this->actingAs($user)->patchJson('/inventory/counts/' . $count->id, [
+        'counted_at' => $updatedAt->toISOString(),
+        'notes' => 'Cycle count notes',
+        'assigned_to_user_id' => $assignee->id,
+    ])->assertOk()
+        ->assertJsonPath('count.counted_at', $updatedAt->format('Y-m-d H:i'))
+        ->assertJsonPath('count.counted_at_iso', $updatedAt->format('Y-m-d\TH:i'))
+        ->assertJsonPath('count.notes', 'Cycle count notes')
+        ->assertJsonPath('count.assigned_to_user_id', $assignee->id)
+        ->assertJsonPath('count.assigned_to_user_name', $assignee->name);
+
+    $count->refresh();
+
+    expect($count->counted_at->format('Y-m-d H:i'))->toBe($updatedAt->format('Y-m-d H:i'))
+        ->and($count->notes)->toBe('Cycle count notes')
+        ->and($count->assigned_to_user_id)->toBe($assignee->id);
+
+    $this->actingAs($user)->patchJson('/inventory/counts/' . $count->id, [
+        'counted_at' => 'not-a-date',
+        'notes' => 'Still invalid',
+    ])->assertStatus(422)->assertJsonValidationErrors(['counted_at']);
+
+    $this->actingAs($user)->patchJson('/inventory/counts/' . $count->id, [
+        'counted_at' => now()->toISOString(),
+        'assigned_to_user_id' => $otherTenantUser->id,
+    ])->assertStatus(422)->assertJsonValidationErrors(['assigned_to_user_id']);
 });
 
 it('advancing a non inventory-effect stage does not post the count', function () {
@@ -1426,7 +2123,7 @@ it('posting failure while advancing blocks stage completion and leaves no partia
 
     $count->refresh();
 
-    expect($count->workflowStage?->key)->toBe('open')
+    expect($count->workflowStage?->key)->toBe('scheduled')
         ->and($count->posted_at)->toBeNull()
         ->and(($this->countAdjustmentsFor)($tenant, $count))->toBe(0);
 });
@@ -1460,7 +2157,7 @@ it('blank counted quantity is allowed before completion but blocks advancing int
 
     $count->refresh();
 
-    expect($count->workflowStage?->key)->toBe('open')
+    expect($count->workflowStage?->key)->toBe('scheduled')
         ->and($count->posted_at)->toBeNull()
         ->and(($this->countAdjustmentsFor)($tenant, $count))->toBe(0);
 });
@@ -1614,11 +2311,8 @@ it('detail page shows breadcrumb workflow metadata materials tasks and no post u
         ->assertSee('Inventory Count')
         ->assertSee('Inventory Counts')
         ->assertSee('ID# ' . $count->id)
-        ->assertSee('Workflow Stage')
-        ->assertSee('Open')
-        ->assertSee('Counted')
-        ->assertSee('Line Items')
-        ->assertSee('Workflow detail')
+        ->assertSee('SCHEDULED')
+        ->assertSee('Details')
         ->assertSee('Materials')
         ->assertDontSee('Count Lines')
         ->assertSee('Tasks')
@@ -1626,7 +2320,7 @@ it('detail page shows breadcrumb workflow metadata materials tasks and no post u
         ->assertDontSee('Lifecycle Status')
         ->assertDontSee('Post Count')
         ->assertDontSee('Submit Count')
-        ->assertSee('Completed')
+        ->assertSee('COMPLETE')
         ->assertSee('data-section-key="countLines"', false)
         ->assertSee('data-section-key="tasks"', false)
         ->assertDontSee('data-crud-root', false);
@@ -1663,11 +2357,11 @@ it('first active workflow stage hides the previous-stage button and shows the ne
 
     expect($response->getContent())->not->toContain("window.dispatchEvent(new CustomEvent('inventory-count-previous'))")
         ->and($response->getContent())->toContain("window.dispatchEvent(new CustomEvent('inventory-count-advance'))")
-        ->and($response->getContent())->toContain('Completed')
+        ->and($response->getContent())->toContain('COMPLETE')
         ->and($response->getContent())->not->toContain('Back to');
 });
 
-it('non-first non-posted workflow stages can expose a previous-stage button by stage name only', function () {
+it('non-first non-posted workflow stages can expose previous and next buttons by target stage button text', function () {
     $tenant = Tenant::factory()->create();
     $user = ($this->makeUser)($tenant);
 
@@ -1682,6 +2376,7 @@ it('non-first non-posted workflow stages can expose a previous-stage button by s
         'workflow_domain_id' => ($this->inventoryDomain)()->id,
         'key' => 'review',
         'name' => 'Review',
+        'button_text' => 'REVIEW',
         'description' => null,
         'sort_order' => 15,
         'is_active' => true,
@@ -1705,8 +2400,8 @@ it('non-first non-posted workflow stages can expose a previous-stage button by s
 
     expect($response->getContent())->toContain("window.dispatchEvent(new CustomEvent('inventory-count-previous'))")
         ->and($response->getContent())->toContain("window.dispatchEvent(new CustomEvent('inventory-count-advance'))")
-        ->and($response->getContent())->toContain('Open')
-        ->and($response->getContent())->toContain('Completed')
+        ->and($response->getContent())->toContain('SCHEDULE')
+        ->and($response->getContent())->toContain('COMPLETE')
         ->and($response->getContent())->not->toContain('Back to')
         ->and($response->getContent())->not->toContain('Move to');
 });
@@ -1726,6 +2421,7 @@ it('previous-stage button renders before the next-stage button in the inventory 
         'workflow_domain_id' => ($this->inventoryDomain)()->id,
         'key' => 'approval',
         'name' => 'Approval',
+        'button_text' => 'APPROVE',
         'description' => null,
         'sort_order' => 20,
         'is_active' => true,
@@ -1755,7 +2451,7 @@ it('previous stage availability follows configured stage order rather than hardc
     ($this->grantPermission)($user, 'inventory-adjustments-execute');
     ($this->seedInventoryWorkflow)($tenant);
 
-    $openStage = ($this->inventoryStages)($tenant)->firstWhere('key', 'open');
+    $openStage = ($this->inventoryStages)($tenant)->firstWhere('key', 'scheduled');
     $completedStage = ($this->inventoryStages)($tenant)->firstWhere('key', 'completed');
 
     WorkflowStage::withoutGlobalScopes()->create([
@@ -1763,6 +2459,7 @@ it('previous stage availability follows configured stage order rather than hardc
         'workflow_domain_id' => ($this->inventoryDomain)()->id,
         'key' => 'approval',
         'name' => 'Approval',
+        'button_text' => 'APPROVE',
         'description' => null,
         'sort_order' => 20,
         'is_active' => true,
@@ -1791,13 +2488,13 @@ it('previous stage availability follows configured stage order rather than hardc
     $response = $this->actingAs($user)->get('/inventory/counts/' . $count->id)->assertOk();
 
     expect($response->getContent())->toContain('Approval')
-        ->and($response->getContent())->toContain('Open')
-        ->and($response->getContent())->toContain('Completed')
+        ->and($response->getContent())->toContain('COMPLETE')
+        ->and($response->getContent())->toContain('SCHEDULE')
         ->and($response->getContent())->toContain("window.dispatchEvent(new CustomEvent('inventory-count-previous'))")
         ->and($response->getContent())->toContain("window.dispatchEvent(new CustomEvent('inventory-count-advance'))");
 });
 
-it('draft detail page does not expose Completed as an available workflow action', function () {
+it('draft detail page does not expose Complete as an available workflow action', function () {
     $tenant = Tenant::factory()->create();
     $user = ($this->makeUser)($tenant);
 
@@ -1813,7 +2510,7 @@ it('draft detail page does not expose Completed as an available workflow action'
 
     expect($response->getContent())->toContain("window.dispatchEvent(new CustomEvent('inventory-count-submit'))")
         ->and($response->getContent())->not->toContain("window.dispatchEvent(new CustomEvent('inventory-count-advance'))")
-        ->and($response->getContent())->not->toContain('>Completed<');
+        ->and($response->getContent())->not->toContain('>COMPLETE<');
 });
 
 it('draft detail page hides the previous-stage button', function () {
@@ -1848,6 +2545,7 @@ it('previous-stage button is hidden without execute permission', function () {
         'workflow_domain_id' => ($this->inventoryDomain)()->id,
         'key' => 'approval',
         'name' => 'Approval',
+        'button_text' => 'APPROVE',
         'description' => null,
         'sort_order' => 20,
         'is_active' => true,
@@ -1882,6 +2580,7 @@ it('previous-stage action works when the count is on a non-first non-posted work
         'workflow_domain_id' => ($this->inventoryDomain)()->id,
         'key' => 'approval',
         'name' => 'Approval',
+        'button_text' => 'APPROVE',
         'description' => null,
         'sort_order' => 20,
         'is_active' => true,
@@ -1898,11 +2597,11 @@ it('previous-stage action works when the count is on a non-first non-posted work
 
     $this->actingAs($user)->postJson(route('inventory.counts.previous', $count))
         ->assertOk()
-        ->assertJsonPath('count.workflow_stage_name', 'Open');
+        ->assertJsonPath('count.workflow_stage_name', 'SCHEDULED');
 
     $count->refresh();
 
-    expect($count->workflowStage?->key)->toBe('open');
+    expect($count->workflowStage?->key)->toBe('scheduled');
 });
 
 it('previous-stage action is blocked after inventory has posted', function () {
@@ -1912,16 +2611,15 @@ it('previous-stage action is blocked after inventory has posted', function () {
     ($this->grantPermission)($user, 'inventory-adjustments-execute');
     ($this->seedInventoryWorkflow)($tenant);
 
-    $count = ($this->createDraftCountViaApi)($user);
-    ($this->submitCount)($user, $count)->assertOk();
-
     $uom = ($this->makeUom)($tenant);
     $item = ($this->makeItem)($tenant, $uom);
+    $count = ($this->createDraftCountViaApi)($user);
     ($this->createLineViaApi)($user, $count, [
         'item_id' => $item->id,
         'counted_quantity' => '1.000000',
     ]);
 
+    ($this->submitCount)($user, $count)->assertOk();
     ($this->advanceCount)($user, $count)->assertOk();
 
     $this->actingAs($user)->postJson(route('inventory.counts.previous', $count))
@@ -1963,4 +2661,59 @@ it('prevents cross-tenant item usage via validation (line create/update uses ten
         'item_id' => $itemB->id,
         'counted_quantity' => '2.000000',
     ])->assertStatus(422);
+});
+
+it('posts inventory count adjustments only for stockable items', function () {
+    $tenant = Tenant::factory()->create();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermission)($user, 'inventory-adjustments-execute');
+
+    $uom = ($this->makeUom)($tenant);
+    $stockableItem = ($this->makeItem)($tenant, $uom, ['name' => 'Tracked']);
+    $nonStockableItem = ($this->makeItem)($tenant, $uom, ['name' => 'Untracked', 'is_stockable' => false]);
+
+    StockMove::query()->create([
+        'tenant_id' => $tenant->id,
+        'item_id' => $stockableItem->id,
+        'uom_id' => $uom->id,
+        'quantity' => '1.000000',
+        'type' => 'receipt',
+        'status' => 'POSTED',
+    ]);
+
+    StockMove::query()->create([
+        'tenant_id' => $tenant->id,
+        'item_id' => $nonStockableItem->id,
+        'uom_id' => $uom->id,
+        'quantity' => '1.000000',
+        'type' => 'receipt',
+        'status' => 'POSTED',
+    ]);
+
+    $count = ($this->createDraftCountViaApi)($user, [
+        'assigned_to_user_id' => $user->id,
+    ]);
+
+    ($this->createLineViaApi)($user, $count, [
+        'item_id' => $stockableItem->id,
+        'counted_quantity' => '3.000000',
+    ]);
+
+    ($this->createLineViaApi)($user, $count, [
+        'item_id' => $nonStockableItem->id,
+        'counted_quantity' => '5.000000',
+    ]);
+
+    ($this->postCount)($user, $count)->assertOk();
+
+    $moves = StockMove::query()
+        ->where('source_type', InventoryCount::class)
+        ->where('source_id', $count->id)
+        ->orderBy('id')
+        ->get();
+
+    expect($moves)->toHaveCount(1)
+        ->and($moves->first()->item_id)->toBe($stockableItem->id)
+        ->and((string) $moves->first()->quantity)->toBe('2.000000');
 });

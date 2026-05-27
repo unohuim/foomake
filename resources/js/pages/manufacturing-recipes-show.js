@@ -586,19 +586,8 @@ export function mount(rootEl, payload) {
             buildListParams: (_toggleValues, section) => ({
                 mobile_page_size: section?.mobilePageSize || '',
             }),
-            buildCreatePayload: (form) => ({
-                runs: asString(form.runs),
-            }),
-            handleCreateSuccess: async ({ data }) => {
-                const showUrl = asString(data?.data?.show_url);
-
-                if (showUrl === '') {
-                    return false;
-                }
-
-                window.location.assign(showUrl);
-
-                return true;
+            handleCreateAction: async ({ section }) => {
+                await pageState?.createMakeOrder(section?.endpoints?.create || '');
             },
             handleAction: async () => {},
         },

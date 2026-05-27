@@ -131,6 +131,7 @@ beforeEach(function () {
             'name' => 'Item ' . $this->itemCounter,
             'base_uom_id' => $uom->id,
             'is_active' => true,
+            'is_stockable' => true,
             'is_purchasable' => false,
             'is_sellable' => true,
             'is_manufacturable' => false,
@@ -886,4 +887,27 @@ it('63. cancellation still creates reversing moves after inventory posts at a mo
     expect($moves)->toHaveCount($beforeCancelCount * 2)
         ->and($moves->last()->quantity)->toBe('2.000000')
         ->and(($this->fetchOrder)($order)->status)->toBe(SalesOrder::STATUS_CANCELLED);
+});
+
+it('64. sales inventory transitions skip non stockable line items while still packing the order', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $customer = ($this->createCustomer)($tenant);
+    $uom = ($this->makeUom)($tenant);
+    $trackedItem = ($this->createItem)($tenant, $uom, ['name' => 'Tracked']);
+    $untrackedItem = ($this->createItem)($tenant, $uom, ['name' => 'Untracked', 'is_stockable' => false]);
+    $order = ($this->createSalesOrder)($tenant, $customer->id);
+    ($this->createLine)($tenant, $order, $trackedItem, ['quantity' => '2.000000']);
+    ($this->createLine)($tenant, $order, $untrackedItem, ['quantity' => '3.000000']);
+    ($this->createReceipt)($tenant, $trackedItem, '5.000000');
+    ($this->grantPermission)($user, 'sales-sales-orders-manage');
+
+    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKING)->assertOk();
+    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKED)->assertOk();
+
+    $moves = ($this->fetchOrderMoves)($order);
+
+    expect($moves)->toHaveCount(1)
+        ->and($moves->first()->item_id)->toBe($trackedItem->id)
+        ->and(($this->fetchOrder)($order)->status)->toBe(SalesOrder::STATUS_PACKED);
 });

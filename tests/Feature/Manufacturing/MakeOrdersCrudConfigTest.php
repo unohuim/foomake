@@ -348,7 +348,7 @@ it('15. crud labels expose the shared search and create copy', function (): void
     expect($config['labels']['searchPlaceholder'] ?? null)->toBe('Search make orders')
         ->and($config['labels']['createTitle'] ?? null)->toBe('Create Make Order')
         ->and($config['labels']['createAriaLabel'] ?? null)->toBe('Create Make Order')
-        ->and($config['labels']['actionsAriaLabel'] ?? null)->toBe('Make order actions');
+        ->and($config['labels']['actionsAriaLabel'] ?? null)->toBe('Archive make order');
 });
 
 it('16. crud permissions show only the create button and no unrelated toolbar buttons', function (): void {
@@ -366,7 +366,7 @@ it('16. crud permissions show only the create button and no unrelated toolbar bu
     ]);
 });
 
-it('17. crud actions expose view edit and archive in the row menu', function (): void {
+it('17. crud actions expose archive as the direct row action for active make orders', function (): void {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
 
@@ -375,10 +375,13 @@ it('17. crud actions expose view edit and archive in the row menu', function ():
     $config = ($this->extractCrudConfig)(($this->getIndex)($user));
 
     expect($config['actions'] ?? null)->toBe([
-        ['id' => 'view', 'label' => 'View', 'tone' => 'default'],
-        ['id' => 'edit', 'label' => 'Edit', 'tone' => 'default'],
         ['id' => 'archive', 'label' => 'Archive', 'tone' => 'warning'],
-    ]);
+    ])
+        ->and($config['rowActions'] ?? null)->toBe([
+            'mode' => 'icon-button',
+            'icon' => 'x-mark',
+            'ariaLabel' => 'Archive make order',
+        ]);
 });
 
 it('18. page blade does not render bespoke toolbar or table markup anymore', function (): void {
@@ -398,24 +401,31 @@ it('19. page module mounts the shared crud renderer', function (): void {
         ->and($source)->toContain('mountCrudRenderer(');
 });
 
-it('20. page module maps the row actions to view edit and archive handlers', function (): void {
+it('20. page module maps the direct row action to the archive handler', function (): void {
     $source = file_get_contents(resource_path('js/pages/manufacturing-make-orders.js'));
 
-    expect($source)->toContain("action.id === 'view'")
-        ->and($source)->toContain("action.id === 'edit'")
-        ->and($source)->toContain("action.id === 'archive'")
-        ->and($source)->toContain('view(record)')
-        ->and($source)->toContain('openEdit(record)')
-        ->and($source)->toContain('archive(record)');
+    expect($source)->toContain("action.id === 'archive'")
+        ->and($source)->toContain('archive(record)')
+        ->and($source)->not->toContain("action.id === 'view'")
+        ->and($source)->not->toContain("action.id === 'edit'");
 });
 
-it('21. shared renderer remains the owner of search create and row action markup', function (): void {
+it('21. shared renderer remains the owner of search create and direct row action markup', function (): void {
     $rendererSource = file_get_contents(resource_path('js/lib/crud-page.js'));
 
     expect($rendererSource)->toContain('data-crud-toolbar-create-button')
-        ->and($rendererSource)->toContain('data-crud-action-trigger')
-        ->and($rendererSource)->toContain('data-crud-action-menu')
-        ->and($rendererSource)->toContain('data-crud-action-item-${escapeHtml(action.id)}');
+        ->and($rendererSource)->toContain('data-crud-direct-action-trigger')
+        ->and($rendererSource)->toContain('data-crud-action-item-${escapeHtml(action.id)}')
+        ->and($rendererSource)->toContain("d=\"M6 18 18 6M6 6l12 12\"");
+});
+
+it('21b. archive handler removes the local row without reloading the page and only shows errors on failure', function (): void {
+    $source = file_get_contents(resource_path('js/pages/manufacturing-make-orders.js'));
+
+    expect($source)->toContain('const removedId = data?.removed_id ?? record?.id;')
+        ->and($source)->toContain('this.makeOrders = this.makeOrders.filter((entry) => entry.id !== removedId);')
+        ->and($source)->toContain("this.showToast('error', 'Unable to archive make order.');")
+        ->and($source)->not->toContain("this.showToast('success', 'Make order archived.');");
 });
 
 it('22. index view still includes the existing make order slide over partial', function (): void {

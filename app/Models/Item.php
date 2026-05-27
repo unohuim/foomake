@@ -27,6 +27,7 @@ class Item extends Model
         'is_purchasable',
         'is_sellable',
         'is_manufacturable',
+        'is_stockable',
         'default_price_cents',
         'default_price_currency_code',
         'image_url',
@@ -39,6 +40,7 @@ class Item extends Model
         'is_purchasable' => 'boolean',
         'is_sellable' => 'boolean',
         'is_manufacturable' => 'boolean',
+        'is_stockable' => 'boolean',
     ];
 
     /**

@@ -2,15 +2,22 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\Inventory\AdvanceInventoryCountWorkflowStageAction;
+use App\Actions\Inventory\BuildMaterialInventoryStatsAction;
+use App\Actions\Workflows\ResolveInventoryWorkflowStageAction;
+use App\Actions\Workflows\SeedDefaultWorkflowStagesForTenantAction;
 use App\Models\InventoryCount;
 use App\Models\InventoryCountLine;
 use App\Models\Item;
 use App\Models\Recipe;
 use App\Models\Supplier;
-use App\Models\StockMove;
 use App\Models\Uom;
+use App\Models\User;
+use App\Support\QuantityFormatter;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
@@ -39,6 +46,7 @@ class ItemController extends Controller
                     'id' => $item->id,
                     'name' => $item->name,
                     'base_uom_id' => $item->base_uom_id,
+                    'is_stockable' => $item->is_stockable,
                     'default_price_amount' => $this->formatCentsToAmount($item->default_price_cents),
                     'default_price_currency_code' => $item->default_price_currency_code,
                 ],
@@ -52,14 +60,18 @@ class ItemController extends Controller
         $canViewMakeOrders = Gate::allows('inventory-make-orders-view');
         $canManageRecipes = Gate::allows('inventory-make-orders-manage');
         $canExecuteMakeOrders = Gate::allows('inventory-make-orders-execute');
+        $canViewInventoryCounts = Gate::allows('inventory-adjustments-view');
+        $canCreateInventoryCounts = Gate::allows('inventory-adjustments-execute');
         $canCreatePurchaseOrdersFromPackages = $canViewPurchasing
             && Gate::allows('purchasing-purchase-orders-create');
-
         $payload = [
             'item' => [
                 'id' => $item->id,
                 'name' => $item->name,
             ],
+            'inventoryStats' => $item->is_stockable
+                ? app(BuildMaterialInventoryStatsAction::class)->execute($item)
+                : null,
             'tenantCurrency' => strtoupper($this->resolveTenantCurrency($request)),
             'navigationStateUrl' => route('navigation.state'),
             'canViewPurchasing' => $canViewPurchasing,
@@ -68,6 +80,9 @@ class ItemController extends Controller
                 : null,
             'recipeCreate' => $canViewRecipes && $item->is_manufacturable
                 ? $this->recipeCreateConfig($request, $item, $canManageRecipes)
+                : null,
+            'inventoryCountCreate' => $item->is_stockable && $canViewInventoryCounts && $canCreateInventoryCounts
+                ? $this->inventoryCountCreateConfig($request, $item)
                 : null,
             'makeOrderCreate' => $canViewMakeOrders && $item->is_manufacturable
                 ? $this->makeOrderCreateConfig($request, $item, $canExecuteMakeOrders)
@@ -78,6 +93,9 @@ class ItemController extends Controller
                     : null,
                 'recipes' => $canViewRecipes && $item->is_manufacturable
                     ? $this->recipesSectionConfig($item, $canManageRecipes, $canExecuteMakeOrders)
+                    : null,
+                'inventoryCounts' => $item->is_stockable && $canViewInventoryCounts
+                    ? $this->inventoryCountsSectionConfig($request, $item)
                     : null,
                 'purchaseOrders' => $canViewPurchaseOrders && $item->is_purchasable
                     ? $this->purchaseOrdersSectionConfig($item)
@@ -126,6 +144,7 @@ class ItemController extends Controller
             'is_purchasable' => ['nullable', 'boolean'],
             'is_sellable' => ['nullable', 'boolean'],
             'is_manufacturable' => ['nullable', 'boolean'],
+            'is_stockable' => ['nullable', 'boolean'],
             'default_price_amount' => ['nullable', 'regex:/^\\d+(\\.\\d{1,2})?$/'],
             'default_price_currency_code' => ['nullable', 'regex:/^[A-Za-z]{3}$/'],
             'starting_quantity' => ['nullable', 'string', 'regex:/^\\d+(?:\\.\\d{1,6})?$/'],
@@ -133,6 +152,15 @@ class ItemController extends Controller
 
         $defaultPriceData = $this->resolveDefaultPriceData($request, null);
         $startingQuantity = $this->normalizeStartingQuantity($validated['starting_quantity'] ?? null);
+
+        if ($startingQuantity !== null && ! $request->boolean('is_stockable')) {
+            return response()->json([
+                'message' => 'Starting quantity is only allowed for stockable materials.',
+                'errors' => [
+                    'starting_quantity' => ['Starting quantity is only allowed for stockable materials.'],
+                ],
+            ], 422);
+        }
 
         $item = DB::transaction(function () use ($request, $validated, $defaultPriceData, $startingQuantity): Item {
             $item = Item::query()->create(array_merge([
@@ -142,39 +170,15 @@ class ItemController extends Controller
                 'is_purchasable' => $request->boolean('is_purchasable'),
                 'is_sellable' => $request->boolean('is_sellable'),
                 'is_manufacturable' => $request->boolean('is_manufacturable'),
+                'is_stockable' => $request->boolean('is_stockable'),
             ], $defaultPriceData));
 
-            if ($startingQuantity !== null && bccomp($startingQuantity, '0.000000', self::QUANTITY_SCALE) === 1) {
-                $inventoryCount = InventoryCount::query()->create([
-                    'tenant_id' => $item->tenant_id,
-                    'created_by_user_id' => $request->user()->id,
-                    'tasked_by_user_id' => $request->user()->id,
-                    'assigned_to_user_id' => $request->user()->id,
-                    'counted_at' => now(),
-                    'workflow_stage_id' => null,
-                    'posted_at' => now(),
-                    'posted_by_user_id' => $request->user()->id,
-                    'notes' => 'Initial Stock',
-                ]);
-
-                InventoryCountLine::query()->create([
-                    'tenant_id' => $item->tenant_id,
-                    'inventory_count_id' => $inventoryCount->id,
-                    'item_id' => $item->id,
-                    'counted_quantity' => $startingQuantity,
-                    'notes' => 'Initial Stock',
-                ]);
-
-                StockMove::query()->create([
-                    'tenant_id' => $item->tenant_id,
-                    'source_type' => InventoryCount::class,
-                    'source_id' => $inventoryCount->id,
-                    'item_id' => $item->id,
-                    'uom_id' => $item->base_uom_id,
-                    'quantity' => $startingQuantity,
-                    'type' => 'inventory_count_adjustment',
-                    'status' => 'POSTED',
-                ]);
+            if (
+                $item->is_stockable
+                && $startingQuantity !== null
+                && bccomp($startingQuantity, '0.000000', self::QUANTITY_SCALE) === 1
+            ) {
+                $this->createCompletedStartingInventoryCount($request, $item, $startingQuantity);
             }
 
             return $item;
@@ -185,6 +189,7 @@ class ItemController extends Controller
                 'id' => $item->id,
                 'name' => $item->name,
                 'base_uom_id' => $item->base_uom_id,
+                'is_stockable' => $item->is_stockable,
                 'is_purchasable' => $item->is_purchasable,
                 'is_sellable' => $item->is_sellable,
                 'is_manufacturable' => $item->is_manufacturable,
@@ -218,6 +223,7 @@ class ItemController extends Controller
             'is_purchasable' => ['nullable', 'boolean'],
             'is_sellable' => ['nullable', 'boolean'],
             'is_manufacturable' => ['nullable', 'boolean'],
+            'is_stockable' => ['nullable', 'boolean'],
             'default_price_amount' => ['nullable', 'regex:/^\\d+(\\.\\d{1,2})?$/'],
             'default_price_currency_code' => ['nullable', 'regex:/^[A-Za-z]{3}$/'],
         ]);
@@ -239,7 +245,7 @@ class ItemController extends Controller
             'base_uom_id' => $baseUomId,
         ];
 
-        $flagFields = ['is_purchasable', 'is_sellable', 'is_manufacturable'];
+        $flagFields = ['is_stockable', 'is_purchasable', 'is_sellable', 'is_manufacturable'];
 
         foreach ($flagFields as $field) {
             if ($request->has($field)) {
@@ -257,6 +263,7 @@ class ItemController extends Controller
                 'id' => $item->id,
                 'name' => $item->name,
                 'base_uom_id' => $item->base_uom_id,
+                'is_stockable' => $item->is_stockable,
                 'is_purchasable' => $item->is_purchasable,
                 'is_sellable' => $item->is_sellable,
                 'is_manufacturable' => $item->is_manufacturable,
@@ -288,6 +295,87 @@ class ItemController extends Controller
         return response()->json([
             'message' => 'Deleted.',
         ]);
+    }
+
+    /**
+     * List inventory count rows scoped to one stockable material.
+     */
+    public function listInventoryCounts(Request $request, Item $item): JsonResponse
+    {
+        Gate::authorize('inventory-materials-view');
+        Gate::authorize('inventory-adjustments-view');
+
+        abort_unless($item->is_stockable, 404);
+
+        $paginator = InventoryCountLine::query()
+            ->where('inventory_count_lines.tenant_id', $request->user()->tenant_id)
+            ->where('inventory_count_lines.item_id', $item->id)
+            ->with(['inventoryCount.assignedToUser', 'item.baseUom'])
+            ->join('inventory_counts', 'inventory_counts.id', '=', 'inventory_count_lines.inventory_count_id')
+            ->orderByDesc('inventory_counts.counted_at')
+            ->orderByDesc('inventory_count_lines.id')
+            ->select('inventory_count_lines.*')
+            ->paginate(10);
+
+        return response()->json([
+            'data' => collect($paginator->items())
+                ->map(fn (InventoryCountLine $line): array => $this->materialInventoryCountRowPayload($line))
+                ->values()
+                ->all(),
+            'meta' => $this->sectionMeta($paginator),
+        ]);
+    }
+
+    /**
+     * Create an inventory count prefilled for the current stockable material.
+     */
+    public function storeInventoryCount(Request $request, Item $item): JsonResponse
+    {
+        Gate::authorize('inventory-adjustments-execute');
+
+        abort_unless($item->is_stockable, 404);
+
+        $validated = $request->validate([
+            'counted_at' => ['required', 'date'],
+            'notes' => ['nullable', 'string'],
+            'assigned_to_user_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('users', 'id')->where('tenant_id', $request->user()->tenant_id),
+            ],
+            'counted_quantity' => ['nullable', 'string', 'regex:/^\\d+(?:\\.\\d{1,6})?$/'],
+        ]);
+
+        $count = DB::transaction(function () use ($request, $item, $validated): InventoryCount {
+            $count = InventoryCount::query()->create([
+                'tenant_id' => $request->user()->tenant_id,
+                'created_by_user_id' => $request->user()->id,
+                'tasked_by_user_id' => $request->user()->id,
+                'assigned_to_user_id' => isset($validated['assigned_to_user_id'])
+                    ? (int) $validated['assigned_to_user_id']
+                    : null,
+                'counted_at' => Carbon::parse((string) $validated['counted_at']),
+                'workflow_stage_id' => null,
+                'notes' => $validated['notes'] ?? null,
+            ]);
+
+            InventoryCountLine::query()->create([
+                'tenant_id' => $request->user()->tenant_id,
+                'inventory_count_id' => $count->id,
+                'item_id' => $item->id,
+                'counted_quantity' => $validated['counted_quantity'] ?? null,
+                'notes' => null,
+            ]);
+
+            return $count->fresh(['assignedToUser']);
+        });
+
+        return response()->json([
+            'count' => [
+                'id' => $count->id,
+                'show_url' => route('inventory.counts.show', $count),
+            ],
+        ], 201);
     }
 
     /**
@@ -461,8 +549,13 @@ class ItemController extends Controller
                 ],
                 'badges' => [
                     [
-                        'field' => 'display.stateText',
-                        'toneField' => 'display.stateTone',
+                        'field' => 'display.statusText',
+                        'toneField' => 'display.statusTone',
+                        'fallback' => '',
+                    ],
+                    [
+                        'field' => 'display.versionText',
+                        'toneField' => 'display.versionTone',
                         'fallback' => '',
                     ],
                 ],
@@ -701,8 +794,13 @@ class ItemController extends Controller
                 ],
                 'badges' => [
                     [
-                        'field' => 'display.stateText',
-                        'toneField' => 'display.stateTone',
+                        'field' => 'display.statusText',
+                        'toneField' => 'display.statusTone',
+                        'fallback' => '',
+                    ],
+                    [
+                        'field' => 'display.versionText',
+                        'toneField' => 'display.versionTone',
                         'fallback' => '',
                     ],
                 ],
@@ -716,6 +814,105 @@ class ItemController extends Controller
                 ],
             ],
             'actions' => $actions,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function inventoryCountsSectionConfig(Request $request, Item $item): array
+    {
+        $canCreate = Gate::allows('inventory-adjustments-execute');
+
+        return [
+            'resource' => 'material-inventory-counts',
+            'title' => 'Inventory Counts',
+            'description' => 'Inventory count history for this stockable material.',
+            'emptyState' => 'No inventory counts include this material yet.',
+            'csrfToken' => csrf_token(),
+            'defaultOpen' => false,
+            'permissions' => [
+                'canCreate' => $canCreate,
+            ],
+            'createAction' => [
+                'type' => 'custom',
+                'handlerKey' => 'openInventoryCountCreate',
+                'title' => 'Create Inventory Count',
+                'description' => 'Create a count prefilled for this material.',
+                'submitLabel' => 'Create Count',
+            ],
+            'endpoints' => [
+                'list' => route('materials.inventory-counts.index', $item),
+                'create' => route('materials.inventory-counts.store', $item),
+                'update' => '',
+                'remove' => '',
+            ],
+            'fields' => [],
+            'rowLayout' => [
+                'primaryText' => [
+                    'field' => 'display.countedAtText',
+                    'fallback' => '—',
+                ],
+                'secondaryFields' => [
+                    [
+                        'label' => 'Assigned',
+                        'field' => 'display.assignedToText',
+                        'fallback' => 'Unassigned',
+                    ],
+                    [
+                        'label' => 'UOM',
+                        'field' => 'display.uomText',
+                        'fallback' => '—',
+                    ],
+                ],
+                'badges' => [],
+                'rightMeta' => [
+                    [
+                        'label' => 'Counted Qty',
+                        'field' => 'display.countedQuantityText',
+                        'fallback' => '—',
+                        'strong' => true,
+                    ],
+                ],
+            ],
+            'actions' => [
+                [
+                    'id' => 'view',
+                    'label' => 'View',
+                    'type' => 'view',
+                    'tone' => 'default',
+                    'urlField' => 'display.showUrl',
+                ],
+            ],
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function inventoryCountCreateConfig(Request $request, Item $item): array
+    {
+        return [
+            'canCreate' => true,
+            'storeUrl' => route('materials.inventory-counts.store', $item),
+            'csrfToken' => csrf_token(),
+            'users' => User::query()
+                ->where('tenant_id', $request->user()->tenant_id)
+                ->orderBy('name')
+                ->orderBy('id')
+                ->get(['id', 'name', 'email'])
+                ->map(fn (User $user): array => [
+                    'id' => $user->id,
+                    'name' => $user->name,
+                    'email' => $user->email,
+                ])
+                ->values()
+                ->all(),
+            'scopedItem' => [
+                'id' => $item->id,
+                'name' => $item->name,
+                'uomSymbol' => $item->baseUom?->symbol,
+            ],
         ];
     }
 
@@ -780,6 +977,40 @@ class ItemController extends Controller
                     'urlField' => 'display.showUrl',
                 ],
             ],
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function materialInventoryCountRowPayload(InventoryCountLine $line): array
+    {
+        $count = $line->inventoryCount;
+
+        return [
+            'id' => $line->id,
+            'counted_at' => $count?->counted_at?->format('Y-m-d H:i') ?? '—',
+            'assigned_to_user_name' => $count?->assignedToUser?->name,
+            'uom_symbol' => $line->item?->baseUom?->symbol,
+            'counted_quantity' => $line->counted_quantity,
+            'counted_quantity_display' => $line->counted_quantity === null
+                ? '—'
+                : QuantityFormatter::formatForUom($line->counted_quantity, $line->item?->baseUom, 2),
+            'show_url' => $count ? route('inventory.counts.show', $count) : '',
+            'available_actions' => ['view'],
+        ];
+    }
+
+    /**
+     * @return array<string, int>
+     */
+    private function sectionMeta(LengthAwarePaginator $paginator): array
+    {
+        return [
+            'current_page' => $paginator->currentPage(),
+            'last_page' => $paginator->lastPage(),
+            'per_page' => $paginator->perPage(),
+            'total' => $paginator->total(),
         ];
     }
 
@@ -962,6 +1193,55 @@ class ItemController extends Controller
     {
         if ($request->has('starting_quantity') && $request->input('starting_quantity') === '') {
             $request->merge(['starting_quantity' => null]);
+        }
+    }
+
+    /**
+     * Create and complete the initial inventory count used for a stockable opening balance.
+     */
+    private function createCompletedStartingInventoryCount(Request $request, Item $item, string $startingQuantity): void
+    {
+        $inventoryCount = InventoryCount::query()->create([
+            'tenant_id' => $item->tenant_id,
+            'created_by_user_id' => $request->user()->id,
+            'tasked_by_user_id' => $request->user()->id,
+            'assigned_to_user_id' => $request->user()->id,
+            'counted_at' => now(),
+            'workflow_stage_id' => null,
+            'notes' => 'Initial Stock',
+        ]);
+
+        InventoryCountLine::query()->create([
+            'tenant_id' => $item->tenant_id,
+            'inventory_count_id' => $inventoryCount->id,
+            'item_id' => $item->id,
+            'counted_quantity' => $startingQuantity,
+            'notes' => 'Initial Stock',
+        ]);
+
+        $this->ensureInventoryWorkflowStagesExist($request);
+        app(AdvanceInventoryCountWorkflowStageAction::class)->postCompatible(
+            $inventoryCount,
+            (int) $request->user()->id
+        );
+    }
+
+    /**
+     * Seed default inventory workflow stages only when the tenant has not configured them yet.
+     */
+    private function ensureInventoryWorkflowStagesExist(Request $request): void
+    {
+        $resolver = app(ResolveInventoryWorkflowStageAction::class);
+        $seedDefaultStagesAction = app(SeedDefaultWorkflowStagesForTenantAction::class);
+        $inventoryDomainId = $resolver->inventoryDomainId();
+
+        $hasStages = \App\Models\WorkflowStage::withoutGlobalScopes()
+            ->where('tenant_id', (int) $request->user()->tenant_id)
+            ->where('workflow_domain_id', $inventoryDomainId)
+            ->exists();
+
+        if (! $hasStages) {
+            $seedDefaultStagesAction->execute($request->user()->tenant()->firstOrFail());
         }
     }
 

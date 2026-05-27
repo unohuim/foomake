@@ -37,6 +37,6 @@ public_interface:
   - docs/architecture/workflows/Task.yaml
 example_usage: |
   Inventory count submit:
-    count enters Open
-    generate Open-stage tasks from active templates
-    block Open -> Completed until current-stage tasks are complete
+    count enters SCHEDULED
+    generate SCHEDULED-stage tasks from active templates
+    block SCHEDULED -> COMPLETED until current-stage tasks are complete

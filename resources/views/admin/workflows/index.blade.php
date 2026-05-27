@@ -87,6 +87,10 @@
                                                     </span>
                                                 </div>
                                                 <p class="mt-1 text-xs uppercase tracking-[0.2em] text-slate-500" x-text="stage.workflow_domain_key"></p>
+                                                <p class="mt-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+                                                    <span>Button text:</span>
+                                                    <span x-text="stage.button_text"></span>
+                                                </p>
                                                 <p class="mt-2 text-sm text-slate-600" x-text="stage.description || 'No description.'"></p>
                                             </div>
 
@@ -125,6 +129,11 @@
                                 <label class="block text-sm font-medium text-slate-700">
                                     Name
                                     <input type="text" class="mt-1 block w-full rounded-xl border-slate-300 text-sm shadow-sm focus:border-slate-500 focus:ring-slate-500" x-model="stageForm.name">
+                                </label>
+
+                                <label class="block text-sm font-medium text-slate-700">
+                                    Button text
+                                    <input type="text" class="mt-1 block w-full rounded-xl border-slate-300 text-sm shadow-sm focus:border-slate-500 focus:ring-slate-500" x-model="stageForm.button_text">
                                 </label>
 
                                 <label class="block text-sm font-medium text-slate-700">

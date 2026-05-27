@@ -9,33 +9,51 @@ when_to_use:
   - Creating a Make Order from a recipe
   - Executing a Make Order
   - Reading planned Make Order inputs or output quantities
-  - Reading Make Order detail sections in the order Workflow, then Ingredients
+  - Reading Make Order detail sections in the order Details, then Ingredients
 when_not_to_use:
   - Mutating live recipe versions after a Make Order already exists
   - Deriving execution inputs from the current recipe lines at make time
-  - Treating make_orders.output_quantity as produced quantity instead of runs
+  - Treating make_orders.runs as produced quantity instead of an execution multiplier
 rules:
   - A Make Order stores both recipe_id and recipe_version_id.
   - Creating or editing a Make Order must resolve recipe_version_id from recipes.current_version_id.
   - Make Order creation is blocked when recipes.current_version_id is null.
   - Recipe detail Make Orders section create actions must resolve recipe_version_id from recipes.current_version_id.
-  - Recipe detail Make Orders section create actions must use the shared section create slide-over rather than posting directly from the plus button.
-  - Recipe detail Make Orders section create forms must not expose a recipe selector because the route is already recipe-scoped.
+  - Recipe detail Make Orders section create actions should create a DRAFT Make Order directly from the recipe-scoped endpoint instead of opening a dedicated slide-over form.
+  - Recipe detail Make Orders section create actions must not expose a recipe selector because the route is already recipe-scoped.
   - Publishing a recipe version must refresh Recipe detail Make Orders create eligibility reactively through the page module contract.
-  - Recipes index Make actions must resolve recipe_version_id from recipes.current_version_id.
-  - Current published version row Make Order actions must resolve recipe_version_id from recipes.current_version_id.
+  - Recipes index row-menu Make actions must resolve recipe_version_id from recipes.current_version_id.
+  - Current published version row/header Make Order actions must resolve recipe_version_id from recipes.current_version_id.
   - Material detail recipe-row Make actions must resolve recipe_version_id from recipes.current_version_id.
+  - Dropdown/menu Make actions should create a DRAFT Make Order immediately and redirect to the created Make Order detail page when `show_url` is returned, rather than opening a separate slide-over form.
+  - Make Orders index rows may use a direct inline `x-mark` archive action instead of the vertical-dots row menu when archive is the only row-level action exposed there.
+  - Make Orders index archive should be AJAX-first, update the row list immediately without a full-page refresh, and show feedback only on failure.
   - User checked-out recipe versions must never be used for Make Orders.
   - Creating a Make Order copies recipe version lines into make_order_lines.
   - Successful recipe-scoped Make Order create should redirect to the created Make Order detail page when `show_url` is returned.
   - Make Order execution must use make_order_lines, not live recipe_version_lines or recipe_lines.
   - Make Order detail Ingredients must use the shared Ingredients detail section abstraction.
   - Make Order detail Ingredients rows are editable snapshots owned by make_order_lines and may be adjusted after creation without mutating recipe versions.
-  - Make Order detail Workflow renders before Ingredients and uses the shared resource header plus reusable detail-section shell.
+  - Make Order detail Ingredients rows should use a direct inline `x-mark` remove action instead of the vertical-dots row menu when removal is the only row-level action exposed in that view.
+  - Make Order detail ingredient-row removal should be AJAX-first, update the UI immediately without a full-page refresh, and show feedback only on failure.
+  - Make Order detail Details renders before Ingredients and uses the shared resource header plus reusable detail-section shell.
   - Make Order workflow movement is stage-driven through `workflow_stage_id` and configured manufacturing workflow stages, not recipe-version-driven.
   - Make Order workflow movement must not mutate `make_order_lines` snapshot rows.
   - Make Order detail must use the shared resource detail header and reusable detail-section card contracts instead of a bespoke Core card.
-  - Produced output quantity is recipe_version.output_quantity multiplied by make_orders.output_quantity runs using BCMath string math.
+  - Runs are stored on make_orders.runs and are the execution multiplier, not the expected or actual output quantity.
+  - Expected output quantity is persisted on make_orders.expected_output_qty and defaults to recipe_version.output_quantity multiplied by runs using BCMath string math.
+  - Updating Make Order runs must recalculate expected_output_qty and stale client-submitted expected output values must be ignored.
+  - Make Order detail may render expected_output_qty as read-only because it is a derived planning quantity.
+  - Runs should render compactly without unnecessary trailing zero decimals in the Make Order detail UI even though the stored value remains canonical scale 6.
+  - Expected output and actual output should render using the output item base UOM display precision.
+  - make_orders.actual_output_qty is nullable, canonical scale 6, and records the completed output truth when provided at make time.
+  - When make_orders.actual_output_qty is null, completed output falls back to expected_output_qty.
+  - Actual output quantity must not imply or introduce actual ingredient-usage tracking in this phase.
+  - Make Order execution creates issue and receipt stock moves only for stockable input and output items.
+  - When present, make_orders.actual_output_qty overrides expected produced quantity for the output receipt stock move created during Make Order execution.
+  - Non-stockable make-order inputs or outputs do not block execution; they simply skip stock-move creation.
+  - Stockable Material detail net-quantity stats treat non-terminal non-cancelled make-order outputs as positive supply and open make_order_lines input quantities as negative demand.
+  - Stockable Material detail on-hand and net-quantity stats reflect completed make-order output through the stock-move ledger, using actual_output_qty when present and expected_output_qty otherwise.
   - Later recipe or current-version changes must not mutate existing make_orders or make_order_lines.
   - Make Order snapshots must come from the current published version lines referenced by recipes.current_version_id at creation time.
   - Recipe-scoped Make Order creation must not auto-enter workflow; created records stay pre-workflow with `workflow_stage_id = null`.

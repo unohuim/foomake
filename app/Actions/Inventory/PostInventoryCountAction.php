@@ -69,6 +69,10 @@ class PostInventoryCountAction
             foreach ($countedByItem as $itemId => $countedQuantity) {
                 $item = $itemsById[$itemId];
 
+                if (! $item->is_stockable) {
+                    continue;
+                }
+
                 $onHand = BigDecimal::of($item->onHandQuantity());
 
                 $variance = $countedQuantity

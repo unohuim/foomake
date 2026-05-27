@@ -72,28 +72,32 @@ class ExecuteRecipeAction
 
                 $inputQuantity = bcmul((string) $line->quantity, $runs, 6);
 
-                $stockMoves[] = StockMove::create([
-                    'tenant_id' => $recipe->tenant_id,
-                    'item_id' => $inputItem->id,
-                    'uom_id' => $inputItem->base_uom_id,
-                    'quantity' => bcsub('0.000000', $inputQuantity, 6),
-                    'type' => 'issue',
-                    'source_id' => $recipe->id,
-                    'source_type' => Recipe::class,
-                ]);
+                if ($inputItem->is_stockable) {
+                    $stockMoves[] = StockMove::create([
+                        'tenant_id' => $recipe->tenant_id,
+                        'item_id' => $inputItem->id,
+                        'uom_id' => $inputItem->base_uom_id,
+                        'quantity' => bcsub('0.000000', $inputQuantity, 6),
+                        'type' => 'issue',
+                        'source_id' => $recipe->id,
+                        'source_type' => Recipe::class,
+                    ]);
+                }
             }
 
             $outputQuantityScaled = bcmul($recipeOutputQuantity, $runs, 6);
 
-            $stockMoves[] = StockMove::create([
-                'tenant_id' => $recipe->tenant_id,
-                'item_id' => $outputItem->id,
-                'uom_id' => $outputItem->base_uom_id,
-                'quantity' => $outputQuantityScaled,
-                'type' => 'receipt',
-                'source_id' => $recipe->id,
-                'source_type' => Recipe::class,
-            ]);
+            if ($outputItem->is_stockable) {
+                $stockMoves[] = StockMove::create([
+                    'tenant_id' => $recipe->tenant_id,
+                    'item_id' => $outputItem->id,
+                    'uom_id' => $outputItem->base_uom_id,
+                    'quantity' => $outputQuantityScaled,
+                    'type' => 'receipt',
+                    'source_id' => $recipe->id,
+                    'source_type' => Recipe::class,
+                ]);
+            }
 
             return $stockMoves;
         });

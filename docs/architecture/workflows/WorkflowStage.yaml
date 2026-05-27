@@ -6,6 +6,7 @@ location:
   - app/Actions/Workflows/SeedDefaultWorkflowStagesForTenantAction.php
   - app/Models/WorkflowStage.php
   - database/migrations/2026_05_07_000002_create_workflow_stages_table.php
+  - database/migrations/2026_05_27_000001_add_button_text_to_workflow_stages_table.php
   - database/migrations/2026_05_20_000001_add_is_inventory_effect_stage_to_workflow_stages_table.php
   - database/seeders/WorkflowStageSeeder.php
   - docs/PR3_ROADMAP.md
@@ -22,6 +23,7 @@ rules:
   - Workflow stages belong to exactly one workflow domain.
   - Workflow stages are database-backed rather than hardcoded.
   - Workflow stages represent tenant-configurable operational stages within a workflow domain.
+  - Workflow stages store both a display `name` and a separate workflow-action `button_text`.
   - A stage key must be unique within its tenant and workflow domain.
   - Stage keys are system-generated from the stage name when a stage is created.
   - Generated stage-key uniqueness must be validated before insert, using the normal Laravel validation error shape.
@@ -31,13 +33,16 @@ rules:
   - Stages support active and inactive state.
   - Stages support a stage-level is_inventory_effect_stage marker when a domain adopts inventory-effect stage configuration.
   - Admin users may create, edit, deactivate, and reactivate operational stages within the tenant/domain scope.
+  - Workflow admin create and edit flows must require both `name` and `button_text`.
   - sort_order must persist the exact numeric value entered by the admin UI.
   - Active stage lists must re-sort by sort_order immediately after stage saves without requiring a page refresh.
   - The workflow admin UI does not expose a manual reorder button for stages.
+  - Current-stage chips, badges, and status surfaces must render from `workflow_stages.name` rather than `workflow_stages.button_text`.
+  - Workflow transition buttons must render from `workflow_stages.button_text` when it exists rather than overloading `workflow_stages.name`.
   - Default sales workflow stages are seeded idempotently per tenant as packing, packed, and shipping, with packed marked as the default inventory-effect stage.
   - Default purchasing workflow stages are seeded idempotently per tenant as receiving and completed, with receiving marked as the default inventory-effect stage.
   - Default manufacturing workflow stages are seeded idempotently per tenant as production and completed, with production marked as the default inventory-effect stage.
-  - Default inventory workflow stages are seeded idempotently per tenant as open and completed, with completed marked as the default inventory-effect stage.
+  - Default inventory workflow stages are seeded idempotently per tenant as scheduled and completed, with completed marked as the default inventory-effect stage.
   - Sales-order runtime ordering must use the active sales workflow stages ordered by sort_order.
   - Sales-order statuses that remain system-owned are documented in docs/PR3_ROADMAP.md and docs/ENUMS.md rather than duplicated here.
 public_interface:

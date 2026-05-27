@@ -56,6 +56,7 @@ beforeEach(function (): void {
             'tenant_id' => $this->tenant->id,
             'name' => 'Flour',
             'base_uom_id' => $uom->id,
+            'is_stockable' => false,
             'is_purchasable' => false,
             'is_sellable' => false,
             'is_manufacturable' => false,
@@ -89,6 +90,7 @@ test('updates a material for users with inventory-materials-manage permission', 
     $response = ($this->patchUpdate)($this->user, $item, [
         'name' => 'Updated Flour',
         'base_uom_id' => $newUom->id,
+        'is_stockable' => true,
         'is_purchasable' => true,
         'is_sellable' => false,
         'is_manufacturable' => false,
@@ -97,15 +99,46 @@ test('updates a material for users with inventory-materials-manage permission', 
     $response->assertOk()
         ->assertJsonPath('data.name', 'Updated Flour')
         ->assertJsonPath('data.base_uom_id', $newUom->id)
+        ->assertJsonPath('data.is_stockable', true)
         ->assertJsonPath('data.is_purchasable', true);
 
     $updated = Item::withoutGlobalScopes()->findOrFail($item->id);
 
     expect($updated->name)->toBe('Updated Flour')
         ->and($updated->base_uom_id)->toBe($newUom->id)
+        ->and($updated->is_stockable)->toBeTrue()
         ->and($updated->is_purchasable)->toBeTrue()
         ->and($updated->is_sellable)->toBeFalse()
         ->and($updated->is_manufacturable)->toBeFalse();
+});
+
+test('updates can toggle is_stockable on and off', function (): void {
+    ($this->grantPermission)($this->user, 'inventory-materials-manage');
+
+    $uom = ($this->makeUom)();
+    $item = ($this->makeItem)($uom, ['is_stockable' => false]);
+
+    ($this->patchUpdate)($this->user, $item, [
+        'name' => 'Tracked Flour',
+        'base_uom_id' => $uom->id,
+        'is_stockable' => true,
+    ])->assertOk()->assertJsonPath('data.is_stockable', true);
+
+    ($this->patchUpdate)($this->user, $item->fresh(), [
+        'name' => 'Untracked Flour',
+        'base_uom_id' => $uom->id,
+        'is_stockable' => false,
+    ])->assertOk()->assertJsonPath('data.is_stockable', false);
+
+    expect(Item::withoutGlobalScopes()->findOrFail($item->id)->is_stockable)->toBeFalse();
+});
+
+test('edit material slide over keeps the stockable checkbox bound to the shared edit form', function (): void {
+    $source = file_get_contents(resource_path('views/materials/partials/edit-material-slide-over.blade.php'));
+    $pageSource = file_get_contents(resource_path('js/pages/materials-index.js'));
+
+    expect($source)->toContain('x-model="editForm.is_stockable"')
+        ->and($pageSource)->toContain('is_stockable: Boolean(record.is_stockable)');
 });
 
 test('returns not found when attempting to update another tenant item', function (): void {
@@ -543,4 +576,41 @@ test('rejects amounts with more than two decimals on update', function (): void 
 
     $response->assertUnprocessable()
         ->assertJsonValidationErrors(['default_price_amount']);
+});
+
+test('forbidden users cannot mutate is_stockable', function (): void {
+    $uom = ($this->makeUom)();
+    $item = ($this->makeItem)($uom, ['is_stockable' => false]);
+
+    ($this->patchUpdate)($this->user, $item, [
+        'name' => 'Blocked Flour',
+        'base_uom_id' => $uom->id,
+        'is_stockable' => true,
+    ])->assertForbidden();
+
+    expect(Item::withoutGlobalScopes()->findOrFail($item->id)->is_stockable)->toBeFalse();
+});
+
+test('cross tenant update attempts cannot mutate is_stockable', function (): void {
+    ($this->grantPermission)($this->user, 'inventory-materials-manage');
+
+    $uom = ($this->makeUom)();
+    $otherTenant = Tenant::factory()->create();
+    $otherItem = Item::query()->create([
+        'tenant_id' => $otherTenant->id,
+        'name' => 'Other Flour',
+        'base_uom_id' => $uom->id,
+        'is_stockable' => false,
+        'is_purchasable' => false,
+        'is_sellable' => false,
+        'is_manufacturable' => false,
+    ]);
+
+    ($this->patchUpdate)($this->user, $otherItem, [
+        'name' => 'Blocked',
+        'base_uom_id' => $uom->id,
+        'is_stockable' => true,
+    ])->assertNotFound();
+
+    expect(Item::withoutGlobalScopes()->findOrFail($otherItem->id)->is_stockable)->toBeFalse();
 });

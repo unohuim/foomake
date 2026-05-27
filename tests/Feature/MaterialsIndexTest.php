@@ -3,6 +3,8 @@
 declare(strict_types=1);
 
 use App\Models\Item;
+use App\Models\InventoryCount;
+use App\Models\InventoryCountLine;
 use App\Models\Permission;
 use App\Models\Role;
 use App\Models\StockMove;
@@ -61,6 +63,19 @@ beforeEach(function (): void {
     };
 
     $this->makeUom = function (Tenant $tenant, array $attributes = []): Uom {
+        $symbol = $attributes['symbol'] ?? 'mat-' . $this->uomCounter;
+
+        if (array_key_exists('symbol', $attributes)) {
+            $existing = Uom::query()
+                ->where('tenant_id', $tenant->id)
+                ->where('symbol', $symbol)
+                ->first();
+
+            if ($existing) {
+                return $existing;
+            }
+        }
+
         $category = UomCategory::query()->create([
             'tenant_id' => $tenant->id,
             'name' => $attributes['category_name'] ?? 'Materials Category ' . $this->uomCounter,
@@ -70,7 +85,7 @@ beforeEach(function (): void {
             'tenant_id' => $tenant->id,
             'uom_category_id' => $category->id,
             'name' => $attributes['name'] ?? 'Materials UoM ' . $this->uomCounter,
-            'symbol' => $attributes['symbol'] ?? 'mat-' . $this->uomCounter,
+            'symbol' => $symbol,
         ]);
 
         $this->uomCounter++;
@@ -83,6 +98,7 @@ beforeEach(function (): void {
             'tenant_id' => $tenant->id,
             'name' => 'Material ' . $this->itemCounter,
             'base_uom_id' => $uom->id,
+            'is_stockable' => false,
             'is_purchasable' => false,
             'is_sellable' => false,
             'is_manufacturable' => false,
@@ -360,6 +376,7 @@ it('17. list endpoint returns the materials row data required by the shared crud
         'name' => 'Flour',
         'base_uom_name' => 'Kilogram',
         'base_uom_symbol' => $symbol,
+        'is_stockable' => false,
         'is_purchasable' => true,
         'is_sellable' => false,
         'is_manufacturable' => true,
@@ -410,6 +427,99 @@ it('18a. materials create response returns the created record id needed for redi
         ->and($response->json('data.name'))->toBe('Redirect Material');
 });
 
+it('18b. materials create accepts is_stockable true and persists it', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $uom = ($this->makeUom)($tenant);
+
+    ($this->grantPermissions)($user, ['inventory-materials-view', 'inventory-materials-manage']);
+
+    $response = $this->actingAs($user)->postJson(route('materials.store'), [
+        'name' => 'Tracked Material',
+        'base_uom_id' => $uom->id,
+        'is_stockable' => true,
+    ])->assertCreated();
+
+    $item = Item::withoutGlobalScopes()->findOrFail((int) $response->json('data.id'));
+
+    expect($response->json('data.is_stockable'))->toBeTrue()
+        ->and($item->is_stockable)->toBeTrue();
+});
+
+it('18c. materials create defaults is_stockable to false when omitted', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $uom = ($this->makeUom)($tenant);
+
+    ($this->grantPermissions)($user, ['inventory-materials-view', 'inventory-materials-manage']);
+
+    $response = $this->actingAs($user)->postJson(route('materials.store'), [
+        'name' => 'Non Tracked Material',
+        'base_uom_id' => $uom->id,
+    ])->assertCreated();
+
+    $item = Item::withoutGlobalScopes()->findOrFail((int) $response->json('data.id'));
+
+    expect($response->json('data.is_stockable'))->toBeFalse()
+        ->and($item->is_stockable)->toBeFalse();
+});
+
+it('18d. creating a stockable material with starting quantity creates a completed inventory count and stock effect', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $uom = ($this->makeUom)($tenant, ['name' => 'Kilogram', 'symbol' => 'kg']);
+
+    ($this->grantPermissions)($user, ['inventory-materials-view', 'inventory-materials-manage']);
+
+    $response = $this->actingAs($user)->postJson(route('materials.store'), [
+        'name' => 'Opening Balance Material',
+        'base_uom_id' => $uom->id,
+        'is_stockable' => true,
+        'starting_quantity' => '3.250000',
+    ])->assertCreated();
+
+    $item = Item::withoutGlobalScopes()->findOrFail((int) $response->json('data.id'));
+    $line = InventoryCountLine::query()
+        ->where('tenant_id', $tenant->id)
+        ->where('item_id', $item->id)
+        ->firstOrFail();
+    $count = InventoryCount::withoutGlobalScopes()
+        ->with('workflowStage')
+        ->findOrFail((int) $line->inventory_count_id);
+    $move = StockMove::query()
+        ->where('tenant_id', $tenant->id)
+        ->where('source_type', InventoryCount::class)
+        ->where('source_id', $count->id)
+        ->where('item_id', $item->id)
+        ->firstOrFail();
+
+    expect($count->workflowStage?->key)->toBe('completed')
+        ->and($count->posted_at)->not->toBeNull()
+        ->and($count->created_by_user_id)->toBe($user->id)
+        ->and($count->tasked_by_user_id)->toBe($user->id)
+        ->and($count->assigned_to_user_id)->toBe($user->id)
+        ->and($line->item_id)->toBe($item->id)
+        ->and((string) $line->counted_quantity)->toBe('3.250000')
+        ->and($count->tenant_id)->toBe($tenant->id)
+        ->and($move->uom_id)->toBe($uom->id)
+        ->and((string) $move->quantity)->toBe('3.250000');
+});
+
+it('18e. non stockable material creation rejects a starting quantity', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $uom = ($this->makeUom)($tenant);
+
+    ($this->grantPermissions)($user, ['inventory-materials-view', 'inventory-materials-manage']);
+
+    $this->actingAs($user)->postJson(route('materials.store'), [
+        'name' => 'Non Tracked Opening Balance',
+        'base_uom_id' => $uom->id,
+        'is_stockable' => false,
+        'starting_quantity' => '1.000000',
+    ])->assertStatus(422)->assertJsonValidationErrors('starting_quantity');
+});
+
 it('19. list endpoint search filters materials by name', function (): void {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
@@ -451,10 +561,13 @@ it('21. materials blade shell no longer contains page local list table or row ac
 
 it('22. materials page module uses the shared crud renderer and configured crud helper', function (): void {
     $pageSource = file_get_contents(resource_path('js/pages/materials-index.js'));
+    $createSource = file_get_contents(resource_path('views/materials/partials/create-material-slide-over.blade.php'));
 
     expect($pageSource)->toContain('createGenericCrud(parseCrudConfig(rootEl))')
         ->and($pageSource)->toContain('mountCrudRenderer(crudRootEl, rendererConfig);')
-        ->and($pageSource)->toContain('this.crud.fetchList({');
+        ->and($pageSource)->toContain('this.crud.fetchList({')
+        ->and($pageSource)->toContain('is_stockable')
+        ->and($createSource)->toContain('x-model="form.is_stockable"');
 });
 
 it('23. materials page module removes duplicate page local action menu state and methods', function (): void {

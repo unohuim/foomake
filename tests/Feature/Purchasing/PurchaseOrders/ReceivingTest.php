@@ -97,6 +97,7 @@ beforeEach(function () {
             'tenant_id' => $tenant->id,
             'name' => $attributes['name'] ?? 'Item ' . $this->itemCounter,
             'base_uom_id' => $uom->id,
+            'is_stockable' => true,
             'is_purchasable' => true,
             'is_sellable' => false,
             'is_manufacturable' => false,

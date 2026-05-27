@@ -2,6 +2,94 @@ import Alpine from 'alpinejs';
 
 const asRecord = (value) => (value && typeof value === 'object' && !Array.isArray(value) ? value : {});
 const asArray = (value) => (Array.isArray(value) ? value : []);
+const SCALE = 6;
+const SCALE_FACTOR = 10n ** 6n;
+
+const normalizePrecision = (value, fallback = SCALE) => {
+    const precision = Number.parseInt(String(value ?? fallback), 10);
+
+    if (Number.isNaN(precision)) {
+        return fallback;
+    }
+
+    return Math.max(0, Math.min(SCALE, precision));
+};
+
+const compactQuantityDisplay = (value) => {
+    const normalized = String(value ?? '').trim();
+
+    if (normalized === '' || !/^\d+(?:\.\d+)?$/.test(normalized)) {
+        return '';
+    }
+
+    const trimmed = normalized.replace(/(\.\d*?[1-9])0+$/u, '$1').replace(/\.0+$/u, '');
+
+    return trimmed === '' ? '0' : trimmed;
+};
+
+const canonicalizeScaleSix = (value) => {
+    const normalized = String(value ?? '').trim();
+
+    if (!/^\d+(?:\.\d+)?$/.test(normalized)) {
+        return null;
+    }
+
+    const [wholePart, decimalPart = ''] = normalized.split('.', 2);
+
+    return `${wholePart}.${decimalPart.padEnd(SCALE, '0').slice(0, SCALE)}`;
+};
+
+const scaledIntegerFromCanonical = (value) => {
+    const canonical = canonicalizeScaleSix(value);
+
+    if (canonical === null) {
+        return null;
+    }
+
+    return BigInt(canonical.replace('.', ''));
+};
+
+const multiplyCanonicalQuantities = (left, right) => {
+    const leftScaled = scaledIntegerFromCanonical(left);
+    const rightScaled = scaledIntegerFromCanonical(right);
+
+    if (leftScaled === null || rightScaled === null) {
+        return null;
+    }
+
+    const product = (leftScaled * rightScaled) / SCALE_FACTOR;
+    const sign = product < 0n ? '-' : '';
+    const absolute = (product < 0n ? -product : product).toString().padStart(SCALE + 1, '0');
+    const splitAt = absolute.length - SCALE;
+
+    return `${sign}${absolute.slice(0, splitAt)}.${absolute.slice(splitAt)}`;
+};
+
+const formatQuantityForPrecision = (value, precision) => {
+    const scaled = scaledIntegerFromCanonical(value);
+
+    if (scaled === null) {
+        return '';
+    }
+
+    const normalizedPrecision = normalizePrecision(precision, SCALE);
+    const reductionPower = SCALE - normalizedPrecision;
+    const factor = 10n ** BigInt(reductionPower);
+    let rounded = scaled / factor;
+
+    if ((scaled % factor) * 2n >= factor) {
+        rounded += 1n;
+    }
+
+    if (normalizedPrecision === 0) {
+        return rounded.toString();
+    }
+
+    const absolute = rounded.toString().padStart(normalizedPrecision + 1, '0');
+    const splitAt = absolute.length - normalizedPrecision;
+
+    return `${absolute.slice(0, splitAt)}.${absolute.slice(splitAt)}`;
+};
 
 export function mount(rootEl, payload) {
     const safePayload = payload || {};
@@ -52,6 +140,7 @@ export function mount(rootEl, payload) {
             : String(workflowPayload.made_by_user_id),
         workflowTransitionSaving: false,
         workflowTaskSavingIds: [],
+        makeOrderDetailSaving: false,
         ingredientSavedState: {},
         toast: {
             visible: false,
@@ -66,6 +155,30 @@ export function mount(rootEl, payload) {
                     ...asRecord(data),
                 };
             }
+        },
+        outputUomDisplayPrecision() {
+            return normalizePrecision(this.makeOrder.output_uom_display_precision, SCALE);
+        },
+        recalculateExpectedOutputQtyFromRuns() {
+            const canonicalRuns = canonicalizeScaleSix(this.makeOrder.runs_text);
+            const perRunOutputQty = canonicalizeScaleSix(this.makeOrder.recipe_version_output_qty);
+
+            if (canonicalRuns === null || perRunOutputQty === null) {
+                this.makeOrder.expected_output_qty_text = '';
+                return;
+            }
+
+            const expectedOutputQty = multiplyCanonicalQuantities(canonicalRuns, perRunOutputQty);
+
+            if (expectedOutputQty === null) {
+                this.makeOrder.expected_output_qty_text = '';
+                return;
+            }
+
+            this.makeOrder.expected_output_qty_text = formatQuantityForPrecision(
+                expectedOutputQty,
+                this.outputUomDisplayPrecision()
+            );
         },
         hydrateWorkflowResponse(data) {
             if (!data || typeof data !== 'object') {
@@ -223,6 +336,50 @@ export function mount(rootEl, payload) {
                 this.showToast('error', 'Unable to save make order owner.');
             } finally {
                 this.workflowAssignmentSaving = false;
+            }
+        },
+        async saveMakeOrderDetailQuantity(field) {
+            if (!this.makeOrder.details_update_url || this.makeOrderDetailSaving) {
+                return;
+            }
+
+            this.makeOrderDetailSaving = true;
+
+            try {
+                const payload = { field };
+
+                if (field === 'runs') {
+                    payload.runs = this.makeOrder.runs_text;
+                }
+
+                if (field === 'actual_output_qty') {
+                    payload.actual_output_qty = this.makeOrder.actual_output_qty_text === '' ? null : this.makeOrder.actual_output_qty_text;
+                }
+
+                const response = await fetch(this.makeOrder.details_update_url, {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        Accept: 'application/json',
+                        'X-CSRF-TOKEN': this.csrfToken,
+                    },
+                    body: JSON.stringify(payload),
+                });
+
+                if (!response.ok) {
+                    this.showToast('error', 'Unable to save make order details.');
+                    return;
+                }
+
+                const data = await response.json();
+                this.hydrateMakeOrderResponse(data.data);
+                this.hydrateWorkflowResponse(data.workflow);
+                this.syncHeaderState();
+                this.showToast('success', 'Make order details updated.');
+            } catch (error) {
+                this.showToast('error', 'Unable to save make order details.');
+            } finally {
+                this.makeOrderDetailSaving = false;
             }
         },
         async saveWorkflowDueDate() {
@@ -403,8 +560,13 @@ export function mount(rootEl, payload) {
                     return;
                 }
 
-                this.ingredients.lines = this.ingredients.lines.filter((entry) => entry.id !== line.id);
-                this.showToast('success', 'Ingredient removed.');
+                const data = await response.json();
+                const deletedLineId = data?.deleted_line_id ?? line.id;
+                const nextLines = asArray(data?.lines);
+
+                this.ingredients.lines = nextLines.length > 0
+                    ? nextLines
+                    : this.ingredients.lines.filter((entry) => entry.id !== deletedLineId);
             } catch (error) {
                 this.showToast('error', 'Unable to remove ingredient.');
             }

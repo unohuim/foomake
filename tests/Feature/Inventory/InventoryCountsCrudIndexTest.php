@@ -227,7 +227,7 @@ it('9. the crud config includes the required inventory counts list and create en
         ->and($config['endpoints']['update'] ?? null)->toBe(url('/inventory/counts/{id}'))
         ->and($config['endpoints']['delete'] ?? null)->toBe(url('/inventory/counts/{id}'))
         ->and($config['detailUrlTemplate'] ?? null)->toBe(url('/inventory/counts/{id}'))
-        ->and($config['headers']['counter'] ?? null)->toBe('Counter');
+        ->and($config['headers']['counter'] ?? null)->toBe('Assigned');
 });
 
 it('10. the crud config exposes create through the shared toolbar contract for authorized users', function (): void {
@@ -353,9 +353,9 @@ it('15b. the inventory counts list endpoint keeps the counter column nullable fo
         ->and($record['counter_email'])->toBeNull();
 });
 
-it('15c. the inventory counts list status column shows the current workflow stage label for open counts', function (): void {
+it('15c. the inventory counts list status column shows the current workflow stage label for scheduled counts', function (): void {
     ($this->grantPermission)($this->user, 'inventory-adjustments-view');
-    $openStage = ($this->inventoryStage)('open');
+    $openStage = ($this->inventoryStage)('scheduled');
 
     $count = ($this->makeCount)([
         'workflow_stage_id' => $openStage->id,
@@ -368,7 +368,7 @@ it('15c. the inventory counts list status column shows the current workflow stag
     )->firstWhere('id', $count->id);
 
     expect($record)->not->toBeNull()
-        ->and($record['status_label'] ?? null)->toBe('Open')
+        ->and($record['status_label'] ?? null)->toBe('SCHEDULED')
         ->and($record['status'] ?? null)->toBe('draft');
 });
 
@@ -387,7 +387,7 @@ it('15d. the inventory counts list status column does not use posted lifecycle t
     )->firstWhere('id', $count->id);
 
     expect($record)->not->toBeNull()
-        ->and($record['status_label'] ?? null)->toBe('Completed')
+        ->and($record['status_label'] ?? null)->toBe('COMPLETED')
         ->and($record['posted_at'] ?? null)->not->toBe('—');
 });
 
@@ -613,6 +613,16 @@ it('28. the create slide over renders the assigned user field for workflow task 
         ->and($response->getContent())->toContain('Select a user');
 });
 
+it('28a. the inventory counts index owns the standard open create event contract for the shared slide over', function (): void {
+    $source = file_get_contents(resource_path('views/inventory/counts/index.blade.php'));
+    $pageSource = file_get_contents(resource_path('js/pages/inventory-counts-index.js'));
+
+    expect($source)->toContain('@open-create-inventory-count.window="openCreate()"')
+        ->and($pageSource)->toContain('openCreate()')
+        ->and($pageSource)->toContain("action: this.endpoints.create || ''")
+        ->and($pageSource)->not->toContain('counted_quantity:');
+});
+
 it('29. the counted at field source auto collapses the native picker after date selection without clearing the bound value', function (): void {
     $source = file_get_contents(resource_path('views/inventory/counts/partials/count-form.blade.php'));
     $pageSource = file_get_contents(resource_path('js/pages/inventory-counts-index.js'));
@@ -635,6 +645,6 @@ it('30. the shared crud config exposes a Counter column and the mobile card summ
     );
 
     expect($config['columns'] ?? [])->toContain('counter')
-        ->and($config['headers']['counter'] ?? null)->toBe('Counter')
+        ->and($config['headers']['counter'] ?? null)->toBe('Assigned')
         ->and($config['mobileCard']['bodyExpression'] ?? null)->toContain('inventoryCountSummary(record)');
 });

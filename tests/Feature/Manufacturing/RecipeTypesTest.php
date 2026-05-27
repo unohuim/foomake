@@ -59,6 +59,7 @@ beforeEach(function () {
             'tenant_id' => $tenant->id,
             'name' => $name,
             'base_uom_id' => $uom->id,
+            'is_stockable' => true,
             'is_purchasable' => false,
             'is_sellable' => false,
             'is_manufacturable' => false,

@@ -57,20 +57,22 @@ class PurchaseOrderLifecycleService
                     'received_quantity' => $quantity,
                 ]);
 
-                $stockMove = StockMove::query()->create([
-                    'tenant_id' => $lockedOrder->tenant_id,
-                    'item_id' => $line->item_id,
-                    'uom_id' => $line->item->base_uom_id,
-                    'quantity' => $stockMoveQuantity,
-                    'type' => 'receipt',
-                    'status' => 'POSTED',
-                    'source_type' => 'purchase_order_receipt_line',
-                    'source_id' => $receiptLine->id,
-                ]);
+                if ($line->item?->is_stockable) {
+                    $stockMove = StockMove::query()->create([
+                        'tenant_id' => $lockedOrder->tenant_id,
+                        'item_id' => $line->item_id,
+                        'uom_id' => $line->item->base_uom_id,
+                        'quantity' => $stockMoveQuantity,
+                        'type' => 'receipt',
+                        'status' => 'POSTED',
+                        'source_type' => 'purchase_order_receipt_line',
+                        'source_id' => $receiptLine->id,
+                    ]);
 
-                $receiptLine->forceFill([
-                    'stock_move_id' => $stockMove->id,
-                ])->save();
+                    $receiptLine->forceFill([
+                        'stock_move_id' => $stockMove->id,
+                    ])->save();
+                }
             }
 
             $this->updateDerivedStatus($lockedOrder);

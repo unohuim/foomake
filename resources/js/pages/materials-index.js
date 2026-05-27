@@ -49,6 +49,7 @@ export function mount(rootEl, payload) {
     const emptyForm = () => ({
         name: '',
         base_uom_id: '',
+        is_stockable: false,
         is_purchasable: false,
         is_sellable: false,
         is_manufacturable: false,
@@ -132,6 +133,10 @@ export function mount(rootEl, payload) {
         },
         materialFlagsLabel(record) {
             const flags = [];
+
+            if (record?.is_stockable) {
+                flags.push('Stockable');
+            }
 
             if (record?.is_purchasable) {
                 flags.push('Purchasable');
@@ -253,6 +258,7 @@ export function mount(rootEl, payload) {
             this.editForm = {
                 name: record.name || '',
                 base_uom_id: record.base_uom_id ? String(record.base_uom_id) : '',
+                is_stockable: Boolean(record.is_stockable),
                 is_purchasable: Boolean(record.is_purchasable),
                 is_sellable: Boolean(record.is_sellable),
                 is_manufacturable: Boolean(record.is_manufacturable),

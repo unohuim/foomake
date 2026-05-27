@@ -19,12 +19,17 @@ rules:
   - Section action eligibility may update reactively after related row actions when the page module refreshes the shared section config.
   - Shared CRUD add rows must use a dedicated shared add-row contract rather than overloading the actions slot.
   - In the shared add-row contract, search or select controls belong in the left region and add buttons belong in the right region.
+  - Shared CRUD detail sections may use the shared add-row contract to add an existing related record directly through AJAX without opening the built-in slide-over create form.
+  - When a shared CRUD detail section uses the shared add-row contract, the default top-right create button should stay hidden for that section.
+  - Shared combobox add rows should reuse the existing reusable combobox pattern rather than page-local selector markup.
   - Shared compact add/search rows must not render a visible field label unless a future screen explicitly opts into one.
   - Shared detail-section controls should avoid unnecessary extra rows when one compact inline control can satisfy the interaction.
   - Shared detail sections should avoid duplicate controls for actions already exposed in the shared header.
   - Shared detail-section toolbar toggles must use a compact switch-style control rather than a visible native checkbox.
   - Shared detail-section toolbar toggles should use one horizontal row with label text on the left and the switch track on the right.
   - Shared detail sections should keep row-level actions row-focused; vertical-dot row menus remain the default contract for row actions.
+  - Shared detail sections may opt out of the vertical-dots row menu through `showRowActionsMenu: false` when a row exposes only one direct action such as a destructive inline `x-mark` remove button.
+  - When `showRowActionsMenu` is false, the inline action must stay compact, bordered, rounded, AJAX-first, and vertically aligned with the row content.
   - When a header-level select-button mirrors one active/display row's actions, the shared detail section should not duplicate that header select-button inside every row.
   - Header-level status or action select-buttons that mirror row actions must render the active caption visibly in the closed button state rather than as an icon-only control.
   - When those header-level mirrored menus expose helper copy for options, that copy should come from the same shared action catalog used to build the row-equivalent actions.
@@ -37,6 +42,12 @@ rules:
   - Shared detail-section buttons should be reserved for destructive actions, workflow transitions, multi-field commits, or expensive explicit actions.
   - Related metadata controls such as due date and assignee should align on one compact row when space allows.
   - Shared CRUD detail sections may use the built-in slide-over create form for scoped create flows instead of page-local bespoke create overlays.
+  - Material detail may expose stockable-only Inventory Counts as a shared CRUD detail section rather than embedding a bespoke inventory-count list.
+  - Material-scoped Inventory Counts create flows should reuse the shared Inventory Counts create slide-over contract rather than introducing a simplified page-local form.
+  - Material-scoped Inventory Counts create flows should follow the same open-create event path used by the Inventory Counts index page when triggering that shared slide-over contract.
+  - Material-scoped Inventory Counts create flows may prefill the current material and redirect to the created Inventory Count detail page after successful create.
+  - Successful empty shared-section loads must render the configured empty state only; load-failure copy belongs only to actual fetch failures.
+  - Material detail recipe rows may use multiple compact badges in the shared row header, including published-status and `v{version}` badges, without replacing the shared row-action menu.
   - Detail subsections that contain comboboxes or row-action menus must preserve non-clipping overflow behavior.
   - Short-lived row success highlights may be applied after row actions when the page module drives them from local state.
   - Temporary row highlights must use Tailwind classes, must be state-driven, and must not persist after refresh.

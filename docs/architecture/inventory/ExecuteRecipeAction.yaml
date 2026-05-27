@@ -16,7 +16,9 @@ rules:
   - Recipe output item must be manufacturable for manufacturing execution.
   - Recipe output_quantity must be greater than zero.
   - Runs must be greater than zero.
-  - Inputs are issued and outputs are receipted as stock moves.
+  - Inputs are issued as stock moves only when the input item is stockable.
+  - Outputs are receipted as stock moves only when the output item is stockable.
+  - Non-stockable recipe inputs or outputs do not block execution; they simply skip stock-move creation.
   - Input stock move quantity is recipe line quantity multiplied by runs.
   - Output stock move quantity is recipe output_quantity multiplied by runs.
   - Quantities are recorded in each item base UoM.

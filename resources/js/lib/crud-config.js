@@ -39,6 +39,7 @@ export function normalizeCrudConfig(config) {
     const rawPermissions = sanitizeRecord(config.permissions);
     const rawRowDisplay = sanitizeRecord(config.rowDisplay);
     const rawMobileCard = sanitizeRecord(config.mobileCard);
+    const rawRowActions = sanitizeRecord(config.rowActions);
     const rowDisplayColumns = sanitizeRecord(rawRowDisplay.columns);
 
     columns.forEach((column) => {
@@ -99,6 +100,11 @@ export function normalizeCrudConfig(config) {
             titleExpression: sanitizeLabel(rawMobileCard.titleExpression, "record.name || '—'"),
             subtitleExpression: sanitizeLabel(rawMobileCard.subtitleExpression),
             bodyExpression: sanitizeLabel(rawMobileCard.bodyExpression),
+        },
+        rowActions: {
+            mode: sanitizeLabel(rawRowActions.mode, 'menu'),
+            icon: sanitizeLabel(rawRowActions.icon, 'ellipsis-vertical'),
+            ariaLabel: sanitizeLabel(rawRowActions.ariaLabel, rawLabels.actionsAriaLabel || 'Actions'),
         },
         detailUrlTemplate: sanitizeLabel(config.detailUrlTemplate),
         actions: sanitizeActionDefinitions(config.actions),

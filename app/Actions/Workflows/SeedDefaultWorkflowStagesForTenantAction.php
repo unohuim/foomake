@@ -42,6 +42,7 @@ class SeedDefaultWorkflowStagesForTenantAction
                     'key' => $stage['key'],
                 ], [
                     'name' => $stage['name'],
+                    'button_text' => $stage['button_text'],
                     'description' => null,
                     'sort_order' => $stage['sort_order'],
                     'is_active' => true,
@@ -63,21 +64,21 @@ class SeedDefaultWorkflowStagesForTenantAction
     {
         return [
             'sales' => [
-                ['key' => 'packing', 'name' => 'Packing', 'sort_order' => 10, 'is_inventory_effect_stage' => false],
-                ['key' => 'packed', 'name' => 'Packed', 'sort_order' => 20, 'is_inventory_effect_stage' => true],
-                ['key' => 'shipping', 'name' => 'Shipping', 'sort_order' => 30, 'is_inventory_effect_stage' => false],
+                ['key' => 'packing', 'name' => 'Packing', 'button_text' => 'Packing', 'sort_order' => 10, 'is_inventory_effect_stage' => false],
+                ['key' => 'packed', 'name' => 'Packed', 'button_text' => 'Packed', 'sort_order' => 20, 'is_inventory_effect_stage' => true],
+                ['key' => 'shipping', 'name' => 'Shipping', 'button_text' => 'Shipping', 'sort_order' => 30, 'is_inventory_effect_stage' => false],
             ],
             'purchasing' => [
-                ['key' => 'receiving', 'name' => 'Receiving', 'sort_order' => 10, 'is_inventory_effect_stage' => true],
-                ['key' => 'completed', 'name' => 'Completed', 'sort_order' => 20, 'is_inventory_effect_stage' => false],
+                ['key' => 'receiving', 'name' => 'Receiving', 'button_text' => 'Receiving', 'sort_order' => 10, 'is_inventory_effect_stage' => true],
+                ['key' => 'completed', 'name' => 'Completed', 'button_text' => 'Completed', 'sort_order' => 20, 'is_inventory_effect_stage' => false],
             ],
             'manufacturing' => [
-                ['key' => 'production', 'name' => 'Production', 'sort_order' => 10, 'is_inventory_effect_stage' => true],
-                ['key' => 'completed', 'name' => 'Completed', 'sort_order' => 20, 'is_inventory_effect_stage' => false],
+                ['key' => 'production', 'name' => 'Production', 'button_text' => 'Production', 'sort_order' => 10, 'is_inventory_effect_stage' => true],
+                ['key' => 'completed', 'name' => 'Completed', 'button_text' => 'Completed', 'sort_order' => 20, 'is_inventory_effect_stage' => false],
             ],
             'inventory' => [
-                ['key' => 'open', 'name' => 'Open', 'sort_order' => 10, 'is_inventory_effect_stage' => false],
-                ['key' => 'completed', 'name' => 'Completed', 'sort_order' => 20, 'is_inventory_effect_stage' => true],
+                ['key' => 'scheduled', 'name' => 'SCHEDULED', 'button_text' => 'SCHEDULE', 'sort_order' => 10, 'is_inventory_effect_stage' => false],
+                ['key' => 'completed', 'name' => 'COMPLETED', 'button_text' => 'COMPLETE', 'sort_order' => 20, 'is_inventory_effect_stage' => true],
             ],
         ];
     }

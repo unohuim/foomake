@@ -327,7 +327,8 @@ Migrations remain the **sole source of truth**.
 | tenant_id         | bigint    | No       | FK → tenants.id (CASCADE)           |
 | workflow_domain_id | bigint   | No       | FK → workflow_domains.id (CASCADE)  |
 | key               | string    | No       | Tenant/domain-scoped operational key |
-| name              | string    | No       | Display name                        |
+| name              | string    | No       | Current-stage display name/status label |
+| button_text       | string    | No       | Workflow action button text         |
 | description       | text      | Yes      | —                                   |
 | sort_order        | unsignedInteger | No | Runtime order within domain         |
 | is_active         | boolean   | No       | Default true                        |
@@ -615,6 +616,7 @@ Migrations remain the **sole source of truth**.
 | is_purchasable    | boolean   | No       | Default false             |
 | is_sellable       | boolean   | No       | Default false             |
 | is_manufacturable | boolean   | No       | Default false             |
+| is_stockable      | boolean   | No       | Default false             |
 | default_price_cents | integer | Yes      | Minor currency units      |
 | default_price_currency_code | char(3) | Yes | —                        |
 | image_url         | string    | Yes      | Remote image URL only; no local image storage |
@@ -696,7 +698,11 @@ Migrations remain the **sole source of truth**.
 | recipe_id          | bigint        | No       | FK → recipes.id (CASCADE)             |
 | recipe_version_id  | bigint        | Yes      | FK → recipe_versions.id (SET NULL)    |
 | output_item_id     | bigint        | No       | FK → items.id (CASCADE)               |
-| output_quantity    | decimal(18,6) | No       | Stored runs; canonical scale          |
+| runs               | decimal(18,6) | Yes      | Canonical Make Order runs multiplier; canonical scale |
+| expected_output_qty | decimal(18,6) | Yes     | Persisted expected output quantity; canonical scale |
+| actual_output_qty  | decimal(18,6) | Yes      | Canonical actual completed output; canonical scale |
+| output_quantity    | decimal(18,6) | No       | Legacy compatibility column; mirrors runs during rollout |
+| actual_output_quantity | decimal(18,6) | Yes   | Legacy compatibility column; mirrors actual_output_qty during rollout |
 | status             | string        | No       | DRAFT, SCHEDULED, MADE, CANCELLED     |
 | due_date           | date          | Yes      | Set on schedule                       |
 | workflow_stage_id  | bigint        | Yes      | FK → workflow_stages.id (SET NULL); operational stage only |
@@ -727,10 +733,15 @@ Migrations remain the **sole source of truth**.
 
 ### Behavioral Notes
 
-- `output_quantity` stores runs, not produced quantity.
+- `runs` is the canonical Make Order execution multiplier.
+- `expected_output_qty` is the persisted expected production output for the Make Order.
+- `actual_output_qty` is nullable and stores the completed output truth when explicitly recorded at make time.
 - `status` remains lifecycle only; `workflow_stage_id` stores the current operational stage when the Make Order adopts tenant-configured manufacturing workflow stages.
 - Make Order ownership uses `made_by_user_id`; `make_orders` does not include `assigned_to_user_id`.
-- Produced quantity is `runs × recipe_version.output_quantity`.
+- Expected output defaults to `runs × recipe_version.output_quantity`.
+- Updating `runs` should recalculate `expected_output_qty`; direct client edits to expected output are not the canonical source of truth.
+- When `actual_output_qty` is null, completed output falls back to `expected_output_qty`.
+- `output_quantity` and `actual_output_quantity` remain only as compatibility mirrors during the migration rollout and must not be the primary application contract.
 - Existing Make Orders keep their `recipe_id`, `recipe_version_id`, and `make_order_lines` snapshots even when later recipe versions change.
 
 ---

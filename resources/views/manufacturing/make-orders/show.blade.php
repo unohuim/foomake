@@ -39,7 +39,7 @@
                         class="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700"
                         x-text="workflowState || 'DRAFT'"
                     >
-                        {{ $makeOrderPayload['workflow_state'] ?? 'DRAFT' }}
+                        {{ data_get($makeOrderPayload, 'workflow_state', 'DRAFT') }}
                     </span>
                 </x-slot>
 
@@ -51,7 +51,10 @@
                         <span class="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700">
                             {{ $makeOrderPayload['recipe_name'] ?? '—' }}
                         </span>
-                        <span class="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700">
+                        <span
+                            class="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700"
+                            x-text="'{{ __('Runs') }} ' + (makeOrder.runs_text || '—')"
+                        >
                             {{ __('Runs') }} {{ $makeOrderPayload['runs_text'] ?? '—' }}
                         </span>
                     </div>
@@ -63,8 +66,11 @@
                         <span class="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700">
                             {{ $makeOrderPayload['output_item_name'] ?? '—' }}
                         </span>
-                        <span class="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700">
-                            {{ __('Expected Output') }} {{ $makeOrderPayload['produced_quantity_text'] ?? '—' }}
+                        <span
+                            class="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700"
+                            x-text="'{{ __('Expected Output') }} ' + (makeOrder.expected_output_qty_text || '—')"
+                        >
+                            {{ __('Expected Output') }} {{ $makeOrderPayload['expected_output_qty_text'] ?? '—' }}
                         </span>
                     </div>
                 </x-slot>
@@ -100,35 +106,72 @@
 
     <div class="mx-auto max-w-5xl space-y-4 px-1 py-8 sm:space-y-6 sm:px-6 sm:py-12 lg:px-8">
         <x-detail-section-card
-            title="Workflow"
-            :description="__('Due date and assignment autosave here. Workflow movement stays in the header action.')"
+            title="Details"
+            :description="__('Runs, expected output, actual output, due date, and assignment live here. Workflow movement stays in the header action.')"
             :default-open="$payload['workflow']['default_open'] ?? true"
         >
-            <div
-                class="grid gap-3 sm:grid-cols-2"
-                data-make-order-workflow-metadata-row
-            >
-                <div class="space-y-1">
-                    <p class="text-xs font-semibold uppercase tracking-wide text-gray-500">{{ __('Due Date') }}</p>
-                    <input
-                        type="date"
-                        class="block w-full max-w-xs rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:cursor-not-allowed disabled:bg-gray-100"
-                        x-model="workflow.due_date"
-                        x-bind:disabled="!workflow.can_edit_due_date || workflowDueDateSaving"
-                        x-on:change="saveWorkflowDueDate()"
-                    />
+            <div class="space-y-3" data-make-order-workflow-metadata-row>
+                <div class="grid grid-cols-3 gap-2">
+                    <div class="space-y-1">
+                        <p class="text-[10px] font-semibold uppercase tracking-wide text-gray-500 sm:text-xs">{{ __('Runs') }}</p>
+                        <input
+                            type="text"
+                            value="{{ $makeOrderPayload['runs_text'] ?? '' }}"
+                            class="block w-full rounded-xl border border-gray-300 bg-white px-2.5 py-2 text-xs text-gray-900 shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 sm:px-3 sm:text-sm"
+                            x-model="makeOrder.runs_text"
+                            x-on:input="recalculateExpectedOutputQtyFromRuns()"
+                            x-on:change="saveMakeOrderDetailQuantity('runs')"
+                        />
+                    </div>
+
+                    <div class="space-y-1">
+                        <p class="text-[10px] font-semibold uppercase tracking-wide text-gray-500 sm:text-xs">{{ __('Expected Output') }}</p>
+                        <input
+                            type="text"
+                            value="{{ $makeOrderPayload['expected_output_qty_text'] ?? '' }}"
+                            readonly
+                            aria-readonly="true"
+                            class="block w-full cursor-not-allowed rounded-xl border border-gray-300 bg-gray-50 px-2.5 py-2 text-xs text-gray-600 shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 sm:px-3 sm:text-sm"
+                            x-model="makeOrder.expected_output_qty_text"
+                        />
+                    </div>
+
+                    <div class="space-y-1">
+                        <p class="text-[10px] font-semibold uppercase tracking-wide text-gray-500 sm:text-xs">{{ __('Actual Output') }}</p>
+                        <input
+                            type="text"
+                            value="{{ $makeOrderPayload['actual_output_qty_text'] ?? '' }}"
+                            class="block w-full rounded-xl border border-gray-300 bg-white px-2.5 py-2 text-xs text-gray-900 shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 sm:px-3 sm:text-sm"
+                            x-model="makeOrder.actual_output_qty_text"
+                            x-on:change="saveMakeOrderDetailQuantity('actual_output_qty')"
+                        />
+                    </div>
                 </div>
 
-                <div class="space-y-1">
-                    <p class="text-xs font-semibold uppercase tracking-wide text-gray-500">{{ __('Assigned To') }}</p>
-                    <x-dropdown-select
-                        name="workflow_made_by_user_id"
-                        options-expression="workflow.assignee_options"
-                        placeholder="Unassigned"
-                        disabled-expression="!workflow.can_edit_assignment || workflowAssignmentSaving"
-                        x-model="workflow.made_by_user_id"
-                        class="max-w-xs"
-                    />
+                <div class="grid grid-cols-2 gap-2">
+                    <div class="space-y-1">
+                        <p class="text-[10px] font-semibold uppercase tracking-wide text-gray-500 sm:text-xs">{{ __('Due Date') }}</p>
+                        <input
+                            type="date"
+                            class="block w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:cursor-not-allowed disabled:bg-gray-100"
+                            x-model="workflow.due_date"
+                            x-bind:disabled="!workflow.can_edit_due_date || workflowDueDateSaving"
+                            x-on:change="saveWorkflowDueDate()"
+                        />
+                    </div>
+
+                    <div class="space-y-1">
+                        <p class="text-[10px] font-semibold uppercase tracking-wide text-gray-500 sm:text-xs">{{ __('Assigned To') }}</p>
+                        <x-dropdown-select
+                            name="workflow_made_by_user_id"
+                            options-expression="workflow.assignee_options"
+                            placeholder="Unassigned"
+                            disabled-expression="!workflow.can_edit_assignment || workflowAssignmentSaving"
+                            button-class="flex w-full items-center justify-between rounded-xl border border-gray-300 bg-white px-3 py-2 text-left text-sm text-gray-900 shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:cursor-not-allowed disabled:bg-gray-100"
+                            x-model="workflow.made_by_user_id"
+                            class="w-full"
+                        />
+                    </div>
                 </div>
             </div>
         </x-detail-section-card>
@@ -189,6 +232,7 @@
             :context-text-expression="''"
             :show-on-hand="true"
             :show-actions="true"
+            :show-row-actions-menu="false"
         />
     </div>
 </x-resource-detail-layout>

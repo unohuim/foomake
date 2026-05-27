@@ -103,6 +103,7 @@ class WorkflowController extends Controller
             'workflow_domain_key' => $stage->workflowDomain?->key,
             'key' => $stage->key,
             'name' => $stage->name,
+            'button_text' => $stage->button_text,
             'description' => $stage->description,
             'sort_order' => $stage->sort_order,
             'is_active' => $stage->is_active,

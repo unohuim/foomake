@@ -119,6 +119,7 @@ class MaterialController extends Controller
             'base_uom_id' => $item->base_uom_id,
             'base_uom_name' => $item->baseUom?->name,
             'base_uom_symbol' => $item->baseUom?->symbol,
+            'is_stockable' => $item->is_stockable,
             'is_purchasable' => $item->is_purchasable,
             'is_sellable' => $item->is_sellable,
             'is_manufacturable' => $item->is_manufacturable,

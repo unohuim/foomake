@@ -67,6 +67,29 @@
     <script type="application/json" id="materials-show-payload">@json($payload)</script>
 
     <div class="max-w-5xl mx-auto px-1 sm:px-6 lg:px-8 py-8 sm:py-12 space-y-4 sm:space-y-6" data-material-detail-content>
+        @if ($payload['inventoryStats'] ?? null)
+            <section
+                class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"
+                data-material-inventory-stats
+            >
+                <dl class="grid grid-cols-1 divide-y divide-slate-200 sm:grid-cols-2 sm:divide-x sm:divide-y-0 lg:grid-cols-5">
+                    @foreach (($payload['inventoryStats']['cards'] ?? []) as $card)
+                        <div class="px-4 py-5 sm:px-6">
+                            <dt class="text-sm font-medium text-slate-500">{{ $card['label'] ?? '—' }}</dt>
+                            <dd class="mt-2 flex items-baseline gap-2">
+                                <span class="text-2xl font-semibold tracking-tight text-slate-900">
+                                    {{ $card['quantity_display'] ?? '0' }}
+                                </span>
+                                @if (($card['uom_symbol'] ?? '') !== '')
+                                    <span class="text-sm font-medium text-slate-500">{{ $card['uom_symbol'] }}</span>
+                                @endif
+                            </dd>
+                        </div>
+                    @endforeach
+                </dl>
+            </section>
+        @endif
+
         @if ($payload['purchaseOrderCreate'] ?? null)
             <div data-purchase-order-create-root></div>
         @endif
@@ -79,6 +102,10 @@
             <div data-js-crud-section-root data-section-key="recipes"></div>
         @endif
 
+        @if (($payload['sections']['inventoryCounts'] ?? null))
+            <div data-js-crud-section-root data-section-key="inventoryCounts"></div>
+        @endif
+
         @if (($payload['sections']['purchaseOrders'] ?? null))
             <div data-js-crud-section-root data-section-key="purchaseOrders"></div>
         @endif
@@ -86,6 +113,7 @@
         @if (($payload['sections']['makeOrders'] ?? null))
             <div data-js-crud-section-root data-section-key="makeOrders"></div>
         @endif
+
     </div>
 
     <x-slot name="overlays">
@@ -96,6 +124,19 @@
 
             @if ($payload['makeOrderCreate'] ?? null)
                 @include('manufacturing.make-orders.partials.create-make-order-slide-over')
+            @endif
+
+            @if ($payload['inventoryCountCreate'] ?? null)
+                <div
+                    data-material-inventory-count-create-root
+                    x-data="materialInventoryCountCreate"
+                >
+                    @include('inventory.counts.partials.count-form', [
+                        'submitLabel' => __('Create Count'),
+                        'users' => collect(data_get($payload, 'inventoryCountCreate.users', [])),
+                        'scopedItem' => $item,
+                    ])
+                </div>
             @endif
         </div>
     </x-slot>

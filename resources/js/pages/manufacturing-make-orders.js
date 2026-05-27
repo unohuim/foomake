@@ -9,13 +9,9 @@ export function mount(rootEl, payload) {
     const crudRootEl = rootEl.querySelector('[data-crud-root]');
     const actionDefinitions = (Array.isArray(crud.actions) ? crud.actions : []).map((action) => ({
         ...action,
-        handler: action.id === 'view'
-            ? 'view(record)'
-            : action.id === 'edit'
-                ? 'openEdit(record)'
-                : action.id === 'archive'
-                    ? 'archive(record)'
-                    : '',
+        handler: action.id === 'archive'
+            ? 'archive(record)'
+            : '',
     }));
     const rendererConfig = {
         ...crud,
@@ -38,6 +34,7 @@ export function mount(rootEl, payload) {
         mobileCard: {
             ...crud.mobileCard,
         },
+        rowActions: crud.rowActions || {},
         actions: actionDefinitions,
     };
 
@@ -375,8 +372,9 @@ export function mount(rootEl, payload) {
                     return;
                 }
 
-                await this.fetchMakeOrders();
-                this.showToast('success', 'Make order archived.');
+                const data = await response.json();
+                const removedId = data?.removed_id ?? record?.id;
+                this.makeOrders = this.makeOrders.filter((entry) => entry.id !== removedId);
             } catch (error) {
                 this.showToast('error', 'Unable to archive make order.');
             }

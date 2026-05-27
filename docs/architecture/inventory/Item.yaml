@@ -2,7 +2,7 @@ name: Item
 type: Eloquent Model
 location:
   - app/Models/Item.php
-purpose: Represent a tenant-owned stock-tracked entity with inventory derived from stock moves.
+purpose: Represent a tenant-owned item identity whose inventory tracking is explicitly gated by is_stockable.
 when_to_use:
   - Modeling tenant-owned materials or products
   - Computing on-hand inventory from the ledger
@@ -10,9 +10,18 @@ when_not_to_use:
   - Storing denormalized on-hand quantities
 rules:
   - Each item has exactly one base UoM referenced by base_uom_id.
+  - is_stockable defaults false and explicitly controls whether inventory-affecting workflows create stock moves for the item.
   - Products remain normal items; the sales-facing products view is filtered from items where is_sellable = true.
-  - On-hand quantity is computed from stock_moves.
-  - Purchase receipt inventory impact is derived from posted receipt stock moves recorded in item base units.
+  - On-hand quantity is computed from stock_moves for stockable items.
+  - Stockable Material detail pages may expose an inventory stats strip directly under the shared header.
+  - The Material detail inventory stats strip always includes On Hand and Net Qty for stockable items.
+  - The Material detail inventory stats strip adds only the qualifying dynamic cards for open sales demand, open purchase supply, and open make-order impact.
+  - Material detail inventory stats must remain tenant-scoped and must use BCMath-safe canonical scale-6 quantities.
+  - Material detail inventory stats use make_orders.expected_output_qty for non-terminal non-cancelled make orders.
+  - Completed make-order output reaches Material detail On Hand and Net Qty through the stock-move ledger, using make_orders.actual_output_qty when present and falling back to expected_output_qty otherwise.
+  - Non-stockable items may still be purchased, received, sold, manufactured, counted, or used in recipes, but those workflows must skip stock-move creation for that item.
+  - Starting quantity is valid only for stockable items; non-stockable items must reject starting quantity input instead of silently creating no inventory effect.
+  - Purchase receipt inventory impact is derived from posted receipt stock moves recorded in item base units for stockable items only.
   - Inventory is derived and not stored on the items table.
   - Planning price is stored as integer cents in default_price_cents with an uppercase 3-letter default_price_currency_code.
   - Temporary external product identities may be stored on items through external_source and external_id.
@@ -26,6 +35,7 @@ public_interface:
   - itemUomConversions()
   - default_price_cents (attribute)
   - default_price_currency_code (attribute)
+  - is_stockable (attribute)
   - is_sellable (attribute)
   - external_source (attribute)
   - external_id (attribute)

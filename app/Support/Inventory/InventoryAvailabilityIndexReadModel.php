@@ -273,12 +273,9 @@ class InventoryAvailabilityIndexReadModel
         $makeOrders = MakeOrder::query()
             ->select([
                 'make_orders.output_item_id',
-                'make_orders.output_quantity',
-                'recipes.output_quantity as recipe_output_quantity',
+                'make_orders.expected_output_qty',
             ])
-            ->join('recipes', 'recipes.id', '=', 'make_orders.recipe_id')
             ->where('make_orders.tenant_id', $tenantId)
-            ->where('recipes.tenant_id', $tenantId)
             ->whereIn('make_orders.output_item_id', $itemIds)
             ->whereNotIn('make_orders.status', [
                 MakeOrder::STATUS_DRAFT,
@@ -289,13 +286,7 @@ class InventoryAvailabilityIndexReadModel
 
         foreach ($makeOrders as $makeOrder) {
             $itemId = (int) $makeOrder->output_item_id;
-            $recipeOutputQuantity = bcadd((string) $makeOrder->recipe_output_quantity, '0', self::SCALE);
-
-            if (bccomp($recipeOutputQuantity, $this->zero(), self::SCALE) !== 1) {
-                continue;
-            }
-
-            $producedQuantity = bcmul((string) $makeOrder->output_quantity, $recipeOutputQuantity, self::SCALE);
+            $producedQuantity = bcadd((string) ($makeOrder->expected_output_qty ?? '0.000000'), '0', self::SCALE);
 
             $quantities[$itemId] = isset($quantities[$itemId])
                 ? bcadd($quantities[$itemId], $producedQuantity, self::SCALE)

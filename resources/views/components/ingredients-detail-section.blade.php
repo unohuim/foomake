@@ -7,6 +7,7 @@
     'emptyState' => 'No ingredients yet.',
     'showOnHand' => false,
     'showActions' => false,
+    'showRowActionsMenu' => true,
 ])
 
 <x-detail-section-card
@@ -122,60 +123,75 @@
                         @endif
                         @if ($showActions)
                             <td class="px-3 py-3 text-right">
-                                <x-dropdown align="right" width="w-40" contentClasses="rounded-xl border border-gray-200 bg-white p-1.5 shadow-lg ring-1 ring-black/5">
-                                    <x-slot name="trigger">
-                                        <button
-                                            type="button"
-                                            class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-gray-300 text-gray-600 transition hover:bg-gray-50 hover:text-gray-900"
-                                            aria-label="Ingredient actions"
-                                        >
-                                            <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                                                <path d="M10 3a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3Zm0 5.5a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3Zm1.5 6.5a1.5 1.5 0 1 0-3 0 1.5 1.5 0 0 0 3 0Z" />
-                                            </svg>
-                                        </button>
-                                    </x-slot>
-
-                                    <x-slot name="content">
-                                        <template x-if="line.view_url">
-                                            <a
-                                                class="flex w-full rounded-lg px-3 py-2 text-left text-sm text-gray-700 transition hover:bg-gray-50"
-                                                x-bind:href="line.view_url"
-                                            >
-                                                {{ __('View') }}
-                                            </a>
-                                        </template>
-
-                                        <template x-if="line.make_url">
+                                @if (! $showRowActionsMenu)
+                                    <button
+                                        type="button"
+                                        class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-gray-300 text-gray-500 transition hover:border-red-300 hover:bg-red-50 hover:text-red-600"
+                                        x-show="ingredients.can_edit && line.remove_url"
+                                        x-on:click="removeIngredient(line)"
+                                        aria-label="Remove ingredient"
+                                        data-ingredients-remove-button
+                                    >
+                                        <svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.75" stroke="currentColor" aria-hidden="true">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
+                                        </svg>
+                                    </button>
+                                @else
+                                    <x-dropdown align="right" width="w-40" contentClasses="rounded-xl border border-gray-200 bg-white p-1.5 shadow-lg ring-1 ring-black/5">
+                                        <x-slot name="trigger">
                                             <button
                                                 type="button"
-                                                class="flex w-full rounded-lg px-3 py-2 text-left text-sm text-gray-700 transition hover:bg-gray-50"
-                                                x-on:click="goTo(line.make_url)"
+                                                class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-gray-300 text-gray-600 transition hover:bg-gray-50 hover:text-gray-900"
+                                                aria-label="Ingredient actions"
                                             >
-                                                {{ __('Make') }}
+                                                <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                                    <path d="M10 3a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3Zm0 5.5a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3Zm1.5 6.5a1.5 1.5 0 1 0-3 0 1.5 1.5 0 0 0 3 0Z" />
+                                                </svg>
                                             </button>
-                                        </template>
+                                        </x-slot>
 
-                                        <template x-if="line.purchase_url">
-                                            <button
-                                                type="button"
-                                                class="flex w-full rounded-lg px-3 py-2 text-left text-sm text-gray-700 transition hover:bg-gray-50"
-                                                x-on:click="goTo(line.purchase_url)"
-                                            >
-                                                {{ __('Purchase') }}
-                                            </button>
-                                        </template>
+                                        <x-slot name="content">
+                                            <template x-if="line.view_url">
+                                                <a
+                                                    class="flex w-full rounded-lg px-3 py-2 text-left text-sm text-gray-700 transition hover:bg-gray-50"
+                                                    x-bind:href="line.view_url"
+                                                >
+                                                    {{ __('View') }}
+                                                </a>
+                                            </template>
 
-                                        <template x-if="ingredients.can_edit && line.remove_url">
-                                            <button
-                                                type="button"
-                                                class="flex w-full rounded-lg px-3 py-2 text-left text-sm text-red-600 transition hover:bg-red-50"
-                                                x-on:click="removeIngredient(line)"
-                                            >
-                                                {{ __('Remove') }}
-                                            </button>
-                                        </template>
-                                    </x-slot>
-                                </x-dropdown>
+                                            <template x-if="line.make_url">
+                                                <button
+                                                    type="button"
+                                                    class="flex w-full rounded-lg px-3 py-2 text-left text-sm text-gray-700 transition hover:bg-gray-50"
+                                                    x-on:click="goTo(line.make_url)"
+                                                >
+                                                    {{ __('Make') }}
+                                                </button>
+                                            </template>
+
+                                            <template x-if="line.purchase_url">
+                                                <button
+                                                    type="button"
+                                                    class="flex w-full rounded-lg px-3 py-2 text-left text-sm text-gray-700 transition hover:bg-gray-50"
+                                                    x-on:click="goTo(line.purchase_url)"
+                                                >
+                                                    {{ __('Purchase') }}
+                                                </button>
+                                            </template>
+
+                                            <template x-if="ingredients.can_edit && line.remove_url">
+                                                <button
+                                                    type="button"
+                                                    class="flex w-full rounded-lg px-3 py-2 text-left text-sm text-red-600 transition hover:bg-red-50"
+                                                    x-on:click="removeIngredient(line)"
+                                                >
+                                                    {{ __('Remove') }}
+                                                </button>
+                                            </template>
+                                        </x-slot>
+                                    </x-dropdown>
+                                @endif
                             </td>
                         @endif
                     </tr>

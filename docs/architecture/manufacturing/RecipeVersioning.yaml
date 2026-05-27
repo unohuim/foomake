@@ -72,6 +72,7 @@ rules:
   - The Recipe detail Versions section must surface View Archived through the shared compact switch-style toolbar toggle contract rather than a visible native checkbox.
   - Version numbers must display in x.xx format.
   - Recipe detail Make Orders entry points, Recipes index Make actions, and Material detail recipe-row Make actions all create from recipes.current_version_id only.
+  - Recipe detail Make Orders `+` and Recipe Version Make actions should create a DRAFT Make Order immediately and redirect to the created Make Order detail page when `show_url` is returned.
 public_interface:
   - Recipe::currentVersion()
   - Recipe::displayVersionForUser()

@@ -867,22 +867,14 @@ test('25. recipe detail renders the reusable make orders accordion crud section'
         ->and(data_get($payload, 'sections.makeOrders.defaultOpen'))->toBeTrue()
         ->and(data_get($payload, 'sections.makeOrders.mobilePageSize'))->toBe(3)
         ->and(data_get($payload, 'sections.makeOrders.rowLayout.primaryText.urlField'))->toBe('display.showUrl')
-        ->and(data_get($payload, 'sections.makeOrders.createAction.type'))->toBe('form')
+        ->and(data_get($payload, 'sections.makeOrders.createAction.type'))->toBe('custom')
         ->and(data_get($payload, 'sections.makeOrders.createAction.title'))->toBe('Create Make Order')
-        ->and(data_get($payload, 'sections.makeOrders.createAction.submitLabel'))->toBe('Create Make Order')
         ->and(data_get($payload, 'sections.makeOrders.createAction.description'))->toContain('Soup Recipe')
+        ->and(data_get($payload, 'sections.makeOrders.createAction.handlerKey'))->toBe('createMakeOrder')
         ->and(data_get($payload, 'sections.makeOrders.endpoints.create'))->toBe(route('manufacturing.recipes.make-orders.store', $recipe))
         ->and(data_get($payload, 'sections.makeOrders.rowLayout.badges.0.field'))->toBe('display.statusText')
         ->and(data_get($payload, 'sections.makeOrders.rowLayout.badges.1.field'))->toBe('display.versionBadgeText')
-        ->and(data_get($payload, 'sections.makeOrders.fields'))->toBe([
-            [
-                'name' => 'runs',
-                'label' => 'Runs',
-                'type' => 'text',
-                'required' => true,
-                'rowGroup' => '',
-            ],
-        ]);
+        ->and(data_get($payload, 'sections.makeOrders.fields'))->toBe([]);
 });
 
 test('25a. recipe detail make orders rows include a compact version badge beside the workflow status badge', function (): void {
@@ -1080,19 +1072,18 @@ test('25d. recipe detail make orders plus button remains right aligned through t
         ->and($crudSectionSource)->toContain('sm:ml-auto');
 });
 
-test('25e. recipe detail make orders create action uses the shared crud section slide over instead of page local make order create markup', function (): void {
+test('25e. recipe detail make orders create action posts directly through the shared crud section custom action contract instead of opening a slide over', function (): void {
     $viewSource = File::get(resource_path('views/manufacturing/recipes/show.blade.php'));
     $pageSource = File::get(resource_path('js/pages/manufacturing-recipes-show.js'));
     $crudSectionSource = File::get(resource_path('js/lib/js-crud-section.js'));
 
     expect($viewSource)->not->toContain('data-recipe-make-order-create-slide-over')
         ->and($viewSource)->not->toContain('data-recipe-make-order-create-button')
-        ->and($pageSource)->not->toContain('handleCreateAction: async ({ section }) =>')
-        ->and($pageSource)->not->toContain('section?.endpoints?.create || \'\'')
-        ->and($pageSource)->toContain('handleCreateSuccess: async ({ data }) =>')
-        ->and($crudSectionSource)->toContain('x-show="isFormOpen"')
-        ->and($crudSectionSource)->toContain('createFormTitle()')
-        ->and($crudSectionSource)->toContain('createFormDescription()');
+        ->and($pageSource)->toContain('handleCreateAction: async ({ section }) =>')
+        ->and($pageSource)->toContain("await pageState?.createMakeOrder(section?.endpoints?.create || '')")
+        ->and($pageSource)->not->toContain('buildCreatePayload: (form) => ({')
+        ->and($pageSource)->not->toContain('handleCreateSuccess: async ({ data }) =>')
+        ->and($crudSectionSource)->toContain("if (this.section.createAction.type === 'custom' && typeof this.adapters.handleCreateAction === 'function')");
 });
 
 test('25f. shared crud section keeps the create button outside the empty state box', function (): void {
@@ -1315,10 +1306,10 @@ test('32. draft only recipe detail payload keeps make orders plus hidden until p
     expect(data_get($beforePayload, 'sections.makeOrders.permissions.canCreate'))->toBeFalse()
         ->and(data_get($publishResponse->json(), 'sections.makeOrders.permissions.canCreate'))->toBeTrue()
         ->and(data_get($publishResponse->json(), 'sections.makeOrders.endpoints.create'))->toBe(route('manufacturing.recipes.make-orders.store', $recipe))
-        ->and(data_get($publishResponse->json(), 'sections.makeOrders.createAction.type'))->toBe('form');
+        ->and(data_get($publishResponse->json(), 'sections.makeOrders.createAction.type'))->toBe('custom');
 });
 
-test('33. recipe scoped make order create form stays recipe scoped with no recipe selector after publish', function (): void {
+test('33. recipe scoped make order create action stays recipe scoped with no recipe selector after publish', function (): void {
     $tenant = ($this->makeTenant)('Tenant A');
     $user = ($this->makeUser)($tenant);
     ($this->grantPermission)($user, 'inventory-recipes-view');
@@ -1338,17 +1329,12 @@ test('33. recipe scoped make order create form stays recipe scoped with no recip
         'manufacturing-recipes-show-payload'
     );
 
-    expect(data_get($payload, 'sections.makeOrders.fields'))->toBe([
-        [
-            'name' => 'runs',
-            'label' => 'Runs',
-            'type' => 'text',
-            'required' => true,
-            'rowGroup' => '',
-        ],
-    ])
-        ->and(json_encode(data_get($payload, 'sections.makeOrders.fields')) ?: '')->not->toContain('recipe_id')
-        ->and(json_encode(data_get($payload, 'sections.makeOrders.fields')) ?: '')->not->toContain('recipe_version_id');
+    expect(data_get($payload, 'sections.makeOrders.fields'))->toBe([])
+        ->and(data_get($payload, 'sections.makeOrders.createAction.type'))->toBe('custom')
+        ->and(data_get($payload, 'sections.makeOrders.createAction.handlerKey'))->toBe('createMakeOrder')
+        ->and(json_encode(data_get($payload, 'sections.makeOrders.createAction')) ?: '')->toContain('recipes.current_version_id')
+        ->and(json_encode(data_get($payload, 'sections.makeOrders.createAction')) ?: '')->not->toContain('recipe_id')
+        ->and(json_encode(data_get($payload, 'sections.makeOrders.createAction')) ?: '')->not->toContain('recipe_version_id');
 });
 
 test('34. publish highlight is local page state driven, temporary, and targets only the newly published row', function (): void {

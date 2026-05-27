@@ -198,7 +198,11 @@ Notes:
 - Material detail section rows expose record detail links where an existing detail surface is available, using the shared row-action `View` contract rather than bespoke row-click behavior; this applies to Supplier Package rows, Purchase Order rows, Recipe rows, and Make Order rows.
 - Material detail `Recipes` plus opens the existing recipe create slide-over in place, prefilled with the current material as the output item, and successful recipe create redirects to the created recipe detail page.
 - Material detail recipe-row `Make` creates a draft Make Order directly from the selected recipe current version and redirects to the created make-order detail page when `show_url` is returned.
-- Recipe detail uses the same reusable CRUD detail-section pattern for a `Make Orders` accordion scoped to one recipe; the right-aligned shared `+` action opens the built-in shared section slide-over, create always uses the recipe current published version, and checked-out drafts are never used.
+- Material detail `Inventory Counts` `+` reuses the standard Inventory Count create slide-over contract and mounts that shared form under a dedicated live Alpine create component in the resource-detail overlay area inside the Material page scope.
+- The Material detail page module must open that mounted create component directly so the same `showCountForm` state bound by the shared Inventory Count slide-over is toggled by the `+` action.
+- The Material detail Inventory Counts section `createAction` must pass a concrete handler config object into the page adapter, using `handlerKey: openInventoryCountCreate`; the adapter must not assume `action` exists when the shared section fails to pass it.
+- Recipe and recipe-version dropdown or header `Make` actions follow the same direct-create-and-redirect contract instead of opening a dedicated Make Order slide-over.
+- Recipe detail uses the same reusable CRUD detail-section pattern for a `Make Orders` accordion scoped to one recipe; the right-aligned shared `+` action now posts directly to the recipe-scoped create endpoint, create always uses the recipe current published version, and checked-out drafts are never used.
 - Recipe detail `Make Orders` create eligibility is reactive: publishing the first or current recipe version updates the shared section action contract immediately so the right-aligned `+` appears without a full page refresh.
 - Recipe detail `Versions` rows follow the shared row-action dropdown contract; draft rows expose `Publish`, and publish success may trigger a temporary row highlight when the newly current version re-sorts to the top.
 - Recipe detail `Versions` toolbar toggles use the shared compact switch contract in the reusable detail-section renderer, with left-aligned label text and a right-aligned pill track rather than a visible native checkbox.
@@ -216,26 +220,38 @@ Notes:
 - Recipe detail `Make Orders` rows may reuse the shared badges row to show both workflow state and a compact `v{x.xx}` recipe-version snapshot badge on the same line.
 - Recipes index row menus expose `Make` when the recipe has a current published manufacturing version and the current user can execute Make Orders.
 - Make Orders index primary recipe-name rows use the shared linked-text CRUD contract to open the Make Order detail page.
-- Make Order detail uses the shared resource detail header pattern plus `Workflow`, `Tasks`, and `Ingredients` detail sections in that order.
+- Make Order detail uses the shared resource detail header pattern plus `Details`, `Tasks`, and `Ingredients` detail sections in that order.
+- The Make Order `Details` section keeps `Runs`, `Expected Output`, `Actual Output`, `Due Date`, and `Assigned To` together in one compact responsive grid; `Runs` come from `make_orders.runs`, expected output is persisted on `make_orders.expected_output_qty`, and actual output stays separate as `make_orders.actual_output_qty` when present.
+- Editing `Runs` must recalculate `expected_output_qty` immediately from `runs × recipe_version.output_quantity`, and stale client-submitted expected-output values must be ignored.
+- The Make Order `Expected Output` field may render read-only in the detail UI because it is a derived planning quantity, while `Actual Output`, `Due Date`, and `Assigned To` remain editable.
+- `Runs` should render compactly without unnecessary trailing scale-6 decimals in the detail UI, while Expected Output and Actual Output should render using the output item base UOM display precision.
+- On mobile, `Runs` / `Expected Output` / `Actual Output` stay on one compact row and `Due Date` / `Assigned To` stay on a second compact row.
+- Recipe and Recipe Version `output_quantity` remain the per-run output contract and must not be reinterpreted as Make Order runs.
 - Shared workflow-enabled resource headers may expose one compact next-stage action through the shared header action slot when a valid configured transition exists.
 - Shared workflow-enabled resource headers may expose one compact draft-entry action through the same header action slot when a pre-workflow draft can enter the first configured stage.
 - Shared resource headers may render grouped metadata rows through the shared header metadata slot; Make Orders use recipe/runs on the first row and output item/expected output on the second row.
 - Shared resource headers may render a compact visible-state chip beside the title when the resource uses a workflow-stage-driven status surface.
 - Make Order visible state is `DRAFT` while `workflow_stage_id` is null, then tenant-configured `workflow_stages.name` after workflow entry; lifecycle `status` remains lifecycle-only while `workflow_stage_id` tracks the operational workflow position.
 - Make Order detail keeps that visible state beside the `Make Order {id}` title rather than repeating it in the compact metadata rows.
-- Make Order workflow ownership metadata lives on `make_orders.made_by_user_id`, auto-assigns to the creator on Make Order creation, and is edited from the Workflow section through the shared dropdown-select pattern.
+- Make Order workflow ownership metadata lives on `make_orders.made_by_user_id`, auto-assigns to the creator on Make Order creation, and is edited from the Details section through the shared dropdown-select pattern.
 - `make_orders.assigned_to_user_id` is not part of the Make Order schema and must not be used for Make Order ownership.
-- Make Order due date is edited inline from the Workflow section through a compact autosave date input.
+- Make Order due date is edited inline from the Details section through a compact autosave date input.
 - Make Order assignee options are tenant-scoped, include an explicit `Unassigned` choice, autosave on change, and reject cross-tenant assignment.
 - Make Order due-date changes must not mutate lifecycle `status`, operational `workflow_stage_id`, `make_order_lines`, `recipe_version_lines`, workflow tasks, or task templates.
 - Make Order assignee changes must not mutate lifecycle `status`, operational `workflow_stage_id`, `make_order_lines`, `recipe_version_lines`, workflow tasks, or task templates.
 - Make Order stage transitions must preserve `made_by_user_id`.
+- Make Orders may optionally persist a nullable `actual_output_qty` at make time; when present it is the completion-truth output quantity and overrides expected produced quantity for the output receipt stock move only.
+- When `actual_output_qty` is absent, completed output still falls back to `expected_output_qty`.
+- `actual_output_qty` does not introduce actual ingredient-usage tracking in this phase.
 - Generated Make Order workflow task assignees remain independent from Make Order assignee metadata.
 - Shared detail-section UX should prefer compact inline autosave controls for safe single-field updates and avoid extra save-button rows.
 - Shared detail sections should not duplicate stage-movement controls already owned by the shared header workflow action.
 - Recipe-scoped Make Order create may redirect directly to the created Make Order detail page through the shared section create-success hook when `show_url` is returned.
-- Make Order header, index, Workflow section, and shared Material/Recipe detail rows all use the same workflow-stage-driven display rule after workflow entry.
+- Make Order header, index, Details section, and shared Material/Recipe detail rows all use the same workflow-stage-driven display rule after workflow entry.
 - Reusable detail sections may disable the vertical-dots row menu through `showRowActionsMenu: false`; the default remains enabled for existing section consumers, and disabled sections may surface their configured row actions inline instead.
+- Make Order detail ingredient rows may opt out of the row-actions menu and render a direct inline `x-mark` remove button when removal is the only row-level action exposed there.
+- Make Orders index rows may opt out of the row-actions menu and render a direct inline `x-mark` archive button when archive is the only row-level action exposed there.
+- Both of those direct row actions remain AJAX-first, update the UI immediately without a full-page refresh, and show feedback only on failure.
 
 ### Shared Ingredients Detail Section Pattern
 
@@ -267,11 +283,11 @@ Notes:
 - Make Order Ingredients persist to `make_order_lines`.
 - Recipe Ingredients stay version-aware and edit only through the checked-out draft context.
 - Make Order Ingredients are editable snapshots and must not mutate recipe version lines.
-- Make Order Workflow uses the shared detail-section shell, defaults open, and keeps operational stage data separate from lifecycle status.
+- Make Order Details uses the shared detail-section shell, defaults open, and keeps runs, expected output, actual output, and workflow metadata separate from lifecycle status.
 
-### Make Order Workflow Detail Section Pattern
+### Make Order Details Section Pattern
 
-**Name:** Make Order Workflow Detail Section Pattern
+**Name:** Make Order Details Section Pattern
 **Type:** Manufacturing UI Pattern
 **Location:**
 - `docs/architecture/manufacturing/MakeOrderWorkflowSection.yaml`
@@ -280,9 +296,10 @@ Notes:
 - `resources/js/pages/manufacturing-make-orders-show.js`
 
 **Purpose:**
-Render compact due-date and assignee editing on Make Order detail while keeping workflow-stage movement in the shared header action and current-stage tasks in a separate detail section.
+Render compact Runs, Expected Output, Actual Output, Due Date, and Assigned To detail on Make Order detail while keeping workflow-stage movement in the shared header action and current-stage tasks in a separate detail section.
 
 **When to Use:**
+- Showing Make Order runs, expected output, and actual output separately
 - Editing Make Order due date
 - Editing Make Order workflow ownership assignment
 - Surfacing the shared header workflow transition action for a Make Order
@@ -473,6 +490,44 @@ Notes:
 - `fulfillment` recipes require `is_sellable = true`.
 - Items with both flags may use both recipe types.
 - Items with neither flag are excluded from recipe output pickers and rejected server-side.
+
+---
+
+### Item Stockability / Inventory Tracking Eligibility
+
+**Name:** Item Stockability / Inventory Tracking Eligibility  
+**Type:** Domain Rule  
+**Location:**  
+- `docs/architecture/inventory/Item.yaml`  
+- `docs/architecture/inventory/StockMove.yaml`  
+- `app/Models/Item.php`  
+- `database/migrations/2026_05_25_000001_add_is_stockable_to_items_table.php`  
+
+**Purpose:**  
+Separate general item participation in business workflows from stock-ledger participation.
+
+**When to Use:**  
+Any purchasing, manufacturing, sales, or counting workflow that might otherwise create stock moves.
+
+**When Not to Use:**  
+Permission checks, recipe output eligibility, or generic item naming/UoM concerns.
+
+**Public Interface:**  
+- `items.is_stockable`  
+- `Item::$casts['is_stockable']`  
+
+**Example Usage:**  
+```php
+if ($item->is_stockable) {
+    // create stock move
+}
+```
+
+Notes:
+- `is_stockable` defaults `false`.
+- Non-stockable items may still be purchased, received, sold, manufactured, counted, or used in recipes.
+- Those workflows must skip stock-move creation for non-stockable items instead of blocking the workflow.
+- On-hand inventory is meaningful only for stockable items because it is derived from the stock-move ledger.
 
 ---
 
@@ -1386,12 +1441,32 @@ Notes:
 - Count-level audit is tracked with `created_by_user_id` and `tasked_by_user_id`.
 - Draft creation does not require assignment; if a count-level assignee is present it is reused when workflow tasks are generated.
 - Workflow task assignment uses generated `tasks.assigned_to_user_id` rather than a separate inventory-count-only task system.
-- Draft detail exposes only the next valid workflow action, defaulting to `Open` when seeded inventory stages are unchanged.
-- Submitted Inventory Counts may expose previous-stage and next-stage actions using stage names only. Previous-stage movement is Inventory Count specific and never reverses posted stock.
+- Draft detail exposes only the next valid workflow action, defaulting to `SCHEDULE` when seeded inventory stages are unchanged.
+- Submitted Inventory Counts may expose previous-stage and next-stage actions using configured button text. Previous-stage movement is Inventory Count specific and never reverses posted stock.
+- Inventory Count detail uses the shared resource-detail header plus a compact `Details` section ahead of the reusable `Materials` and `Tasks` sections. The header no longer owns counted-date / line-count / workflow-stage metadata pills; it now shows a clean workflow-status badge beside the title, while Count Date, Assigned To, and Notes live in the AJAX-autosaved `Details` section.
+- Workflow stages now separate current-state display from transition-button copy: badges and current-stage labels use `workflow_stages.name`, while workflow buttons use `workflow_stages.button_text`.
 - Inventory Count detail mounts reusable `Materials` and `Tasks` sections through shared `js-crud-section` payload/config rendering; the `Tasks` section is not bespoke markup, uses the existing `tasks.complete` route contract, disables the shared dots menu through config, always shows `Assigned By`, then swaps `Assigned To` for `Completed By` once the task is completed, and shows a visible inline `Complete` action only while the task is incomplete and completable.
+- Inventory Count detail `Materials` section uses the shared compact add-row contract in Draft: a reusable combobox on the left plus a `+` button on the right adds an existing selected material line through AJAX and must not open Material or Item creation.
+- Inventory Count detail `Materials` rows use two mutually exclusive modes: Draft rows use a direct inline rounded `x-mark` remove action instead of the vertical-dots row menu, while submitted workflow-stage rows hide removal and expose an AJAX Qty input on the right side instead.
+- Draft Inventory Count detail `Materials` rows do not show QTY labels or QTY inputs, and workflow-stage rows do not show remove actions.
+- Inventory Count detail `Details` metadata may still be updated after workflow entry, but posting / inventory-effect stages remain mutation-locked.
+- Seeded Inventory Count workflow stages now use `SCHEDULED` and `COMPLETED` as stage names, with `SCHEDULE` and `COMPLETE` as the corresponding workflow button text.
+- Entering any workflow stage hides the Inventory Count Materials combobox add row and server-side line creation is rejected.
+- Workflow-stage Inventory Count QTY edits use the existing line update route, normalize counted quantities to canonical scale 6, and return refreshed row payloads for immediate shared-section updates.
+- Workflow-stage Inventory Count QTY inputs display using the counted item's base UoM display precision instead of raw canonical scale-6 storage.
+- Successful workflow-stage Inventory Count QTY AJAX saves show a transient row-scoped green check-circle immediately before the `QTY` label and do not show that success state on failed saves.
+- Blank Inventory Count Materials notes render nothing; the detail row no longer shows `Notes: —`.
+- Draft Inventory Count line removal stays AJAX-first and returns `deleted_line_id` plus remaining lines so the shared section can remove the row immediately without a page refresh.
+- Stockable Materials detail pages may mount an `Inventory Counts` reusable CRUD section that lists count lines for the current material, shows count date / assigned user / UOM / counted quantity, and uses the shared section plus-button to open the same shared Inventory Count create slide-over contract and open-create event path used by the Inventory Counts index page.
+- Successful empty `Inventory Counts` section loads must render only the configured empty state; `Unable to load records.` is reserved for actual fetch failures.
+- Material-scoped Inventory Count creation may prefill the current material server-side and redirect to the created Inventory Count detail page when `show_url` is returned.
+- Stockable Material detail pages may also render a compact inventory stats strip directly under the header. That strip always shows `On Hand` and `Net Qty`, then conditionally adds `Open Sales Orders Qty`, `Open Purchase Orders Qty`, and `Open Make Orders Impact` only when the item qualifies.
+- Material detail net quantity uses the formula `on hand - open sales + open purchase + open make outputs - open make ingredients`, with all quantity math kept at canonical scale 6 and displayed through the shared quantity formatter.
+- Open make-order output in that stats strip and in the inventory availability read model uses `expected_output_qty`, while completed make-order output reaches `On Hand` and `Net Qty` through ledger stock moves that use `actual_output_qty` when present.
 - Shared section metadata rendering filters explicit empty metadata values so mutually exclusive task-row labels do not render placeholder rows.
 - Inventory Count index `Status` reflects the current workflow stage label rather than the posted lifecycle label.
 - Count lines may leave `counted_quantity` blank during draft/setup, but posting must fail until every line has a quantity.
+- Posting inventory counts creates stock moves only for stockable count lines.
 - The direct `/inventory/counts/{count}/post` route remains a compatibility path and may move the count to the Inventory inventory-effect stage before posting.
 
 ---
@@ -1668,6 +1743,11 @@ General receiving, purchase-order posting, or later stock adjustments.
 **Public Interface:**  
 - `ItemController::store()`  
 - `InventoryCount::stockMoves()`  
+
+**Rules:**  
+- Positive starting quantity for a stockable material creates an immediately completed and posted `Initial Stock` inventory count.
+- The opening-balance stock effect should reuse the existing inventory-count posting behavior instead of creating a disconnected one-off inventory mutation.
+- Non-stockable materials must reject starting quantity input instead of silently ignoring it.
 
 **Public Interface:**  
 - `RecipeVersion::lines()`  
@@ -2915,7 +2995,8 @@ Static pages, or domain workflows that exceed generic CRUD concerns.
 - Blade index shells remain mount-only for CRUD concerns and must provide a bounded viewport-height container for the shared CRUD module.  
 - CRUD pages that use the shared import abstraction emit a separate `data-import-config` contract instead of embedding import internals into the CRUD config.  
 - `data-crud-root` must fill the available bounded height with `h-full` / `min-h-0`-compatible layout so the shared renderer can size its records pane correctly.  
-- The shared CRUD renderer owns toolbar layout, search input, create/import/export buttons, sticky desktop headers, record table/cards, empty states, and row action menus.  
+- The shared CRUD renderer owns toolbar layout, search input, create/import/export buttons, sticky desktop headers, record table/cards, empty states, and row-level action rendering.  
+- The shared CRUD renderer may render either the default vertical-dots row menu or one direct inline icon button when the CRUD config opts into that row-action mode.  
 - Toolbar and page chrome remain outside the records scroller; the records/results area is the only scrollable region for CRUD list rendering.  
 - Desktop and mobile variants follow the same scroll-containment contract: header/toolbar stays fixed in the component shell while only records scroll.  
 - Shared export helpers own export panel markup, open/close/reset lifecycle, scope selection, validation/error display, config-driven URL building, and export submission wiring without introducing global state.  

@@ -1120,24 +1120,16 @@ class RecipeController extends Controller
                 'canCreate' => $canExecute && $hasCurrentPublishedVersion,
             ],
             'createAction' => [
-                'type' => 'form',
+                'type' => 'custom',
+                'handlerKey' => 'createMakeOrder',
                 'title' => 'Create Make Order',
                 'description' => 'Recipe: ' . $recipe->name . '. Make orders created from this recipe always use recipes.current_version_id.',
-                'submitLabel' => 'Create Make Order',
             ],
             'endpoints' => [
                 'list' => route('manufacturing.recipes.make-orders.index', $recipe),
                 'create' => route('manufacturing.recipes.make-orders.store', $recipe),
             ],
-            'fields' => [
-                [
-                    'name' => 'runs',
-                    'label' => 'Runs',
-                    'type' => 'text',
-                    'required' => true,
-                    'rowGroup' => '',
-                ],
-            ],
+            'fields' => [],
             'rowLayout' => [
                 'primaryText' => [
                     'field' => 'display.recipeNameText',
@@ -1215,10 +1207,11 @@ class RecipeController extends Controller
             : (string) $recipe->output_quantity;
         $versionStatus = $displayVersion?->status ?? ($recipe->is_active ? '—' : RecipeVersion::STATUS_ARCHIVED);
         $recipeType = $displayVersion?->recipe_type ?? $recipe->recipe_type;
+        $displayVersionNumber = $displayVersion?->versionNumberDisplay() ?? '—';
         $canMake = $canExecute
             && $currentVersion !== null
             && $currentVersion->recipe_type === Recipe::TYPE_MANUFACTURING;
-        $availableActions = [];
+        $availableActions = ['view'];
         if ($canMake) {
             $availableActions[] = 'make';
         }
@@ -1239,6 +1232,7 @@ class RecipeController extends Controller
                 : '—',
             'recipe_type' => $recipeType,
             'recipe_type_label' => $recipeType ? Recipe::labelForRecipeType($recipeType) : '—',
+            'display_version_number_display' => $displayVersionNumber,
             'current_version_id' => $currentVersion?->id,
             'current_version_number' => $currentVersion?->version_number,
             'current_version_number_display' => $currentVersion?->versionNumberDisplay() ?? '—',
@@ -2188,7 +2182,16 @@ class RecipeController extends Controller
             ->orderByDesc('updated_at')
             ->orderByDesc('id')
             ->get()
-            ->map(fn (Recipe $recipe): array => $this->recipePayload($recipe, $canManage, $canExecute))
+            ->map(function (Recipe $recipe) use ($canManage, $canExecute): array {
+                $row = $this->recipePayload($recipe, $canManage, $canExecute);
+
+                $row['available_actions'] = array_values(array_filter(
+                    $row['available_actions'] ?? [],
+                    static fn (string $actionId): bool => $actionId !== 'view'
+                ));
+
+                return $row;
+            })
             ->values()
             ->all();
 

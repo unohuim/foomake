@@ -3,16 +3,27 @@
 declare(strict_types=1);
 
 use App\Models\Item;
+use App\Models\ItemPurchaseOption;
+use App\Models\InventoryCount;
+use App\Models\InventoryCountLine;
 use App\Models\MakeOrder;
+use App\Models\MakeOrderLine;
 use App\Models\Permission;
-use App\Models\Recipe;
+use App\Models\PurchaseOrder;
+use App\Models\PurchaseOrderLine;
 use App\Models\RecipeVersion;
+use App\Models\Recipe;
 use App\Models\RecipeVersionLine;
 use App\Models\Role;
+use App\Models\SalesOrder;
+use App\Models\SalesOrderLine;
+use App\Models\StockMove;
+use App\Models\Supplier;
 use App\Models\Tenant;
 use App\Models\Uom;
 use App\Models\UomCategory;
 use App\Models\User;
+use App\Models\Customer;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -73,6 +84,18 @@ beforeEach(function (): void {
 
     $this->makeUom = function (Tenant $tenant, array $attributes = []): Uom {
         $suffix = 'msm-' . $this->uomCounter . '-' . Str::lower(Str::random(4));
+        $symbol = $attributes['symbol'] ?? $suffix;
+
+        if (array_key_exists('symbol', $attributes)) {
+            $existing = Uom::query()
+                ->where('tenant_id', $tenant->id)
+                ->where('symbol', $symbol)
+                ->first();
+
+            if ($existing) {
+                return $existing;
+            }
+        }
 
         $category = UomCategory::query()->create([
             'tenant_id' => $tenant->id,
@@ -83,7 +106,7 @@ beforeEach(function (): void {
             'tenant_id' => $tenant->id,
             'uom_category_id' => $category->id,
             'name' => $attributes['name'] ?? 'Uom ' . $suffix,
-            'symbol' => $attributes['symbol'] ?? $suffix,
+            'symbol' => $symbol,
             'display_precision' => $attributes['display_precision'] ?? 1,
         ]);
 
@@ -97,6 +120,7 @@ beforeEach(function (): void {
             'tenant_id' => $tenant->id,
             'name' => $attributes['name'] ?? 'Material ' . $this->itemCounter,
             'base_uom_id' => $uom->id,
+            'is_stockable' => false,
             'is_purchasable' => false,
             'is_sellable' => false,
             'is_manufacturable' => false,
@@ -153,12 +177,17 @@ beforeEach(function (): void {
     };
 
     $this->makeMakeOrder = function (Tenant $tenant, Recipe $recipe, array $attributes = []): MakeOrder {
+        $runs = (string) ($attributes['runs'] ?? $attributes['output_quantity'] ?? '2.000000');
+        $recipeOutputQuantity = (string) ($recipe->currentVersion?->output_quantity ?? $recipe->output_quantity ?? '0.000000');
+
         $makeOrder = MakeOrder::query()->create(array_merge([
             'tenant_id' => $tenant->id,
             'recipe_id' => $recipe->id,
             'recipe_version_id' => $recipe->current_version_id,
             'output_item_id' => $recipe->item_id,
-            'output_quantity' => $attributes['output_quantity'] ?? '2.000000',
+            'runs' => $runs,
+            'expected_output_qty' => bcmul($runs, $recipeOutputQuantity, 6),
+            'actual_output_qty' => $attributes['actual_output_qty'] ?? $attributes['actual_output_quantity'] ?? null,
             'status' => $attributes['status'] ?? MakeOrder::STATUS_DRAFT,
             'created_by_user_id' => $attributes['created_by_user_id'] ?? null,
             'made_by_user_id' => $attributes['made_by_user_id'] ?? null,
@@ -167,6 +196,124 @@ beforeEach(function (): void {
         $this->makeOrderCounter++;
 
         return $makeOrder;
+    };
+
+    $this->makeCustomer = function (Tenant $tenant, array $attributes = []): Customer {
+        return Customer::query()->create(array_merge([
+            'tenant_id' => $tenant->id,
+            'name' => 'Customer ' . Str::random(6),
+            'status' => Customer::STATUS_ACTIVE,
+            'customer_type' => Customer::TYPE_BUSINESS,
+        ], $attributes));
+    };
+
+    $this->makeSalesOrder = function (Tenant $tenant, Customer $customer, array $attributes = []): SalesOrder {
+        return SalesOrder::query()->create(array_merge([
+            'tenant_id' => $tenant->id,
+            'customer_id' => $customer->id,
+            'status' => SalesOrder::STATUS_OPEN,
+        ], $attributes));
+    };
+
+    $this->makeSalesOrderLine = function (Tenant $tenant, SalesOrder $order, Item $item, string $quantity): SalesOrderLine {
+        return SalesOrderLine::query()->create([
+            'tenant_id' => $tenant->id,
+            'sales_order_id' => $order->id,
+            'item_id' => $item->id,
+            'quantity' => $quantity,
+            'unit_price_cents' => 100,
+            'unit_price_currency_code' => 'USD',
+            'line_total_cents' => '100.000000',
+        ]);
+    };
+
+    $this->makeSupplier = function (Tenant $tenant, array $attributes = []): Supplier {
+        return Supplier::query()->create(array_merge([
+            'tenant_id' => $tenant->id,
+            'company_name' => 'Supplier ' . Str::random(6),
+        ], $attributes));
+    };
+
+    $this->makePurchaseOption = function (Tenant $tenant, Item $item, Uom $uom, Supplier $supplier, array $attributes = []): ItemPurchaseOption {
+        return ItemPurchaseOption::query()->create(array_merge([
+            'tenant_id' => $tenant->id,
+            'item_id' => $item->id,
+            'supplier_id' => $supplier->id,
+            'pack_uom_id' => $uom->id,
+            'pack_quantity' => '1.000000',
+            'is_active' => true,
+        ], $attributes));
+    };
+
+    $this->makePurchaseOrder = function (Tenant $tenant, Supplier $supplier, array $attributes = []): PurchaseOrder {
+        return PurchaseOrder::query()->create(array_merge([
+            'tenant_id' => $tenant->id,
+            'supplier_id' => $supplier->id,
+            'status' => PurchaseOrder::STATUS_OPEN,
+            'po_subtotal_cents' => 0,
+            'po_grand_total_cents' => 0,
+        ], $attributes));
+    };
+
+    $this->makePurchaseOrderLine = function (
+        Tenant $tenant,
+        PurchaseOrder $purchaseOrder,
+        Item $item,
+        ItemPurchaseOption $purchaseOption,
+        int $packCount = 1
+    ): PurchaseOrderLine {
+        return PurchaseOrderLine::query()->create([
+            'tenant_id' => $tenant->id,
+            'purchase_order_id' => $purchaseOrder->id,
+            'item_id' => $item->id,
+            'item_purchase_option_id' => $purchaseOption->id,
+            'pack_count' => $packCount,
+            'unit_price_cents' => 100,
+            'line_subtotal_cents' => 100,
+            'unit_price_amount' => 100,
+            'unit_price_currency_code' => 'USD',
+            'converted_unit_price_amount' => 100,
+            'fx_rate' => '1.000000',
+            'fx_rate_as_of' => now()->toDateString(),
+        ]);
+    };
+
+    $this->makeStockMove = function (Tenant $tenant, Item $item, string $quantity): StockMove {
+        return StockMove::query()->create([
+            'tenant_id' => $tenant->id,
+            'item_id' => $item->id,
+            'uom_id' => $item->base_uom_id,
+            'quantity' => $quantity,
+            'type' => 'inventory_count_adjustment',
+            'status' => 'POSTED',
+        ]);
+    };
+
+    $this->makeInventoryCount = function (Tenant $tenant, User $assignedUser, array $attributes = []): InventoryCount {
+        return InventoryCount::query()->create(array_merge([
+            'tenant_id' => $tenant->id,
+            'created_by_user_id' => $assignedUser->id,
+            'tasked_by_user_id' => $assignedUser->id,
+            'assigned_to_user_id' => $assignedUser->id,
+            'counted_at' => now()->subDay(),
+            'notes' => null,
+        ], $attributes));
+    };
+
+    $this->makeInventoryCountLine = function (
+        Tenant $tenant,
+        InventoryCount $count,
+        Item $item,
+        string $countedQuantity = '1.000000',
+        array $attributes = []
+    ): InventoryCountLine {
+        return InventoryCountLine::query()->create(array_merge([
+            'tenant_id' => $tenant->id,
+            'inventory_count_id' => $count->id,
+            'item_id' => $item->id,
+            'counted_quantity' => $countedQuantity,
+            'notes' => null,
+        ], $attributes));
     };
 
     $this->getShow = function (?User $user, Item $item) {
@@ -189,6 +336,10 @@ beforeEach(function (): void {
 
     $this->postMakeOrder = function (User $user, array $payload) {
         return $this->actingAs($user)->postJson(route('manufacturing.make-orders.store'), $payload);
+    };
+
+    $this->postMaterialInventoryCount = function (User $user, Item $item, array $payload = []) {
+        return $this->actingAs($user)->postJson(route('materials.inventory-counts.store', $item), $payload);
     };
 
     $this->extractPayload = function ($response, string $payloadId): array {
@@ -216,6 +367,13 @@ beforeEach(function (): void {
         $section = $payload['sections'][$sectionKey] ?? null;
 
         return is_array($section) ? $section : [];
+    };
+
+    $this->extractInventoryStats = function ($response): array {
+        $payload = ($this->extractMaterialPayload)($response);
+        $stats = $payload['inventoryStats'] ?? null;
+
+        return is_array($stats) ? $stats : [];
     };
 
     $this->getSectionList = function (User $user, array $sectionConfig) {
@@ -710,6 +868,13 @@ it('26. material detail recipe make action creates a make order directly and ret
         ->and(bcadd((string) DB::table('make_order_lines')->where('make_order_id', $makeOrderId)->value('planned_quantity'), '0', 6))->toBe('3.000000');
 });
 
+it('26aa. material detail recipe make action uses direct create and redirect instead of opening the make order slide over', function (): void {
+    $pageSource = file_get_contents(resource_path('js/pages/materials-show.js'));
+
+    expect($pageSource)->toContain("await pageState?.createMakeOrderFromUrl(record.make_url || '');")
+        ->and($pageSource)->not->toContain("action.handlerKey === 'createMakeOrder') {\n                    pageState?.openMakeOrderCreate");
+});
+
 it('26a. material detail recipe make is hidden when the recipe has no current published version', function (): void {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
@@ -736,6 +901,63 @@ it('26a. material detail recipe make is hidden when the recipe has no current pu
             'runs' => '2.000000',
         ])
         ->assertStatus(422);
+});
+
+it('26b. material detail recipe rows show published status and current version badges instead of the old active badge', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $uom = ($this->makeUom)($tenant, ['display_precision' => 2]);
+    $item = ($this->makeItem)($tenant, $uom, ['is_manufacturable' => true]);
+    $recipe = ($this->makeRecipe)($tenant, $item, ['name' => 'Badge Recipe']);
+    $version = ($this->makeRecipeVersion)($tenant, $recipe, [
+        'status' => RecipeVersion::STATUS_PUBLISHED,
+        'version_number' => 102,
+    ]);
+    ($this->publishRecipeVersion)($recipe, $version);
+
+    ($this->grantPermissions)($user, ['inventory-materials-view', 'inventory-recipes-view']);
+
+    $section = ($this->extractSection)(($this->getShow)($user, $item), 'recipes');
+    $response = ($this->getSectionList)($user, $section)->assertOk();
+
+    expect($section['rowLayout']['badges'][0]['field'] ?? null)->toBe('display.statusText')
+        ->and($section['rowLayout']['badges'][1]['field'] ?? null)->toBe('display.versionText')
+        ->and($response->json('data.0.version_status'))->toBe(RecipeVersion::STATUS_PUBLISHED)
+        ->and($response->json('data.0.current_version_number_display'))->toBe('1.02');
+
+    $pageSource = file_get_contents(resource_path('js/pages/materials-show.js'));
+    $recipeStateBlockStart = strpos($pageSource, 'const recipeStateDisplay = (record) => {');
+    $makeOrderStatusBlockStart = strpos($pageSource, 'const makeOrderStatusDisplay = (record) => {');
+
+    expect($recipeStateBlockStart)->not->toBeFalse()
+        ->and($makeOrderStatusBlockStart)->not->toBeFalse();
+
+    $recipeStateBlock = substr($pageSource, $recipeStateBlockStart, $makeOrderStatusBlockStart - $recipeStateBlockStart);
+
+    expect($pageSource)->toContain('versionText')
+        ->and($recipeStateBlock)->not->toContain("text: 'Active'");
+});
+
+it('26c. material detail recipe rows keep the vertical dots menu by exposing view as an available action on every row', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $uom = ($this->makeUom)($tenant);
+    $item = ($this->makeItem)($tenant, $uom, ['is_manufacturable' => true]);
+    ($this->makeRecipe)($tenant, $item, ['name' => 'View Only Recipe']);
+
+    ($this->grantPermissions)($user, ['inventory-materials-view', 'inventory-recipes-view']);
+
+    $section = ($this->extractSection)(($this->getShow)($user, $item), 'recipes');
+    $response = ($this->getSectionList)($user, $section)->assertOk();
+
+    expect($response->json('data.0.available_actions'))->toContain('view')
+        ->and($section['actions'][0]['id'] ?? null)->toBe('view');
+
+    $sharedSource = file_get_contents(resource_path('js/lib/js-crud-section.js'));
+
+    expect($sharedSource)->toContain('visibleActions(record).length > 0')
+        ->and($sharedSource)->toContain('stroke-linecap="round"')
+        ->and($sharedSource)->toContain('M12 6.75');
 });
 
 it('27. make orders section lists only make orders whose recipe outputs this material', function (): void {
@@ -889,7 +1111,7 @@ it('32. make order rows show total output quantity as runs multiplied by recipe 
         'output_quantity' => '1.250000',
     ]);
     ($this->publishRecipeVersion)($recipe, $version);
-    ($this->makeMakeOrder)($tenant, $recipe, ['output_quantity' => '2.000000']);
+    ($this->makeMakeOrder)($tenant, $recipe, ['runs' => '2.000000']);
 
     ($this->grantPermissions)($user, ['inventory-materials-view', 'inventory-make-orders-view']);
 
@@ -908,7 +1130,7 @@ it('33. make order runs display with zero decimals', function (): void {
     $uom = ($this->makeUom)($tenant);
     $material = ($this->makeItem)($tenant, $uom, ['is_manufacturable' => true]);
     $recipe = ($this->makeRecipe)($tenant, $material);
-    ($this->makeMakeOrder)($tenant, $recipe, ['output_quantity' => '3.000000']);
+    ($this->makeMakeOrder)($tenant, $recipe, ['runs' => '3.000000']);
 
     ($this->grantPermissions)($user, ['inventory-materials-view', 'inventory-make-orders-view']);
 
@@ -940,6 +1162,644 @@ it('35. make orders section visibility is gated by inventory make orders view', 
     ($this->grantPermissions)($user, ['inventory-materials-view']);
 
     expect(($this->extractSection)(($this->getShow)($user, $item), 'makeOrders'))->toBe([]);
+});
+
+it('35a. non stockable material detail hides the inventory counts section', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $uom = ($this->makeUom)($tenant);
+    $item = ($this->makeItem)($tenant, $uom, ['is_stockable' => false]);
+
+    ($this->grantPermissions)($user, ['inventory-materials-view', 'inventory-adjustments-view']);
+
+    expect(($this->extractSection)(($this->getShow)($user, $item), 'inventoryCounts'))->toBe([]);
+});
+
+it('35aa. non stockable material detail hides the inventory stats strip', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $uom = ($this->makeUom)($tenant);
+    $item = ($this->makeItem)($tenant, $uom, ['is_stockable' => false]);
+
+    ($this->grantPermissions)($user, ['inventory-materials-view']);
+
+    $response = ($this->getShow)($user, $item)->assertOk();
+
+    expect(($this->extractInventoryStats)($response))->toBe([])
+        ->and($response->getContent())->not->toContain('data-material-inventory-stats');
+});
+
+it('35ab. stockable material detail shows the inventory stats strip under the header', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $uom = ($this->makeUom)($tenant, ['display_precision' => 2, 'symbol' => 'kg']);
+    $item = ($this->makeItem)($tenant, $uom, ['is_stockable' => true]);
+
+    ($this->grantPermissions)($user, ['inventory-materials-view']);
+
+    $response = ($this->getShow)($user, $item)->assertOk();
+    $content = $response->getContent();
+
+    expect(($this->extractInventoryStats)($response)['cards'] ?? null)->toBeArray()
+        ->and($content)->toContain('data-material-inventory-stats')
+        ->and(strpos($content, 'data-material-inventory-stats'))->toBeGreaterThan(
+            strpos($content, 'data-resource-detail-header')
+        );
+});
+
+it('35ac. stockable material inventory stats always show on hand and net qty cards', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $uom = ($this->makeUom)($tenant, ['display_precision' => 2, 'symbol' => 'kg']);
+    $item = ($this->makeItem)($tenant, $uom, ['is_stockable' => true]);
+
+    ($this->grantPermissions)($user, ['inventory-materials-view']);
+
+    $cards = collect(($this->extractInventoryStats)(($this->getShow)($user, $item))['cards'] ?? []);
+
+    expect($cards->pluck('label')->all())->toContain('On Hand')
+        ->and($cards->pluck('label')->all())->toContain('Net Qty');
+});
+
+it('35ad. sellable stockable material shows an open sales orders qty card', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $uom = ($this->makeUom)($tenant, ['display_precision' => 2, 'symbol' => 'kg']);
+    $item = ($this->makeItem)($tenant, $uom, ['is_stockable' => true, 'is_sellable' => true]);
+    $customer = ($this->makeCustomer)($tenant);
+    $order = ($this->makeSalesOrder)($tenant, $customer, ['status' => SalesOrder::STATUS_OPEN]);
+    ($this->makeSalesOrderLine)($tenant, $order, $item, '2.500000');
+
+    ($this->grantPermissions)($user, ['inventory-materials-view']);
+
+    $cards = collect(($this->extractInventoryStats)(($this->getShow)($user, $item))['cards'] ?? []);
+
+    expect($cards->pluck('label')->all())->toContain('Open Sales Orders Qty')
+        ->and($cards->firstWhere('key', 'open_sales')['quantity'])->toBe('2.500000');
+});
+
+it('35ae. non sellable stockable material does not show a sales orders card', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $uom = ($this->makeUom)($tenant);
+    $item = ($this->makeItem)($tenant, $uom, ['is_stockable' => true, 'is_sellable' => false]);
+
+    ($this->grantPermissions)($user, ['inventory-materials-view']);
+
+    expect(collect(($this->extractInventoryStats)(($this->getShow)($user, $item))['cards'] ?? [])->pluck('label')->all())
+        ->not->toContain('Open Sales Orders Qty');
+});
+
+it('35af. purchasable stockable material shows an open purchase orders qty card', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $uom = ($this->makeUom)($tenant, ['display_precision' => 2, 'symbol' => 'kg']);
+    $item = ($this->makeItem)($tenant, $uom, ['is_stockable' => true, 'is_purchasable' => true]);
+    $supplier = ($this->makeSupplier)($tenant);
+    $purchaseOption = ($this->makePurchaseOption)($tenant, $item, $uom, $supplier, ['pack_quantity' => '2.000000']);
+    $purchaseOrder = ($this->makePurchaseOrder)($tenant, $supplier, ['status' => PurchaseOrder::STATUS_OPEN]);
+    ($this->makePurchaseOrderLine)($tenant, $purchaseOrder, $item, $purchaseOption, 3);
+
+    ($this->grantPermissions)($user, ['inventory-materials-view']);
+
+    $cards = collect(($this->extractInventoryStats)(($this->getShow)($user, $item))['cards'] ?? []);
+
+    expect($cards->pluck('label')->all())->toContain('Open Purchase Orders Qty')
+        ->and($cards->firstWhere('key', 'open_purchase')['quantity'])->toBe('6.000000');
+});
+
+it('35ag. non purchasable stockable material does not show a purchase orders card', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $uom = ($this->makeUom)($tenant);
+    $item = ($this->makeItem)($tenant, $uom, ['is_stockable' => true, 'is_purchasable' => false]);
+
+    ($this->grantPermissions)($user, ['inventory-materials-view']);
+
+    expect(collect(($this->extractInventoryStats)(($this->getShow)($user, $item))['cards'] ?? [])->pluck('label')->all())
+        ->not->toContain('Open Purchase Orders Qty');
+});
+
+it('35ah. manufacturable stockable material shows an open make orders impact card', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $uom = ($this->makeUom)($tenant, ['display_precision' => 2, 'symbol' => 'kg']);
+    $item = ($this->makeItem)($tenant, $uom, ['is_stockable' => true, 'is_manufacturable' => true]);
+    $recipe = ($this->makeRecipe)($tenant, $item, ['output_quantity' => '3.000000']);
+    $version = ($this->makeRecipeVersion)($tenant, $recipe, ['status' => RecipeVersion::STATUS_PUBLISHED, 'output_quantity' => '3.000000']);
+    ($this->publishRecipeVersion)($recipe, $version);
+    ($this->makeMakeOrder)($tenant, $recipe, ['status' => MakeOrder::STATUS_DRAFT, 'runs' => '2.000000']);
+
+    ($this->grantPermissions)($user, ['inventory-materials-view']);
+
+    $cards = collect(($this->extractInventoryStats)(($this->getShow)($user, $item))['cards'] ?? []);
+
+    expect($cards->pluck('label')->all())->toContain('Open Make Orders Impact')
+        ->and($cards->firstWhere('key', 'open_make')['quantity'])->toBe('6.000000');
+});
+
+it('35ai. non manufacturable item with no open make-order relevance does not show a make-order card', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $uom = ($this->makeUom)($tenant);
+    $item = ($this->makeItem)($tenant, $uom, ['is_stockable' => true, 'is_manufacturable' => false]);
+
+    ($this->grantPermissions)($user, ['inventory-materials-view']);
+
+    expect(collect(($this->extractInventoryStats)(($this->getShow)($user, $item))['cards'] ?? [])->pluck('label')->all())
+        ->not->toContain('Open Make Orders Impact');
+});
+
+it('35aj. multi flag stockable material shows all qualifying inventory stats cards', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $uom = ($this->makeUom)($tenant, ['display_precision' => 2, 'symbol' => 'kg']);
+    $item = ($this->makeItem)($tenant, $uom, [
+        'is_stockable' => true,
+        'is_sellable' => true,
+        'is_purchasable' => true,
+        'is_manufacturable' => true,
+    ]);
+    $customer = ($this->makeCustomer)($tenant);
+    $salesOrder = ($this->makeSalesOrder)($tenant, $customer);
+    ($this->makeSalesOrderLine)($tenant, $salesOrder, $item, '1.000000');
+    $supplier = ($this->makeSupplier)($tenant);
+    $purchaseOption = ($this->makePurchaseOption)($tenant, $item, $uom, $supplier, ['pack_quantity' => '2.000000']);
+    $purchaseOrder = ($this->makePurchaseOrder)($tenant, $supplier);
+    ($this->makePurchaseOrderLine)($tenant, $purchaseOrder, $item, $purchaseOption, 1);
+    $recipe = ($this->makeRecipe)($tenant, $item, ['output_quantity' => '2.000000']);
+    $version = ($this->makeRecipeVersion)($tenant, $recipe, ['status' => RecipeVersion::STATUS_PUBLISHED, 'output_quantity' => '2.000000']);
+    ($this->publishRecipeVersion)($recipe, $version);
+    ($this->makeMakeOrder)($tenant, $recipe, ['status' => MakeOrder::STATUS_DRAFT, 'runs' => '1.000000']);
+
+    ($this->grantPermissions)($user, ['inventory-materials-view']);
+
+    expect(collect(($this->extractInventoryStats)(($this->getShow)($user, $item))['cards'] ?? [])->pluck('label')->all())
+        ->toContain('On Hand')
+        ->toContain('Net Qty')
+        ->toContain('Open Sales Orders Qty')
+        ->toContain('Open Purchase Orders Qty')
+        ->toContain('Open Make Orders Impact');
+});
+
+it('35ak. inventory stats net qty equals on hand minus open sales plus open purchase', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $uom = ($this->makeUom)($tenant, ['display_precision' => 2, 'symbol' => 'kg']);
+    $item = ($this->makeItem)($tenant, $uom, ['is_stockable' => true, 'is_sellable' => true, 'is_purchasable' => true]);
+    ($this->makeStockMove)($tenant, $item, '10.000000');
+    $customer = ($this->makeCustomer)($tenant);
+    $salesOrder = ($this->makeSalesOrder)($tenant, $customer);
+    ($this->makeSalesOrderLine)($tenant, $salesOrder, $item, '2.500000');
+    $supplier = ($this->makeSupplier)($tenant);
+    $purchaseOption = ($this->makePurchaseOption)($tenant, $item, $uom, $supplier, ['pack_quantity' => '2.000000']);
+    $purchaseOrder = ($this->makePurchaseOrder)($tenant, $supplier);
+    ($this->makePurchaseOrderLine)($tenant, $purchaseOrder, $item, $purchaseOption, 3);
+
+    ($this->grantPermissions)($user, ['inventory-materials-view']);
+
+    $stats = ($this->extractInventoryStats)(($this->getShow)($user, $item));
+
+    expect($stats['net_quantity'] ?? null)->toBe('13.500000')
+        ->and(collect($stats['cards'] ?? [])->firstWhere('key', 'net')['quantity_display'])->toBe('13.5');
+});
+
+it('35al. open make-order output quantity adds to material net qty', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $uom = ($this->makeUom)($tenant, ['display_precision' => 2, 'symbol' => 'kg']);
+    $item = ($this->makeItem)($tenant, $uom, ['is_stockable' => true, 'is_manufacturable' => true]);
+    $recipe = ($this->makeRecipe)($tenant, $item, ['output_quantity' => '4.000000']);
+    $version = ($this->makeRecipeVersion)($tenant, $recipe, ['status' => RecipeVersion::STATUS_PUBLISHED, 'output_quantity' => '4.000000']);
+    ($this->publishRecipeVersion)($recipe, $version);
+    ($this->makeMakeOrder)($tenant, $recipe, ['status' => MakeOrder::STATUS_DRAFT, 'runs' => '2.000000']);
+
+    ($this->grantPermissions)($user, ['inventory-materials-view']);
+
+    expect(($this->extractInventoryStats)(($this->getShow)($user, $item))['net_quantity'] ?? null)->toBe('8.000000');
+});
+
+it('35am. open make-order ingredient quantity subtracts from material net qty', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $uom = ($this->makeUom)($tenant, ['display_precision' => 2, 'symbol' => 'kg']);
+    $item = ($this->makeItem)($tenant, $uom, ['is_stockable' => true]);
+    $outputItem = ($this->makeItem)($tenant, $uom, ['is_manufacturable' => true]);
+    $recipe = ($this->makeRecipe)($tenant, $outputItem, ['output_quantity' => '1.000000']);
+    $version = ($this->makeRecipeVersion)($tenant, $recipe, ['status' => RecipeVersion::STATUS_PUBLISHED, 'output_quantity' => '1.000000']);
+    ($this->publishRecipeVersion)($recipe, $version);
+    $makeOrder = ($this->makeMakeOrder)($tenant, $recipe, ['status' => MakeOrder::STATUS_DRAFT, 'runs' => '1.000000']);
+    MakeOrderLine::query()->create([
+        'tenant_id' => $tenant->id,
+        'make_order_id' => $makeOrder->id,
+        'input_item_id' => $item->id,
+        'uom_id' => $uom->id,
+        'planned_quantity' => '5.500000',
+        'line_type' => MakeOrderLine::TYPE_RECIPE,
+    ]);
+
+    ($this->grantPermissions)($user, ['inventory-materials-view']);
+
+    $stats = ($this->extractInventoryStats)(($this->getShow)($user, $item));
+
+    expect($stats['net_quantity'] ?? null)->toBe('-5.500000')
+        ->and(collect($stats['cards'] ?? [])->firstWhere('key', 'open_make')['quantity'])->toBe('-5.500000');
+});
+
+it('35an. mixed make-order input and output impact calculates correctly', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $uom = ($this->makeUom)($tenant, ['display_precision' => 2, 'symbol' => 'kg']);
+    $item = ($this->makeItem)($tenant, $uom, ['is_stockable' => true, 'is_manufacturable' => true]);
+
+    $outputRecipe = ($this->makeRecipe)($tenant, $item, ['output_quantity' => '3.000000']);
+    $outputVersion = ($this->makeRecipeVersion)($tenant, $outputRecipe, ['status' => RecipeVersion::STATUS_PUBLISHED, 'output_quantity' => '3.000000']);
+    ($this->publishRecipeVersion)($outputRecipe, $outputVersion);
+    ($this->makeMakeOrder)($tenant, $outputRecipe, ['status' => MakeOrder::STATUS_DRAFT, 'runs' => '2.000000']);
+
+    $otherOutputItem = ($this->makeItem)($tenant, $uom, ['is_manufacturable' => true]);
+    $inputRecipe = ($this->makeRecipe)($tenant, $otherOutputItem, ['output_quantity' => '1.000000']);
+    $inputVersion = ($this->makeRecipeVersion)($tenant, $inputRecipe, ['status' => RecipeVersion::STATUS_PUBLISHED, 'output_quantity' => '1.000000']);
+    ($this->publishRecipeVersion)($inputRecipe, $inputVersion);
+    $inputMakeOrder = ($this->makeMakeOrder)($tenant, $inputRecipe, ['status' => MakeOrder::STATUS_DRAFT, 'runs' => '1.000000']);
+    MakeOrderLine::query()->create([
+        'tenant_id' => $tenant->id,
+        'make_order_id' => $inputMakeOrder->id,
+        'input_item_id' => $item->id,
+        'uom_id' => $uom->id,
+        'planned_quantity' => '1.500000',
+        'line_type' => MakeOrderLine::TYPE_RECIPE,
+    ]);
+
+    ($this->grantPermissions)($user, ['inventory-materials-view']);
+
+    expect(($this->extractInventoryStats)(($this->getShow)($user, $item))['net_quantity'] ?? null)->toBe('4.500000');
+});
+
+it('35ao. completed and cancelled records are excluded from material inventory stats and tenant isolation is preserved', function (): void {
+    $tenant = ($this->makeTenant)();
+    $otherTenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $uom = ($this->makeUom)($tenant, ['display_precision' => 2, 'symbol' => 'kg']);
+    $otherUom = ($this->makeUom)($otherTenant, ['display_precision' => 2, 'symbol' => 'kg']);
+    $item = ($this->makeItem)($tenant, $uom, [
+        'is_stockable' => true,
+        'is_sellable' => true,
+        'is_purchasable' => true,
+        'is_manufacturable' => true,
+    ]);
+    $otherItem = ($this->makeItem)($otherTenant, $otherUom, [
+        'is_stockable' => true,
+        'name' => $item->name,
+    ]);
+    ($this->makeStockMove)($tenant, $item, '5.000000');
+    ($this->makeStockMove)($otherTenant, $otherItem, '99.000000');
+
+    $customer = ($this->makeCustomer)($tenant);
+    ($this->makeSalesOrderLine)(
+        $tenant,
+        ($this->makeSalesOrder)($tenant, $customer, ['status' => SalesOrder::STATUS_OPEN]),
+        $item,
+        '1.000000'
+    );
+    ($this->makeSalesOrderLine)(
+        $tenant,
+        ($this->makeSalesOrder)($tenant, $customer, ['status' => SalesOrder::STATUS_COMPLETED]),
+        $item,
+        '8.000000'
+    );
+    ($this->makeSalesOrderLine)(
+        $tenant,
+        ($this->makeSalesOrder)($tenant, $customer, ['status' => SalesOrder::STATUS_CANCELLED]),
+        $item,
+        '9.000000'
+    );
+
+    $supplier = ($this->makeSupplier)($tenant);
+    $purchaseOption = ($this->makePurchaseOption)($tenant, $item, $uom, $supplier, ['pack_quantity' => '2.000000']);
+    ($this->makePurchaseOrderLine)(
+        $tenant,
+        ($this->makePurchaseOrder)($tenant, $supplier, ['status' => PurchaseOrder::STATUS_OPEN]),
+        $item,
+        $purchaseOption,
+        2
+    );
+    ($this->makePurchaseOrderLine)(
+        $tenant,
+        ($this->makePurchaseOrder)($tenant, $supplier, ['status' => PurchaseOrder::STATUS_RECEIVED]),
+        $item,
+        $purchaseOption,
+        10
+    );
+    ($this->makePurchaseOrderLine)(
+        $tenant,
+        ($this->makePurchaseOrder)($tenant, $supplier, ['status' => PurchaseOrder::STATUS_CANCELLED]),
+        $item,
+        $purchaseOption,
+        11
+    );
+
+    $recipe = ($this->makeRecipe)($tenant, $item, ['output_quantity' => '2.000000']);
+    $version = ($this->makeRecipeVersion)($tenant, $recipe, ['status' => RecipeVersion::STATUS_PUBLISHED, 'output_quantity' => '2.000000']);
+    ($this->publishRecipeVersion)($recipe, $version);
+    ($this->makeMakeOrder)($tenant, $recipe, ['status' => MakeOrder::STATUS_DRAFT, 'runs' => '2.000000']);
+    ($this->makeMakeOrder)($tenant, $recipe, ['status' => MakeOrder::STATUS_MADE, 'runs' => '9.000000']);
+    ($this->makeMakeOrder)($tenant, $recipe, ['status' => MakeOrder::STATUS_CANCELLED, 'runs' => '10.000000']);
+
+    $otherCustomer = ($this->makeCustomer)($otherTenant);
+    ($this->makeSalesOrderLine)(
+        $otherTenant,
+        ($this->makeSalesOrder)($otherTenant, $otherCustomer, ['status' => SalesOrder::STATUS_OPEN]),
+        $otherItem,
+        '50.000000'
+    );
+
+    ($this->grantPermissions)($user, ['inventory-materials-view']);
+
+    expect(($this->extractInventoryStats)(($this->getShow)($user, $item))['net_quantity'] ?? null)->toBe('12.000000');
+});
+
+it('35ap. material inventory stats use actual make-order output when a made order stores it', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $uom = ($this->makeUom)($tenant, ['display_precision' => 2, 'symbol' => 'kg']);
+    $item = ($this->makeItem)($tenant, $uom, ['is_stockable' => true, 'is_manufacturable' => true]);
+    $recipe = ($this->makeRecipe)($tenant, $item, ['output_quantity' => '10.000000']);
+    $version = ($this->makeRecipeVersion)($tenant, $recipe, ['status' => RecipeVersion::STATUS_PUBLISHED, 'output_quantity' => '10.000000']);
+    ($this->publishRecipeVersion)($recipe, $version);
+    $makeOrder = ($this->makeMakeOrder)($tenant, $recipe, [
+        'status' => MakeOrder::STATUS_SCHEDULED,
+        'runs' => '3.000000',
+    ]);
+
+    ($this->grantPermissions)($user, ['inventory-materials-view', 'inventory-make-orders-execute']);
+
+    $this->actingAs($user)
+        ->postJson(route('manufacturing.make-orders.make', $makeOrder), [
+            'actual_output_qty' => '27.125000',
+        ])
+        ->assertOk();
+
+    $stats = ($this->extractInventoryStats)(($this->getShow)($user, $item));
+
+    expect($stats['on_hand_quantity'] ?? null)->toBe('27.125000')
+        ->and($stats['net_quantity'] ?? null)->toBe('27.125000')
+        ->and(collect($stats['cards'] ?? [])->firstWhere('key', 'net')['quantity_display'])->toBe('27.1');
+});
+
+it('35aq. material inventory stats fall back to expected make-order output when a made order has no actual output quantity', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $uom = ($this->makeUom)($tenant, ['display_precision' => 2, 'symbol' => 'kg']);
+    $item = ($this->makeItem)($tenant, $uom, ['is_stockable' => true, 'is_manufacturable' => true]);
+    $recipe = ($this->makeRecipe)($tenant, $item, ['output_quantity' => '4.000000']);
+    $version = ($this->makeRecipeVersion)($tenant, $recipe, ['status' => RecipeVersion::STATUS_PUBLISHED, 'output_quantity' => '4.000000']);
+    ($this->publishRecipeVersion)($recipe, $version);
+    $makeOrder = ($this->makeMakeOrder)($tenant, $recipe, [
+        'status' => MakeOrder::STATUS_SCHEDULED,
+        'runs' => '2.000000',
+    ]);
+
+    ($this->grantPermissions)($user, ['inventory-materials-view', 'inventory-make-orders-execute']);
+
+    $this->actingAs($user)
+        ->postJson(route('manufacturing.make-orders.make', $makeOrder))
+        ->assertOk();
+
+    $stats = ($this->extractInventoryStats)(($this->getShow)($user, $item));
+
+    expect($makeOrder->fresh()->actual_output_qty)->toBeNull()
+        ->and($stats['on_hand_quantity'] ?? null)->toBe('8.000000')
+        ->and($stats['net_quantity'] ?? null)->toBe('8.000000');
+});
+
+it('35ar. material inventory stats keep expected ingredient demand while actual make-order output increases net quantity', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $uom = ($this->makeUom)($tenant, ['display_precision' => 2, 'symbol' => 'kg']);
+    $item = ($this->makeItem)($tenant, $uom, ['is_stockable' => true, 'is_manufacturable' => true]);
+
+    $outputRecipe = ($this->makeRecipe)($tenant, $item, ['output_quantity' => '10.000000']);
+    $outputVersion = ($this->makeRecipeVersion)($tenant, $outputRecipe, ['status' => RecipeVersion::STATUS_PUBLISHED, 'output_quantity' => '10.000000']);
+    ($this->publishRecipeVersion)($outputRecipe, $outputVersion);
+    $madeOrder = ($this->makeMakeOrder)($tenant, $outputRecipe, [
+        'status' => MakeOrder::STATUS_SCHEDULED,
+        'runs' => '3.000000',
+    ]);
+
+    $otherOutputItem = ($this->makeItem)($tenant, $uom, ['is_manufacturable' => true]);
+    $inputRecipe = ($this->makeRecipe)($tenant, $otherOutputItem, ['output_quantity' => '1.000000']);
+    $inputVersion = ($this->makeRecipeVersion)($tenant, $inputRecipe, ['status' => RecipeVersion::STATUS_PUBLISHED, 'output_quantity' => '1.000000']);
+    ($this->publishRecipeVersion)($inputRecipe, $inputVersion);
+    $openOrder = ($this->makeMakeOrder)($tenant, $inputRecipe, [
+        'status' => MakeOrder::STATUS_DRAFT,
+        'runs' => '1.000000',
+    ]);
+
+    MakeOrderLine::query()->create([
+        'tenant_id' => $tenant->id,
+        'make_order_id' => $openOrder->id,
+        'input_item_id' => $item->id,
+        'uom_id' => $uom->id,
+        'planned_quantity' => '1.500000',
+        'line_type' => MakeOrderLine::TYPE_RECIPE,
+    ]);
+
+    ($this->grantPermissions)($user, ['inventory-materials-view', 'inventory-make-orders-execute']);
+
+    $this->actingAs($user)
+        ->postJson(route('manufacturing.make-orders.make', $madeOrder), [
+            'actual_output_qty' => '27.125000',
+        ])
+        ->assertOk();
+
+    $stats = ($this->extractInventoryStats)(($this->getShow)($user, $item));
+
+    expect($stats['on_hand_quantity'] ?? null)->toBe('27.125000')
+        ->and($stats['open_make_output_quantity'] ?? null)->toBe('0.000000')
+        ->and($stats['open_make_ingredient_quantity'] ?? null)->toBe('1.500000')
+        ->and($stats['net_quantity'] ?? null)->toBe('25.625000');
+});
+
+it('35b. stockable material detail shows an inventory counts section using the shared reusable detail section pattern', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $uom = ($this->makeUom)($tenant);
+    $item = ($this->makeItem)($tenant, $uom, ['is_stockable' => true]);
+
+    ($this->grantPermissions)($user, ['inventory-materials-view', 'inventory-adjustments-view', 'inventory-adjustments-execute']);
+
+    $response = ($this->getShow)($user, $item)->assertOk();
+    $section = ($this->extractSection)($response, 'inventoryCounts');
+    $viewSource = file_get_contents(resource_path('views/materials/show.blade.php'));
+
+    expect($section['resource'] ?? null)->toBe('material-inventory-counts')
+        ->and($section['title'] ?? null)->toBe('Inventory Counts')
+        ->and($section['permissions']['canCreate'] ?? null)->toBeTrue()
+        ->and($section['createAction']['submitLabel'] ?? null)->toBe('Create Count')
+        ->and($section['createAction']['handlerKey'] ?? null)->toBe('openInventoryCountCreate')
+        ->and($viewSource)->toContain('data-section-key="inventoryCounts"');
+});
+
+it('35c. stockable material inventory counts rows show count date assignee uom and counted quantity', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant, ['name' => 'Counter User']);
+    $uom = ($this->makeUom)($tenant, ['name' => 'Kilogram', 'symbol' => 'kg', 'display_precision' => 2]);
+    $item = ($this->makeItem)($tenant, $uom, ['is_stockable' => true]);
+    $count = ($this->makeInventoryCount)($tenant, $user, ['counted_at' => now()->setDate(2026, 5, 10)->setTime(9, 30)]);
+    ($this->makeInventoryCountLine)($tenant, $count, $item, '4.500000');
+
+    ($this->grantPermissions)($user, ['inventory-materials-view', 'inventory-adjustments-view']);
+
+    $response = ($this->getSectionList)(
+        $user,
+        ($this->extractSection)(($this->getShow)($user, $item), 'inventoryCounts')
+    )->assertOk();
+
+    expect($response->json('data.0.counted_at'))->toContain('2026-05-10')
+        ->and($response->json('data.0.assigned_to_user_name'))->toBe('Counter User')
+        ->and($response->json('data.0.uom_symbol'))->toBe('kg')
+        ->and($response->json('data.0.counted_quantity_display'))->toBe('4.5');
+});
+
+it('35d. material detail inventory counts create endpoint scopes the created count to the current material and returns the detail redirect url', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $uom = ($this->makeUom)($tenant, ['display_precision' => 2]);
+    $item = ($this->makeItem)($tenant, $uom, ['is_stockable' => true]);
+
+    ($this->grantPermissions)($user, ['inventory-materials-view', 'inventory-adjustments-execute']);
+
+    $response = ($this->postMaterialInventoryCount)($user, $item, [
+        'counted_at' => '2026-05-20T10:15',
+        'assigned_to_user_id' => $user->id,
+    ])->assertCreated();
+
+    $countId = (int) $response->json('count.id');
+    $line = InventoryCountLine::query()->where('inventory_count_id', $countId)->first();
+
+    expect($line)->not->toBeNull()
+        ->and($line?->item_id)->toBe($item->id)
+        ->and($line?->counted_quantity)->toBeNull()
+        ->and($response->json('count.show_url'))->toBe(route('inventory.counts.show', $countId));
+});
+
+it('35e. empty stockable material inventory counts section uses the normal empty state and not the load error message contract', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $uom = ($this->makeUom)($tenant);
+    $item = ($this->makeItem)($tenant, $uom, ['is_stockable' => true]);
+
+    ($this->grantPermissions)($user, ['inventory-materials-view', 'inventory-adjustments-view']);
+
+    $response = ($this->getShow)($user, $item)->assertOk();
+    $section = ($this->extractSection)($response, 'inventoryCounts');
+    $listResponse = ($this->getSectionList)($user, $section)->assertOk();
+    $sharedSectionSource = file_get_contents(resource_path('js/lib/js-crud-section.js'));
+
+    expect($section['emptyState'] ?? null)->toBe('No inventory counts include this material yet.')
+        ->and($listResponse->json('data'))->toBe([])
+        ->and($sharedSectionSource)->toContain("x-show=\"!isLoading && records.length === 0\"")
+        ->and($sharedSectionSource)->toContain("x-show=\"sectionError\"")
+        ->and($sharedSectionSource)->toContain("if (!response.ok) {\n                this.sectionError = 'Unable to load records.';")
+        ->and($sharedSectionSource)->toContain("this.records = asArray(data.data).map((record) => this.normalizeRow(record));");
+});
+
+it('35f. material detail inventory counts only show an error message when the shared section load actually fails', function (): void {
+    $sharedSectionSource = file_get_contents(resource_path('js/lib/js-crud-section.js'));
+
+    expect($sharedSectionSource)->toContain("if (!response.ok) {\n                this.sectionError = 'Unable to load records.';")
+        ->and($sharedSectionSource)->toContain("} catch (error) {\n            this.sectionError = 'Unable to load records.';")
+        ->and($sharedSectionSource)->not->toContain("this.sectionError = 'Unable to load records.';\n            this.records = [];")
+        ->and($sharedSectionSource)->toContain('action: this.section.createAction,');
+});
+
+it('35g. material detail inventory counts section reuses the inventory counts shared create slide-over contract from the index page', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant, ['name' => 'Counter User']);
+    $uom = ($this->makeUom)($tenant, ['name' => 'Kilogram', 'symbol' => 'kg']);
+    $item = ($this->makeItem)($tenant, $uom, ['is_stockable' => true, 'name' => 'Scoped Material']);
+
+    ($this->grantPermissions)($user, ['inventory-materials-view', 'inventory-adjustments-view', 'inventory-adjustments-execute']);
+
+    $response = ($this->getShow)($user, $item)->assertOk();
+    $payload = ($this->extractMaterialPayload)($response);
+    $section = ($this->extractSection)($response, 'inventoryCounts');
+    $materialShowSource = file_get_contents(resource_path('views/materials/show.blade.php'));
+    $inventoryIndexSource = file_get_contents(resource_path('views/inventory/counts/index.blade.php'));
+    $pageSource = file_get_contents(resource_path('js/pages/materials-show.js'));
+
+    expect($section['createAction']['type'] ?? null)->toBe('custom')
+        ->and($section['createAction']['handlerKey'] ?? null)->toBe('openInventoryCountCreate')
+        ->and($payload['inventoryCountCreate']['storeUrl'] ?? null)->toBe(route('materials.inventory-counts.store', $item))
+        ->and(data_get($payload, 'inventoryCountCreate.users.0.id'))->toBe($user->id)
+        ->and($payload['inventoryCountCreate']['scopedItem']['id'] ?? null)->toBe($item->id)
+        ->and($payload['inventoryCountCreate']['scopedItem']['name'] ?? null)->toBe('Scoped Material')
+        ->and($payload['inventoryCountCreate']['scopedItem']['uomSymbol'] ?? null)->toBe('kg')
+        ->and($materialShowSource)->toContain("inventory.counts.partials.count-form")
+        ->and($inventoryIndexSource)->toContain("inventory.counts.partials.count-form")
+        ->and($materialShowSource)->toContain('<x-slot name="overlays">')
+        ->and($materialShowSource)->toContain('data-material-inventory-count-create-root')
+        ->and($materialShowSource)->toContain('x-data="materialInventoryCountCreate"')
+        ->and($response->getContent())->toContain('role="dialog"')
+        ->and($response->getContent())->toContain('Inventory Count')
+        ->and($pageSource)->toContain("let inventoryCountCreateState = null;")
+        ->and($pageSource)->toContain("Alpine.data('materialInventoryCountCreate', () => ({")
+        ->and($pageSource)->toContain('inventoryCountCreateState = this;')
+        ->and($pageSource)->toContain("const openInventoryCountCreate = () => {")
+        ->and($pageSource)->toContain("inventoryCountCreateState.openCreate();")
+        ->and($pageSource)->toContain("if (!action || action.handlerKey !== 'openInventoryCountCreate') {")
+        ->and($pageSource)->toContain('openInventoryCountCreate();')
+        ->and($pageSource)->toContain('showCountForm: false,')
+        ->and($pageSource)->toContain('this.showCountForm = Boolean(this.form.action);')
+        ->and($pageSource)->toContain("action: this.inventoryCountStoreUrl || ''")
+        ->and($pageSource)->not->toContain('counted_quantity:');
+});
+
+it('35h. material detail inventory counts create contract redirects to the created inventory count detail page after success', function (): void {
+    $pageSource = file_get_contents(resource_path('js/pages/materials-show.js'));
+
+    expect($pageSource)->toContain("const showUrl = asString(data?.count?.show_url);")
+        ->and($pageSource)->toContain('window.location.assign(showUrl);');
+});
+
+it('35ha. material detail inventory counts does not introduce a material only simplified create field into the shared slide over', function (): void {
+    $materialShowSource = file_get_contents(resource_path('views/materials/show.blade.php'));
+    $inventoryIndexSource = file_get_contents(resource_path('views/inventory/counts/index.blade.php'));
+
+    expect($materialShowSource)->not->toContain("'showCountedQuantity' => true")
+        ->and($inventoryIndexSource)->not->toContain("'showCountedQuantity' => true");
+});
+
+it('35i. material detail inventory counts section enforces permissions and tenant isolation', function (): void {
+    $tenant = ($this->makeTenant)();
+    $otherTenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $otherUser = ($this->makeUser)($otherTenant);
+    $uom = ($this->makeUom)($tenant);
+    $otherUom = ($this->makeUom)($otherTenant);
+    $item = ($this->makeItem)($tenant, $uom, ['is_stockable' => true]);
+    $otherItem = ($this->makeItem)($otherTenant, $otherUom, ['is_stockable' => true]);
+
+    ($this->grantPermissions)($user, ['inventory-materials-view']);
+    ($this->grantPermissions)($otherUser, ['inventory-materials-view', 'inventory-adjustments-view', 'inventory-adjustments-execute']);
+
+    $this->actingAs($user)
+        ->getJson(route('materials.inventory-counts.index', $item))
+        ->assertForbidden();
+
+    $this->actingAs($otherUser)
+        ->getJson(route('materials.inventory-counts.index', $item))
+        ->assertNotFound();
+
+    $this->actingAs($otherUser)
+        ->postJson(route('materials.inventory-counts.store', $item), [
+            'counted_at' => '2026-05-20T10:15',
+            'counted_quantity' => '1.000000',
+        ])
+        ->assertNotFound();
+
+    expect(route('materials.inventory-counts.index', $otherItem))->not->toBe('');
 });
 
 it('36. resource detail pages use a shared resource detail layout component', function (): void {

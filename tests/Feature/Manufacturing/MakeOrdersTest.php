@@ -61,6 +61,7 @@ beforeEach(function () {
             'tenant_id' => $tenant->id,
             'name' => $name,
             'base_uom_id' => $uom->id,
+            'is_stockable' => true,
             'is_purchasable' => false,
             'is_sellable' => false,
             'is_manufacturable' => $manufacturable,
@@ -128,12 +129,17 @@ beforeEach(function () {
     };
 
     $this->makeOrder = function (Tenant $tenant, Recipe $recipe, User $user, array $overrides = []): MakeOrder {
+        $runs = (string) ($overrides['runs'] ?? $overrides['output_quantity'] ?? '1.000000');
+        $recipeOutputQuantity = (string) ($recipe->currentVersion?->output_quantity ?? $recipe->output_quantity ?? '0.000000');
+
         $makeOrder = MakeOrder::query()->forceCreate(array_merge([
             'tenant_id' => $tenant->id,
             'recipe_id' => $recipe->id,
             'recipe_version_id' => $recipe->current_version_id,
             'output_item_id' => $recipe->item_id,
-            'output_quantity' => '1.000000',
+            'runs' => $runs,
+            'expected_output_qty' => bcmul($runs, $recipeOutputQuantity, 6),
+            'actual_output_qty' => $overrides['actual_output_qty'] ?? $overrides['actual_output_quantity'] ?? null,
             'status' => 'DRAFT',
             'due_date' => null,
             'scheduled_at' => null,
@@ -154,7 +160,7 @@ beforeEach(function () {
                     'uom_id' => $versionLine->uom_id,
                     'planned_quantity' => bcmul(
                         (string) $versionLine->quantity,
-                        (string) $makeOrder->output_quantity,
+                        (string) $makeOrder->runs,
                         6
                     ),
                     'actual_quantity' => null,
@@ -190,8 +196,8 @@ beforeEach(function () {
     $this->createManufacturingWorkflowStages = function (
         Tenant $tenant,
         array $stages = [
-            ['key' => 'production', 'name' => 'Production', 'sort_order' => 10, 'is_inventory_effect_stage' => true],
-            ['key' => 'completed', 'name' => 'Completed', 'sort_order' => 20, 'is_inventory_effect_stage' => false],
+            ['key' => 'production', 'name' => 'Production', 'button_text' => 'Production', 'sort_order' => 10, 'is_inventory_effect_stage' => true],
+            ['key' => 'completed', 'name' => 'Completed', 'button_text' => 'Completed', 'sort_order' => 20, 'is_inventory_effect_stage' => false],
         ]
     ): array {
         $domain = WorkflowDomain::query()->firstOrCreate(
@@ -206,6 +212,7 @@ beforeEach(function () {
                 'key' => $stage['key'],
             ], [
                 'name' => $stage['name'],
+                'button_text' => $stage['button_text'] ?? $stage['name'],
                 'description' => $stage['name'] . ' stage.',
                 'sort_order' => $stage['sort_order'],
                 'is_active' => true,
@@ -257,6 +264,10 @@ beforeEach(function () {
             'due_date' => $dueDate,
         ]);
     };
+
+    $this->updateMakeOrderDetails = function (User $user, MakeOrder $makeOrder, array $payload) {
+        return $this->actingAs($user)->patchJson(route('manufacturing.make-orders.details.update', $makeOrder), $payload);
+    };
 });
 
 test('guests are redirected to login for make orders routes', function () {
@@ -286,6 +297,18 @@ test('make orders schema includes nullable workflow_stage_id after migrations', 
         ->and((int) ($columnInfo->notnull ?? 1))->toBe(0);
 });
 
+test('make orders schema includes canonical runs expected_output_qty and nullable actual_output_qty after migrations', function () {
+    expect(Schema::hasColumn('make_orders', 'runs'))->toBeTrue()
+        ->and(Schema::hasColumn('make_orders', 'expected_output_qty'))->toBeTrue()
+        ->and(Schema::hasColumn('make_orders', 'actual_output_qty'))->toBeTrue();
+
+    $columnInfo = collect(DB::select("PRAGMA table_info('make_orders')"))
+        ->firstWhere('name', 'actual_output_qty');
+
+    expect($columnInfo)->not->toBeNull()
+        ->and((int) ($columnInfo->notnull ?? 1))->toBe(0);
+});
+
 test('make orders schema workflow_stage_id references workflow_stages and does not expose assigned_to_user_id', function () {
     $foreignKeys = collect(DB::select("PRAGMA foreign_key_list('make_orders')"));
     $workflowStageForeignKey = $foreignKeys->firstWhere('from', 'workflow_stage_id');
@@ -301,8 +324,14 @@ test('make order model uses workflowStage and madeByUser relations for workflow 
     expect($makeOrder->workflowStage()->getForeignKeyName())->toBe('workflow_stage_id')
         ->and($makeOrder->madeByUser()->getForeignKeyName())->toBe('made_by_user_id')
         ->and(in_array('workflow_stage_id', $makeOrder->getFillable(), true))->toBeTrue()
+        ->and(in_array('runs', $makeOrder->getFillable(), true))->toBeTrue()
+        ->and(in_array('expected_output_qty', $makeOrder->getFillable(), true))->toBeTrue()
+        ->and(in_array('actual_output_qty', $makeOrder->getFillable(), true))->toBeTrue()
         ->and(in_array('made_by_user_id', $makeOrder->getFillable(), true))->toBeTrue()
-        ->and(in_array('assigned_to_user_id', $makeOrder->getFillable(), true))->toBeFalse();
+        ->and(in_array('assigned_to_user_id', $makeOrder->getFillable(), true))->toBeFalse()
+        ->and(array_key_exists('runs', $makeOrder->getCasts()))->toBeTrue()
+        ->and(array_key_exists('expected_output_qty', $makeOrder->getCasts()))->toBeTrue()
+        ->and(array_key_exists('actual_output_qty', $makeOrder->getCasts()))->toBeTrue();
 });
 
 test('users without inventory-make-orders-view cannot access make orders index', function () {
@@ -353,7 +382,7 @@ test('view permission can access make orders index and payload lists tenant scop
     $recipe = ($this->makeRecipe)($tenant, $output, true, 'Batch of Patties');
 
     ($this->makeOrder)($tenant, $recipe, $user, [
-        'output_quantity' => '2.500000',
+        'runs' => '2.500000',
         'status' => 'DRAFT',
     ]);
 
@@ -415,7 +444,7 @@ test('make orders index is tenant scoped and empty state returns empty payload l
     $recipeB = ($this->makeRecipe)($tenantB, $outputB, true);
 
     ($this->makeOrder)($tenantB, $recipeB, ($this->makeUser)($tenantB), [
-        'output_quantity' => '1.000000',
+        'runs' => '1.000000',
         'status' => 'DRAFT',
     ]);
 
@@ -428,7 +457,7 @@ test('make orders index is tenant scoped and empty state returns empty payload l
     expect($payload['recipes'])->toBeArray();
 
     ($this->makeOrder)($tenantA, $recipeA, $userA, [
-        'output_quantity' => '3.000000',
+        'runs' => '3.000000',
         'status' => 'DRAFT',
     ]);
 
@@ -463,7 +492,7 @@ test('list payload includes due date recipe name runs output item workflow state
     $output = ($this->makeItem)($tenant, $uom, 'Patties', true);
     $recipe = ($this->makeRecipe)($tenant, $output, true, 'Patty Batch', '12.500000');
     $makeOrder = ($this->makeOrder)($tenant, $recipe, $user, [
-        'output_quantity' => '2.000000',
+        'runs' => '2.000000',
         'status' => 'SCHEDULED',
         'workflow_stage_id' => $workflowStage->id,
         'due_date' => '2026-02-12',
@@ -508,7 +537,7 @@ test('list payload displays draft as the visible workflow state when workflow_st
     $output = ($this->makeItem)($tenant, $uom, 'Sauce', true);
     $recipe = ($this->makeRecipe)($tenant, $output, true, 'Sauce Batch', '4.000000');
     $makeOrder = ($this->makeOrder)($tenant, $recipe, $user, [
-        'output_quantity' => '2.000000',
+        'runs' => '2.000000',
         'status' => MakeOrder::STATUS_SCHEDULED,
         'workflow_stage_id' => null,
         'due_date' => '2026-02-12',
@@ -559,7 +588,7 @@ test('list qty calculation uses recipe output quantity multiplied by runs with c
     $output = ($this->makeItem)($tenant, $uom, 'Sauce', true);
     $recipe = ($this->makeRecipe)($tenant, $output, true, 'Sauce Batch', '1.234500');
     $makeOrder = ($this->makeOrder)($tenant, $recipe, $user, [
-        'output_quantity' => '2.500000',
+        'runs' => '2.500000',
         'status' => 'DRAFT',
     ]);
 
@@ -579,7 +608,7 @@ test('list qty calculation does not assume float math for small decimals', funct
     $output = ($this->makeItem)($tenant, $uom, 'Spice Mix', true);
     $recipe = ($this->makeRecipe)($tenant, $output, true, 'Spice Batch', '0.100000');
     $makeOrder = ($this->makeOrder)($tenant, $recipe, $user, [
-        'output_quantity' => '0.200000',
+        'runs' => '0.200000',
         'status' => 'DRAFT',
     ]);
 
@@ -601,7 +630,7 @@ test('edit updates the existing make order and returns the selected record paylo
     $recipe = ($this->makeRecipe)($tenant, $output, true, 'Bread Batch', '10.000000');
     $recipeTwo = ($this->makeRecipe)($tenant, $outputTwo, true, 'Bun Batch', '6.000000');
     $makeOrder = ($this->makeOrder)($tenant, $recipe, $user, [
-        'output_quantity' => '1.500000',
+        'runs' => '1.500000',
         'status' => 'SCHEDULED',
         'due_date' => '2026-02-01',
         'scheduled_at' => now(),
@@ -624,7 +653,8 @@ test('edit updates the existing make order and returns the selected record paylo
 
     expect($makeOrder->recipe_id)->toBe($recipeTwo->id);
     expect($makeOrder->output_item_id)->toBe($outputTwo->id);
-    expect($makeOrder->output_quantity)->toBe('3.250000');
+    expect($makeOrder->runs)->toBe('3.250000');
+    expect($makeOrder->expected_output_qty)->toBe('19.500000');
     expect($makeOrder->due_date?->format('Y-m-d'))->toBe('2026-02-18');
 });
 
@@ -637,7 +667,7 @@ test('edit preserves validation behavior for recipe and runs fields', function (
     $output = ($this->makeItem)($tenant, $uom, 'Bread', true);
     $recipe = ($this->makeRecipe)($tenant, $output, true, 'Bread Batch', '10.000000');
     $makeOrder = ($this->makeOrder)($tenant, $recipe, $user, [
-        'output_quantity' => '1.500000',
+        'runs' => '1.500000',
         'status' => 'DRAFT',
     ]);
 
@@ -657,6 +687,111 @@ test('edit preserves validation behavior for recipe and runs fields', function (
         ->assertJsonValidationErrors(['recipe_id']);
 });
 
+test('details quantity update recalculates expected_output_qty and canonicalizes runs when runs change', function () {
+    $tenant = ($this->makeTenant)('Tenant A');
+    $user = ($this->makeUser)($tenant);
+    ($this->grantPermission)($user, 'inventory-make-orders-execute');
+
+    $uom = ($this->makeUom)($tenant);
+    $output = ($this->makeItem)($tenant, $uom, 'Bread', true);
+    $recipe = ($this->makeRecipe)($tenant, $output, true, 'Expected Output Recipe', '4.000000');
+    $makeOrder = ($this->makeOrder)($tenant, $recipe, $user, [
+        'runs' => '2.000000',
+        'status' => MakeOrder::STATUS_DRAFT,
+    ]);
+
+    ($this->updateMakeOrderDetails)($user, $makeOrder, [
+        'field' => 'runs',
+        'runs' => '3',
+        'expected_output_qty' => '8.000000',
+        'actual_output_qty' => null,
+    ])->assertOk()
+        ->assertJsonPath('data.runs', '3.000000')
+        ->assertJsonPath('data.expected_output_qty', '12.000000');
+
+    expect($makeOrder->fresh()->runs)->toBe('3.000000')
+        ->and($makeOrder->fresh()->expected_output_qty)->toBe('12.000000');
+});
+
+test('details quantity update ignores stale submitted expected_output_qty when runs change', function () {
+    $tenant = ($this->makeTenant)('Tenant A');
+    $user = ($this->makeUser)($tenant);
+    ($this->grantPermission)($user, 'inventory-make-orders-execute');
+
+    $uom = ($this->makeUom)($tenant);
+    $output = ($this->makeItem)($tenant, $uom, 'Bread', true);
+    $recipe = ($this->makeRecipe)($tenant, $output, true, 'Manual Expected Recipe', '4.000000');
+    $makeOrder = ($this->makeOrder)($tenant, $recipe, $user, [
+        'runs' => '2.000000',
+        'expected_output_qty' => '9.500000',
+        'status' => MakeOrder::STATUS_DRAFT,
+    ]);
+
+    ($this->updateMakeOrderDetails)($user, $makeOrder, [
+        'field' => 'runs',
+        'runs' => '3.000000',
+        'expected_output_qty' => 'not-a-qty',
+        'actual_output_qty' => null,
+    ])->assertOk()
+        ->assertJsonPath('data.expected_output_qty', '12.000000');
+
+    expect($makeOrder->fresh()->runs)->toBe('3.000000')
+        ->and($makeOrder->fresh()->expected_output_qty)->toBe('12.000000');
+});
+
+test('details quantity update accepts integer style runs input and still persists canonical scale 6 runs with recalculated expected output', function () {
+    $tenant = ($this->makeTenant)('Tenant A');
+    $user = ($this->makeUser)($tenant);
+    ($this->grantPermission)($user, 'inventory-make-orders-execute');
+
+    $uom = ($this->makeUom)($tenant);
+    $output = ($this->makeItem)($tenant, $uom, 'Bread', true);
+    $recipe = ($this->makeRecipe)($tenant, $output, true, 'Integer Runs Recipe', '4.500000');
+    $makeOrder = ($this->makeOrder)($tenant, $recipe, $user, [
+        'runs' => '2.000000',
+        'status' => MakeOrder::STATUS_DRAFT,
+    ]);
+
+    ($this->updateMakeOrderDetails)($user, $makeOrder, [
+        'field' => 'runs',
+        'runs' => '6',
+    ])->assertOk()
+        ->assertJsonPath('data.runs', '6.000000')
+        ->assertJsonPath('data.expected_output_qty', '27.000000');
+
+    expect($makeOrder->fresh()->runs)->toBe('6.000000')
+        ->and($makeOrder->fresh()->expected_output_qty)->toBe('27.000000');
+});
+
+test('details quantity update rejects direct expected_output_qty edits and persists manual actual_output_qty edits', function () {
+    $tenant = ($this->makeTenant)('Tenant A');
+    $user = ($this->makeUser)($tenant);
+    ($this->grantPermission)($user, 'inventory-make-orders-execute');
+
+    $uom = ($this->makeUom)($tenant);
+    $output = ($this->makeItem)($tenant, $uom, 'Bread', true);
+    $recipe = ($this->makeRecipe)($tenant, $output, true, 'Manual Detail Edit Recipe', '4.000000');
+    $makeOrder = ($this->makeOrder)($tenant, $recipe, $user, [
+        'runs' => '2.000000',
+        'status' => MakeOrder::STATUS_SCHEDULED,
+    ]);
+
+    ($this->updateMakeOrderDetails)($user, $makeOrder, [
+        'field' => 'expected_output_qty',
+        'expected_output_qty' => '11.250000',
+    ])->assertStatus(422)
+        ->assertJsonValidationErrors(['field']);
+
+    ($this->updateMakeOrderDetails)($user, $makeOrder->fresh(), [
+        'field' => 'actual_output_qty',
+        'actual_output_qty' => '10.125',
+    ])->assertOk()
+        ->assertJsonPath('data.actual_output_qty', '10.125000');
+
+    expect($makeOrder->fresh()->expected_output_qty)->toBe('8.000000')
+        ->and($makeOrder->fresh()->actual_output_qty)->toBe('10.125000');
+});
+
 test('archive transitions an eligible make order to cancelled and removes it from the active list', function () {
     $tenant = ($this->makeTenant)('Tenant A');
     $user = ($this->makeUser)($tenant);
@@ -673,6 +808,7 @@ test('archive transitions an eligible make order to cancelled and removes it fro
 
     ($this->archiveMakeOrder)($user, $makeOrder)
         ->assertOk()
+        ->assertJsonPath('removed_id', $makeOrder->id)
         ->assertJsonPath('data.status', MakeOrder::STATUS_CANCELLED);
 
     $makeOrder->refresh();
@@ -682,6 +818,24 @@ test('archive transitions an eligible make order to cancelled and removes it fro
     $listResponse = ($this->listMakeOrders)($user)->assertOk();
 
     expect(collect($listResponse->json('data'))->pluck('id')->all())->not->toContain($makeOrder->id);
+});
+
+test('archive response returns a direct row-removal contract for ajax index updates', function () {
+    $tenant = ($this->makeTenant)('Tenant A');
+    $user = ($this->makeUser)($tenant);
+    ($this->grantPermissions)($user, ['inventory-make-orders-view', 'inventory-make-orders-execute']);
+
+    $uom = ($this->makeUom)($tenant);
+    $output = ($this->makeItem)($tenant, $uom, 'Bread', true);
+    $recipe = ($this->makeRecipe)($tenant, $output, true);
+    $makeOrder = ($this->makeOrder)($tenant, $recipe, $user, [
+        'status' => MakeOrder::STATUS_DRAFT,
+    ]);
+
+    ($this->archiveMakeOrder)($user, $makeOrder)
+        ->assertOk()
+        ->assertJsonPath('removed_id', $makeOrder->id)
+        ->assertJsonPath('message', 'Archived.');
 });
 
 test('archive requires execute permission even when view permission exists', function () {
@@ -744,6 +898,138 @@ test('archive rejects made make orders as an invalid terminal state change', fun
     $makeOrder->refresh();
 
     expect($makeOrder->status)->toBe('MADE');
+});
+
+test('line removal requires execute permission', function () {
+    $tenant = ($this->makeTenant)('Tenant A');
+    $user = ($this->makeUser)($tenant);
+
+    $uom = ($this->makeUom)($tenant);
+    $output = ($this->makeItem)($tenant, $uom, 'Bread', true);
+    $input = ($this->makeItem)($tenant, $uom, 'Salt');
+    $recipe = ($this->makeRecipe)($tenant, $output, true);
+    $makeOrder = ($this->makeOrder)($tenant, $recipe, $user);
+
+    $line = MakeOrderLine::query()->forceCreate([
+        'tenant_id' => $tenant->id,
+        'make_order_id' => $makeOrder->id,
+        'source_recipe_version_line_id' => null,
+        'input_item_id' => $input->id,
+        'uom_id' => $uom->id,
+        'planned_quantity' => '2.000000',
+        'actual_quantity' => null,
+        'line_type' => MakeOrderLine::TYPE_MANUAL_ADJUSTMENT,
+    ]);
+
+    $this->actingAs($user)
+        ->deleteJson(route('manufacturing.make-orders.lines.destroy', [$makeOrder, $line]))
+        ->assertForbidden();
+});
+
+test('line removal is tenant scoped', function () {
+    $tenantA = ($this->makeTenant)('Tenant A');
+    $tenantB = ($this->makeTenant)('Tenant B');
+    $userA = ($this->makeUser)($tenantA);
+    ($this->grantPermission)($userA, 'inventory-make-orders-execute');
+
+    $userB = ($this->makeUser)($tenantB);
+    $uomB = ($this->makeUom)($tenantB);
+    $outputB = ($this->makeItem)($tenantB, $uomB, 'Bread B', true);
+    $inputB = ($this->makeItem)($tenantB, $uomB, 'Salt B');
+    $recipeB = ($this->makeRecipe)($tenantB, $outputB, true);
+    $makeOrderB = ($this->makeOrder)($tenantB, $recipeB, $userB);
+
+    $lineB = MakeOrderLine::query()->forceCreate([
+        'tenant_id' => $tenantB->id,
+        'make_order_id' => $makeOrderB->id,
+        'source_recipe_version_line_id' => null,
+        'input_item_id' => $inputB->id,
+        'uom_id' => $uomB->id,
+        'planned_quantity' => '2.000000',
+        'actual_quantity' => null,
+        'line_type' => MakeOrderLine::TYPE_MANUAL_ADJUSTMENT,
+    ]);
+
+    $this->actingAs($userA)
+        ->deleteJson(route('manufacturing.make-orders.lines.destroy', [$makeOrderB, $lineB]))
+        ->assertNotFound();
+});
+
+test('line removal returns remaining ingredient rows for instant ui reconciliation', function () {
+    $tenant = ($this->makeTenant)('Tenant A');
+    $user = ($this->makeUser)($tenant);
+    ($this->grantPermission)($user, 'inventory-make-orders-execute');
+
+    $uom = ($this->makeUom)($tenant);
+    $output = ($this->makeItem)($tenant, $uom, 'Bread', true);
+    $inputA = ($this->makeItem)($tenant, $uom, 'Salt');
+    $inputB = ($this->makeItem)($tenant, $uom, 'Yeast');
+    $recipe = ($this->makeRecipe)($tenant, $output, true);
+    $makeOrder = ($this->makeOrder)($tenant, $recipe, $user);
+
+    $lineA = MakeOrderLine::query()->forceCreate([
+        'tenant_id' => $tenant->id,
+        'make_order_id' => $makeOrder->id,
+        'source_recipe_version_line_id' => null,
+        'input_item_id' => $inputA->id,
+        'uom_id' => $uom->id,
+        'planned_quantity' => '2.000000',
+        'actual_quantity' => null,
+        'line_type' => MakeOrderLine::TYPE_MANUAL_ADJUSTMENT,
+    ]);
+
+    $lineB = MakeOrderLine::query()->forceCreate([
+        'tenant_id' => $tenant->id,
+        'make_order_id' => $makeOrder->id,
+        'source_recipe_version_line_id' => null,
+        'input_item_id' => $inputB->id,
+        'uom_id' => $uom->id,
+        'planned_quantity' => '1.000000',
+        'actual_quantity' => null,
+        'line_type' => MakeOrderLine::TYPE_MANUAL_ADJUSTMENT,
+    ]);
+
+    $response = $this->actingAs($user)
+        ->deleteJson(route('manufacturing.make-orders.lines.destroy', [$makeOrder, $lineA]))
+        ->assertOk()
+        ->assertJsonPath('deleted_line_id', $lineA->id);
+
+    expect(collect($response->json('lines'))->pluck('id')->all())
+        ->toBe([$lineB->id])
+        ->and(collect($response->json('lines'))->pluck('id')->all())
+        ->not->toContain($lineA->id);
+});
+
+test('line removal is blocked for invalid terminal make order states', function () {
+    $tenant = ($this->makeTenant)('Tenant A');
+    $user = ($this->makeUser)($tenant);
+    ($this->grantPermission)($user, 'inventory-make-orders-execute');
+
+    $uom = ($this->makeUom)($tenant);
+    $output = ($this->makeItem)($tenant, $uom, 'Bread', true);
+    $input = ($this->makeItem)($tenant, $uom, 'Salt');
+    $recipe = ($this->makeRecipe)($tenant, $output, true);
+    $makeOrder = ($this->makeOrder)($tenant, $recipe, $user, [
+        'status' => MakeOrder::STATUS_MADE,
+    ]);
+
+    $line = MakeOrderLine::query()->forceCreate([
+        'tenant_id' => $tenant->id,
+        'make_order_id' => $makeOrder->id,
+        'source_recipe_version_line_id' => null,
+        'input_item_id' => $input->id,
+        'uom_id' => $uom->id,
+        'planned_quantity' => '2.000000',
+        'actual_quantity' => null,
+        'line_type' => MakeOrderLine::TYPE_MANUAL_ADJUSTMENT,
+    ]);
+
+    $this->actingAs($user)
+        ->deleteJson(route('manufacturing.make-orders.lines.destroy', [$makeOrder, $line]))
+        ->assertStatus(422)
+        ->assertJson([
+            'message' => 'Only draft or scheduled make orders can be edited.',
+        ]);
 });
 
 test('cancelled make orders remain terminal for schedule and make actions', function () {
@@ -837,12 +1123,15 @@ test('create draft make order validates payload and does not create stock moves'
 
     expect($makeOrder->status)->toBe('DRAFT');
     expect($makeOrder->output_item_id)->toBe($output->id);
-    expect($makeOrder->output_quantity)->toBe('2.000000');
+    expect($makeOrder->runs)->toBe('2.000000');
+    expect($makeOrder->expected_output_qty)->toBe('2.000000');
+    expect($makeOrder->actual_output_qty)->toBeNull();
     expect($makeOrder->created_by_user_id)->toBe($user->id);
     expect($makeOrder->made_by_user_id)->toBe($user->id);
     expect($makeOrder->workflow_stage_id)->toBeNull();
     expect($makeOrder->made_at)->toBeNull();
     expect($response->json('data.runs'))->toBe('2.000000');
+    expect($response->json('data.expected_output_qty'))->toBe('2.000000');
     expect($response->json('data.made_by_user_id'))->toBe($user->id);
 
     expect(StockMove::query()->count())->toBe($beforeMoves);
@@ -954,7 +1243,8 @@ test('create accepts fractional runs and stores them without float conversion', 
 
     $makeOrder = MakeOrder::query()->findOrFail($response->json('data.id'));
 
-    expect($makeOrder->output_quantity)->toBe('2.500000');
+    expect($makeOrder->runs)->toBe('2.500000')
+        ->and($makeOrder->expected_output_qty)->toBe('135.000000');
 });
 
 test('schedule enters workflow by assigning the first configured manufacturing stage and keeps stock moves unchanged', function () {
@@ -1067,7 +1357,7 @@ test('make treats make order quantity as runs and scales recipe inputs and outpu
     ($this->addRecipeLine)($tenant, $recipe, $inputB, '1.000000');
 
     $makeOrder = ($this->makeOrder)($tenant, $recipe, $user, [
-        'output_quantity' => '3.000000',
+        'runs' => '3.000000',
         'status' => 'SCHEDULED',
         'due_date' => '2026-02-01',
         'scheduled_at' => now(),
@@ -1084,6 +1374,7 @@ test('make treats make order quantity as runs and scales recipe inputs and outpu
     expect($makeOrder->status)->toBe('MADE');
     expect($makeOrder->made_at)->not->toBeNull();
     expect($makeOrder->made_by_user_id)->toBe($user->id);
+    expect($makeOrder->actual_output_qty)->toBeNull();
 
     $moves = StockMove::query()
         ->where('tenant_id', $tenant->id)
@@ -1111,6 +1402,76 @@ test('make treats make order quantity as runs and scales recipe inputs and outpu
     expect($moveByItem[$output->id]->uom_id)->toBe($output->base_uom_id);
 });
 
+test('make can persist actual output quantity and use it for the receipt stock move', function () {
+    $tenant = ($this->makeTenant)('Tenant A');
+    $user = ($this->makeUser)($tenant);
+    ($this->grantPermission)($user, 'inventory-make-orders-execute');
+
+    $uom = ($this->makeUom)($tenant);
+    $output = ($this->makeItem)($tenant, $uom, 'Soup', true);
+    $recipe = ($this->makeRecipe)($tenant, $output, true, 'Actual Output Recipe', '10.000000');
+
+    $makeOrder = ($this->makeOrder)($tenant, $recipe, $user, [
+        'runs' => '3.000000',
+        'status' => MakeOrder::STATUS_SCHEDULED,
+        'due_date' => '2026-02-01',
+        'scheduled_at' => now(),
+    ]);
+
+    $this->actingAs($user)
+        ->postJson(route('manufacturing.make-orders.make', $makeOrder), [
+            'actual_output_qty' => '27.125',
+        ])
+        ->assertOk()
+        ->assertJsonPath('data.actual_output_qty', '27.125000');
+
+    $makeOrder->refresh();
+
+    $receipt = StockMove::query()
+        ->where('tenant_id', $tenant->id)
+        ->where('source_id', $makeOrder->id)
+        ->where('source_type', MakeOrder::class)
+        ->where('item_id', $output->id)
+        ->where('type', 'receipt')
+        ->firstOrFail();
+
+    expect($makeOrder->status)->toBe(MakeOrder::STATUS_MADE)
+        ->and($makeOrder->actual_output_qty)->toBe('27.125000')
+        ->and((string) $receipt->quantity)->toBe('27.125000');
+});
+
+test('make rejects invalid actual output quantity formats', function () {
+    $tenant = ($this->makeTenant)('Tenant A');
+    $user = ($this->makeUser)($tenant);
+    ($this->grantPermission)($user, 'inventory-make-orders-execute');
+
+    $uom = ($this->makeUom)($tenant);
+    $output = ($this->makeItem)($tenant, $uom, 'Soup', true);
+    $recipe = ($this->makeRecipe)($tenant, $output, true, 'Actual Output Validation Recipe', '10.000000');
+
+    $makeOrder = ($this->makeOrder)($tenant, $recipe, $user, [
+        'runs' => '3.000000',
+        'status' => MakeOrder::STATUS_SCHEDULED,
+        'due_date' => '2026-02-01',
+        'scheduled_at' => now(),
+    ]);
+
+    $beforeMoves = StockMove::query()->count();
+
+    $this->actingAs($user)
+        ->postJson(route('manufacturing.make-orders.make', $makeOrder), [
+            'actual_output_qty' => '27.1250001',
+        ])
+        ->assertStatus(422)
+        ->assertJsonValidationErrors(['actual_output_qty']);
+
+    $makeOrder->refresh();
+
+    expect($makeOrder->actual_output_qty)->toBeNull()
+        ->and($makeOrder->status)->toBe(MakeOrder::STATUS_SCHEDULED)
+        ->and(StockMove::query()->count())->toBe($beforeMoves);
+});
+
 test('make is blocked when already made and creates no additional stock moves', function () {
     $tenant = ($this->makeTenant)('Tenant A');
     $user = ($this->makeUser)($tenant);
@@ -1124,7 +1485,7 @@ test('make is blocked when already made and creates no additional stock moves', 
     ($this->addRecipeLine)($tenant, $recipe, $input, '1.000000');
 
     $makeOrder = ($this->makeOrder)($tenant, $recipe, $user, [
-        'output_quantity' => '1.000000',
+        'runs' => '1.000000',
         'status' => 'SCHEDULED',
         'due_date' => '2026-02-01',
         'scheduled_at' => now(),
@@ -1161,7 +1522,7 @@ test('make preserves an existing make order owner when execution is performed by
     ($this->addRecipeLine)($tenant, $recipe, $input, '1.000000');
 
     $makeOrder = ($this->makeOrder)($tenant, $recipe, $owner, [
-        'output_quantity' => '1.000000',
+        'runs' => '1.000000',
         'status' => 'SCHEDULED',
         'due_date' => '2026-02-01',
         'scheduled_at' => now(),
@@ -1189,7 +1550,7 @@ test('make rejects inactive recipe', function () {
     ($this->addRecipeLine)($tenant, $recipe, $input, '1.000000');
 
     $makeOrder = ($this->makeOrder)($tenant, $recipe, $user, [
-        'output_quantity' => '1.000000',
+        'runs' => '1.000000',
         'status' => 'SCHEDULED',
         'due_date' => '2026-02-01',
         'scheduled_at' => now(),
@@ -1253,7 +1614,7 @@ test('make blocks execution when recipe output quantity is zero', function () {
     ($this->addRecipeLine)($tenant, $recipe, $input, '1.000000');
 
     $makeOrder = ($this->makeOrder)($tenant, $recipe, $user, [
-        'output_quantity' => '1.000000',
+        'runs' => '1.000000',
         'status' => 'SCHEDULED',
         'due_date' => '2026-02-01',
         'scheduled_at' => now(),
@@ -1282,7 +1643,7 @@ test('make blocks execution when runs are negative or zero on persisted orders',
     ($this->addRecipeLine)($tenant, $recipe, $input, '1.000000');
 
     $makeOrder = ($this->makeOrder)($tenant, $recipe, $user, [
-        'output_quantity' => $runs,
+        'runs' => $runs,
         'status' => 'SCHEDULED',
         'due_date' => '2026-02-01',
         'scheduled_at' => now(),
@@ -1876,6 +2237,44 @@ test('make order due date update is tenant scoped', function () {
 
     ($this->updateMakeOrderDueDate)($userA, $makeOrderB, '2026-06-10')
         ->assertNotFound();
+});
+
+test('make order details quantity update requires execute permission', function () {
+    $tenant = ($this->makeTenant)('Tenant A');
+    $viewer = ($this->makeUser)($tenant);
+    ($this->grantPermission)($viewer, 'inventory-make-orders-view');
+
+    $uom = ($this->makeUom)($tenant);
+    $output = ($this->makeItem)($tenant, $uom, 'Bread', true);
+    $recipe = ($this->makeRecipe)($tenant, $output, true, 'Workflow Recipe', '5.000000');
+    $makeOrder = ($this->makeOrder)($tenant, $recipe, $viewer, [
+        'status' => MakeOrder::STATUS_SCHEDULED,
+    ]);
+
+    ($this->updateMakeOrderDetails)($viewer, $makeOrder, [
+        'field' => 'actual_output_qty',
+        'actual_output_qty' => '4.500000',
+    ])->assertForbidden();
+});
+
+test('make order details quantity update is tenant scoped', function () {
+    $tenantA = ($this->makeTenant)('Tenant A');
+    $tenantB = ($this->makeTenant)('Tenant B');
+    $userA = ($this->makeUser)($tenantA);
+    $userB = ($this->makeUser)($tenantB);
+    ($this->grantPermissions)($userA, ['inventory-make-orders-view', 'inventory-make-orders-execute']);
+
+    $uomB = ($this->makeUom)($tenantB);
+    $outputB = ($this->makeItem)($tenantB, $uomB, 'Bread B', true);
+    $recipeB = ($this->makeRecipe)($tenantB, $outputB, true, 'Recipe B', '5.000000');
+    $makeOrderB = ($this->makeOrder)($tenantB, $recipeB, $userB, [
+        'status' => MakeOrder::STATUS_SCHEDULED,
+    ]);
+
+    ($this->updateMakeOrderDetails)($userA, $makeOrderB, [
+        'field' => 'actual_output_qty',
+        'actual_output_qty' => '4.500000',
+    ])->assertNotFound();
 });
 
 test('moving workflow stage does not erase make order owner', function () {

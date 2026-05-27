@@ -128,6 +128,10 @@ class BuildSalesOrderIssuePlanAction
         Item $item,
         string $requiredQuantity
     ): void {
+        if (! $item->is_stockable) {
+            return;
+        }
+
         $normalizedQuantity = bcadd($requiredQuantity, '0', self::SCALE);
 
         $plan[] = [
@@ -169,4 +173,3 @@ class BuildSalesOrderIssuePlanAction
         }
     }
 }
-

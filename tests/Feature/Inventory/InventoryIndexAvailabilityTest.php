@@ -274,13 +274,18 @@ beforeEach(function (): void {
         Tenant $tenant,
         Recipe $recipe,
         string $status,
-        string $outputQuantity
+        string $runs
     ): MakeOrder {
+        $recipeOutputQuantity = bcadd((string) ($recipe->output_quantity ?? '0.000000'), '0', 6);
+        $canonicalRuns = bcadd($runs, '0', 6);
+
         return MakeOrder::query()->create([
             'tenant_id' => $tenant->id,
             'recipe_id' => $recipe->id,
             'output_item_id' => $recipe->item_id,
-            'output_quantity' => $outputQuantity,
+            'runs' => $canonicalRuns,
+            'expected_output_qty' => bcmul($canonicalRuns, $recipeOutputQuantity, 6),
+            'actual_output_qty' => null,
             'status' => $status,
             'due_date' => $status === MakeOrder::STATUS_SCHEDULED ? '2026-05-22' : null,
             'scheduled_at' => $status === MakeOrder::STATUS_SCHEDULED ? now() : null,

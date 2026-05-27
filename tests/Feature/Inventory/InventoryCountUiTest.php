@@ -37,6 +37,7 @@ beforeEach(function () {
         'tenant_id' => $this->tenant->id,
         'name' => 'Flour',
         'base_uom_id' => $this->uom->id,
+        'is_stockable' => true,
         'is_purchasable' => false,
         'is_sellable' => false,
         'is_manufacturable' => false,

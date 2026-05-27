@@ -109,12 +109,16 @@ Route::middleware('auth')->group(function () {
         ->name('materials.purchase-orders.index');
     Route::get('/materials/{item}/recipes', [RecipeController::class, 'listForMaterial'])
         ->name('materials.recipes.index');
+    Route::get('/materials/{item}/inventory-counts', [ItemController::class, 'listInventoryCounts'])
+        ->name('materials.inventory-counts.index');
     Route::get('/materials/{item}/make-orders', [MakeOrderController::class, 'listForMaterial'])
         ->name('materials.make-orders.index');
     Route::post('/materials/{item}/purchase-orders', [MaterialDraftPurchaseOrderController::class, 'store'])
         ->name('materials.purchase-orders.store');
     Route::post('/materials/{item}/supplier-packages', [MaterialSupplierPackageController::class, 'store'])
         ->name('materials.supplier-packages.store');
+    Route::post('/materials/{item}/inventory-counts', [ItemController::class, 'storeInventoryCount'])
+        ->name('materials.inventory-counts.store');
     Route::patch('/materials/{item}/supplier-packages/{option}', [MaterialSupplierPackageController::class, 'update'])
         ->name('materials.supplier-packages.update');
     Route::delete('/materials/{item}/supplier-packages/{option}', [MaterialSupplierPackageController::class, 'destroy'])
@@ -207,6 +211,8 @@ Route::middleware('auth')->group(function () {
         ->name('manufacturing.make-orders.store');
     Route::patch('/manufacturing/make-orders/{makeOrder}', [MakeOrderController::class, 'update'])
         ->name('manufacturing.make-orders.update');
+    Route::patch('/manufacturing/make-orders/{makeOrder}/details', [MakeOrderController::class, 'updateDetailsQuantities'])
+        ->name('manufacturing.make-orders.details.update');
     Route::patch('/manufacturing/make-orders/{makeOrder}/due-date', [MakeOrderController::class, 'updateDueDate'])
         ->name('manufacturing.make-orders.due-date.update');
     Route::patch('/manufacturing/make-orders/{makeOrder}/assignment', [MakeOrderController::class, 'updateAssignment'])

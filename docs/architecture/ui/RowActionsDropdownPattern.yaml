@@ -2,6 +2,7 @@ name: Row Actions Dropdown Pattern
 type: UI Pattern
 location:
   - resources/views/components/dropdown.blade.php
+  - resources/js/lib/crud-page.js
 purpose: Provide contextual row-level actions such as edit and delete.
 when_to_use:
   - Tables or lists with multiple row actions
@@ -10,6 +11,7 @@ when_not_to_use:
 rules:
   - Actions are explicit and do not rely on row click.
   - Destructive actions require confirmation before submission.
+  - When a row exposes only one direct destructive AJAX-first action, a compact inline icon button may replace the vertical-dots dropdown menu.
   - Reusable detail sections may disable the vertical-dots row menu through a `showRowActionsMenu` config flag.
   - `showRowActionsMenu` defaults to enabled/true so existing section consumers keep their current row menu behavior.
   - When `showRowActionsMenu` is false, row actions should remain visible inline rather than disappearing.

@@ -246,18 +246,22 @@ class MakeOrderController extends Controller
         }
 
         $makeOrder = DB::transaction(function () use ($request, $recipe, $version, $validated): MakeOrder {
+            $runs = $this->canonicalQuantity($validated['runs']);
+
             $makeOrder = MakeOrder::query()->create([
                 'tenant_id' => $request->user()->tenant_id,
                 'recipe_id' => $recipe->id,
                 'recipe_version_id' => $version->id,
                 'output_item_id' => $recipe->item_id,
-                'output_quantity' => $validated['runs'],
+                'runs' => $runs,
+                'expected_output_qty' => $this->expectedOutputQtyForVersion($runs, $version),
+                'actual_output_qty' => null,
                 'status' => MakeOrder::STATUS_DRAFT,
                 'created_by_user_id' => $request->user()->id,
                 'made_by_user_id' => $request->user()->id,
             ]);
 
-            $this->snapshotVersionLines($makeOrder, $version, (string) $validated['runs']);
+            $this->snapshotVersionLines($makeOrder, $version, $runs);
 
             return $makeOrder->fresh(['recipe', 'recipeVersion', 'outputItem.baseUom', 'lines.inputItem.baseUom', 'workflowStage']);
         });
@@ -296,18 +300,22 @@ class MakeOrderController extends Controller
         }
 
         $makeOrder = DB::transaction(function () use ($request, $recipe, $version, $runs): MakeOrder {
+            $canonicalRuns = $this->canonicalQuantity($runs);
+
             $makeOrder = MakeOrder::query()->create([
                 'tenant_id' => $request->user()->tenant_id,
                 'recipe_id' => $recipe->id,
                 'recipe_version_id' => $version->id,
                 'output_item_id' => $recipe->item_id,
-                'output_quantity' => $runs,
+                'runs' => $canonicalRuns,
+                'expected_output_qty' => $this->expectedOutputQtyForVersion($canonicalRuns, $version),
+                'actual_output_qty' => null,
                 'status' => MakeOrder::STATUS_DRAFT,
                 'created_by_user_id' => $request->user()->id,
                 'made_by_user_id' => $request->user()->id,
             ]);
 
-            $this->snapshotVersionLines($makeOrder, $version, $runs);
+            $this->snapshotVersionLines($makeOrder, $version, $canonicalRuns);
 
             return $makeOrder->fresh(['recipe', 'recipeVersion', 'outputItem.baseUom', 'lines.inputItem.baseUom', 'workflowStage']);
         });
@@ -369,11 +377,13 @@ class MakeOrderController extends Controller
 
         DB::transaction(function () use ($makeOrderModel, $recipe, $version, $validated): void {
             $dueDate = $validated['due_date'] ?? null;
+            $runs = $this->canonicalQuantity($validated['runs']);
 
             $makeOrderModel->recipe_id = $recipe->id;
             $makeOrderModel->recipe_version_id = $version->id;
             $makeOrderModel->output_item_id = $recipe->item_id;
-            $makeOrderModel->output_quantity = $validated['runs'];
+            $makeOrderModel->runs = $runs;
+            $makeOrderModel->expected_output_qty = $this->recalculateExpectedOutputQty($version, $runs);
             $makeOrderModel->due_date = $dueDate ? Carbon::parse($dueDate)->startOfDay() : null;
             if ($makeOrderModel->workflow_stage_id === null) {
                 $makeOrderModel->status = MakeOrder::STATUS_DRAFT;
@@ -381,7 +391,7 @@ class MakeOrderController extends Controller
             $makeOrderModel->save();
 
             $makeOrderModel->lines()->delete();
-            $this->snapshotVersionLines($makeOrderModel, $version, (string) $validated['runs']);
+            $this->snapshotVersionLines($makeOrderModel, $version, $runs);
         });
 
         return response()->json([
@@ -637,7 +647,12 @@ class MakeOrderController extends Controller
     {
         Gate::authorize('inventory-make-orders-execute');
 
-        $result = DB::transaction(function () use ($request, $makeOrder): array|JsonResponse {
+        $validated = $request->validate([
+            'actual_output_qty' => ['nullable', 'string', 'regex:/^\d+(?:\.\d{1,6})?$/'],
+            'actual_output_quantity' => ['nullable', 'string', 'regex:/^\d+(?:\.\d{1,6})?$/'],
+        ]);
+
+        $result = DB::transaction(function () use ($request, $makeOrder, $validated): array|JsonResponse {
             $makeOrderModel = MakeOrder::query()
                 ->where('tenant_id', $request->user()->tenant_id)
                 ->with(['recipe', 'recipeVersion', 'outputItem', 'lines.inputItem'])
@@ -682,11 +697,16 @@ class MakeOrderController extends Controller
                 ], 'Recipe version output quantity must be greater than zero.');
             }
 
-            if (bccomp((string) $makeOrderModel->output_quantity, '0.000000', self::SCALE) !== 1) {
+            if (bccomp($this->makeOrderRuns($makeOrderModel), '0.000000', self::SCALE) !== 1) {
                 return $this->validationError([
                     'runs' => ['Runs must be greater than zero.'],
                 ], 'Runs must be greater than zero.');
             }
+
+            $actualOutputInput = $validated['actual_output_qty'] ?? $validated['actual_output_quantity'] ?? null;
+            $actualOutputQty = $actualOutputInput !== null
+                ? $this->canonicalQuantity((string) $actualOutputInput)
+                : null;
 
             foreach ($makeOrderModel->lines as $line) {
                 $inputItem = $line->inputItem;
@@ -697,30 +717,37 @@ class MakeOrderController extends Controller
                     ], 'Make order line input item is missing.');
                 }
 
+                if ($inputItem->is_stockable) {
+                    StockMove::query()->create([
+                        'tenant_id' => $makeOrderModel->tenant_id,
+                        'item_id' => $inputItem->id,
+                        'uom_id' => $line->uom_id ?? $inputItem->base_uom_id,
+                        'quantity' => bcsub('0.000000', (string) $line->planned_quantity, self::SCALE),
+                        'type' => 'issue',
+                        'source_id' => $makeOrderModel->id,
+                        'source_type' => MakeOrder::class,
+                        'status' => 'POSTED',
+                    ]);
+                }
+            }
+
+            $completedOutputQuantity = $actualOutputQty ?? $this->expectedOutputQty($makeOrderModel);
+
+            if ($makeOrderModel->outputItem?->is_stockable) {
                 StockMove::query()->create([
                     'tenant_id' => $makeOrderModel->tenant_id,
-                    'item_id' => $inputItem->id,
-                    'uom_id' => $line->uom_id ?? $inputItem->base_uom_id,
-                    'quantity' => bcsub('0.000000', (string) $line->planned_quantity, self::SCALE),
-                    'type' => 'issue',
+                    'item_id' => $makeOrderModel->output_item_id,
+                    'uom_id' => $makeOrderModel->outputItem?->base_uom_id,
+                    'quantity' => $completedOutputQuantity,
+                    'type' => 'receipt',
                     'source_id' => $makeOrderModel->id,
                     'source_type' => MakeOrder::class,
                     'status' => 'POSTED',
                 ]);
             }
 
-            StockMove::query()->create([
-                'tenant_id' => $makeOrderModel->tenant_id,
-                'item_id' => $makeOrderModel->output_item_id,
-                'uom_id' => $makeOrderModel->outputItem?->base_uom_id,
-                'quantity' => $this->totalOutputQuantity($makeOrderModel),
-                'type' => 'receipt',
-                'source_id' => $makeOrderModel->id,
-                'source_type' => MakeOrder::class,
-                'status' => 'POSTED',
-            ]);
-
             $makeOrderModel->status = MakeOrder::STATUS_MADE;
+            $makeOrderModel->actual_output_qty = $actualOutputQty;
             $makeOrderModel->made_at = now();
             $makeOrderModel->save();
 
@@ -740,6 +767,109 @@ class MakeOrderController extends Controller
         }
 
         return response()->json($result);
+    }
+
+    /**
+     * Autosave Make Order detail quantity fields from the detail page.
+     */
+    public function updateDetailsQuantities(Request $request, int $makeOrder): JsonResponse
+    {
+        Gate::authorize('inventory-make-orders-execute');
+
+        $makeOrderModel = MakeOrder::query()
+            ->where('tenant_id', $request->user()->tenant_id)
+            ->with([
+                'recipe.item.baseUom',
+                'recipeVersion',
+                'outputItem.baseUom',
+                'lines.inputItem.baseUom',
+                'workflowStage',
+                'madeByUser',
+                'taskedByUser',
+            ])
+            ->findOrFail($makeOrder);
+
+        if ($makeOrderModel->status === MakeOrder::STATUS_CANCELLED) {
+            return response()->json([
+                'message' => 'Cancelled make orders cannot be edited.',
+            ], 422);
+        }
+
+        $validated = $request->validate([
+            'field' => ['required', 'string', Rule::in(['runs', 'actual_output_qty'])],
+            'runs' => ['nullable', 'string', 'regex:/^\d+(?:\.\d{1,6})?$/'],
+            'actual_output_qty' => ['nullable', 'string', 'regex:/^\d+(?:\.\d{1,6})?$/'],
+        ]);
+
+        $field = (string) $validated['field'];
+
+        try {
+            DB::transaction(function () use ($makeOrderModel, $validated, $field): void {
+                if ($field === 'runs' && in_array($makeOrderModel->status, [MakeOrder::STATUS_MADE], true)) {
+                    throw new DomainException('Made make orders cannot change runs or expected output.');
+                }
+
+                if ($field === 'runs') {
+                    $runs = $this->canonicalQuantity((string) ($validated['runs'] ?? ''));
+
+                    if (bccomp($runs, '0.000000', self::SCALE) !== 1) {
+                        throw new DomainException('Runs must be greater than zero.');
+                    }
+
+                    $makeOrderModel->runs = $runs;
+                    $makeOrderModel->expected_output_qty = $this->recalculateExpectedOutputQty(
+                        $makeOrderModel->recipeVersion,
+                        $runs
+                    );
+                    $makeOrderModel->save();
+                    $makeOrderModel->lines()->delete();
+                    if ($makeOrderModel->recipeVersion) {
+                        $this->snapshotVersionLines($makeOrderModel, $makeOrderModel->recipeVersion, $runs);
+                    }
+
+                    return;
+                }
+
+                $actualOutputQty = $validated['actual_output_qty'] ?? null;
+                $makeOrderModel->actual_output_qty = $actualOutputQty !== null && $actualOutputQty !== ''
+                    ? $this->canonicalQuantity((string) $actualOutputQty)
+                    : null;
+                $makeOrderModel->save();
+
+                if ($makeOrderModel->status === MakeOrder::STATUS_MADE && $makeOrderModel->outputItem?->is_stockable) {
+                    $receiptQuantity = $makeOrderModel->actual_output_qty ?? $this->expectedOutputQty($makeOrderModel);
+
+                    StockMove::query()
+                        ->where('tenant_id', $makeOrderModel->tenant_id)
+                        ->where('source_id', $makeOrderModel->id)
+                        ->where('source_type', MakeOrder::class)
+                        ->where('item_id', $makeOrderModel->output_item_id)
+                        ->where('type', 'receipt')
+                        ->update([
+                            'quantity' => $receiptQuantity,
+                        ]);
+                }
+            });
+        } catch (DomainException $exception) {
+            return $this->validationError([
+                $field => [$exception->getMessage()],
+            ], $exception->getMessage());
+        }
+
+        $makeOrderModel = $makeOrderModel->fresh([
+            'recipe.item.baseUom',
+            'recipeVersion',
+            'outputItem.baseUom',
+            'lines.inputItem.baseUom',
+            'workflowStage',
+            'madeByUser',
+            'taskedByUser',
+        ]);
+
+        return response()->json([
+            'data' => $this->makeOrderDetailPayload($makeOrderModel),
+            'workflow' => $this->makeOrderWorkflowPayload($makeOrderModel, $request->user()),
+        ]);
     }
 
     /**
@@ -770,6 +900,7 @@ class MakeOrderController extends Controller
         $makeOrderModel->save();
 
         return response()->json([
+            'removed_id' => $makeOrderModel->id,
             'data' => $this->makeOrderPayload($makeOrderModel->fresh(['recipe', 'recipeVersion', 'outputItem.baseUom', 'workflowStage'])),
             'message' => 'Archived.',
         ]);
@@ -910,9 +1041,18 @@ class MakeOrderController extends Controller
             ->whereKey($line)
             ->firstOrFail();
 
+        $deletedLineId = (int) $lineModel->id;
         $lineModel->delete();
 
+        $makeOrderModel->load(['lines.inputItem.baseUom']);
+
         return response()->json([
+            'deleted_line_id' => $deletedLineId,
+            'lines' => $makeOrderModel->lines
+                ->sortBy('id')
+                ->values()
+                ->map(fn (MakeOrderLine $remainingLine): array => $this->makeOrderLinePayload($remainingLine))
+                ->all(),
             'message' => 'Removed.',
         ]);
     }
@@ -924,9 +1064,12 @@ class MakeOrderController extends Controller
      */
     private function makeOrderPayload(MakeOrder $makeOrder): array
     {
-        $totalOutputQuantity = $this->totalOutputQuantity($makeOrder);
+        $expectedOutputQty = $this->expectedOutputQty($makeOrder);
+        $runs = $this->makeOrderRuns($makeOrder);
+        $runsText = $this->compactQuantityDisplay($runs);
+        $recipeVersionOutputQty = $this->recipeVersionOutputQty($makeOrder);
         $totalOutputQuantityDisplay = QuantityFormatter::formatForUom(
-            $totalOutputQuantity,
+            $expectedOutputQty,
             $makeOrder->outputItem?->baseUom,
             1
         );
@@ -941,12 +1084,21 @@ class MakeOrderController extends Controller
             'recipe_name' => $makeOrder->recipe?->name ?? '—',
             'output_item_id' => $makeOrder->output_item_id,
             'output_item_name' => $makeOrder->outputItem?->name ?? '—',
-            'runs' => (string) $makeOrder->output_quantity,
-            'runs_display' => QuantityFormatter::format((string) $makeOrder->output_quantity, 0),
-            'qty' => $totalOutputQuantity,
+            'output_quantity' => $runs,
+            'runs' => $runs,
+            'runs_display' => $runsText,
+            'expected_output_qty' => $expectedOutputQty,
+            'expected_output_qty_display' => $totalOutputQuantityDisplay,
+            'qty' => $expectedOutputQty,
             'qty_display' => $totalOutputQuantityDisplay,
-            'total_output_quantity' => $totalOutputQuantity,
+            'total_output_quantity' => $expectedOutputQty,
             'total_output_quantity_display' => $totalOutputQuantityDisplay,
+            'actual_output_qty' => $makeOrder->actual_output_qty !== null
+                ? bcadd((string) $makeOrder->actual_output_qty, '0', self::SCALE)
+                : null,
+            'actual_output_quantity' => $makeOrder->actual_output_qty !== null
+                ? bcadd((string) $makeOrder->actual_output_qty, '0', self::SCALE)
+                : null,
             'status' => $makeOrder->status,
             'workflow_state' => $workflowState,
             'workflow_stage_id' => $makeOrder->workflow_stage_id,
@@ -956,9 +1108,11 @@ class MakeOrderController extends Controller
             'scheduled_at' => $makeOrder->scheduled_at?->format('Y-m-d H:i'),
             'made_at' => $makeOrder->made_at?->format('Y-m-d H:i'),
             'show_url' => $showUrl,
+            'recipe_version_output_qty' => $recipeVersionOutputQty,
+            'output_uom_display_precision' => (int) ($makeOrder->outputItem?->baseUom?->display_precision ?? 6),
             'display' => [
                 'recipeNameText' => $makeOrder->recipe?->name ?? 'Unnamed recipe',
-                'runsText' => QuantityFormatter::format((string) $makeOrder->output_quantity, 0),
+                'runsText' => $runsText,
                 'dueDateText' => $makeOrder->due_date?->format('Y-m-d') ?? 'No due date',
                 'totalOutputQuantityText' => $totalOutputQuantityDisplay,
                 'statusText' => $workflowState,
@@ -977,16 +1131,30 @@ class MakeOrderController extends Controller
      */
     private function makeOrderDetailPayload(MakeOrder $makeOrder): array
     {
-        $totalOutputQuantity = $this->totalOutputQuantity($makeOrder);
+        $expectedOutputQty = $this->expectedOutputQty($makeOrder);
+        $actualOutputQtyText = $makeOrder->actual_output_qty !== null
+            ? QuantityFormatter::formatForUom(
+                bcadd((string) $makeOrder->actual_output_qty, '0', self::SCALE),
+                $makeOrder->outputItem?->baseUom,
+                1
+            )
+            : '';
+        $expectedOutputQtyText = QuantityFormatter::formatForUom(
+            $expectedOutputQty,
+            $makeOrder->outputItem?->baseUom,
+            1
+        );
 
         return array_merge($this->makeOrderPayload($makeOrder), [
             'title' => 'Make Order ' . $makeOrder->id,
-            'runs_text' => QuantityFormatter::format((string) $makeOrder->output_quantity, 0),
-            'produced_quantity_text' => QuantityFormatter::formatForUom(
-                $totalOutputQuantity,
-                $makeOrder->outputItem?->baseUom,
-                1
-            ),
+            'details_update_url' => route('manufacturing.make-orders.details.update', $makeOrder),
+            'can_edit_quantities' => Gate::allows('inventory-make-orders-execute'),
+            'runs_text' => $this->compactQuantityDisplay($this->makeOrderRuns($makeOrder)),
+            'expected_output_qty_text' => $expectedOutputQtyText,
+            'actual_output_qty_text' => $actualOutputQtyText,
+            'expected_output_quantity_text' => $expectedOutputQtyText,
+            'actual_output_quantity_text' => $actualOutputQtyText,
+            'produced_quantity_text' => $expectedOutputQtyText,
         ]);
     }
 
@@ -1107,7 +1275,7 @@ class MakeOrderController extends Controller
             if ($nextStage) {
                 $nextStageAction = [
                     'id' => $nextStage->id,
-                    'label' => $nextStage->name,
+                    'label' => $nextStage->button_text ?: $nextStage->name,
                 ];
             }
         }
@@ -1208,9 +1376,79 @@ class MakeOrderController extends Controller
      */
     private function totalOutputQuantity(MakeOrder $makeOrder): string
     {
-        $recipeOutputQuantity = (string) ($makeOrder->recipeVersion?->output_quantity ?? '0.000000');
+        return $this->expectedOutputQty($makeOrder);
+    }
 
-        return bcmul((string) $makeOrder->output_quantity, $recipeOutputQuantity, self::SCALE);
+    /**
+     * Normalize a quantity string to canonical scale.
+     */
+    private function canonicalQuantity(string $quantity): string
+    {
+        return bcadd($quantity, '0', self::SCALE);
+    }
+
+    /**
+     * Resolve canonical runs for one make order.
+     */
+    private function makeOrderRuns(MakeOrder $makeOrder): string
+    {
+        return $this->canonicalQuantity((string) ($makeOrder->runs ?? $makeOrder->output_quantity ?? '0.000000'));
+    }
+
+    /**
+     * Resolve persisted expected output quantity with a safe fallback for older records.
+     */
+    private function expectedOutputQty(MakeOrder $makeOrder): string
+    {
+        if ($makeOrder->expected_output_qty !== null) {
+            return $this->canonicalQuantity((string) $makeOrder->expected_output_qty);
+        }
+
+        $recipeOutputQuantity = (string) ($makeOrder->recipeVersion?->output_quantity ?? $makeOrder->recipe?->output_quantity ?? '0.000000');
+
+        return bcmul($this->makeOrderRuns($makeOrder), $this->canonicalQuantity($recipeOutputQuantity), self::SCALE);
+    }
+
+    /**
+     * Calculate expected output quantity for one recipe version and runs value.
+     */
+    private function expectedOutputQtyForVersion(string $runs, ?RecipeVersion $version): string
+    {
+        $recipeOutputQuantity = (string) ($version?->output_quantity ?? '0.000000');
+
+        return bcmul($runs, $this->canonicalQuantity($recipeOutputQuantity), self::SCALE);
+    }
+
+    /**
+     * Recalculate expected output from the current recipe-version per-run output quantity.
+     */
+    private function recalculateExpectedOutputQty(?RecipeVersion $version, string $newRuns): string
+    {
+        return $this->expectedOutputQtyForVersion($newRuns, $version);
+    }
+
+    /**
+     * Resolve the per-run recipe output quantity for one make order.
+     */
+    private function recipeVersionOutputQty(MakeOrder $makeOrder): string
+    {
+        return $this->canonicalQuantity((string) ($makeOrder->recipeVersion?->output_quantity ?? $makeOrder->recipe?->output_quantity ?? '0.000000'));
+    }
+
+    /**
+     * Render a compact quantity string without unnecessary trailing zero decimals.
+     */
+    private function compactQuantityDisplay(string $quantity): string
+    {
+        $canonical = $this->canonicalQuantity($quantity);
+
+        if (! str_contains($canonical, '.')) {
+            return $canonical;
+        }
+
+        $trimmed = rtrim(rtrim($canonical, '0'), '.');
+
+        return $trimmed === '' ? '0' : $trimmed;
     }
 
     /**
@@ -1220,14 +1458,9 @@ class MakeOrderController extends Controller
      */
     private function crudConfig(bool $canExecute): array
     {
-        $actions = [
-            ['id' => 'view', 'label' => 'View', 'tone' => 'default'],
-        ];
-
-        if ($canExecute) {
-            $actions[] = ['id' => 'edit', 'label' => 'Edit', 'tone' => 'default'];
-            $actions[] = ['id' => 'archive', 'label' => 'Archive', 'tone' => 'warning'];
-        }
+        $actions = $canExecute
+            ? [['id' => 'archive', 'label' => 'Archive', 'tone' => 'warning']]
+            : [];
 
         return [
             'resource' => 'make-orders',
@@ -1253,12 +1486,17 @@ class MakeOrderController extends Controller
                 'createTitle' => 'Create Make Order',
                 'createAriaLabel' => 'Create Make Order',
                 'emptyState' => 'No make orders found.',
-                'actionsAriaLabel' => 'Make order actions',
+                'actionsAriaLabel' => 'Archive make order',
             ],
             'permissions' => [
                 'showExport' => false,
                 'showImport' => false,
                 'showCreate' => $canExecute,
+            ],
+            'rowActions' => [
+                'mode' => 'icon-button',
+                'icon' => 'x-mark',
+                'ariaLabel' => 'Archive make order',
             ],
             'rowDisplay' => [
                 'columns' => [

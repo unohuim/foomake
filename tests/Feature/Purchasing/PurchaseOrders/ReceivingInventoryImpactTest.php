@@ -100,6 +100,7 @@ beforeEach(function (): void {
             'tenant_id' => $tenant->id,
             'name' => $attributes['name'] ?? 'Item ' . $this->itemCounter,
             'base_uom_id' => $uom->id,
+            'is_stockable' => true,
             'is_purchasable' => true,
             'is_sellable' => false,
             'is_manufacturable' => false,
@@ -1028,4 +1029,66 @@ it('converts received pack quantity into base-unit stock move quantity', functio
     expect($stockMove)->not->toBeNull()
         ->and((string) $stockMove?->quantity)->toBe('1000.000000')
         ->and($item->onHandQuantity())->toBe('1000.000000');
+});
+
+it('still records receipt lines for non stockable items without creating stock moves', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $supplier = ($this->makeSupplier)($tenant);
+    $uom = ($this->makeUom)($tenant);
+    $item = ($this->makeItem)($tenant, $uom, ['is_stockable' => false]);
+    $option = ($this->makeOption)($tenant, $supplier, $item, $uom);
+    $order = ($this->makeOrder)($tenant, $user, $supplier);
+    $line = ($this->makeLine)($tenant, $order, $item, $option);
+
+    ($this->grantReceivePermission)($user);
+
+    ($this->receive)($user, $order, [
+        'purchase_order_line_id' => $line->id,
+        'received_quantity' => '2.000000',
+    ])->assertCreated();
+
+    $receiptLine = ($this->findReceiptLine)($line);
+
+    expect($receiptLine)->not->toBeNull()
+        ->and($receiptLine?->stock_move_id)->toBeNull()
+        ->and(StockMove::query()->count())->toBe(0);
+});
+
+it('creates stock moves only for stockable lines on mixed receipts', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $supplier = ($this->makeSupplier)($tenant);
+    $uom = ($this->makeUom)($tenant);
+    $stockableItem = ($this->makeItem)($tenant, $uom, ['name' => 'Tracked']);
+    $nonStockableItem = ($this->makeItem)($tenant, $uom, ['name' => 'Untracked', 'is_stockable' => false]);
+    $stockableOption = ($this->makeOption)($tenant, $supplier, $stockableItem, $uom);
+    $nonStockableOption = ($this->makeOption)($tenant, $supplier, $nonStockableItem, $uom, ['supplier_sku' => 'SKU-UNTRACKED']);
+    $order = ($this->makeOrder)($tenant, $user, $supplier);
+    $stockableLine = ($this->makeLine)($tenant, $order, $stockableItem, $stockableOption);
+    $nonStockableLine = ($this->makeLine)($tenant, $order, $nonStockableItem, $nonStockableOption);
+
+    ($this->grantReceivePermission)($user);
+
+    ($this->receive)($user, $order, [
+        'reference' => 'RCPT-MIX',
+        'lines' => [
+            [
+                'purchase_order_line_id' => $stockableLine->id,
+                'received_quantity' => '3.000000',
+            ],
+            [
+                'purchase_order_line_id' => $nonStockableLine->id,
+                'received_quantity' => '4.000000',
+            ],
+        ],
+    ])->assertCreated();
+
+    $stockableReceiptLine = ($this->findReceiptLine)($stockableLine);
+    $nonStockableReceiptLine = ($this->findReceiptLine)($nonStockableLine);
+
+    expect($stockableReceiptLine?->stock_move_id)->not->toBeNull()
+        ->and($nonStockableReceiptLine?->stock_move_id)->toBeNull()
+        ->and(StockMove::query()->count())->toBe(1)
+        ->and(StockMove::query()->first()?->item_id)->toBe($stockableItem->id);
 });
