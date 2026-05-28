@@ -104,10 +104,12 @@ class StockMove extends Model
 **Location:**  
 - `app/Http/Controllers/SalesProductController.php`  
 - `app/Http/Controllers/CustomerController.php`  
+- `app/Http/Controllers/SupplierController.php`
 - `app/Http/Controllers/MaterialController.php`  
 - `app/Http/Controllers/InventoryCountController.php`  
 - `resources/views/sales/products/index.blade.php`  
 - `resources/views/sales/customers/index.blade.php`  
+- `resources/views/purchasing/suppliers/index.blade.php`
 - `resources/views/materials/index.blade.php`  
 - `resources/views/inventory/counts/index.blade.php`  
 - `resources/views/manufacturing/make-orders/index.blade.php`  
@@ -116,6 +118,7 @@ class StockMove extends Model
 - `resources/js/lib/crud-page.js`  
 - `resources/js/pages/sales-products-index.js`  
 - `resources/js/pages/sales-customers-index.js`  
+- `resources/js/pages/purchasing-suppliers-index.js`
 - `resources/js/pages/materials-index.js`
 - `resources/js/pages/inventory-counts-index.js`
 - `resources/js/pages/manufacturing-make-orders.js`
@@ -151,7 +154,7 @@ $crudConfig = [
 ```
 
 Notes:
-- Products, Customers, Materials, Inventory Counts, and Make Orders are current reference implementations.
+- Products, Customers, Suppliers, Materials, Inventory Counts, and Make Orders are current reference implementations.
 - `detailUrlTemplate` is optional. When present, create flows may redirect to the created record detail page after success.
 - When `detailUrlTemplate` is absent, the existing inline success behavior such as list refresh remains the fallback.
 
@@ -162,8 +165,10 @@ Notes:
 **Location:**  
 - `resources/js/lib/js-crud-section.js`  
 - `resources/js/pages/materials-show.js`  
+- `resources/js/pages/purchasing-suppliers-show.js`
 - `resources/js/pages/inventory-count-show.js`  
 - `resources/views/materials/show.blade.php`  
+- `resources/views/purchasing/suppliers/show.blade.php`
 - `resources/views/inventory/counts/show.blade.php`  
 
 **Purpose:**  
@@ -194,6 +199,8 @@ Notes:
 - Shared compact add/search rows do not render a visible field label unless a future screen explicitly opts into one.
 - Inventory Count detail uses this pattern with a `Materials` section and a read-only `Tasks` section that reuses the existing task completion route/payload contract.
 - Material detail uses this pattern for `Supplier Packages`, `Recipes`, `Purchase Orders`, and `Make Orders`; `Supplier Packages` and `Recipes` render near the top and default open, while `Purchase Orders` and `Make Orders` render near the bottom and default collapsed.
+- Supplier detail uses this pattern for `Supplier Packages`, scoped to the current supplier. The create slide-over selects the Material while the supplier is fixed by the page context, and row actions use the shared vertical dots menu for `Edit`, `Purchase`, and `Delete`.
+- Supplier detail uses this pattern for `Purchase Orders`, scoped to purchase orders whose `supplier_id` matches the current supplier. Its `+` action posts to the existing Purchase Order create endpoint with the supplier fixed by page context and redirects to the created draft PO detail page.
 - Material detail reuses the existing section abstraction for manufacturable-only `Recipes` and `Make Orders` sections rather than introducing a bespoke accordion/detail implementation.
 - Material detail section rows expose record detail links where an existing detail surface is available, using the shared row-action `View` contract rather than bespoke row-click behavior; this applies to Supplier Package rows, Purchase Order rows, Recipe rows, and Make Order rows.
 - Material detail `Recipes` plus opens the existing recipe create slide-over in place, prefilled with the current material as the output item, and successful recipe create redirects to the created recipe detail page.
@@ -664,6 +671,7 @@ Gate::authorize('workflow-manage');
 - `resources/js/lib/crud-page.js`  
 - `resources/js/pages/sales-products-index.js`  
 - `resources/js/pages/sales-customers-index.js`
+- `resources/js/pages/purchasing-suppliers-index.js`
 
 **Purpose:**  
 Provide a shared config-driven CRUD page shell where toolbar actions, list rendering, and common AJAX behavior are owned by a reusable renderer rather than resource-specific Blade markup.
@@ -2963,8 +2971,10 @@ Vendor or generated views excluded from repository checks, plus Breeze/shared la
 - `resources/js/lib/crud-page.js`  
 - `resources/js/pages/sales-products-index.js`  
 - `resources/js/pages/sales-customers-index.js`  
+- `resources/js/pages/purchasing-suppliers-index.js`
 - `resources/views/sales/products/index.blade.php`
 - `resources/views/sales/customers/index.blade.php`
+- `resources/views/purchasing/suppliers/index.blade.php`
 
 **Purpose:**  
 Centralize a shared config-driven CRUD renderer behind server-generated page contracts while keeping Blade index pages mount-only, moving import UX and lifecycle into a shared import component, and leaving page-specific create/export behavior plus approved data adapters in each page module.
@@ -2989,6 +2999,7 @@ Static pages, or domain workflows that exceed generic CRUD concerns.
 **Current Reference Implementations:**  
 - Sales Products  
 - Sales Customers
+- Purchasing Suppliers
 - Recipes
 
 **Key Rules:**  

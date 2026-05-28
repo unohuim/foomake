@@ -144,6 +144,10 @@ beforeEach(function () {
         return $this->actingAs($user)->get(route('purchasing.suppliers.show', $supplier));
     };
 
+    $this->getSupplierPackages = function (User $user, Supplier $supplier) {
+        return $this->actingAs($user)->getJson(route('purchasing.suppliers.purchase-options.index', $supplier));
+    };
+
     $this->assertStableErrors = function ($response): void {
         $response->assertJsonStructure([
             'errors' => [
@@ -755,5 +759,12 @@ it('end-to-end: setting price shows on supplier detail', function () {
 
     ($this->getSupplierShow)($user, $supplier)
         ->assertOk()
-        ->assertSee('USD 33.00');
+        ->assertSee('data-js-crud-section-root', false)
+        ->assertSee('data-section-key="supplierPackages"', false);
+
+    $row = ($this->getSupplierPackages)($user, $supplier)
+        ->assertOk()
+        ->json('data.0');
+
+    expect($row['current_price_display'])->toBe('USD 33.00');
 });

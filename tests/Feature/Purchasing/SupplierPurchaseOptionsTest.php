@@ -147,6 +147,10 @@ beforeEach(function () {
         return $this->actingAs($user)->get(route('purchasing.suppliers.show', $supplier));
     };
 
+    $this->getList = function (User $user, Supplier $supplier) {
+        return $this->actingAs($user)->getJson(route('purchasing.suppliers.purchase-options.index', $supplier));
+    };
+
     $this->extractSupplierPayload = function ($response): array {
         $content = $response->getContent();
         preg_match('/<script[^>]+id="purchasing-suppliers-show-payload"[^>]*>(.*?)<\\/script>/s', $content, $matches);
@@ -553,11 +557,10 @@ it('deletes a supplier package and returns JSON', function () {
         'id' => $option->id,
     ]);
 
-    $response = ($this->getSupplierShow)($user, $supplier)
+    $response = ($this->getList)($user, $supplier)
         ->assertOk();
 
-    $payload = ($this->extractSupplierPayload)($response);
-    expect(collect($payload['packages'] ?? [])->pluck('id')->all())
+    expect(collect($response->json('data'))->pluck('id')->all())
         ->not()
         ->toContain($option->id);
 });
@@ -629,9 +632,10 @@ it('end-to-end: creates a package then shows it on supplier detail', function ()
         'item_id' => $item->id,
     ]);
 
-    ($this->getSupplierShow)($user, $supplier)
-        ->assertOk()
-        ->assertSee('"id":' . $optionId, false);
+    $response = ($this->getList)($user, $supplier)
+        ->assertOk();
+
+    expect(collect($response->json('data'))->pluck('id')->all())->toContain($optionId);
 });
 
 it('allows duplicate packages by default', function () {
@@ -662,10 +666,12 @@ it('allows duplicate packages by default', function () {
 
     $this->assertDatabaseCount('item_purchase_options', 2);
 
-    ($this->getSupplierShow)($user, $supplier)
-        ->assertOk()
-        ->assertSee('"id":' . $first->json('data.id'), false)
-        ->assertSee('"id":' . $second->json('data.id'), false);
+    $response = ($this->getList)($user, $supplier)
+        ->assertOk();
+
+    expect(collect($response->json('data'))->pluck('id')->all())
+        ->toContain($first->json('data.id'))
+        ->toContain($second->json('data.id'));
 
     expect($first->json('data.id'))->not()->toBe($second->json('data.id'));
 });

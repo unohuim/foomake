@@ -25,6 +25,7 @@ use App\Http\Controllers\SalesOrderLineController;
 use App\Http\Controllers\SalesOrderStatusController;
 use App\Http\Controllers\SalesProductController;
 use App\Http\Controllers\SupplierController;
+use App\Http\Controllers\SupplierPurchaseOrderController;
 use App\Http\Controllers\SupplierPurchaseOptionController;
 use App\Http\Controllers\TaskCompletionController;
 use App\Http\Controllers\UomCategoryController;
@@ -234,6 +235,8 @@ Route::middleware('auth')->group(function () {
 
     Route::get('/purchasing/suppliers', [SupplierController::class, 'index'])
         ->name('purchasing.suppliers.index');
+    Route::get('/purchasing/suppliers/list', [SupplierController::class, 'list'])
+        ->name('purchasing.suppliers.list');
     Route::post('/purchasing/suppliers', [SupplierController::class, 'store'])
         ->name('purchasing.suppliers.store');
     Route::get('/purchasing/suppliers/{supplier}', [SupplierController::class, 'show'])
@@ -242,8 +245,14 @@ Route::middleware('auth')->group(function () {
         ->name('purchasing.suppliers.update');
     Route::delete('/purchasing/suppliers/{supplier}', [SupplierController::class, 'destroy'])
         ->name('purchasing.suppliers.destroy');
+    Route::get('/purchasing/suppliers/{supplier}/purchase-orders', [SupplierPurchaseOrderController::class, 'index'])
+        ->name('purchasing.suppliers.purchase-orders.index');
+    Route::get('/purchasing/suppliers/{supplier}/purchase-options', [SupplierPurchaseOptionController::class, 'index'])
+        ->name('purchasing.suppliers.purchase-options.index');
     Route::post('/purchasing/suppliers/{supplier}/purchase-options', [SupplierPurchaseOptionController::class, 'store'])
         ->name('purchasing.suppliers.purchase-options.store');
+    Route::patch('/purchasing/suppliers/{supplier}/purchase-options/{option}', [SupplierPurchaseOptionController::class, 'update'])
+        ->name('purchasing.suppliers.purchase-options.update');
     Route::delete('/purchasing/suppliers/{supplier}/purchase-options/{option}', [SupplierPurchaseOptionController::class, 'destroy'])
         ->name('purchasing.suppliers.purchase-options.destroy');
     Route::post('/purchasing/purchase-options/{option}/prices', [ItemPurchaseOptionPriceController::class, 'store'])

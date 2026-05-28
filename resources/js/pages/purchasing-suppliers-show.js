@@ -1,178 +1,321 @@
-export function mount(rootEl, payload) {
-    const Alpine = window.Alpine;
-    const safePayload = payload || {};
-    const headers = {
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-        'X-CSRF-TOKEN': safePayload.csrfToken || '',
-    };
+import Alpine from 'alpinejs';
+import { mountCrudSection } from '../lib/js-crud-section';
+import { mountPurchaseOrderCreate } from '../lib/js-purchase-order-create';
 
-    Alpine.data('purchasingSuppliersShow', () => {
-        const tenantCurrencyCode = safePayload.tenantCurrencyCode || 'USD';
-        const supplierCurrencyCode = safePayload.supplierCurrencyCode || null;
+const asRecord = (value) => (value && typeof value === 'object' && !Array.isArray(value) ? value : {});
 
+const asString = (value, fallback = '') => {
+    if (typeof value === 'string' && value.trim() !== '') {
+        return value;
+    }
+
+    return fallback;
+};
+
+const toStringValue = (value) => {
+    if (value === null || value === undefined) {
+        return '';
+    }
+
+    return String(value);
+};
+
+const packageDisplayText = (record) => {
+    const quantity = asString(record.pack_quantity_display, asString(record.pack_quantity, '—'));
+    const uomSymbol = asString(record.pack_uom_symbol);
+
+    if (uomSymbol === '') {
+        return quantity;
+    }
+
+    return `${quantity} ${uomSymbol}`;
+};
+
+const supplierPackageStateDisplay = (record) => {
+    if (record.is_active === false || record.state === 'archived') {
         return {
-            supplier: safePayload.supplier || {},
-            packages: safePayload.packages || [],
-            canManage: safePayload.canManage || false,
-            purchasableItems: safePayload.purchasableItems || [],
-            uoms: safePayload.uoms || [],
-            packageStoreUrl: safePayload.packageStoreUrl || '',
-            priceStoreUrlBase: safePayload.priceStoreUrlBase || '',
-            tenantCurrencyCode,
-            supplierCurrencyCode,
-            form: {
-                item_id: '',
-                pack_quantity: '1.000000',
-                pack_uom_id: '',
-                supplier_sku: '',
-                price_cents: '',
-                price_currency_code: supplierCurrencyCode || tenantCurrencyCode,
-                fx_rate: '',
-                fx_rate_as_of: '',
-            },
-            packageErrors: {},
-            priceErrors: {},
-            generalError: '',
-            isSubmitting: false,
-            hasFxFields() {
-                if (!this.form.price_currency_code) {
-                    return false;
-                }
+            text: 'Archived',
+            tone: 'muted',
+        };
+    }
 
-                return this.form.price_currency_code.toUpperCase() !== this.tenantCurrencyCode;
-            },
-            resetForm() {
-                this.form = {
-                    item_id: '',
-                    pack_quantity: '1.000000',
-                    pack_uom_id: '',
-                    supplier_sku: '',
-                    price_cents: '',
-                    price_currency_code: this.supplierCurrencyCode || this.tenantCurrencyCode,
-                    fx_rate: '',
-                    fx_rate_as_of: '',
-                };
-                this.packageErrors = {};
-                this.priceErrors = {};
-                this.generalError = '';
-            },
-            async submitPackageAndPrice() {
-                if (!this.canManage || !this.packageStoreUrl || !this.priceStoreUrlBase) {
+    return {
+        text: 'Active',
+        tone: 'success',
+    };
+};
+
+const formatMoney = (currencyCode, cents) => {
+    const safeCurrencyCode = asString(currencyCode, 'USD');
+    const safeCents = Number(cents || 0);
+
+    return `${safeCurrencyCode} ${(safeCents / 100).toFixed(2)}`;
+};
+
+const purchaseOrderStatusDisplay = (record) => {
+    switch (record.status) {
+    case 'OPEN':
+    case 'PARTIALLY-RECEIVED':
+        return {
+            text: record.status,
+            tone: 'default',
+        };
+    case 'RECEIVED':
+        return {
+            text: record.status,
+            tone: 'success',
+        };
+    case 'BACK-ORDERED':
+    case 'SHORT-CLOSED':
+    case 'CANCELLED':
+        return {
+            text: record.status,
+            tone: 'muted',
+        };
+    default:
+        return {
+            text: asString(record.status, '—'),
+            tone: 'muted',
+        };
+    }
+};
+
+const buildSupplierPackagePayload = (form) => ({
+    item_id: toStringValue(form.item_id),
+    pack_quantity: asString(form.pack_quantity),
+    pack_uom_id: toStringValue(form.pack_uom_id),
+    supplier_sku: asString(form.supplier_sku),
+    price_amount: asString(form.price_amount),
+});
+
+const detailsFromSupplier = (supplier) => ({
+    company_name: asString(supplier.company_name),
+    url: asString(supplier.url),
+    phone: asString(supplier.phone),
+    email: asString(supplier.email),
+    currency_code: asString(supplier.currency_code),
+});
+
+const emptyDetailsSavedFields = () => ({
+    company_name: false,
+    url: false,
+    phone: false,
+    email: false,
+    currency_code: false,
+});
+
+export function mount(rootEl, payload) {
+    const safePayload = payload || {};
+    const supplierPayload = asRecord(safePayload.supplier);
+    const tenantCurrency = asString(safePayload.tenantCurrencyCode, 'USD');
+    const sectionRootsByKey = new Map();
+    const purchaseOrderCreateRootEl = rootEl.querySelector('[data-purchase-order-create-root]');
+    const purchaseOrderCreate = mountPurchaseOrderCreate(
+        purchaseOrderCreateRootEl,
+        safePayload.purchaseOrderCreate || {}
+    );
+
+    rootEl.querySelectorAll('[data-js-crud-section-root]').forEach((sectionRootEl) => {
+        const sectionKey = sectionRootEl.dataset.sectionKey || '';
+        sectionRootsByKey.set(sectionKey, sectionRootEl);
+    });
+
+    Alpine.data('purchasingSuppliersShow', () => ({
+        supplier: supplierPayload,
+        details: detailsFromSupplier(supplierPayload),
+        lastSavedDetails: detailsFromSupplier(supplierPayload),
+        detailsSavedFields: emptyDetailsSavedFields(),
+        detailsSavedTimeouts: {},
+        detailsSaving: false,
+        detailsError: '',
+        detailsFieldClass(field) {
+            return this.detailsSavedFields[field] ? 'border-2 border-lime-400' : 'border-gray-300';
+        },
+        detailsPayload() {
+            return {
+                company_name: asString(this.details.company_name),
+                url: asString(this.details.url),
+                phone: asString(this.details.phone),
+                email: asString(this.details.email),
+                currency_code: asString(this.details.currency_code).toUpperCase(),
+            };
+        },
+        hydrateSupplier(data) {
+            const supplier = asRecord(data);
+
+            this.supplier = {
+                ...this.supplier,
+                company_name: asString(supplier.company_name, this.supplier.company_name),
+                url: supplier.url ?? '',
+                phone: supplier.phone ?? '',
+                email: supplier.email ?? '',
+                currency_code: supplier.currency_code ?? '',
+            };
+            this.details = detailsFromSupplier(this.supplier);
+            this.lastSavedDetails = detailsFromSupplier(this.supplier);
+        },
+        markDetailsFieldSaved(field) {
+            if (!field || !Object.prototype.hasOwnProperty.call(this.detailsSavedFields, field)) {
+                return;
+            }
+
+            window.clearTimeout(this.detailsSavedTimeouts[field]);
+            this.detailsSavedFields[field] = true;
+            this.detailsSavedTimeouts[field] = window.setTimeout(() => {
+                this.detailsSavedFields[field] = false;
+            }, 1000);
+        },
+        async saveDetails(field) {
+            if (!this.supplier.can_manage || !this.supplier.update_url || this.detailsSaving) {
+                return;
+            }
+
+            const payload = this.detailsPayload();
+            const current = JSON.stringify(payload);
+            const previous = JSON.stringify(this.lastSavedDetails);
+
+            if (current === previous) {
+                return;
+            }
+
+            const previousDetails = { ...this.lastSavedDetails };
+            this.detailsSaving = true;
+            this.detailsError = '';
+
+            try {
+                const response = await fetch(this.supplier.update_url, {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        Accept: 'application/json',
+                        'X-CSRF-TOKEN': asString(safePayload.csrfToken),
+                    },
+                    body: JSON.stringify(payload),
+                });
+                const data = await response.json().catch(() => ({}));
+
+                if (!response.ok) {
+                    this.details = previousDetails;
+                    this.detailsError = 'Unable to update supplier details.';
                     return;
                 }
 
-                this.isSubmitting = true;
-                this.generalError = '';
-                this.packageErrors = {};
-                this.priceErrors = {};
+                this.hydrateSupplier(asRecord(data).data || {});
+                this.markDetailsFieldSaved(field);
+            } catch (error) {
+                this.details = previousDetails;
+                this.detailsError = 'Unable to update supplier details.';
+            } finally {
+                this.detailsSaving = false;
+            }
+        },
+    }));
 
-                const packagePayload = {
-                    item_id: Number(this.form.item_id) || null,
-                    pack_quantity: this.form.pack_quantity || '1.000000',
-                    pack_uom_id: Number(this.form.pack_uom_id) || null,
-                    supplier_sku: this.form.supplier_sku || null,
+    const adaptersBySectionKey = {
+        purchaseOrders: {
+            normalizeRow: (record) => {
+                const status = purchaseOrderStatusDisplay(record);
+
+                return {
+                    ...record,
+                    display: {
+                        poNumberText: record.po_number ? `PO #${record.po_number}` : 'Draft PO',
+                        orderDateText: asString(record.order_date, 'No order date'),
+                        supplierText: asString(record.supplier_name, 'Supplier not set'),
+                        totalText: formatMoney(tenantCurrency, record.po_grand_total_cents),
+                        statusText: status.text,
+                        statusTone: status.tone,
+                        showUrl: asString(record.show_url),
+                    },
                 };
-
-                try {
-                    const packageResponse = await fetch(this.packageStoreUrl, {
-                        method: 'POST',
-                        headers,
-                        body: JSON.stringify(packagePayload),
-                    });
-
-                    if (packageResponse.status === 422) {
-                        const data = await packageResponse.json();
-                        this.packageErrors = data.errors || {};
-                        this.generalError = data.message || 'Unable to save package.';
-                        return;
-                    }
-
-                    if (!packageResponse.ok) {
-                        this.generalError = 'Unable to save package. Please try again.';
-                        return;
-                    }
-
-                    const packageData = await packageResponse.json();
-                    const optionId = packageData.data?.id;
-
-                    if (!optionId) {
-                        this.generalError = 'Unable to retrieve the created package.';
-                        return;
-                    }
-
-                    const currencyInput = this.form.price_currency_code?.trim();
-                    const pricePayload = {
-                        price_cents: this.form.price_cents,
-                    };
-
-                    if (currencyInput) {
-                        pricePayload.price_currency_code = currencyInput.toUpperCase();
-                    }
-
-                    if (this.form.fx_rate) {
-                        pricePayload.fx_rate = this.form.fx_rate;
-                    }
-
-                    if (this.form.fx_rate_as_of) {
-                        pricePayload.fx_rate_as_of = this.form.fx_rate_as_of;
-                    }
-
-                    const priceResponse = await fetch(`${this.priceStoreUrlBase}/${optionId}/prices`, {
-                        method: 'POST',
-                        headers,
-                        body: JSON.stringify(pricePayload),
-                    });
-
-                    if (priceResponse.status === 422) {
-                        const body = await priceResponse.json();
-                        this.priceErrors = body.errors || {};
-                        this.generalError = body.message || 'Unable to save price.';
-                        return;
-                    }
-
-                    if (!priceResponse.ok) {
-                        this.generalError = 'Unable to save price. Please try again.';
-                        return;
-                    }
-
-                    const priceBody = await priceResponse.json();
-                    const item = this.purchasableItems.find((entry) => entry.id === Number(packagePayload.item_id));
-                    const uom = this.uoms.find((entry) => entry.id === Number(packagePayload.pack_uom_id));
-
-                    this.packages.push({
-                        id: optionId,
-                        item_id: packagePayload.item_id,
-                        item_name: item?.name ?? 'Material',
-                        pack_quantity: packagePayload.pack_quantity,
-                        pack_uom_id: packagePayload.pack_uom_id,
-                        pack_uom_symbol: uom?.symbol ?? '—',
-                        pack_uom_name: uom?.name ?? '',
-                        supplier_sku: this.form.supplier_sku || null,
-                        current_price_display: this.formatMoney(
-                            priceBody.data.price_currency_code,
-                            priceBody.data.converted_price_cents
-                        ),
-                        current_price_currency_code: priceBody.data.price_currency_code,
-                        current_price_cents: priceBody.data.converted_price_cents,
-                    });
-
-                    this.resetForm();
-                } catch (error) {
-                    // eslint-disable-next-line no-console
-                    console.error(error);
-                    this.generalError = 'Unable to save package and price.';
-                } finally {
-                    this.isSubmitting = false;
-                }
             },
-            formatMoney(currency, cents) {
-                if (!currency || cents === undefined || cents === null) {
-                    return '—';
+            async handleCreateAction({ action }) {
+                if (action.handlerKey !== 'createSupplierPurchaseOrder') {
+                    return;
                 }
 
-                return `${currency} ${(cents / 100).toFixed(2)}`;
+                const response = await fetch(asString(action.url), {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        Accept: 'application/json',
+                        'X-CSRF-TOKEN': asString(action.csrfToken, asString(safePayload.csrfToken)),
+                    },
+                    body: JSON.stringify({
+                        supplier_id: action.prefill?.supplier_id ?? safePayload.supplier?.id ?? null,
+                    }),
+                });
+
+                if (!response.ok) {
+                    return;
+                }
+
+                const data = await response.json();
+
+                if (data?.data?.show_url) {
+                    window.location.assign(data.data.show_url);
+                }
             },
-        };
+        },
+        supplierPackages: {
+            normalizeRow(record) {
+                const stateDisplay = supplierPackageStateDisplay(record);
+
+                return {
+                    ...record,
+                    formValues: {
+                        item_id: toStringValue(record.item_id),
+                        pack_quantity: asString(record.pack_quantity),
+                        pack_uom_id: toStringValue(record.pack_uom_id),
+                        supplier_sku: asString(record.supplier_sku),
+                        price_amount: asString(record.price_amount),
+                    },
+                    display: {
+                        primaryText: asString(record.item_name, 'Unknown material'),
+                        packageText: packageDisplayText(record),
+                        skuText: asString(record.supplier_sku, '—'),
+                        statusText: stateDisplay.text,
+                        statusTone: stateDisplay.tone,
+                        priceText: asString(record.current_price_display, 'No price'),
+                        showUrl: asString(record.show_url),
+                    },
+                };
+            },
+            buildCreatePayload(form) {
+                return buildSupplierPackagePayload(form);
+            },
+            buildUpdatePayload(form) {
+                return buildSupplierPackagePayload(form);
+            },
+            async handleAction({ action, record }) {
+                if (action.handlerKey !== 'purchase' || !purchaseOrderCreate) {
+                    return;
+                }
+
+                const purchaseUrl = asString(record.purchase_url);
+
+                if (purchaseUrl !== '') {
+                    purchaseOrderCreate.config.storeUrl = purchaseUrl;
+                }
+
+                purchaseOrderCreate.openFromSupplierPackage({
+                    supplier_id: record.supplier_id,
+                    item_purchase_option_id: record.item_purchase_option_id ?? record.id,
+                });
+            },
+        },
+    };
+
+    sectionRootsByKey.forEach((sectionRootEl, sectionKey) => {
+        const section = safePayload.sections?.[sectionKey];
+
+        if (!section) {
+            return;
+        }
+
+        mountCrudSection(sectionRootEl, {
+            section,
+            adapters: adaptersBySectionKey[sectionKey] || {},
+        });
     });
 }

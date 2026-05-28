@@ -2,8 +2,8 @@
 
 namespace App\Http\Requests\Purchasing;
 
-use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Contracts\Validation\Validator;
+use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
@@ -48,6 +48,10 @@ class StoreSupplierPurchaseOptionRequest extends FormRequest
                 Rule::exists('uoms', 'id')->where(fn ($query) => $query->where('tenant_id', $tenantId)),
             ],
             'supplier_sku' => ['nullable', 'string', 'max:255'],
+            'price_amount' => [
+                'nullable',
+                'regex:/^\\d{1,10}(?:\\.\\d{1,2})?$/',
+            ],
         ];
     }
 
@@ -73,7 +77,7 @@ class StoreSupplierPurchaseOptionRequest extends FormRequest
     private function normalizeErrors(array $errors): array
     {
         foreach (['item_id', 'pack_quantity', 'pack_uom_id', 'supplier_sku'] as $field) {
-            if (!array_key_exists($field, $errors) || !is_array($errors[$field])) {
+            if (! array_key_exists($field, $errors) || ! is_array($errors[$field])) {
                 $errors[$field] = [];
             }
         }
