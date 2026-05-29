@@ -13,8 +13,12 @@ use App\Models\Tenant;
 use App\Models\Uom;
 use App\Models\UomCategory;
 use App\Models\User;
+use App\Models\WorkflowDomain;
+use App\Models\WorkflowStage;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Database\Schema\Blueprint;
 
 uses(RefreshDatabase::class);
 
@@ -139,7 +143,7 @@ beforeEach(function () {
             'tax_cents' => 0,
             'po_number' => 'PO-' . $tenant->id,
             'notes' => null,
-            'status' => 'OPEN',
+            'status' => 'SENT',
             'po_subtotal_cents' => 0,
             'po_grand_total_cents' => 0,
         ]);
@@ -193,6 +197,32 @@ it('rejects authed users without receive permission on status changes', function
         ->assertForbidden();
 });
 
+it('rejects create action without receive permission', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $supplier = ($this->makeSupplier)($tenant);
+    $order = ($this->makeOrder)($tenant, $user, $supplier);
+    ($this->setOrderStatus)($order, 'DRAFT');
+
+    ($this->patchStatus)($user, $order, ['status' => 'SENT'])
+        ->assertForbidden();
+
+    expect($order->fresh()->status)->toBe('DRAFT');
+});
+
+it('rejects cancel action without receive permission', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $supplier = ($this->makeSupplier)($tenant);
+    $order = ($this->makeOrder)($tenant, $user, $supplier);
+
+    ($this->patchStatus)($user, $order, ['action' => 'cancel'])
+        ->assertForbidden();
+
+    expect($order->fresh()->status)->not->toBe('CANCELLED')
+        ->and($order->fresh()->cancelled_at)->toBeNull();
+});
+
 it('blocks cross-tenant status updates', function () {
     $tenantA = ($this->makeTenant)(['tenant_name' => 'Tenant A']);
     $tenantB = ($this->makeTenant)(['tenant_name' => 'Tenant B']);
@@ -203,11 +233,11 @@ it('blocks cross-tenant status updates', function () {
 
     ($this->grantPermission)($userA, 'purchasing-purchase-orders-receive');
 
-    ($this->patchStatus)($userA, $orderB, ['status' => 'OPEN'])
+    ($this->patchStatus)($userA, $orderB, ['status' => 'SENT'])
         ->assertNotFound();
 });
 
-it('allows draft to open transition', function () {
+it('allows draft to sent transition', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
     $supplier = ($this->makeSupplier)($tenant);
@@ -216,42 +246,113 @@ it('allows draft to open transition', function () {
 
     ($this->grantPermission)($user, 'purchasing-purchase-orders-receive');
 
-    ($this->patchStatus)($user, $order, ['status' => 'OPEN'])
+    ($this->patchStatus)($user, $order, ['status' => 'SENT'])
         ->assertOk();
 
-    expect($order->fresh()->status)->toBe('OPEN');
+    expect($order->fresh()->status)->toBe('SENT');
 });
 
-it('allows open to back-ordered transition', function () {
+it('create action response transitions draft to sent and returns header state', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $supplier = ($this->makeSupplier)($tenant);
+    $order = ($this->makeOrder)($tenant, $user, $supplier);
+    ($this->setOrderStatus)($order, 'DRAFT');
+
+    ($this->grantPermission)($user, 'purchasing-purchase-orders-receive');
+
+    ($this->patchStatus)($user, $order, ['status' => 'SENT'])
+        ->assertOk()
+        ->assertJsonPath('data.status', 'CREATED')
+        ->assertJsonPath('data.is_cancelled', false)
+        ->assertJsonPath('data.is_back_ordered', false);
+
+    expect($order->fresh()->status)->toBe('SENT');
+});
+
+it('create action enters first purchasing workflow stage when purchase orders support workflow stages', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $supplier = ($this->makeSupplier)($tenant);
+    $order = ($this->makeOrder)($tenant, $user, $supplier);
+    ($this->setOrderStatus)($order, 'DRAFT');
+
+    if (! Schema::hasColumn('purchase_orders', 'workflow_stage_id')) {
+        Schema::table('purchase_orders', function (Blueprint $table): void {
+            $table->unsignedBigInteger('workflow_stage_id')
+                ->nullable()
+                ->after('status');
+        });
+    }
+
+    $domain = WorkflowDomain::query()->firstOrCreate([
+        'key' => 'purchasing',
+    ], [
+        'name' => 'Purchasing',
+        'sort_order' => 20,
+    ]);
+
+    $firstStage = WorkflowStage::withoutGlobalScopes()->create([
+        'tenant_id' => $tenant->id,
+        'workflow_domain_id' => $domain->id,
+        'key' => 'first',
+        'name' => 'First Stage',
+        'action_verb' => 'FIRST',
+        'sort_order' => 10,
+        'is_active' => true,
+        'is_inventory_effect_stage' => false,
+    ]);
+
+    WorkflowStage::withoutGlobalScopes()->create([
+        'tenant_id' => $tenant->id,
+        'workflow_domain_id' => $domain->id,
+        'key' => 'second',
+        'name' => 'Second Stage',
+        'action_verb' => 'SECOND',
+        'sort_order' => 20,
+        'is_active' => true,
+        'is_inventory_effect_stage' => true,
+    ]);
+
+    ($this->grantPermission)($user, 'purchasing-purchase-orders-receive');
+
+    ($this->patchStatus)($user, $order, ['status' => 'SENT'])
+        ->assertOk()
+        ->assertJsonPath('data.status', 'CREATED');
+
+    $row = DB::table('purchase_orders')->where('id', $order->id)->first();
+
+    expect($row->status)->toBe('SENT')
+        ->and($row->current_workflow_stage_id)->not->toBeNull();
+});
+
+it('allows sent to back-ordered action', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
     $supplier = ($this->makeSupplier)($tenant);
     $order = ($this->makeOrder)($tenant, $user, $supplier);
 
+    ($this->grantPermission)($user, 'purchasing-purchase-orders-receive');
+
+    ($this->patchStatus)($user, $order, ['action' => 'back_order'])
+        ->assertOk();
+
+    expect($order->fresh()->status)->toBe('SENT')
+        ->and($order->fresh()->back_ordered_at)->not->toBeNull();
+});
+
+it('rejects legacy back-ordered status transition', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $supplier = ($this->makeSupplier)($tenant);
+    $order = ($this->makeOrder)($tenant, $user, $supplier);
     ($this->grantPermission)($user, 'purchasing-purchase-orders-receive');
 
     ($this->patchStatus)($user, $order, ['status' => 'BACK-ORDERED'])
-        ->assertOk();
-
-    expect($order->fresh()->status)->toBe('BACK-ORDERED');
+        ->assertStatus(422);
 });
 
-it('allows back-ordered to open transition', function () {
-    $tenant = ($this->makeTenant)();
-    $user = ($this->makeUser)($tenant);
-    $supplier = ($this->makeSupplier)($tenant);
-    $order = ($this->makeOrder)($tenant, $user, $supplier);
-    ($this->setOrderStatus)($order, 'BACK-ORDERED');
-
-    ($this->grantPermission)($user, 'purchasing-purchase-orders-receive');
-
-    ($this->patchStatus)($user, $order, ['status' => 'OPEN'])
-        ->assertOk();
-
-    expect($order->fresh()->status)->toBe('OPEN');
-});
-
-it('allows open to cancelled transition with no receipts', function () {
+it('allows sent to cancelled action with no receipts', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
     $supplier = ($this->makeSupplier)($tenant);
@@ -259,10 +360,34 @@ it('allows open to cancelled transition with no receipts', function () {
 
     ($this->grantPermission)($user, 'purchasing-purchase-orders-receive');
 
-    ($this->patchStatus)($user, $order, ['status' => 'CANCELLED'])
-        ->assertOk();
+    ($this->patchStatus)($user, $order, ['action' => 'cancel'])
+        ->assertOk()
+        ->assertJsonPath('data.status', 'CANCELLED')
+        ->assertJsonPath('data.is_cancelled', true);
 
-    expect($order->fresh()->status)->toBe('CANCELLED');
+    expect($order->fresh()->status)->toBe('CANCELLED')
+        ->and($order->fresh()->cancelled_at)->not->toBeNull();
+});
+
+it('cancel action persists cancelled status and audit metadata', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $supplier = ($this->makeSupplier)($tenant);
+    $order = ($this->makeOrder)($tenant, $user, $supplier);
+    ($this->setOrderStatus)($order, 'DRAFT');
+
+    ($this->grantPermission)($user, 'purchasing-purchase-orders-receive');
+
+    ($this->patchStatus)($user, $order, ['action' => 'cancel'])
+        ->assertOk()
+        ->assertJsonPath('data.status', 'CANCELLED')
+        ->assertJsonPath('data.is_cancelled', true);
+
+    $order->refresh();
+
+    expect($order->status)->toBe('CANCELLED')
+        ->and($order->cancelled_at)->not->toBeNull()
+        ->and($order->cancelled_by_user_id)->toBe($user->id);
 });
 
 it('blocks open to cancelled transition when receipts exist', function () {
@@ -283,8 +408,24 @@ it('blocks open to cancelled transition when receipts exist', function () {
         'received_quantity' => '1.000000',
     ])->assertCreated();
 
-    ($this->patchStatus)($user, $order, ['status' => 'CANCELLED'])
+    ($this->patchStatus)($user, $order, ['action' => 'cancel'])
         ->assertStatus(422);
+});
+
+it('rejects cancel action for completed purchase orders', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $supplier = ($this->makeSupplier)($tenant);
+    $order = ($this->makeOrder)($tenant, $user, $supplier);
+    ($this->setOrderStatus)($order, 'COMPLETED');
+
+    ($this->grantPermission)($user, 'purchasing-purchase-orders-receive');
+
+    ($this->patchStatus)($user, $order, ['action' => 'cancel'])
+        ->assertStatus(422)
+        ->assertJsonValidationErrors(['action']);
+
+    expect($order->fresh()->status)->toBe('COMPLETED');
 });
 
 it('rejects draft to back-ordered transition', function () {
@@ -296,11 +437,26 @@ it('rejects draft to back-ordered transition', function () {
 
     ($this->grantPermission)($user, 'purchasing-purchase-orders-receive');
 
-    ($this->patchStatus)($user, $order, ['status' => 'BACK-ORDERED'])
+    ($this->patchStatus)($user, $order, ['action' => 'back_order'])
         ->assertStatus(422);
 });
 
-it('rejects draft to cancelled transition', function () {
+it('allows draft to cancelled action with no receipts', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $supplier = ($this->makeSupplier)($tenant);
+    $order = ($this->makeOrder)($tenant, $user, $supplier);
+    ($this->setOrderStatus)($order, 'DRAFT');
+
+    ($this->grantPermission)($user, 'purchasing-purchase-orders-receive');
+
+    ($this->patchStatus)($user, $order, ['action' => 'cancel'])
+        ->assertOk();
+
+    expect($order->fresh()->status)->toBe('CANCELLED');
+});
+
+it('rejects direct cancelled status transitions', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
     $supplier = ($this->makeSupplier)($tenant);
@@ -310,8 +466,31 @@ it('rejects draft to cancelled transition', function () {
     ($this->grantPermission)($user, 'purchasing-purchase-orders-receive');
 
     ($this->patchStatus)($user, $order, ['status' => 'CANCELLED'])
-        ->assertStatus(422);
+        ->assertStatus(422)
+        ->assertJsonValidationErrors(['status']);
+
+    expect($order->fresh()->status)->toBe('DRAFT');
 });
+
+it('rejects lifecycle transitions from cancelled purchase orders', function (string $targetStatus): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $supplier = ($this->makeSupplier)($tenant);
+    $order = ($this->makeOrder)($tenant, $user, $supplier);
+    ($this->setOrderStatus)($order, 'CANCELLED');
+
+    ($this->grantPermission)($user, 'purchasing-purchase-orders-receive');
+
+    ($this->patchStatus)($user, $order, ['status' => $targetStatus])
+        ->assertStatus(422)
+        ->assertJsonValidationErrors(['status']);
+
+    expect($order->fresh()->status)->toBe('CANCELLED');
+})->with([
+    'sent' => 'SENT',
+    'received' => 'RECEIVED',
+    'completed' => 'COMPLETED',
+]);
 
 it('rejects setting received status directly', function () {
     $tenant = ($this->makeTenant)();
@@ -383,7 +562,7 @@ it('derives partially-received after first receipt with remaining balance', func
         'received_quantity' => '3.000000',
     ])->assertCreated();
 
-    expect($order->fresh()->status)->toBe('PARTIALLY-RECEIVED');
+    expect($order->fresh()->status)->toBe('SENT');
 });
 
 it('derives received when all balances are zero and no short-close exists', function () {
@@ -407,7 +586,7 @@ it('derives received when all balances are zero and no short-close exists', func
     expect($order->fresh()->status)->toBe('RECEIVED');
 });
 
-it('derives short-closed when balances are zero and any short-close exists', function () {
+it('derives received when balances are zero and any short-close exists', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
     $supplier = ($this->makeSupplier)($tenant);
@@ -425,10 +604,10 @@ it('derives short-closed when balances are zero and any short-close exists', fun
         'short_closed_quantity' => '5.000000',
     ])->assertCreated();
 
-    expect($order->fresh()->status)->toBe('SHORT-CLOSED');
+    expect($order->fresh()->status)->toBe('RECEIVED');
 });
 
-it('short-close status takes precedence over receipts when fully balanced', function () {
+it('short-close history closes balances without becoming a status', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
     $supplier = ($this->makeSupplier)($tenant);
@@ -452,7 +631,7 @@ it('short-close status takes precedence over receipts when fully balanced', func
         'short_closed_quantity' => '2.000000',
     ])->assertCreated();
 
-    expect($order->fresh()->status)->toBe('SHORT-CLOSED');
+    expect($order->fresh()->status)->toBe('RECEIVED');
 });
 
 it('short-close after partial receipt closes remaining balance', function () {
@@ -473,7 +652,7 @@ it('short-close after partial receipt closes remaining balance', function () {
         'received_quantity' => '3.000000',
     ])->assertCreated();
 
-    expect($order->fresh()->status)->toBe('PARTIALLY-RECEIVED');
+    expect($order->fresh()->status)->toBe('SENT');
 
     ($this->postShortClose)($user, $order, [
         'short_closed_at' => '2026-02-04 11:25:00',
@@ -481,7 +660,7 @@ it('short-close after partial receipt closes remaining balance', function () {
         'short_closed_quantity' => '5.000000',
     ])->assertCreated();
 
-    expect($order->fresh()->status)->toBe('SHORT-CLOSED');
+    expect($order->fresh()->status)->toBe('RECEIVED');
 });
 
 it('accumulates multiple receipts to reach received status', function () {
@@ -502,7 +681,7 @@ it('accumulates multiple receipts to reach received status', function () {
         'received_quantity' => '2.000000',
     ])->assertCreated();
 
-    expect($order->fresh()->status)->toBe('PARTIALLY-RECEIVED');
+    expect($order->fresh()->status)->toBe('SENT');
 
     ($this->postReceipt)($user, $order, [
         'received_at' => '2026-02-04 12:00:00',

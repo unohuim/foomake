@@ -2,6 +2,7 @@
 
 namespace App\Services\Purchasing;
 
+use App\Actions\Inventory\ReceivePurchaseOptionAction;
 use App\Models\PurchaseOrder;
 use App\Models\PurchaseOrderLine;
 use App\Models\PurchaseOrderReceipt;
@@ -10,6 +11,8 @@ use App\Models\PurchaseOrderShortClosure;
 use App\Models\PurchaseOrderShortClosureLine;
 use App\Models\StockMove;
 use App\Models\User;
+use App\Models\WorkflowDomain;
+use App\Models\WorkflowStage;
 use DomainException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -17,6 +20,10 @@ use Illuminate\Support\Facades\DB;
 class PurchaseOrderLifecycleService
 {
     private const SCALE = 6;
+
+    public function __construct(private readonly ReceivePurchaseOptionAction $receivePurchaseOptionAction)
+    {
+    }
 
     /**
      * @param array<int, array{line: PurchaseOrderLine, quantity: string}> $lineItems
@@ -155,8 +162,6 @@ class PurchaseOrderLifecycleService
     {
         $lineTotals = $this->computeLineTotals($order);
         $allBalancesZero = true;
-        $anyReceipt = false;
-        $anyShortClose = false;
         $totalReceived = '0.000000';
 
         foreach ($lineTotals as $totals) {
@@ -164,41 +169,73 @@ class PurchaseOrderLifecycleService
                 $allBalancesZero = false;
             }
 
-            if (bccomp($totals['received_sum'], '0', self::SCALE) === 1) {
-                $anyReceipt = true;
-            }
-
-            if (bccomp($totals['short_closed_sum'], '0', self::SCALE) === 1) {
-                $anyShortClose = true;
-            }
-
             $totalReceived = bcadd($totalReceived, $totals['received_sum'], self::SCALE);
         }
 
         $nextStatus = $order->status;
 
-        if ($allBalancesZero && $anyShortClose) {
-            $nextStatus = PurchaseOrder::STATUS_SHORT_CLOSED;
-        } elseif ($allBalancesZero && bccomp($totalReceived, '0', self::SCALE) === 1) {
+        if (
+            $order->status === PurchaseOrder::STATUS_SENT
+            && $allBalancesZero
+            && bccomp($totalReceived, '0', self::SCALE) >= 0
+        ) {
             $nextStatus = PurchaseOrder::STATUS_RECEIVED;
-        } elseif (! $allBalancesZero && $anyReceipt) {
-            $nextStatus = PurchaseOrder::STATUS_PARTIALLY_RECEIVED;
         }
 
         if ($nextStatus !== $order->status) {
-            $order->forceFill(['status' => $nextStatus])->save();
+            $order->forceFill(array_merge(
+                ['status' => $nextStatus],
+                $this->workflowFieldsForStatus($order, $nextStatus)
+            ))->save();
         }
+    }
+
+    /**
+     * Mirror legacy status changes into purchase-order workflow fields during migration.
+     *
+     * @return array<string, int|null>
+     */
+    private function workflowFieldsForStatus(PurchaseOrder $order, string $status): array
+    {
+        $domainId = WorkflowDomain::query()
+            ->where('key', 'purchasing')
+            ->value('id');
+
+        if (! $domainId) {
+            return [];
+        }
+
+        $stages = WorkflowStage::withoutGlobalScopes()
+            ->where('tenant_id', $order->tenant_id)
+            ->where('workflow_domain_id', $domainId)
+            ->whereIn('key', ['creating', 'receiving', 'completing'])
+            ->get()
+            ->keyBy('key');
+
+        return match ($status) {
+            PurchaseOrder::STATUS_SENT => [
+                'last_completed_workflow_stage_id' => $stages->get('creating')?->id,
+                'current_workflow_stage_id' => $stages->get('receiving')?->id,
+            ],
+            PurchaseOrder::STATUS_RECEIVED => [
+                'last_completed_workflow_stage_id' => $stages->get('receiving')?->id,
+                'current_workflow_stage_id' => $stages->get('completing')?->id,
+            ],
+            PurchaseOrder::STATUS_COMPLETED => [
+                'last_completed_workflow_stage_id' => $stages->get('completing')?->id,
+                'current_workflow_stage_id' => null,
+            ],
+            default => [],
+        };
     }
 
     private function ensureReceivableStatus(PurchaseOrder $order): void
     {
         $allowedStatuses = [
-            PurchaseOrder::STATUS_OPEN,
-            PurchaseOrder::STATUS_BACK_ORDERED,
-            PurchaseOrder::STATUS_PARTIALLY_RECEIVED,
+            PurchaseOrder::STATUS_SENT,
         ];
 
-        if (! in_array($order->status, $allowedStatuses, true)) {
+        if (! in_array($order->status, $allowedStatuses, true) || $order->isCancelled()) {
             throw new DomainException('Purchase order is not in a receivable status.');
         }
     }
@@ -250,12 +287,12 @@ class PurchaseOrderLifecycleService
 
     private function calculateReceiptStockMoveQuantity(PurchaseOrderLine $line, string $receivedQuantity): string
     {
-        $packQuantity = $line->purchaseOption?->pack_quantity;
+        $purchaseOption = $line->purchaseOption;
 
-        if ($packQuantity === null) {
+        if ($purchaseOption === null) {
             throw new DomainException('Purchase order line is missing a purchase option pack quantity.');
         }
 
-        return bcmul($receivedQuantity, $this->normalizeQuantity((string) $packQuantity), self::SCALE);
+        return $this->receivePurchaseOptionAction->baseQuantityFor($purchaseOption, $receivedQuantity);
     }
 }

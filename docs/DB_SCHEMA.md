@@ -241,12 +241,12 @@ Migrations remain the **sole source of truth**.
 - `COMPLETED` and `CANCELLED` are terminal.
 - `DRAFT`, `OPEN`, `COMPLETED`, and `CANCELLED` are system statuses.
 - Operational middle stages are derived from active tenant `workflow_stages` rows in the `sales` workflow domain and are persisted as uppercase stage keys in `sales_orders.status`.
-- New tenants are seeded by default with `packing`, `packed`, and `shipping`, but runtime stage order is database-backed by `sort_order`.
+- New tenants are seeded by default with `creating`, `packing`, `shipping`, `invoicing`, and `completing`, but runtime stage order is database-backed by `sort_order`.
 - Entering the first operational stage checks fulfillment availability, reserves nothing, and creates no stock moves.
-- Moving from the seeded `packing` stage to the seeded `packed` stage posts inventory issue stock moves in a single transaction.
+- Completing the configured inventory-effect stage posts inventory issue stock moves in a single transaction.
 - Later operational stages and the final operational-stage-to-`COMPLETED` transition create no stock moves.
 - Cancellation before packed inventory posting creates no stock moves.
-- Cancelling from the seeded `packed` stage appends reversing stock moves and preserves the original issue moves for audit history.
+- Cancelling after packed inventory posting appends reversing stock moves and preserves the original issue moves for audit history.
 
 ---
 
@@ -287,7 +287,7 @@ Migrations remain the **sole source of truth**.
 - External CSV export emits one row per sales order line and repeats order header fields on each exported row.
 - External CSV file-upload import groups rows into unique orders by `(tenant_id, external_source, order_external_id)` and creates one sales-order line per grouped CSV row.
 - `external_id` is the source-system line ID when present; it is not used as the local primary key.
-- On the seeded `packing -> packed` transition, each line may generate exactly one posted `stock_moves` ledger entry with `source_type = App\Models\SalesOrderLine` and `source_id = sales_order_lines.id`.
+- On the configured sales inventory-effect transition, each line may generate exactly one posted `stock_moves` ledger entry with `source_type = App\Models\SalesOrderLine` and `source_id = sales_order_lines.id`.
 
 ---
 
@@ -328,7 +328,9 @@ Migrations remain the **sole source of truth**.
 | workflow_domain_id | bigint   | No       | FK → workflow_domains.id (CASCADE)  |
 | key               | string    | No       | Tenant/domain-scoped operational key |
 | name              | string    | No       | Current-stage display name/status label |
-| button_text       | string    | No       | Workflow action button text         |
+| action_verb       | string    | Yes      | Verb shown for completing the current stage |
+| status_complete_label | string | Yes    | Derived status after the stage completes |
+| completion_mode   | string    | No       | `manual` or `automatic`; default `manual` |
 | description       | text      | Yes      | —                                   |
 | sort_order        | unsignedInteger | No | Runtime order within domain         |
 | is_active         | boolean   | No       | Default true                        |
@@ -824,9 +826,10 @@ Migrations remain the **sole source of truth**.
 | purchase_order_id          | bigint         | No       | Part of composite FK                         |
 | item_id                    | bigint         | No       | FK → items.id (CASCADE)                      |
 | item_purchase_option_id    | bigint         | No       | FK → item_purchase_options.id (CASCADE)      |
-| pack_count                 | integer        | No       | Unsigned, CHECK ≥ 1                          |
+| pack_count                 | integer        | No       | Unsigned whole package count, CHECK ≥ 1      |
 | unit_price_cents           | integer        | No       | Unsigned                                     |
 | line_subtotal_cents        | integer        | No       | Unsigned, unit_price_cents * pack_count      |
+| line_tax_rate_bps          | integer        | No       | Unsigned basis points, default 0; UI accepts 1 decimal |
 | unit_price_amount          | integer        | No       | Unsigned, snapshot cents                     |
 | unit_price_currency_code   | char(3)        | No       | Snapshot currency                            |
 | converted_unit_price_amount | integer        | No       | Unsigned, snapshot converted cents           |
@@ -871,7 +874,14 @@ Migrations remain the **sole source of truth**.
 | po_grand_total_cents | integer     | No       | Unsigned, default 0       |
 | po_number           | string      | Yes      | —                         |
 | notes               | text        | Yes      | —                         |
-| status              | string      | No       | See ENUMS.md              |
+| status              | string      | No       | See ENUMS.md; constrained to PurchaseOrder statuses |
+| cancelled_at        | timestamp   | Yes      | Cancellation audit timestamp |
+| cancelled_by_user_id | bigint      | Yes      | FK → users.id (SET NULL)  |
+| back_ordered_at     | timestamp   | Yes      | Back-order action marker  |
+| back_ordered_by_user_id | bigint  | Yes      | FK → users.id (SET NULL)  |
+| current_workflow_stage_id | bigint | Yes      | FK → workflow_stages.id (SET NULL) |
+| last_completed_workflow_stage_id | bigint | Yes | FK → workflow_stages.id (SET NULL) |
+| workflow_cancelled_at | timestamp | Yes      | Workflow cancellation marker |
 | created_at          | timestamp   | Yes      | —                         |
 | updated_at          | timestamp   | Yes      | —                         |
 
@@ -882,8 +892,22 @@ Migrations remain the **sole source of truth**.
 - Index: `tenant_id`
 - Index: `(tenant_id, status)`
 - Index: `(tenant_id, supplier_id)`
+- Index: `(tenant_id, current_workflow_stage_id)` (`po_tenant_current_workflow_stage_idx`)
+- Index: `(tenant_id, last_completed_workflow_stage_id)` (`po_tenant_last_workflow_stage_idx`)
+- Check: `status IN ('DRAFT', 'SENT', 'RECEIVED', 'COMPLETED', 'CANCELLED')`
 - Implicit (FK index): `created_by_user_id`
 - Implicit (FK index): `supplier_id`
+- Implicit (FK index): `cancelled_by_user_id`
+- Implicit (FK index): `back_ordered_by_user_id`
+- Implicit (FK index): `current_workflow_stage_id`
+- Implicit (FK index): `last_completed_workflow_stage_id`
+
+### Notes
+
+- `shipping_cents` is stored as integer cents; PO forms accept `shipping_amount` in dollars/cents and normalize at the request boundary.
+- `tax_cents` is server-calculated from `purchase_order_lines.line_tax_rate_bps`; it is not user-entered on the PO header.
+- `CANCELLED` is persisted in `status`; `cancelled_at` and `cancelled_by_user_id` are audit metadata, not display authority.
+- During workflow migration, PO detail status is derived from workflow fields while `status` remains mirrored for compatibility.
 
 ---
 

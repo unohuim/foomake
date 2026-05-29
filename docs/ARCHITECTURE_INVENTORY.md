@@ -213,6 +213,7 @@ Notes:
 - Recipe detail `Make Orders` create eligibility is reactive: publishing the first or current recipe version updates the shared section action contract immediately so the right-aligned `+` appears without a full page refresh.
 - Recipe detail `Versions` rows follow the shared row-action dropdown contract; draft rows expose `Publish`, and publish success may trigger a temporary row highlight when the newly current version re-sorts to the top.
 - Recipe detail `Versions` toolbar toggles use the shared compact switch contract in the reusable detail-section renderer, with left-aligned label text and a right-aligned pill track rather than a visible native checkbox.
+- Material detail supplier-package create success must refresh the page-local Purchase Order create slide-over supplier/package option data so newly created packages can be selected without a full page reload.
 - Recipe detail header owns one active-version status or action menu, using a Tailwind-only split-button style through the shared header action slot rather than rendering one status-action button in every Version row.
 - That header split-button must show the active version caption visibly in the closed state; icon-only status or action controls are not acceptable.
 - Recipe detail header renders `Version {x.xx}` beside that split-button in the right-side action area and must not keep a stale standalone version chip in the left metadata group.
@@ -255,6 +256,7 @@ Notes:
 - Shared detail sections should not duplicate stage-movement controls already owned by the shared header workflow action.
 - Recipe-scoped Make Order create may redirect directly to the created Make Order detail page through the shared section create-success hook when `show_url` is returned.
 - Make Order header, index, Details section, and shared Material/Recipe detail rows all use the same workflow-stage-driven display rule after workflow entry.
+- Make Order detail and workflow transition endpoints seed default manufacturing stages only when the tenant has no configured manufacturing workflow stages; existing configured stages remain authoritative.
 - Reusable detail sections may disable the vertical-dots row menu through `showRowActionsMenu: false`; the default remains enabled for existing section consumers, and disabled sections may surface their configured row actions inline instead.
 - Make Order detail ingredient rows may opt out of the row-actions menu and render a direct inline `x-mark` remove button when removal is the only row-level action exposed there.
 - Make Orders index rows may opt out of the row-actions menu and render a direct inline `x-mark` archive button when archive is the only row-level action exposed there.
@@ -375,7 +377,8 @@ $stage->is_inventory_effect_stage = true;
 Notes:
 - The fixed workflow domains are `sales`, `purchasing`, `manufacturing`, and `inventory`.
 - Default seeded stock-impacting stage sets are tenant-scoped and idempotent.
-- Only Sales runtime currently resolves the marker to trigger stock posting.
+- Default Sales inventory impact is assigned to the seeded `Packed` stage, not the pre-impact `Packing` stage.
+- Sales, Purchasing, Manufacturing, and Inventory each enforce exactly one active inventory-effect stage when stage defaults or admin edits touch the domain.
 
 ### Workflow Stage Task Gating
 
@@ -1374,6 +1377,11 @@ Posting stock moves or mutating operational records.
 - Availability math remains canonical BCMath at scale 6.  
 - UI-facing inventory quantities must render using the item base UoM `display_precision`.  
 - The read model may expose both canonical quantity fields and backend-formatted display fields for the same row.  
+- Workflow-enabled Purchase Orders count as BUY/open supply while they have an active current purchasing workflow stage and are not cancelled.
+- Purchase Orders without workflow state count as BUY/open supply unless they are completed or cancelled, preserving availability for rows created before workflow initialization.
+- Buy/open purchase-order quantities are calculated as package count × supplier package quantity × resolved package-UoM-to-item-base-UoM conversion, matching UoMs by normalized symbol rather than requiring conversion-row UoM ids to match package/base UoM ids.
+- Buy/open purchase-order conversion precedence is tenant/general, then global, then item-specific fallback; conversion resolution supports direct, reciprocal, and multi-step symbol paths through defined conversion records.
+- Missing required package-UoM conversion excludes that PO line from BUY availability rather than displaying package-UoM quantities as base-UoM quantities.
 
 **Example Usage:**  
 ```php
@@ -1450,15 +1458,15 @@ Notes:
 - Draft creation does not require assignment; if a count-level assignee is present it is reused when workflow tasks are generated.
 - Workflow task assignment uses generated `tasks.assigned_to_user_id` rather than a separate inventory-count-only task system.
 - Draft detail exposes only the next valid workflow action, defaulting to `SCHEDULE` when seeded inventory stages are unchanged.
-- Submitted Inventory Counts may expose previous-stage and next-stage actions using configured button text. Previous-stage movement is Inventory Count specific and never reverses posted stock.
+- Submitted Inventory Counts may expose previous-stage and next-stage actions using configured action verb. Previous-stage movement is Inventory Count specific and never reverses posted stock.
 - Inventory Count detail uses the shared resource-detail header plus a compact `Details` section ahead of the reusable `Materials` and `Tasks` sections. The header no longer owns counted-date / line-count / workflow-stage metadata pills; it now shows a clean workflow-status badge beside the title, while Count Date, Assigned To, and Notes live in the AJAX-autosaved `Details` section.
-- Workflow stages now separate current-state display from transition-button copy: badges and current-stage labels use `workflow_stages.name`, while workflow buttons use `workflow_stages.button_text`.
+- Workflow stages separate current-state display from transition-button copy: stage labels use `workflow_stages.name`, while workflow action buttons use `workflow_stages.action_verb`.
 - Inventory Count detail mounts reusable `Materials` and `Tasks` sections through shared `js-crud-section` payload/config rendering; the `Tasks` section is not bespoke markup, uses the existing `tasks.complete` route contract, disables the shared dots menu through config, always shows `Assigned By`, then swaps `Assigned To` for `Completed By` once the task is completed, and shows a visible inline `Complete` action only while the task is incomplete and completable.
 - Inventory Count detail `Materials` section uses the shared compact add-row contract in Draft: a reusable combobox on the left plus a `+` button on the right adds an existing selected material line through AJAX and must not open Material or Item creation.
 - Inventory Count detail `Materials` rows use two mutually exclusive modes: Draft rows use a direct inline rounded `x-mark` remove action instead of the vertical-dots row menu, while submitted workflow-stage rows hide removal and expose an AJAX Qty input on the right side instead.
 - Draft Inventory Count detail `Materials` rows do not show QTY labels or QTY inputs, and workflow-stage rows do not show remove actions.
 - Inventory Count detail `Details` metadata may still be updated after workflow entry, but posting / inventory-effect stages remain mutation-locked.
-- Seeded Inventory Count workflow stages now use `SCHEDULED` and `COMPLETED` as stage names, with `SCHEDULE` and `COMPLETE` as the corresponding workflow button text.
+- Seeded Inventory Count workflow stages use Creating and Completing as stage names, with `SCHEDULE` and `COMPLETE` as the corresponding workflow action verbs; Inventory Completing remains manual because it is inventory-impacting.
 - Entering any workflow stage hides the Inventory Count Materials combobox add row and server-side line creation is rejected.
 - Workflow-stage Inventory Count QTY edits use the existing line update route, normalize counted quantities to canonical scale 6, and return refreshed row payloads for immediate shared-section updates.
 - Workflow-stage Inventory Count QTY inputs display using the counted item's base UoM display precision instead of raw canonical scale-6 storage.
@@ -2264,6 +2272,10 @@ Tracking inventory on-hand directly.
 - `item()`  
 - `packUom()`
 
+**Notes:**
+- Pack UoM must match the item base UoM or have a resolvable direct, reciprocal, or multi-step path through item-specific, tenant/general, or global conversions before create/update is allowed.
+- Missing conversion responses must include enough item/UOM context for the supplier-package slide-over to open a quick item-conversion modal without navigating away.
+
 **Example Usage:**  
 ```php
 $option = ItemPurchaseOption::create([
@@ -2273,6 +2285,32 @@ $option = ItemPurchaseOption::create([
     'pack_uom_id' => $kg->id,
 ]);
 ```
+
+### Purchase Order Lifecycle
+
+**Name:** Purchase Order Lifecycle
+**Type:** Domain Rule
+**Location:** `docs/architecture/purchasing/PurchaseOrderLifecycle.yaml`
+
+**Purpose:**
+Track Purchase Order lifecycle through the shared workflow foundation while mirroring the legacy status column during migration.
+
+**Rules:**
+- PO detail status is derived from workflow state: `workflow_cancelled_at` means `CANCELLED`, no completed stage means `DRAFT`, otherwise the last completed stage's `status_complete_label`.
+- PO index, detail header, action-button state, row badges, and page JSON payloads must use workflow-derived status, not the legacy `purchase_orders.status` mirror column.
+- PO detail actions are driven by reusable workflow JSON and complete the current stage through AJAX.
+- Workflow action dropdown labels are presented in natural case from `workflow_stages.action_verb`.
+- Completing the configured inventory-impacting PO stage applies receipt inventory impact.
+- Cancel transitions eligible purchase orders to persisted terminal status `CANCELLED`.
+- Back Order and Short Close are action events or markers, not `purchase_orders.status` values.
+- Line-level tax is entered with one decimal place, stored in basis points, and calculated per line for PO tax totals.
+- PO detail Details fields autosave individually and must not depend on a section-level Save button.
+- PO detail header, shipping, and line edits remain editable until the configured purchasing inventory-effect stage has completed; cancellation, completed workflow, or inventory-effect completion locks edits.
+- Supplier changes on a draft PO clear existing PO lines server-side because supplier-package options are supplier-scoped.
+- Draft PO Items add flow uses one clean supplier-scoped supplier-package combobox plus an icon `+` button; it must not expose separate item and package-option selectors.
+- Draft PO line quantity and tax are edited inline and autosaved through the line update endpoint, which must return refreshed line and PO totals JSON.
+- Draft PO line quantity input and validation use whole package counts only.
+- Backend transition rules and gates are authoritative.
 
 ### Purchase Order Receipt Inventory Impact
 
@@ -2284,7 +2322,7 @@ $option = ItemPurchaseOption::create([
 - `app/Models/PurchaseOrderReceiptLine.php`
 
 **Purpose:**  
-Ensure every purchase order receipt line posts exactly one linked stock move and updates inventory in item base units.
+Ensure purchase order receipt lines are recorded while stockable receipt lines post linked stock moves in item base units.
 
 **When to Use:**  
 Purchase order receiving and receipt-ledger audit checks.
@@ -2296,6 +2334,11 @@ Short-close events or non-purchasing inventory adjustments.
 - `PurchaseOrderLifecycleService::createReceipt()`  
 - `PurchaseOrderReceiptLine::stockMove()`  
 - `Item::onHandQuantity()`
+
+**Notes:**
+- Receipt quantity uses package count × package quantity × resolved package-UoM-to-base-UoM conversion.
+- Conversion precedence is item-specific, tenant/general, then global; missing conversion blocks receiving transactionally.
+- Conversion may resolve through direct, reciprocal, or multi-step paths through defined conversion records.
 
 **Example Usage:**  
 ```php
@@ -2322,6 +2365,7 @@ Generic inventory adjustments.
 
 **Public Interface:**  
 - `execute(ItemPurchaseOption $option, string $packCount): StockMove`
+- `baseQuantityFor(ItemPurchaseOption $option, string $packCount): string`
 
 **Example Usage:**  
 ```php

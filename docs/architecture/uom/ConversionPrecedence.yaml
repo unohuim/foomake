@@ -3,6 +3,7 @@ type: Domain Resolution Rule
 location:
   - app/Http/Controllers/UomConversionController.php
   - app/Actions/Inventory/ReceivePurchaseOptionAction.php
+  - app/Support/Uom/UomConversionPathResolver.php
 purpose: >
   Define deterministic conversion lookup order when more than one scope can provide
   a valid mapping between the same UoMs.
@@ -27,9 +28,13 @@ rules:
   - If no tenant conversion exists, a global seeded conversion may be used.
   - General conversions remain same-category only even when used through precedence lookup.
   - Item-specific conversions may cross categories because they are item-scoped.
+  - Runtime lookup may resolve a direct, reciprocal, or multi-step path through defined conversion records.
+  - Runtime lookup matches UoM symbols, not conversion-row UoM ids, so tenant UoMs can use seeded/global conversions with the same symbols.
 public_interface:
   - resolve()
+  - UomConversionPathResolver::resolveFactor()
   - ReceivePurchaseOptionAction conversion lookup
+  - ReceivePurchaseOptionAction::baseQuantityFor()
 example_usage: |
   For item 42 converting ea -> g:
     1. Look for ItemUomConversion(item_id=42, from=ea, to=g)

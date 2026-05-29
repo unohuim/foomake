@@ -53,24 +53,31 @@ const formatMoney = (currencyCode, cents) => {
 };
 
 const purchaseOrderStatusDisplay = (record) => {
+    if (record.is_cancelled) {
+        return {
+            text: 'Cancelled',
+            tone: 'muted',
+        };
+    }
+
+    if (record.is_back_ordered) {
+        return {
+            text: 'Back Ordered',
+            tone: 'muted',
+        };
+    }
+
     switch (record.status) {
-    case 'OPEN':
-    case 'PARTIALLY-RECEIVED':
+    case 'SENT':
         return {
             text: record.status,
             tone: 'default',
         };
     case 'RECEIVED':
+    case 'COMPLETED':
         return {
             text: record.status,
             tone: 'success',
-        };
-    case 'BACK-ORDERED':
-    case 'SHORT-CLOSED':
-    case 'CANCELLED':
-        return {
-            text: record.status,
-            tone: 'muted',
         };
     default:
         return {

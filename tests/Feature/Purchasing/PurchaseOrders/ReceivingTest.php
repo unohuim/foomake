@@ -140,7 +140,7 @@ beforeEach(function () {
             'tax_cents' => 0,
             'po_number' => 'PO-' . $tenant->id,
             'notes' => null,
-            'status' => 'OPEN',
+            'status' => 'SENT',
             'po_subtotal_cents' => 0,
             'po_grand_total_cents' => 0,
         ]);
@@ -319,7 +319,7 @@ it('rejects receipts when status is short-closed', function () {
     $item = ($this->makeItem)($tenant, $uom);
     $option = ($this->makeOption)($tenant, $supplier, $item, $uom);
     $order = ($this->makeOrder)($tenant, $user, $supplier);
-    ($this->setOrderStatus)($order, 'SHORT-CLOSED');
+    ($this->setOrderStatus)($order, 'RECEIVED');
     $line = ($this->makeLine)($tenant, $order, $item, $option);
 
     ($this->grantPermission)($user, 'purchasing-purchase-orders-receive');
@@ -376,7 +376,8 @@ it('allows receipts when status is back-ordered', function () {
     $item = ($this->makeItem)($tenant, $uom);
     $option = ($this->makeOption)($tenant, $supplier, $item, $uom);
     $order = ($this->makeOrder)($tenant, $user, $supplier);
-    ($this->setOrderStatus)($order, 'BACK-ORDERED');
+    ($this->setOrderStatus)($order, 'SENT');
+    $order->forceFill(['back_ordered_at' => now()])->save();
     $line = ($this->makeLine)($tenant, $order, $item, $option);
 
     ($this->grantPermission)($user, 'purchasing-purchase-orders-receive');
@@ -396,7 +397,7 @@ it('allows receipts when status is partially received', function () {
     $item = ($this->makeItem)($tenant, $uom);
     $option = ($this->makeOption)($tenant, $supplier, $item, $uom);
     $order = ($this->makeOrder)($tenant, $user, $supplier);
-    ($this->setOrderStatus)($order, 'PARTIALLY-RECEIVED');
+    ($this->setOrderStatus)($order, 'SENT');
     $line = ($this->makeLine)($tenant, $order, $item, $option);
 
     ($this->grantPermission)($user, 'purchasing-purchase-orders-receive');
@@ -736,7 +737,8 @@ it('allows short-close when status is back-ordered', function () {
     $item = ($this->makeItem)($tenant, $uom);
     $option = ($this->makeOption)($tenant, $supplier, $item, $uom);
     $order = ($this->makeOrder)($tenant, $user, $supplier);
-    ($this->setOrderStatus)($order, 'BACK-ORDERED');
+    ($this->setOrderStatus)($order, 'SENT');
+    $order->forceFill(['back_ordered_at' => now()])->save();
     $line = ($this->makeLine)($tenant, $order, $item, $option);
 
     ($this->grantPermission)($user, 'purchasing-purchase-orders-receive');
@@ -756,7 +758,7 @@ it('allows short-close when status is partially received', function () {
     $item = ($this->makeItem)($tenant, $uom);
     $option = ($this->makeOption)($tenant, $supplier, $item, $uom);
     $order = ($this->makeOrder)($tenant, $user, $supplier);
-    ($this->setOrderStatus)($order, 'PARTIALLY-RECEIVED');
+    ($this->setOrderStatus)($order, 'SENT');
     $line = ($this->makeLine)($tenant, $order, $item, $option);
 
     ($this->grantPermission)($user, 'purchasing-purchase-orders-receive');
@@ -938,7 +940,7 @@ it('rejects short-close when status is short-closed', function () {
     $item = ($this->makeItem)($tenant, $uom);
     $option = ($this->makeOption)($tenant, $supplier, $item, $uom);
     $order = ($this->makeOrder)($tenant, $user, $supplier);
-    ($this->setOrderStatus)($order, 'SHORT-CLOSED');
+    ($this->setOrderStatus)($order, 'RECEIVED');
     $line = ($this->makeLine)($tenant, $order, $item, $option);
 
     ($this->grantPermission)($user, 'purchasing-purchase-orders-receive');

@@ -2,11 +2,25 @@ export function mount(rootEl, payload) {
     const Alpine = window.Alpine;
     const safePayload = payload || {};
 
+    document.querySelectorAll('[data-purchase-order-action-option]').forEach((button) => {
+        button.addEventListener('click', (event) => {
+            event.preventDefault();
+
+            try {
+                window.dispatchEvent(new CustomEvent('purchase-order-status-action', {
+                    detail: JSON.parse(button.dataset.purchaseOrderActionOption || '{}'),
+                }));
+            } catch (error) {
+                // eslint-disable-next-line no-console
+                console.error(error);
+            }
+        });
+    });
+
     const emptyHeaderErrors = () => ({
         supplier_id: [],
         order_date: [],
-        shipping_cents: [],
-        tax_cents: [],
+        shipping_amount: [],
         po_number: [],
         notes: [],
     });
@@ -16,12 +30,14 @@ export function mount(rootEl, payload) {
         item_purchase_option_id: [],
         pack_count: [],
         unit_price_cents: [],
+        tax_percent: [],
         supplier_id: [],
     });
 
     const emptyEditErrors = () => ({
         pack_count: [],
         unit_price_cents: [],
+        tax_percent: [],
     });
 
     const emptyReceiveErrors = () => ({
@@ -51,11 +67,55 @@ export function mount(rootEl, payload) {
         return `${whole}.${fraction}`;
     };
 
+    const normalizeId = (value) => (value === null || value === undefined ? '' : String(value));
+
+    const initialSupplierId = normalizeId(safePayload.purchaseOrder?.supplier_id);
+
+    const normalizedSuppliers = (safePayload.suppliers || []).map((supplier) => ({
+        ...supplier,
+        id: normalizeId(supplier.id),
+    }));
+
+    if (
+        initialSupplierId !== ''
+        && !normalizedSuppliers.some((supplier) => supplier.id === initialSupplierId)
+        && safePayload.purchaseOrder?.supplier_name
+    ) {
+        normalizedSuppliers.push({
+            id: initialSupplierId,
+            company_name: safePayload.purchaseOrder.supplier_name,
+        });
+    }
+
+    Alpine.data('purchaseOrderHeader', (initialState = {}) => ({
+        purchaseOrder: initialState.purchaseOrder || initialState || {},
+        workflow: initialState.workflow || {},
+        init() {
+            this.$el.addEventListener('workflow-updated', (event) => {
+                this.workflow = event.detail?.workflow || this.workflow;
+            });
+            window.addEventListener('purchase-order-status-sync', (event) => {
+                this.purchaseOrder = {
+                    ...this.purchaseOrder,
+                    ...(event.detail?.purchaseOrder || {}),
+                };
+            });
+        },
+        statusMenuOptions() {
+            return Array.isArray(this.workflow.actions) ? this.workflow.actions : [];
+        },
+        performStatusMenuAction(option) {
+            window.dispatchEvent(new CustomEvent('purchase-order-status-action', {
+                detail: option || {},
+            }));
+        },
+    }));
 
     Alpine.data('purchasingOrdersShow', () => ({
         purchaseOrder: safePayload.purchaseOrder || {},
+        workflow: safePayload.workflow || {},
         lines: safePayload.lines || [],
-        suppliers: safePayload.suppliers || [],
+        suppliers: normalizedSuppliers,
         purchaseOptions: safePayload.purchaseOptions || [],
         receipts: safePayload.receipts || [],
         shortClosures: safePayload.shortClosures || [],
@@ -72,8 +132,16 @@ export function mount(rootEl, payload) {
         canReceive: safePayload.canReceive || false,
         currentUserName: safePayload.currentUserName || '',
         csrfToken: safePayload.csrfToken || '',
-        isEditable: (safePayload.purchaseOrder?.status || '') === 'DRAFT',
+        isEditable: Boolean(safePayload.purchaseOrder?.is_editable),
         isHeaderSubmitting: false,
+        savedFields: {
+            supplier_id: false,
+            order_date: false,
+            shipping_amount: false,
+            po_number: false,
+            notes: false,
+        },
+        savedFieldTimeouts: {},
         headerErrors: emptyHeaderErrors(),
         headerError: '',
         isLineSubmitting: false,
@@ -83,9 +151,12 @@ export function mount(rootEl, payload) {
         editForm: {
             pack_count: 1,
             unit_price_cents: '',
+            tax_percent: '',
         },
         editErrors: emptyEditErrors(),
         isEditSubmitting: false,
+        savedLineFields: {},
+        savedLineFieldTimeouts: {},
         isDeleteLineOpen: false,
         isDeleteLineSubmitting: false,
         deleteLineId: null,
@@ -125,10 +196,9 @@ export function mount(rootEl, payload) {
             timeoutId: null,
         },
         form: {
-            supplier_id: safePayload.purchaseOrder?.supplier_id ?? '',
+            supplier_id: initialSupplierId,
             order_date: safePayload.purchaseOrder?.order_date ?? '',
-            shipping_cents: safePayload.purchaseOrder?.shipping_cents ?? '',
-            tax_cents: safePayload.purchaseOrder?.tax_cents ?? '',
+            shipping_amount: safePayload.purchaseOrder?.shipping_amount ?? '',
             po_number: safePayload.purchaseOrder?.po_number ?? '',
             notes: safePayload.purchaseOrder?.notes ?? '',
         },
@@ -137,6 +207,18 @@ export function mount(rootEl, payload) {
             item_purchase_option_id: '',
             pack_count: 1,
             unit_price_cents: '',
+            tax_percent: '0',
+        },
+        init() {
+            this.form.supplier_id = normalizeId(this.purchaseOrder?.supplier_id);
+
+            this.$nextTick(() => {
+                this.form.supplier_id = normalizeId(this.purchaseOrder?.supplier_id);
+            });
+
+            this.$watch('lineForm.item_purchase_option_id', () => {
+                this.handleOptionChange();
+            });
         },
         normalizeErrors(errors, emptyFactory) {
             const defaults = emptyFactory();
@@ -190,6 +272,32 @@ export function mount(rootEl, payload) {
 
             return raw;
         },
+        lineFieldKey(line, field) {
+            return `${line?.id || 'new'}:${field}`;
+        },
+        lineFieldSaved(line, field) {
+            return Boolean(this.savedLineFields[this.lineFieldKey(line, field)]);
+        },
+        showLineFieldSaved(line, field) {
+            const key = this.lineFieldKey(line, field);
+
+            this.savedLineFields = {
+                ...this.savedLineFields,
+                [key]: true,
+            };
+
+            if (this.savedLineFieldTimeouts[key]) {
+                clearTimeout(this.savedLineFieldTimeouts[key]);
+            }
+
+            this.savedLineFieldTimeouts[key] = setTimeout(() => {
+                this.savedLineFields = {
+                    ...this.savedLineFields,
+                    [key]: false,
+                };
+                delete this.savedLineFieldTimeouts[key];
+            }, 1500);
+        },
         get supplierOptions() {
             const supplierId = Number(this.form.supplier_id);
             if (!supplierId) {
@@ -222,17 +330,84 @@ export function mount(rootEl, payload) {
                 .filter((option) => option.item_id === itemId)
                 .map((option) => this.decorateOption(option));
         },
-        get canReceiveOrder() {
-            return ['OPEN', 'BACK-ORDERED', 'PARTIALLY-RECEIVED'].includes(this.purchaseOrder.status);
+        get supplierPackageComboboxOptions() {
+            if (!Number(this.form.supplier_id)) {
+                return [];
+            }
+
+            return this.supplierOptions.map((option) => {
+                const decorated = this.decorateOption(option);
+                const price = this.formatMoney(option.current_price_cents ?? 0);
+
+                return {
+                    value: String(option.id),
+                    label: decorated.label,
+                    description: `${option.supplier_name || 'Supplier'} · ${price}`,
+                };
+            });
         },
-        get canOpenOrder() {
-            return ['DRAFT', 'BACK-ORDERED'].includes(this.purchaseOrder.status);
+        get canReceiveOrder() {
+            const currentStage = this.workflow.currentStage || {};
+
+            return currentStage.actionVerb === 'Receive' && !this.purchaseOrder.is_cancelled;
         },
         get canBackOrder() {
-            return this.purchaseOrder.status === 'OPEN';
+            return this.canReceiveOrder;
         },
         get canCancelOrder() {
-            return this.purchaseOrder.status === 'OPEN';
+            const actions = Array.isArray(this.workflow.actions) ? this.workflow.actions : [];
+
+            return actions.some((action) => action.type === 'cancel')
+                && !this.purchaseOrder.is_cancelled
+                && !this.purchaseOrder.has_receipts;
+        },
+        statusMenuOptions() {
+            return Array.isArray(this.workflow.actions) ? this.workflow.actions : [];
+        },
+        performStatusMenuAction(option) {
+            if (!option || typeof option !== 'object') {
+                return;
+            }
+
+            if (option.action === 'receive') {
+                this.openReceive();
+                return;
+            }
+
+            if (option.action === 'short_close') {
+                const line = this.lines.find((entry) => this.canShortCloseLine(entry));
+
+                if (line) {
+                    this.openShortCloseLine(line);
+                }
+
+                return;
+            }
+
+            if (option.action) {
+                this.submitStatusAction(option.action);
+                return;
+            }
+
+            if (option.status) {
+                this.submitStatus(option.status);
+            }
+        },
+        handleWorkflowUpdated(detail) {
+            const workflow = detail?.workflow || {};
+
+            if (!workflow.status) {
+                return;
+            }
+
+            this.workflow = workflow;
+            this.purchaseOrder = {
+                ...this.purchaseOrder,
+                ...(detail?.purchaseOrder || {}),
+                workflow_status: workflow.status,
+                status: workflow.status,
+            };
+            this.isEditable = this.purchaseOrder.is_editable;
         },
         decorateOption(option) {
             const quantity = option.pack_quantity_display || this.formatQuantity(option.pack_quantity);
@@ -247,11 +422,13 @@ export function mount(rootEl, payload) {
             this.lineForm.item_purchase_option_id = '';
             this.lineForm.pack_count = 1;
             this.lineForm.unit_price_cents = '';
+            this.lineForm.tax_percent = '0';
             this.lineErrors = emptyLineErrors();
         },
         handleItemChange() {
             this.lineForm.item_purchase_option_id = '';
             this.lineForm.unit_price_cents = '';
+            this.lineForm.tax_percent = '0';
             this.lineErrors = emptyLineErrors();
         },
         handleOptionChange() {
@@ -267,6 +444,8 @@ export function mount(rootEl, payload) {
 
             this.lineForm.item_id = option.item_id;
             this.lineForm.unit_price_cents = option.current_price_cents ?? '';
+            this.lineForm.pack_count = this.lineForm.pack_count || 1;
+            this.lineForm.tax_percent = this.lineForm.tax_percent || '0';
         },
         lineLabel(line) {
             if (!line.pack_quantity) {
@@ -289,6 +468,7 @@ export function mount(rootEl, payload) {
                 item_purchase_option_id: '',
                 pack_count: 1,
                 unit_price_cents: '',
+                tax_percent: '0',
             };
         },
         receiptLineSummary(receipt) {
@@ -441,20 +621,125 @@ export function mount(rootEl, payload) {
             this.isShortCloseSubmitting = false;
         },
         updateDerivedStatus() {
-            const balances = this.lines.map((line) => normalizeDecimal(line.remaining_balance));
-            const allZero = balances.length > 0 && balances.every((balance) => balance === '0.000000');
-            const anyReceipt = this.lines.some((line) => normalizeDecimal(line.received_sum) !== '0.000000');
-            const anyShortClose = this.lines.some((line) => normalizeDecimal(line.short_closed_sum) !== '0.000000');
-
-            if (allZero && anyShortClose) {
-                this.purchaseOrder.status = 'SHORT-CLOSED';
-            } else if (allZero && anyReceipt) {
-                this.purchaseOrder.status = 'RECEIVED';
-            } else if (!allZero && anyReceipt) {
-                this.purchaseOrder.status = 'PARTIALLY-RECEIVED';
+            this.isEditable = Boolean(this.purchaseOrder.is_editable);
+        },
+        markSaved(field) {
+            if (!Object.prototype.hasOwnProperty.call(this.savedFields, field)) {
+                return;
             }
 
-            this.isEditable = this.purchaseOrder.status === 'DRAFT';
+            this.savedFields[field] = true;
+
+            if (this.savedFieldTimeouts[field]) {
+                clearTimeout(this.savedFieldTimeouts[field]);
+            }
+
+            this.savedFieldTimeouts[field] = setTimeout(() => {
+                this.savedFields[field] = false;
+            }, 1500);
+        },
+        fieldPayload(field) {
+            const payloadData = {};
+
+            if (field === 'supplier_id') {
+                payloadData.supplier_id = this.normalizeNullableInt(this.form.supplier_id);
+            }
+
+            if (field === 'order_date') {
+                payloadData.order_date = this.normalizeNullable(this.form.order_date);
+            }
+
+            if (field === 'shipping_amount') {
+                payloadData.shipping_amount = this.normalizeNullable(this.form.shipping_amount);
+            }
+
+            if (field === 'po_number') {
+                payloadData.po_number = this.normalizeNullable(this.form.po_number);
+            }
+
+            if (field === 'notes') {
+                payloadData.notes = this.normalizeNullable(this.form.notes);
+            }
+
+            return payloadData;
+        },
+        applyPurchaseOrderUpdate(updated, lines = null) {
+            this.purchaseOrder = {
+                ...this.purchaseOrder,
+                ...updated,
+            };
+
+            this.form = {
+                supplier_id: updated.supplier_id === null || updated.supplier_id === undefined
+                    ? ''
+                    : String(updated.supplier_id),
+                order_date: updated.order_date ?? '',
+                shipping_amount: updated.shipping_amount ?? '',
+                po_number: updated.po_number ?? '',
+                notes: updated.notes ?? '',
+            };
+
+            if (Array.isArray(lines)) {
+                this.lines = lines;
+            }
+
+            this.isEditable = Boolean(updated.is_editable);
+        },
+        async autosaveField(field) {
+            if (!this.isEditable || !this.updateUrl || this.isHeaderSubmitting) {
+                return;
+            }
+
+            const payloadData = this.fieldPayload(field);
+
+            if (Object.keys(payloadData).length === 0) {
+                return;
+            }
+
+            this.isHeaderSubmitting = true;
+            this.headerErrors = emptyHeaderErrors();
+            this.headerError = '';
+
+            try {
+                const response = await fetch(this.updateUrl, {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        Accept: 'application/json',
+                        'X-CSRF-TOKEN': this.csrfToken,
+                    },
+                    body: JSON.stringify(payloadData),
+                });
+
+                if (response.status === 422) {
+                    const data = await response.json();
+                    this.headerErrors = this.normalizeErrors(data.errors, emptyHeaderErrors);
+                    this.headerError = data.message || 'Unable to save field.';
+                    return;
+                }
+
+                if (!response.ok) {
+                    this.headerError = 'Unable to save field. Please try again.';
+                    return;
+                }
+
+                const data = await response.json();
+                const updated = data.data?.purchase_order || data.data || {};
+
+                this.applyPurchaseOrderUpdate(updated, data.data?.lines);
+
+                if (field === 'supplier_id') {
+                    this.handleSupplierChange();
+                }
+
+                this.markSaved(field);
+            } catch (error) {
+                // eslint-disable-next-line no-console
+                console.error(error);
+                this.headerError = 'Unable to save field. Please try again.';
+            } finally {
+                this.isHeaderSubmitting = false;
+            }
         },
         async submitHeader() {
             if (!this.isEditable || !this.updateUrl || this.isHeaderSubmitting) {
@@ -468,8 +753,7 @@ export function mount(rootEl, payload) {
             const payloadData = {
                 supplier_id: this.normalizeNullableInt(this.form.supplier_id),
                 order_date: this.normalizeNullable(this.form.order_date),
-                shipping_cents: this.normalizeNullableInt(this.form.shipping_cents),
-                tax_cents: this.normalizeNullableInt(this.form.tax_cents),
+                shipping_amount: this.normalizeNullable(this.form.shipping_amount),
                 po_number: this.normalizeNullable(this.form.po_number),
                 notes: this.normalizeNullable(this.form.notes),
             };
@@ -498,23 +782,9 @@ export function mount(rootEl, payload) {
                 }
 
                 const data = await response.json();
-                const updated = data.data || {};
+                const updated = data.data?.purchase_order || data.data || {};
 
-                this.purchaseOrder = {
-                    ...this.purchaseOrder,
-                    ...updated,
-                };
-
-                this.form = {
-                    supplier_id: updated.supplier_id ?? '',
-                    order_date: updated.order_date ?? '',
-                    shipping_cents: updated.shipping_cents ?? '',
-                    tax_cents: updated.tax_cents ?? '',
-                    po_number: updated.po_number ?? '',
-                    notes: updated.notes ?? '',
-                };
-
-                this.isEditable = updated.status === 'DRAFT';
+                this.applyPurchaseOrderUpdate(updated, data.data?.lines);
                 this.handleSupplierChange();
                 this.showToast('success', 'Header updated.');
             } catch (error) {
@@ -533,12 +803,14 @@ export function mount(rootEl, payload) {
             this.isLineSubmitting = true;
             this.lineErrors = emptyLineErrors();
             this.lineError = '';
+            this.handleOptionChange();
 
             const payloadData = {
                 item_id: this.normalizeNullableInt(this.lineForm.item_id),
                 item_purchase_option_id: this.normalizeNullableInt(this.lineForm.item_purchase_option_id),
                 pack_count: this.normalizeNullableInt(this.lineForm.pack_count),
                 unit_price_cents: this.normalizeNullableInt(this.lineForm.unit_price_cents),
+                tax_percent: this.normalizeNullable(this.lineForm.tax_percent),
             };
 
             try {
@@ -598,6 +870,7 @@ export function mount(rootEl, payload) {
             this.editForm = {
                 pack_count: line.pack_count,
                 unit_price_cents: line.unit_price_cents,
+                tax_percent: line.tax_percent ?? '0',
             };
             this.editErrors = emptyEditErrors();
         },
@@ -606,6 +879,7 @@ export function mount(rootEl, payload) {
             this.editForm = {
                 pack_count: 1,
                 unit_price_cents: '',
+                tax_percent: '',
             };
             this.editErrors = emptyEditErrors();
         },
@@ -620,6 +894,7 @@ export function mount(rootEl, payload) {
             const payloadData = {
                 pack_count: this.normalizeNullableInt(this.editForm.pack_count),
                 unit_price_cents: this.normalizeNullableInt(this.editForm.unit_price_cents),
+                tax_percent: this.normalizeNullable(this.editForm.tax_percent),
             };
 
             try {
@@ -665,6 +940,65 @@ export function mount(rootEl, payload) {
                 // eslint-disable-next-line no-console
                 console.error(error);
                 this.showToast('error', 'Unable to update line.');
+            } finally {
+                this.isEditSubmitting = false;
+            }
+        },
+        async autosaveLineField(line, field) {
+            if (!this.isEditable || !line || !this.lineUpdateUrlBase || this.isEditSubmitting) {
+                return;
+            }
+
+            this.isEditSubmitting = true;
+
+            const payloadData = {
+                pack_count: this.normalizeNullableInt(line.pack_count),
+                unit_price_cents: this.normalizeNullableInt(line.unit_price_cents),
+                tax_percent: this.normalizeNullable(line.tax_percent),
+            };
+
+            try {
+                const response = await fetch(`${this.lineUpdateUrlBase}/${line.id}`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        Accept: 'application/json',
+                        'X-CSRF-TOKEN': this.csrfToken,
+                    },
+                    body: JSON.stringify(payloadData),
+                });
+
+                if (response.status === 422) {
+                    const data = await response.json();
+                    this.showToast('error', data.message || `Unable to update ${field}.`);
+                    return;
+                }
+
+                if (!response.ok) {
+                    this.showToast('error', `Unable to update ${field}.`);
+                    return;
+                }
+
+                const data = await response.json();
+                const updatedLine = data.data?.line;
+                const totals = data.data?.purchase_order;
+
+                if (updatedLine) {
+                    this.lines = this.lines.map((entry) => (entry.id === updatedLine.id ? updatedLine : entry));
+                }
+
+                if (totals) {
+                    this.purchaseOrder.po_subtotal_cents = totals.po_subtotal_cents;
+                    this.purchaseOrder.po_grand_total_cents = totals.po_grand_total_cents;
+                    this.purchaseOrder.shipping_cents = totals.shipping_cents;
+                    this.purchaseOrder.tax_cents = totals.tax_cents;
+                }
+
+                this.showLineFieldSaved(updatedLine || line, field);
+            } catch (error) {
+                // eslint-disable-next-line no-console
+                console.error(error);
+                this.showToast('error', `Unable to update ${field}.`);
             } finally {
                 this.isEditSubmitting = false;
             }
@@ -717,7 +1051,9 @@ export function mount(rootEl, payload) {
                 const data = await response.json();
                 const totals = data.data?.purchase_order;
 
-                this.lines = this.lines.filter((entry) => entry.id !== this.deleteLineId);
+                this.lines = Array.isArray(data.data?.lines)
+                    ? data.data.lines
+                    : this.lines.filter((entry) => entry.id !== this.deleteLineId);
 
                 if (totals) {
                     this.purchaseOrder.po_subtotal_cents = totals.po_subtotal_cents;
@@ -732,6 +1068,55 @@ export function mount(rootEl, payload) {
                 // eslint-disable-next-line no-console
                 console.error(error);
                 this.deleteLineError = 'Unable to delete line.';
+            } finally {
+                this.isDeleteLineSubmitting = false;
+            }
+        },
+        async deleteLine(line) {
+            if (!this.isEditable || !line || !this.lineDeleteUrlBase || this.isDeleteLineSubmitting) {
+                return;
+            }
+
+            this.isDeleteLineSubmitting = true;
+            this.deleteLineError = '';
+
+            try {
+                const response = await fetch(`${this.lineDeleteUrlBase}/${line.id}`, {
+                    method: 'DELETE',
+                    headers: {
+                        Accept: 'application/json',
+                        'X-CSRF-TOKEN': this.csrfToken,
+                    },
+                });
+
+                if (response.status === 422) {
+                    const data = await response.json();
+                    this.showToast('error', data.message || 'Unable to delete line.');
+                    return;
+                }
+
+                if (!response.ok) {
+                    this.showToast('error', 'Unable to delete line.');
+                    return;
+                }
+
+                const data = await response.json();
+                const totals = data.data?.purchase_order;
+
+                this.lines = Array.isArray(data.data?.lines)
+                    ? data.data.lines
+                    : this.lines.filter((entry) => entry.id !== line.id);
+
+                if (totals) {
+                    this.purchaseOrder.po_subtotal_cents = totals.po_subtotal_cents;
+                    this.purchaseOrder.po_grand_total_cents = totals.po_grand_total_cents;
+                    this.purchaseOrder.shipping_cents = totals.shipping_cents;
+                    this.purchaseOrder.tax_cents = totals.tax_cents;
+                }
+            } catch (error) {
+                // eslint-disable-next-line no-console
+                console.error(error);
+                this.showToast('error', 'Unable to delete line.');
             } finally {
                 this.isDeleteLineSubmitting = false;
             }
@@ -910,23 +1295,98 @@ export function mount(rootEl, payload) {
                 if (response.status === 422) {
                     const data = await response.json();
                     this.statusError = data.message || 'Unable to update status.';
+                    this.showToast('error', this.statusError);
                     return;
                 }
 
                 if (!response.ok) {
                     this.statusError = 'Unable to update status.';
+                    this.showToast('error', this.statusError);
                     return;
                 }
 
                 const data = await response.json();
-                this.purchaseOrder.status = data.data?.status || status;
-                this.isEditable = this.purchaseOrder.status === 'DRAFT';
+                this.purchaseOrder = {
+                    ...this.purchaseOrder,
+                    ...(data.data || {}),
+                    status: data.data?.status || status,
+                    is_cancelled: Boolean(data.data?.is_cancelled),
+                    is_back_ordered: Boolean(data.data?.is_back_ordered),
+                };
+                this.isEditable = Boolean(this.purchaseOrder.is_editable);
+                this.syncHeaderStatus();
                 this.showToast('success', 'Status updated.');
+                window.location.reload();
             } catch (error) {
                 // eslint-disable-next-line no-console
                 console.error(error);
                 this.statusError = 'Unable to update status.';
+                this.showToast('error', this.statusError);
             }
+        },
+        async submitStatusAction(action) {
+            if (!this.statusUpdateUrl) {
+                return;
+            }
+
+            this.statusError = '';
+
+            try {
+                const response = await fetch(this.statusUpdateUrl, {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        Accept: 'application/json',
+                        'X-CSRF-TOKEN': this.csrfToken,
+                    },
+                    body: JSON.stringify({ action }),
+                });
+
+                if (response.status === 422) {
+                    const data = await response.json();
+                    this.statusError = data.message || 'Unable to apply action.';
+                    this.showToast('error', this.statusError);
+                    return;
+                }
+
+                if (!response.ok) {
+                    this.statusError = 'Unable to apply action.';
+                    this.showToast('error', this.statusError);
+                    return;
+                }
+
+                const data = await response.json();
+                this.purchaseOrder = {
+                    ...this.purchaseOrder,
+                    ...(data.data || {}),
+                    status: data.data?.status || this.purchaseOrder.status,
+                    is_cancelled: Boolean(data.data?.is_cancelled),
+                    is_back_ordered: Boolean(data.data?.is_back_ordered),
+                };
+                this.isEditable = Boolean(this.purchaseOrder.is_editable);
+                this.syncHeaderStatus();
+                this.showToast('success', 'Action applied.');
+                window.location.reload();
+            } catch (error) {
+                // eslint-disable-next-line no-console
+                console.error(error);
+                this.statusError = 'Unable to apply action.';
+                this.showToast('error', this.statusError);
+            }
+        },
+        syncHeaderStatus() {
+            window.dispatchEvent(new CustomEvent('purchase-order-status-sync', {
+                detail: {
+                    purchaseOrder: {
+                        status: this.purchaseOrder.status,
+                        is_cancelled: this.purchaseOrder.is_cancelled,
+                        is_back_ordered: this.purchaseOrder.is_back_ordered,
+                        has_receipts: this.purchaseOrder.has_receipts,
+                        current_workflow_stage_id: this.purchaseOrder.current_workflow_stage_id,
+                        last_completed_workflow_stage_id: this.purchaseOrder.last_completed_workflow_stage_id,
+                    },
+                },
+            }));
         },
     }));
 }

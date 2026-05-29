@@ -1,0 +1,34 @@
+name: Workflow Action Button Contract
+type: UI Contract
+location:
+  - resources/views/components/workflow-action-button.blade.php
+  - resources/js/components/workflow-action-button.js
+  - app/Services/Workflows/WorkflowTransitionService.php
+purpose: Define the reusable JSON-driven workflow action button used by workflow-enabled record detail headers.
+when_to_use:
+  - Rendering the current workflow status and available workflow actions in a resource detail header
+  - Completing the current workflow stage through AJAX
+  - Cancelling a workflow-enabled record through AJAX
+when_not_to_use:
+  - Adding arbitrary custom dropdown actions
+  - Replacing backend authorization or transition validation
+  - Browser-refresh lifecycle transitions
+rules:
+  - The button receives JSON state only.
+  - The closed button text is the derived workflow status.
+  - The primary dropdown action is the current stage `action_verb`.
+  - The only v1 dropdown action types are completing the current stage and cancelling when allowed.
+  - The component submits actions through AJAX and replaces local workflow state from the JSON response.
+  - The component must not introduce global JavaScript state.
+  - UI action visibility is not authorization.
+public_interface:
+  - workflowActionButton
+  - WorkflowTransitionService::purchaseOrderWorkflowPayload()
+example_usage: |
+  workflow:
+    status: CREATED
+    currentStage:
+      actionVerb: Receive
+    actions:
+      - type: complete_stage
+        label: Receive

@@ -925,7 +925,7 @@ it('34. make order detail workflow payload includes due date assignee and availa
         'key' => 'production',
     ], [
         'name' => 'Production',
-        'button_text' => 'PRODUCE',
+        'action_verb' => 'PRODUCE',
         'description' => 'Build the batch.',
         'sort_order' => 10,
         'is_active' => true,
@@ -938,7 +938,7 @@ it('34. make order detail workflow payload includes due date assignee and availa
         'key' => 'completed',
     ], [
         'name' => 'Completed',
-        'button_text' => 'COMPLETE',
+        'action_verb' => 'COMPLETE',
         'description' => 'Close the batch.',
         'sort_order' => 20,
         'is_active' => true,
@@ -1012,7 +1012,7 @@ it('34a. make order workflow payload exposes editable tenant scoped assignee opt
         'key' => 'production',
     ], [
         'name' => 'Production',
-        'button_text' => 'PRODUCE',
+        'action_verb' => 'PRODUCE',
         'description' => 'Build the batch.',
         'sort_order' => 10,
         'is_active' => true,
@@ -1025,7 +1025,7 @@ it('34a. make order workflow payload exposes editable tenant scoped assignee opt
         'key' => 'completed',
     ], [
         'name' => 'Completed',
-        'button_text' => 'COMPLETE',
+        'action_verb' => 'COMPLETE',
         'description' => 'Close the batch.',
         'sort_order' => 20,
         'is_active' => true,
@@ -1094,7 +1094,7 @@ it('35. make order detail tasks payload includes current stage tasks and complet
         'key' => 'production',
     ], [
         'name' => 'Production',
-        'button_text' => 'PRODUCE',
+        'action_verb' => 'PRODUCE',
         'description' => 'Build the batch.',
         'sort_order' => 10,
         'is_active' => true,
@@ -1179,7 +1179,7 @@ it('35a. make order detail header payload uses workflow stage names and not life
         'key' => 'completed',
     ], [
         'name' => 'Completed',
-        'button_text' => 'COMPLETE',
+        'action_verb' => 'COMPLETE',
         'description' => 'Check the batch.',
         'sort_order' => 20,
         'is_active' => true,
@@ -1222,8 +1222,8 @@ it('35a. make order detail header payload uses workflow stage names and not life
         ->and(data_get($payload, 'makeOrder.status'))->toBe(MakeOrder::STATUS_SCHEDULED)
         ->and(data_get($payload, 'workflow.next_stage_action.label'))->toBe('COMPLETE');
 
-    $stageA->forceFill(['name' => 'Cook', 'button_text' => 'COOK'])->save();
-    $stageB->forceFill(['name' => 'Ready for QA', 'button_text' => 'QA READY'])->save();
+    $stageA->forceFill(['name' => 'Cook', 'action_verb' => 'COOK'])->save();
+    $stageB->forceFill(['name' => 'Ready for QA', 'action_verb' => 'QA READY'])->save();
 
     $renamedPayload = ($this->extractPayload)(
         actingAs($user)->get(route('manufacturing.make-orders.show', $withStage->fresh()))->assertOk(),

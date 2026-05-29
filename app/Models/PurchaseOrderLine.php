@@ -16,6 +16,7 @@ use Illuminate\Support\Carbon;
  * @property int $pack_count
  * @property int $unit_price_cents
  * @property int $line_subtotal_cents
+ * @property int $line_tax_rate_bps
  * @property int $unit_price_amount
  * @property string $unit_price_currency_code
  * @property int $converted_unit_price_amount

@@ -3,11 +3,14 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\Purchasing\StoreSupplierPurchaseOptionRequest;
+use App\Models\Item;
 use App\Models\ItemPurchaseOption;
 use App\Models\ItemPurchaseOptionPrice;
 use App\Models\PurchaseOrderLine;
 use App\Models\Supplier;
+use App\Models\Uom;
 use App\Support\QuantityFormatter;
+use App\Support\Uom\UomConversionPathResolver;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -19,6 +22,11 @@ use Illuminate\Support\Facades\Gate;
  */
 class SupplierPurchaseOptionController extends Controller
 {
+    public function __construct(
+        private readonly UomConversionPathResolver $conversionPathResolver
+    ) {
+    }
+
     /**
      * Return supplier-scoped purchase options for the reusable detail section.
      */
@@ -64,6 +72,11 @@ class SupplierPurchaseOptionController extends Controller
         $this->abortIfWrongTenant($request, $supplier);
 
         $validated = $request->validated();
+
+        if (! $this->supplierPackageConversionExists($request, (int) $validated['item_id'], (int) $validated['pack_uom_id'])) {
+            return $this->missingConversionResponse($request, (int) $validated['item_id'], (int) $validated['pack_uom_id']);
+        }
+
         $tenantCurrency = $this->tenantCurrency($request);
         $priceCents = isset($validated['price_amount']) && $validated['price_amount'] !== ''
             ? $this->normalizeAmountToCents((string) $validated['price_amount'])
@@ -106,6 +119,11 @@ class SupplierPurchaseOptionController extends Controller
         $this->abortIfOptionUnavailable($request, $supplier, $option);
 
         $validated = $request->validated();
+
+        if (! $this->supplierPackageConversionExists($request, (int) $validated['item_id'], (int) $validated['pack_uom_id'])) {
+            return $this->missingConversionResponse($request, (int) $validated['item_id'], (int) $validated['pack_uom_id']);
+        }
+
         $tenantCurrency = $this->tenantCurrency($request);
         $priceCents = isset($validated['price_amount']) && $validated['price_amount'] !== ''
             ? $this->normalizeAmountToCents((string) $validated['price_amount'])
@@ -236,6 +254,7 @@ class SupplierPurchaseOptionController extends Controller
             'is_active' => (bool) $option->is_active,
             'state' => $option->is_active ? 'active' : 'archived',
             'available_actions' => $availableActions,
+            'conversion_create_url' => route('manufacturing.uom-conversions.items.store'),
         ];
     }
 
@@ -316,5 +335,75 @@ class SupplierPurchaseOptionController extends Controller
     private function tenantCurrency(Request $request): string
     {
         return strtoupper((string) ($request->user()?->tenant?->currency_code ?: config('app.currency_code', 'USD')));
+    }
+
+    /**
+     * Determine whether the package UoM can convert into the item base UoM.
+     */
+    private function supplierPackageConversionExists(Request $request, int $itemId, int $packUomId): bool
+    {
+        $tenantId = (int) $request->user()->tenant_id;
+
+        $item = Item::query()
+            ->where('tenant_id', $tenantId)
+            ->findOrFail($itemId);
+
+        $packUom = Uom::query()
+            ->where('tenant_id', $tenantId)
+            ->findOrFail($packUomId);
+
+        $baseUom = Uom::query()
+            ->where('tenant_id', $tenantId)
+            ->findOrFail($item->base_uom_id);
+
+        return $this->conversionPathResolver->canResolve(
+            $tenantId,
+            (int) $item->id,
+            $packUom,
+            $baseUom,
+            UomConversionPathResolver::PRECEDENCE_GENERAL_FIRST
+        );
+    }
+
+    /**
+     * Return a JSON/AJAX-compatible missing conversion response.
+     */
+    private function missingConversionResponse(Request $request, int $itemId, int $packUomId): JsonResponse
+    {
+        $tenantId = (int) $request->user()->tenant_id;
+        $item = Item::query()
+            ->with('baseUom')
+            ->where('tenant_id', $tenantId)
+            ->findOrFail($itemId);
+        $packUom = Uom::query()
+            ->where('tenant_id', $tenantId)
+            ->findOrFail($packUomId);
+        $baseUom = $item->baseUom;
+
+        return response()->json([
+            'message' => 'Create a unit conversion before using this package UoM.',
+            'errors' => [
+                'pack_uom_id' => ['Create a unit conversion before using this package UoM.'],
+            ],
+            'meta' => [
+                'requires_conversion' => true,
+                'conversion_create_url' => route('manufacturing.uom-conversions.items.store'),
+                'suggested_direction' => 'package_to_base',
+                'item' => [
+                    'id' => $item->id,
+                    'name' => $item->name,
+                ],
+                'from_uom' => [
+                    'id' => $packUom->id,
+                    'name' => $packUom->name,
+                    'symbol' => $packUom->symbol,
+                ],
+                'to_uom' => [
+                    'id' => $baseUom?->id,
+                    'name' => $baseUom?->name,
+                    'symbol' => $baseUom?->symbol,
+                ],
+            ],
+        ], 422);
     }
 }

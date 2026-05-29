@@ -196,8 +196,8 @@ beforeEach(function () {
     $this->createManufacturingWorkflowStages = function (
         Tenant $tenant,
         array $stages = [
-            ['key' => 'production', 'name' => 'Production', 'button_text' => 'Production', 'sort_order' => 10, 'is_inventory_effect_stage' => true],
-            ['key' => 'completed', 'name' => 'Completed', 'button_text' => 'Completed', 'sort_order' => 20, 'is_inventory_effect_stage' => false],
+            ['key' => 'production', 'name' => 'Production', 'action_verb' => 'Production', 'sort_order' => 10, 'is_inventory_effect_stage' => true],
+            ['key' => 'completed', 'name' => 'Completed', 'action_verb' => 'Completed', 'sort_order' => 20, 'is_inventory_effect_stage' => false],
         ]
     ): array {
         $domain = WorkflowDomain::query()->firstOrCreate(
@@ -212,7 +212,7 @@ beforeEach(function () {
                 'key' => $stage['key'],
             ], [
                 'name' => $stage['name'],
-                'button_text' => $stage['button_text'] ?? $stage['name'],
+                'action_verb' => $stage['action_verb'] ?? $stage['name'],
                 'description' => $stage['name'] . ' stage.',
                 'sort_order' => $stage['sort_order'],
                 'is_active' => true,

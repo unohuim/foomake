@@ -493,7 +493,7 @@ it('18d. creating a stockable material with starting quantity creates a complete
         ->where('item_id', $item->id)
         ->firstOrFail();
 
-    expect($count->workflowStage?->key)->toBe('completed')
+    expect($count->workflowStage?->key)->toBe('completing')
         ->and($count->posted_at)->not->toBeNull()
         ->and($count->created_by_user_id)->toBe($user->id)
         ->and($count->tasked_by_user_id)->toBe($user->id)

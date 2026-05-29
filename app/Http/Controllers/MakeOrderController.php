@@ -14,6 +14,7 @@ use App\Models\RecipeVersionLine;
 use App\Models\StockMove;
 use App\Models\Task;
 use App\Models\User;
+use App\Models\WorkflowDomain;
 use App\Models\WorkflowStage;
 use App\Support\QuantityFormatter;
 use DomainException;
@@ -1275,7 +1276,7 @@ class MakeOrderController extends Controller
             if ($nextStage) {
                 $nextStageAction = [
                     'id' => $nextStage->id,
-                    'label' => $nextStage->button_text ?: $nextStage->name,
+                    'label' => $nextStage->action_verb ?: $nextStage->name,
                 ];
             }
         }
@@ -1801,6 +1802,21 @@ class MakeOrderController extends Controller
      */
     private function ensureManufacturingWorkflowStagesExist(Request $request): void
     {
+        $manufacturingDomainId = WorkflowDomain::query()
+            ->where('key', 'manufacturing')
+            ->value('id');
+
+        if ($manufacturingDomainId) {
+            $hasConfiguredStages = WorkflowStage::withoutGlobalScopes()
+                ->where('tenant_id', $request->user()->tenant_id)
+                ->where('workflow_domain_id', $manufacturingDomainId)
+                ->exists();
+
+            if ($hasConfiguredStages) {
+                return;
+            }
+        }
+
         app(SeedDefaultWorkflowStagesForTenantAction::class)->execute($request->user()->tenant);
     }
 }

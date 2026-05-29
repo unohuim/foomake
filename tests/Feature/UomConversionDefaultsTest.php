@@ -32,6 +32,7 @@ beforeEach(function (): void {
         'conversions' => [
             'mass' => [
                 ['from' => 'kg', 'to' => 'g', 'multiplier' => '1000.00000000'],
+                ['from' => 'lb', 'to' => 'g', 'multiplier' => '453.59200000'],
                 ['from' => 'lb', 'to' => 'oz', 'multiplier' => '16.00000000'],
             ],
             'volume' => [
@@ -89,6 +90,23 @@ it('2. seeds global volume conversions', function (): void {
         'from_uom_id' => $liter?->id,
         'to_uom_id' => $milliliter?->id,
         'multiplier' => '1000.00000000',
+    ]);
+});
+
+it('1a. seeds global pound to gram conversion', function (): void {
+    ($this->seedDefaults)();
+
+    $pound = ($this->systemUom)('lb');
+    $gram = ($this->systemUom)('g');
+
+    expect($pound)->not->toBeNull()
+        ->and($gram)->not->toBeNull();
+
+    $this->assertDatabaseHas('uom_conversions', [
+        'tenant_id' => null,
+        'from_uom_id' => $pound?->id,
+        'to_uom_id' => $gram?->id,
+        'multiplier' => '453.59200000',
     ]);
 });
 

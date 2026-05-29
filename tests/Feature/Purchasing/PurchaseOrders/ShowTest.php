@@ -131,6 +131,18 @@ beforeEach(function () {
         return $this->actingAs($user)->postJson('/purchasing/orders', $payload);
     };
 
+    $this->purchasingWorkflowStages = function (Tenant $tenant): array {
+        app(\App\Actions\Workflows\SeedDefaultWorkflowStagesForTenantAction::class)->execute($tenant);
+
+        return DB::table('workflow_stages')
+            ->join('workflow_domains', 'workflow_domains.id', '=', 'workflow_stages.workflow_domain_id')
+            ->where('workflow_stages.tenant_id', $tenant->id)
+            ->where('workflow_domains.key', 'purchasing')
+            ->get(['workflow_stages.id', 'workflow_stages.key'])
+            ->keyBy('key')
+            ->all();
+    };
+
     $this->addLine = function (User $user, int $orderId, array $payload = []) {
         return $this->actingAs($user)->postJson("/purchasing/orders/{$orderId}/lines", $payload);
     };
@@ -228,7 +240,7 @@ it('renders show payload markers', function () {
         ->get("/purchasing/orders/{$orderId}")
         ->assertOk()
         ->assertSee('Purchase Orders')
-        ->assertSee('ID #' . $orderId)
+        ->assertSee('PO #' . $orderId)
         ->assertSee(route('purchasing.orders.index'), false)
         ->assertDontSee('Back to Purchase Orders')
         ->assertSee('data-page="purchasing-orders-show"', false)
@@ -246,7 +258,7 @@ it('includes header fields in show payload', function () {
     $orderResponse = ($this->createOrder)($user, [
         'supplier_id' => $supplier->id,
         'order_date' => '2026-02-05',
-        'shipping_cents' => 150,
+        'shipping_amount' => '1.50',
         'po_number' => 'PO-300',
         'notes' => 'Show order notes',
     ])->assertCreated();
@@ -374,7 +386,7 @@ it('shows line sub totals and totals', function () {
 
     $orderResponse = ($this->createOrder)($user, [
         'supplier_id' => $supplier->id,
-        'shipping_cents' => 150,
+        'shipping_amount' => '1.50',
     ])->assertCreated();
 
     $orderId = (int) ($orderResponse->json('data.id') ?? 0);
@@ -427,7 +439,7 @@ it('shows totals when shipping is null', function () {
 
     $orderResponse = ($this->createOrder)($user, [
         'supplier_id' => $supplier->id,
-        'shipping_cents' => null,
+        'shipping_amount' => null,
     ])->assertCreated();
 
     $orderId = (int) ($orderResponse->json('data.id') ?? 0);
@@ -602,6 +614,228 @@ it('shows status field on show', function () {
     expect($order['status'] ?? null)->toBe('DRAFT');
 });
 
+it('does not render literal blade javascript directives in the purchase order header', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermission)($user, 'purchasing-purchase-orders-create');
+    ($this->grantPermission)($user, 'purchasing-purchase-orders-receive');
+
+    $orderResponse = ($this->createOrder)($user, [])
+        ->assertCreated();
+
+    $orderId = (int) ($orderResponse->json('data.id') ?? 0);
+
+    $html = $this->actingAs($user)
+        ->get("/purchasing/orders/{$orderId}")
+        ->assertOk()
+        ->getContent();
+
+    expect($html)->not->toContain('@js(');
+});
+
+it('renders initialized purchase order header alpine data as valid json', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermission)($user, 'purchasing-purchase-orders-create');
+    ($this->grantPermission)($user, 'purchasing-purchase-orders-receive');
+
+    $orderResponse = ($this->createOrder)($user, [])
+        ->assertCreated();
+
+    $orderId = (int) ($orderResponse->json('data.id') ?? 0);
+
+    $html = $this->actingAs($user)
+        ->get("/purchasing/orders/{$orderId}")
+        ->assertOk()
+        ->getContent();
+
+    $decodedHtml = html_entity_decode($html, ENT_QUOTES, 'UTF-8');
+
+    expect($decodedHtml)
+        ->toContain('x-data="purchaseOrderHeader(')
+        ->toContain((string) $orderId)
+        ->toContain('DRAFT');
+});
+
+it('renders draft action dropdown with recipe-style action descriptions', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermission)($user, 'purchasing-purchase-orders-create');
+    ($this->grantPermission)($user, 'purchasing-purchase-orders-receive');
+
+    $orderResponse = ($this->createOrder)($user, [])
+        ->assertCreated();
+
+    $orderId = (int) ($orderResponse->json('data.id') ?? 0);
+
+    $this->actingAs($user)
+        ->get("/purchasing/orders/{$orderId}")
+        ->assertOk()
+        ->assertSee('data-purchase-order-action-button', false)
+        ->assertSee('DRAFT')
+        ->assertSee('w-64', false)
+        ->assertSee('rounded-xl border border-slate-200 bg-white p-1.5 shadow-lg ring-1 ring-black/5', false)
+        ->assertSee('block font-medium text-slate-900', false)
+        ->assertSee('mt-1 block text-xs leading-5 text-slate-500', false)
+        ->assertSee('Create')
+        ->assertSee('Create this purchase order, and begin workflow.')
+        ->assertSee('Cancel')
+        ->assertSee('Cancel this purchase order.')
+        ->assertDontSee('Mark remaining items as back ordered.')
+        ->assertDontSee('Short Close')
+        ->assertDontSee('Mark this purchase order as complete.');
+});
+
+it('renders sent action dropdown with receiving-stage actions and descriptions', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermission)($user, 'purchasing-purchase-orders-create');
+    ($this->grantPermission)($user, 'purchasing-purchase-orders-receive');
+
+    $orderResponse = ($this->createOrder)($user, [])
+        ->assertCreated();
+
+    $orderId = (int) ($orderResponse->json('data.id') ?? 0);
+    $stages = ($this->purchasingWorkflowStages)($tenant);
+
+    DB::table('purchase_orders')
+        ->where('id', $orderId)
+        ->update([
+            'status' => 'SENT',
+            'last_completed_workflow_stage_id' => $stages['creating']->id,
+            'current_workflow_stage_id' => $stages['receiving']->id,
+        ]);
+
+    $this->actingAs($user)
+        ->get("/purchasing/orders/{$orderId}")
+        ->assertOk()
+        ->assertSee('data-purchase-order-action-button', false)
+        ->assertSee('CREATED')
+        ->assertSee('Receive')
+        ->assertSee('Record received inventory for this purchase order.')
+        ->assertSee('Back Order')
+        ->assertSee('Mark remaining items as back ordered.')
+        ->assertSee('Short Close')
+        ->assertSee('Close remaining unreceived quantities.')
+        ->assertSee('Cancel')
+        ->assertSee('Cancel this purchase order.')
+        ->assertDontSee('Create this purchase order, and begin workflow.')
+        ->assertDontSee('Mark this purchase order as complete.');
+});
+
+it('does not render cancel action when a purchase order has receipts', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermission)($user, 'purchasing-purchase-orders-create');
+    ($this->grantPermission)($user, 'purchasing-purchase-orders-receive');
+
+    $orderResponse = ($this->createOrder)($user, [])
+        ->assertCreated();
+
+    $orderId = (int) ($orderResponse->json('data.id') ?? 0);
+    $stages = ($this->purchasingWorkflowStages)($tenant);
+
+    DB::table('purchase_orders')
+        ->where('id', $orderId)
+        ->update([
+            'status' => 'SENT',
+            'last_completed_workflow_stage_id' => $stages['creating']->id,
+            'current_workflow_stage_id' => $stages['receiving']->id,
+        ]);
+
+    DB::table('purchase_order_receipts')->insert([
+        'tenant_id' => $tenant->id,
+        'purchase_order_id' => $orderId,
+        'received_at' => '2026-02-04 10:00:00',
+        'received_by_user_id' => $user->id,
+        'reference' => null,
+        'notes' => null,
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    $this->actingAs($user)
+        ->get("/purchasing/orders/{$orderId}")
+        ->assertOk()
+        ->assertSee('Receive')
+        ->assertDontSee('Cancel this purchase order.');
+});
+
+it('renders received action dropdown with complete action description', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermission)($user, 'purchasing-purchase-orders-create');
+    ($this->grantPermission)($user, 'purchasing-purchase-orders-receive');
+
+    $orderResponse = ($this->createOrder)($user, [])
+        ->assertCreated();
+
+    $orderId = (int) ($orderResponse->json('data.id') ?? 0);
+    $stages = ($this->purchasingWorkflowStages)($tenant);
+
+    DB::table('purchase_orders')
+        ->where('id', $orderId)
+        ->update([
+            'status' => 'RECEIVED',
+            'last_completed_workflow_stage_id' => $stages['receiving']->id,
+            'current_workflow_stage_id' => $stages['completing']->id,
+        ]);
+
+    $this->actingAs($user)
+        ->get("/purchasing/orders/{$orderId}")
+        ->assertOk()
+        ->assertSee('data-purchase-order-action-button', false)
+        ->assertSee('RECEIVED')
+        ->assertSee('Complete')
+        ->assertSee('Mark this purchase order as complete.')
+        ->assertSee('Cancel')
+        ->assertSee('Cancel this purchase order.')
+        ->assertDontSee('Create this purchase order, and begin workflow.')
+        ->assertDontSee('Record received inventory for this purchase order.')
+        ->assertDontSee('Mark remaining items as back ordered.')
+        ->assertDontSee('Close remaining unreceived quantities.');
+});
+
+it('does not expose lifecycle actions for a cancelled purchase order', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermission)($user, 'purchasing-purchase-orders-create');
+    ($this->grantPermission)($user, 'purchasing-purchase-orders-receive');
+
+    $orderResponse = ($this->createOrder)($user, [])
+        ->assertCreated();
+
+    $orderId = (int) ($orderResponse->json('data.id') ?? 0);
+
+    DB::table('purchase_orders')
+        ->where('id', $orderId)
+        ->update([
+            'status' => 'CANCELLED',
+            'cancelled_at' => now(),
+            'cancelled_by_user_id' => $user->id,
+        ]);
+
+    $this->actingAs($user)
+        ->get("/purchasing/orders/{$orderId}")
+        ->assertOk()
+        ->assertSee('CANCELLED')
+        ->assertSee('bg-red-50 text-red-700', false)
+        ->assertDontSee('data-purchase-order-action-button', false)
+        ->assertDontSee('Create this purchase order, and begin workflow.')
+        ->assertDontSee('Record received inventory for this purchase order.')
+        ->assertDontSee('Mark remaining items as back ordered.')
+        ->assertDontSee('Close remaining unreceived quantities.')
+        ->assertDontSee('Mark this purchase order as complete.')
+        ->assertDontSee('Cancel this purchase order.');
+});
+
 it('shows line quantity, price, and totals in payload', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
@@ -655,7 +889,7 @@ it('shows totals when multiple lines exist', function () {
 
     $orderResponse = ($this->createOrder)($user, [
         'supplier_id' => $supplier->id,
-        'shipping_cents' => 50,
+        'shipping_amount' => '0.50',
     ])->assertCreated();
 
     $orderId = (int) ($orderResponse->json('data.id') ?? 0);
@@ -760,7 +994,7 @@ it('includes receipt history in show payload after receipt event', function () {
 
     DB::table('purchase_orders')
         ->where('id', $orderId)
-        ->update(['status' => 'OPEN']);
+        ->update(['status' => 'SENT']);
 
     ($this->addLine)($user, $orderId, [
         'item_purchase_option_id' => $option->id,
@@ -820,7 +1054,7 @@ it('shows updated status in show payload after receipt event', function () {
     ])->assertCreated();
 
     $this->actingAs($user)
-        ->patchJson("/purchasing/orders/{$orderId}/status", ['status' => 'OPEN'])
+        ->patchJson("/purchasing/orders/{$orderId}/status", ['status' => 'SENT'])
         ->assertOk();
 
     $line = DB::table('purchase_order_lines')->where('purchase_order_id', $orderId)->first();
@@ -840,7 +1074,7 @@ it('shows updated status in show payload after receipt event', function () {
         ?? $payload['purchase_order']
         ?? [];
 
-    expect($order['status'] ?? null)->toBe('PARTIALLY-RECEIVED');
+    expect($order['status'] ?? null)->toBe('CREATED');
 });
 
 it('includes short-close history in show payload after short-close event', function () {
@@ -864,7 +1098,7 @@ it('includes short-close history in show payload after short-close event', funct
 
     DB::table('purchase_orders')
         ->where('id', $orderId)
-        ->update(['status' => 'OPEN']);
+        ->update(['status' => 'SENT']);
 
     ($this->addLine)($user, $orderId, [
         'item_purchase_option_id' => $option->id,
@@ -924,7 +1158,7 @@ it('shows updated status in show payload after short-close event', function () {
     ])->assertCreated();
 
     $this->actingAs($user)
-        ->patchJson("/purchasing/orders/{$orderId}/status", ['status' => 'OPEN'])
+        ->patchJson("/purchasing/orders/{$orderId}/status", ['status' => 'SENT'])
         ->assertOk();
 
     $line = DB::table('purchase_order_lines')->where('purchase_order_id', $orderId)->first();
@@ -944,7 +1178,7 @@ it('shows updated status in show payload after short-close event', function () {
         ?? $payload['purchase_order']
         ?? [];
 
-    expect($order['status'] ?? null)->toBe('SHORT-CLOSED');
+    expect($order['status'] ?? null)->toBe('RECEIVED');
 });
 
 it('shows received and short-closed sums in line payload after events', function () {
@@ -968,7 +1202,7 @@ it('shows received and short-closed sums in line payload after events', function
 
     DB::table('purchase_orders')
         ->where('id', $orderId)
-        ->update(['status' => 'OPEN']);
+        ->update(['status' => 'SENT']);
 
     ($this->addLine)($user, $orderId, [
         'item_purchase_option_id' => $option->id,
@@ -1032,7 +1266,7 @@ it('shows remaining balance after multiple receipts in line payload', function (
     ])->assertCreated();
 
     $this->actingAs($user)
-        ->patchJson("/purchasing/orders/{$orderId}/status", ['status' => 'OPEN'])
+        ->patchJson("/purchasing/orders/{$orderId}/status", ['status' => 'SENT'])
         ->assertOk();
 
     $line = DB::table('purchase_order_lines')->where('purchase_order_id', $orderId)->first();

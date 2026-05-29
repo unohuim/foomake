@@ -214,6 +214,59 @@ const createState = (config) => ({
             label: asString(supplier.name),
         }));
     },
+    refreshFromSupplierPackage(record = {}) {
+        const supplierId = toStringValue(record.supplier_id);
+        const supplierName = asString(record.supplier_name);
+        const packageId = toStringValue(record.item_purchase_option_id ?? record.id);
+
+        if (supplierId !== '' && supplierName !== '') {
+            const supplierExists = asArray(this.config.suppliers)
+                .some((supplier) => toStringValue(supplier.id) === supplierId);
+
+            if (!supplierExists) {
+                this.config.suppliers = [
+                    ...asArray(this.config.suppliers),
+                    {
+                        id: Number(supplierId),
+                        name: supplierName,
+                    },
+                ];
+            }
+        }
+
+        if (packageId === '') {
+            return;
+        }
+
+        const packageExists = asArray(this.config.packages)
+            .some((option) => toStringValue(option.id) === packageId);
+
+        if (packageExists) {
+            this.config.packages = asArray(this.config.packages).map((option) => (
+                toStringValue(option.id) === packageId
+                    ? {
+                        ...option,
+                        ...record,
+                        id: Number(packageId),
+                    }
+                    : option
+            ));
+            return;
+        }
+
+        this.config.packages = [
+            ...asArray(this.config.packages),
+            {
+                id: Number(packageId),
+                supplier_id: Number(supplierId),
+                supplier_name: supplierName,
+                item_id: record.item_id,
+                item_name: asString(record.item_name),
+                label: asString(record.label, asString(record.package_display, supplierName)),
+                current_price_cents: record.current_price_cents ?? 0,
+            },
+        ];
+    },
     firstError(field) {
         const values = this.errors[field];
 

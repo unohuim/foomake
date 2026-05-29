@@ -113,28 +113,21 @@ export function mount(rootEl, payload) {
                 return false;
             }
 
-            return ['OPEN', 'BACK-ORDERED', 'PARTIALLY-RECEIVED'].includes(order.status);
-        },
-        canOpenOrder(order) {
-            if (!order) {
-                return false;
-            }
-
-            return ['DRAFT', 'BACK-ORDERED'].includes(order.status);
+            return order.status === 'CREATED' && !order.is_cancelled;
         },
         canBackOrder(order) {
             if (!order) {
                 return false;
             }
 
-            return order.status === 'OPEN';
+            return order.status === 'CREATED' && !order.is_cancelled;
         },
         canCancelOrder(order) {
             if (!order) {
                 return false;
             }
 
-            return order.status === 'OPEN';
+            return ['DRAFT', 'CREATED', 'RECEIVED'].includes(order.status) && !order.is_cancelled;
         },
         openReceive(order) {
             if (!order || !this.canReceiveOrder(order)) {
@@ -309,6 +302,8 @@ export function mount(rootEl, payload) {
                 const data = await response.json();
                 const updatedStatus = data.data?.status || status;
                 order.status = updatedStatus;
+                order.is_cancelled = Boolean(data.data?.is_cancelled);
+                order.is_back_ordered = Boolean(data.data?.is_back_ordered);
                 this.showToast('success', 'Status updated.');
             } catch (error) {
                 // eslint-disable-next-line no-console
@@ -325,6 +320,54 @@ export function mount(rootEl, payload) {
             }
 
             this.submitStatus(order, status);
+        },
+        async submitAction(order, action) {
+            if (!order || !order.status_url) {
+                return;
+            }
+
+            try {
+                const response = await fetch(order.status_url, {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        Accept: 'application/json',
+                        'X-CSRF-TOKEN': this.csrfToken,
+                    },
+                    body: JSON.stringify({ action }),
+                });
+
+                if (response.status === 422) {
+                    const data = await response.json();
+                    this.showToast('error', data.message || 'Unable to apply action.');
+                    return;
+                }
+
+                if (!response.ok) {
+                    this.showToast('error', 'Unable to apply action.');
+                    return;
+                }
+
+                const data = await response.json();
+                order.status = data.data?.status || order.status;
+                order.is_cancelled = Boolean(data.data?.is_cancelled);
+                order.is_back_ordered = Boolean(data.data?.is_back_ordered);
+                this.showToast('success', 'Action applied.');
+            } catch (error) {
+                // eslint-disable-next-line no-console
+                console.error(error);
+                this.showToast('error', 'Unable to apply action.');
+            }
+        },
+        submitActionFromActionMenu(action) {
+            const order = this.actionMenuOrder;
+            this.closeActionMenu();
+
+            if (!order) {
+                return;
+            }
+
+            this.submitAction(order, action);
         },
         async createOrder() {
             if (!this.storeUrl || this.isCreating) {

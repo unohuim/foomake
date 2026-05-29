@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Models\Item;
 use App\Models\ItemPurchaseOption;
 use App\Models\ItemPurchaseOptionPrice;
+use App\Models\ItemUomConversion;
 use App\Models\Permission;
 use App\Models\PurchaseOrder;
 use App\Models\PurchaseOrderLine;
@@ -15,6 +16,7 @@ use App\Models\Supplier;
 use App\Models\Tenant;
 use App\Models\Uom;
 use App\Models\UomCategory;
+use App\Models\UomConversion;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
@@ -70,6 +72,14 @@ beforeEach(function (): void {
 
     $this->makeUom = function (Tenant $tenant, array $attributes = []): Uom {
         $suffix = $attributes['symbol'] ?? ('msp-' . $this->uomCounter . '-' . Str::lower(Str::random(5)));
+        $existing = Uom::query()
+            ->where('tenant_id', $tenant->id)
+            ->where('symbol', $suffix)
+            ->first();
+
+        if ($existing) {
+            return $existing;
+        }
 
         $category = UomCategory::query()->create([
             'tenant_id' => $tenant->id,
@@ -326,6 +336,103 @@ it('2. forbids material detail access without inventory view permission', functi
 
     ($this->getShow)($user, $item)
         ->assertForbidden();
+});
+
+it('2b. supplier package missing conversion response includes quick modal context and no silent conversion', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $supplier = ($this->makeSupplier)($tenant);
+    $baseUom = ($this->makeUom)($tenant, ['name' => 'Gram', 'symbol' => 'g']);
+    $packUom = ($this->makeUom)($tenant, ['name' => 'Case', 'symbol' => 'case']);
+    $item = ($this->makeItem)($tenant, $baseUom, ['name' => 'Sauce']);
+
+    ($this->grantPermissions)($user, [
+        'inventory-materials-view',
+        'purchasing-suppliers-manage',
+    ]);
+
+    ($this->postPackage)($user, $item, [
+        'supplier_id' => $supplier->id,
+        'pack_quantity' => '1.000000',
+        'pack_uom_id' => $packUom->id,
+        'supplier_sku' => 'CASE-1',
+        'price_amount' => '12.34',
+    ])->assertStatus(422)
+        ->assertJsonPath('meta.requires_conversion', true)
+        ->assertJsonPath('meta.conversion_create_url', route('manufacturing.uom-conversions.items.store'))
+        ->assertJsonPath('meta.item.id', $item->id)
+        ->assertJsonPath('meta.item.name', 'Sauce')
+        ->assertJsonPath('meta.from_uom.id', $packUom->id)
+        ->assertJsonPath('meta.from_uom.symbol', 'case')
+        ->assertJsonPath('meta.to_uom.id', $baseUom->id)
+        ->assertJsonPath('meta.to_uom.symbol', 'g')
+        ->assertJsonPath('meta.suggested_direction', 'package_to_base');
+
+    expect(ItemUomConversion::query()->count())->toBe(0);
+});
+
+it('2c. supplier package missing conversion modal uses existing conversion endpoint and allows retry after conversion', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $supplier = ($this->makeSupplier)($tenant);
+    $baseUom = ($this->makeUom)($tenant, ['name' => 'Gram', 'symbol' => 'g']);
+    $packUom = ($this->makeUom)($tenant, ['name' => 'Case', 'symbol' => 'case']);
+    $item = ($this->makeItem)($tenant, $baseUom);
+    $payload = [
+        'supplier_id' => $supplier->id,
+        'pack_quantity' => '1.000000',
+        'pack_uom_id' => $packUom->id,
+        'supplier_sku' => 'CASE-1',
+        'price_amount' => '12.34',
+    ];
+
+    ($this->grantPermissions)($user, [
+        'inventory-materials-view',
+        'inventory-materials-manage',
+        'purchasing-suppliers-manage',
+    ]);
+
+    ($this->postPackage)($user, $item, $payload)->assertStatus(422);
+
+    $this->actingAs($user)
+        ->postJson(route('manufacturing.uom-conversions.items.store'), [
+            'item_id' => $item->id,
+            'from_uom_id' => $packUom->id,
+            'to_uom_id' => $baseUom->id,
+            'conversion_factor' => '24.000000',
+        ])->assertCreated();
+
+    ($this->postPackage)($user, $item, $payload)
+        ->assertCreated()
+        ->assertJsonPath('data.supplier_id', $supplier->id)
+        ->assertJsonPath('data.pack_uom_id', $packUom->id);
+});
+
+it('2d. supplier package quick conversion endpoint enforces permission', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $baseUom = ($this->makeUom)($tenant);
+    $packUom = ($this->makeUom)($tenant);
+    $item = ($this->makeItem)($tenant, $baseUom);
+
+    $this->actingAs($user)
+        ->postJson(route('manufacturing.uom-conversions.items.store'), [
+            'item_id' => $item->id,
+            'from_uom_id' => $packUom->id,
+            'to_uom_id' => $baseUom->id,
+            'conversion_factor' => '24.000000',
+        ])->assertForbidden();
+});
+
+it('2e. reusable supplier package section opens quick conversion modal from missing conversion responses', function (): void {
+    $sectionModule = file_get_contents(resource_path('js/lib/js-crud-section.js'));
+
+    expect($sectionModule)->toContain('missingConversionModal')
+        ->and($sectionModule)->toContain('openMissingConversionModal(data.meta, body)')
+        ->and($sectionModule)->toContain('submitMissingConversion()')
+        ->and($sectionModule)->toContain('conversion_create_url')
+        ->and($sectionModule)->toContain('conversion_factor')
+        ->and($sectionModule)->toContain('await this.submitForm()');
 });
 
 it('3. includes the supplier packages section config for purchasable materials with purchasing view permission', function (): void {
@@ -1167,6 +1274,54 @@ it('31. creates an item purchase option for the current material and returns the
     ]);
 });
 
+it('31aa. creates a supplier package when an indirect generic conversion path exists', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $supplier = ($this->makeSupplier)($tenant);
+    $gram = Uom::query()->where('tenant_id', $tenant->id)->where('symbol', 'g')->firstOrFail();
+    $kilogram = Uom::query()->where('tenant_id', $tenant->id)->where('symbol', 'kg')->firstOrFail();
+    $pound = Uom::query()->where('tenant_id', $tenant->id)->where('symbol', 'lb')->firstOrFail();
+    $item = ($this->makeItem)($tenant, $pound, ['name' => 'Indirect Path Material']);
+
+    UomConversion::query()->create([
+        'tenant_id' => $tenant->id,
+        'from_uom_id' => $kilogram->id,
+        'to_uom_id' => $gram->id,
+        'multiplier' => '1000.00000000',
+    ]);
+    UomConversion::query()->create([
+        'tenant_id' => $tenant->id,
+        'from_uom_id' => $pound->id,
+        'to_uom_id' => $gram->id,
+        'multiplier' => '453.59200000',
+    ]);
+
+    ($this->grantPermissions)($user, [
+        'inventory-materials-view',
+        'purchasing-suppliers-view',
+        'purchasing-suppliers-manage',
+    ]);
+
+    ($this->postPackage)($user, $item, [
+        'supplier_id' => $supplier->id,
+        'pack_quantity' => '20.000000',
+        'pack_uom_id' => $kilogram->id,
+        'supplier_sku' => 'INDIRECT-31AA',
+        'price_amount' => '40.00',
+    ])->assertCreated()
+        ->assertJsonPath('data.item_id', $item->id)
+        ->assertJsonPath('data.supplier_id', $supplier->id)
+        ->assertJsonPath('data.pack_uom_id', $kilogram->id);
+
+    $this->assertDatabaseHas('item_purchase_options', [
+        'tenant_id' => $tenant->id,
+        'item_id' => $item->id,
+        'supplier_id' => $supplier->id,
+        'pack_uom_id' => $kilogram->id,
+        'supplier_sku' => 'INDIRECT-31AA',
+    ]);
+});
+
 it('31a. rejects invalid decimal package prices on create', function (): void {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
@@ -1264,6 +1419,14 @@ it('35. updates supplier package fields for the current material', function (): 
     $supplier = ($this->makeSupplier)($tenant);
     $otherSupplier = ($this->makeSupplier)($tenant, ['company_name' => 'Updated Supplier']);
     $option = ($this->makeOption)($tenant, $supplier, $item, $uom, ['supplier_sku' => 'EDIT-35']);
+
+    ItemUomConversion::query()->create([
+        'tenant_id' => $tenant->id,
+        'item_id' => $item->id,
+        'from_uom_id' => $otherUom->id,
+        'to_uom_id' => $uom->id,
+        'conversion_factor' => '1.000000',
+    ]);
 
     ($this->grantPermissions)($user, [
         'inventory-materials-view',
@@ -1567,13 +1730,14 @@ it('48. returns paginated purchase orders for the material and excludes unrelate
         'po_grand_total_cents' => 2250,
         'shipping_cents' => 300,
         'tax_cents' => 150,
-        'status' => PurchaseOrder::STATUS_BACK_ORDERED,
+        'status' => PurchaseOrder::STATUS_SENT,
+        'back_ordered_at' => now(),
     ]);
     $hiddenOrder = ($this->makePurchaseOrder)($tenant, $user, $supplier, [
         'po_number' => 'PO-HIDDEN-48',
         'po_subtotal_cents' => 9900,
         'po_grand_total_cents' => 9900,
-        'status' => PurchaseOrder::STATUS_OPEN,
+        'status' => PurchaseOrder::STATUS_SENT,
     ]);
 
     ($this->makePurchaseOrderLine)($tenant, $visibleOrder, $item, $option, [
@@ -1598,7 +1762,7 @@ it('48. returns paginated purchase orders for the material and excludes unrelate
         ->and($response->json('data.0.supplier_name'))->toBe('PO Supplier')
         ->and($response->json('data.0.order_date'))->toBe('2026-05-15')
         ->and($response->json('data.0.po_grand_total_cents'))->toBe(2250)
-        ->and($response->json('data.0.status'))->toBe(PurchaseOrder::STATUS_BACK_ORDERED)
+        ->and($response->json('data.0.status'))->toBe(PurchaseOrder::STATUS_SENT)
         ->and($response->json('data.0.show_url'))->toBe(route('purchasing.orders.show', $visibleOrder));
 
     $ids = collect($response->json('data'))->pluck('id')->all();
@@ -1678,7 +1842,7 @@ it('51. purchase order rows include raw status fields and the page adapter owns 
         'po_grand_total_cents' => 700,
         'shipping_cents' => 100,
         'tax_cents' => 100,
-        'status' => PurchaseOrder::STATUS_SHORT_CLOSED,
+        'status' => PurchaseOrder::STATUS_RECEIVED,
     ]);
 
     ($this->makePurchaseOrderLine)($tenant, $order, $item, $option, [
@@ -1693,7 +1857,7 @@ it('51. purchase order rows include raw status fields and the page adapter owns 
 
     expect(array_key_exists('po_number', $row))->toBeTrue()
         ->and($row['po_number'])->toBeNull()
-        ->and($row['status'] ?? null)->toBe(PurchaseOrder::STATUS_SHORT_CLOSED)
+        ->and($row['status'] ?? null)->toBe(PurchaseOrder::STATUS_RECEIVED)
         ->and($row['show_url'] ?? null)->toBe(route('purchasing.orders.show', $order))
         ->and($pageSource)->toContain('Draft PO')
         ->and($pageSource)->toContain('statusTone')

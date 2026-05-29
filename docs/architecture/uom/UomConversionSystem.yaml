@@ -34,6 +34,8 @@ rules:
   - Global conversions are system-seeded and read-only in the UI.
   - Tenant conversions are user-managed and editable only within the owning tenant scope.
   - Item-specific conversions are editable only within the owning tenant scope.
+  - Runtime conversion resolution may use direct, reciprocal, or multi-step paths through defined conversion records.
+  - Runtime conversion matching uses normalized UoM symbols rather than requiring the runtime UoM ids to match seeded/global conversion-row UoM ids.
 public_interface:
   - manufacturing.uom-conversions.index
   - manufacturing.uom-conversions.store

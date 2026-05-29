@@ -32,7 +32,9 @@
             return [
                 'id' => $purchaseOrder->id,
                 'supplier_name' => $purchaseOrder->supplier?->company_name,
-                'status' => $purchaseOrder->status,
+                'status' => $purchaseOrder->workflowStatus(),
+                'is_cancelled' => $purchaseOrder->workflow_cancelled_at !== null,
+                'is_back_ordered' => $purchaseOrder->back_ordered_at !== null,
                 'order_date' => $purchaseOrder->order_date?->format('Y-m-d'),
                 'po_number' => $purchaseOrder->po_number,
                 'po_subtotal_cents' => $purchaseOrder->po_subtotal_cents,
@@ -313,16 +315,16 @@
                     <button
                         type="button"
                         class="block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100"
-                        x-show="canOpenOrder(actionMenuOrder)"
-                        x-on:click="submitStatusFromActionMenu('OPEN')"
+                        x-show="actionMenuOrder && actionMenuOrder.status === 'DRAFT' && !actionMenuOrder.is_cancelled"
+                        x-on:click="submitStatusFromActionMenu('SENT')"
                     >
-                        Open
+                        Send
                     </button>
                     <button
                         type="button"
                         class="block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100"
                         x-show="canBackOrder(actionMenuOrder)"
-                        x-on:click="submitStatusFromActionMenu('BACK-ORDERED')"
+                        x-on:click="submitActionFromActionMenu('back_order')"
                     >
                         Back-Order
                     </button>
@@ -330,7 +332,7 @@
                         type="button"
                         class="block w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50"
                         x-show="canCancelOrder(actionMenuOrder)"
-                        x-on:click="submitStatusFromActionMenu('CANCELLED')"
+                        x-on:click="submitActionFromActionMenu('cancel')"
                     >
                         Cancel
                     </button>

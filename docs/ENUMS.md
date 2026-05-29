@@ -127,26 +127,24 @@ Do not introduce new enum values without updating this document.
 **Allowed values:**
 
 - `DRAFT`
-- `OPEN`
-- `PARTIALLY-RECEIVED`
+- `SENT`
 - `RECEIVED`
-- `BACK-ORDERED`
-- `SHORT-CLOSED`
+- `COMPLETED`
 - `CANCELLED`
 
 **Semantic meaning:**
 
 - `DRAFT`: Purchase order is being assembled and may be edited.
-- `OPEN`: Purchase order has been issued to the supplier.
-- `PARTIALLY-RECEIVED`: Some items have been received, balances remain.
-- `RECEIVED`: All ordered items have been received.
-- `BACK-ORDERED`: Order contains backordered items.
-- `SHORT-CLOSED`: Order closed with a short receipt.
-- `CANCELLED`: Order has been cancelled.
+- `SENT`: Purchase order has been issued to the supplier and may receive inventory.
+- `RECEIVED`: All line balances have been received or short-closed.
+- `COMPLETED`: Purchase order lifecycle is complete.
+- `CANCELLED`: Purchase order has been cancelled and is terminal.
 
 **Notes:**
 
-- Derived statuses are set by receiving/short-close events.
+- `purchase_orders.status` must persist only the five values above.
+- Purchase Order workflow displays may derive status from workflow fields during migration; the legacy column remains mirrored temporarily.
+- Back Order and Short Close are actions/events, not status values.
 
 ---
 

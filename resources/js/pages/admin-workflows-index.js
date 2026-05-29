@@ -5,7 +5,9 @@ export function mount(rootEl, payload) {
     const emptyStageForm = () => ({
         workflow_domain_id: '',
         name: '',
-        button_text: '',
+        action_verb: '',
+        status_complete_label: '',
+        completion_mode: 'manual',
         description: '',
         sort_order: '',
         is_active: true,
@@ -88,7 +90,9 @@ export function mount(rootEl, payload) {
             this.stageForm = {
                 workflow_domain_id: String(stage.workflow_domain_id || ''),
                 name: stage.name || '',
-                button_text: stage.button_text || '',
+                action_verb: stage.action_verb || '',
+                status_complete_label: stage.status_complete_label || '',
+                completion_mode: stage.completion_mode || 'manual',
                 description: stage.description || '',
                 sort_order: Number(stage.sort_order || 10),
                 is_active: !!stage.is_active,
@@ -172,7 +176,9 @@ export function mount(rootEl, payload) {
                 body: JSON.stringify({
                     workflow_domain_id: stage.workflow_domain_id,
                     name: stage.name,
-                    button_text: stage.button_text,
+                    action_verb: stage.action_verb,
+                    status_complete_label: stage.status_complete_label,
+                    completion_mode: stage.completion_mode,
                     description: stage.description,
                     sort_order: stage.sort_order,
                     is_active: stage.is_active,

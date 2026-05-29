@@ -5,9 +5,9 @@ namespace App\Actions\Workflows;
 use App\Models\SalesOrder;
 use App\Models\WorkflowDomain;
 use App\Models\WorkflowStage;
+use DomainException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
-use DomainException;
 
 /**
  * Resolve the sales workflow stage that matches a sales-order operational status.
@@ -88,6 +88,22 @@ class ResolveSalesWorkflowStageAction
     }
 
     /**
+     * Resolve a configured stage for a status even when the stage is inactive compatibility metadata.
+     */
+    public function stageForStatus(SalesOrder $salesOrder, string $status): ?WorkflowStage
+    {
+        if ($this->isSystemStatus($status)) {
+            return null;
+        }
+
+        return WorkflowStage::withoutGlobalScopes()
+            ->where('tenant_id', $salesOrder->tenant_id)
+            ->where('workflow_domain_id', $this->salesDomainId())
+            ->where('key', $this->stageKeyForStatus($status))
+            ->first();
+    }
+
+    /**
      * Return the active sales workflow stages in runtime order.
      *
      * @return Collection<int, WorkflowStage>
@@ -98,6 +114,7 @@ class ResolveSalesWorkflowStageAction
             ->where('tenant_id', $salesOrder->tenant_id)
             ->where('workflow_domain_id', $this->salesDomainId())
             ->where('is_active', true)
+            ->whereNotIn('key', ['creating', 'invoicing', 'completing'])
             ->orderBy('sort_order')
             ->orderBy('id')
             ->get();
@@ -163,7 +180,10 @@ class ResolveSalesWorkflowStageAction
      */
     public function stageKeyForStatus(string $status): string
     {
-        return Str::lower($status);
+        return match ($status) {
+            SalesOrder::STATUS_PACKED => 'packed',
+            default => Str::lower($status),
+        };
     }
 
     /**

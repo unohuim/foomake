@@ -12,6 +12,10 @@ when_not_to_use:
 rules:
   - Purchase options are not inventory identities.
   - Pack quantities convert into the item base UoM on receipt using BCMath string math at scale 6.
+  - Creating or updating a purchase option whose pack UoM differs from the item base UoM requires a resolvable conversion path.
+  - Conversion enforcement may satisfy the requirement with a direct, reciprocal, or multi-step path through tenant/general, global, or item-specific conversion records.
+  - Missing conversion validation must be JSON/AJAX-compatible and expose the item conversion creation endpoint for the quick-create modal.
+  - Missing conversion validation must include item, package UOM, and item base UOM context so the current supplier-package slide-over can open the quick-create modal immediately.
 public_interface:
   - item()
   - packUom()

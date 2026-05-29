@@ -11,6 +11,7 @@ use App\Models\PurchaseOrder;
 use App\Models\PurchaseOrderLine;
 use App\Models\SalesOrder;
 use App\Models\SalesOrderLine;
+use App\Support\Inventory\InventoryBuyUomConversionResolver;
 use App\Support\QuantityFormatter;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -21,6 +22,11 @@ use Illuminate\Support\Facades\DB;
 class BuildMaterialInventoryStatsAction
 {
     private const SCALE = 6;
+
+    public function __construct(
+        private readonly InventoryBuyUomConversionResolver $buyUomConversionResolver
+    ) {
+    }
 
     /**
      * Build the inventory stats payload for one stockable material.
@@ -92,13 +98,35 @@ class BuildMaterialInventoryStatsAction
             ->where('tenant_id', $item->tenant_id)
             ->where('item_id', $item->id)
             ->whereHas('purchaseOrder', function ($query): void {
-                $query->whereNotIn('status', [
-                    PurchaseOrder::STATUS_RECEIVED,
-                    PurchaseOrder::STATUS_SHORT_CLOSED,
-                    PurchaseOrder::STATUS_CANCELLED,
-                ]);
+                $query
+                    ->whereNull('cancelled_at')
+                    ->whereNull('workflow_cancelled_at')
+                    ->where('status', '!=', PurchaseOrder::STATUS_CANCELLED)
+                    ->where(function ($openQuery): void {
+                        $openQuery
+                            ->where(function ($legacyQuery): void {
+                                $legacyQuery
+                                    ->whereNull('current_workflow_stage_id')
+                                    ->whereNull('last_completed_workflow_stage_id')
+                                    ->whereNotIn('status', [
+                                        PurchaseOrder::STATUS_COMPLETED,
+                                        PurchaseOrder::STATUS_CANCELLED,
+                                    ]);
+                            })
+                            ->orWhere(function ($workflowQuery): void {
+                                $workflowQuery
+                                    ->whereNotNull('current_workflow_stage_id')
+                                    ->whereHas('currentWorkflowStage', function ($stageQuery): void {
+                                        $stageQuery
+                                            ->where('is_active', true)
+                                            ->whereHas('workflowDomain', function ($domainQuery): void {
+                                                $domainQuery->where('key', 'purchasing');
+                                            });
+                                    });
+                            });
+                    });
             })
-            ->with('purchaseOption')
+            ->with(['purchaseOption.item.baseUom', 'purchaseOption.packUom'])
             ->get();
 
         foreach ($lines as $line) {
@@ -112,17 +140,17 @@ class BuildMaterialInventoryStatsAction
                 continue;
             }
 
-            $packQuantity = $line->purchaseOption?->pack_quantity;
-
-            if ($packQuantity === null) {
+            if ($line->purchaseOption === null) {
                 continue;
             }
 
-            $total = bcadd(
-                $total,
-                bcmul($remaining, bcadd((string) $packQuantity, '0', self::SCALE), self::SCALE),
-                self::SCALE
-            );
+            $baseQuantity = $this->buyUomConversionResolver->baseQuantityFor($line->purchaseOption, $remaining);
+
+            if ($baseQuantity === null) {
+                continue;
+            }
+
+            $total = bcadd($total, $baseQuantity, self::SCALE);
         }
 
         return $total;

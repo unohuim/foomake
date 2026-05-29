@@ -1896,19 +1896,24 @@ class StockMove extends Model
 **Location:**  
 - `app/Http/Controllers/SalesProductController.php`  
 - `app/Http/Controllers/CustomerController.php`  
+- `app/Http/Controllers/SupplierController.php`
 - `app/Http/Controllers/MaterialController.php`  
 - `app/Http/Controllers/InventoryCountController.php`  
 - `resources/views/sales/products/index.blade.php`  
 - `resources/views/sales/customers/index.blade.php`  
+- `resources/views/purchasing/suppliers/index.blade.php`
 - `resources/views/materials/index.blade.php`  
 - `resources/views/inventory/counts/index.blade.php`  
+- `resources/views/manufacturing/make-orders/index.blade.php`  
 - `resources/js/lib/crud-config.js`  
 - `resources/js/lib/generic-crud.js`  
 - `resources/js/lib/crud-page.js`  
 - `resources/js/pages/sales-products-index.js`  
 - `resources/js/pages/sales-customers-index.js`  
+- `resources/js/pages/purchasing-suppliers-index.js`
 - `resources/js/pages/materials-index.js`
 - `resources/js/pages/inventory-counts-index.js`
+- `resources/js/pages/manufacturing-make-orders.js`
 
 **Purpose:**  
 Provide a mount-only Blade shell plus server-configured shared CRUD renderer so index pages reuse one toolbar, list, empty-state, and row-action pattern without global JavaScript state.
@@ -1941,7 +1946,7 @@ $crudConfig = [
 ```
 
 Notes:
-- Products, Customers, Materials, and Inventory Counts are current reference implementations.
+- Products, Customers, Suppliers, Materials, Inventory Counts, and Make Orders are current reference implementations.
 - `detailUrlTemplate` is optional. When present, create flows may redirect to the created record detail page after success.
 - When `detailUrlTemplate` is absent, the existing inline success behavior such as list refresh remains the fallback.
 
@@ -1952,8 +1957,10 @@ Notes:
 **Location:**  
 - `resources/js/lib/js-crud-section.js`  
 - `resources/js/pages/materials-show.js`  
+- `resources/js/pages/purchasing-suppliers-show.js`
 - `resources/js/pages/inventory-count-show.js`  
 - `resources/views/materials/show.blade.php`  
+- `resources/views/purchasing/suppliers/show.blade.php`
 - `resources/views/inventory/counts/show.blade.php`  
 
 **Purpose:**  
@@ -1980,13 +1987,133 @@ Provide a shared expandable detail-section CRUD surface for record sublists such
 
 Notes:
 - Reusable CRUD detail sections must keep their outer shell `overflow-visible` so row-action dropdowns are not clipped.
+- Shared CRUD add/search rows use a dedicated layout contract rather than the generic actions slot: the search/select control belongs on the left and the add button belongs on the right.
+- Shared compact add/search rows do not render a visible field label unless a future screen explicitly opts into one.
 - Inventory Count detail uses this pattern with a `Materials` section and a read-only `Tasks` section that reuses the existing task completion route/payload contract.
 - Material detail uses this pattern for `Supplier Packages`, `Recipes`, `Purchase Orders`, and `Make Orders`; `Supplier Packages` and `Recipes` render near the top and default open, while `Purchase Orders` and `Make Orders` render near the bottom and default collapsed.
+- Supplier detail uses this pattern for `Supplier Packages`, scoped to the current supplier. The create slide-over selects the Material while the supplier is fixed by the page context, and row actions use the shared vertical dots menu for `Edit`, `Purchase`, and `Delete`.
+- Supplier detail uses this pattern for `Purchase Orders`, scoped to purchase orders whose `supplier_id` matches the current supplier. Its `+` action posts to the existing Purchase Order create endpoint with the supplier fixed by page context and redirects to the created draft PO detail page.
 - Material detail reuses the existing section abstraction for manufacturable-only `Recipes` and `Make Orders` sections rather than introducing a bespoke accordion/detail implementation.
 - Material detail section rows expose record detail links where an existing detail surface is available, using the shared row-action `View` contract rather than bespoke row-click behavior; this applies to Supplier Package rows, Purchase Order rows, Recipe rows, and Make Order rows.
 - Material detail `Recipes` plus opens the existing recipe create slide-over in place, prefilled with the current material as the output item, and successful recipe create redirects to the created recipe detail page.
-- Material detail recipe-row `Make` opens the existing make-order create slide-over in place, prefilled with the selected recipe, and successful make-order create redirects to the created make-order detail page.
+- Material detail recipe-row `Make` creates a draft Make Order directly from the selected recipe current version and redirects to the created make-order detail page when `show_url` is returned.
+- Material detail `Inventory Counts` `+` reuses the standard Inventory Count create slide-over contract and mounts that shared form under a dedicated live Alpine create component in the resource-detail overlay area inside the Material page scope.
+- The Material detail page module must open that mounted create component directly so the same `showCountForm` state bound by the shared Inventory Count slide-over is toggled by the `+` action.
+- The Material detail Inventory Counts section `createAction` must pass a concrete handler config object into the page adapter, using `handlerKey: openInventoryCountCreate`; the adapter must not assume `action` exists when the shared section fails to pass it.
+- Recipe and recipe-version dropdown or header `Make` actions follow the same direct-create-and-redirect contract instead of opening a dedicated Make Order slide-over.
+- Recipe detail uses the same reusable CRUD detail-section pattern for a `Make Orders` accordion scoped to one recipe; the right-aligned shared `+` action now posts directly to the recipe-scoped create endpoint, create always uses the recipe current published version, and checked-out drafts are never used.
+- Recipe detail `Make Orders` create eligibility is reactive: publishing the first or current recipe version updates the shared section action contract immediately so the right-aligned `+` appears without a full page refresh.
+- Recipe detail `Versions` rows follow the shared row-action dropdown contract; draft rows expose `Publish`, and publish success may trigger a temporary row highlight when the newly current version re-sorts to the top.
+- Recipe detail `Versions` toolbar toggles use the shared compact switch contract in the reusable detail-section renderer, with left-aligned label text and a right-aligned pill track rather than a visible native checkbox.
+- Material detail supplier-package create success must refresh the page-local Purchase Order create slide-over supplier/package option data so newly created packages can be selected without a full page reload.
+- Recipe detail header owns one active-version status or action menu, using a Tailwind-only split-button style through the shared header action slot rather than rendering one status-action button in every Version row.
+- That header split-button must show the active version caption visibly in the closed state; icon-only status or action controls are not acceptable.
+- Recipe detail header renders `Version {x.xx}` beside that split-button in the right-side action area and must not keep a stale standalone version chip in the left metadata group.
+- Recipe detail closed header captions use `Checked-Out` for the current user's checked-out active version, otherwise `Draft`, `Published`, or `Archived` from the active version lifecycle.
+- Recipe detail active-version identity uses the current user's checked-out version first, otherwise `recipes.current_version_id`, otherwise the most recent version, and the header plus Ingredients section should read from that same resolved display-version identity.
+- Header active-version menu options mirror the active Version row's valid actions from the same shared action builder source, and publish from that header menu refreshes Make Orders create eligibility immediately.
+- Header active-version menu helper descriptions also come from that shared action catalog so row-equivalent action intent does not drift.
+- Publishing a new recipe version archives all previously published versions for that same recipe before moving `recipes.current_version_id`.
+- Publishing an older recipe draft first promotes its version number to the next highest available recipe version number before it becomes current.
+- Recipe detail section order is `Make Orders`, `Ingredients`, then `Versions`; `Make Orders` defaults open while `Ingredients` and `Versions` default collapsed.
+- Recipe detail `Make Orders` may opt into a shared mobile page-size contract so the same reusable section renders the latest `3` rows first on mobile while retaining shared pagination controls for remaining rows.
+- Recipe detail `Make Orders` rows may reuse the shared badges row to show both workflow state and a compact `v{x.xx}` recipe-version snapshot badge on the same line.
+- Recipes index row menus expose `Make` when the recipe has a current published manufacturing version and the current user can execute Make Orders.
+- Make Orders index primary recipe-name rows use the shared linked-text CRUD contract to open the Make Order detail page.
+- Make Order detail uses the shared resource detail header pattern plus `Details`, `Tasks`, and `Ingredients` detail sections in that order.
+- The Make Order `Details` section keeps `Runs`, `Expected Output`, `Actual Output`, `Due Date`, and `Assigned To` together in one compact responsive grid; `Runs` come from `make_orders.runs`, expected output is persisted on `make_orders.expected_output_qty`, and actual output stays separate as `make_orders.actual_output_qty` when present.
+- Editing `Runs` must recalculate `expected_output_qty` immediately from `runs × recipe_version.output_quantity`, and stale client-submitted expected-output values must be ignored.
+- The Make Order `Expected Output` field may render read-only in the detail UI because it is a derived planning quantity, while `Actual Output`, `Due Date`, and `Assigned To` remain editable.
+- `Runs` should render compactly without unnecessary trailing scale-6 decimals in the detail UI, while Expected Output and Actual Output should render using the output item base UOM display precision.
+- On mobile, `Runs` / `Expected Output` / `Actual Output` stay on one compact row and `Due Date` / `Assigned To` stay on a second compact row.
+- Recipe and Recipe Version `output_quantity` remain the per-run output contract and must not be reinterpreted as Make Order runs.
+- Shared workflow-enabled resource headers may expose one compact next-stage action through the shared header action slot when a valid configured transition exists.
+- Shared workflow-enabled resource headers may expose one compact draft-entry action through the same header action slot when a pre-workflow draft can enter the first configured stage.
+- Shared resource headers may render grouped metadata rows through the shared header metadata slot; Make Orders use recipe/runs on the first row and output item/expected output on the second row.
+- Shared resource headers may render a compact visible-state chip beside the title when the resource uses a workflow-stage-driven status surface.
+- Make Order visible state is `DRAFT` while `workflow_stage_id` is null, then tenant-configured `workflow_stages.name` after workflow entry; lifecycle `status` remains lifecycle-only while `workflow_stage_id` tracks the operational workflow position.
+- Make Order detail keeps that visible state beside the `Make Order {id}` title rather than repeating it in the compact metadata rows.
+- Make Order workflow ownership metadata lives on `make_orders.made_by_user_id`, auto-assigns to the creator on Make Order creation, and is edited from the Details section through the shared dropdown-select pattern.
+- `make_orders.assigned_to_user_id` is not part of the Make Order schema and must not be used for Make Order ownership.
+- Make Order due date is edited inline from the Details section through a compact autosave date input.
+- Make Order assignee options are tenant-scoped, include an explicit `Unassigned` choice, autosave on change, and reject cross-tenant assignment.
+- Make Order due-date changes must not mutate lifecycle `status`, operational `workflow_stage_id`, `make_order_lines`, `recipe_version_lines`, workflow tasks, or task templates.
+- Make Order assignee changes must not mutate lifecycle `status`, operational `workflow_stage_id`, `make_order_lines`, `recipe_version_lines`, workflow tasks, or task templates.
+- Make Order stage transitions must preserve `made_by_user_id`.
+- Make Orders may optionally persist a nullable `actual_output_qty` at make time; when present it is the completion-truth output quantity and overrides expected produced quantity for the output receipt stock move only.
+- When `actual_output_qty` is absent, completed output still falls back to `expected_output_qty`.
+- `actual_output_qty` does not introduce actual ingredient-usage tracking in this phase.
+- Generated Make Order workflow task assignees remain independent from Make Order assignee metadata.
+- Shared detail-section UX should prefer compact inline autosave controls for safe single-field updates and avoid extra save-button rows.
+- Shared detail sections should not duplicate stage-movement controls already owned by the shared header workflow action.
+- Recipe-scoped Make Order create may redirect directly to the created Make Order detail page through the shared section create-success hook when `show_url` is returned.
+- Make Order header, index, Details section, and shared Material/Recipe detail rows all use the same workflow-stage-driven display rule after workflow entry.
+- Make Order detail and workflow transition endpoints seed default manufacturing stages only when the tenant has no configured manufacturing workflow stages; existing configured stages remain authoritative.
 - Reusable detail sections may disable the vertical-dots row menu through `showRowActionsMenu: false`; the default remains enabled for existing section consumers, and disabled sections may surface their configured row actions inline instead.
+- Make Order detail ingredient rows may opt out of the row-actions menu and render a direct inline `x-mark` remove button when removal is the only row-level action exposed there.
+- Make Orders index rows may opt out of the row-actions menu and render a direct inline `x-mark` archive button when archive is the only row-level action exposed there.
+- Both of those direct row actions remain AJAX-first, update the UI immediately without a full-page refresh, and show feedback only on failure.
+
+### Shared Ingredients Detail Section Pattern
+
+**Name:** Shared Ingredients Detail Section Pattern
+**Type:** Manufacturing UI Pattern
+**Location:**
+- `resources/views/components/ingredients-detail-section.blade.php`
+- `resources/views/manufacturing/recipes/show.blade.php`
+- `resources/views/manufacturing/make-orders/show.blade.php`
+
+**Purpose:**
+Keep Recipe Ingredients and Make Order Ingredients visually and behaviorally consistent through one shared detail-section abstraction.
+
+**When to Use:**
+- Rendering ingredient lines on Recipe detail
+- Rendering ingredient snapshot lines on Make Order detail
+
+**When Not to Use:**
+- Non-ingredient child collections
+- Resource index pages
+
+Notes:
+- The shared Ingredients section composes the reusable detail-section shell rather than reimplementing accordion markup.
+- The compact combobox plus plus-button add bar is shared between Recipe and Make Order detail.
+- The shared Ingredients add row inherits the shared detail-section add-row contract so the search/select control stays left-aligned and the add button stays right-aligned.
+- The shared compact Ingredients add row intentionally omits a visible field label.
+- The shared section preserves dropdown and row-action overflow visibility.
+- Recipe Ingredients persist to `recipe_version_lines`.
+- Make Order Ingredients persist to `make_order_lines`.
+- Recipe Ingredients stay version-aware and edit only through the checked-out draft context.
+- Make Order Ingredients are editable snapshots and must not mutate recipe version lines.
+- Make Order Details uses the shared detail-section shell, defaults open, and keeps runs, expected output, actual output, and workflow metadata separate from lifecycle status.
+
+### Make Order Details Section Pattern
+
+**Name:** Make Order Details Section Pattern
+**Type:** Manufacturing UI Pattern
+**Location:**
+- `docs/architecture/manufacturing/MakeOrderWorkflowSection.yaml`
+- `app/Http/Controllers/MakeOrderController.php`
+- `resources/views/manufacturing/make-orders/show.blade.php`
+- `resources/js/pages/manufacturing-make-orders-show.js`
+
+**Purpose:**
+Render compact Runs, Expected Output, Actual Output, Due Date, and Assigned To detail on Make Order detail while keeping workflow-stage movement in the shared header action and current-stage tasks in a separate detail section.
+
+**When to Use:**
+- Showing Make Order runs, expected output, and actual output separately
+- Editing Make Order due date
+- Editing Make Order workflow ownership assignment
+- Surfacing the shared header workflow transition action for a Make Order
+
+**When Not to Use:**
+- Recipe versioning
+- Lifecycle status transitions such as making or cancelling
+
+**Public Interface:**
+- `manufacturing.make-orders.due-date.update`
+- `manufacturing.make-orders.workflow-stage.update`
+- `MoveMakeOrderWorkflowStageAction::execute()`
+- `ResolveManufacturingWorkflowStageAction::availableTransitions()`
 
 ### Resource Detail Layout Pattern
 
@@ -2042,7 +2169,8 @@ $stage->is_inventory_effect_stage = true;
 Notes:
 - The fixed workflow domains are `sales`, `purchasing`, `manufacturing`, and `inventory`.
 - Default seeded stock-impacting stage sets are tenant-scoped and idempotent.
-- Only Sales runtime currently resolves the marker to trigger stock posting.
+- Default Sales inventory impact is assigned to the seeded `Packed` stage, not the pre-impact `Packing` stage.
+- Sales, Purchasing, Manufacturing, and Inventory each enforce exactly one active inventory-effect stage when stage defaults or admin edits touch the domain.
 
 ### Workflow Stage Task Gating
 
@@ -2164,6 +2292,44 @@ Notes:
 - `fulfillment` recipes require `is_sellable = true`.
 - Items with both flags may use both recipe types.
 - Items with neither flag are excluded from recipe output pickers and rejected server-side.
+
+---
+
+### Item Stockability / Inventory Tracking Eligibility
+
+**Name:** Item Stockability / Inventory Tracking Eligibility  
+**Type:** Domain Rule  
+**Location:**  
+- `docs/architecture/inventory/Item.yaml`  
+- `docs/architecture/inventory/StockMove.yaml`  
+- `app/Models/Item.php`  
+- `database/migrations/2026_05_25_000001_add_is_stockable_to_items_table.php`  
+
+**Purpose:**  
+Separate general item participation in business workflows from stock-ledger participation.
+
+**When to Use:**  
+Any purchasing, manufacturing, sales, or counting workflow that might otherwise create stock moves.
+
+**When Not to Use:**  
+Permission checks, recipe output eligibility, or generic item naming/UoM concerns.
+
+**Public Interface:**  
+- `items.is_stockable`  
+- `Item::$casts['is_stockable']`  
+
+**Example Usage:**  
+```php
+if ($item->is_stockable) {
+    // create stock move
+}
+```
+
+Notes:
+- `is_stockable` defaults `false`.
+- Non-stockable items may still be purchased, received, sold, manufactured, counted, or used in recipes.
+- Those workflows must skip stock-move creation for non-stockable items instead of blocking the workflow.
+- On-hand inventory is meaningful only for stockable items because it is derived from the stock-move ledger.
 
 ---
 
@@ -2300,6 +2466,7 @@ Gate::authorize('workflow-manage');
 - `resources/js/lib/crud-page.js`  
 - `resources/js/pages/sales-products-index.js`  
 - `resources/js/pages/sales-customers-index.js`
+- `resources/js/pages/purchasing-suppliers-index.js`
 
 **Purpose:**  
 Provide a shared config-driven CRUD page shell where toolbar actions, list rendering, and common AJAX behavior are owned by a reusable renderer rather than resource-specific Blade markup.
@@ -3002,6 +3169,11 @@ Posting stock moves or mutating operational records.
 - Availability math remains canonical BCMath at scale 6.  
 - UI-facing inventory quantities must render using the item base UoM `display_precision`.  
 - The read model may expose both canonical quantity fields and backend-formatted display fields for the same row.  
+- Workflow-enabled Purchase Orders count as BUY/open supply while they have an active current purchasing workflow stage and are not cancelled.
+- Purchase Orders without workflow state count as BUY/open supply unless they are completed or cancelled, preserving availability for rows created before workflow initialization.
+- Buy/open purchase-order quantities are calculated as package count × supplier package quantity × resolved package-UoM-to-item-base-UoM conversion, matching UoMs by normalized symbol rather than requiring conversion-row UoM ids to match package/base UoM ids.
+- Buy/open purchase-order conversion precedence is tenant/general, then global, then item-specific fallback; conversion resolution supports direct, reciprocal, and multi-step symbol paths through defined conversion records.
+- Missing required package-UoM conversion excludes that PO line from BUY availability rather than displaying package-UoM quantities as base-UoM quantities.
 
 **Example Usage:**  
 ```php
@@ -3077,12 +3249,32 @@ Notes:
 - Count-level audit is tracked with `created_by_user_id` and `tasked_by_user_id`.
 - Draft creation does not require assignment; if a count-level assignee is present it is reused when workflow tasks are generated.
 - Workflow task assignment uses generated `tasks.assigned_to_user_id` rather than a separate inventory-count-only task system.
-- Draft detail exposes only the next valid workflow action, defaulting to `Open` when seeded inventory stages are unchanged.
-- Submitted Inventory Counts may expose previous-stage and next-stage actions using stage names only. Previous-stage movement is Inventory Count specific and never reverses posted stock.
+- Draft detail exposes only the next valid workflow action, defaulting to `SCHEDULE` when seeded inventory stages are unchanged.
+- Submitted Inventory Counts may expose previous-stage and next-stage actions using configured action verb. Previous-stage movement is Inventory Count specific and never reverses posted stock.
+- Inventory Count detail uses the shared resource-detail header plus a compact `Details` section ahead of the reusable `Materials` and `Tasks` sections. The header no longer owns counted-date / line-count / workflow-stage metadata pills; it now shows a clean workflow-status badge beside the title, while Count Date, Assigned To, and Notes live in the AJAX-autosaved `Details` section.
+- Workflow stages separate current-state display from transition-button copy: stage labels use `workflow_stages.name`, while workflow action buttons use `workflow_stages.action_verb`.
 - Inventory Count detail mounts reusable `Materials` and `Tasks` sections through shared `js-crud-section` payload/config rendering; the `Tasks` section is not bespoke markup, uses the existing `tasks.complete` route contract, disables the shared dots menu through config, always shows `Assigned By`, then swaps `Assigned To` for `Completed By` once the task is completed, and shows a visible inline `Complete` action only while the task is incomplete and completable.
+- Inventory Count detail `Materials` section uses the shared compact add-row contract in Draft: a reusable combobox on the left plus a `+` button on the right adds an existing selected material line through AJAX and must not open Material or Item creation.
+- Inventory Count detail `Materials` rows use two mutually exclusive modes: Draft rows use a direct inline rounded `x-mark` remove action instead of the vertical-dots row menu, while submitted workflow-stage rows hide removal and expose an AJAX Qty input on the right side instead.
+- Draft Inventory Count detail `Materials` rows do not show QTY labels or QTY inputs, and workflow-stage rows do not show remove actions.
+- Inventory Count detail `Details` metadata may still be updated after workflow entry, but posting / inventory-effect stages remain mutation-locked.
+- Seeded Inventory Count workflow stages use Creating and Completing as stage names, with `SCHEDULE` and `COMPLETE` as the corresponding workflow action verbs; Inventory Completing remains manual because it is inventory-impacting.
+- Entering any workflow stage hides the Inventory Count Materials combobox add row and server-side line creation is rejected.
+- Workflow-stage Inventory Count QTY edits use the existing line update route, normalize counted quantities to canonical scale 6, and return refreshed row payloads for immediate shared-section updates.
+- Workflow-stage Inventory Count QTY inputs display using the counted item's base UoM display precision instead of raw canonical scale-6 storage.
+- Successful workflow-stage Inventory Count QTY AJAX saves show a transient row-scoped green check-circle immediately before the `QTY` label and do not show that success state on failed saves.
+- Blank Inventory Count Materials notes render nothing; the detail row no longer shows `Notes: —`.
+- Draft Inventory Count line removal stays AJAX-first and returns `deleted_line_id` plus remaining lines so the shared section can remove the row immediately without a page refresh.
+- Stockable Materials detail pages may mount an `Inventory Counts` reusable CRUD section that lists count lines for the current material, shows count date / assigned user / UOM / counted quantity, and uses the shared section plus-button to open the same shared Inventory Count create slide-over contract and open-create event path used by the Inventory Counts index page.
+- Successful empty `Inventory Counts` section loads must render only the configured empty state; `Unable to load records.` is reserved for actual fetch failures.
+- Material-scoped Inventory Count creation may prefill the current material server-side and redirect to the created Inventory Count detail page when `show_url` is returned.
+- Stockable Material detail pages may also render a compact inventory stats strip directly under the header. That strip always shows `On Hand` and `Net Qty`, then conditionally adds `Open Sales Orders Qty`, `Open Purchase Orders Qty`, and `Open Make Orders Impact` only when the item qualifies.
+- Material detail net quantity uses the formula `on hand - open sales + open purchase + open make outputs - open make ingredients`, with all quantity math kept at canonical scale 6 and displayed through the shared quantity formatter.
+- Open make-order output in that stats strip and in the inventory availability read model uses `expected_output_qty`, while completed make-order output reaches `On Hand` and `Net Qty` through ledger stock moves that use `actual_output_qty` when present.
 - Shared section metadata rendering filters explicit empty metadata values so mutually exclusive task-row labels do not render placeholder rows.
 - Inventory Count index `Status` reflects the current workflow stage label rather than the posted lifecycle label.
 - Count lines may leave `counted_quantity` blank during draft/setup, but posting must fail until every line has a quantity.
+- Posting inventory counts creates stock moves only for stockable count lines.
 - The direct `/inventory/counts/{count}/post` route remains a compatibility path and may move the count to the Inventory inventory-effect stage before posting.
 
 ---
@@ -3152,10 +3344,10 @@ $action->execute($inventoryCount, $userId);
 **Location:** `app/Models/Recipe.php`
 
 **Purpose:**  
-Represent named manufacturing recipes for items, including output quantity per run.
+Represent the stable parent identity for named recipes while delegating execution details to version records.
 
 **When to Use:**  
-Defining recipes and their line items.
+Defining recipe parents and parent-level metadata.
 
 **When Not to Use:**  
 Non-manufacturing inventory relationships.
@@ -3163,6 +3355,8 @@ Non-manufacturing inventory relationships.
 **Public Interface:**  
 - `tenant()`  
 - `item()`  
+- `currentVersion()`  
+- `versions()`  
 - `lines()`  
 - `stockMoves()`
 
@@ -3172,9 +3366,267 @@ $recipe = Recipe::create([
     'tenant_id' => $tenant->id,
     'item_id' => $item->id,
     'name' => 'Batch of Patties',
-    'output_quantity' => '54.000000',
+    'is_active' => true,
 ]);
 ```
+
+---
+
+### Recipe Versioning Pattern
+
+**Name:** Recipe Versioning Pattern  
+**Type:** Manufacturing Domain Pattern  
+**Location:**  
+- `docs/architecture/manufacturing/RecipeVersioning.yaml`  
+- `app/Models/Recipe.php`  
+- `app/Models/RecipeVersion.php`  
+- `app/Models/RecipeVersionLine.php`
+
+**Purpose:**  
+Separate stable recipe identity from version-owned execution templates and ingredient lines.
+
+**When to Use:**  
+Capturing or changing recipe execution behavior without mutating historical Make Orders.
+
+**When Not to Use:**  
+Parent-level display metadata such as the main recipe name or default flag.
+
+**Public Interface:**  
+- `Recipe::currentVersion()`  
+- `Recipe::versions()`  
+- `RecipeVersion::lines()`
+
+**Example Usage:**  
+```php
+$recipe->versions()->create([
+    'tenant_id' => $recipe->tenant_id,
+    'version_number' => 101,
+    'recipe_type' => 'manufacturing',
+    'output_quantity' => '54.000000',
+    'status' => 'DRAFT',
+]);
+```
+
+Notes:
+- `recipes.current_version_id` is the single pointer to the current version.
+- Version status is lifecycle, checkout is user editing context, and neither is a synonym for currentness.
+- Recipe detail headers and Make Order defaults must read type and output quantity from the displayed version context, with current published as fallback.
+- Recipe creation seeds version `1.00` as a draft, without auto-checkout and without setting `recipes.current_version_id`.
+- Published version actions are `View`, `Duplicate`, and `Archive`; published versions do not expose `Checkout` or direct `Edit`.
+- Draft version actions are `View/Edit`, `Duplicate`, and `Delete`.
+- Archived versions stay hidden by default behind the `View Archived` toggle.
+
+---
+
+### Recipe Version Checkout Pattern
+
+**Name:** Recipe Version Checkout Pattern  
+**Type:** Manufacturing Domain Pattern  
+**Location:**  
+- `docs/architecture/manufacturing/RecipeVersionCheckout.yaml`  
+- `app/Models/RecipeVersionCheckout.php`  
+- `app/Http/Controllers/RecipeController.php`
+
+**Purpose:**  
+Persist per-user recipe-version editing context without introducing a recipe-wide lock.
+
+**When to Use:**  
+Checking out, checking in, publishing, or resolving the version a user should see on the recipe detail page.
+
+**When Not to Use:**  
+Choosing the version for Make Orders or expressing lifecycle status.
+
+Notes:
+- Checkout controls editing context only.
+- Users without an open checkout must see the current published version.
+- Users without an open checkout fall back to the latest non-archived version when no current published version exists yet.
+
+**Public Interface:**  
+- `Recipe::openCheckoutForUser()`  
+- `Recipe::displayVersionForUser()`  
+- `RecipeVersion::checkouts()`
+
+---
+
+### Recipe Ingredients Editing Pattern
+
+**Name:** Recipe Ingredients Editing Pattern  
+**Type:** Manufacturing Domain Pattern  
+**Location:**  
+- `docs/architecture/manufacturing/RecipeIngredientsEditing.yaml`  
+- `app/Models/RecipeVersionLine.php`  
+- `app/Http/Controllers/RecipeController.php`  
+- `resources/views/manufacturing/recipes/show.blade.php`
+
+**Purpose:**  
+Keep recipe ingredients version-owned and editable only through a checked-out draft context on the recipe detail page.
+
+**When to Use:**  
+Displaying, adding, or editing recipe ingredients in the recipe detail view.
+
+**When Not to Use:**  
+Editing parent recipe lines directly or deriving Make Order inputs from live recipe data.
+
+Notes:
+- Ingredients come from `recipe_version_lines`.
+- The displayed ingredient section follows the current user's checkout context, otherwise the current published version.
+- Ingredient quantity formatting follows the ingredient item's UoM `display_precision`, while storage remains canonical scale 6.
+- The add bar uses the shared compact combobox-plus detail-section pattern and stays hidden in read-only mode.
+- The Ingredients section must use the shared detail-section card contract rather than page-local accordion markup.
+- Parent-level recipe line editing UI must stay hidden.
+
+---
+
+### Shared Resource Detail Header Breadcrumb Component
+
+**Name:** Shared Resource Detail Header Breadcrumb Component  
+**Type:** UI Layout Pattern  
+**Location:**  
+- `docs/architecture/ui/ResourceDetailHeaderBreadcrumb.yaml`  
+- `resources/views/components/resource-detail-header-breadcrumb.blade.php`  
+- `resources/views/materials/show.blade.php`  
+- `resources/views/manufacturing/recipes/show.blade.php`  
+
+**Purpose:**  
+Keep detail-page titles and breadcrumbs aligned through one reusable header contract with the breadcrumb rendered at the bottom of the header.
+
+**When to Use:**  
+Resource detail pages that render a title and breadcrumb trail.
+
+**When Not to Use:**  
+Index pages or standalone navigation bars.
+
+**Public Interface:**  
+- `<x-resource-detail-header-breadcrumb />`
+- `<x-resource-breadcrumbs />`
+
+Notes:
+- Recipes and Materials must not hand-roll their own resource header or breadcrumb wrappers.
+- Connected chevron separators and the horizontal border lines above and below the breadcrumb trail are part of the component contract.
+
+### Recipe Detail Make Orders Section
+
+**Name:** Recipe Detail Make Orders Section
+**Type:** Manufacturing UI Pattern
+**Location:**
+- `resources/views/manufacturing/recipes/show.blade.php`
+- `app/Http/Controllers/RecipeController.php`
+- `resources/js/lib/js-crud-section.js`
+
+**Purpose:**
+Expose recipe-scoped Make Order history and direct creation through the shared detail CRUD section.
+
+**When to Use:**
+Listing or creating Make Orders from a recipe detail page.
+
+**When Not to Use:**
+Creating Make Orders from drafts or from a checked-out display context.
+
+Notes:
+- The Recipe detail section order is Make Orders, Ingredients, then Versions.
+- The Make Orders section defaults open.
+- The plus button remains right-aligned through the shared CRUD section create-wrapper contract.
+- Row primary text links to the Make Order detail page through the shared primary-link contract.
+
+---
+
+### Starting Inventory Visibility Pattern
+
+**Name:** Starting Inventory Visibility Pattern  
+**Type:** Inventory Domain Pattern  
+**Location:**  
+- `app/Http/Controllers/ItemController.php`  
+- `app/Models/InventoryCount.php`  
+- `app/Models/StockMove.php`  
+
+**Purpose:**  
+Make material starting quantity visible through the user-facing inventory counts surface while preserving stock moves as the canonical append-only inventory ledger.
+
+**When to Use:**  
+Creating a material with a positive starting quantity.
+
+**When Not to Use:**  
+General receiving, purchase-order posting, or later stock adjustments.
+
+**Public Interface:**  
+- `ItemController::store()`  
+- `InventoryCount::stockMoves()`  
+
+**Rules:**  
+- Positive starting quantity for a stockable material creates an immediately completed and posted `Initial Stock` inventory count.
+- The opening-balance stock effect should reuse the existing inventory-count posting behavior instead of creating a disconnected one-off inventory mutation.
+- Non-stockable materials must reject starting quantity input instead of silently ignoring it.
+
+**Public Interface:**  
+- `RecipeVersion::lines()`  
+- `RecipeController::storeIngredient()`  
+- `RecipeController::updateIngredient()`
+
+---
+
+### Make Order Recipe Snapshot Pattern
+
+**Name:** Make Order Recipe Snapshot Pattern  
+**Type:** Manufacturing Domain Pattern  
+**Location:**  
+- `docs/architecture/manufacturing/MakeOrderRecipeSnapshot.yaml`  
+- `app/Models/MakeOrder.php`  
+- `app/Models/MakeOrderLine.php`  
+- `app/Http/Controllers/MakeOrderController.php`
+
+**Purpose:**  
+Snapshot the current published recipe version and its lines onto each Make Order so later recipe changes do not mutate execution history.
+
+**When to Use:**  
+Creating or executing Make Orders.
+
+**When Not to Use:**  
+Live recipe planning queries that should resolve the current version directly.
+
+Notes:
+- Make Orders must resolve `recipe_version_id` from `recipes.current_version_id`.
+- User checked-out recipe versions are excluded from Make Order selection.
+
+**Public Interface:**  
+- `MakeOrder::recipeVersion()`  
+- `MakeOrder::lines()`
+
+**Example Usage:**  
+```php
+$makeOrder->lines()->create([
+    'tenant_id' => $makeOrder->tenant_id,
+    'input_item_id' => $item->id,
+    'planned_quantity' => '4.000000',
+    'line_type' => 'recipe',
+]);
+```
+
+---
+
+### Breadcrumb/Header Alignment Rule
+
+**Name:** Breadcrumb/Header Alignment Rule  
+**Type:** UI Layout Invariant  
+**Location:**  
+- `docs/architecture/ui/ResourceDetailBreadcrumbAlignment.yaml`  
+- `resources/views/manufacturing/recipes/show.blade.php`
+
+**Purpose:**  
+Keep resource-detail breadcrumbs and titles aligned within one container so the home icon and title share the same left edge.
+
+**When to Use:**  
+Rendering breadcrumbs above a resource detail title.
+
+**When Not to Use:**  
+Index pages or standalone navigation regions.
+
+Notes:
+- Breadcrumbs and the header title must share the same layout container.
+- Breadcrumbs must not drift in an independent max-width wrapper.
+
+**Public Interface:**  
+- `resources/views/components/resource-breadcrumbs.blade.php`  
+- `resources/views/manufacturing/recipes/show.blade.php`
 
 ---
 
@@ -3612,6 +4064,10 @@ Tracking inventory on-hand directly.
 - `item()`  
 - `packUom()`
 
+**Notes:**
+- Pack UoM must match the item base UoM or have a resolvable direct, reciprocal, or multi-step path through item-specific, tenant/general, or global conversions before create/update is allowed.
+- Missing conversion responses must include enough item/UOM context for the supplier-package slide-over to open a quick item-conversion modal without navigating away.
+
 **Example Usage:**  
 ```php
 $option = ItemPurchaseOption::create([
@@ -3621,6 +4077,32 @@ $option = ItemPurchaseOption::create([
     'pack_uom_id' => $kg->id,
 ]);
 ```
+
+### Purchase Order Lifecycle
+
+**Name:** Purchase Order Lifecycle
+**Type:** Domain Rule
+**Location:** `docs/architecture/purchasing/PurchaseOrderLifecycle.yaml`
+
+**Purpose:**
+Track Purchase Order lifecycle through the shared workflow foundation while mirroring the legacy status column during migration.
+
+**Rules:**
+- PO detail status is derived from workflow state: `workflow_cancelled_at` means `CANCELLED`, no completed stage means `DRAFT`, otherwise the last completed stage's `status_complete_label`.
+- PO index, detail header, action-button state, row badges, and page JSON payloads must use workflow-derived status, not the legacy `purchase_orders.status` mirror column.
+- PO detail actions are driven by reusable workflow JSON and complete the current stage through AJAX.
+- Workflow action dropdown labels are presented in natural case from `workflow_stages.action_verb`.
+- Completing the configured inventory-impacting PO stage applies receipt inventory impact.
+- Cancel transitions eligible purchase orders to persisted terminal status `CANCELLED`.
+- Back Order and Short Close are action events or markers, not `purchase_orders.status` values.
+- Line-level tax is entered with one decimal place, stored in basis points, and calculated per line for PO tax totals.
+- PO detail Details fields autosave individually and must not depend on a section-level Save button.
+- PO detail header, shipping, and line edits remain editable until the configured purchasing inventory-effect stage has completed; cancellation, completed workflow, or inventory-effect completion locks edits.
+- Supplier changes on a draft PO clear existing PO lines server-side because supplier-package options are supplier-scoped.
+- Draft PO Items add flow uses one clean supplier-scoped supplier-package combobox plus an icon `+` button; it must not expose separate item and package-option selectors.
+- Draft PO line quantity and tax are edited inline and autosaved through the line update endpoint, which must return refreshed line and PO totals JSON.
+- Draft PO line quantity input and validation use whole package counts only.
+- Backend transition rules and gates are authoritative.
 
 ### Purchase Order Receipt Inventory Impact
 
@@ -3632,7 +4114,7 @@ $option = ItemPurchaseOption::create([
 - `app/Models/PurchaseOrderReceiptLine.php`
 
 **Purpose:**  
-Ensure every purchase order receipt line posts exactly one linked stock move and updates inventory in item base units.
+Ensure purchase order receipt lines are recorded while stockable receipt lines post linked stock moves in item base units.
 
 **When to Use:**  
 Purchase order receiving and receipt-ledger audit checks.
@@ -3644,6 +4126,11 @@ Short-close events or non-purchasing inventory adjustments.
 - `PurchaseOrderLifecycleService::createReceipt()`  
 - `PurchaseOrderReceiptLine::stockMove()`  
 - `Item::onHandQuantity()`
+
+**Notes:**
+- Receipt quantity uses package count × package quantity × resolved package-UoM-to-base-UoM conversion.
+- Conversion precedence is item-specific, tenant/general, then global; missing conversion blocks receiving transactionally.
+- Conversion may resolve through direct, reciprocal, or multi-step paths through defined conversion records.
 
 **Example Usage:**  
 ```php
@@ -3670,6 +4157,7 @@ Generic inventory adjustments.
 
 **Public Interface:**  
 - `execute(ItemPurchaseOption $option, string $packCount): StockMove`
+- `baseQuantityFor(ItemPurchaseOption $option, string $packCount): string`
 
 **Example Usage:**  
 ```php
@@ -4319,8 +4807,10 @@ Vendor or generated views excluded from repository checks, plus Breeze/shared la
 - `resources/js/lib/crud-page.js`  
 - `resources/js/pages/sales-products-index.js`  
 - `resources/js/pages/sales-customers-index.js`  
+- `resources/js/pages/purchasing-suppliers-index.js`
 - `resources/views/sales/products/index.blade.php`
 - `resources/views/sales/customers/index.blade.php`
+- `resources/views/purchasing/suppliers/index.blade.php`
 
 **Purpose:**  
 Centralize a shared config-driven CRUD renderer behind server-generated page contracts while keeping Blade index pages mount-only, moving import UX and lifecycle into a shared import component, and leaving page-specific create/export behavior plus approved data adapters in each page module.
@@ -4345,12 +4835,15 @@ Static pages, or domain workflows that exceed generic CRUD concerns.
 **Current Reference Implementations:**  
 - Sales Products  
 - Sales Customers
+- Purchasing Suppliers
+- Recipes
 
 **Key Rules:**  
 - Blade index shells remain mount-only for CRUD concerns and must provide a bounded viewport-height container for the shared CRUD module.  
 - CRUD pages that use the shared import abstraction emit a separate `data-import-config` contract instead of embedding import internals into the CRUD config.  
 - `data-crud-root` must fill the available bounded height with `h-full` / `min-h-0`-compatible layout so the shared renderer can size its records pane correctly.  
-- The shared CRUD renderer owns toolbar layout, search input, create/import/export buttons, sticky desktop headers, record table/cards, empty states, and row action menus.  
+- The shared CRUD renderer owns toolbar layout, search input, create/import/export buttons, sticky desktop headers, record table/cards, empty states, and row-level action rendering.  
+- The shared CRUD renderer may render either the default vertical-dots row menu or one direct inline icon button when the CRUD config opts into that row-action mode.  
 - Toolbar and page chrome remain outside the records scroller; the records/results area is the only scrollable region for CRUD list rendering.  
 - Desktop and mobile variants follow the same scroll-containment contract: header/toolbar stays fixed in the component shell while only records scroll.  
 - Shared export helpers own export panel markup, open/close/reset lifecycle, scope selection, validation/error display, config-driven URL building, and export submission wiring without introducing global state.  
@@ -4695,17 +5188,44 @@ Do not introduce new enum values without updating this document.
 - `DRAFT`
 - `SCHEDULED`
 - `MADE`
+- `CANCELLED`
 
 **Semantic meaning:**
 
 - `DRAFT`: Planned make order with no scheduled date.
 - `SCHEDULED`: Due date set; still no stock moves.
 - `MADE`: Executed; stock moves have been posted.
+- `CANCELLED`: Archived or cancelled make order. No stock moves are posted by cancellation.
 
 **Notes:**
 
-- Status transitions are DRAFT → SCHEDULED → MADE.
-- MADE is terminal.
+- Status transitions are DRAFT → SCHEDULED → MADE, with archive/cancel transitions from eligible non-MADE orders to CANCELLED.
+- MADE and CANCELLED are terminal.
+
+---
+
+### Recipe Version Status
+
+**Name:** RecipeVersion status  
+**Storage location(s):** `recipe_versions.status` (string column)  
+**Allowed values:**
+
+- `DRAFT`
+- `PUBLISHED`
+- `ARCHIVED`
+
+**Semantic meaning:**
+
+- `DRAFT`: Editable execution template that is not eligible for new Make Orders.
+- `PUBLISHED`: Published execution template. Multiple versions may be published historically, but only `recipes.current_version_id` is current.
+- `ARCHIVED`: Inactive execution template kept for historical reference only.
+
+**Notes:**
+
+- Legacy persisted `APPROVED` values must be treated as `PUBLISHED` during migration and read-model normalization until old records are rewritten safely.
+- Recipe parent names remain on `recipes.name`; version names are optional internal labels only.
+- Version status is lifecycle only. Currentness is controlled only by `recipes.current_version_id`.
+- Make Orders must reference the recipe version pointed to by `recipes.current_version_id`.
 
 ---
 
@@ -4718,26 +5238,24 @@ Do not introduce new enum values without updating this document.
 **Allowed values:**
 
 - `DRAFT`
-- `OPEN`
-- `PARTIALLY-RECEIVED`
+- `SENT`
 - `RECEIVED`
-- `BACK-ORDERED`
-- `SHORT-CLOSED`
+- `COMPLETED`
 - `CANCELLED`
 
 **Semantic meaning:**
 
 - `DRAFT`: Purchase order is being assembled and may be edited.
-- `OPEN`: Purchase order has been issued to the supplier.
-- `PARTIALLY-RECEIVED`: Some items have been received, balances remain.
-- `RECEIVED`: All ordered items have been received.
-- `BACK-ORDERED`: Order contains backordered items.
-- `SHORT-CLOSED`: Order closed with a short receipt.
-- `CANCELLED`: Order has been cancelled.
+- `SENT`: Purchase order has been issued to the supplier and may receive inventory.
+- `RECEIVED`: All line balances have been received or short-closed.
+- `COMPLETED`: Purchase order lifecycle is complete.
+- `CANCELLED`: Purchase order has been cancelled and is terminal.
 
 **Notes:**
 
-- Derived statuses are set by receiving/short-close events.
+- `purchase_orders.status` must persist only the five values above.
+- Purchase Order workflow displays may derive status from workflow fields during migration; the legacy column remains mirrored temporarily.
+- Back Order and Short Close are actions/events, not status values.
 
 ---
 
@@ -5166,12 +5684,12 @@ Migrations remain the **sole source of truth**.
 - `COMPLETED` and `CANCELLED` are terminal.
 - `DRAFT`, `OPEN`, `COMPLETED`, and `CANCELLED` are system statuses.
 - Operational middle stages are derived from active tenant `workflow_stages` rows in the `sales` workflow domain and are persisted as uppercase stage keys in `sales_orders.status`.
-- New tenants are seeded by default with `packing`, `packed`, and `shipping`, but runtime stage order is database-backed by `sort_order`.
+- New tenants are seeded by default with `creating`, `packing`, `shipping`, `invoicing`, and `completing`, but runtime stage order is database-backed by `sort_order`.
 - Entering the first operational stage checks fulfillment availability, reserves nothing, and creates no stock moves.
-- Moving from the seeded `packing` stage to the seeded `packed` stage posts inventory issue stock moves in a single transaction.
+- Completing the configured inventory-effect stage posts inventory issue stock moves in a single transaction.
 - Later operational stages and the final operational-stage-to-`COMPLETED` transition create no stock moves.
 - Cancellation before packed inventory posting creates no stock moves.
-- Cancelling from the seeded `packed` stage appends reversing stock moves and preserves the original issue moves for audit history.
+- Cancelling after packed inventory posting appends reversing stock moves and preserves the original issue moves for audit history.
 
 ---
 
@@ -5212,7 +5730,7 @@ Migrations remain the **sole source of truth**.
 - External CSV export emits one row per sales order line and repeats order header fields on each exported row.
 - External CSV file-upload import groups rows into unique orders by `(tenant_id, external_source, order_external_id)` and creates one sales-order line per grouped CSV row.
 - `external_id` is the source-system line ID when present; it is not used as the local primary key.
-- On the seeded `packing -> packed` transition, each line may generate exactly one posted `stock_moves` ledger entry with `source_type = App\Models\SalesOrderLine` and `source_id = sales_order_lines.id`.
+- On the configured sales inventory-effect transition, each line may generate exactly one posted `stock_moves` ledger entry with `source_type = App\Models\SalesOrderLine` and `source_id = sales_order_lines.id`.
 
 ---
 
@@ -5252,7 +5770,10 @@ Migrations remain the **sole source of truth**.
 | tenant_id         | bigint    | No       | FK → tenants.id (CASCADE)           |
 | workflow_domain_id | bigint   | No       | FK → workflow_domains.id (CASCADE)  |
 | key               | string    | No       | Tenant/domain-scoped operational key |
-| name              | string    | No       | Display name                        |
+| name              | string    | No       | Current-stage display name/status label |
+| action_verb       | string    | Yes      | Verb shown for completing the current stage |
+| status_complete_label | string | Yes    | Derived status after the stage completes |
+| completion_mode   | string    | No       | `manual` or `automatic`; default `manual` |
 | description       | text      | Yes      | —                                   |
 | sort_order        | unsignedInteger | No | Runtime order within domain         |
 | is_active         | boolean   | No       | Default true                        |
@@ -5540,6 +6061,7 @@ Migrations remain the **sole source of truth**.
 | is_purchasable    | boolean   | No       | Default false             |
 | is_sellable       | boolean   | No       | Default false             |
 | is_manufacturable | boolean   | No       | Default false             |
+| is_stockable      | boolean   | No       | Default false             |
 | default_price_cents | integer | Yes      | Minor currency units      |
 | default_price_currency_code | char(3) | Yes | —                        |
 | image_url         | string    | Yes      | Remote image URL only; no local image storage |
@@ -5619,14 +6141,21 @@ Migrations remain the **sole source of truth**.
 | id                 | bigint        | No       | Primary key                           |
 | tenant_id          | bigint        | No       | FK → tenants.id (CASCADE)             |
 | recipe_id          | bigint        | No       | FK → recipes.id (CASCADE)             |
+| recipe_version_id  | bigint        | Yes      | FK → recipe_versions.id (SET NULL)    |
 | output_item_id     | bigint        | No       | FK → items.id (CASCADE)               |
-| output_quantity    | decimal(18,6) | No       | Stored runs; canonical scale          |
-| status             | string        | No       | DRAFT, SCHEDULED, MADE                |
+| runs               | decimal(18,6) | Yes      | Canonical Make Order runs multiplier; canonical scale |
+| expected_output_qty | decimal(18,6) | Yes     | Persisted expected output quantity; canonical scale |
+| actual_output_qty  | decimal(18,6) | Yes      | Canonical actual completed output; canonical scale |
+| output_quantity    | decimal(18,6) | No       | Legacy compatibility column; mirrors runs during rollout |
+| actual_output_quantity | decimal(18,6) | Yes   | Legacy compatibility column; mirrors actual_output_qty during rollout |
+| status             | string        | No       | DRAFT, SCHEDULED, MADE, CANCELLED     |
 | due_date           | date          | Yes      | Set on schedule                       |
+| workflow_stage_id  | bigint        | Yes      | FK → workflow_stages.id (SET NULL); operational stage only |
+| tasked_by_user_id  | bigint        | Yes      | FK → users.id (SET NULL); workflow-stage transition audit |
 | scheduled_at       | timestamp     | Yes      | Set on schedule                       |
 | made_at            | timestamp     | Yes      | Set on make                           |
 | created_by_user_id | bigint        | Yes      | FK → users.id (SET NULL)              |
-| made_by_user_id    | bigint        | Yes      | FK → users.id (SET NULL)              |
+| made_by_user_id    | bigint        | Yes      | FK → users.id (SET NULL); current Make Order owner/assignment |
 | created_at         | timestamp     | Yes      | —                                     |
 | updated_at         | timestamp     | Yes      | —                                     |
 
@@ -5637,11 +6166,28 @@ Migrations remain the **sole source of truth**.
 - Index: `(tenant_id, due_date)`
 - Index: `(tenant_id, recipe_id)`
 - Index: `(tenant_id, output_item_id)`
+- Index: `(tenant_id, workflow_stage_id)` (`mkord_tenant_stage_idx`)
 - Implicit (FK index): `tenant_id`
 - Implicit (FK index): `recipe_id`
+- Implicit (FK index): `recipe_version_id`
 - Implicit (FK index): `output_item_id`
+- Implicit (FK index): `workflow_stage_id`
+- Implicit (FK index): `tasked_by_user_id`
 - Implicit (FK index): `created_by_user_id`
 - Implicit (FK index): `made_by_user_id`
+
+### Behavioral Notes
+
+- `runs` is the canonical Make Order execution multiplier.
+- `expected_output_qty` is the persisted expected production output for the Make Order.
+- `actual_output_qty` is nullable and stores the completed output truth when explicitly recorded at make time.
+- `status` remains lifecycle only; `workflow_stage_id` stores the current operational stage when the Make Order adopts tenant-configured manufacturing workflow stages.
+- Make Order ownership uses `made_by_user_id`; `make_orders` does not include `assigned_to_user_id`.
+- Expected output defaults to `runs × recipe_version.output_quantity`.
+- Updating `runs` should recalculate `expected_output_qty`; direct client edits to expected output are not the canonical source of truth.
+- When `actual_output_qty` is null, completed output falls back to `expected_output_qty`.
+- `output_quantity` and `actual_output_quantity` remain only as compatibility mirrors during the migration rollout and must not be the primary application contract.
+- Existing Make Orders keep their `recipe_id`, `recipe_version_id`, and `make_order_lines` snapshots even when later recipe versions change.
 
 ---
 
@@ -5723,9 +6269,10 @@ Migrations remain the **sole source of truth**.
 | purchase_order_id          | bigint         | No       | Part of composite FK                         |
 | item_id                    | bigint         | No       | FK → items.id (CASCADE)                      |
 | item_purchase_option_id    | bigint         | No       | FK → item_purchase_options.id (CASCADE)      |
-| pack_count                 | integer        | No       | Unsigned, CHECK ≥ 1                          |
+| pack_count                 | integer        | No       | Unsigned whole package count, CHECK ≥ 1      |
 | unit_price_cents           | integer        | No       | Unsigned                                     |
 | line_subtotal_cents        | integer        | No       | Unsigned, unit_price_cents * pack_count      |
+| line_tax_rate_bps          | integer        | No       | Unsigned basis points, default 0; UI accepts 1 decimal |
 | unit_price_amount          | integer        | No       | Unsigned, snapshot cents                     |
 | unit_price_currency_code   | char(3)        | No       | Snapshot currency                            |
 | converted_unit_price_amount | integer        | No       | Unsigned, snapshot converted cents           |
@@ -5770,7 +6317,14 @@ Migrations remain the **sole source of truth**.
 | po_grand_total_cents | integer     | No       | Unsigned, default 0       |
 | po_number           | string      | Yes      | —                         |
 | notes               | text        | Yes      | —                         |
-| status              | string      | No       | See ENUMS.md              |
+| status              | string      | No       | See ENUMS.md; constrained to PurchaseOrder statuses |
+| cancelled_at        | timestamp   | Yes      | Cancellation audit timestamp |
+| cancelled_by_user_id | bigint      | Yes      | FK → users.id (SET NULL)  |
+| back_ordered_at     | timestamp   | Yes      | Back-order action marker  |
+| back_ordered_by_user_id | bigint  | Yes      | FK → users.id (SET NULL)  |
+| current_workflow_stage_id | bigint | Yes      | FK → workflow_stages.id (SET NULL) |
+| last_completed_workflow_stage_id | bigint | Yes | FK → workflow_stages.id (SET NULL) |
+| workflow_cancelled_at | timestamp | Yes      | Workflow cancellation marker |
 | created_at          | timestamp   | Yes      | —                         |
 | updated_at          | timestamp   | Yes      | —                         |
 
@@ -5781,8 +6335,22 @@ Migrations remain the **sole source of truth**.
 - Index: `tenant_id`
 - Index: `(tenant_id, status)`
 - Index: `(tenant_id, supplier_id)`
+- Index: `(tenant_id, current_workflow_stage_id)` (`po_tenant_current_workflow_stage_idx`)
+- Index: `(tenant_id, last_completed_workflow_stage_id)` (`po_tenant_last_workflow_stage_idx`)
+- Check: `status IN ('DRAFT', 'SENT', 'RECEIVED', 'COMPLETED', 'CANCELLED')`
 - Implicit (FK index): `created_by_user_id`
 - Implicit (FK index): `supplier_id`
+- Implicit (FK index): `cancelled_by_user_id`
+- Implicit (FK index): `back_ordered_by_user_id`
+- Implicit (FK index): `current_workflow_stage_id`
+- Implicit (FK index): `last_completed_workflow_stage_id`
+
+### Notes
+
+- `shipping_cents` is stored as integer cents; PO forms accept `shipping_amount` in dollars/cents and normalize at the request boundary.
+- `tax_cents` is server-calculated from `purchase_order_lines.line_tax_rate_bps`; it is not user-entered on the PO header.
+- `CANCELLED` is persisted in `status`; `cancelled_at` and `cancelled_by_user_id` are audit metadata, not display authority.
+- During workflow migration, PO detail status is derived from workflow fields while `status` remains mirrored for compatibility.
 
 ---
 
@@ -5925,9 +6493,10 @@ Migrations remain the **sole source of truth**.
 | id              | bigint        | No       | Primary key               |
 | tenant_id       | bigint        | No       | FK → tenants.id (CASCADE) |
 | item_id         | bigint        | No       | FK → items.id (CASCADE)   |
-| recipe_type     | string        | No       | Allowed values defined in `docs/ENUMS.md` |
-| name            | string        | No       | User-defined recipe name  |
-| output_quantity | decimal(18,6) | No       | Canonical scale           |
+| current_version_id | bigint     | Yes      | FK → recipe_versions.id (SET NULL) |
+| recipe_type     | string        | No       | Legacy mirror of current version type |
+| name            | string        | No       | Stable parent recipe name |
+| output_quantity | decimal(18,6) | No       | Legacy mirror of current version output qty |
 | is_active       | boolean       | No       | Default true              |
 | is_default      | boolean       | No       | Default false             |
 | created_at      | timestamp     | Yes      | —                         |
@@ -5937,7 +6506,7 @@ Migrations remain the **sole source of truth**.
 
 - PK: `id`
 - Unique: `(id, tenant_id)`
-- Unique: `(tenant_id, item_id)` where `is_default = 1` (partial/filtered; driver-specific)
+- Index: `recipes_default_lookup_idx (tenant_id, item_id, is_default)`
 - Index: `(tenant_id, item_id)`
 - Index: `(tenant_id, recipe_type)`
 - Implicit (FK index): `tenant_id`
@@ -5946,10 +6515,12 @@ Migrations remain the **sole source of truth**.
 ### Behavioral Notes
 
 - `recipe_type` is required and must use values defined in `docs/ENUMS.md`.
+- `name` is parent-level identity, not a version label.
 - Recipe output candidates are normal `items` where `is_manufacturable = true` or `is_sellable = true`.
 - Output items where both flags are false are invalid for recipes.
 - Fulfillment recipes normalize `output_quantity` to `1.000000` on save.
 - Output quantity storage remains canonical scale `6`; UI display precision is derived from the output item base UoM.
+- `current_version_id` points at the single current published execution template when one exists.
 
 ---
 
@@ -5981,6 +6552,158 @@ Migrations remain the **sole source of truth**.
 - Index: `(recipe_id, item_id)`
 - Implicit (FK index): `tenant_id`
 - Implicit (FK index): `item_id`
+
+### Behavioral Notes
+
+- `recipe_lines` is retained as a transitional compatibility mirror for legacy line APIs.
+- Versioned execution authority lives in `recipe_versions` and `recipe_version_lines`.
+
+---
+
+## recipe_versions
+
+**Tenant-owned:** Yes  
+**Purpose:** Versioned execution templates owned by a recipe parent
+
+### Columns
+
+| Name       | Type          | Nullable | Notes                     |
+| ---------- | ------------- | -------- | ------------------------- |
+| id         | bigint        | No       | Primary key               |
+| tenant_id  | bigint        | No       | FK → tenants.id (CASCADE) |
+| recipe_id  | bigint        | No       | FK → recipes.id (CASCADE) |
+| version_number | integer   | No       | Scoped per tenant + recipe |
+| name       | string        | Yes      | Optional internal version label |
+| output_quantity | decimal(18,6) | No  | Canonical scale           |
+| recipe_type | string       | No       | Allowed values defined in `docs/ENUMS.md` |
+| status     | string        | No       | Allowed values defined in `docs/ENUMS.md` |
+| effective_from | timestamp | Yes      | —                         |
+| effective_until | timestamp | Yes     | —                         |
+| approved_at | timestamp    | Yes      | —                         |
+| approved_by_user_id | bigint | Yes    | FK → users.id (SET NULL)  |
+| notes      | text          | Yes      | —                         |
+| created_at | timestamp     | Yes      | —                         |
+| updated_at | timestamp     | Yes      | —                         |
+
+### Keys & Indexes
+
+- PK: `id`
+- Unique: `(tenant_id, recipe_id, version_number)`
+- Index: `(tenant_id, recipe_id, status)`
+- Implicit (FK index): `tenant_id`
+- Implicit (FK index): `recipe_id`
+
+### Behavioral Notes
+
+- Lifecycle statuses are `DRAFT`, `PUBLISHED`, and `ARCHIVED` per `docs/ENUMS.md`.
+- Legacy persisted `APPROVED` values must be normalized as `PUBLISHED` until rewritten safely.
+- New recipes auto-create version `1.00` as a `DRAFT` and do not set `recipes.current_version_id` until publish.
+- `recipes.current_version_id` is the single currentness pointer and is independent from lifecycle status history.
+- Multiple historical versions may remain published, but only `recipes.current_version_id` is current.
+- DRAFT and ARCHIVED versions are not eligible for new Make Orders.
+- Version numbers are stored as sortable integers and displayed in `x.xx` format.
+
+---
+
+## recipe_version_lines
+
+**Tenant-owned:** Yes  
+**Purpose:** Version-owned input lines for a recipe execution template
+
+### Columns
+
+| Name       | Type          | Nullable | Notes                     |
+| ---------- | ------------- | -------- | ------------------------- |
+| id         | bigint        | No       | Primary key               |
+| tenant_id  | bigint        | No       | FK → tenants.id (CASCADE) |
+| recipe_version_id | bigint | No       | FK → recipe_versions.id (CASCADE) |
+| input_item_id | bigint     | No       | FK → items.id (CASCADE)   |
+| uom_id     | bigint        | Yes      | FK → uoms.id (SET NULL)   |
+| quantity   | decimal(18,6) | No       | Canonical scale           |
+| sort_order | integer       | No       | Default 1                 |
+| created_at | timestamp     | Yes      | —                         |
+| updated_at | timestamp     | Yes      | —                         |
+
+### Keys & Indexes
+
+- PK: `id`
+- Index: `(recipe_version_id, sort_order)`
+- Implicit (FK index): `tenant_id`
+- Implicit (FK index): `input_item_id`
+
+### Behavioral Notes
+
+- `recipe_version_lines` is the canonical ingredient source for recipe detail display and Make Order snapshots.
+- Parent-level `recipe_lines` is a transitional compatibility mirror and is not the authoritative ingredient source.
+
+---
+
+## recipe_version_checkouts
+
+**Tenant-owned:** Yes  
+**Purpose:** Persist the current user editing context for recipe versions
+
+### Columns
+
+| Name       | Type      | Nullable | Notes                     |
+| ---------- | --------- | -------- | ------------------------- |
+| id         | bigint    | No       | Primary key               |
+| tenant_id  | bigint    | No       | FK → tenants.id (CASCADE) |
+| recipe_id  | bigint    | No       | FK → recipes.id (CASCADE) |
+| recipe_version_id | bigint | No   | FK → recipe_versions.id (CASCADE) |
+| user_id    | bigint    | No       | FK → users.id (CASCADE)   |
+| checked_out_at | timestamp | No   | Checkout timestamp        |
+| checked_in_at | timestamp | Yes   | Null while open           |
+| created_at | timestamp | Yes      | —                         |
+| updated_at | timestamp | Yes      | —                         |
+
+### Keys & Indexes
+
+- PK: `id`
+- Index: `(tenant_id, recipe_id, user_id, checked_in_at)`
+- Index: `(tenant_id, recipe_version_id, user_id, checked_in_at)`
+- Implicit (FK index): `tenant_id`
+- Implicit (FK index): `recipe_id`
+- Implicit (FK index): `recipe_version_id`
+- Implicit (FK index): `user_id`
+
+### Behavioral Notes
+
+- Checkout controls user editing context only.
+- Only the checkout owner may edit the checked-out draft version.
+- A user without an open checkout sees the current published version from `recipes.current_version_id`.
+- Different users may check out different versions of the same recipe at the same time.
+- Explicit index names are `rvco_recipe_user_open_idx` and `rvco_open_user_version_idx`.
+
+---
+
+## make_order_lines
+
+**Tenant-owned:** Yes  
+**Purpose:** Snapshotted execution lines owned by a Make Order
+
+### Columns
+
+| Name       | Type          | Nullable | Notes                     |
+| ---------- | ------------- | -------- | ------------------------- |
+| id         | bigint        | No       | Primary key               |
+| tenant_id  | bigint        | No       | FK → tenants.id (CASCADE) |
+| make_order_id | bigint     | No       | FK → make_orders.id (CASCADE) |
+| source_recipe_version_line_id | bigint | Yes | FK → recipe_version_lines.id (SET NULL) |
+| input_item_id | bigint     | No       | FK → items.id (CASCADE)   |
+| uom_id     | bigint        | Yes      | FK → uoms.id (SET NULL)   |
+| planned_quantity | decimal(18,6) | No | Canonical scale snapshot  |
+| actual_quantity | decimal(18,6) | Yes | Runtime override / actual |
+| line_type  | string        | No       | `recipe`, `manual_adjustment`, or `substitution` |
+| created_at | timestamp     | Yes      | —                         |
+| updated_at | timestamp     | Yes      | —                         |
+
+### Keys & Indexes
+
+- PK: `id`
+- Index: `(make_order_id, line_type)`
+- Implicit (FK index): `tenant_id`
+- Implicit (FK index): `input_item_id`
 
 ---
 
@@ -6396,6 +7119,7 @@ The UI should feel:
 - No heavy borders
 - Subtle dividers only when necessary
 - Vertical “⋮” actions menu on the far right
+- Exception: when a row exposes only one destructive AJAX-first action, a compact rounded inline `x-mark` button may replace the vertical-dots menu
 - Row click ≠ edit (explicit actions only)
 - Reusable CRUD detail sections must not clip row-action menus; section/card shells and menu wrappers must allow dropdowns to escape with visible overflow and a stable elevated z-index
 - Mobile list summaries may truncate long secondary identifiers such as assigned-user emails when the full value would otherwise destabilize the card layout
@@ -6923,12 +7647,14 @@ use App\Http\Controllers\PurchaseOrderLineController;
 use App\Http\Controllers\PurchaseOrderReceiptController;
 use App\Http\Controllers\PurchaseOrderShortClosureController;
 use App\Http\Controllers\PurchaseOrderStatusController;
+use App\Http\Controllers\PurchaseOrderWorkflowController;
 use App\Http\Controllers\RecipeController;
 use App\Http\Controllers\SalesOrderController;
 use App\Http\Controllers\SalesOrderLineController;
 use App\Http\Controllers\SalesOrderStatusController;
 use App\Http\Controllers\SalesProductController;
 use App\Http\Controllers\SupplierController;
+use App\Http\Controllers\SupplierPurchaseOrderController;
 use App\Http\Controllers\SupplierPurchaseOptionController;
 use App\Http\Controllers\TaskCompletionController;
 use App\Http\Controllers\UomCategoryController;
@@ -7013,12 +7739,16 @@ Route::middleware('auth')->group(function () {
         ->name('materials.purchase-orders.index');
     Route::get('/materials/{item}/recipes', [RecipeController::class, 'listForMaterial'])
         ->name('materials.recipes.index');
+    Route::get('/materials/{item}/inventory-counts', [ItemController::class, 'listInventoryCounts'])
+        ->name('materials.inventory-counts.index');
     Route::get('/materials/{item}/make-orders', [MakeOrderController::class, 'listForMaterial'])
         ->name('materials.make-orders.index');
     Route::post('/materials/{item}/purchase-orders', [MaterialDraftPurchaseOrderController::class, 'store'])
         ->name('materials.purchase-orders.store');
     Route::post('/materials/{item}/supplier-packages', [MaterialSupplierPackageController::class, 'store'])
         ->name('materials.supplier-packages.store');
+    Route::post('/materials/{item}/inventory-counts', [ItemController::class, 'storeInventoryCount'])
+        ->name('materials.inventory-counts.store');
     Route::patch('/materials/{item}/supplier-packages/{option}', [MaterialSupplierPackageController::class, 'update'])
         ->name('materials.supplier-packages.update');
     Route::delete('/materials/{item}/supplier-packages/{option}', [MaterialSupplierPackageController::class, 'destroy'])
@@ -7056,6 +7786,14 @@ Route::middleware('auth')->group(function () {
         ->name('manufacturing.uom-conversions.destroy');
     Route::get('/manufacturing/recipes', [RecipeController::class, 'index'])
         ->name('manufacturing.recipes.index');
+    Route::get('/manufacturing/recipes/list', [RecipeController::class, 'list'])
+        ->name('manufacturing.recipes.list');
+    Route::get('/manufacturing/recipes/{recipe}/versions/list', [RecipeController::class, 'listVersions'])
+        ->name('manufacturing.recipes.versions.index');
+    Route::get('/manufacturing/recipes/{recipe}/make-orders', [MakeOrderController::class, 'listForRecipe'])
+        ->name('manufacturing.recipes.make-orders.index');
+    Route::post('/manufacturing/recipes/{recipe}/make-orders', [MakeOrderController::class, 'storeForRecipe'])
+        ->name('manufacturing.recipes.make-orders.store');
     Route::get('/manufacturing/recipes/{recipe}', [RecipeController::class, 'show'])
         ->name('manufacturing.recipes.show');
     Route::post('/manufacturing/recipes', [RecipeController::class, 'store'])
@@ -7064,6 +7802,28 @@ Route::middleware('auth')->group(function () {
         ->name('manufacturing.recipes.update');
     Route::delete('/manufacturing/recipes/{recipe}', [RecipeController::class, 'destroy'])
         ->name('manufacturing.recipes.destroy');
+    Route::post('/manufacturing/recipes/{recipe}/versions', [RecipeController::class, 'storeVersion'])
+        ->name('manufacturing.recipes.versions.store');
+    Route::patch('/manufacturing/recipes/{recipe}/versions/{version}', [RecipeController::class, 'updateVersion'])
+        ->name('manufacturing.recipes.versions.update');
+    Route::delete('/manufacturing/recipes/{recipe}/versions/{version}', [RecipeController::class, 'destroyVersion'])
+        ->name('manufacturing.recipes.versions.destroy');
+    Route::post('/manufacturing/recipes/{recipe}/versions/{version}/checkout', [RecipeController::class, 'checkoutVersion'])
+        ->name('manufacturing.recipes.versions.checkout');
+    Route::post('/manufacturing/recipes/{recipe}/versions/{version}/check-in', [RecipeController::class, 'checkInVersion'])
+        ->name('manufacturing.recipes.versions.check-in');
+    Route::patch('/manufacturing/recipes/{recipe}/versions/{version}/publish', [RecipeController::class, 'publishVersion'])
+        ->name('manufacturing.recipes.versions.publish');
+    Route::patch('/manufacturing/recipes/{recipe}/versions/{version}/approve', [RecipeController::class, 'publishVersion'])
+        ->name('manufacturing.recipes.versions.approve');
+    Route::post('/manufacturing/recipes/{recipe}/versions/{version}/duplicate', [RecipeController::class, 'duplicateVersion'])
+        ->name('manufacturing.recipes.versions.duplicate');
+    Route::patch('/manufacturing/recipes/{recipe}/versions/{version}/archive', [RecipeController::class, 'archiveVersion'])
+        ->name('manufacturing.recipes.versions.archive');
+    Route::post('/manufacturing/recipes/{recipe}/versions/{version}/ingredients', [RecipeController::class, 'storeIngredient'])
+        ->name('manufacturing.recipes.ingredients.store');
+    Route::patch('/manufacturing/recipes/{recipe}/versions/{version}/ingredients/{line}', [RecipeController::class, 'updateIngredient'])
+        ->name('manufacturing.recipes.ingredients.update');
     Route::post('/manufacturing/recipes/{recipe}/lines', [RecipeController::class, 'storeLine'])
         ->name('manufacturing.recipes.lines.store');
     Route::patch('/manufacturing/recipes/{recipe}/lines/{line}', [RecipeController::class, 'updateLine'])
@@ -7073,10 +7833,30 @@ Route::middleware('auth')->group(function () {
 
     Route::get('/manufacturing/make-orders', [MakeOrderController::class, 'index'])
         ->name('manufacturing.make-orders.index');
+    Route::get('/manufacturing/make-orders/list', [MakeOrderController::class, 'list'])
+        ->name('manufacturing.make-orders.list');
     Route::get('/manufacturing/make-orders/{makeOrder}', [MakeOrderController::class, 'show'])
         ->name('manufacturing.make-orders.show');
     Route::post('/manufacturing/make-orders', [MakeOrderController::class, 'store'])
         ->name('manufacturing.make-orders.store');
+    Route::patch('/manufacturing/make-orders/{makeOrder}', [MakeOrderController::class, 'update'])
+        ->name('manufacturing.make-orders.update');
+    Route::patch('/manufacturing/make-orders/{makeOrder}/details', [MakeOrderController::class, 'updateDetailsQuantities'])
+        ->name('manufacturing.make-orders.details.update');
+    Route::patch('/manufacturing/make-orders/{makeOrder}/due-date', [MakeOrderController::class, 'updateDueDate'])
+        ->name('manufacturing.make-orders.due-date.update');
+    Route::patch('/manufacturing/make-orders/{makeOrder}/assignment', [MakeOrderController::class, 'updateAssignment'])
+        ->name('manufacturing.make-orders.assignment.update');
+    Route::patch('/manufacturing/make-orders/{makeOrder}/workflow-stage', [MakeOrderController::class, 'updateWorkflowStage'])
+        ->name('manufacturing.make-orders.workflow-stage.update');
+    Route::delete('/manufacturing/make-orders/{makeOrder}', [MakeOrderController::class, 'destroy'])
+        ->name('manufacturing.make-orders.destroy');
+    Route::post('/manufacturing/make-orders/{makeOrder}/lines', [MakeOrderController::class, 'storeLine'])
+        ->name('manufacturing.make-orders.lines.store');
+    Route::patch('/manufacturing/make-orders/{makeOrder}/lines/{line}', [MakeOrderController::class, 'updateLine'])
+        ->name('manufacturing.make-orders.lines.update');
+    Route::delete('/manufacturing/make-orders/{makeOrder}/lines/{line}', [MakeOrderController::class, 'destroyLine'])
+        ->name('manufacturing.make-orders.lines.destroy');
     Route::post('/manufacturing/make-orders/{makeOrder}/schedule', [MakeOrderController::class, 'schedule'])
         ->name('manufacturing.make-orders.schedule');
     Route::post('/manufacturing/make-orders/{makeOrder}/make', [MakeOrderController::class, 'make'])
@@ -7084,6 +7864,8 @@ Route::middleware('auth')->group(function () {
 
     Route::get('/purchasing/suppliers', [SupplierController::class, 'index'])
         ->name('purchasing.suppliers.index');
+    Route::get('/purchasing/suppliers/list', [SupplierController::class, 'list'])
+        ->name('purchasing.suppliers.list');
     Route::post('/purchasing/suppliers', [SupplierController::class, 'store'])
         ->name('purchasing.suppliers.store');
     Route::get('/purchasing/suppliers/{supplier}', [SupplierController::class, 'show'])
@@ -7092,8 +7874,14 @@ Route::middleware('auth')->group(function () {
         ->name('purchasing.suppliers.update');
     Route::delete('/purchasing/suppliers/{supplier}', [SupplierController::class, 'destroy'])
         ->name('purchasing.suppliers.destroy');
+    Route::get('/purchasing/suppliers/{supplier}/purchase-orders', [SupplierPurchaseOrderController::class, 'index'])
+        ->name('purchasing.suppliers.purchase-orders.index');
+    Route::get('/purchasing/suppliers/{supplier}/purchase-options', [SupplierPurchaseOptionController::class, 'index'])
+        ->name('purchasing.suppliers.purchase-options.index');
     Route::post('/purchasing/suppliers/{supplier}/purchase-options', [SupplierPurchaseOptionController::class, 'store'])
         ->name('purchasing.suppliers.purchase-options.store');
+    Route::patch('/purchasing/suppliers/{supplier}/purchase-options/{option}', [SupplierPurchaseOptionController::class, 'update'])
+        ->name('purchasing.suppliers.purchase-options.update');
     Route::delete('/purchasing/suppliers/{supplier}/purchase-options/{option}', [SupplierPurchaseOptionController::class, 'destroy'])
         ->name('purchasing.suppliers.purchase-options.destroy');
     Route::post('/purchasing/purchase-options/{option}/prices', [ItemPurchaseOptionPriceController::class, 'store'])
@@ -7112,6 +7900,10 @@ Route::middleware('auth')->group(function () {
         ->name('purchasing.orders.destroy');
     Route::patch('/purchasing/orders/{purchaseOrder}/status', [PurchaseOrderStatusController::class, 'update'])
         ->name('purchasing.orders.status.update');
+    Route::post('/purchasing/orders/{purchaseOrder}/workflow/complete', [PurchaseOrderWorkflowController::class, 'complete'])
+        ->name('purchasing.orders.workflow.complete');
+    Route::post('/purchasing/orders/{purchaseOrder}/workflow/cancel', [PurchaseOrderWorkflowController::class, 'cancel'])
+        ->name('purchasing.orders.workflow.cancel');
     Route::post('/purchasing/orders/{purchaseOrder}/receipts', [PurchaseOrderReceiptController::class, 'store'])
         ->name('purchasing.orders.receipts.store');
     Route::post('/purchasing/orders/{purchaseOrder}/short-closures', [PurchaseOrderShortClosureController::class, 'store'])

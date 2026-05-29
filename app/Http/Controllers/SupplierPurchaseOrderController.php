@@ -65,7 +65,9 @@ class SupplierPurchaseOrderController extends Controller
             'supplier_name' => $purchaseOrder->supplier?->company_name,
             'po_number' => $purchaseOrder->po_number ?? null,
             'po_grand_total_cents' => $purchaseOrder->po_grand_total_cents,
-            'status' => $purchaseOrder->status,
+            'status' => $purchaseOrder->workflowStatus(),
+            'is_cancelled' => $purchaseOrder->isCancelled(),
+            'is_back_ordered' => $purchaseOrder->back_ordered_at !== null,
             'show_url' => route('purchasing.orders.show', $purchaseOrder),
             'available_actions' => Gate::allows('purchasing-purchase-orders-create') ? ['view'] : [],
         ];

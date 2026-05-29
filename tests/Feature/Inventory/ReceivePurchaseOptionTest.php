@@ -179,7 +179,7 @@ it('throws when pack_count is zero or negative', function () {
     expect(StockMove::count())->toBe(0);
 });
 
-it('requires a direct same-category conversion (no chained conversions)', function () {
+it('uses indirect same-category conversions when no direct conversion exists', function () {
     $tenant = ($this->makeTenant)('Tenant A');
 
     $mass = ($this->makeCategory)($tenant, 'Mass');
@@ -204,10 +204,10 @@ it('requires a direct same-category conversion (no chained conversions)', functi
 
     $action = new ReceivePurchaseOptionAction();
 
-    expect(fn () => $action->execute($option, '1'))
-        ->toThrow(\DomainException::class);
+    $move = $action->execute($option, '1');
 
-    expect(StockMove::count())->toBe(0);
+    expect(($this->asSixDecimals)($move->quantity))->toBe('1000000.000000');
+    expect($move->uom_id)->toBe($mg->id);
 });
 
 it('enforces authenticated tenant isolation', function () {

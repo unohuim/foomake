@@ -50,9 +50,10 @@ rules:
   - Make Order detail may show one compact next-stage workflow action in the shared resource header when a valid next configured stage exists.
   - Draft Make Orders may show one compact workflow-entry action in the shared resource header when a valid first configured stage exists.
   - The compact resource header workflow-stage chip must render only from `workflow_stages.name` for the current `workflow_stage_id` and must never fall back to lifecycle `status`.
-  - The compact resource header next-stage action label must render from the next valid configured `workflow_stages.button_text`, falling back to `workflow_stages.name` only when legacy records have no separate button text yet.
+  - The compact resource header next-stage action label must render from the next valid configured `workflow_stages.action_verb`, falling back to `workflow_stages.name` only when legacy records have no separate action verb yet.
   - Index rows, detail headers, workflow panels, and shared detail-section rows must display `DRAFT` while `workflow_stage_id` is null, then switch to configured `workflow_stages.name` after workflow entry.
   - Workflow stage movement must use configured tenant `workflow_stages` in the `manufacturing` workflow domain.
+  - Make Order detail and transition endpoints must not seed default manufacturing stages when the tenant already has configured manufacturing workflow stages.
   - Make Order workflow movement must reuse shared workflow task generation and current-stage task gating rather than bespoke status buttons.
   - The Details section must not render a duplicate stage-movement select/button block when the shared header workflow action already exists.
   - Draft Make Orders remain outside operational workflow stages until they explicitly enter workflow.

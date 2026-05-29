@@ -3,10 +3,12 @@ import './bootstrap';
 import Alpine from 'alpinejs';
 import { registerCombobox } from './components/combobox';
 import { registerDropdownSelect } from './components/dropdown-select';
+import { registerWorkflowActionButton } from './components/workflow-action-button';
 
 window.Alpine = Alpine;
 registerCombobox(Alpine);
 registerDropdownSelect(Alpine);
+registerWorkflowActionButton(Alpine);
 
 // Page module contract: export function mount(rootEl, payload)
 const pageModules = import.meta.glob('./pages/*.js');

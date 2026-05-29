@@ -17,10 +17,13 @@ rules:
   - Stock moves are created only for receipt lines whose item has items.is_stockable = true.
   - Stockable receipt lines link to their stock move through stock_move_id.
   - Non-stockable receipt lines keep stock_move_id null.
-  - Receipt stock move quantity is calculated as received_quantity multiplied by item_purchase_options.pack_quantity using BCMath at scale 6.
+  - Receipt stock move quantity is calculated as received_quantity multiplied by item_purchase_options.pack_quantity, then converted from package UoM into the item base UoM when those UoMs differ.
+  - Receipt conversion precedence is item-specific conversion, then tenant/general conversion, then global conversion.
+  - Receipt conversion may use direct, reciprocal, or multi-step paths through defined conversion records.
+  - Receipt conversion and quantity math use BCMath string math at scale 6; receipt creation fails transactionally when a required conversion is unavailable.
   - Receipt stock moves must remain the source of truth for inventory on-hand.
   - Receipt creation must fail transactionally if stock move creation fails.
-  - Stockable Material detail net-quantity stats treat non-terminal non-cancelled purchase orders as open supply and add the remaining unreceived base quantity for matching lines.
+  - Stockable Material detail net-quantity stats treat purchase orders with status SENT as open supply and add the remaining unreceived quantity converted from supplier package UoM into item base UoM.
 public_interface:
   - PurchaseOrderLifecycleService::createReceipt()
   - PurchaseOrderReceiptLine::stockMove()

@@ -1,0 +1,28 @@
+name: Derived Workflow Status
+type: Workflow Status Rule
+location:
+  - app/Models/PurchaseOrder.php
+  - app/Services/Workflows/WorkflowTransitionService.php
+  - database/migrations/2026_05_28_000003_add_workflow_foundation_fields.php
+purpose: Define how workflow-enabled records derive visible status from workflow state while legacy domain status columns remain during migration.
+when_to_use:
+  - Rendering workflow-enabled record status in detail headers
+  - Building workflow action-button JSON
+  - Migrating domain-owned lifecycle status columns toward workflow-derived status
+when_not_to_use:
+  - Persisting arbitrary custom status strings on domain records
+  - Deriving non-workflow audit markers such as Back Order or Short Close
+rules:
+  - If `workflow_cancelled_at` is not null, the derived status is `CANCELLED`.
+  - If `last_completed_workflow_stage_id` is null, the derived status is `DRAFT`.
+  - Otherwise the derived status is `last_completed_workflow_stage.status_complete_label`.
+  - Legacy domain status columns may be mirrored during migration but must not be the PO detail action-button display authority.
+  - Workflow cancellation is terminal and blocks future workflow actions.
+public_interface:
+  - PurchaseOrder::workflowStatus()
+  - WorkflowTransitionService::purchaseOrderWorkflowPayload()
+example_usage: |
+  Purchase Order workflow display:
+    current_workflow_stage = Receiving
+    last_completed_workflow_stage = Creating
+    derived_status = CREATED

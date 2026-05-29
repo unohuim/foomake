@@ -1241,7 +1241,7 @@ class InventoryCountController extends Controller
             return null;
         }
 
-        return $workflowStage->button_text ?: $workflowStage->name;
+        return $workflowStage->action_verb ?: $workflowStage->name;
     }
 
     /**

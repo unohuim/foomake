@@ -9,6 +9,7 @@ use App\Models\PurchaseOrderLine;
 use App\Models\Supplier;
 use App\Models\Uom;
 use App\Support\QuantityFormatter;
+use App\Support\Uom\UomConversionPathResolver;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -18,6 +19,11 @@ use Illuminate\Validation\Rule;
 
 class MaterialSupplierPackageController extends Controller
 {
+    public function __construct(
+        private readonly UomConversionPathResolver $conversionPathResolver
+    ) {
+    }
+
     public function index(Request $request, Item $item): JsonResponse
     {
         Gate::authorize('inventory-materials-view');
@@ -27,7 +33,7 @@ class MaterialSupplierPackageController extends Controller
             ->where('tenant_id', $request->user()->tenant_id)
             ->where('item_id', $item->id)
             ->whereNotNull('supplier_id')
-            ->with(['supplier', 'packUom', 'currentPrice'])
+            ->with(['supplier', 'item', 'packUom', 'currentPrice'])
             ->whereHas('supplier')
             ->orderByDesc('is_active')
             ->orderBy('id')
@@ -55,6 +61,11 @@ class MaterialSupplierPackageController extends Controller
         Gate::authorize('purchasing-suppliers-manage');
 
         $validated = $request->validate($this->rules($request));
+
+        if (! $this->supplierPackageConversionExists($request, $item, (int) $validated['pack_uom_id'])) {
+            return $this->missingConversionResponse($request, $item, (int) $validated['pack_uom_id']);
+        }
+
         $tenantCurrency = $this->tenantCurrency($request);
         $option = null;
         $priceCents = $this->normalizeAmountToCents((string) $validated['price_amount']);
@@ -73,20 +84,10 @@ class MaterialSupplierPackageController extends Controller
             $this->storeCurrentPrice($request, $option, $priceCents, $tenantCurrency);
         });
 
-        $option->load('currentPrice');
+        $option->load(['supplier', 'item', 'packUom', 'currentPrice']);
 
         return response()->json([
-            'data' => [
-                'id' => $option->id,
-                'item_id' => $option->item_id,
-                'supplier_id' => $option->supplier_id,
-                'pack_quantity' => bcadd((string) $option->pack_quantity, '0', 6),
-                'pack_uom_id' => $option->pack_uom_id,
-                'supplier_sku' => $option->supplier_sku,
-                'is_active' => (bool) $option->is_active,
-                'price_amount' => $this->formatCentsToAmount($option->currentPrice?->converted_price_cents),
-                'current_price_cents' => $option->currentPrice?->converted_price_cents,
-            ],
+            'data' => $this->rowPayload($request, $option),
         ], 201);
     }
 
@@ -98,6 +99,10 @@ class MaterialSupplierPackageController extends Controller
         $this->abortIfOptionDoesNotBelongToItem($request, $item, $option);
 
         $validated = $request->validate($this->rules($request));
+
+        if (! $this->supplierPackageConversionExists($request, $item, (int) $validated['pack_uom_id'])) {
+            return $this->missingConversionResponse($request, $item, (int) $validated['pack_uom_id']);
+        }
 
         $tenantCurrency = $this->tenantCurrency($request);
         $priceCents = $this->normalizeAmountToCents((string) $validated['price_amount']);
@@ -113,20 +118,10 @@ class MaterialSupplierPackageController extends Controller
             $this->storeCurrentPrice($request, $option, $priceCents, $tenantCurrency);
         });
 
-        $option->load('currentPrice');
+        $option->load(['supplier', 'item', 'packUom', 'currentPrice']);
 
         return response()->json([
-            'data' => [
-                'id' => $option->id,
-                'item_id' => $option->item_id,
-                'supplier_id' => $option->supplier_id,
-                'pack_quantity' => bcadd((string) $option->pack_quantity, '0', 6),
-                'pack_uom_id' => $option->pack_uom_id,
-                'supplier_sku' => $option->supplier_sku,
-                'is_active' => (bool) $option->is_active,
-                'price_amount' => $this->formatCentsToAmount($option->currentPrice?->converted_price_cents),
-                'current_price_cents' => $option->currentPrice?->converted_price_cents,
-            ],
+            'data' => $this->rowPayload($request, $option),
         ]);
     }
 
@@ -247,12 +242,20 @@ class MaterialSupplierPackageController extends Controller
             'item_purchase_option_id' => $option->id,
             'supplier_id' => $option->supplier_id,
             'supplier_name' => $option->supplier?->company_name,
+            'item_id' => $option->item_id,
+            'item_name' => $option->item?->name,
             'show_url' => $option->supplier_id ? route('purchasing.suppliers.show', $option->supplier_id) : null,
             'pack_quantity' => $packQuantity,
             'pack_quantity_display' => QuantityFormatter::format($packQuantity, $packPrecision),
             'pack_uom_id' => $option->pack_uom_id,
             'pack_uom_symbol' => $option->packUom?->symbol,
             'pack_uom_name' => $option->packUom?->name,
+            'label' => trim(sprintf(
+                '%s (%s %s)',
+                (string) $option->supplier?->company_name,
+                QuantityFormatter::format($packQuantity, $packPrecision),
+                (string) ($option->packUom?->symbol ?: $option->packUom?->name)
+            )),
             'supplier_sku' => $option->supplier_sku,
             'current_price_display' => $currentPrice
                 ? $this->formatMoney($currentPrice->price_currency_code, $currentPrice->converted_price_cents)
@@ -263,6 +266,7 @@ class MaterialSupplierPackageController extends Controller
             'is_active' => (bool) $option->is_active,
             'state' => $option->is_active ? 'active' : 'archived',
             'available_actions' => $availableActions,
+            'conversion_create_url' => route('manufacturing.uom-conversions.items.store'),
         ];
     }
 
@@ -328,5 +332,68 @@ class MaterialSupplierPackageController extends Controller
     private function tenantCurrency(Request $request): string
     {
         return strtoupper((string) ($request->user()?->tenant?->currency_code ?: config('app.currency_code', 'USD')));
+    }
+
+    /**
+     * Determine whether the package UoM can convert into the item base UoM.
+     */
+    private function supplierPackageConversionExists(Request $request, Item $item, int $packUomId): bool
+    {
+        $tenantId = (int) $request->user()->tenant_id;
+
+        $packUom = Uom::query()
+            ->where('tenant_id', $tenantId)
+            ->findOrFail($packUomId);
+
+        $baseUom = Uom::query()
+            ->where('tenant_id', $tenantId)
+            ->findOrFail($item->base_uom_id);
+
+        return $this->conversionPathResolver->canResolve(
+            $tenantId,
+            (int) $item->id,
+            $packUom,
+            $baseUom,
+            UomConversionPathResolver::PRECEDENCE_GENERAL_FIRST
+        );
+    }
+
+    /**
+     * Return a JSON/AJAX-compatible missing conversion response.
+     */
+    private function missingConversionResponse(Request $request, Item $item, int $packUomId): JsonResponse
+    {
+        $tenantId = (int) $request->user()->tenant_id;
+        $item->loadMissing('baseUom');
+        $packUom = Uom::query()
+            ->where('tenant_id', $tenantId)
+            ->findOrFail($packUomId);
+        $baseUom = $item->baseUom;
+
+        return response()->json([
+            'message' => 'Create a unit conversion before using this package UoM.',
+            'errors' => [
+                'pack_uom_id' => ['Create a unit conversion before using this package UoM.'],
+            ],
+            'meta' => [
+                'requires_conversion' => true,
+                'conversion_create_url' => route('manufacturing.uom-conversions.items.store'),
+                'suggested_direction' => 'package_to_base',
+                'item' => [
+                    'id' => $item->id,
+                    'name' => $item->name,
+                ],
+                'from_uom' => [
+                    'id' => $packUom->id,
+                    'name' => $packUom->name,
+                    'symbol' => $packUom->symbol,
+                ],
+                'to_uom' => [
+                    'id' => $baseUom?->id,
+                    'name' => $baseUom?->name,
+                    'symbol' => $baseUom?->symbol,
+                ],
+            ],
+        ], 422);
     }
 }

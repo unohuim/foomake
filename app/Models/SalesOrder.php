@@ -181,6 +181,10 @@ class SalesOrder extends Model
             return [$resolver->statusForStage($firstStage), self::STATUS_CANCELLED];
         }
 
+        if ($this->status === self::STATUS_PACKING) {
+            return [self::STATUS_PACKED, self::STATUS_CANCELLED];
+        }
+
         $nextStage = $resolver->nextActiveStage($this);
 
         if ($nextStage) {

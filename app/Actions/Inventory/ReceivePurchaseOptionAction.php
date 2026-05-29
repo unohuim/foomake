@@ -3,9 +3,8 @@
 namespace App\Actions\Inventory;
 
 use App\Models\ItemPurchaseOption;
-use App\Models\ItemUomConversion;
 use App\Models\StockMove;
-use App\Models\UomConversion;
+use App\Support\Uom\UomConversionPathResolver;
 use DomainException;
 use Illuminate\Support\Facades\Auth;
 
@@ -13,10 +12,32 @@ class ReceivePurchaseOptionAction
 {
     private const SCALE = 6;
 
+    public function __construct(
+        private readonly ?UomConversionPathResolver $conversionPathResolver = null
+    ) {
+    }
+
     /**
      * Receive inventory for a purchase option and create a receipt stock move.
      */
     public function execute(ItemPurchaseOption $option, string $packCount): StockMove
+    {
+        $baseQuantity = $this->baseQuantityFor($option, $packCount);
+
+        return StockMove::create([
+            'tenant_id' => $option->tenant_id,
+            'item_id' => $option->item_id,
+            'uom_id' => $option->item->base_uom_id,
+            'quantity' => $baseQuantity,
+            'type' => 'receipt',
+            'status' => 'POSTED',
+        ]);
+    }
+
+    /**
+     * Resolve a received package count into the item's base UoM quantity.
+     */
+    public function baseQuantityFor(ItemPurchaseOption $option, string $packCount): string
     {
         $this->ensureValidPackCount($packCount);
         $this->ensureAuthenticatedTenant($option);
@@ -29,15 +50,8 @@ class ReceivePurchaseOptionAction
         }
 
         $totalPackQuantity = bcmul($packQuantity, $packCount, self::SCALE);
-        $baseQuantity = $this->convertToBaseUom($option, $totalPackQuantity);
 
-        return StockMove::create([
-            'tenant_id' => $option->tenant_id,
-            'item_id' => $option->item_id,
-            'uom_id' => $option->item->base_uom_id,
-            'quantity' => $baseQuantity,
-            'type' => 'receipt',
-        ]);
+        return $this->convertToBaseUom($option, $totalPackQuantity);
     }
 
     /**
@@ -73,7 +87,7 @@ class ReceivePurchaseOptionAction
     {
         $item = $option->item;
 
-        if (!$item) {
+        if (! $item) {
             throw new DomainException('Purchase option must reference an item.');
         }
 
@@ -91,7 +105,7 @@ class ReceivePurchaseOptionAction
         $packUom = $option->packUom;
         $baseUom = $item->baseUom;
 
-        if (!$packUom || !$baseUom) {
+        if (! $packUom || ! $baseUom) {
             throw new DomainException('Missing required unit of measure.');
         }
 
@@ -99,45 +113,27 @@ class ReceivePurchaseOptionAction
             return $quantity;
         }
 
-        $itemConversion = ItemUomConversion::query()
-            ->where('tenant_id', $option->tenant_id)
-            ->where('item_id', $item->id)
-            ->where('from_uom_id', $packUom->id)
-            ->where('to_uom_id', $baseUom->id)
-            ->first();
+        $convertedQuantity = $this->resolver()->convertQuantity(
+            (int) $option->tenant_id,
+            (int) $item->id,
+            $packUom,
+            $baseUom,
+            $quantity,
+            UomConversionPathResolver::PRECEDENCE_ITEM_FIRST
+        );
 
-        if ($itemConversion) {
-            return bcmul($quantity, (string) $itemConversion->conversion_factor, self::SCALE);
+        if ($convertedQuantity === null) {
+            throw new DomainException('Missing required unit conversion.');
         }
 
-        if ($packUom->uom_category_id === $baseUom->uom_category_id) {
-            $conversion = UomConversion::query()
-                ->where('tenant_id', $option->tenant_id)
-                ->where('from_uom_id', $packUom->id)
-                ->where('to_uom_id', $baseUom->id)
-                ->first();
+        return $convertedQuantity;
+    }
 
-            if ($conversion) {
-                return bcmul($quantity, (string) $conversion->multiplier, self::SCALE);
-            }
-
-            $conversion = UomConversion::query()
-                ->whereNull('tenant_id')
-                ->where('from_uom_id', $packUom->id)
-                ->where('to_uom_id', $baseUom->id)
-                ->first();
-
-            if (!$conversion) {
-                throw new DomainException('Missing required unit conversion.');
-            }
-
-            return bcmul($quantity, (string) $conversion->multiplier, self::SCALE);
-        }
-
-        if (!$itemConversion) {
-            throw new DomainException('Missing item-specific unit conversion.');
-        }
-
-        return bcmul($quantity, (string) $itemConversion->conversion_factor, self::SCALE);
+    /**
+     * Resolve the conversion path resolver while preserving simple manual construction in tests.
+     */
+    private function resolver(): UomConversionPathResolver
+    {
+        return $this->conversionPathResolver ?? app(UomConversionPathResolver::class);
     }
 }

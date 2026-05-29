@@ -44,6 +44,7 @@ class SalesOrderStatusController extends Controller
         $targetStatus = (string) $request->validated('status');
         $resolver = app(ResolveSalesWorkflowStageAction::class);
         $targetStage = $resolver->activeStageForStatus($salesOrder, $targetStatus);
+        $packedStage = $resolver->stageForStatus($salesOrder, SalesOrder::STATUS_PACKED);
 
         if (! $salesOrder->canTransitionTo($targetStatus)) {
             return response()->json([
@@ -66,6 +67,14 @@ class SalesOrderStatusController extends Controller
                         $deleteOpenSalesOrderTasksAction,
                         $resolver
                     ),
+                $targetStatus === SalesOrder::STATUS_PACKED && $packedStage?->is_inventory_effect_stage => $packSalesOrderAction->execute(
+                    $salesOrder,
+                    $buildPlanAction,
+                    $assertWorkflowStageTasksCompletedAction,
+                    $generateWorkflowStageTasksAction,
+                    $targetStatus,
+                    $packedStage->key
+                ),
                 $targetStage !== null && $targetStage->is_inventory_effect_stage => $packSalesOrderAction->execute(
                     $salesOrder,
                     $buildPlanAction,

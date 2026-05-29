@@ -30,10 +30,8 @@ class PurchaseOrderLineController extends Controller
             ->where('tenant_id', $request->user()->tenant_id)
             ->findOrFail($purchaseOrderId);
 
-        if (! in_array($purchaseOrder->status, [PurchaseOrder::STATUS_DRAFT, PurchaseOrder::STATUS_OPEN], true)) {
-            return response()->json([
-                'message' => 'Only draft or open purchase orders can be edited.',
-            ], 422);
+        if (! $purchaseOrder->isWorkflowEditable()) {
+            return $this->lockedPurchaseOrderResponse();
         }
 
         $validator = Validator::make($request->all(), [
@@ -48,11 +46,16 @@ class PurchaseOrderLineController extends Controller
             'item_id' => ['nullable', 'integer'],
             'pack_count' => ['required', 'integer', 'min:1'],
             'unit_price_cents' => ['required', 'integer', 'min:0'],
+            'tax_percent' => ['nullable', 'regex:/^\d{1,3}(?:\.\d)?$/'],
         ]);
 
-        $validator->after(function ($validator) use ($purchaseOrder) {
+        $validator->after(function ($validator) use ($purchaseOrder, $request) {
             if (! $purchaseOrder->supplier_id) {
                 $validator->errors()->add('supplier_id', 'Supplier must be selected before adding lines.');
+            }
+
+            if ($this->taxPercentToBasisPoints((string) $request->input('tax_percent', '0')) > 10000) {
+                $validator->errors()->add('tax_percent', 'Tax percent must not exceed 100.');
             }
         });
 
@@ -77,6 +80,7 @@ class PurchaseOrderLineController extends Controller
         $unitPriceCents = (int) $validated['unit_price_cents'];
         $packCount = (int) $validated['pack_count'];
         $lineSubtotal = $unitPriceCents * $packCount;
+        $lineTaxRateBps = $this->taxPercentToBasisPoints($validated['tax_percent'] ?? null);
         $tenantCurrency = strtoupper(
             (string) ($request->user()?->tenant?->currency_code ?: config('app.currency_code', 'USD'))
         );
@@ -95,6 +99,7 @@ class PurchaseOrderLineController extends Controller
             $unitPriceCents,
             $packCount,
             $lineSubtotal,
+            $lineTaxRateBps,
             $tenantCurrency,
             $fxRate,
             $fxRateAsOf,
@@ -105,7 +110,7 @@ class PurchaseOrderLineController extends Controller
                 ->lockForUpdate()
                 ->findOrFail($purchaseOrder->id);
 
-            if (! in_array($lockedOrder->status, [PurchaseOrder::STATUS_DRAFT, PurchaseOrder::STATUS_OPEN], true)) {
+            if (! $lockedOrder->isWorkflowEditable()) {
                 return;
             }
 
@@ -117,6 +122,7 @@ class PurchaseOrderLineController extends Controller
                 'pack_count' => $packCount,
                 'unit_price_cents' => $unitPriceCents,
                 'line_subtotal_cents' => $lineSubtotal,
+                'line_tax_rate_bps' => $lineTaxRateBps,
                 'unit_price_amount' => $unitPriceCents,
                 'unit_price_currency_code' => $tenantCurrency,
                 'converted_unit_price_amount' => $unitPriceCents,
@@ -129,9 +135,7 @@ class PurchaseOrderLineController extends Controller
         });
 
         if (! $createdLine || ! $updatedOrder) {
-            return response()->json([
-                'message' => 'Only draft or open purchase orders can be edited.',
-            ], 422);
+            return $this->lockedPurchaseOrderResponse();
         }
 
         $createdLine->setRelation('item', $option->item);
@@ -157,20 +161,28 @@ class PurchaseOrderLineController extends Controller
             abort(404);
         }
 
-        if ($purchaseOrder->status !== PurchaseOrder::STATUS_DRAFT) {
-            return response()->json([
-                'message' => 'Only draft purchase orders can be edited.',
-            ], 422);
+        if (! $purchaseOrder->isWorkflowEditable()) {
+            return $this->lockedPurchaseOrderResponse();
         }
 
-        $validated = $request->validate([
+        $validator = Validator::make($request->all(), [
             'pack_count' => ['required', 'integer', 'min:1'],
             'unit_price_cents' => ['required', 'integer', 'min:0'],
+            'tax_percent' => ['nullable', 'regex:/^\d{1,3}(?:\.\d)?$/'],
         ]);
+
+        $validator->after(function ($validator) use ($request): void {
+            if ($this->taxPercentToBasisPoints((string) $request->input('tax_percent', '0')) > 10000) {
+                $validator->errors()->add('tax_percent', 'Tax percent must not exceed 100.');
+            }
+        });
+
+        $validated = $validator->validate();
 
         $unitPriceCents = (int) $validated['unit_price_cents'];
         $packCount = (int) $validated['pack_count'];
         $lineSubtotal = $unitPriceCents * $packCount;
+        $lineTaxRateBps = $this->taxPercentToBasisPoints($validated['tax_percent'] ?? null);
         $tenantCurrency = strtoupper(
             (string) ($request->user()?->tenant?->currency_code ?: config('app.currency_code', 'USD'))
         );
@@ -184,6 +196,7 @@ class PurchaseOrderLineController extends Controller
             $unitPriceCents,
             $packCount,
             $lineSubtotal,
+            $lineTaxRateBps,
             &$updatedLine,
             &$updatedOrder
         ) {
@@ -191,7 +204,7 @@ class PurchaseOrderLineController extends Controller
                 ->lockForUpdate()
                 ->findOrFail($purchaseOrder->id);
 
-            if ($lockedOrder->status !== PurchaseOrder::STATUS_DRAFT) {
+            if (! $lockedOrder->isWorkflowEditable()) {
                 return;
             }
 
@@ -199,6 +212,7 @@ class PurchaseOrderLineController extends Controller
                 'pack_count' => $packCount,
                 'unit_price_cents' => $unitPriceCents,
                 'line_subtotal_cents' => $lineSubtotal,
+                'line_tax_rate_bps' => $lineTaxRateBps,
                 'unit_price_amount' => $unitPriceCents,
                 'converted_unit_price_amount' => $unitPriceCents,
             ]);
@@ -209,9 +223,7 @@ class PurchaseOrderLineController extends Controller
         });
 
         if (! $updatedLine || ! $updatedOrder) {
-            return response()->json([
-                'message' => 'Only draft purchase orders can be edited.',
-            ], 422);
+            return $this->lockedPurchaseOrderResponse();
         }
 
         return response()->json([
@@ -233,10 +245,8 @@ class PurchaseOrderLineController extends Controller
             ->where('tenant_id', $request->user()->tenant_id)
             ->findOrFail($purchaseOrderId);
 
-        if ($purchaseOrder->status !== PurchaseOrder::STATUS_DRAFT) {
-            return response()->json([
-                'message' => 'Only draft purchase orders can be edited.',
-            ], 422);
+        if (! $purchaseOrder->isWorkflowEditable()) {
+            return $this->lockedPurchaseOrderResponse();
         }
 
         $line = PurchaseOrderLine::query()
@@ -248,30 +258,37 @@ class PurchaseOrderLineController extends Controller
         }
 
         $updatedOrder = null;
+        $remainingLines = [];
+        $tenantCurrency = strtoupper(
+            (string) ($request->user()?->tenant?->currency_code ?: config('app.currency_code', 'USD'))
+        );
 
-        DB::transaction(function () use ($purchaseOrder, $line, &$updatedOrder) {
+        DB::transaction(function () use ($purchaseOrder, $line, $tenantCurrency, &$updatedOrder, &$remainingLines) {
             $lockedOrder = PurchaseOrder::query()
                 ->lockForUpdate()
                 ->findOrFail($purchaseOrder->id);
 
-            if ($lockedOrder->status !== PurchaseOrder::STATUS_DRAFT) {
+            if (! $lockedOrder->isWorkflowEditable()) {
                 return;
             }
 
             $line->delete();
             $this->recalculateTotals($lockedOrder);
-            $updatedOrder = $lockedOrder->fresh();
+            $updatedOrder = $lockedOrder->fresh(['lines.item', 'lines.purchaseOption.packUom']);
+            $remainingLines = $updatedOrder->lines
+                ->map(fn (PurchaseOrderLine $remainingLine): array => $this->linePayload($remainingLine, $tenantCurrency))
+                ->values()
+                ->all();
         });
 
         if (! $updatedOrder) {
-            return response()->json([
-                'message' => 'Only draft purchase orders can be edited.',
-            ], 422);
+            return $this->lockedPurchaseOrderResponse();
         }
 
         return response()->json([
             'data' => [
                 'purchase_order' => $this->purchaseOrderTotalsPayload($updatedOrder),
+                'lines' => $remainingLines,
             ],
         ]);
     }
@@ -291,10 +308,12 @@ class PurchaseOrderLineController extends Controller
             'item_id' => $line->item_id,
             'item_name' => $line->item?->name,
             'item_purchase_option_id' => $line->item_purchase_option_id,
-            'pack_count' => $packCount,
+            'pack_count' => (int) $line->pack_count,
             'pack_count_display' => QuantityFormatter::format($packCount, $packPrecision),
             'unit_price_cents' => $line->unit_price_cents,
             'line_subtotal_cents' => $line->line_subtotal_cents,
+            'tax_percent' => $this->basisPointsToTaxPercent((int) $line->line_tax_rate_bps),
+            'line_tax_rate_bps' => (int) $line->line_tax_rate_bps,
             'pack_quantity' => $packQuantity,
             'pack_quantity_display' => $packQuantity !== null
                 ? QuantityFormatter::format($packQuantity, $packPrecision)
@@ -335,11 +354,67 @@ class PurchaseOrderLineController extends Controller
             ->sum('line_subtotal_cents');
 
         $shipping = $purchaseOrder->shipping_cents ?? 0;
-        $tax = $purchaseOrder->tax_cents ?? 0;
+        $tax = (int) PurchaseOrderLine::query()
+            ->where('purchase_order_id', $purchaseOrder->id)
+            ->get(['line_subtotal_cents', 'line_tax_rate_bps'])
+            ->sum(fn (PurchaseOrderLine $line): int => $this->taxCentsForLine(
+                (int) $line->line_subtotal_cents,
+                (int) $line->line_tax_rate_bps
+            ));
 
         $purchaseOrder->forceFill([
             'po_subtotal_cents' => $subtotal,
+            'tax_cents' => $tax,
             'po_grand_total_cents' => $subtotal + $shipping + $tax,
         ])->save();
+    }
+
+    /**
+     * Build a JSON response for locked purchase order line edits.
+     */
+    private function lockedPurchaseOrderResponse(): JsonResponse
+    {
+        return response()->json([
+            'message' => 'Purchase order is locked for editing.',
+            'errors' => [
+                'purchase_order' => ['Purchase order is locked for editing.'],
+            ],
+        ], 422);
+    }
+
+    /**
+     * Convert tax percentage text into basis points.
+     */
+    private function taxPercentToBasisPoints(?string $taxPercent): int
+    {
+        if ($taxPercent === null || $taxPercent === '') {
+            return 0;
+        }
+
+        $parts = explode('.', $taxPercent, 2);
+        $whole = (int) $parts[0];
+        $fraction = (int) ($parts[1] ?? '0');
+
+        return ($whole * 100) + ($fraction * 10);
+    }
+
+    /**
+     * Convert basis points into displayable tax percentage text.
+     */
+    private function basisPointsToTaxPercent(int $basisPoints): string
+    {
+        $tenths = intdiv($basisPoints + 5, 10);
+        $whole = intdiv($tenths, 10);
+        $fraction = $tenths % 10;
+
+        return $whole . '.' . $fraction;
+    }
+
+    /**
+     * Calculate line tax cents using integer basis points.
+     */
+    private function taxCentsForLine(int $lineSubtotalCents, int $lineTaxRateBps): int
+    {
+        return intdiv(($lineSubtotalCents * $lineTaxRateBps) + 5000, 10000);
     }
 }

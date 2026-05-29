@@ -736,10 +736,10 @@ it('submits a draft count into the first active inventory workflow stage', funct
 
     $count->refresh();
 
-    expect($count->workflowStage?->key)->toBe('scheduled')
+    expect($count->workflowStage?->key)->toBe('creating')
         ->and($count->posted_at)->toBeNull()
-        ->and($response->json('count.workflow_stage_key'))->toBe('scheduled')
-        ->and($response->json('count.workflow_status_label'))->toBe('SCHEDULED')
+        ->and($response->json('count.workflow_stage_key'))->toBe('creating')
+        ->and($response->json('count.workflow_status_label'))->toBe('Creating')
         ->and($response->json('count.is_draft_setup'))->toBeFalse();
 });
 
@@ -765,16 +765,16 @@ it('draft schedule action works without an assigned user and still moves the cou
     $response = ($this->submitCount)($user, $count);
 
     $response->assertOk()
-        ->assertJsonPath('count.workflow_stage_key', 'scheduled')
-        ->assertJsonPath('count.workflow_status_label', 'SCHEDULED');
+        ->assertJsonPath('count.workflow_stage_key', 'creating')
+        ->assertJsonPath('count.workflow_status_label', 'Creating');
 
     $count->refresh();
 
-    expect($count->workflowStage?->key)->toBe('scheduled')
+    expect($count->workflowStage?->key)->toBe('creating')
         ->and($count->assigned_to_user_id)->toBeNull();
 });
 
-it('draft detail page shows the next workflow stage button text as the submit action', function () {
+it('draft detail page shows the next workflow stage action verb as the submit action', function () {
     $tenant = Tenant::factory()->create();
     $user = ($this->makeUser)($tenant);
 
@@ -844,7 +844,7 @@ it('completed inventory count detail does not show a draft stage advancement but
 
     expect($response->getContent())->not->toContain("window.dispatchEvent(new CustomEvent('inventory-count-submit'))")
         ->and($response->getContent())->not->toContain("window.dispatchEvent(new CustomEvent('inventory-count-advance'))")
-        ->and($response->getContent())->toContain('COMPLETED');
+        ->and($response->getContent())->toContain('Completing');
 });
 
 it('detail page mounts reusable sections for count lines and tasks', function () {
@@ -1021,7 +1021,7 @@ it('submitting a draft count generates workflow tasks for the selected assigned 
     ($this->grantPermission)($creator, 'inventory-adjustments-execute');
     ($this->seedInventoryWorkflow)($tenant);
 
-    $openStage = ($this->inventoryStages)($tenant)->firstWhere('key', 'scheduled');
+    $openStage = ($this->inventoryStages)($tenant)->firstWhere('key', 'creating');
     ($this->createInventoryTaskTemplate)($tenant, $openStage, $creator, [
         'title' => 'Count review',
     ]);
@@ -1055,7 +1055,7 @@ it('detail payload shows current stage tasks with name status assigned user and 
     ($this->grantPermission)($assignee, 'inventory-adjustments-execute');
     ($this->seedInventoryWorkflow)($tenant);
 
-    $openStage = ($this->inventoryStages)($tenant)->firstWhere('key', 'scheduled');
+    $openStage = ($this->inventoryStages)($tenant)->firstWhere('key', 'creating');
     ($this->createInventoryTaskTemplate)($tenant, $openStage, $assignee, [
         'title' => 'Review count lines',
     ]);
@@ -1095,7 +1095,7 @@ it('detail page renders a Tasks section with generated task name status and open
     ($this->grantPermission)($assignee, 'inventory-adjustments-execute');
     ($this->seedInventoryWorkflow)($tenant);
 
-    $openStage = ($this->inventoryStages)($tenant)->firstWhere('key', 'scheduled');
+    $openStage = ($this->inventoryStages)($tenant)->firstWhere('key', 'creating');
     ($this->createInventoryTaskTemplate)($tenant, $openStage, $assignee, [
         'title' => 'Task section item',
     ]);
@@ -1130,7 +1130,7 @@ it('tasks section rows expose a visible Complete button and disable the row acti
     ($this->grantPermission)($assignee, 'inventory-adjustments-execute');
     ($this->seedInventoryWorkflow)($tenant);
 
-    $openStage = ($this->inventoryStages)($tenant)->firstWhere('key', 'scheduled');
+    $openStage = ($this->inventoryStages)($tenant)->firstWhere('key', 'creating');
     ($this->createInventoryTaskTemplate)($tenant, $openStage, $assignee, [
         'title' => 'Inline task completion',
     ]);
@@ -1724,7 +1724,7 @@ it('completed task rows do not render a Complete button in the tasks section pay
     ($this->grantPermission)($assignee, 'inventory-adjustments-execute');
     ($this->seedInventoryWorkflow)($tenant);
 
-    $openStage = ($this->inventoryStages)($tenant)->firstWhere('key', 'scheduled');
+    $openStage = ($this->inventoryStages)($tenant)->firstWhere('key', 'creating');
     ($this->createInventoryTaskTemplate)($tenant, $openStage, $assignee, [
         'title' => 'Already done task',
     ]);
@@ -1781,7 +1781,7 @@ it('incomplete task rows expose a Complete button in the tasks section payload',
     ($this->grantPermission)($assignee, 'inventory-adjustments-execute');
     ($this->seedInventoryWorkflow)($tenant);
 
-    $openStage = ($this->inventoryStages)($tenant)->firstWhere('key', 'scheduled');
+    $openStage = ($this->inventoryStages)($tenant)->firstWhere('key', 'creating');
     ($this->createInventoryTaskTemplate)($tenant, $openStage, $assignee, [
         'title' => 'Still open task',
     ]);
@@ -1820,7 +1820,7 @@ it('advance requires current inventory workflow tasks to be completed before mov
     ($this->grantPermission)($creator, 'inventory-adjustments-execute');
     ($this->seedInventoryWorkflow)($tenant);
 
-    $openStage = ($this->inventoryStages)($tenant)->firstWhere('key', 'scheduled');
+    $openStage = ($this->inventoryStages)($tenant)->firstWhere('key', 'creating');
     ($this->createInventoryTaskTemplate)($tenant, $openStage, $assignee, [
         'title' => 'Count check',
     ]);
@@ -1843,7 +1843,7 @@ it('advance requires current inventory workflow tasks to be completed before mov
 
     $count->refresh();
 
-    expect($count->workflowStage?->key)->toBe('scheduled')
+    expect($count->workflowStage?->key)->toBe('creating')
         ->and($count->posted_at)->toBeNull();
 });
 
@@ -1856,7 +1856,7 @@ it('completing the assigned current stage task removes the gating block and allo
     ($this->grantPermission)($assignee, 'inventory-adjustments-execute');
     ($this->seedInventoryWorkflow)($tenant);
 
-    $openStage = ($this->inventoryStages)($tenant)->firstWhere('key', 'scheduled');
+    $openStage = ($this->inventoryStages)($tenant)->firstWhere('key', 'creating');
     ($this->createInventoryTaskTemplate)($tenant, $openStage, $assignee, [
         'title' => 'Complete me',
     ]);
@@ -1885,7 +1885,7 @@ it('completing the assigned current stage task removes the gating block and allo
 
     $count->refresh();
 
-    expect($count->workflowStage?->key)->toBe('completed')
+    expect($count->workflowStage?->key)->toBe('completing')
         ->and($count->posted_at)->not->toBeNull();
 });
 
@@ -1899,7 +1899,7 @@ it('submitting uses the configured first active inventory stage rather than a ha
     WorkflowStage::withoutGlobalScopes()
         ->where('tenant_id', $tenant->id)
         ->where('workflow_domain_id', ($this->inventoryDomain)()->id)
-        ->where('key', 'completed')
+        ->where('key', 'completing')
         ->update([
             'sort_order' => 5,
             'is_inventory_effect_stage' => false,
@@ -1908,7 +1908,7 @@ it('submitting uses the configured first active inventory stage rather than a ha
     WorkflowStage::withoutGlobalScopes()
         ->where('tenant_id', $tenant->id)
         ->where('workflow_domain_id', ($this->inventoryDomain)()->id)
-        ->where('key', 'scheduled')
+        ->where('key', 'creating')
         ->update([
             'sort_order' => 20,
         ]);
@@ -1930,7 +1930,7 @@ it('submitting uses the configured first active inventory stage rather than a ha
 
     $count->refresh();
 
-    expect($count->workflowStage?->key)->toBe('completed');
+    expect($count->workflowStage?->key)->toBe('completing');
 });
 
 it('open stage blocks new material adds while still allowing counted qty updates detail edits and blocking count deletion', function () {
@@ -2038,7 +2038,7 @@ it('advancing a non inventory-effect stage does not post the count', function ()
     WorkflowStage::withoutGlobalScopes()
         ->where('tenant_id', $tenant->id)
         ->where('workflow_domain_id', ($this->inventoryDomain)()->id)
-        ->where('key', 'completed')
+        ->where('key', 'completing')
         ->update([
             'sort_order' => 30,
         ]);
@@ -2100,7 +2100,7 @@ it('advancing into the inventory-effect stage posts the count', function () {
 
     $count->refresh();
 
-    expect($count->workflowStage?->key)->toBe('completed')
+    expect($count->workflowStage?->key)->toBe('completing')
         ->and($count->posted_at)->not->toBeNull()
         ->and(($this->countAdjustmentsFor)($tenant, $count))->toBe(1)
         ->and($response->json('count.status'))->toBe('posted');
@@ -2123,7 +2123,7 @@ it('posting failure while advancing blocks stage completion and leaves no partia
 
     $count->refresh();
 
-    expect($count->workflowStage?->key)->toBe('scheduled')
+    expect($count->workflowStage?->key)->toBe('creating')
         ->and($count->posted_at)->toBeNull()
         ->and(($this->countAdjustmentsFor)($tenant, $count))->toBe(0);
 });
@@ -2157,7 +2157,7 @@ it('blank counted quantity is allowed before completion but blocks advancing int
 
     $count->refresh();
 
-    expect($count->workflowStage?->key)->toBe('scheduled')
+    expect($count->workflowStage?->key)->toBe('creating')
         ->and($count->posted_at)->toBeNull()
         ->and(($this->countAdjustmentsFor)($tenant, $count))->toBe(0);
 });
@@ -2259,11 +2259,11 @@ it('direct post remains compatible from draft and moves the count to the invento
 
     $count->refresh();
 
-    expect($count->workflowStage?->key)->toBe('completed')
+    expect($count->workflowStage?->key)->toBe('completing')
         ->and($count->status)->toBe('posted')
         ->and($count->notes)->toBe('Direct post draft')
         ->and($count->counted_at->format('Y-m-d H:i'))->toBe('2026-05-19 09:00')
-        ->and($response->json('count.workflow_stage_key'))->toBe('completed');
+        ->and($response->json('count.workflow_stage_key'))->toBe('completing');
 });
 
 it('direct post remains compatible after submit from an in workflow count', function () {
@@ -2286,7 +2286,7 @@ it('direct post remains compatible after submit from an in workflow count', func
 
     $count->refresh();
 
-    expect($count->workflowStage?->key)->toBe('completed')
+    expect($count->workflowStage?->key)->toBe('completing')
         ->and($count->status)->toBe('posted');
 });
 
@@ -2311,7 +2311,7 @@ it('detail page shows breadcrumb workflow metadata materials tasks and no post u
         ->assertSee('Inventory Count')
         ->assertSee('Inventory Counts')
         ->assertSee('ID# ' . $count->id)
-        ->assertSee('SCHEDULED')
+        ->assertSee('Creating')
         ->assertSee('Details')
         ->assertSee('Materials')
         ->assertDontSee('Count Lines')
@@ -2361,7 +2361,7 @@ it('first active workflow stage hides the previous-stage button and shows the ne
         ->and($response->getContent())->not->toContain('Back to');
 });
 
-it('non-first non-posted workflow stages can expose previous and next buttons by target stage button text', function () {
+it('non-first non-posted workflow stages can expose previous and next buttons by target stage action verb', function () {
     $tenant = Tenant::factory()->create();
     $user = ($this->makeUser)($tenant);
 
@@ -2369,14 +2369,14 @@ it('non-first non-posted workflow stages can expose previous and next buttons by
     ($this->grantPermission)($user, 'inventory-adjustments-execute');
     ($this->seedInventoryWorkflow)($tenant);
 
-    $completedStage = ($this->inventoryStages)($tenant)->firstWhere('key', 'completed');
+    $completedStage = ($this->inventoryStages)($tenant)->firstWhere('key', 'completing');
 
     WorkflowStage::withoutGlobalScopes()->create([
         'tenant_id' => $tenant->id,
         'workflow_domain_id' => ($this->inventoryDomain)()->id,
         'key' => 'review',
         'name' => 'Review',
-        'button_text' => 'REVIEW',
+        'action_verb' => 'REVIEW',
         'description' => null,
         'sort_order' => 15,
         'is_active' => true,
@@ -2414,14 +2414,14 @@ it('previous-stage button renders before the next-stage button in the inventory 
     ($this->grantPermission)($user, 'inventory-adjustments-execute');
     ($this->seedInventoryWorkflow)($tenant);
 
-    $completedStage = ($this->inventoryStages)($tenant)->firstWhere('key', 'completed');
+    $completedStage = ($this->inventoryStages)($tenant)->firstWhere('key', 'completing');
 
     WorkflowStage::withoutGlobalScopes()->create([
         'tenant_id' => $tenant->id,
         'workflow_domain_id' => ($this->inventoryDomain)()->id,
         'key' => 'approval',
         'name' => 'Approval',
-        'button_text' => 'APPROVE',
+        'action_verb' => 'APPROVE',
         'description' => null,
         'sort_order' => 20,
         'is_active' => true,
@@ -2451,15 +2451,15 @@ it('previous stage availability follows configured stage order rather than hardc
     ($this->grantPermission)($user, 'inventory-adjustments-execute');
     ($this->seedInventoryWorkflow)($tenant);
 
-    $openStage = ($this->inventoryStages)($tenant)->firstWhere('key', 'scheduled');
-    $completedStage = ($this->inventoryStages)($tenant)->firstWhere('key', 'completed');
+    $openStage = ($this->inventoryStages)($tenant)->firstWhere('key', 'creating');
+    $completedStage = ($this->inventoryStages)($tenant)->firstWhere('key', 'completing');
 
     WorkflowStage::withoutGlobalScopes()->create([
         'tenant_id' => $tenant->id,
         'workflow_domain_id' => ($this->inventoryDomain)()->id,
         'key' => 'approval',
         'name' => 'Approval',
-        'button_text' => 'APPROVE',
+        'action_verb' => 'APPROVE',
         'description' => null,
         'sort_order' => 20,
         'is_active' => true,
@@ -2538,14 +2538,14 @@ it('previous-stage button is hidden without execute permission', function () {
     ($this->grantPermission)($executor, 'inventory-adjustments-execute');
     ($this->seedInventoryWorkflow)($tenant);
 
-    $completedStage = ($this->inventoryStages)($tenant)->firstWhere('key', 'completed');
+    $completedStage = ($this->inventoryStages)($tenant)->firstWhere('key', 'completing');
 
     WorkflowStage::withoutGlobalScopes()->create([
         'tenant_id' => $tenant->id,
         'workflow_domain_id' => ($this->inventoryDomain)()->id,
         'key' => 'approval',
         'name' => 'Approval',
-        'button_text' => 'APPROVE',
+        'action_verb' => 'APPROVE',
         'description' => null,
         'sort_order' => 20,
         'is_active' => true,
@@ -2573,14 +2573,14 @@ it('previous-stage action works when the count is on a non-first non-posted work
     ($this->grantPermission)($user, 'inventory-adjustments-execute');
     ($this->seedInventoryWorkflow)($tenant);
 
-    $completedStage = ($this->inventoryStages)($tenant)->firstWhere('key', 'completed');
+    $completedStage = ($this->inventoryStages)($tenant)->firstWhere('key', 'completing');
 
     WorkflowStage::withoutGlobalScopes()->create([
         'tenant_id' => $tenant->id,
         'workflow_domain_id' => ($this->inventoryDomain)()->id,
         'key' => 'approval',
         'name' => 'Approval',
-        'button_text' => 'APPROVE',
+        'action_verb' => 'APPROVE',
         'description' => null,
         'sort_order' => 20,
         'is_active' => true,
@@ -2597,11 +2597,11 @@ it('previous-stage action works when the count is on a non-first non-posted work
 
     $this->actingAs($user)->postJson(route('inventory.counts.previous', $count))
         ->assertOk()
-        ->assertJsonPath('count.workflow_stage_name', 'SCHEDULED');
+        ->assertJsonPath('count.workflow_stage_name', 'Creating');
 
     $count->refresh();
 
-    expect($count->workflowStage?->key)->toBe('scheduled');
+    expect($count->workflowStage?->key)->toBe('creating');
 });
 
 it('previous-stage action is blocked after inventory has posted', function () {

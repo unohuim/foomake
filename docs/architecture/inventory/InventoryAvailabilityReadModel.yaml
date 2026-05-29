@@ -21,8 +21,14 @@ rules:
   - Sell includes direct demand from tenant-scoped sales-order lines whose parent sales orders are not DRAFT COMPLETED or CANCELLED.
   - Sell also includes tenant-scoped component demand from the selected active fulfillment recipe when that recipe output item appears on a qualifying sales order.
   - Fulfillment recipe component demand is recipe line quantity multiplied by sales-order line quantity divided by recipe output_quantity using BCMath at canonical scale 6.
-  - Buy includes inbound tenant-scoped purchase-order line quantity for purchase orders that are not DRAFT RECEIVED SHORT-CLOSED or CANCELLED.
-  - Buy quantity is pack_count multiplied by item_purchase_options.pack_quantity using BCMath at canonical scale 6.
+  - Buy includes inbound tenant-scoped purchase-order line quantity for qualifying open purchase orders.
+  - A workflow-enabled purchase order is open for Buy availability while it has an active current purchasing workflow stage and is not cancelled.
+  - Purchase orders without workflow state are treated as open for Buy availability unless they are completed or cancelled, which preserves availability for rows created before workflow initialization.
+  - Buy quantity is pack_count multiplied by item_purchase_options.pack_quantity and converted from the supplier package UoM into the item base UoM using BCMath at canonical scale 6.
+  - Buy package-UoM conversion matching uses normalized UoM symbols rather than requiring package/base UoM ids to match the conversion row UoM ids.
+  - Buy package-UoM conversion precedence is tenant/general conversion, then global conversion, then item-specific conversion fallback.
+  - Buy package-UoM conversion supports direct, reciprocal, and multi-step symbol paths through defined conversion records.
+  - Buy excludes a purchase-order line from availability when its required package-UoM conversion is missing.
   - Make includes tenant-scoped make_orders.expected_output_qty for qualifying open make orders and must not rely on the legacy make_orders.output_quantity column.
   - Open scheduled or in-flight make orders contribute expected_output_qty to Make, while MADE and CANCELLED records remain excluded.
   - Net is computed as On-Hand minus Sell plus Buy plus Make using BCMath at canonical scale 6.

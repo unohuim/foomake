@@ -21,7 +21,7 @@ rules:
   - Leaving the current Inventory workflow stage is blocked while required current-stage tasks remain open.
   - Inventory count detail uses the shared resource-detail header plus reusable detail-section pattern with a Details section, a Materials section, and a Tasks section.
   - Inventory Count detail headers should not use rounded metadata pills for counted date, line count, workflow stage, or notes; the header should instead show a clean workflow-status badge beside the title and move editable metadata into the Details section.
-  - Inventory Count detail workflow-status badges should render from the current stage `name`, while workflow action buttons should render from the target stage `button_text`.
+  - Inventory Count detail workflow-status badges should render from the current stage `name`, while workflow action buttons should render from the target stage `action_verb`.
   - The Inventory Count `Details` section keeps Count Date, Assigned To, and Notes together in one compact responsive layout consistent with other detail-edit sections.
   - Inventory Count `Details` updates use the existing inventory count update route through AJAX/autosave and may remain editable after submission until the count reaches a posted or inventory-effect stage.
   - Empty Inventory Count detail Notes should render as blank editable content and should not show placeholder dashes.

@@ -140,10 +140,14 @@ class PurchaseOrderReceiptController extends Controller
                 $validated['notes'] ?? null
             );
         } catch (DomainException $exception) {
+            $errorKey = str_contains(strtolower($exception->getMessage()), 'conversion')
+                ? 'conversion'
+                : 'status';
+
             return response()->json([
                 'message' => $exception->getMessage(),
                 'errors' => [
-                    'status' => [$exception->getMessage()],
+                    $errorKey => [$exception->getMessage()],
                 ],
             ], 422);
         }

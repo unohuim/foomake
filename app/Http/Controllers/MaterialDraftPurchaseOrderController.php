@@ -6,6 +6,7 @@ use App\Models\Item;
 use App\Models\ItemPurchaseOption;
 use App\Models\PurchaseOrder;
 use App\Models\PurchaseOrderLine;
+use App\Services\Workflows\WorkflowTransitionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -18,7 +19,7 @@ class MaterialDraftPurchaseOrderController extends Controller
     /**
      * Store a draft purchase order with one line from a material supplier package context.
      */
-    public function store(Request $request, Item $item): JsonResponse
+    public function store(Request $request, Item $item, WorkflowTransitionService $workflowTransitionService): JsonResponse
     {
         Gate::authorize('inventory-materials-view');
         Gate::authorize('purchasing-purchase-orders-create');
@@ -145,9 +146,12 @@ class MaterialDraftPurchaseOrderController extends Controller
             $purchaseOrder = $purchaseOrder->fresh();
         });
 
+        $purchaseOrder = $workflowTransitionService->initializePurchaseOrder($purchaseOrder);
+
         return response()->json([
             'data' => [
                 'id' => $purchaseOrder->id,
+                'supplier_id' => $purchaseOrder->supplier_id,
                 'show_url' => route('purchasing.orders.show', $purchaseOrder),
             ],
         ], 201);

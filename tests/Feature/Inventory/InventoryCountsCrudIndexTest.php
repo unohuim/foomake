@@ -355,7 +355,7 @@ it('15b. the inventory counts list endpoint keeps the counter column nullable fo
 
 it('15c. the inventory counts list status column shows the current workflow stage label for scheduled counts', function (): void {
     ($this->grantPermission)($this->user, 'inventory-adjustments-view');
-    $openStage = ($this->inventoryStage)('scheduled');
+    $openStage = ($this->inventoryStage)('creating');
 
     $count = ($this->makeCount)([
         'workflow_stage_id' => $openStage->id,
@@ -368,13 +368,13 @@ it('15c. the inventory counts list status column shows the current workflow stag
     )->firstWhere('id', $count->id);
 
     expect($record)->not->toBeNull()
-        ->and($record['status_label'] ?? null)->toBe('SCHEDULED')
+        ->and($record['status_label'] ?? null)->toBe('Creating')
         ->and($record['status'] ?? null)->toBe('draft');
 });
 
 it('15d. the inventory counts list status column does not use posted lifecycle text for posted counts', function (): void {
     ($this->grantPermission)($this->user, 'inventory-adjustments-view');
-    $completedStage = ($this->inventoryStage)('completed');
+    $completedStage = ($this->inventoryStage)('completing');
 
     $count = ($this->makeCount)([
         'workflow_stage_id' => $completedStage->id,
@@ -387,7 +387,7 @@ it('15d. the inventory counts list status column does not use posted lifecycle t
     )->firstWhere('id', $count->id);
 
     expect($record)->not->toBeNull()
-        ->and($record['status_label'] ?? null)->toBe('COMPLETED')
+        ->and($record['status_label'] ?? null)->toBe('Completing')
         ->and($record['posted_at'] ?? null)->not->toBe('—');
 });
 

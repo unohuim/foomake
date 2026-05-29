@@ -472,7 +472,7 @@ it('updates totals on add line', function () {
 
     $orderResponse = ($this->createOrder)($user, [
         'supplier_id' => $supplier->id,
-        'shipping_cents' => 50,
+        'shipping_amount' => '0.50',
     ])->assertCreated();
 
     $orderId = (int) ($orderResponse->json('data.id') ?? 0);

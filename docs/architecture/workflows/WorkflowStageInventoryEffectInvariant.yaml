@@ -12,20 +12,20 @@ location:
 purpose: Define the stage-level marker that identifies which operational stock-impacting workflow stage owns inventory posting and ensure workflow admin cannot leave stock-impacting workflow domains without exactly one active inventory-effect stage.
 when_to_use:
   - Configuring stock-impacting workflow stages in workflow admin
-  - Resolving which sales stage owns stock impact
+  - Resolving which workflow stage owns stock impact
   - Preserving sales inventory timing while removing hardcoded stage-key coupling
 when_not_to_use:
-  - Purchase-order runtime receiving
-  - Make-order execution runtime
-  - Inventory-count posting runtime
+  - Configuring arbitrary custom backend action types
 rules:
   - The inventory-effect marker lives on workflow stages as is_inventory_effect_stage.
   - The current invariant applies to the sales, purchasing, manufacturing, and inventory workflow domains.
   - Active workflow stages in those domains must include exactly one inventory-effect stage.
   - Active workflow stages in those domains must have at least two active stages overall.
+  - The inventory-effect stage may be the last active stage.
+  - Inventory effect fires when the inventory-effect stage completes, not when it starts.
   - Marking a stage as the inventory-effect stage must clear the previous marked stage in the same tenant/domain transaction.
   - Workflow admin updates that would leave those domains with zero marked stages, multiple marked stages, or fewer than two active stages must fail with validation errors.
-  - Purchase-order, make-order, and inventory-count runtime posting remain unchanged in this PR slice even though those domains now carry seeded stage configuration.
+  - Purchase-order receipt inventory impact is applied when the configured purchasing inventory-effect stage completes.
 public_interface:
   - EnforceWorkflowStageInventoryEffectInvariantAction::normalizeAndAssert()
   - EnforceWorkflowStageInventoryEffectInvariantAction::assertDomain()

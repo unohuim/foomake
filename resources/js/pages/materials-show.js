@@ -60,24 +60,31 @@ const formatMoney = (currencyCode, cents) => {
 };
 
 const purchaseOrderStatusDisplay = (record) => {
+    if (record.is_cancelled) {
+        return {
+            text: 'Cancelled',
+            tone: 'muted',
+        };
+    }
+
+    if (record.is_back_ordered) {
+        return {
+            text: 'Back Ordered',
+            tone: 'muted',
+        };
+    }
+
     switch (record.status) {
-    case 'OPEN':
-    case 'PARTIALLY-RECEIVED':
+    case 'SENT':
         return {
             text: record.status,
             tone: 'default',
         };
     case 'RECEIVED':
+    case 'COMPLETED':
         return {
             text: record.status,
             tone: 'success',
-        };
-    case 'BACK-ORDERED':
-    case 'SHORT-CLOSED':
-    case 'CANCELLED':
-        return {
-            text: record.status,
-            tone: 'muted',
         };
     default:
         return {
@@ -876,8 +883,24 @@ export function mount(rootEl, payload) {
             },
             buildCreatePayload: (form) => buildSupplierPackagePayload(form),
             buildUpdatePayload: (form) => buildSupplierPackagePayload(form),
+            handleCreateSuccess: async ({ data, component }) => {
+                const record = data?.data || {};
+
+                if (purchaseOrderCreate && typeof purchaseOrderCreate.refreshFromSupplierPackage === 'function') {
+                    purchaseOrderCreate.refreshFromSupplierPackage(record);
+                }
+
+                component.isFormOpen = false;
+                await component.fetchPage(component.meta.current_page || 1);
+
+                return true;
+            },
             handleAction: async ({ action, record }) => {
                 if (action.handlerKey === 'purchase' && purchaseOrderCreate) {
+                    if (typeof purchaseOrderCreate.refreshFromSupplierPackage === 'function') {
+                        purchaseOrderCreate.refreshFromSupplierPackage(record);
+                    }
+
                     purchaseOrderCreate.openFromSupplierPackage({
                         supplier_id: record.supplier_id,
                         item_purchase_option_id: record.item_purchase_option_id ?? record.id,

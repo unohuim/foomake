@@ -712,6 +712,52 @@ const renderCrudSection = () => `
                 </div>
             </div>
         </div>
+
+        <div
+            class="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/40 p-4"
+            x-show="missingConversionModal.open"
+            x-cloak
+            data-missing-conversion-modal
+        >
+            <div class="w-full max-w-md rounded-xl bg-white shadow-xl">
+                <div class="border-b border-gray-100 px-5 py-4">
+                    <h4 class="text-base font-semibold text-gray-900">Create unit conversion</h4>
+                    <p class="mt-1 text-sm text-gray-500">
+                        <span x-text="missingConversionModal.itemName"></span>
+                        <span x-show="missingConversionModal.fromUomLabel !== '' && missingConversionModal.toUomLabel !== ''">
+                            needs a conversion from
+                            <span class="font-medium text-gray-700" x-text="missingConversionModal.fromUomLabel"></span>
+                            to
+                            <span class="font-medium text-gray-700" x-text="missingConversionModal.toUomLabel"></span>.
+                        </span>
+                    </p>
+                </div>
+                <div class="space-y-4 px-5 py-4">
+                    <p class="text-sm text-red-600" x-show="missingConversionModal.error" x-text="missingConversionModal.error"></p>
+                    <div>
+                        <label class="block text-xs font-semibold uppercase tracking-wide text-gray-500" for="missing-conversion-factor">Conversion factor</label>
+                        <input
+                            id="missing-conversion-factor"
+                            type="text"
+                            inputmode="decimal"
+                            class="mt-1 block w-full rounded-lg border-gray-300 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                            x-model="missingConversionModal.form.conversion_factor"
+                        />
+                        <p class="mt-1 text-xs text-red-600" x-text="missingConversionError('conversion_factor')"></p>
+                    </div>
+                    <p class="text-xs text-gray-500">Direction: package UOM to item base UOM.</p>
+                </div>
+                <div class="flex items-center justify-end gap-3 border-t border-gray-100 px-5 py-4">
+                    <button type="button" class="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 transition hover:bg-gray-50" x-on:click="closeMissingConversionModal()">Cancel</button>
+                    <button
+                        type="button"
+                        class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+                        x-bind:disabled="missingConversionModal.submitting"
+                        x-on:click="submitMissingConversion()"
+                    >Create conversion</button>
+                </div>
+            </div>
+        </div>
     </section>
 `;
 
@@ -764,6 +810,24 @@ const createSectionState = (section, adapters, hostEl) => ({
     errors: {},
     sectionError: '',
     formError: '',
+    missingConversionModal: {
+        open: false,
+        itemName: '',
+        fromUomLabel: '',
+        toUomLabel: '',
+        endpoint: '',
+        retryAfterSuccess: false,
+        originalPayload: {},
+        form: {
+            item_id: '',
+            from_uom_id: '',
+            to_uom_id: '',
+            conversion_factor: '',
+        },
+        errors: {},
+        error: '',
+        submitting: false,
+    },
     inlineCreateFieldName: '',
     inlineCreateForm: {},
     inlineCreateErrors: {},
@@ -870,6 +934,91 @@ const createSectionState = (section, adapters, hostEl) => ({
         }
 
         return values[0];
+    },
+    missingConversionError(fieldName) {
+        const values = this.missingConversionModal.errors[fieldName];
+
+        if (!Array.isArray(values) || values.length === 0) {
+            return '';
+        }
+
+        return values[0];
+    },
+    openMissingConversionModal(meta, originalPayload = {}) {
+        const item = asRecord(meta.item);
+        const fromUom = asRecord(meta.from_uom);
+        const toUom = asRecord(meta.to_uom);
+
+        this.missingConversionModal = {
+            open: true,
+            itemName: asString(item.name, 'Selected material'),
+            fromUomLabel: asString(fromUom.symbol, asString(fromUom.name)),
+            toUomLabel: asString(toUom.symbol, asString(toUom.name)),
+            endpoint: asString(meta.conversion_create_url),
+            retryAfterSuccess: true,
+            originalPayload,
+            form: {
+                item_id: item.id === null || item.id === undefined ? '' : String(item.id),
+                from_uom_id: fromUom.id === null || fromUom.id === undefined ? '' : String(fromUom.id),
+                to_uom_id: toUom.id === null || toUom.id === undefined ? '' : String(toUom.id),
+                conversion_factor: '',
+            },
+            errors: {},
+            error: '',
+            submitting: false,
+        };
+    },
+    closeMissingConversionModal() {
+        this.missingConversionModal = {
+            ...this.missingConversionModal,
+            open: false,
+            errors: {},
+            error: '',
+            submitting: false,
+        };
+    },
+    async submitMissingConversion() {
+        if (!this.missingConversionModal.endpoint || this.missingConversionModal.submitting) {
+            return;
+        }
+
+        this.missingConversionModal.submitting = true;
+        this.missingConversionModal.errors = {};
+        this.missingConversionModal.error = '';
+
+        try {
+            const response = await fetch(this.missingConversionModal.endpoint, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Accept: 'application/json',
+                    'X-CSRF-TOKEN': this.section.csrfToken,
+                },
+                body: JSON.stringify(this.missingConversionModal.form),
+            });
+            const data = await response.json().catch(() => ({}));
+
+            if (response.status === 422) {
+                this.missingConversionModal.errors = asRecord(data.errors);
+                this.missingConversionModal.error = asString(data.message, 'Unable to create conversion.');
+                return;
+            }
+
+            if (!response.ok) {
+                this.missingConversionModal.error = asString(data.message, 'Unable to create conversion.');
+                return;
+            }
+
+            this.closeMissingConversionModal();
+            this.errors = {};
+            this.formError = '';
+
+            await this.submitForm();
+        } catch (error) {
+            this.missingConversionModal.error = 'Unable to create conversion.';
+        } finally {
+            this.missingConversionModal.submitting = false;
+        }
     },
     firstInlineCreateError(fieldName) {
         const values = this.inlineCreateErrors[fieldName];
@@ -1248,6 +1397,11 @@ const createSectionState = (section, adapters, hostEl) => ({
                 const data = await response.json();
                 this.errors = asRecord(data.errors);
                 this.formError = asString(data.message, 'Unable to save record.');
+
+                if (data.meta?.requires_conversion) {
+                    this.openMissingConversionModal(data.meta, body);
+                }
+
                 return;
             }
 

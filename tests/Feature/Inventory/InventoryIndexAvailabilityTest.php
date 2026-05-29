@@ -5,6 +5,8 @@ declare(strict_types=1);
 use App\Models\Customer;
 use App\Models\Item;
 use App\Models\ItemPurchaseOption;
+use App\Models\ItemPurchaseOptionPrice;
+use App\Models\ItemUomConversion;
 use App\Models\MakeOrder;
 use App\Models\Permission;
 use App\Models\PurchaseOrder;
@@ -19,8 +21,12 @@ use App\Models\Supplier;
 use App\Models\Tenant;
 use App\Models\Uom;
 use App\Models\UomCategory;
+use App\Models\UomConversion;
 use App\Models\User;
+use App\Models\WorkflowDomain;
+use App\Models\WorkflowStage;
 use App\Support\Inventory\InventoryAvailabilityCalculator;
+use App\Support\Inventory\InventoryBuyUomConversionResolver;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
 uses(RefreshDatabase::class);
@@ -82,6 +88,25 @@ beforeEach(function (): void {
         return Uom::query()->create([
             'tenant_id' => $tenant->id,
             'uom_category_id' => $category->id,
+            'name' => $name . ' ' . $suffix,
+            'symbol' => $symbol . '-' . $suffix,
+            'display_precision' => $displayPrecision,
+        ]);
+    };
+
+    $this->makeRelatedUom = function (
+        Tenant $tenant,
+        Uom $baseUom,
+        string $name,
+        string $symbol,
+        int $displayPrecision = 1
+    ): Uom {
+        $suffix = (string) $this->uomCounter;
+        $this->uomCounter++;
+
+        return Uom::query()->create([
+            'tenant_id' => $tenant->id,
+            'uom_category_id' => $baseUom->uom_category_id,
             'name' => $name . ' ' . $suffix,
             'symbol' => $symbol . '-' . $suffix,
             'display_precision' => $displayPrecision,
@@ -230,7 +255,7 @@ beforeEach(function (): void {
         Tenant $tenant,
         User $user,
         Supplier $supplier,
-        string $status = PurchaseOrder::STATUS_OPEN
+        string $status = PurchaseOrder::STATUS_SENT
     ): PurchaseOrder {
         return PurchaseOrder::query()->create([
             'tenant_id' => $tenant->id,
@@ -268,6 +293,61 @@ beforeEach(function (): void {
             'fx_rate' => '1.00000000',
             'fx_rate_as_of' => '2026-05-21',
         ]);
+    };
+
+    $this->makePurchasingWorkflowStages = function (Tenant $tenant): array {
+        $domain = WorkflowDomain::query()->firstOrCreate(
+            ['key' => 'purchasing'],
+            ['name' => 'Purchasing', 'sort_order' => 20]
+        );
+
+        $creating = WorkflowStage::withoutGlobalScopes()->updateOrCreate([
+            'tenant_id' => $tenant->id,
+            'workflow_domain_id' => $domain->id,
+            'key' => 'creating',
+        ], [
+            'name' => 'Creating',
+            'action_verb' => 'CREATE',
+            'status_complete_label' => 'CREATED',
+            'completion_mode' => 'manual',
+            'sort_order' => 10,
+            'is_active' => true,
+            'is_inventory_effect_stage' => false,
+        ]);
+
+        $receiving = WorkflowStage::withoutGlobalScopes()->updateOrCreate([
+            'tenant_id' => $tenant->id,
+            'workflow_domain_id' => $domain->id,
+            'key' => 'receiving',
+        ], [
+            'name' => 'Receiving',
+            'action_verb' => 'RECEIVE',
+            'status_complete_label' => 'RECEIVED',
+            'completion_mode' => 'manual',
+            'sort_order' => 20,
+            'is_active' => true,
+            'is_inventory_effect_stage' => true,
+        ]);
+
+        $completing = WorkflowStage::withoutGlobalScopes()->updateOrCreate([
+            'tenant_id' => $tenant->id,
+            'workflow_domain_id' => $domain->id,
+            'key' => 'completing',
+        ], [
+            'name' => 'Completing',
+            'action_verb' => 'COMPLETE',
+            'status_complete_label' => 'COMPLETED',
+            'completion_mode' => 'automatic',
+            'sort_order' => 30,
+            'is_active' => true,
+            'is_inventory_effect_stage' => false,
+        ]);
+
+        return [
+            'creating' => $creating,
+            'receiving' => $receiving,
+            'completing' => $completing,
+        ];
     };
 
     $this->makeMakeOrder = function (
@@ -751,7 +831,7 @@ it('25. fulfillment recipe component demand is included in sell when the output 
     expect($row['sell'] ?? null)->toBe('1.500000');
 });
 
-it('26. draft purchase orders are excluded from buy', function (): void {
+it('26. draft purchase orders without workflow state are included in buy when not cancelled or complete', function (): void {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
     $uom = ($this->makeUom)($tenant);
@@ -767,7 +847,7 @@ it('26. draft purchase orders are excluded from buy', function (): void {
         $item->id
     );
 
-    expect($row['buy'] ?? null)->toBe('0.000000');
+    expect($row['buy'] ?? null)->toBe('6.000000');
 });
 
 it('27. completed or terminal purchase orders are excluded from buy', function (): void {
@@ -777,9 +857,10 @@ it('27. completed or terminal purchase orders are excluded from buy', function (
     $item = ($this->makeItem)($tenant, $uom);
     $supplier = ($this->makeSupplier)($tenant);
     $option = ($this->makePurchaseOption)($tenant, $supplier, $item, $uom, '2.000000');
-    $receivedOrder = ($this->makePurchaseOrder)($tenant, $user, $supplier, PurchaseOrder::STATUS_RECEIVED);
-    $cancelledOrder = ($this->makePurchaseOrder)($tenant, $user, $supplier, PurchaseOrder::STATUS_CANCELLED);
-    ($this->makePurchaseOrderLine)($tenant, $receivedOrder, $item, $option, 3);
+    $completedOrder = ($this->makePurchaseOrder)($tenant, $user, $supplier, PurchaseOrder::STATUS_COMPLETED);
+    $cancelledOrder = ($this->makePurchaseOrder)($tenant, $user, $supplier, PurchaseOrder::STATUS_SENT);
+    $cancelledOrder->forceFill(['cancelled_at' => now(), 'cancelled_by_user_id' => $user->id])->save();
+    ($this->makePurchaseOrderLine)($tenant, $completedOrder, $item, $option, 3);
     ($this->makePurchaseOrderLine)($tenant, $cancelledOrder, $item, $option, 2);
     ($this->grantPermission)($user, 'inventory-adjustments-view');
 
@@ -798,7 +879,7 @@ it('28. qualifying open purchase order quantities are included in buy', function
     $item = ($this->makeItem)($tenant, $uom);
     $supplier = ($this->makeSupplier)($tenant);
     $option = ($this->makePurchaseOption)($tenant, $supplier, $item, $uom, '1.500000');
-    $purchaseOrder = ($this->makePurchaseOrder)($tenant, $user, $supplier, PurchaseOrder::STATUS_OPEN);
+    $purchaseOrder = ($this->makePurchaseOrder)($tenant, $user, $supplier, PurchaseOrder::STATUS_SENT);
     ($this->makePurchaseOrderLine)($tenant, $purchaseOrder, $item, $option, 4);
     ($this->grantPermission)($user, 'inventory-adjustments-view');
 
@@ -817,7 +898,7 @@ it('29. purchase option pack quantity is applied when calculating buy', function
     $item = ($this->makeItem)($tenant, $uom);
     $supplier = ($this->makeSupplier)($tenant);
     $option = ($this->makePurchaseOption)($tenant, $supplier, $item, $uom, '2.250000');
-    $purchaseOrder = ($this->makePurchaseOrder)($tenant, $user, $supplier, PurchaseOrder::STATUS_OPEN);
+    $purchaseOrder = ($this->makePurchaseOrder)($tenant, $user, $supplier, PurchaseOrder::STATUS_SENT);
     ($this->makePurchaseOrderLine)($tenant, $purchaseOrder, $item, $option, 3);
     ($this->grantPermission)($user, 'inventory-adjustments-view');
 
@@ -827,6 +908,745 @@ it('29. purchase option pack quantity is applied when calculating buy', function
     );
 
     expect($row['buy'] ?? null)->toBe('6.750000');
+});
+
+it('29a. open purchase order buy uses package quantity when pack uom matches item base uom', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $uom = ($this->makeUom)($tenant, 'Gram', 'g', 0);
+    $item = ($this->makeItem)($tenant, $uom);
+    $supplier = ($this->makeSupplier)($tenant);
+    $option = ($this->makePurchaseOption)($tenant, $supplier, $item, $uom, '20.000000');
+    $purchaseOrder = ($this->makePurchaseOrder)($tenant, $user, $supplier, PurchaseOrder::STATUS_SENT);
+    ($this->makePurchaseOrderLine)($tenant, $purchaseOrder, $item, $option, 2);
+    ($this->grantPermission)($user, 'inventory-adjustments-view');
+
+    $row = ($this->inventoryRow)(
+        ($this->inventoryList)($user)->assertOk()->json('data'),
+        $item->id
+    );
+
+    expect($row['buy'] ?? null)->toBe('40.000000')
+        ->and($row['buy_display'] ?? null)->toBe('40');
+});
+
+it('29b. open purchase order buy converts supplier package uom into item base uom', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $gram = ($this->makeUom)($tenant, 'Gram', 'g', 0);
+    $kilogram = ($this->makeRelatedUom)($tenant, $gram, 'Kilogram', 'kg', 3);
+    $item = ($this->makeItem)($tenant, $gram);
+    $supplier = ($this->makeSupplier)($tenant);
+
+    UomConversion::query()->create([
+        'tenant_id' => $tenant->id,
+        'from_uom_id' => $kilogram->id,
+        'to_uom_id' => $gram->id,
+        'multiplier' => '1000.00000000',
+    ]);
+
+    $option = ($this->makePurchaseOption)($tenant, $supplier, $item, $kilogram, '20.000000');
+    $purchaseOrder = ($this->makePurchaseOrder)($tenant, $user, $supplier, PurchaseOrder::STATUS_SENT);
+    ($this->makePurchaseOrderLine)($tenant, $purchaseOrder, $item, $option, 1);
+    ($this->grantPermission)($user, 'inventory-adjustments-view');
+
+    $row = ($this->inventoryRow)(
+        ($this->inventoryList)($user)->assertOk()->json('data'),
+        $item->id
+    );
+
+    expect($row['buy'] ?? null)->toBe('20000.000000')
+        ->and($row['buy_display'] ?? null)->toBe('20000');
+});
+
+it('29ba. workflow-open purchase order buy is included even when legacy status is stale draft', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $stages = ($this->makePurchasingWorkflowStages)($tenant);
+    $gram = ($this->makeUom)($tenant, 'Gram', 'g', 0);
+    $kilogram = ($this->makeRelatedUom)($tenant, $gram, 'Kilogram', 'kg', 3);
+    $item = ($this->makeItem)($tenant, $gram);
+    $supplier = ($this->makeSupplier)($tenant);
+
+    UomConversion::query()->create([
+        'tenant_id' => $tenant->id,
+        'from_uom_id' => $kilogram->id,
+        'to_uom_id' => $gram->id,
+        'multiplier' => '1000.00000000',
+    ]);
+
+    $option = ($this->makePurchaseOption)($tenant, $supplier, $item, $kilogram, '20.000000');
+    $purchaseOrder = ($this->makePurchaseOrder)($tenant, $user, $supplier, PurchaseOrder::STATUS_DRAFT);
+    $purchaseOrder->forceFill([
+        'current_workflow_stage_id' => $stages['receiving']->id,
+        'last_completed_workflow_stage_id' => $stages['creating']->id,
+    ])->save();
+    ($this->makePurchaseOrderLine)($tenant, $purchaseOrder, $item, $option, 1);
+    ($this->grantPermission)($user, 'inventory-adjustments-view');
+
+    $row = ($this->inventoryRow)(
+        ($this->inventoryList)($user)->assertOk()->json('data'),
+        $item->id
+    );
+
+    expect($purchaseOrder->fresh()->workflowStatus())->toBe('CREATED')
+        ->and($purchaseOrder->fresh()->status)->toBe(PurchaseOrder::STATUS_DRAFT)
+        ->and($row['buy'] ?? null)->toBe('20000.000000')
+        ->and($row['buy_display'] ?? null)->toBe('20000');
+});
+
+it('29bb. diagnostic trace proves material supplier package purchase order buy reaches rendered inventory output', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $stages = ($this->makePurchasingWorkflowStages)($tenant);
+    $gram = ($this->makeUom)($tenant, 'Gram', 'g', 0);
+    $kilogram = ($this->makeRelatedUom)($tenant, $gram, 'Kilogram', 'kg', 3);
+    $item = ($this->makeItem)($tenant, $gram, ['name' => 'Brown Rice']);
+    $supplier = ($this->makeSupplier)($tenant);
+
+    UomConversion::query()->create([
+        'tenant_id' => $tenant->id,
+        'from_uom_id' => $kilogram->id,
+        'to_uom_id' => $gram->id,
+        'multiplier' => '1000.00000000',
+    ]);
+
+    $option = ($this->makePurchaseOption)($tenant, $supplier, $item, $kilogram, '20.000000');
+    ItemPurchaseOptionPrice::query()->create([
+        'tenant_id' => $tenant->id,
+        'item_purchase_option_id' => $option->id,
+        'price_cents' => 100,
+        'price_currency_code' => 'USD',
+        'converted_price_cents' => 100,
+        'fx_rate' => '1.00000000',
+        'fx_rate_as_of' => '2026-05-21',
+        'effective_at' => now(),
+        'ended_at' => null,
+    ]);
+    ($this->grantPermission)($user, 'inventory-materials-view');
+    ($this->grantPermission)($user, 'purchasing-purchase-orders-create');
+    ($this->grantPermission)($user, 'inventory-adjustments-view');
+
+    $createResponse = $this->actingAs($user)->postJson(route('materials.purchase-orders.store', $item), [
+        'supplier_id' => $supplier->id,
+        'item_purchase_option_id' => $option->id,
+        'pack_count' => 1,
+    ])->assertCreated();
+
+    $purchaseOrder = PurchaseOrder::query()->findOrFail((int) $createResponse->json('data.id'));
+    $line = PurchaseOrderLine::query()
+        ->where('purchase_order_id', $purchaseOrder->id)
+        ->firstOrFail();
+
+    $conversion = UomConversion::query()
+        ->where('tenant_id', $tenant->id)
+        ->where('from_uom_id', $kilogram->id)
+        ->where('to_uom_id', $gram->id)
+        ->first();
+    expect($conversion)->not->toBeNull('Expected tenant-visible kg to g conversion for Inventory BUY diagnostics.');
+
+    $calculatedLineQuantity = bcmul(
+        bcadd((string) $line->pack_count, '0', 6),
+        bcadd((string) $option->pack_quantity, '0', 6),
+        6
+    );
+    $calculatedLineQuantity = bcmul($calculatedLineQuantity, (string) $conversion?->multiplier, 6);
+    $readModelRow = app(InventoryAvailabilityCalculator::class)->forItem($item);
+    $listRow = ($this->inventoryRow)(
+        ($this->inventoryList)($user)->assertOk()->json('data'),
+        $item->id
+    );
+    $jsSource = file_get_contents(resource_path('js/pages/inventory-index.js'));
+
+    expect((int) $item->base_uom_id)->toBe((int) $gram->id)
+        ->and($item->baseUom?->name)->toContain('Gram')
+        ->and((int) $option->pack_uom_id)->toBe((int) $kilogram->id)
+        ->and($option->packUom?->name)->toContain('Kilogram')
+        ->and(bcadd((string) $option->pack_quantity, '0', 6))->toBe('20.000000')
+        ->and((int) $line->pack_count)->toBe(1)
+        ->and((int) $line->item_id)->toBe((int) $item->id)
+        ->and((int) $line->item_purchase_option_id)->toBe((int) $option->id)
+        ->and(bcadd((string) $option->pack_quantity, '0', 6))->toBe('20.000000')
+        ->and((string) $conversion?->multiplier)->toBe('1000.00000000')
+        ->and($calculatedLineQuantity)->toBe('20000.000000')
+        ->and($purchaseOrder->fresh()->workflow_cancelled_at)->toBeNull()
+        ->and($purchaseOrder->fresh()->current_workflow_stage_id)->toBe($stages['creating']->id)
+        ->and($readModelRow['buy'] ?? null)->toBe('20000.000000')
+        ->and($listRow['buy'] ?? null)->toBe('20000.000000')
+        ->and($listRow['buy_display'] ?? null)->toBe('20000')
+        ->and($jsSource)->toContain("buy: 'buy_display'");
+});
+
+it('29bc. inventory buy resolves global direct conversions by uom symbol instead of matching uom ids', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $tenantCategory = UomCategory::query()->create([
+        'tenant_id' => $tenant->id,
+        'name' => 'Tenant Mass 29bc',
+    ]);
+    $globalCategory = UomCategory::query()->create([
+        'tenant_id' => null,
+        'name' => 'Global Mass 29bc',
+    ]);
+    $tenantGram = Uom::query()->where('tenant_id', $tenant->id)->where('symbol', 'g')->firstOrFail();
+    $tenantKilogram = Uom::query()->where('tenant_id', $tenant->id)->where('symbol', 'kg')->firstOrFail();
+    $globalGram = Uom::query()->firstOrCreate([
+        'tenant_id' => null,
+        'symbol' => 'g',
+    ], [
+        'uom_category_id' => $globalCategory->id,
+        'name' => 'Global Gram 29bc',
+        'display_precision' => 0,
+    ]);
+    $globalKilogram = Uom::query()->firstOrCreate([
+        'tenant_id' => null,
+        'symbol' => 'kg',
+    ], [
+        'uom_category_id' => $globalCategory->id,
+        'name' => 'Global Kilogram 29bc',
+        'display_precision' => 3,
+    ]);
+    $item = ($this->makeItem)($tenant, $tenantGram, ['name' => 'Brown Rice']);
+    $supplier = ($this->makeSupplier)($tenant);
+
+    UomConversion::query()->updateOrCreate([
+        'tenant_id' => null,
+        'from_uom_id' => $globalKilogram->id,
+        'to_uom_id' => $globalGram->id,
+    ], [
+        'multiplier' => '1000.00000000',
+    ]);
+
+    $option = ($this->makePurchaseOption)($tenant, $supplier, $item, $tenantKilogram, '20.000000');
+    $purchaseOrder = ($this->makePurchaseOrder)($tenant, $user, $supplier, PurchaseOrder::STATUS_SENT);
+    $line = ($this->makePurchaseOrderLine)($tenant, $purchaseOrder, $item, $option, 1);
+    ($this->grantPermission)($user, 'inventory-adjustments-view');
+
+    $resolvedQuantity = app(InventoryBuyUomConversionResolver::class)->baseQuantityFor($option, '1.000000');
+    $row = ($this->inventoryRow)(
+        ($this->inventoryList)($user)->assertOk()->json('data'),
+        $item->id
+    );
+
+    expect((int) $item->base_uom_id)->toBe((int) $tenantGram->id)
+        ->and($item->baseUom?->symbol)->toBe('g')
+        ->and((int) $option->pack_uom_id)->toBe((int) $tenantKilogram->id)
+        ->and($option->packUom?->symbol)->toBe('kg')
+        ->and((int) $option->pack_uom_id)->not->toBe((int) $globalKilogram->id)
+        ->and((int) $item->base_uom_id)->not->toBe((int) $globalGram->id)
+        ->and(bcadd((string) $option->pack_quantity, '0', 6))->toBe('20.000000')
+        ->and((int) $line->pack_count)->toBe(1)
+        ->and((string) UomConversion::query()
+            ->whereNull('tenant_id')
+            ->where('from_uom_id', $globalKilogram->id)
+            ->where('to_uom_id', $globalGram->id)
+            ->value('multiplier'))->toBe('1000.00000000')
+        ->and($resolvedQuantity)->toBe('20000.000000')
+        ->and($row['buy'] ?? null)->toBe('20000.000000')
+        ->and($row['buy_display'] ?? null)->toBe('20000.0');
+});
+
+it('29bd. inventory buy resolves global reverse conversions by symbol using reciprocal math', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $tenantCategory = UomCategory::query()->create([
+        'tenant_id' => $tenant->id,
+        'name' => 'Tenant Mass 29bd',
+    ]);
+    $globalCategory = UomCategory::query()->create([
+        'tenant_id' => null,
+        'name' => 'Global Mass 29bd',
+    ]);
+    $tenantGram = Uom::query()->where('tenant_id', $tenant->id)->where('symbol', 'g')->firstOrFail();
+    $tenantKilogram = Uom::query()->where('tenant_id', $tenant->id)->where('symbol', 'kg')->firstOrFail();
+    $globalGram = Uom::query()->firstOrCreate([
+        'tenant_id' => null,
+        'symbol' => 'g',
+    ], [
+        'uom_category_id' => $globalCategory->id,
+        'name' => 'Global Gram 29bd',
+        'display_precision' => 0,
+    ]);
+    $globalKilogram = Uom::query()->firstOrCreate([
+        'tenant_id' => null,
+        'symbol' => 'kg',
+    ], [
+        'uom_category_id' => $globalCategory->id,
+        'name' => 'Global Kilogram 29bd',
+        'display_precision' => 3,
+    ]);
+    $item = ($this->makeItem)($tenant, $tenantGram, ['name' => 'Brown Rice Reverse']);
+    $supplier = ($this->makeSupplier)($tenant);
+
+    UomConversion::query()->updateOrCreate([
+        'tenant_id' => null,
+        'from_uom_id' => $globalGram->id,
+        'to_uom_id' => $globalKilogram->id,
+    ], [
+        'multiplier' => '0.00100000',
+    ]);
+
+    $option = ($this->makePurchaseOption)($tenant, $supplier, $item, $tenantKilogram, '20.000000');
+    $purchaseOrder = ($this->makePurchaseOrder)($tenant, $user, $supplier, PurchaseOrder::STATUS_SENT);
+    $line = ($this->makePurchaseOrderLine)($tenant, $purchaseOrder, $item, $option, 1);
+    ($this->grantPermission)($user, 'inventory-adjustments-view');
+
+    $resolvedQuantity = app(InventoryBuyUomConversionResolver::class)->baseQuantityFor($option, '1.000000');
+    $row = ($this->inventoryRow)(
+        ($this->inventoryList)($user)->assertOk()->json('data'),
+        $item->id
+    );
+
+    expect($item->baseUom?->symbol)->toBe('g')
+        ->and($option->packUom?->symbol)->toBe('kg')
+        ->and(bcadd((string) $option->pack_quantity, '0', 6))->toBe('20.000000')
+        ->and((int) $line->pack_count)->toBe(1)
+        ->and((string) UomConversion::query()
+            ->whereNull('tenant_id')
+            ->where('from_uom_id', $globalGram->id)
+            ->where('to_uom_id', $globalKilogram->id)
+            ->value('multiplier'))->toBe('0.00100000')
+        ->and($resolvedQuantity)->toBe('20000.000000')
+        ->and($row['buy'] ?? null)->toBe('20000.000000')
+        ->and($row['buy_display'] ?? null)->toBe('20000.0');
+});
+
+it('29be. inventory buy resolves indirect generic conversion paths by symbol', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $category = UomCategory::query()->create([
+        'tenant_id' => $tenant->id,
+        'name' => 'Tenant Mass 29be',
+    ]);
+    $gram = Uom::query()->where('tenant_id', $tenant->id)->where('symbol', 'g')->firstOrFail();
+    $kilogram = Uom::query()->where('tenant_id', $tenant->id)->where('symbol', 'kg')->firstOrFail();
+    $pound = Uom::query()->where('tenant_id', $tenant->id)->where('symbol', 'lb')->firstOrFail();
+    $item = ($this->makeItem)($tenant, $pound, ['name' => 'Brown Rice Pounds']);
+    $supplier = ($this->makeSupplier)($tenant);
+
+    UomConversion::query()->create([
+        'tenant_id' => $tenant->id,
+        'from_uom_id' => $kilogram->id,
+        'to_uom_id' => $gram->id,
+        'multiplier' => '1000.00000000',
+    ]);
+    UomConversion::query()->create([
+        'tenant_id' => $tenant->id,
+        'from_uom_id' => $pound->id,
+        'to_uom_id' => $gram->id,
+        'multiplier' => '453.59200000',
+    ]);
+
+    $option = ($this->makePurchaseOption)($tenant, $supplier, $item, $kilogram, '20.000000');
+    $purchaseOrder = ($this->makePurchaseOrder)($tenant, $user, $supplier, PurchaseOrder::STATUS_SENT);
+    ($this->makePurchaseOrderLine)($tenant, $purchaseOrder, $item, $option, 1);
+    ($this->grantPermission)($user, 'inventory-adjustments-view');
+
+    $resolvedQuantity = app(InventoryBuyUomConversionResolver::class)->baseQuantityFor($option, '1.000000');
+    $expectedFactor = bcmul(
+        '1000.000000000000',
+        bcdiv('1', '453.592000000000', 12),
+        12
+    );
+    $expectedQuantity = bcmul('20.000000', $expectedFactor, 6);
+    $row = ($this->inventoryRow)(
+        ($this->inventoryList)($user)->assertOk()->json('data'),
+        $item->id
+    );
+
+    expect($option->packUom?->symbol)->toBe('kg')
+        ->and($item->baseUom?->symbol)->toBe('lb')
+        ->and($resolvedQuantity)->toBe($expectedQuantity)
+        ->and($row['buy'] ?? null)->toBe($expectedQuantity)
+        ->and($row['net'] ?? null)->toBe($expectedQuantity);
+});
+
+it('29c. generic conversion beats item specific conversion for open purchase order buy', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $gram = ($this->makeUom)($tenant, 'Gram', 'g', 0);
+    $kilogram = ($this->makeRelatedUom)($tenant, $gram, 'Kilogram', 'kg', 3);
+    $item = ($this->makeItem)($tenant, $gram);
+    $supplier = ($this->makeSupplier)($tenant);
+
+    UomConversion::query()->create([
+        'tenant_id' => $tenant->id,
+        'from_uom_id' => $kilogram->id,
+        'to_uom_id' => $gram->id,
+        'multiplier' => '1000.00000000',
+    ]);
+
+    ItemUomConversion::query()->create([
+        'tenant_id' => $tenant->id,
+        'item_id' => $item->id,
+        'from_uom_id' => $kilogram->id,
+        'to_uom_id' => $gram->id,
+        'conversion_factor' => '900.000000',
+    ]);
+
+    $option = ($this->makePurchaseOption)($tenant, $supplier, $item, $kilogram, '20.000000');
+    $purchaseOrder = ($this->makePurchaseOrder)($tenant, $user, $supplier, PurchaseOrder::STATUS_SENT);
+    ($this->makePurchaseOrderLine)($tenant, $purchaseOrder, $item, $option, 1);
+    ($this->grantPermission)($user, 'inventory-adjustments-view');
+
+    $row = ($this->inventoryRow)(
+        ($this->inventoryList)($user)->assertOk()->json('data'),
+        $item->id
+    );
+
+    expect($row['buy'] ?? null)->toBe('20000.000000');
+});
+
+it('29d. tenant general conversion is used when no item conversion exists for open purchase order buy', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $gram = ($this->makeUom)($tenant, 'Gram', 'g', 0);
+    $kilogram = ($this->makeRelatedUom)($tenant, $gram, 'Kilogram', 'kg', 3);
+    $item = ($this->makeItem)($tenant, $gram);
+    $supplier = ($this->makeSupplier)($tenant);
+
+    UomConversion::query()->create([
+        'tenant_id' => $tenant->id,
+        'from_uom_id' => $kilogram->id,
+        'to_uom_id' => $gram->id,
+        'multiplier' => '1000.00000000',
+    ]);
+
+    $option = ($this->makePurchaseOption)($tenant, $supplier, $item, $kilogram, '3.500000');
+    $purchaseOrder = ($this->makePurchaseOrder)($tenant, $user, $supplier, PurchaseOrder::STATUS_SENT);
+    ($this->makePurchaseOrderLine)($tenant, $purchaseOrder, $item, $option, 2);
+    ($this->grantPermission)($user, 'inventory-adjustments-view');
+
+    $row = ($this->inventoryRow)(
+        ($this->inventoryList)($user)->assertOk()->json('data'),
+        $item->id
+    );
+
+    expect($row['buy'] ?? null)->toBe('7000.000000');
+});
+
+it('29e. global conversion is used when no item or tenant conversion exists for open purchase order buy', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $gram = ($this->makeUom)($tenant, 'Gram', 'g', 0);
+    $kilogram = ($this->makeRelatedUom)($tenant, $gram, 'Kilogram', 'kg', 3);
+    $item = ($this->makeItem)($tenant, $gram);
+    $supplier = ($this->makeSupplier)($tenant);
+
+    UomConversion::query()->create([
+        'tenant_id' => null,
+        'from_uom_id' => $kilogram->id,
+        'to_uom_id' => $gram->id,
+        'multiplier' => '1000.00000000',
+    ]);
+
+    $option = ($this->makePurchaseOption)($tenant, $supplier, $item, $kilogram, '2.000000');
+    $purchaseOrder = ($this->makePurchaseOrder)($tenant, $user, $supplier, PurchaseOrder::STATUS_SENT);
+    ($this->makePurchaseOrderLine)($tenant, $purchaseOrder, $item, $option, 4);
+    ($this->grantPermission)($user, 'inventory-adjustments-view');
+
+    $row = ($this->inventoryRow)(
+        ($this->inventoryList)($user)->assertOk()->json('data'),
+        $item->id
+    );
+
+    expect($row['buy'] ?? null)->toBe('8000.000000');
+});
+
+it('29ea. reciprocal conversion records use package uom to item base uom direction for buy', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $gram = ($this->makeUom)($tenant, 'Gram', 'g', 0);
+    $kilogram = ($this->makeRelatedUom)($tenant, $gram, 'Kilogram', 'kg', 3);
+    $item = ($this->makeItem)($tenant, $gram);
+    $supplier = ($this->makeSupplier)($tenant);
+
+    UomConversion::query()->create([
+        'tenant_id' => $tenant->id,
+        'from_uom_id' => $gram->id,
+        'to_uom_id' => $kilogram->id,
+        'multiplier' => '0.00100000',
+    ]);
+    UomConversion::query()->create([
+        'tenant_id' => $tenant->id,
+        'from_uom_id' => $kilogram->id,
+        'to_uom_id' => $gram->id,
+        'multiplier' => '1000.00000000',
+    ]);
+
+    $option = ($this->makePurchaseOption)($tenant, $supplier, $item, $kilogram, '20.000000');
+    $purchaseOrder = ($this->makePurchaseOrder)($tenant, $user, $supplier, PurchaseOrder::STATUS_SENT);
+    ($this->makePurchaseOrderLine)($tenant, $purchaseOrder, $item, $option, 1);
+    ($this->grantPermission)($user, 'inventory-adjustments-view');
+
+    $row = ($this->inventoryRow)(
+        ($this->inventoryList)($user)->assertOk()->json('data'),
+        $item->id
+    );
+
+    expect($row['buy'] ?? null)->toBe('20000.000000');
+});
+
+it('29f. missing package uom conversion excludes the open purchase order line safely', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $gram = ($this->makeUom)($tenant, 'Gram', 'g', 0);
+    $kilogram = ($this->makeRelatedUom)($tenant, $gram, 'Kilogram', 'kg', 3);
+    $item = ($this->makeItem)($tenant, $gram);
+    $supplier = ($this->makeSupplier)($tenant);
+    $option = ($this->makePurchaseOption)($tenant, $supplier, $item, $kilogram, '20.000000');
+    $purchaseOrder = ($this->makePurchaseOrder)($tenant, $user, $supplier, PurchaseOrder::STATUS_SENT);
+    ($this->makePurchaseOrderLine)($tenant, $purchaseOrder, $item, $option, 1);
+    ($this->grantPermission)($user, 'inventory-adjustments-view');
+
+    $resolvedQuantity = app(InventoryBuyUomConversionResolver::class)->baseQuantityFor($option, '1.000000');
+    $row = ($this->inventoryRow)(
+        ($this->inventoryList)($user)->assertOk()->json('data'),
+        $item->id
+    );
+
+    expect($resolvedQuantity)->toBeNull()
+        ->and($row['buy'] ?? null)->toBe('0.000000');
+});
+
+it('29g. multiple open purchase order lines aggregate after package uom conversion', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $gram = ($this->makeUom)($tenant, 'Gram', 'g', 0);
+    $kilogram = ($this->makeRelatedUom)($tenant, $gram, 'Kilogram', 'kg', 3);
+    $item = ($this->makeItem)($tenant, $gram);
+    $supplier = ($this->makeSupplier)($tenant);
+
+    UomConversion::query()->create([
+        'tenant_id' => $tenant->id,
+        'from_uom_id' => $kilogram->id,
+        'to_uom_id' => $gram->id,
+        'multiplier' => '1000.00000000',
+    ]);
+
+    $gramOption = ($this->makePurchaseOption)($tenant, $supplier, $item, $gram, '500.000000');
+    $kilogramOption = ($this->makePurchaseOption)($tenant, $supplier, $item, $kilogram, '2.000000');
+    $purchaseOrder = ($this->makePurchaseOrder)($tenant, $user, $supplier, PurchaseOrder::STATUS_SENT);
+    ($this->makePurchaseOrderLine)($tenant, $purchaseOrder, $item, $gramOption, 3);
+    ($this->makePurchaseOrderLine)($tenant, $purchaseOrder, $item, $kilogramOption, 2);
+    ($this->grantPermission)($user, 'inventory-adjustments-view');
+
+    $row = ($this->inventoryRow)(
+        ($this->inventoryList)($user)->assertOk()->json('data'),
+        $item->id
+    );
+
+    expect($row['buy'] ?? null)->toBe('5500.000000');
+});
+
+it('29h. other tenant open purchase order lines are excluded before package uom conversion', function (): void {
+    $tenant = ($this->makeTenant)();
+    $otherTenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $gram = ($this->makeUom)($tenant, 'Gram', 'g', 0);
+    $otherGram = ($this->makeUom)($otherTenant, 'Gram', 'g', 0);
+    $kilogram = ($this->makeRelatedUom)($tenant, $gram, 'Kilogram', 'kg', 3);
+    $otherKilogram = ($this->makeRelatedUom)($otherTenant, $otherGram, 'Kilogram', 'kg', 3);
+    $item = ($this->makeItem)($tenant, $gram);
+    $otherItem = ($this->makeItem)($otherTenant, $otherGram, ['name' => $item->name]);
+    $supplier = ($this->makeSupplier)($tenant);
+    $otherSupplier = ($this->makeSupplier)($otherTenant);
+
+    UomConversion::query()->create([
+        'tenant_id' => $tenant->id,
+        'from_uom_id' => $kilogram->id,
+        'to_uom_id' => $gram->id,
+        'multiplier' => '1000.00000000',
+    ]);
+    UomConversion::query()->create([
+        'tenant_id' => $otherTenant->id,
+        'from_uom_id' => $otherKilogram->id,
+        'to_uom_id' => $otherGram->id,
+        'multiplier' => '1000.00000000',
+    ]);
+
+    $option = ($this->makePurchaseOption)($tenant, $supplier, $item, $kilogram, '1.000000');
+    $otherOption = ($this->makePurchaseOption)($otherTenant, $otherSupplier, $otherItem, $otherKilogram, '99.000000');
+    $purchaseOrder = ($this->makePurchaseOrder)($tenant, $user, $supplier, PurchaseOrder::STATUS_SENT);
+    $otherPurchaseOrder = ($this->makePurchaseOrder)(
+        $otherTenant,
+        ($this->makeUser)($otherTenant),
+        $otherSupplier,
+        PurchaseOrder::STATUS_SENT
+    );
+    ($this->makePurchaseOrderLine)($tenant, $purchaseOrder, $item, $option, 1);
+    ($this->makePurchaseOrderLine)($otherTenant, $otherPurchaseOrder, $otherItem, $otherOption, 1);
+    ($this->grantPermission)($user, 'inventory-adjustments-view');
+
+    $row = ($this->inventoryRow)(
+        ($this->inventoryList)($user)->assertOk()->json('data'),
+        $item->id
+    );
+
+    expect($row['buy'] ?? null)->toBe('1000.000000');
+});
+
+it('29i. completed and cancelled purchase orders are excluded from converted buy', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $gram = ($this->makeUom)($tenant, 'Gram', 'g', 0);
+    $kilogram = ($this->makeRelatedUom)($tenant, $gram, 'Kilogram', 'kg', 3);
+    $item = ($this->makeItem)($tenant, $gram);
+    $supplier = ($this->makeSupplier)($tenant);
+
+    UomConversion::query()->create([
+        'tenant_id' => $tenant->id,
+        'from_uom_id' => $kilogram->id,
+        'to_uom_id' => $gram->id,
+        'multiplier' => '1000.00000000',
+    ]);
+
+    $option = ($this->makePurchaseOption)($tenant, $supplier, $item, $kilogram, '20.000000');
+    $completedOrder = ($this->makePurchaseOrder)($tenant, $user, $supplier, PurchaseOrder::STATUS_COMPLETED);
+    $cancelledOrder = ($this->makePurchaseOrder)($tenant, $user, $supplier, PurchaseOrder::STATUS_CANCELLED);
+    ($this->makePurchaseOrderLine)($tenant, $completedOrder, $item, $option, 1);
+    ($this->makePurchaseOrderLine)($tenant, $cancelledOrder, $item, $option, 1);
+    ($this->grantPermission)($user, 'inventory-adjustments-view');
+
+    $row = ($this->inventoryRow)(
+        ($this->inventoryList)($user)->assertOk()->json('data'),
+        $item->id
+    );
+
+    expect($row['buy'] ?? null)->toBe('0.000000');
+});
+
+it('29ia. completed workflow purchase order buy is excluded even when legacy status is stale sent', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $stages = ($this->makePurchasingWorkflowStages)($tenant);
+    $gram = ($this->makeUom)($tenant, 'Gram', 'g', 0);
+    $kilogram = ($this->makeRelatedUom)($tenant, $gram, 'Kilogram', 'kg', 3);
+    $item = ($this->makeItem)($tenant, $gram);
+    $supplier = ($this->makeSupplier)($tenant);
+
+    UomConversion::query()->create([
+        'tenant_id' => $tenant->id,
+        'from_uom_id' => $kilogram->id,
+        'to_uom_id' => $gram->id,
+        'multiplier' => '1000.00000000',
+    ]);
+
+    $option = ($this->makePurchaseOption)($tenant, $supplier, $item, $kilogram, '20.000000');
+    $purchaseOrder = ($this->makePurchaseOrder)($tenant, $user, $supplier, PurchaseOrder::STATUS_SENT);
+    $purchaseOrder->forceFill([
+        'current_workflow_stage_id' => null,
+        'last_completed_workflow_stage_id' => $stages['completing']->id,
+    ])->save();
+    ($this->makePurchaseOrderLine)($tenant, $purchaseOrder, $item, $option, 1);
+    ($this->grantPermission)($user, 'inventory-adjustments-view');
+
+    $row = ($this->inventoryRow)(
+        ($this->inventoryList)($user)->assertOk()->json('data'),
+        $item->id
+    );
+
+    expect($purchaseOrder->fresh()->workflowStatus())->toBe('COMPLETED')
+        ->and($purchaseOrder->fresh()->status)->toBe(PurchaseOrder::STATUS_SENT)
+        ->and($row['buy'] ?? null)->toBe('0.000000');
+});
+
+it('29j. inventory net calculation uses converted open purchase order buy quantity', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $gram = ($this->makeUom)($tenant, 'Gram', 'g', 0);
+    $kilogram = ($this->makeRelatedUom)($tenant, $gram, 'Kilogram', 'kg', 3);
+    $item = ($this->makeItem)($tenant, $gram, ['is_sellable' => true]);
+    $customer = ($this->makeCustomer)($tenant);
+    $supplier = ($this->makeSupplier)($tenant);
+
+    UomConversion::query()->create([
+        'tenant_id' => $tenant->id,
+        'from_uom_id' => $kilogram->id,
+        'to_uom_id' => $gram->id,
+        'multiplier' => '1000.00000000',
+    ]);
+
+    ($this->makeStockMove)($tenant, $item, '500.000000');
+    $salesOrder = ($this->makeSalesOrder)($tenant, $customer, SalesOrder::STATUS_OPEN);
+    ($this->makeSalesOrderLine)($tenant, $salesOrder, $item, '250.000000');
+    $option = ($this->makePurchaseOption)($tenant, $supplier, $item, $kilogram, '1.000000');
+    $purchaseOrder = ($this->makePurchaseOrder)($tenant, $user, $supplier, PurchaseOrder::STATUS_SENT);
+    ($this->makePurchaseOrderLine)($tenant, $purchaseOrder, $item, $option, 2);
+    ($this->grantPermission)($user, 'inventory-adjustments-view');
+
+    $row = ($this->inventoryRow)(
+        ($this->inventoryList)($user)->assertOk()->json('data'),
+        $item->id
+    );
+
+    expect($row['buy'] ?? null)->toBe('2000.000000')
+        ->and($row['net'] ?? null)->toBe('2250.000000');
+});
+
+it('29ja. rendered inventory index contract uses corrected buy display field', function (): void {
+    $source = file_get_contents(resource_path('js/pages/inventory-index.js'));
+
+    expect($source)->toContain("buy: 'buy_display'");
+});
+
+it('29k. inventory calculator preserves canonical scale for converted open purchase order buy', function (): void {
+    $tenant = ($this->makeTenant)();
+    $gram = ($this->makeUom)($tenant, 'Gram', 'g', 0);
+    $kilogram = ($this->makeRelatedUom)($tenant, $gram, 'Kilogram', 'kg', 3);
+    $user = ($this->makeUser)($tenant);
+    $item = ($this->makeItem)($tenant, $gram);
+    $supplier = ($this->makeSupplier)($tenant);
+
+    UomConversion::query()->create([
+        'tenant_id' => $tenant->id,
+        'from_uom_id' => $kilogram->id,
+        'to_uom_id' => $gram->id,
+        'multiplier' => '1000.00000000',
+    ]);
+
+    $option = ($this->makePurchaseOption)($tenant, $supplier, $item, $kilogram, '1.250000');
+    $purchaseOrder = ($this->makePurchaseOrder)($tenant, $user, $supplier, PurchaseOrder::STATUS_SENT);
+    ($this->makePurchaseOrderLine)($tenant, $purchaseOrder, $item, $option, 1);
+
+    $availability = app(InventoryAvailabilityCalculator::class)->forItem($item);
+
+    expect($availability['buy'] ?? null)->toBe('1250.000000');
+});
+
+it('29l. open purchase order buy falls back to item specific conversion when no generic conversion exists', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $gram = ($this->makeUom)($tenant, 'Gram', 'g', 0);
+    $patty = ($this->makeUom)($tenant, 'Patty', 'patty', 0);
+    $item = ($this->makeItem)($tenant, $gram);
+    $supplier = ($this->makeSupplier)($tenant);
+
+    ItemUomConversion::query()->create([
+        'tenant_id' => $tenant->id,
+        'item_id' => $item->id,
+        'from_uom_id' => $patty->id,
+        'to_uom_id' => $gram->id,
+        'conversion_factor' => '113.000000',
+    ]);
+
+    $option = ($this->makePurchaseOption)($tenant, $supplier, $item, $patty, '40.000000');
+    $purchaseOrder = ($this->makePurchaseOrder)($tenant, $user, $supplier, PurchaseOrder::STATUS_SENT);
+    ($this->makePurchaseOrderLine)($tenant, $purchaseOrder, $item, $option, 1);
+    ($this->grantPermission)($user, 'inventory-adjustments-view');
+
+    $row = ($this->inventoryRow)(
+        ($this->inventoryList)($user)->assertOk()->json('data'),
+        $item->id
+    );
+
+    expect($row['buy'] ?? null)->toBe('4520.000000');
+});
+
+it('29m. receiving conversion keeps its existing item specific first resolver separate from buy availability', function (): void {
+    $source = file_get_contents(app_path('Actions/Inventory/ReceivePurchaseOptionAction.php'));
+
+    expect($source)->toContain('UomConversionPathResolver::PRECEDENCE_ITEM_FIRST');
 });
 
 it('30. draft make orders are excluded from make', function (): void {
@@ -906,7 +1726,7 @@ it('34. net uses the corrected make value', function (): void {
     $supplier = ($this->makeSupplier)($tenant);
     $option = ($this->makePurchaseOption)($tenant, $supplier, $item, $uom, '2.000000');
     $salesOrder = ($this->makeSalesOrder)($tenant, $customer, SalesOrder::STATUS_OPEN);
-    $purchaseOrder = ($this->makePurchaseOrder)($tenant, $user, $supplier, PurchaseOrder::STATUS_OPEN);
+    $purchaseOrder = ($this->makePurchaseOrder)($tenant, $user, $supplier, PurchaseOrder::STATUS_SENT);
     $recipe = ($this->makeRecipe)($tenant, $item, ['output_quantity' => '10.000000']);
     ($this->grantPermission)($user, 'inventory-adjustments-view');
 

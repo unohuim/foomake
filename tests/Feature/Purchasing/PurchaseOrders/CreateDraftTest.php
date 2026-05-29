@@ -160,14 +160,14 @@ it('persists order_date when provided', function () {
     expect((string) ($order->order_date ?? ''))->toBe('2026-02-02');
 });
 
-it('persists shipping_cents when provided', function () {
+it('persists shipping cents from shipping amount when provided', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
 
     ($this->grantPermission)($user, 'purchasing-purchase-orders-create');
 
     ($this->createOrder)($user, [
-        'shipping_cents' => 250,
+        'shipping_amount' => '2.50',
     ])->assertCreated();
 
     $order = ($this->fetchLatestOrder)($tenant->id);
@@ -175,14 +175,14 @@ it('persists shipping_cents when provided', function () {
     expect((int) ($order->shipping_cents ?? 0))->toBe(250);
 });
 
-it('allows shipping_cents to be zero', function () {
+it('allows shipping amount to be zero', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
 
     ($this->grantPermission)($user, 'purchasing-purchase-orders-create');
 
     ($this->createOrder)($user, [
-        'shipping_cents' => 0,
+        'shipping_amount' => '0.00',
     ])->assertCreated();
 
     $order = ($this->fetchLatestOrder)($tenant->id);
@@ -227,7 +227,7 @@ it('keeps status as DRAFT even if payload includes status', function () {
     ($this->grantPermission)($user, 'purchasing-purchase-orders-create');
 
     ($this->createOrder)($user, [
-        'status' => 'OPEN',
+        'status' => 'SENT',
     ])->assertCreated();
 
     $order = ($this->fetchLatestOrder)($tenant->id);
@@ -289,16 +289,16 @@ it('rejects invalid order_date format', function () {
         ->assertJsonValidationErrors(['order_date']);
 });
 
-it('rejects invalid shipping_cents format', function () {
+it('rejects invalid shipping amount format', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
 
     ($this->grantPermission)($user, 'purchasing-purchase-orders-create');
 
     ($this->createOrder)($user, [
-        'shipping_cents' => '12.50',
+        'shipping_amount' => '12.500',
     ])->assertStatus(422)
-        ->assertJsonValidationErrors(['shipping_cents']);
+        ->assertJsonValidationErrors(['shipping_amount']);
 });
 
 it('accepts nullable order_date', function () {
@@ -315,14 +315,14 @@ it('accepts nullable order_date', function () {
     expect($order->order_date ?? null)->toBeNull();
 });
 
-it('accepts nullable shipping_cents', function () {
+it('accepts nullable shipping amount', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
 
     ($this->grantPermission)($user, 'purchasing-purchase-orders-create');
 
     ($this->createOrder)($user, [
-        'shipping_cents' => null,
+        'shipping_amount' => null,
     ])->assertCreated();
 
     $order = ($this->fetchLatestOrder)($tenant->id);

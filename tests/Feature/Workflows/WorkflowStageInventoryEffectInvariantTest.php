@@ -57,6 +57,7 @@ beforeEach(function (): void {
         return WorkflowStage::withoutGlobalScopes()
             ->where('tenant_id', $tenant->id)
             ->where('workflow_domain_id', $domain->id)
+            ->where('is_active', true)
             ->orderBy('sort_order')
             ->orderBy('id')
             ->get();
@@ -75,7 +76,7 @@ beforeEach(function (): void {
             'workflow_domain_id' => $domain->id,
             'key' => 'stage-' . $sequence,
             'name' => 'Stage ' . $sequence,
-            'button_text' => 'STAGE ' . $sequence,
+            'action_verb' => 'STAGE ' . $sequence,
             'description' => null,
             'sort_order' => 10,
             'is_active' => true,
@@ -110,7 +111,7 @@ it('2. authenticated users without workflow-manage cannot create stages', functi
             'workflow_domain_id' => ($this->salesDomain)()->id,
             'key' => 'quality-check',
             'name' => 'Quality Check',
-            'button_text' => 'QUALITY CHECK',
+            'action_verb' => 'QUALITY CHECK',
             'description' => null,
             'sort_order' => 40,
             'is_inventory_effect_stage' => false,
@@ -130,7 +131,7 @@ it('3. seeded sales stages have exactly one active inventory-effect stage', func
     expect($inventoryEffectCount)->toBe(1);
 });
 
-it('4. seeded packed stage is the default inventory-effect stage', function (): void {
+it('4. seeded packing stage is the default inventory-effect stage', function (): void {
     $tenant = ($this->makeTenant)();
     ($this->seedDefaultStages)($tenant);
 
@@ -170,7 +171,7 @@ it('6. admin can create an additional sales stage without changing the inventory
         'workflow_domain_id' => ($this->salesDomain)()->id,
         'key' => 'quality-check',
         'name' => 'Quality Check',
-        'button_text' => 'QUALITY CHECK',
+        'action_verb' => 'QUALITY CHECK',
         'description' => 'Post-pack review',
         'sort_order' => 40,
         'is_inventory_effect_stage' => false,
@@ -190,7 +191,7 @@ it('7. creating a new marked sales stage clears the previous inventory-effect st
         'workflow_domain_id' => ($this->salesDomain)()->id,
         'key' => 'quality-check',
         'name' => 'Quality Check',
-        'button_text' => 'QUALITY CHECK',
+        'action_verb' => 'QUALITY CHECK',
         'description' => null,
         'sort_order' => 40,
         'is_inventory_effect_stage' => true,
@@ -220,7 +221,7 @@ it('8. updating a sales stage to marked true clears the previous inventory-effec
         'workflow_domain_id' => $shippingStage->workflow_domain_id,
         'key' => $shippingStage->key,
         'name' => $shippingStage->name,
-        'button_text' => $shippingStage->button_text,
+        'action_verb' => $shippingStage->action_verb,
         'description' => $shippingStage->description,
         'sort_order' => $shippingStage->sort_order,
         'is_active' => true,
@@ -245,7 +246,7 @@ it('9. removing the only sales inventory-effect stage is rejected', function ():
         'workflow_domain_id' => $packedStage->workflow_domain_id,
         'key' => $packedStage->key,
         'name' => $packedStage->name,
-        'button_text' => $packedStage->button_text,
+        'action_verb' => $packedStage->action_verb,
         'description' => $packedStage->description,
         'sort_order' => $packedStage->sort_order,
         'is_active' => true,
@@ -265,7 +266,7 @@ it('10. deactivating the current sales inventory-effect stage is rejected', func
         'workflow_domain_id' => $packedStage->workflow_domain_id,
         'key' => $packedStage->key,
         'name' => $packedStage->name,
-        'button_text' => $packedStage->button_text,
+        'action_verb' => $packedStage->action_verb,
         'description' => $packedStage->description,
         'sort_order' => $packedStage->sort_order,
         'is_active' => false,
@@ -285,26 +286,26 @@ it('11. sales workflow cannot be reduced to one active stage', function (): void
         'workflow_domain_id' => $stages['shipping']->workflow_domain_id,
         'key' => $stages['shipping']->key,
         'name' => $stages['shipping']->name,
-        'button_text' => $stages['shipping']->button_text,
+        'action_verb' => $stages['shipping']->action_verb,
         'description' => $stages['shipping']->description,
         'sort_order' => $stages['shipping']->sort_order,
         'is_active' => false,
         'is_inventory_effect_stage' => false,
     ])->assertOk();
 
-    $this->actingAs($user)->patchJson(route('admin.workflows.stages.update', $stages['packing']->fresh()), [
-        'workflow_domain_id' => $stages['packing']->workflow_domain_id,
-        'key' => $stages['packing']->key,
-        'name' => $stages['packing']->name,
-        'button_text' => $stages['packing']->button_text,
-        'description' => $stages['packing']->description,
-        'sort_order' => $stages['packing']->sort_order,
+    $this->actingAs($user)->patchJson(route('admin.workflows.stages.update', $stages['packed']->fresh()), [
+        'workflow_domain_id' => $stages['packed']->workflow_domain_id,
+        'key' => $stages['packed']->key,
+        'name' => $stages['packed']->name,
+        'action_verb' => $stages['packed']->action_verb,
+        'description' => $stages['packed']->description,
+        'sort_order' => $stages['packed']->sort_order,
         'is_active' => false,
         'is_inventory_effect_stage' => false,
-    ])->assertStatus(422)->assertJsonValidationErrors(['workflow_domain_id']);
+    ])->assertStatus(422)->assertJsonValidationErrors(['is_inventory_effect_stage']);
 });
 
-it('12. sales workflow may keep exactly two active stages when one is marked', function (): void {
+it('12. sales workflow may deactivate non-inventory stages while one is marked', function (): void {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
     ($this->grantPermission)($user, 'workflow-manage');
@@ -316,14 +317,14 @@ it('12. sales workflow may keep exactly two active stages when one is marked', f
         'workflow_domain_id' => $shippingStage->workflow_domain_id,
         'key' => $shippingStage->key,
         'name' => $shippingStage->name,
-        'button_text' => $shippingStage->button_text,
+        'action_verb' => $shippingStage->action_verb,
         'description' => $shippingStage->description,
         'sort_order' => $shippingStage->sort_order,
         'is_active' => false,
         'is_inventory_effect_stage' => false,
     ])->assertOk();
 
-    expect(($this->salesStages)($tenant)->where('is_active', true)->count())->toBe(2)
+    expect(($this->salesStages)($tenant)->where('is_active', true)->count())->toBe(5)
         ->and(($this->salesStages)($tenant)->where('is_active', true)->where('is_inventory_effect_stage', true)->count())->toBe(1);
 });
 
@@ -337,7 +338,7 @@ it('13. reordering sales stages preserves the single marked stage', function ():
 
     $this->actingAs($user)->postJson(route('admin.workflows.stages.reorder'), [
         'workflow_domain_id' => ($this->salesDomain)()->id,
-        'ordered_ids' => [$stages['shipping']->id, $stages['packed']->id, $stages['packing']->id],
+        'ordered_ids' => [$stages['shipping']->id, $stages['packed']->id, $stages['creating']->id],
     ])->assertOk();
 
     $refreshedStages = ($this->salesStages)($tenant);
@@ -358,7 +359,7 @@ it('14. inventory-effect invariant validation keeps the existing json error shap
         'workflow_domain_id' => $packedStage->workflow_domain_id,
         'key' => $packedStage->key,
         'name' => $packedStage->name,
-        'button_text' => $packedStage->button_text,
+        'action_verb' => $packedStage->action_verb,
         'description' => $packedStage->description,
         'sort_order' => $packedStage->sort_order,
         'is_active' => true,
@@ -379,7 +380,7 @@ it('15. moving the marked sales stage into purchasing is rejected because sales 
         'workflow_domain_id' => ($this->purchasingDomain)()->id,
         'key' => 'receiving-check',
         'name' => 'Receiving Check',
-        'button_text' => 'RECEIVING CHECK',
+        'action_verb' => 'RECEIVING CHECK',
         'description' => $packedStage->description,
         'sort_order' => $packedStage->sort_order,
         'is_active' => true,
@@ -391,14 +392,14 @@ it('16. inventory workflow domain exists as a fixed system-owned domain', functi
     expect(($this->inventoryDomain)()->name)->toBe('Inventory');
 });
 
-it('17. inventory defaults seed open and completed with completed as the marker', function (): void {
+it('17. inventory defaults seed creating and completing with completing as the marker', function (): void {
     $tenant = ($this->makeTenant)();
     ($this->seedDefaultStages)($tenant);
 
     $inventoryStages = ($this->domainStages)($tenant, ($this->inventoryDomain)());
 
-    expect($inventoryStages->pluck('key')->all())->toBe(['scheduled', 'completed'])
-        ->and($inventoryStages->firstWhere('key', 'completed')?->is_inventory_effect_stage)->toBeTrue()
+    expect($inventoryStages->pluck('key')->all())->toBe(['creating', 'completing'])
+        ->and($inventoryStages->firstWhere('key', 'completing')?->is_inventory_effect_stage)->toBeTrue()
         ->and($inventoryStages->where('is_active', true)->where('is_inventory_effect_stage', true)->count())->toBe(1);
 });
 
@@ -408,7 +409,7 @@ it('18. purchasing defaults are seeded with a single active inventory-effect sta
 
     $purchasingStages = ($this->domainStages)($tenant, ($this->purchasingDomain)());
 
-    expect($purchasingStages->pluck('key')->all())->toBe(['receiving', 'completed'])
+    expect($purchasingStages->pluck('key')->all())->toBe(['creating', 'receiving', 'completing'])
         ->and($purchasingStages->firstWhere('key', 'receiving')?->is_inventory_effect_stage)->toBeTrue()
         ->and($purchasingStages->where('is_active', true)->where('is_inventory_effect_stage', true)->count())->toBe(1);
 });
@@ -419,8 +420,8 @@ it('19. manufacturing defaults are seeded with a single active inventory-effect 
 
     $manufacturingStages = ($this->domainStages)($tenant, ($this->manufacturingDomain)());
 
-    expect($manufacturingStages->pluck('key')->all())->toBe(['production', 'completed'])
-        ->and($manufacturingStages->firstWhere('key', 'production')?->is_inventory_effect_stage)->toBeTrue()
+    expect($manufacturingStages->pluck('key')->all())->toBe(['creating', 'making', 'completing'])
+        ->and($manufacturingStages->firstWhere('key', 'making')?->is_inventory_effect_stage)->toBeTrue()
         ->and($manufacturingStages->where('is_active', true)->where('is_inventory_effect_stage', true)->count())->toBe(1);
 });
 
@@ -454,7 +455,7 @@ it('21. purchasing workflow cannot lose its only inventory-effect stage', functi
         'workflow_domain_id' => $receivingStage->workflow_domain_id,
         'key' => $receivingStage->key,
         'name' => $receivingStage->name,
-        'button_text' => $receivingStage->button_text,
+        'action_verb' => $receivingStage->action_verb,
         'description' => $receivingStage->description,
         'sort_order' => $receivingStage->sort_order,
         'is_active' => true,
@@ -469,13 +470,13 @@ it('22. purchasing stage updates may reassign the marker while preserving a sing
     ($this->seedDefaultStages)($tenant);
 
     $completedStage = ($this->domainStages)($tenant, ($this->purchasingDomain)())
-        ->firstWhere('key', 'completed');
+        ->firstWhere('key', 'completing');
 
     $this->actingAs($user)->patchJson(route('admin.workflows.stages.update', $completedStage), [
         'workflow_domain_id' => $completedStage->workflow_domain_id,
         'key' => $completedStage->key,
         'name' => $completedStage->name,
-        'button_text' => $completedStage->button_text,
+        'action_verb' => $completedStage->action_verb,
         'description' => $completedStage->description,
         'sort_order' => $completedStage->sort_order,
         'is_active' => true,
@@ -484,7 +485,7 @@ it('22. purchasing stage updates may reassign the marker while preserving a sing
 
     $purchasingStages = ($this->domainStages)($tenant, ($this->purchasingDomain)());
 
-    expect($purchasingStages->firstWhere('key', 'completed')?->is_inventory_effect_stage)->toBeTrue()
+    expect($purchasingStages->firstWhere('key', 'completing')?->is_inventory_effect_stage)->toBeTrue()
         ->and($purchasingStages->firstWhere('key', 'receiving')?->is_inventory_effect_stage)->toBeFalse()
         ->and($purchasingStages->where('is_active', true)->where('is_inventory_effect_stage', true)->count())->toBe(1);
 });
@@ -526,7 +527,7 @@ it('24. stage store responses include the inventory-effect marker', function ():
         'workflow_domain_id' => ($this->salesDomain)()->id,
         'key' => 'quality-check',
         'name' => 'Quality Check',
-        'button_text' => 'QUALITY CHECK',
+        'action_verb' => 'QUALITY CHECK',
         'description' => null,
         'sort_order' => 40,
         'is_inventory_effect_stage' => true,
@@ -546,7 +547,7 @@ it('25. stage update responses include the inventory-effect marker', function ()
         'workflow_domain_id' => $shippingStage->workflow_domain_id,
         'key' => $shippingStage->key,
         'name' => $shippingStage->name,
-        'button_text' => $shippingStage->button_text,
+        'action_verb' => $shippingStage->action_verb,
         'description' => $shippingStage->description,
         'sort_order' => $shippingStage->sort_order,
         'is_active' => true,
@@ -567,7 +568,7 @@ it('26. inactive sales stages remain visible with their marker field in show-ina
         'workflow_domain_id' => $shippingStage->workflow_domain_id,
         'key' => $shippingStage->key,
         'name' => $shippingStage->name,
-        'button_text' => $shippingStage->button_text,
+        'action_verb' => $shippingStage->action_verb,
         'description' => $shippingStage->description,
         'sort_order' => $shippingStage->sort_order,
         'is_active' => false,
@@ -596,7 +597,7 @@ it('27. creating a stage whose generated key duplicates an existing stage key is
     $this->actingAs($user)->postJson(route('admin.workflows.stages.store'), [
         'workflow_domain_id' => ($this->salesDomain)()->id,
         'name' => 'Quality Check',
-        'button_text' => 'QUALITY CHECK',
+        'action_verb' => 'QUALITY CHECK',
         'description' => null,
         'sort_order' => 40,
         'is_inventory_effect_stage' => false,
@@ -605,7 +606,7 @@ it('27. creating a stage whose generated key duplicates an existing stage key is
     $this->actingAs($user)->postJson(route('admin.workflows.stages.store'), [
         'workflow_domain_id' => ($this->salesDomain)()->id,
         'name' => 'quality-check',
-        'button_text' => 'QUALITY-CHECK',
+        'action_verb' => 'QUALITY-CHECK',
         'description' => null,
         'sort_order' => 50,
         'is_inventory_effect_stage' => false,
@@ -621,7 +622,7 @@ it('28. unique generated stage keys still create successfully', function (): voi
     $response = $this->actingAs($user)->postJson(route('admin.workflows.stages.store'), [
         'workflow_domain_id' => ($this->salesDomain)()->id,
         'name' => 'Quality Review',
-        'button_text' => 'QUALITY REVIEW',
+        'action_verb' => 'QUALITY REVIEW',
         'description' => null,
         'sort_order' => 40,
         'is_inventory_effect_stage' => false,

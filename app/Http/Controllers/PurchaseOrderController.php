@@ -8,12 +8,15 @@ use App\Models\PurchaseOrderLine;
 use App\Models\Supplier;
 use App\Support\QuantityFormatter;
 use App\Services\Purchasing\PurchaseOrderLifecycleService;
+use App\Services\Workflows\WorkflowTransitionService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 
 /**
@@ -33,6 +36,8 @@ class PurchaseOrderController extends Controller
             ->with('lines')
             ->with('lines.item')
             ->with('lines.purchaseOption.packUom')
+            ->with('currentWorkflowStage')
+            ->with('lastCompletedWorkflowStage')
             ->withCount('lines')
             ->orderByDesc('created_at')
             ->get();
@@ -60,22 +65,24 @@ class PurchaseOrderController extends Controller
     /**
      * Store a new draft purchase order.
      */
-    public function store(Request $request): JsonResponse
+    public function store(Request $request, WorkflowTransitionService $workflowTransitionService): JsonResponse
     {
         Gate::authorize('purchasing-purchase-orders-create');
 
-        $validated = $request->validate([
+        $validator = Validator::make($request->all(), [
             'supplier_id' => [
                 'nullable',
                 'integer',
                 Rule::exists('suppliers', 'id')->where('tenant_id', $request->user()->tenant_id),
             ],
             'order_date' => ['nullable', 'date'],
-            'shipping_cents' => ['nullable', 'integer', 'min:0'],
-            'tax_cents' => ['nullable', 'integer', 'min:0'],
+            'shipping_amount' => ['nullable', 'regex:/^\d{1,10}(?:\.\d{1,2})?$/'],
             'po_number' => ['nullable', 'string', 'max:255'],
             'notes' => ['nullable', 'string'],
         ]);
+        $this->rejectLegacyMoneyInputs($validator, $request);
+
+        $validated = $validator->validate();
 
         $orderDate = $validated['order_date'] ?? null;
 
@@ -84,14 +91,17 @@ class PurchaseOrderController extends Controller
             'created_by_user_id' => $request->user()->id,
             'supplier_id' => $validated['supplier_id'] ?? null,
             'order_date' => $orderDate ? Carbon::parse($orderDate)->toDateString() : null,
-            'shipping_cents' => $validated['shipping_cents'] ?? null,
-            'tax_cents' => $validated['tax_cents'] ?? null,
+            'shipping_cents' => array_key_exists('shipping_amount', $validated)
+                ? $this->amountToCents($validated['shipping_amount'])
+                : null,
+            'tax_cents' => 0,
             'po_number' => $validated['po_number'] ?? null,
             'notes' => $validated['notes'] ?? null,
             'status' => PurchaseOrder::STATUS_DRAFT,
             'po_subtotal_cents' => 0,
             'po_grand_total_cents' => 0,
         ]);
+        $purchaseOrder = $workflowTransitionService->initializePurchaseOrder($purchaseOrder);
 
         return response()->json([
             'data' => [
@@ -107,7 +117,8 @@ class PurchaseOrderController extends Controller
     public function show(
         Request $request,
         PurchaseOrder $purchaseOrder,
-        PurchaseOrderLifecycleService $lifecycleService
+        PurchaseOrderLifecycleService $lifecycleService,
+        WorkflowTransitionService $workflowTransitionService
     ): View
     {
         Gate::authorize('purchasing-purchase-orders-create');
@@ -123,6 +134,8 @@ class PurchaseOrderController extends Controller
             'shortClosures',
             'shortClosures.lines',
             'shortClosures.shortClosedByUser',
+            'currentWorkflowStage',
+            'lastCompletedWorkflowStage',
         ]);
 
         $tenantCurrency = strtoupper(
@@ -136,7 +149,7 @@ class PurchaseOrderController extends Controller
         $purchaseOptions = ItemPurchaseOption::query()
             ->where('tenant_id', $request->user()->tenant_id)
             ->where('is_active', true)
-            ->with(['item', 'packUom', 'currentPrice'])
+            ->with(['supplier', 'item', 'packUom', 'currentPrice'])
             ->orderBy('id')
             ->get();
 
@@ -145,6 +158,7 @@ class PurchaseOrderController extends Controller
 
         $payload = [
             'purchaseOrder' => $this->purchaseOrderPayload($purchaseOrder),
+            'workflow' => $workflowTransitionService->purchaseOrderWorkflowPayload($purchaseOrder, $request->user()),
             'lines' => $purchaseOrder->lines->map(function (PurchaseOrderLine $line) use ($tenantCurrency, $lineTotals) {
                 return $this->linePayload($line, $tenantCurrency, $lineTotals[$line->id] ?? []);
             })->values()->all(),
@@ -162,6 +176,7 @@ class PurchaseOrderController extends Controller
                 return [
                     'id' => $option->id,
                     'supplier_id' => $option->supplier_id,
+                    'supplier_name' => $option->supplier?->company_name,
                     'item_id' => $option->item_id,
                     'item_name' => $option->item?->name,
                     'pack_quantity' => $packQuantity,
@@ -203,27 +218,30 @@ class PurchaseOrderController extends Controller
     {
         Gate::authorize('purchasing-purchase-orders-create');
 
-        if ($purchaseOrder->status !== PurchaseOrder::STATUS_DRAFT) {
-            return response()->json([
-                'message' => 'Only draft purchase orders can be edited.',
-            ], 422);
+        if (! $purchaseOrder->isWorkflowEditable()) {
+            return $this->lockedPurchaseOrderResponse();
         }
 
-        $validated = $request->validate([
+        $validator = Validator::make($request->all(), [
             'supplier_id' => [
                 'nullable',
                 'integer',
                 Rule::exists('suppliers', 'id')->where('tenant_id', $request->user()->tenant_id),
             ],
             'order_date' => ['nullable', 'date'],
-            'shipping_cents' => ['nullable', 'integer', 'min:0'],
-            'tax_cents' => ['nullable', 'integer', 'min:0'],
+            'shipping_amount' => ['nullable', 'regex:/^\d{1,10}(?:\.\d{1,2})?$/'],
             'po_number' => ['nullable', 'string', 'max:255'],
             'notes' => ['nullable', 'string'],
         ]);
+        $this->rejectLegacyMoneyInputs($validator, $request);
+
+        $validated = $validator->validate();
 
         $payload = $request->all();
         $updateData = [];
+        $tenantCurrency = strtoupper(
+            (string) ($request->user()?->tenant?->currency_code ?: config('app.currency_code', 'USD'))
+        );
 
         if (array_key_exists('supplier_id', $payload)) {
             $updateData['supplier_id'] = $validated['supplier_id'] ?? null;
@@ -234,12 +252,10 @@ class PurchaseOrderController extends Controller
             $updateData['order_date'] = $orderDate ? Carbon::parse($orderDate)->toDateString() : null;
         }
 
-        if (array_key_exists('shipping_cents', $payload)) {
-            $updateData['shipping_cents'] = $validated['shipping_cents'] ?? null;
-        }
-
-        if (array_key_exists('tax_cents', $payload)) {
-            $updateData['tax_cents'] = $validated['tax_cents'] ?? null;
+        if (array_key_exists('shipping_amount', $payload)) {
+            $updateData['shipping_cents'] = array_key_exists('shipping_amount', $validated)
+                ? $this->amountToCents($validated['shipping_amount'])
+                : null;
         }
 
         if (array_key_exists('po_number', $payload)) {
@@ -252,32 +268,56 @@ class PurchaseOrderController extends Controller
 
         $updatedOrder = null;
 
-        DB::transaction(function () use ($purchaseOrder, $updateData, &$updatedOrder) {
+        $updatedLines = [];
+
+        DB::transaction(function () use ($purchaseOrder, $updateData, $tenantCurrency, &$updatedOrder, &$updatedLines) {
             $lockedOrder = PurchaseOrder::query()
                 ->lockForUpdate()
                 ->findOrFail($purchaseOrder->id);
 
-            if ($lockedOrder->status !== PurchaseOrder::STATUS_DRAFT) {
+            if (! $lockedOrder->isWorkflowEditable()) {
                 $updatedOrder = $lockedOrder;
                 return;
             }
+
+            $supplierChanged = array_key_exists('supplier_id', $updateData)
+                && (int) ($lockedOrder->supplier_id ?? 0) !== (int) ($updateData['supplier_id'] ?? 0);
 
             if ($updateData !== []) {
                 $lockedOrder->update($updateData);
             }
 
+            if ($supplierChanged) {
+                PurchaseOrderLine::query()
+                    ->where('tenant_id', $lockedOrder->tenant_id)
+                    ->where('purchase_order_id', $lockedOrder->id)
+                    ->delete();
+            }
+
             $this->recalculateTotals($lockedOrder);
-            $updatedOrder = $lockedOrder->fresh(['supplier']);
+            $updatedOrder = $lockedOrder->fresh(['supplier', 'lines.item', 'lines.purchaseOption.packUom']);
+            $lineTotals = app(PurchaseOrderLifecycleService::class)->computeLineTotals($updatedOrder);
+            $updatedLines = $updatedOrder->lines
+                ->map(fn (PurchaseOrderLine $line): array => $this->linePayload(
+                    $line,
+                    $tenantCurrency,
+                    $lineTotals[$line->id] ?? []
+                ))
+                ->values()
+                ->all();
         });
 
-        if (! $updatedOrder || $updatedOrder->status !== PurchaseOrder::STATUS_DRAFT) {
-            return response()->json([
-                'message' => 'Only draft purchase orders can be edited.',
-            ], 422);
+        if (! $updatedOrder || ! $updatedOrder->isWorkflowEditable()) {
+            return $this->lockedPurchaseOrderResponse();
         }
 
+        $responsePayload = $this->purchaseOrderPayload($updatedOrder);
+
         return response()->json([
-            'data' => $this->purchaseOrderPayload($updatedOrder),
+            'data' => array_merge($responsePayload, [
+                'purchase_order' => $responsePayload,
+                'lines' => $updatedLines,
+            ]),
         ]);
     }
 
@@ -310,19 +350,31 @@ class PurchaseOrderController extends Controller
      */
     private function purchaseOrderPayload(PurchaseOrder $purchaseOrder): array
     {
-        return [
+        $payload = [
             'id' => $purchaseOrder->id,
             'supplier_id' => $purchaseOrder->supplier_id,
             'supplier_name' => $purchaseOrder->supplier?->company_name,
             'order_date' => $purchaseOrder->order_date?->format('Y-m-d'),
             'shipping_cents' => $purchaseOrder->shipping_cents,
+            'shipping_amount' => $this->formatCentsToAmount($purchaseOrder->shipping_cents),
             'tax_cents' => $purchaseOrder->tax_cents,
             'po_number' => $purchaseOrder->po_number,
             'notes' => $purchaseOrder->notes,
-            'status' => $purchaseOrder->status,
+            'status' => $purchaseOrder->workflowStatus(),
+            'is_cancelled' => $purchaseOrder->workflow_cancelled_at !== null,
+            'is_editable' => $purchaseOrder->isWorkflowEditable(),
+            'is_back_ordered' => $purchaseOrder->back_ordered_at !== null,
+            'has_receipts' => $purchaseOrder->receipts()->exists(),
             'po_subtotal_cents' => $purchaseOrder->po_subtotal_cents,
             'po_grand_total_cents' => $purchaseOrder->po_grand_total_cents,
         ];
+
+        if (Schema::hasColumn('purchase_orders', 'current_workflow_stage_id')) {
+            $payload['current_workflow_stage_id'] = $purchaseOrder->getAttribute('current_workflow_stage_id');
+            $payload['last_completed_workflow_stage_id'] = $purchaseOrder->getAttribute('last_completed_workflow_stage_id');
+        }
+
+        return $payload;
     }
 
     /**
@@ -343,10 +395,13 @@ class PurchaseOrderController extends Controller
             'item_id' => $line->item_id,
             'item_name' => $line->item?->name,
             'item_purchase_option_id' => $line->item_purchase_option_id,
-            'pack_count' => $packCount,
+            'pack_count' => (int) $line->pack_count,
             'pack_count_display' => QuantityFormatter::format($packCount, $packPrecision),
             'unit_price_cents' => $line->unit_price_cents,
             'line_subtotal_cents' => $line->line_subtotal_cents,
+            'line_tax_cents' => $this->taxCentsForLine((int) $line->line_subtotal_cents, (int) $line->line_tax_rate_bps),
+            'tax_percent' => $this->basisPointsToTaxPercent((int) $line->line_tax_rate_bps),
+            'line_tax_rate_bps' => (int) $line->line_tax_rate_bps,
             'pack_quantity' => $packQuantity,
             'pack_quantity_display' => $packQuantity !== null
                 ? QuantityFormatter::format($packQuantity, $packPrecision)
@@ -430,11 +485,98 @@ class PurchaseOrderController extends Controller
             ->sum('line_subtotal_cents');
 
         $shipping = $purchaseOrder->shipping_cents ?? 0;
-        $tax = $purchaseOrder->tax_cents ?? 0;
+        $tax = (int) PurchaseOrderLine::query()
+            ->where('purchase_order_id', $purchaseOrder->id)
+            ->get(['line_subtotal_cents', 'line_tax_rate_bps'])
+            ->sum(fn (PurchaseOrderLine $line): int => $this->taxCentsForLine(
+                (int) $line->line_subtotal_cents,
+                (int) $line->line_tax_rate_bps
+            ));
 
         $purchaseOrder->forceFill([
             'po_subtotal_cents' => $subtotal,
+            'tax_cents' => $tax,
             'po_grand_total_cents' => $subtotal + $shipping + $tax,
         ])->save();
+    }
+
+    /**
+     * Convert a dollars/cents amount string to integer cents.
+     */
+    private function amountToCents(?string $amount): ?int
+    {
+        if ($amount === null || $amount === '') {
+            return null;
+        }
+
+        $parts = explode('.', $amount, 2);
+        $dollars = (int) $parts[0];
+        $cents = (int) str_pad($parts[1] ?? '0', 2, '0');
+
+        return ($dollars * 100) + $cents;
+    }
+
+    /**
+     * Format integer cents as a dollars/cents input value.
+     */
+    private function formatCentsToAmount(?int $cents): ?string
+    {
+        if ($cents === null) {
+            return null;
+        }
+
+        $dollars = intdiv($cents, 100);
+        $minor = $cents % 100;
+
+        return $dollars . '.' . str_pad((string) $minor, 2, '0', STR_PAD_LEFT);
+    }
+
+    /**
+     * Calculate line-level tax cents from basis points.
+     */
+    private function taxCentsForLine(int $lineSubtotalCents, int $lineTaxRateBps): int
+    {
+        return intdiv(($lineSubtotalCents * $lineTaxRateBps) + 5000, 10000);
+    }
+
+    /**
+     * Add new-contract validation errors for removed money inputs.
+     */
+    private function rejectLegacyMoneyInputs(\Illuminate\Contracts\Validation\Validator $validator, Request $request): void
+    {
+        $validator->after(function (\Illuminate\Contracts\Validation\Validator $validator) use ($request): void {
+            if ($request->exists('shipping_cents')) {
+                $validator->errors()->add('shipping_amount', 'Shipping must be entered as dollars and cents.');
+            }
+
+            if ($request->exists('tax_cents')) {
+                $validator->errors()->add('tax_cents', 'Tax is calculated from purchase order lines.');
+            }
+        });
+    }
+
+    /**
+     * Build a JSON response for locked purchase order edits.
+     */
+    private function lockedPurchaseOrderResponse(): JsonResponse
+    {
+        return response()->json([
+            'message' => 'Purchase order is locked for editing.',
+            'errors' => [
+                'purchase_order' => ['Purchase order is locked for editing.'],
+            ],
+        ], 422);
+    }
+
+    /**
+     * Convert basis points into displayable tax percentage text.
+     */
+    private function basisPointsToTaxPercent(int $basisPoints): string
+    {
+        $tenths = intdiv($basisPoints + 5, 10);
+        $whole = intdiv($tenths, 10);
+        $fraction = $tenths % 10;
+
+        return $whole . '.' . $fraction;
     }
 }

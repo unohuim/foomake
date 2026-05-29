@@ -1,10 +1,22 @@
 @props([
+    'alpineComponent' => null,
+    'alpineData' => [],
     'items' => [],
     'title' => '',
     'titleClass' => 'font-semibold text-2xl leading-tight text-gray-900',
 ])
 
-<div class="space-y-4" data-resource-detail-header>
+@php
+    $alpineExpression = $alpineComponent === null
+        ? null
+        : $alpineComponent . '(' . \Illuminate\Support\Js::from($alpineData)->toHtml() . ')';
+@endphp
+
+<div
+    {{ $attributes->class(['space-y-4']) }}
+    @if ($alpineExpression !== null) x-data="{{ $alpineExpression }}" @endif
+    data-resource-detail-header
+>
     <div class="max-w-5xl px-1 sm:px-6 lg:px-8" data-resource-detail-header-body>
         <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div class="min-w-0 flex-1">

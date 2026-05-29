@@ -68,9 +68,11 @@ beforeEach(function () {
         $domain = ($this->salesDomain)();
 
         foreach ([
-            ['key' => 'packing', 'name' => 'Packing', 'button_text' => 'Packing', 'sort_order' => 10],
-            ['key' => 'packed', 'name' => 'Packed', 'button_text' => 'Packed', 'sort_order' => 20],
-            ['key' => 'shipping', 'name' => 'Shipping', 'button_text' => 'Shipping', 'sort_order' => 30],
+            ['key' => 'creating', 'name' => 'Creating', 'action_verb' => 'CREATE', 'sort_order' => 10],
+            ['key' => 'packing', 'name' => 'Packing', 'action_verb' => 'PACK', 'sort_order' => 20],
+            ['key' => 'shipping', 'name' => 'Shipping', 'action_verb' => 'SHIP', 'sort_order' => 30],
+            ['key' => 'invoicing', 'name' => 'Invoicing', 'action_verb' => 'INVOICE', 'sort_order' => 40],
+            ['key' => 'completing', 'name' => 'Completing', 'action_verb' => 'COMPLETE', 'sort_order' => 50],
         ] as $stage) {
             WorkflowStage::withoutGlobalScopes()->updateOrCreate([
                 'tenant_id' => $tenant->id,
@@ -78,7 +80,7 @@ beforeEach(function () {
                 'key' => $stage['key'],
             ], [
                 'name' => $stage['name'],
-                'button_text' => $stage['button_text'],
+                'action_verb' => $stage['action_verb'],
                 'description' => null,
                 'sort_order' => $stage['sort_order'],
                 'is_active' => true,
@@ -99,7 +101,7 @@ beforeEach(function () {
             'workflow_domain_id' => $domain->id,
             'key' => 'stage-' . $sequence,
             'name' => 'Stage ' . $sequence,
-            'button_text' => 'Stage ' . $sequence,
+            'action_verb' => 'Stage ' . $sequence,
             'description' => null,
             'sort_order' => 100,
             'is_active' => true,
@@ -149,15 +151,15 @@ it('2. workflow domain keys are unique and stable', function () {
         ->and(($this->inventoryDomain)()->name)->toBe('Inventory');
 });
 
-it('2a. workflow stages table includes button_text and the migration explicitly drops it on rollback', function () {
-    expect(Schema::hasColumn('workflow_stages', 'button_text'))->toBeTrue();
+it('2a. workflow stages table uses action_verb and drops stale action fields', function () {
+    expect(Schema::hasColumn('workflow_stages', 'action_verb'))->toBeTrue();
 
-    $migrationSource = file_get_contents(database_path('migrations/2026_05_27_000001_add_button_text_to_workflow_stages_table.php'));
+    $migrationSource = file_get_contents(database_path('migrations/2026_05_28_000003_add_workflow_foundation_fields.php'));
 
-    expect($migrationSource)->toContain("\$table->string('button_text')->nullable()")
-        ->and($migrationSource)->toContain("->update(['button_text' => DB::raw('name')])")
-        ->and($migrationSource)->toContain("\$table->string('button_text')->nullable(false)->change()")
-        ->and($migrationSource)->toContain("\$table->dropColumn('button_text');");
+    expect($migrationSource)->toContain("\$table->string('action_verb')->nullable()")
+        ->and($migrationSource)->toContain("'action_verb' => DB::raw('button_text')")
+        ->and($migrationSource)->toContain("\$table->dropColumn('button_text');")
+        ->and($migrationSource)->toContain("\$table->dropColumn('action_verb');");
 });
 
 it('3. workflow domains scope workflow stages', function () {
@@ -186,14 +188,15 @@ it('5. seeded sales operational stages exist with exact keys', function () {
 
     $keys = WorkflowStage::query()
         ->where('workflow_domain_id', ($this->salesDomain)()->id)
+        ->where('is_active', true)
         ->orderBy('sort_order')
         ->pluck('key')
         ->all();
 
-    expect($keys)->toBe(['packing', 'packed', 'shipping']);
+    expect($keys)->toBe(['creating', 'packing', 'packed', 'shipping', 'invoicing', 'completing']);
 });
 
-it('6. sales does not seed system lifecycle statuses while inventory now seeds scheduled and completed', function () {
+it('6. sales does not seed legacy system lifecycle statuses while inventory seeds creating and completing', function () {
     $tenant = ($this->makeTenant)();
     $this->actingAs(($this->makeUser)($tenant));
     app(\App\Actions\Workflows\SeedDefaultWorkflowStagesForTenantAction::class)->execute($tenant);
@@ -212,10 +215,9 @@ it('6. sales does not seed system lifecycle statuses while inventory now seeds s
 
     expect($salesStageKeys)->not->toContain('draft')
         ->and($salesStageKeys)->not->toContain('open')
-        ->and($salesStageKeys)->not->toContain('completed')
         ->and($salesStageKeys)->not->toContain('cancelled')
-        ->and($inventoryStageKeys)->toContain('scheduled')
-        ->and($inventoryStageKeys)->toContain('completed');
+        ->and($inventoryStageKeys)->toContain('creating')
+        ->and($inventoryStageKeys)->toContain('completing');
 });
 
 it('7. workflow stages are tenant scoped', function () {
@@ -285,16 +287,16 @@ it('12. user with workflow manage can access admin workflows page and payload', 
     expect($payload['stageStoreUrl'] ?? null)->toBe(route('admin.workflows.stages.store'))
         ->and($payload['taskTemplateStoreUrl'] ?? null)->toBe(route('admin.workflows.task-templates.store'))
         ->and($payload['domains'][0]['key'] ?? null)->toBe('sales')
-        ->and($payload['stages'][0]['button_text'] ?? null)->toBeString()
+        ->and($payload['stages'][0]['action_verb'] ?? null)->toBeString()
         ->and($response->getContent())->not->toContain('>Key<')
         ->and($response->getContent())->not->toContain('Reorder active stages');
 });
 
-it('12a. workflow stage admin UI hides the key field and shows button text plus sort order', function () {
+it('12a. workflow stage admin UI hides the key field and shows action verb plus sort order', function () {
     $source = file_get_contents(resource_path('views/admin/workflows/index.blade.php'));
 
     expect($source)->not->toContain('>Key<')
-        ->and($source)->toContain('Button text')
+        ->and($source)->toContain('Action verb')
         ->and($source)->toContain('Sort order')
         ->and($source)->not->toContain('Reorder active stages');
 });
@@ -338,14 +340,14 @@ it('15. admin can create a workflow stage', function () {
     $response = $this->actingAs($user)->postJson(route('admin.workflows.stages.store'), [
         'workflow_domain_id' => ($this->salesDomain)()->id,
         'name' => 'PLANNED',
-        'button_text' => 'PLAN',
+        'action_verb' => 'PLAN',
         'description' => 'Before shipping',
         'sort_order' => 1,
     ])->assertCreated();
 
     expect(WorkflowStage::query()->where('key', 'planned')->exists())->toBeTrue()
         ->and($response->json('data.name'))->toBe('PLANNED')
-        ->and($response->json('data.button_text'))->toBe('PLAN')
+        ->and($response->json('data.action_verb'))->toBe('PLAN')
         ->and($response->json('data.sort_order'))->toBe(1);
 });
 
@@ -357,13 +359,13 @@ it('16. admin can edit a workflow stage while preserving the generated key', fun
     $stage = ($this->createStage)($tenant, ($this->salesDomain)(), [
         'key' => 'quality-check',
         'name' => 'Quality Check',
-        'button_text' => 'CHECK',
+        'action_verb' => 'CHECK',
     ]);
 
     $this->actingAs($user)->patchJson(route('admin.workflows.stages.update', $stage), [
         'workflow_domain_id' => ($this->salesDomain)()->id,
         'name' => 'PLANNED',
-        'button_text' => 'PLAN',
+        'action_verb' => 'PLAN',
         'description' => 'Updated',
         'sort_order' => 2,
         'is_active' => true,
@@ -371,11 +373,11 @@ it('16. admin can edit a workflow stage while preserving the generated key', fun
 
     expect($stage->fresh()->key)->toBe('quality-check')
         ->and($stage->fresh()->name)->toBe('PLANNED')
-        ->and($stage->fresh()->button_text)->toBe('PLAN')
+        ->and($stage->fresh()->action_verb)->toBe('PLAN')
         ->and($stage->fresh()->sort_order)->toBe(2);
 });
 
-it('16a. workflow stage create and update reject missing button_text', function () {
+it('16a. workflow stage create and update reject missing action_verb', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
     ($this->grantPermission)($user, 'workflow-manage');
@@ -383,14 +385,14 @@ it('16a. workflow stage create and update reject missing button_text', function 
     $stage = ($this->createStage)($tenant, ($this->salesDomain)(), [
         'key' => 'planned',
         'name' => 'PLANNED',
-        'button_text' => 'PLAN',
+        'action_verb' => 'PLAN',
     ]);
 
     $this->actingAs($user)->postJson(route('admin.workflows.stages.store'), [
         'workflow_domain_id' => ($this->salesDomain)()->id,
         'name' => 'SCHEDULED',
         'sort_order' => 10,
-    ])->assertStatus(422)->assertJsonValidationErrors(['button_text']);
+    ])->assertStatus(422)->assertJsonValidationErrors(['action_verb']);
 
     $this->actingAs($user)->patchJson(route('admin.workflows.stages.update', $stage), [
         'workflow_domain_id' => ($this->salesDomain)()->id,
@@ -398,7 +400,7 @@ it('16a. workflow stage create and update reject missing button_text', function 
         'description' => null,
         'sort_order' => 10,
         'is_active' => true,
-    ])->assertStatus(422)->assertJsonValidationErrors(['button_text']);
+    ])->assertStatus(422)->assertJsonValidationErrors(['action_verb']);
 });
 
 it('17. admin can deactivate and reactivate a workflow stage', function () {
@@ -410,7 +412,7 @@ it('17. admin can deactivate and reactivate a workflow stage', function () {
     $this->actingAs($user)->patchJson(route('admin.workflows.stages.update', $stage), [
         'workflow_domain_id' => $stage->workflow_domain_id,
         'name' => $stage->name,
-        'button_text' => $stage->button_text,
+        'action_verb' => $stage->action_verb,
         'description' => $stage->description,
         'sort_order' => $stage->sort_order,
         'is_active' => false,
@@ -421,7 +423,7 @@ it('17. admin can deactivate and reactivate a workflow stage', function () {
     $this->actingAs($user)->patchJson(route('admin.workflows.stages.update', $stage), [
         'workflow_domain_id' => $stage->workflow_domain_id,
         'name' => $stage->name,
-        'button_text' => $stage->button_text,
+        'action_verb' => $stage->action_verb,
         'description' => $stage->description,
         'sort_order' => $stage->sort_order,
         'is_active' => true,
@@ -492,7 +494,7 @@ it('22. workflow stage sort orders persist exact numeric values without string c
     $firstResponse = $this->actingAs($user)->postJson(route('admin.workflows.stages.store'), [
         'workflow_domain_id' => ($this->salesDomain)()->id,
         'name' => 'First Stage',
-        'button_text' => 'FIRST',
+        'action_verb' => 'FIRST',
         'description' => null,
         'sort_order' => 1,
     ])->assertCreated();
@@ -500,7 +502,7 @@ it('22. workflow stage sort orders persist exact numeric values without string c
     $secondResponse = $this->actingAs($user)->postJson(route('admin.workflows.stages.store'), [
         'workflow_domain_id' => ($this->salesDomain)()->id,
         'name' => 'Second Stage',
-        'button_text' => 'SECOND',
+        'action_verb' => 'SECOND',
         'description' => null,
         'sort_order' => 2,
     ])->assertCreated();
@@ -518,6 +520,7 @@ it('23. inventory workflow system stages are reorderable while sales still exclu
     $inventoryStages = WorkflowStage::query()
         ->where('tenant_id', $tenant->id)
         ->where('workflow_domain_id', ($this->inventoryDomain)()->id)
+        ->where('is_active', true)
         ->orderBy('sort_order')
         ->pluck('key')
         ->all();
@@ -528,9 +531,9 @@ it('23. inventory workflow system stages are reorderable while sales still exclu
         ->pluck('key')
         ->all();
 
-    expect($inventoryStages)->toBe(['scheduled', 'completed'])
+    expect($inventoryStages)->toBe(['creating', 'completing'])
         ->and($salesStageKeys)->not->toContain('scheduled')
-        ->and($salesStageKeys)->not->toContain('completed');
+        ->and($salesStageKeys)->toContain('completing');
 });
 
 it('24. admin can create and edit a workflow task template', function () {

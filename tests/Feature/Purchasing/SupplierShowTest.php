@@ -13,6 +13,7 @@ use App\Models\Supplier;
 use App\Models\Tenant;
 use App\Models\Uom;
 use App\Models\UomCategory;
+use App\Models\UomConversion;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
@@ -641,6 +642,42 @@ it('creates a supplier package with an initial price from the reusable section p
     ]);
 });
 
+it('creates a supplier package from supplier detail when an indirect generic conversion path exists', function () {
+    $tenant = ($this->makeTenant)(['currency_code' => 'USD']);
+    $user = ($this->makeUser)($tenant);
+    $supplier = ($this->makeSupplier)($tenant);
+    $gram = Uom::query()->where('tenant_id', $tenant->id)->where('symbol', 'g')->firstOrFail();
+    $kilogram = Uom::query()->where('tenant_id', $tenant->id)->where('symbol', 'kg')->firstOrFail();
+    $pound = Uom::query()->where('tenant_id', $tenant->id)->where('symbol', 'lb')->firstOrFail();
+    $item = ($this->makeItem)($tenant, $pound, ['name' => 'Supplier Detail Indirect']);
+
+    UomConversion::query()->create([
+        'tenant_id' => $tenant->id,
+        'from_uom_id' => $kilogram->id,
+        'to_uom_id' => $gram->id,
+        'multiplier' => '1000.00000000',
+    ]);
+    UomConversion::query()->create([
+        'tenant_id' => $tenant->id,
+        'from_uom_id' => $pound->id,
+        'to_uom_id' => $gram->id,
+        'multiplier' => '453.59200000',
+    ]);
+
+    ($this->grantPermission)($user, 'purchasing-suppliers-manage');
+
+    ($this->postOption)($user, $supplier, [
+        'item_id' => $item->id,
+        'pack_quantity' => '20.000000',
+        'pack_uom_id' => $kilogram->id,
+        'supplier_sku' => 'SUP-INDIRECT',
+        'price_amount' => '25.00',
+    ])->assertCreated()
+        ->assertJsonPath('data.item_id', $item->id)
+        ->assertJsonPath('data.supplier_id', $supplier->id)
+        ->assertJsonPath('data.pack_uom_id', $kilogram->id);
+});
+
 it('updates a supplier package through the reusable section endpoint', function () {
     $tenant = ($this->makeTenant)(['currency_code' => 'USD']);
     $user = ($this->makeUser)($tenant);
@@ -770,7 +807,7 @@ it('returns purchase order row display fields supported by the Material detail s
     $order = ($this->makePurchaseOrder)($tenant, $user, $supplier, [
         'po_number' => 'DISPLAY-1',
         'order_date' => Carbon::parse('2026-05-20')->toDateString(),
-        'status' => PurchaseOrder::STATUS_OPEN,
+        'status' => PurchaseOrder::STATUS_SENT,
         'po_grand_total_cents' => 4567,
     ]);
 
@@ -780,7 +817,7 @@ it('returns purchase order row display fields supported by the Material detail s
 
     expect($row['id'])->toBe($order->id)
         ->and($row['po_number'])->toBe('DISPLAY-1')
-        ->and($row['status'])->toBe(PurchaseOrder::STATUS_OPEN)
+        ->and($row['status'])->toBe(PurchaseOrder::STATUS_DRAFT)
         ->and($row['order_date'])->toBe('2026-05-20')
         ->and($row['supplier_name'])->toBe('Display Supplier')
         ->and($row['po_grand_total_cents'])->toBe(4567)
@@ -861,7 +898,7 @@ it('preserves nullable draft header fields when supplier detail creates a draft 
         'id' => $purchaseOrderId,
         'order_date' => null,
         'shipping_cents' => null,
-        'tax_cents' => null,
+        'tax_cents' => 0,
         'po_number' => null,
         'notes' => null,
     ]);

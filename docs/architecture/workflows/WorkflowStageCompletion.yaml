@@ -1,0 +1,30 @@
+name: Workflow Stage Completion
+type: Workflow Transition Rule
+location:
+  - app/Services/Workflows/WorkflowTransitionService.php
+  - app/Actions/Workflows/AssertWorkflowStageTasksCompletedAction.php
+  - app/Actions/Workflows/GenerateWorkflowStageTasksAction.php
+purpose: Define the common rule for completing a current workflow stage and advancing a workflow-enabled record.
+when_to_use:
+  - Completing the current stage for a workflow-enabled domain record
+  - Advancing to the next active stage by configured order
+  - Applying inventory effect from configured stage completion
+when_not_to_use:
+  - Manual editing of workflow-stage configuration
+  - Domain-specific actions that are not workflow stage completion
+rules:
+  - Completing a stage requires backend authorization.
+  - Completing a stage is blocked while required tasks for that record and stage remain open.
+  - Completing a stage sets `last_completed_workflow_stage_id` to the completed stage.
+  - Completing a stage advances `current_workflow_stage_id` to the next active stage by `sort_order`, then `id`.
+  - Automatic stages complete immediately until a manual stage or the end of the workflow is reached.
+  - Inventory effect fires when the completed stage is marked `is_inventory_effect_stage`.
+public_interface:
+  - WorkflowTransitionService::completePurchaseOrderStage()
+  - AssertWorkflowStageTasksCompletedAction::execute()
+  - GenerateWorkflowStageTasksAction::execute()
+example_usage: |
+  current_stage = Receiving
+  complete_stage()
+  last_completed_stage = Receiving
+  current_stage = Completing

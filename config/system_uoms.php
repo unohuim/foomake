@@ -80,6 +80,11 @@ return [
             ],
             [
                 'from' => 'lb',
+                'to' => 'g',
+                'multiplier' => '453.59200000',
+            ],
+            [
+                'from' => 'lb',
                 'to' => 'oz',
                 'multiplier' => '16.00000000',
             ],

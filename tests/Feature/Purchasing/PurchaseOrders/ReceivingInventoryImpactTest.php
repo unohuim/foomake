@@ -154,7 +154,7 @@ beforeEach(function (): void {
             'tax_cents' => 0,
             'po_number' => 'PO-' . $this->poCounter,
             'notes' => null,
-            'status' => PurchaseOrder::STATUS_OPEN,
+            'status' => PurchaseOrder::STATUS_SENT,
             'po_subtotal_cents' => 0,
             'po_grand_total_cents' => 0,
         ], $attributes));
@@ -567,7 +567,7 @@ it('13. partial receipt increases inventory only by received amount', function (
     $order->refresh();
 
     expect($item->onHandQuantity())->toBe('2.500000')
-        ->and($order->status)->toBe(PurchaseOrder::STATUS_PARTIALLY_RECEIVED);
+        ->and($order->status)->toBe(PurchaseOrder::STATUS_SENT);
 });
 
 it('14. full receipt updates purchase order to RECEIVED', function (): void {
@@ -613,7 +613,7 @@ it('15. purchase order cannot become RECEIVED if stock move creation fails', fun
 
     $order->refresh();
 
-    expect($order->status)->toBe(PurchaseOrder::STATUS_OPEN);
+    expect($order->status)->toBe(PurchaseOrder::STATUS_SENT);
 });
 
 it('16. receipt transaction rolls back if stock move creation fails', function (): void {
@@ -786,6 +786,7 @@ it('22. cancelled purchase orders cannot receive', function (): void {
     $option = ($this->makeOption)($tenant, $supplier, $item, $uom);
     $order = ($this->makeOrder)($tenant, $user, $supplier, [
         'status' => PurchaseOrder::STATUS_CANCELLED,
+        'cancelled_at' => now(),
     ]);
     $line = ($this->makeLine)($tenant, $order, $item, $option);
 
@@ -805,7 +806,7 @@ it('23. short-closed purchase orders cannot receive', function (): void {
     $item = ($this->makeItem)($tenant, $uom);
     $option = ($this->makeOption)($tenant, $supplier, $item, $uom);
     $order = ($this->makeOrder)($tenant, $user, $supplier, [
-        'status' => PurchaseOrder::STATUS_SHORT_CLOSED,
+        'status' => PurchaseOrder::STATUS_RECEIVED,
     ]);
     $line = ($this->makeLine)($tenant, $order, $item, $option);
 
@@ -904,7 +905,8 @@ it('27. back-ordered purchase order receipt creates stock moves', function (): v
     $item = ($this->makeItem)($tenant, $uom);
     $option = ($this->makeOption)($tenant, $supplier, $item, $uom);
     $order = ($this->makeOrder)($tenant, $user, $supplier, [
-        'status' => PurchaseOrder::STATUS_BACK_ORDERED,
+        'status' => PurchaseOrder::STATUS_SENT,
+        'back_ordered_at' => now(),
     ]);
     $line = ($this->makeLine)($tenant, $order, $item, $option);
 
@@ -936,7 +938,7 @@ it('28. partially-received purchase order receipt creates stock moves', function
     ])->assertCreated();
 
     $order->refresh();
-    expect($order->status)->toBe(PurchaseOrder::STATUS_PARTIALLY_RECEIVED);
+    expect($order->status)->toBe(PurchaseOrder::STATUS_SENT);
 
     ($this->receive)($user, $order, [
         'purchase_order_line_id' => $line->id,
@@ -954,7 +956,7 @@ it('29. status transition depends on receipt plus stock move success', function 
     $item = ($this->makeItem)($tenant, $uom);
     $option = ($this->makeOption)($tenant, $supplier, $item, $uom);
     $order = ($this->makeOrder)($tenant, $user, $supplier, [
-        'status' => PurchaseOrder::STATUS_OPEN,
+        'status' => PurchaseOrder::STATUS_SENT,
     ]);
     $line = ($this->makeLine)($tenant, $order, $item, $option, ['pack_count' => 10]);
 
@@ -969,7 +971,7 @@ it('29. status transition depends on receipt plus stock move success', function 
 
     $order->refresh();
 
-    expect($order->status)->toBe(PurchaseOrder::STATUS_OPEN);
+    expect($order->status)->toBe(PurchaseOrder::STATUS_SENT);
 });
 
 it('30. ajax receive endpoint returns JSON success and JSON error responses only', function (): void {

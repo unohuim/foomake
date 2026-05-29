@@ -88,8 +88,10 @@
                                                 </div>
                                                 <p class="mt-1 text-xs uppercase tracking-[0.2em] text-slate-500" x-text="stage.workflow_domain_key"></p>
                                                 <p class="mt-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-                                                    <span>Button text:</span>
-                                                    <span x-text="stage.button_text"></span>
+                                                    <span>Action:</span>
+                                                    <span x-text="stage.action_verb"></span>
+                                                    <span> / Complete:</span>
+                                                    <span x-text="stage.status_complete_label"></span>
                                                 </p>
                                                 <p class="mt-2 text-sm text-slate-600" x-text="stage.description || 'No description.'"></p>
                                             </div>
@@ -132,8 +134,21 @@
                                 </label>
 
                                 <label class="block text-sm font-medium text-slate-700">
-                                    Button text
-                                    <input type="text" class="mt-1 block w-full rounded-xl border-slate-300 text-sm shadow-sm focus:border-slate-500 focus:ring-slate-500" x-model="stageForm.button_text">
+                                    Action verb
+                                    <input type="text" class="mt-1 block w-full rounded-xl border-slate-300 text-sm shadow-sm focus:border-slate-500 focus:ring-slate-500" x-model="stageForm.action_verb">
+                                </label>
+
+                                <label class="block text-sm font-medium text-slate-700">
+                                    Status complete label
+                                    <input type="text" class="mt-1 block w-full rounded-xl border-slate-300 text-sm shadow-sm focus:border-slate-500 focus:ring-slate-500" x-model="stageForm.status_complete_label">
+                                </label>
+
+                                <label class="block text-sm font-medium text-slate-700">
+                                    Completion mode
+                                    <select class="mt-1 block w-full rounded-xl border-slate-300 text-sm shadow-sm focus:border-slate-500 focus:ring-slate-500" x-model="stageForm.completion_mode">
+                                        <option value="manual">Manual</option>
+                                        <option value="automatic">Automatic</option>
+                                    </select>
                                 </label>
 
                                 <label class="block text-sm font-medium text-slate-700">

@@ -1,0 +1,44 @@
+name: Purchase Order Lifecycle
+type: Domain Rule
+location:
+  - app/Models/PurchaseOrder.php
+  - app/Http/Controllers/PurchaseOrderStatusController.php
+  - app/Http/Controllers/PurchaseOrderWorkflowController.php
+  - app/Services/Purchasing/PurchaseOrderLifecycleService.php
+  - app/Services/Workflows/WorkflowTransitionService.php
+purpose: Keep purchase order lifecycle explicit while Purchase Orders adopt shared workflow state before the legacy status column is removed.
+when_to_use:
+  - Changing purchase order status
+  - Completing Purchase Order workflow stages
+  - Receiving, back-ordering, cancelling, or short-closing purchase orders
+when_not_to_use:
+  - Sales order lifecycle changes
+  - Manual inventory adjustments outside purchase receiving
+rules:
+  - purchase_orders.status persists only DRAFT, SENT, RECEIVED, COMPLETED, or CANCELLED.
+  - New purchase orders start in DRAFT.
+  - New purchase orders enter the first active purchasing workflow stage when workflow stages exist.
+  - PO detail display status derives from workflow state rather than the legacy status column.
+  - Valid status progression is DRAFT to SENT, SENT to RECEIVED, and RECEIVED to COMPLETED.
+  - Workflow stage completion mirrors legacy status only for migration compatibility.
+  - Completing the purchasing inventory-effect stage applies receipt inventory impact.
+  - Cancel transitions eligible purchase orders to persisted terminal status CANCELLED.
+  - Cancel sets workflow_cancelled_at and blocks future workflow actions.
+  - cancelled_at and cancelled_by_user_id are audit metadata and are not display authority.
+  - Back Order is a receiving-stage marker/event and must not persist as a status value.
+  - Short Close is stored through short-close history and quantities, not as a status value.
+  - Line-level tax is entered with one decimal place, stored in basis points on purchase_order_lines, and PO tax totals are calculated per line.
+  - Draft PO line pack_count stores whole package counts only.
+  - Purchase order details, shipping, line add/remove, and line quantity/tax edits remain editable until cancellation, workflow completion, or completion of the configured purchasing inventory-effect stage.
+  - Backend gates and transition rules are authoritative; UI visibility is not authorization.
+public_interface:
+  - PurchaseOrder::statuses()
+  - PurchaseOrderStatusController::update()
+  - PurchaseOrderWorkflowController::complete()
+  - PurchaseOrderWorkflowController::cancel()
+  - PurchaseOrderLifecycleService::createReceipt()
+  - PurchaseOrderLifecycleService::createShortClosure()
+  - WorkflowTransitionService::completePurchaseOrderStage()
+  - WorkflowTransitionService::cancelPurchaseOrder()
+example_usage: |
+  $order->forceFill(['status' => PurchaseOrder::STATUS_SENT])->save();

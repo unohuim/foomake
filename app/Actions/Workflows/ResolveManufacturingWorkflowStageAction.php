@@ -56,13 +56,31 @@ class ResolveManufacturingWorkflowStageAction
      */
     public function activeStages(MakeOrder $makeOrder): Collection
     {
-        return WorkflowStage::withoutGlobalScopes()
+        $stages = WorkflowStage::withoutGlobalScopes()
             ->where('tenant_id', $makeOrder->tenant_id)
             ->where('workflow_domain_id', $this->manufacturingDomainId())
             ->where('is_active', true)
             ->orderBy('sort_order')
             ->orderBy('id')
             ->get();
+
+        $customStages = $stages->reject(fn (WorkflowStage $stage): bool => in_array($stage->key, [
+            'creating',
+            'making',
+            'completing',
+            'cancelling',
+        ], true));
+
+        if ($customStages->isNotEmpty()) {
+            return $customStages->values();
+        }
+
+        return $stages
+            ->reject(fn (WorkflowStage $stage): bool => in_array($stage->key, [
+                'creating',
+                'cancelling',
+            ], true))
+            ->values();
     }
 
     /**
@@ -131,10 +149,6 @@ class ResolveManufacturingWorkflowStageAction
         $available = [];
         $previousStage = $this->previousActiveStage($makeOrder);
         $nextStage = $this->nextActiveStage($makeOrder);
-
-        if ($previousStage) {
-            $available[] = $previousStage;
-        }
 
         if ($nextStage) {
             $available[] = $nextStage;

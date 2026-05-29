@@ -21,6 +21,11 @@ class InventoryAvailabilityIndexReadModel
 {
     private const SCALE = 6;
 
+    public function __construct(
+        private readonly InventoryBuyUomConversionResolver $buyUomConversionResolver
+    ) {
+    }
+
     /**
      * Build all tenant-scoped rows for the inventory index.
      */
@@ -225,15 +230,42 @@ class InventoryAvailabilityIndexReadModel
         $lines = PurchaseOrderLine::query()
             ->select('purchase_order_lines.*')
             ->join('purchase_orders', 'purchase_orders.id', '=', 'purchase_order_lines.purchase_order_id')
+            ->leftJoin(
+                'workflow_stages as current_workflow_stages',
+                'current_workflow_stages.id',
+                '=',
+                'purchase_orders.current_workflow_stage_id'
+            )
+            ->leftJoin(
+                'workflow_domains as current_workflow_domains',
+                'current_workflow_domains.id',
+                '=',
+                'current_workflow_stages.workflow_domain_id'
+            )
             ->where('purchase_order_lines.tenant_id', $tenantId)
             ->where('purchase_orders.tenant_id', $tenantId)
-            ->whereNotIn('purchase_orders.status', [
-                PurchaseOrder::STATUS_DRAFT,
-                PurchaseOrder::STATUS_RECEIVED,
-                PurchaseOrder::STATUS_SHORT_CLOSED,
-                PurchaseOrder::STATUS_CANCELLED,
-            ])
-            ->with('purchaseOption')
+            ->whereNull('purchase_orders.cancelled_at')
+            ->whereNull('purchase_orders.workflow_cancelled_at')
+            ->where('purchase_orders.status', '!=', PurchaseOrder::STATUS_CANCELLED)
+            ->where(function ($query): void {
+                $query
+                    ->where(function ($legacyQuery): void {
+                        $legacyQuery
+                            ->whereNull('purchase_orders.current_workflow_stage_id')
+                            ->whereNull('purchase_orders.last_completed_workflow_stage_id')
+                            ->whereNotIn('purchase_orders.status', [
+                                PurchaseOrder::STATUS_COMPLETED,
+                                PurchaseOrder::STATUS_CANCELLED,
+                            ]);
+                    })
+                    ->orWhere(function ($workflowQuery): void {
+                        $workflowQuery
+                            ->where('current_workflow_domains.key', 'purchasing')
+                            ->where('current_workflow_stages.is_active', true)
+                            ->whereNotNull('purchase_orders.current_workflow_stage_id');
+                    });
+            })
+            ->with(['purchaseOption.item.baseUom', 'purchaseOption.packUom'])
             ->orderBy('purchase_order_lines.id')
             ->get();
 
@@ -244,13 +276,18 @@ class InventoryAvailabilityIndexReadModel
                 continue;
             }
 
-            $packQuantity = $line->purchaseOption?->pack_quantity;
-
-            if ($packQuantity === null) {
+            if ($line->purchaseOption === null) {
                 continue;
             }
 
-            $inboundQuantity = bcmul((string) $line->pack_count, (string) $packQuantity, self::SCALE);
+            $inboundQuantity = $this->buyUomConversionResolver->baseQuantityFor(
+                $line->purchaseOption,
+                bcadd((string) $line->pack_count, '0', self::SCALE)
+            );
+
+            if ($inboundQuantity === null) {
+                continue;
+            }
 
             $quantities[$itemId] = isset($quantities[$itemId])
                 ? bcadd($quantities[$itemId], $inboundQuantity, self::SCALE)

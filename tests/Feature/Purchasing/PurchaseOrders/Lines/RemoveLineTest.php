@@ -169,7 +169,7 @@ it('removes a line and updates totals', function () {
 
     $orderResponse = ($this->createOrder)($user, [
         'supplier_id' => $supplier->id,
-        'shipping_cents' => 100,
+        'shipping_amount' => '1.00',
     ])->assertCreated();
 
     $orderId = (int) ($orderResponse->json('data.id') ?? 0);
@@ -239,7 +239,7 @@ it('removing the last line zeroes totals', function () {
 
     $orderResponse = ($this->createOrder)($user, [
         'supplier_id' => $supplier->id,
-        'shipping_cents' => 0,
+        'shipping_amount' => '0.00',
     ])->assertCreated();
 
     $orderId = (int) ($orderResponse->json('data.id') ?? 0);
@@ -446,7 +446,7 @@ it('deleting line updates subtotal to remaining sum', function () {
 
     $orderResponse = ($this->createOrder)($user, [
         'supplier_id' => $supplier->id,
-        'shipping_cents' => 20,
+        'shipping_amount' => '0.20',
     ])->assertCreated();
 
     $orderId = (int) ($orderResponse->json('data.id') ?? 0);
@@ -552,7 +552,7 @@ it('delete line keeps shipping in grand total when other lines remain', function
 
     $orderResponse = ($this->createOrder)($user, [
         'supplier_id' => $supplier->id,
-        'shipping_cents' => 30,
+        'shipping_amount' => '0.30',
     ])->assertCreated();
 
     $orderId = (int) ($orderResponse->json('data.id') ?? 0);
@@ -639,7 +639,7 @@ it('delete line with shipping null sets grand total to remaining subtotal', func
 
     $orderResponse = ($this->createOrder)($user, [
         'supplier_id' => $supplier->id,
-        'shipping_cents' => null,
+        'shipping_amount' => null,
     ])->assertCreated();
 
     $orderId = (int) ($orderResponse->json('data.id') ?? 0);

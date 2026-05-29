@@ -208,7 +208,7 @@ it('index shows supplier name, order_date, status, and subtotal', function () {
     $orderResponse = ($this->createOrder)($user, [
         'supplier_id' => $supplier->id,
         'order_date' => '2026-02-03',
-        'shipping_cents' => 100,
+        'shipping_amount' => '1.00',
     ])->assertCreated();
 
     $orderId = (int) ($orderResponse->json('data.id') ?? 0);
@@ -335,6 +335,35 @@ it('index shows status value DRAFT for draft orders', function () {
     expect($orderData['status'] ?? null)->toBe('DRAFT');
 });
 
+it('index shows status value CANCELLED for cancelled orders', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermission)($user, 'purchasing-purchase-orders-create');
+
+    $orderResponse = ($this->createOrder)($user, [
+        'order_date' => '2026-02-09',
+    ])->assertCreated();
+
+    $orderId = (int) ($orderResponse->json('data.id') ?? 0);
+
+    DB::table('purchase_orders')
+        ->where('id', $orderId)
+        ->update([
+            'status' => 'CANCELLED',
+            'cancelled_at' => now(),
+            'cancelled_by_user_id' => $user->id,
+        ]);
+
+    $response = $this->actingAs($user)->get('/purchasing/orders')->assertOk();
+    $payload = ($this->extractPayload)($response, 'purchasing-orders-index-payload');
+
+    $orders = $payload['orders'] ?? $payload['purchase_orders'] ?? [];
+    $orderData = collect($orders)->firstWhere('id', $orderId);
+
+    expect($orderData['status'] ?? null)->toBe('CANCELLED');
+});
+
 it('index allows orders without supplier to appear', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
@@ -370,7 +399,7 @@ it('index reflects shipping in totals when line exists', function () {
     $orderResponse = ($this->createOrder)($user, [
         'supplier_id' => $supplier->id,
         'order_date' => '2026-02-11',
-        'shipping_cents' => 50,
+        'shipping_amount' => '0.50',
     ])->assertCreated();
 
     $orderId = (int) ($orderResponse->json('data.id') ?? 0);
@@ -569,7 +598,7 @@ it('index includes orders created with shipping only', function () {
     ($this->grantPermission)($user, 'purchasing-purchase-orders-create');
 
     ($this->createOrder)($user, [
-        'shipping_cents' => 75,
+        'shipping_amount' => '0.75',
     ])->assertCreated();
 
     $this->actingAs($user)
@@ -602,7 +631,7 @@ it('index reflects updated status after receipt event', function () {
         'unit_price_cents' => 100,
     ])->assertCreated();
 
-    ($this->updateStatus)($user, $orderId, ['status' => 'OPEN'])
+    ($this->updateStatus)($user, $orderId, ['status' => 'SENT'])
         ->assertOk();
 
     $line = DB::table('purchase_order_lines')->where('purchase_order_id', $orderId)->first();
@@ -620,7 +649,7 @@ it('index reflects updated status after receipt event', function () {
     $orderData = collect($orders)->firstWhere('id', $orderId);
 
     expect($orderData)->not->toBeNull();
-    expect($orderData['status'] ?? null)->toBe('PARTIALLY-RECEIVED');
+    expect($orderData['status'] ?? null)->toBe('CREATED');
 });
 
 it('index reflects short-closed status after short-close event', function () {
@@ -648,7 +677,7 @@ it('index reflects short-closed status after short-close event', function () {
         'unit_price_cents' => 100,
     ])->assertCreated();
 
-    ($this->updateStatus)($user, $orderId, ['status' => 'OPEN'])
+    ($this->updateStatus)($user, $orderId, ['status' => 'SENT'])
         ->assertOk();
 
     $line = DB::table('purchase_order_lines')->where('purchase_order_id', $orderId)->first();
@@ -667,5 +696,5 @@ it('index reflects short-closed status after short-close event', function () {
     $orderData = collect($orders)->firstWhere('id', $orderId);
 
     expect($orderData)->not->toBeNull();
-    expect($orderData['status'] ?? null)->toBe('SHORT-CLOSED');
+    expect($orderData['status'] ?? null)->toBe('RECEIVED');
 });

@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * Class WorkflowStage
@@ -16,7 +17,9 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property int $workflow_domain_id
  * @property string $key
  * @property string $name
- * @property string $button_text
+ * @property string $action_verb
+ * @property string $status_complete_label
+ * @property string $completion_mode
  * @property string|null $description
  * @property int $sort_order
  * @property bool $is_active
@@ -35,7 +38,9 @@ class WorkflowStage extends Model
         'workflow_domain_id',
         'key',
         'name',
-        'button_text',
+        'action_verb',
+        'status_complete_label',
+        'completion_mode',
         'description',
         'sort_order',
         'is_active',
@@ -51,13 +56,30 @@ class WorkflowStage extends Model
     ];
 
     /**
-     * Ensure legacy stage writes receive a safe button label.
+     * Ensure workflow stage writes receive safe workflow defaults.
      */
     protected static function booted(): void
     {
         static::saving(function (WorkflowStage $workflowStage): void {
-            if (trim((string) $workflowStage->button_text) === '') {
-                $workflowStage->button_text = (string) $workflowStage->name;
+            if (
+                Schema::hasColumn('workflow_stages', 'action_verb')
+                && trim((string) $workflowStage->action_verb) === ''
+            ) {
+                $workflowStage->action_verb = (string) $workflowStage->name;
+            }
+
+            if (
+                Schema::hasColumn('workflow_stages', 'status_complete_label')
+                && trim((string) $workflowStage->status_complete_label) === ''
+            ) {
+                $workflowStage->status_complete_label = (string) $workflowStage->name;
+            }
+
+            if (
+                Schema::hasColumn('workflow_stages', 'completion_mode')
+                && trim((string) $workflowStage->completion_mode) === ''
+            ) {
+                $workflowStage->completion_mode = 'manual';
             }
         });
     }

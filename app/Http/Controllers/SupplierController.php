@@ -155,6 +155,7 @@ class SupplierController extends Controller
                 'create' => route('purchasing.suppliers.purchase-options.store', $supplier),
                 'update' => url("/purchasing/suppliers/{$supplier->id}/purchase-options/{id}"),
                 'remove' => url("/purchasing/suppliers/{$supplier->id}/purchase-options/{id}"),
+                'conversionCreate' => route('manufacturing.uom-conversions.items.store'),
             ],
             'fields' => [
                 [

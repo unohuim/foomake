@@ -103,12 +103,18 @@ class WorkflowController extends Controller
             'workflow_domain_key' => $stage->workflowDomain?->key,
             'key' => $stage->key,
             'name' => $stage->name,
-            'button_text' => $stage->button_text,
+            'action_verb' => $stage->action_verb,
+            'status_complete_label' => $stage->status_complete_label,
+            'completion_mode' => $stage->completion_mode,
             'description' => $stage->description,
             'sort_order' => $stage->sort_order,
             'is_active' => $stage->is_active,
             'is_inventory_effect_stage' => $stage->is_inventory_effect_stage,
-            'is_seeded_sales_stage' => in_array($stage->key, ['packing', 'packed', 'shipping'], true)
+            'is_seeded_sales_stage' => in_array(
+                $stage->key,
+                ['creating', 'packing', 'shipping', 'invoicing', 'completing'],
+                true
+            )
                 && $stage->workflowDomain?->key === 'sales',
         ];
     }

@@ -443,6 +443,7 @@ class ItemController extends Controller
                 'create' => route('materials.supplier-packages.store', $item),
                 'update' => url("/materials/{$item->id}/supplier-packages/{id}"),
                 'remove' => url("/materials/{$item->id}/supplier-packages/{id}"),
+                'conversionCreate' => route('manufacturing.uom-conversions.items.store'),
             ],
             'fields' => [
                 [
