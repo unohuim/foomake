@@ -261,6 +261,8 @@ Route::middleware('auth')->group(function () {
 
     Route::get('/purchasing/orders', [PurchaseOrderController::class, 'index'])
         ->name('purchasing.orders.index');
+    Route::get('/purchasing/orders/list', [PurchaseOrderController::class, 'list'])
+        ->name('purchasing.orders.list');
     Route::post('/purchasing/orders', [PurchaseOrderController::class, 'store'])
         ->name('purchasing.orders.store');
     Route::get('/purchasing/orders/{purchaseOrder}', [PurchaseOrderController::class, 'show'])

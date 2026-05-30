@@ -130,6 +130,10 @@ beforeEach(function () {
         return $this->actingAs($user)->postJson("/purchasing/orders/{$orderId}/receipts", $payload);
     };
 
+    $this->listOrders = function (User $user, array $query = []) {
+        return $this->actingAs($user)->getJson('/purchasing/orders/list?' . http_build_query($query));
+    };
+
     $this->extractPayload = function ($response, string $payloadId): array {
         $html = $response->getContent();
         $pattern = '/<script type="application\\/json" id="' . preg_quote($payloadId, '/') . '">\s*(.*?)\s*<\\/script>/s';
@@ -140,6 +144,14 @@ beforeEach(function () {
         $payload = json_decode($json, true);
 
         return is_array($payload) ? $payload : [];
+    };
+
+    $this->extractCrudConfig = function ($response): array {
+        preg_match("/data-crud-config='([^']+)'/", $response->getContent(), $matches);
+
+        $config = json_decode(html_entity_decode($matches[1] ?? ''), true);
+
+        return is_array($config) ? $config : [];
     };
 });
 
@@ -157,7 +169,7 @@ it('forbids index without permission', function () {
         ->assertForbidden();
 });
 
-it('renders purchase orders index payload markers', function () {
+it('renders purchase orders index through the configured crud page module shell', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
 
@@ -167,6 +179,9 @@ it('renders purchase orders index payload markers', function () {
         ->get('/purchasing/orders')
         ->assertOk()
         ->assertSee('data-page="purchasing-orders-index"', false)
+        ->assertSee('data-payload="purchasing-orders-index-payload"', false)
+        ->assertSee('data-crud-config=', false)
+        ->assertSee('data-crud-root', false)
         ->assertSee('purchasing-orders-index-payload', false);
 });
 
@@ -239,27 +254,28 @@ it('index shows supplier name, order_date, status, and subtotal', function () {
     expect((int) ($orderData['po_subtotal_cents'] ?? 0))->toBe(500);
 });
 
-it('index includes receive and cancel actions when action metadata is present', function () {
+it('index crud config does not expose row actions', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
 
     ($this->grantPermission)($user, 'purchasing-purchase-orders-create');
 
-    ($this->createOrder)($user, [
-        'order_date' => '2026-02-04',
-    ])->assertCreated();
+    $config = ($this->extractCrudConfig)($this->actingAs($user)->get('/purchasing/orders')->assertOk());
 
-    $response = $this->actingAs($user)->get('/purchasing/orders')->assertOk();
-    $payload = ($this->extractPayload)($response, 'purchasing-orders-index-payload');
-    $orders = $payload['orders'] ?? $payload['purchase_orders'] ?? [];
+    expect($config['actions'] ?? null)->toBe([])
+        ->and($config['columns'] ?? [])->not->toContain('actions')
+        ->and($config['headers'] ?? [])->not->toHaveKey('actions');
+});
 
-    $orderData = $orders[0] ?? [];
+it('index blade does not hardcode purchase order table action markup', function () {
+    $view = file_get_contents(resource_path('views/purchasing/orders/index.blade.php'));
 
-    if (array_key_exists('actions', $orderData)) {
-        expect($orderData['actions'])->toHaveKey('receive');
-        expect($orderData['actions'])->toHaveKey('cancel');
-        expect($orderData['actions'])->toHaveKey('delete');
-    }
+    expect($view)->not->toContain('<table')
+        ->and($view)->not->toContain('>Actions<')
+        ->and($view)->not->toContain('Order actions')
+        ->and($view)->not->toContain('toggleActionMenu')
+        ->and($view)->not->toContain('Receive Purchase Order')
+        ->and($view)->not->toContain('submitReceive');
 });
 
 it('index is tenant scoped', function () {
@@ -511,7 +527,7 @@ it('index includes subtotal when no shipping applied', function () {
     }
 });
 
-it('index includes delete action when actions are present', function () {
+it('index row payloads do not include action metadata', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
 
@@ -527,9 +543,9 @@ it('index includes delete action when actions are present', function () {
 
     $orderData = $orders[0] ?? [];
 
-    if (array_key_exists('actions', $orderData)) {
-        expect($orderData['actions'])->toHaveKey('delete');
-    }
+    expect($orderData)->not->toHaveKey('actions')
+        ->and($orderData)->not->toHaveKey('availableActions')
+        ->and($orderData)->not->toHaveKey('row_actions');
 });
 
 it('index exposes status column for multiple orders', function () {
@@ -699,16 +715,101 @@ it('index reflects short-closed status after short-close event', function () {
     expect($orderData['status'] ?? null)->toBe('RECEIVED');
 });
 
-it('index receive slide-over source blurs received at picker and keeps integer quantities', function () {
+it('purchase orders page module mounts the shared crud renderer without row actions', function () {
     $source = file_get_contents(resource_path('views/purchasing/orders/index.blade.php'));
     $pageModule = file_get_contents(resource_path('js/pages/purchasing-orders-index.js'));
 
-    expect($source)->toContain('x-on:input="collapseReceiveDatePicker($event)"')
-        ->and($source)->toContain('x-on:change="collapseReceiveDatePicker($event)"')
-        ->and($source)->toContain('step="1"')
-        ->and($source)->toContain('inputmode="numeric"')
-        ->and($pageModule)->toContain('collapseReceiveDatePicker(event)')
-        ->and($pageModule)->toContain('input.blur()')
-        ->and($pageModule)->toContain("order.persisted_status = data.data?.persisted_status")
-        ->and($pageModule)->toContain("received_quantity: this.formatWholeQuantity(line.remaining_balance || '0.000000')");
+    expect($source)->toContain('data-crud-root')
+        ->and($source)->toContain('data-crud-config')
+        ->and($source)->not->toContain('Receive Purchase Order')
+        ->and($source)->not->toContain('toggleActionMenu')
+        ->and($pageModule)->toContain("import { parseCrudConfig } from '../lib/crud-config';")
+        ->and($pageModule)->toContain("import { mountCrudRenderer } from '../lib/crud-page';")
+        ->and($pageModule)->toContain("import { createGenericCrud } from '../lib/generic-crud';")
+        ->and($pageModule)->toContain('const crud = createGenericCrud(parseCrudConfig(rootEl));')
+        ->and($pageModule)->toContain('mountCrudRenderer(crudRootEl, {')
+        ->and($pageModule)->toContain('actions: [],')
+        ->and($pageModule)->not->toContain('toggleActionMenu')
+        ->and($pageModule)->not->toContain('openReceive')
+        ->and($pageModule)->not->toContain('submitReceive');
+});
+
+it('index crud config links purchase order rows to the detail page', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermission)($user, 'purchasing-purchase-orders-create');
+
+    $config = ($this->extractCrudConfig)($this->actingAs($user)->get('/purchasing/orders')->assertOk());
+
+    expect($config['detailUrlTemplate'] ?? null)->toBe(url('/purchasing/orders/{id}'))
+        ->and($config['rowDisplay']['columns']['order']['kind'] ?? null)->toBe('stacked-text')
+        ->and($config['rowDisplay']['columns']['order']['urlExpression'] ?? null)->toBe('record.show_url');
+});
+
+it('list endpoint requires authentication', function () {
+    $this->getJson('/purchasing/orders/list')
+        ->assertUnauthorized();
+});
+
+it('list endpoint forbids users without purchase order create permission', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->listOrders)($user)->assertForbidden();
+});
+
+it('list endpoint returns tenant scoped rows for authorized users', function () {
+    $tenantA = ($this->makeTenant)();
+    $tenantB = ($this->makeTenant)();
+
+    $userA = ($this->makeUser)($tenantA);
+    $userB = ($this->makeUser)($tenantB);
+
+    ($this->grantPermission)($userA, 'purchasing-purchase-orders-create');
+    ($this->grantPermission)($userB, 'purchasing-purchase-orders-create');
+
+    $supplierA = ($this->makeSupplier)($tenantA, ['company_name' => 'List Tenant A Supplier']);
+    $supplierB = ($this->makeSupplier)($tenantB, ['company_name' => 'List Tenant B Supplier']);
+
+    $orderA = ($this->createOrder)($userA, [
+        'supplier_id' => $supplierA->id,
+        'order_date' => '2026-02-22',
+    ])->assertCreated();
+
+    ($this->createOrder)($userB, [
+        'supplier_id' => $supplierB->id,
+        'order_date' => '2026-02-23',
+    ])->assertCreated();
+
+    $response = ($this->listOrders)($userA)->assertOk();
+
+    expect(collect($response->json('data'))->pluck('id')->all())
+        ->toContain((int) $orderA->json('data.id'))
+        ->not->toContain((int) DB::table('purchase_orders')->where('tenant_id', $tenantB->id)->value('id'));
+
+    expect(json_encode($response->json('data')))->toContain('List Tenant A Supplier')
+        ->not->toContain('List Tenant B Supplier');
+});
+
+it('list endpoint supports search through the shared crud query contract', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermission)($user, 'purchasing-purchase-orders-create');
+
+    ($this->createOrder)($user, [
+        'po_number' => 'PO-MATCH',
+        'order_date' => '2026-02-24',
+    ])->assertCreated();
+
+    ($this->createOrder)($user, [
+        'po_number' => 'PO-OTHER',
+        'order_date' => '2026-02-25',
+    ])->assertCreated();
+
+    $response = ($this->listOrders)($user, ['search' => 'MATCH'])->assertOk();
+
+    expect(collect($response->json('data'))->pluck('po_number')->all())
+        ->toBe(['PO-MATCH']);
 });

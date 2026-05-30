@@ -104,11 +104,13 @@ class StockMove extends Model
 **Location:**  
 - `app/Http/Controllers/SalesProductController.php`  
 - `app/Http/Controllers/CustomerController.php`  
+- `app/Http/Controllers/PurchaseOrderController.php`
 - `app/Http/Controllers/SupplierController.php`
 - `app/Http/Controllers/MaterialController.php`  
 - `app/Http/Controllers/InventoryCountController.php`  
 - `resources/views/sales/products/index.blade.php`  
 - `resources/views/sales/customers/index.blade.php`  
+- `resources/views/purchasing/orders/index.blade.php`
 - `resources/views/purchasing/suppliers/index.blade.php`
 - `resources/views/materials/index.blade.php`  
 - `resources/views/inventory/counts/index.blade.php`  
@@ -118,6 +120,7 @@ class StockMove extends Model
 - `resources/js/lib/crud-page.js`  
 - `resources/js/pages/sales-products-index.js`  
 - `resources/js/pages/sales-customers-index.js`  
+- `resources/js/pages/purchasing-orders-index.js`
 - `resources/js/pages/purchasing-suppliers-index.js`
 - `resources/js/pages/materials-index.js`
 - `resources/js/pages/inventory-counts-index.js`
@@ -154,7 +157,7 @@ $crudConfig = [
 ```
 
 Notes:
-- Products, Customers, Suppliers, Materials, Inventory Counts, and Make Orders are current reference implementations.
+- Products, Customers, Purchase Orders, Suppliers, Materials, Inventory Counts, and Make Orders are current reference implementations.
 - `detailUrlTemplate` is optional. When present, create flows may redirect to the created record detail page after success.
 - When `detailUrlTemplate` is absent, the existing inline success behavior such as list refresh remains the fallback.
 

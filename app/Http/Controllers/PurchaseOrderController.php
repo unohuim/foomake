@@ -10,6 +10,7 @@ use App\Support\QuantityFormatter;
 use App\Services\Purchasing\PurchaseOrderLifecycleService;
 use App\Services\Workflows\WorkflowTransitionService;
 use Illuminate\Contracts\View\View;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -31,34 +32,56 @@ class PurchaseOrderController extends Controller
     {
         Gate::authorize('purchasing-purchase-orders-create');
 
-        $purchaseOrders = PurchaseOrder::query()
-            ->with('supplier')
-            ->with('lines')
-            ->with('lines.item')
-            ->with('lines.purchaseOption.packUom')
-            ->with('currentWorkflowStage')
-            ->with('lastCompletedWorkflowStage')
-            ->withCount('lines')
-            ->orderByDesc('created_at')
-            ->get();
+        $tenantCurrency = strtoupper(
+            (string) ($request->user()?->tenant?->currency_code ?: config('app.currency_code', 'USD'))
+        );
+        $crudConfig = $this->purchaseOrdersCrudConfig();
+        $purchaseOrders = $this->purchaseOrdersQuery('', 'created_at', 'desc')->get();
+
+        return view('purchasing.orders.index', [
+            'crudConfig' => $crudConfig,
+            'payload' => [
+                'orders' => $this->purchaseOrderIndexRows($purchaseOrders, $tenantCurrency, $lifecycleService),
+                'storeUrl' => $crudConfig['endpoints']['create'],
+                'csrfToken' => csrf_token(),
+                'tenantCurrency' => $tenantCurrency,
+            ],
+        ]);
+    }
+
+    /**
+     * Return the purchase orders list read model for the shared CRUD page module.
+     */
+    public function list(Request $request, PurchaseOrderLifecycleService $lifecycleService): JsonResponse
+    {
+        Gate::authorize('purchasing-purchase-orders-create');
+
+        $crudConfig = $this->purchaseOrdersCrudConfig();
+        $validated = $request->validate([
+            'search' => ['nullable', 'string', 'max:255'],
+            'sort' => ['nullable', 'string', Rule::in($crudConfig['sortable'])],
+            'direction' => ['nullable', 'string', Rule::in(['asc', 'desc'])],
+        ]);
 
         $tenantCurrency = strtoupper(
             (string) ($request->user()?->tenant?->currency_code ?: config('app.currency_code', 'USD'))
         );
+        $search = trim((string) ($validated['search'] ?? ''));
+        $sortColumn = (string) ($validated['sort'] ?? 'created_at');
+        $direction = (string) ($validated['direction'] ?? 'desc');
+        $purchaseOrders = $this->purchaseOrdersQuery($search, $sortColumn, $direction)->get();
 
-        $canReceive = Gate::allows('purchasing-purchase-orders-receive');
-
-        $lineTotalsByOrder = [];
-
-        foreach ($purchaseOrders as $purchaseOrder) {
-            $lineTotalsByOrder[$purchaseOrder->id] = $lifecycleService->computeLineTotals($purchaseOrder);
-        }
-
-        return view('purchasing.orders.index', [
-            'purchaseOrders' => $purchaseOrders,
-            'tenantCurrency' => $tenantCurrency,
-            'canReceive' => $canReceive,
-            'lineTotalsByOrder' => $lineTotalsByOrder,
+        return response()->json([
+            'data' => $this->purchaseOrderIndexRows($purchaseOrders, $tenantCurrency, $lifecycleService),
+            'meta' => [
+                'search' => $search,
+                'sort' => [
+                    'column' => $sortColumn,
+                    'direction' => $direction,
+                ],
+                'allowed_sort_columns' => $crudConfig['sortable'],
+                'total' => $purchaseOrders->count(),
+            ],
         ]);
     }
 
@@ -376,6 +399,168 @@ class PurchaseOrderController extends Controller
         }
 
         return $payload;
+    }
+
+    /**
+     * Build the shared CRUD config for the purchase orders index.
+     *
+     * @return array<string, mixed>
+     */
+    private function purchaseOrdersCrudConfig(): array
+    {
+        return [
+            'resource' => 'purchase-orders',
+            'endpoints' => [
+                'list' => route('purchasing.orders.list'),
+                'create' => route('purchasing.orders.store'),
+                'update' => '',
+                'delete' => '',
+            ],
+            'detailUrlTemplate' => url('/purchasing/orders/{id}'),
+            'columns' => ['order', 'supplier_name', 'status', 'po_grand_total_cents', 'lines_count'],
+            'headers' => [
+                'order' => 'Order',
+                'supplier_name' => 'Supplier',
+                'status' => 'Status',
+                'po_grand_total_cents' => 'Total',
+                'lines_count' => 'Lines',
+            ],
+            'sortable' => ['order_date', 'po_grand_total_cents', 'lines_count'],
+            'labels' => [
+                'searchPlaceholder' => 'Search purchase orders',
+                'createTitle' => 'Create Purchase Order',
+                'createAriaLabel' => 'Create Purchase Order',
+                'emptyState' => 'No purchase orders found.',
+                'actionsAriaLabel' => 'Purchase order actions',
+            ],
+            'permissions' => [
+                'showExport' => false,
+                'showImport' => false,
+                'showCreate' => Gate::allows('purchasing-purchase-orders-create'),
+            ],
+            'rowDisplay' => [
+                'columns' => [
+                    'order' => [
+                        'kind' => 'stacked-text',
+                        'urlExpression' => 'record.show_url',
+                        'subtitleExpression' => "record.order_date || 'No order date'",
+                    ],
+                    'supplier_name' => ['kind' => 'text'],
+                    'status' => ['kind' => 'text'],
+                    'po_grand_total_cents' => ['kind' => 'text'],
+                    'lines_count' => ['kind' => 'text'],
+                ],
+            ],
+            'mobileCard' => [
+                'titleExpression' => "record.order || 'Draft PO'",
+                'subtitleExpression' => "record.supplier_name || 'Supplier not set'",
+                'bodyExpression' => 'purchaseOrderMobileSummary(record)',
+            ],
+            'actions' => [],
+        ];
+    }
+
+    /**
+     * Build the purchase orders index query for configured CRUD consumers.
+     */
+    private function purchaseOrdersQuery(string $search, string $sortColumn, string $direction): Builder
+    {
+        $sortableColumns = [
+            'created_at' => 'purchase_orders.created_at',
+            'order_date' => 'purchase_orders.order_date',
+            'po_grand_total_cents' => 'purchase_orders.po_grand_total_cents',
+            'lines_count' => 'lines_count',
+        ];
+
+        $query = PurchaseOrder::query()
+            ->with('supplier')
+            ->with('lines')
+            ->with('lines.item')
+            ->with('lines.purchaseOption.packUom')
+            ->with('currentWorkflowStage')
+            ->with('lastCompletedWorkflowStage')
+            ->withCount('lines');
+
+        if ($search !== '') {
+            $query->where(function (Builder $nested) use ($search): void {
+                $nested->where('po_number', 'like', '%' . $search . '%')
+                    ->orWhere('status', 'like', '%' . $search . '%')
+                    ->orWhere('order_date', 'like', '%' . $search . '%')
+                    ->orWhereHas('supplier', function (Builder $supplierQuery) use ($search): void {
+                        $supplierQuery->where('company_name', 'like', '%' . $search . '%');
+                    });
+            });
+        }
+
+        $orderColumn = $sortableColumns[$sortColumn] ?? 'purchase_orders.created_at';
+
+        return $query
+            ->orderBy($orderColumn, $direction)
+            ->orderByDesc('purchase_orders.created_at')
+            ->orderByDesc('purchase_orders.id');
+    }
+
+    /**
+     * Build purchase order row payloads for the configured CRUD renderer.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function purchaseOrderIndexRows(
+        iterable $purchaseOrders,
+        string $tenantCurrency,
+        PurchaseOrderLifecycleService $lifecycleService
+    ): array {
+        $rows = [];
+
+        foreach ($purchaseOrders as $purchaseOrder) {
+            $lineTotals = $lifecycleService->computeLineTotals($purchaseOrder);
+            $linesPayload = $purchaseOrder->lines->map(function (PurchaseOrderLine $line) use ($lineTotals) {
+                $packCount = bcadd((string) $line->pack_count, '0', 6);
+                $totals = $lineTotals[$line->id] ?? [];
+                $option = $line->purchaseOption;
+                $packPrecision = (int) ($option?->packUom?->display_precision ?? 1);
+                $packQuantity = $option ? bcadd((string) $option->pack_quantity, '0', 6) : null;
+                $packQuantityDisplay = $packQuantity !== null
+                    ? QuantityFormatter::format($packQuantity, $packPrecision)
+                    : null;
+                $packUom = $option?->packUom?->symbol ?: $option?->packUom?->name;
+
+                return [
+                    'id' => $line->id,
+                    'item_name' => $line->item?->name,
+                    'pack_count' => $packCount,
+                    'pack_precision' => $packPrecision,
+                    'pack_count_display' => QuantityFormatter::format($packCount, $packPrecision),
+                    'unit_context' => $packQuantityDisplay && $packUom ? "{$packQuantityDisplay} {$packUom} pack" : 'Pack',
+                    'received_sum' => $totals['received_sum'] ?? '0.000000',
+                    'received_sum_display' => QuantityFormatter::format($totals['received_sum'] ?? '0.000000', $packPrecision),
+                    'short_closed_sum' => $totals['short_closed_sum'] ?? '0.000000',
+                    'short_closed_sum_display' => QuantityFormatter::format($totals['short_closed_sum'] ?? '0.000000', $packPrecision),
+                    'remaining_balance' => $totals['balance'] ?? $packCount,
+                    'remaining_balance_display' => QuantityFormatter::format($totals['balance'] ?? $packCount, $packPrecision),
+                ];
+            })->values()->all();
+
+            $rows[] = [
+                'id' => $purchaseOrder->id,
+                'order' => $purchaseOrder->po_number ? 'PO #' . $purchaseOrder->po_number : 'Draft PO',
+                'supplier_name' => $purchaseOrder->supplier?->company_name ?: 'Supplier not set',
+                'status' => $purchaseOrder->workflowStatus(),
+                'persisted_status' => $purchaseOrder->status,
+                'is_cancelled' => $purchaseOrder->workflow_cancelled_at !== null,
+                'is_back_ordered' => $purchaseOrder->back_ordered_at !== null,
+                'order_date' => $purchaseOrder->order_date?->format('Y-m-d'),
+                'po_number' => $purchaseOrder->po_number,
+                'po_subtotal_cents' => $purchaseOrder->po_subtotal_cents,
+                'po_grand_total_cents' => $purchaseOrder->po_grand_total_cents,
+                'po_grand_total_display' => $tenantCurrency . ' ' . number_format(((int) $purchaseOrder->po_grand_total_cents) / 100, 2),
+                'lines_count' => $purchaseOrder->lines_count ?? $purchaseOrder->lines->count(),
+                'lines' => $linesPayload,
+                'show_url' => route('purchasing.orders.show', $purchaseOrder),
+            ];
+        }
+
+        return $rows;
     }
 
     /**
