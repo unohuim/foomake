@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Actions\Workflows\EnforceWorkflowStageInventoryEffectInvariantAction;
 use App\Models\WorkflowStage;
+use App\Support\Workflows\WorkflowStatusOptions;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -41,6 +42,7 @@ class WorkflowStageController extends Controller
                 'description' => $validated['description'] ?? null,
                 'sort_order' => (int) $validated['sort_order'],
                 'is_active' => true,
+                'is_core' => false,
                 'is_inventory_effect_stage' => (bool) ($validated['is_inventory_effect_stage'] ?? false),
             ]);
 
@@ -69,6 +71,12 @@ class WorkflowStageController extends Controller
         ]);
 
         $validated = $this->validateStage($request, $workflowStage);
+        $coreError = $this->coreStageUpdateError($workflowStage, $validated);
+
+        if ($coreError !== null) {
+            return $coreError;
+        }
+
         $originalWorkflowDomainId = (int) $workflowStage->workflow_domain_id;
 
         $workflowStage = DB::transaction(function () use (
@@ -105,6 +113,24 @@ class WorkflowStageController extends Controller
     }
 
     /**
+     * Delete a workflow stage.
+     */
+    public function destroy(WorkflowStage $workflowStage): JsonResponse
+    {
+        Gate::authorize('workflow-manage');
+
+        if ($workflowStage->is_core) {
+            return $this->coreStageError('stage', 'Core workflow stages cannot be deleted.');
+        }
+
+        $workflowStage->delete();
+
+        return response()->json([
+            'message' => 'Workflow stage deleted.',
+        ]);
+    }
+
+    /**
      * Reorder workflow stages within a domain.
      */
     public function reorder(Request $request): JsonResponse
@@ -134,6 +160,10 @@ class WorkflowStageController extends Controller
             ], 422);
         }
 
+        if ($stages->contains(fn (WorkflowStage $stage): bool => $stage->is_core)) {
+            return $this->coreStageError('ordered_ids', 'Core workflow stages cannot be reordered.');
+        }
+
         DB::transaction(function () use ($validated, $stages, $request): void {
             foreach (array_values($validated['ordered_ids']) as $index => $stageId) {
                 $stage = $stages->get((int) $stageId);
@@ -160,6 +190,20 @@ class WorkflowStageController extends Controller
     private function validateStage(Request $request, ?WorkflowStage $workflowStage = null): array
     {
         $tenantId = (int) $request->user()->tenant_id;
+        $workflowDomainId = (int) ($request->input('workflow_domain_id') ?? $workflowStage?->workflow_domain_id);
+        $statusLabels = app(WorkflowStatusOptions::class)->forDomainId($workflowDomainId);
+
+        if ($workflowStage !== null && ! $request->has('status_complete_label')) {
+            $request->merge([
+                'status_complete_label' => $workflowStage->status_complete_label,
+            ]);
+        }
+
+        if ($workflowStage !== null && ! $request->has('completion_mode')) {
+            $request->merge([
+                'completion_mode' => $workflowStage->completion_mode,
+            ]);
+        }
 
         return $request->validate([
             'workflow_domain_id' => ['required', 'integer', Rule::exists('workflow_domains', 'id')],
@@ -176,7 +220,7 @@ class WorkflowStageController extends Controller
             ],
             'name' => ['required', 'string', 'max:255'],
             'action_verb' => ['required', 'string', 'max:255'],
-            'status_complete_label' => ['nullable', 'string', 'max:255'],
+            'status_complete_label' => ['required', 'string', Rule::in($statusLabels)],
             'completion_mode' => ['nullable', 'string', Rule::in(['manual', 'automatic'])],
             'description' => ['nullable', 'string'],
             'sort_order' => ['required', 'integer', 'min:0'],
@@ -191,6 +235,56 @@ class WorkflowStageController extends Controller
     private function generatedStageKey(string $name): string
     {
         return Str::slug($name);
+    }
+
+    /**
+     * Build a core-stage lock error when immutable fields are changed.
+     *
+     * @param array<string, mixed> $validated
+     */
+    private function coreStageUpdateError(WorkflowStage $stage, array $validated): ?JsonResponse
+    {
+        if (! $stage->is_core) {
+            return null;
+        }
+
+        $lockedFields = [
+            'workflow_domain_id',
+            'key',
+            'name',
+            'action_verb',
+            'status_complete_label',
+            'completion_mode',
+            'sort_order',
+        ];
+
+        foreach ($lockedFields as $field) {
+            $incoming = $validated[$field] ?? null;
+            $current = $stage->getAttribute($field);
+
+            if ((string) $incoming !== (string) $current) {
+                return $this->coreStageError($field, 'Core workflow stage fields cannot be changed.');
+            }
+        }
+
+        if (! (bool) $validated['is_active']) {
+            return $this->coreStageError('is_active', 'Core workflow stages cannot be deactivated.');
+        }
+
+        return null;
+    }
+
+    /**
+     * Build a validation-style response for core-stage lock failures.
+     */
+    private function coreStageError(string $field, string $message): JsonResponse
+    {
+        return response()->json([
+            'message' => $message,
+            'errors' => [
+                $field => [$message],
+            ],
+        ], 422);
     }
 
     /**
@@ -212,6 +306,7 @@ class WorkflowStageController extends Controller
             'description' => $stage->description,
             'sort_order' => $stage->sort_order,
             'is_active' => $stage->is_active,
+            'is_core' => $stage->is_core,
             'is_inventory_effect_stage' => $stage->is_inventory_effect_stage,
         ];
     }

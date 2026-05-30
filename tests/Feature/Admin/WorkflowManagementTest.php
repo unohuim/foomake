@@ -81,6 +81,7 @@ beforeEach(function () {
             ], [
                 'name' => $stage['name'],
                 'action_verb' => $stage['action_verb'],
+                'status_complete_label' => 'OPEN',
                 'description' => null,
                 'sort_order' => $stage['sort_order'],
                 'is_active' => true,
@@ -102,6 +103,12 @@ beforeEach(function () {
             'key' => 'stage-' . $sequence,
             'name' => 'Stage ' . $sequence,
             'action_verb' => 'Stage ' . $sequence,
+            'status_complete_label' => match ($domain->key) {
+                'sales' => 'OPEN',
+                'purchasing' => 'CREATED',
+                'manufacturing', 'inventory' => 'SCHEDULED',
+                default => 'OPEN',
+            },
             'description' => null,
             'sort_order' => 100,
             'is_active' => true,
@@ -193,7 +200,7 @@ it('5. seeded sales operational stages exist with exact keys', function () {
         ->pluck('key')
         ->all();
 
-    expect($keys)->toBe(['creating', 'packing', 'packed', 'shipping', 'invoicing', 'completing']);
+    expect($keys)->toBe(['creating', 'packing', 'shipping', 'invoicing', 'completing']);
 });
 
 it('6. sales does not seed legacy system lifecycle statuses while inventory seeds creating and completing', function () {
@@ -283,20 +290,106 @@ it('12. user with workflow manage can access admin workflows page and payload', 
         ->assertSee('data-page="admin-workflows-index"', false);
 
     $payload = ($this->extractPayload)($response, 'admin-workflows-index-payload');
+    $purchasingDomain = collect($payload['domains'] ?? [])->firstWhere('key', 'purchasing');
+    $purchasingStatusOptions = $payload['statusOptionsByDomainId'][(string) ($purchasingDomain['id'] ?? 0)] ?? [];
 
     expect($payload['stageStoreUrl'] ?? null)->toBe(route('admin.workflows.stages.store'))
         ->and($payload['taskTemplateStoreUrl'] ?? null)->toBe(route('admin.workflows.task-templates.store'))
         ->and($payload['domains'][0]['key'] ?? null)->toBe('sales')
         ->and($payload['stages'][0]['action_verb'] ?? null)->toBeString()
+        ->and($purchasingStatusOptions)->not->toBeEmpty()
+        ->and($purchasingStatusOptions)->toContain('PARTIALLY_RECEIVED')
+        ->and($purchasingStatusOptions)->toContain('OPEN')
         ->and($response->getContent())->not->toContain('>Key<')
         ->and($response->getContent())->not->toContain('Reorder active stages');
 });
 
-it('12a. workflow stage admin UI hides the key field and shows action verb plus sort order', function () {
+it('12c. stage config payload includes non-empty approved purchasing status options independent of stage records', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    ($this->grantPermission)($user, 'workflow-manage');
+
+    $payload = ($this->extractPayload)(
+        $this->actingAs($user)->get(route('admin.workflows.index'))->assertOk(),
+        'admin-workflows-index-payload'
+    );
+
+    $purchasingDomain = collect($payload['domains'] ?? [])->firstWhere('key', 'purchasing');
+    $purchasingStatusOptions = $payload['statusOptionsByDomainId'][(string) ($purchasingDomain['id'] ?? 0)] ?? [];
+    $purchasingStageLabels = WorkflowStage::withoutGlobalScopes()
+        ->where('tenant_id', $tenant->id)
+        ->where('workflow_domain_id', $purchasingDomain['id'] ?? 0)
+        ->pluck('status_complete_label')
+        ->all();
+
+    expect($payload)->toHaveKey('statusOptionsByDomainId')
+        ->and($payload['statusOptionsByDomainId'])->toHaveKey((string) $purchasingDomain['id'])
+        ->and($purchasingStatusOptions)->not->toBeEmpty()
+        ->and($purchasingStatusOptions)->toContain('DRAFT')
+        ->and($purchasingStatusOptions)->toContain('OPEN')
+        ->and($purchasingStatusOptions)->toContain('PARTIALLY_RECEIVED')
+        ->and($purchasingStatusOptions)->toContain('RECEIVED')
+        ->and($purchasingStatusOptions)->toContain('COMPLETED')
+        ->and($purchasingStatusOptions)->toContain('CANCELLED')
+        ->and($purchasingStageLabels)->not->toContain('OPEN')
+        ->and($purchasingStageLabels)->not->toContain('PARTIALLY_RECEIVED');
+});
+
+it('12d. stage config source keeps existing valid status selected when domain changes', function () {
+    $source = file_get_contents(resource_path('js/pages/admin-workflows-index.js'));
+    $view = file_get_contents(resource_path('views/admin/workflows/index.blade.php'));
+
+    expect($source)->toContain('handleStageDomainChanged()')
+        ->and($source)->toContain('statusOptionsByDomainId')
+        ->and($source)->toContain('options.includes(this.stageForm.status_complete_label)')
+        ->and($view)->toContain('x-on:change="handleStageDomainChanged()"')
+        ->and($view)->toContain('<template x-for="status in statusOptionsForStageForm()" :key="status">')
+        ->and($view)->toContain('<option :value="status" x-text="status"></option>');
+});
+
+it('12e. workflow stage validation rejects arbitrary status complete labels', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    ($this->grantPermission)($user, 'workflow-manage');
+
+    $this->actingAs($user)->postJson(route('admin.workflows.stages.store'), [
+        'workflow_domain_id' => ($this->purchasingDomain)()->id,
+        'name' => 'Unapproved Status',
+        'action_verb' => 'REVIEW',
+        'status_complete_label' => 'MANUAL_STATUS',
+        'description' => null,
+        'sort_order' => 40,
+        'is_inventory_effect_stage' => false,
+    ])->assertStatus(422)->assertJsonValidationErrors(['status_complete_label']);
+});
+
+it('12f. workflow stage validation saves approved enum status labels', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    ($this->grantPermission)($user, 'workflow-manage');
+
+    $response = $this->actingAs($user)->postJson(route('admin.workflows.stages.store'), [
+        'workflow_domain_id' => ($this->purchasingDomain)()->id,
+        'name' => 'Open Review',
+        'action_verb' => 'REVIEW',
+        'status_complete_label' => 'OPEN',
+        'description' => null,
+        'sort_order' => 40,
+        'is_inventory_effect_stage' => false,
+    ])->assertCreated();
+
+    expect($response->json('data.status_complete_label'))->toBe('OPEN')
+        ->and(WorkflowStage::withoutGlobalScopes()->where('key', 'open-review')->value('status_complete_label'))->toBe('OPEN');
+});
+
+it('12a. workflow stage admin UI hides the key field and shows action verb, status dropdown, and sort order', function () {
     $source = file_get_contents(resource_path('views/admin/workflows/index.blade.php'));
 
     expect($source)->not->toContain('>Key<')
         ->and($source)->toContain('Action verb')
+        ->and($source)->toContain('Status complete label')
+        ->and($source)->toContain('statusOptionsForStageForm()')
+        ->and($source)->toContain(':disabled="editingCoreStage()"')
         ->and($source)->toContain('Sort order')
         ->and($source)->not->toContain('Reorder active stages');
 });
@@ -341,6 +434,7 @@ it('15. admin can create a workflow stage', function () {
         'workflow_domain_id' => ($this->salesDomain)()->id,
         'name' => 'PLANNED',
         'action_verb' => 'PLAN',
+        'status_complete_label' => 'OPEN',
         'description' => 'Before shipping',
         'sort_order' => 1,
     ])->assertCreated();
@@ -391,6 +485,7 @@ it('16a. workflow stage create and update reject missing action_verb', function 
     $this->actingAs($user)->postJson(route('admin.workflows.stages.store'), [
         'workflow_domain_id' => ($this->salesDomain)()->id,
         'name' => 'SCHEDULED',
+        'status_complete_label' => 'OPEN',
         'sort_order' => 10,
     ])->assertStatus(422)->assertJsonValidationErrors(['action_verb']);
 
@@ -472,6 +567,7 @@ it('20. duplicate workflow stage keys are blocked per tenant and domain', functi
     $this->actingAs($user)->postJson(route('admin.workflows.stages.store'), [
         'workflow_domain_id' => ($this->salesDomain)()->id,
         'name' => 'Packing',
+        'status_complete_label' => 'OPEN',
         'description' => null,
         'sort_order' => 40,
     ])->assertStatus(422)->assertJsonValidationErrors(['key']);
@@ -495,6 +591,7 @@ it('22. workflow stage sort orders persist exact numeric values without string c
         'workflow_domain_id' => ($this->salesDomain)()->id,
         'name' => 'First Stage',
         'action_verb' => 'FIRST',
+        'status_complete_label' => 'OPEN',
         'description' => null,
         'sort_order' => 1,
     ])->assertCreated();
@@ -503,6 +600,7 @@ it('22. workflow stage sort orders persist exact numeric values without string c
         'workflow_domain_id' => ($this->salesDomain)()->id,
         'name' => 'Second Stage',
         'action_verb' => 'SECOND',
+        'status_complete_label' => 'OPEN',
         'description' => null,
         'sort_order' => 2,
     ])->assertCreated();

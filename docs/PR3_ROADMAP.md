@@ -271,7 +271,7 @@ Sales orders must update inventory.
 - `CANCELLED` creates no stock moves
 - Retrying completion must not create duplicate stock moves
 - If stock move creation fails, the order must remain `OPEN` and no partial stock moves may persist
-- This historical slice was later replaced by the packed-stage inventory posting model introduced by PR3-SO-006 and retained under PR3-SO-007
+- This historical slice was later replaced by the PACKED-status inventory posting model introduced by PR3-SO-006 and retained under PR3-SO-007
 
 ---
 
@@ -303,7 +303,7 @@ Extend the Sales Order lifecycle with operational statuses.
 - Make Orders remain manufacturing-only
 - Do not add custom stages in this PR
 - Do not add full task management in this PR unless explicitly scoped later
-- PR3-SO-007 later keeps `packing`, `packed`, and `shipping` as seeded defaults but moves operational stage ordering into tenant-scoped workflow stages backed by the database
+- PR3-SO-007 later keeps `packing` and `shipping` as seeded defaults but moves operational stage ordering into tenant-scoped workflow stages backed by the database
 
 ---
 
@@ -390,8 +390,8 @@ Introduce domain-general workflow infrastructure for operational stages and gene
 - `DRAFT`, `OPEN`, `COMPLETED`, and `CANCELLED` remain system statuses and cannot be reordered through workflow admin UI
 - Inactive stages are hidden by default
 - The admin UI includes a show-inactive toggle
-- Default sales stages are seeded idempotently per tenant and do not duplicate existing `packing`, `packed`, or `shipping` rows
-- Runtime Sales Order stage resolution must use active sales workflow stages from the database rather than a hardcoded `packing -> packed -> shipping` fallback
+- Default sales stages are seeded idempotently per tenant and do not duplicate existing `packing` or `shipping` rows
+- Runtime Sales Order stage resolution must use active sales workflow stages from the database rather than a hardcoded operational fallback
 
 **Implemented Task Template Rules**
 
@@ -437,7 +437,7 @@ Introduce domain-general workflow infrastructure for operational stages and gene
 - Task generation happens only after the underlying stage transition succeeds
 - `OPEN -> first active sales workflow stage` runs existing fulfillment availability checks before generating tasks
 - Inventory consumption still occurs at `packing -> packed` when those seeded default stages exist in the tenant workflow
-- `packed -> shipping` task generation occurs only after the successful stage transition
+- `PACKED -> SHIPPING` task generation occurs only after the successful stage transition
 - Forward Sales Order lifecycle transitions remain gated by:
     1. existing Sales Order domain rules such as packing and inventory rules
     2. completion of current-stage generated tasks
@@ -515,7 +515,7 @@ Tasks accordion:
 - New active sales stages change future Sales Order transition order
 - Deactivating a sales stage removes it from future Sales Order transition order
 - Reordering active sales stages changes future Sales Order transition order
-- Seeded `packing`, `packed`, and `shipping` stages are defaults only and do not override database-backed runtime ordering
+- Seeded `packing` and `shipping` stages are defaults only and do not override database-backed runtime ordering
 - Workflow task template CRUD
 - Workflow task template active/inactive behavior
 - Task generation from active templates

@@ -31,6 +31,8 @@ export function mount(rootEl, payload) {
         users: safePayload.users || [],
         stageStoreUrl: safePayload.stageStoreUrl || '',
         stageUpdateUrlBase: safePayload.stageUpdateUrlBase || '',
+        stageDeleteUrlBase: safePayload.stageDeleteUrlBase || '',
+        statusOptionsByDomainId: safePayload.statusOptionsByDomainId || safePayload.statusOptionsByDomain || {},
         taskTemplateStoreUrl: safePayload.taskTemplateStoreUrl || '',
         taskTemplateUpdateUrlBase: safePayload.taskTemplateUpdateUrlBase || '',
         taskTemplateReorderUrl: safePayload.taskTemplateReorderUrl || '',
@@ -99,6 +101,25 @@ export function mount(rootEl, payload) {
                 is_inventory_effect_stage: !!stage.is_inventory_effect_stage,
             };
         },
+        editingCoreStage() {
+            if (this.stageFormMode !== 'edit' || !this.editingStageId) {
+                return false;
+            }
+
+            const stage = this.stages.find((entry) => entry.id === this.editingStageId);
+
+            return !!stage?.is_core;
+        },
+        statusOptionsForStageForm() {
+            return this.statusOptionsByDomainId[String(this.stageForm.workflow_domain_id)] || [];
+        },
+        handleStageDomainChanged() {
+            const options = this.statusOptionsForStageForm();
+
+            if (!options.includes(this.stageForm.status_complete_label)) {
+                this.stageForm.status_complete_label = '';
+            }
+        },
         resetStageForm() {
             this.openStageCreate();
         },
@@ -125,7 +146,8 @@ export function mount(rootEl, payload) {
             });
 
             if (!response.ok) {
-                this.showToast('error', 'Unable to save workflow stage.');
+                const data = await response.json().catch(() => ({}));
+                this.showToast('error', data.message || 'Unable to save workflow stage.');
                 return;
             }
 
@@ -187,13 +209,36 @@ export function mount(rootEl, payload) {
             });
 
             if (!response.ok) {
-                this.showToast('error', 'Unable to update workflow stage.');
+                const data = await response.json().catch(() => ({}));
+                this.showToast('error', data.message || 'Unable to update workflow stage.');
                 return;
             }
 
             const data = await response.json();
             this.upsertStage(data.data || {});
             this.showToast('success', 'Workflow stage updated.');
+        },
+        async deleteStage(stage) {
+            if (!stage || stage.is_core || !this.stageDeleteUrlBase) {
+                return;
+            }
+
+            const response = await fetch(`${this.stageDeleteUrlBase}/${stage.id}`, {
+                method: 'DELETE',
+                headers: {
+                    Accept: 'application/json',
+                    'X-CSRF-TOKEN': this.csrfToken,
+                },
+            });
+
+            if (!response.ok) {
+                const data = await response.json().catch(() => ({}));
+                this.showToast('error', data.message || 'Unable to delete workflow stage.');
+                return;
+            }
+
+            this.stages = this.stages.filter((entry) => entry.id !== stage.id);
+            this.showToast('success', 'Workflow stage deleted.');
         },
         openTaskTemplateCreate() {
             this.taskTemplateFormMode = 'create';

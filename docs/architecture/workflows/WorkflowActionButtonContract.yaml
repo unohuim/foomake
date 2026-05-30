@@ -16,8 +16,8 @@ when_not_to_use:
 rules:
   - The button receives JSON state only.
   - The closed button text is the derived workflow status.
-  - The primary dropdown action is the current stage `action_verb`.
-  - The only v1 dropdown action types are completing the current stage and cancelling when allowed.
+  - The primary dropdown action is the current stage `action_verb`, except Purchase Order receiving opens the PO-level receipt slide-over instead of auto-completing receipt inventory.
+  - The v1 dropdown action types are completing the current stage, opening Purchase Order receiving or short-close UI actions, and cancelling when allowed.
   - The component submits actions through AJAX and replaces local workflow state from the JSON response.
   - The component must not introduce global JavaScript state.
   - UI action visibility is not authorization.

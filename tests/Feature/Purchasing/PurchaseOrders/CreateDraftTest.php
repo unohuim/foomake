@@ -227,7 +227,7 @@ it('keeps status as DRAFT even if payload includes status', function () {
     ($this->grantPermission)($user, 'purchasing-purchase-orders-create');
 
     ($this->createOrder)($user, [
-        'status' => 'SENT',
+        'status' => 'CREATED',
     ])->assertCreated();
 
     $order = ($this->fetchLatestOrder)($tenant->id);

@@ -34,7 +34,8 @@ class PurchaseOrder extends Model
     use HasTenantScope;
 
     public const STATUS_DRAFT = 'DRAFT';
-    public const STATUS_SENT = 'SENT';
+    public const STATUS_CREATED = 'CREATED';
+    public const STATUS_PARTIALLY_RECEIVED = 'PARTIALLY_RECEIVED';
     public const STATUS_RECEIVED = 'RECEIVED';
     public const STATUS_COMPLETED = 'COMPLETED';
     public const STATUS_CANCELLED = 'CANCELLED';
@@ -49,7 +50,8 @@ class PurchaseOrder extends Model
     {
         return [
             self::STATUS_DRAFT,
-            self::STATUS_SENT,
+            self::STATUS_CREATED,
+            self::STATUS_PARTIALLY_RECEIVED,
             self::STATUS_RECEIVED,
             self::STATUS_COMPLETED,
             self::STATUS_CANCELLED,
@@ -89,7 +91,10 @@ class PurchaseOrder extends Model
      */
     public function isReceivingStage(): bool
     {
-        return $this->status === self::STATUS_SENT && ! $this->isCancelled();
+        return in_array($this->status, [
+            self::STATUS_CREATED,
+            self::STATUS_PARTIALLY_RECEIVED,
+        ], true) && ! $this->isCancelled();
     }
 
     /**
@@ -105,6 +110,10 @@ class PurchaseOrder extends Model
             return $this->status === self::STATUS_CANCELLED
                 ? self::STATUS_CANCELLED
                 : self::STATUS_DRAFT;
+        }
+
+        if ($this->status === self::STATUS_PARTIALLY_RECEIVED) {
+            return self::STATUS_PARTIALLY_RECEIVED;
         }
 
         $completedLabel = $this->lastCompletedWorkflowStage?->status_complete_label;

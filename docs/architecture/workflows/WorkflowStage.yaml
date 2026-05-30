@@ -5,9 +5,12 @@ location:
   - app/Actions/Workflows/ResolveSalesWorkflowStageAction.php
   - app/Actions/Workflows/SeedDefaultWorkflowStagesForTenantAction.php
   - app/Models/WorkflowStage.php
+  - app/Support/Workflows/WorkflowStatusOptions.php
   - database/migrations/2026_05_07_000002_create_workflow_stages_table.php
   - database/migrations/2026_05_20_000001_add_is_inventory_effect_stage_to_workflow_stages_table.php
   - database/migrations/2026_05_28_000003_add_workflow_foundation_fields.php
+  - database/migrations/2026_05_30_000001_add_is_core_to_workflow_stages.php
+  - database/migrations/2026_05_30_000002_remove_packed_sales_workflow_stage.php
   - database/seeders/WorkflowStageSeeder.php
   - docs/PR3_ROADMAP.md
 purpose: Define the tenant-scoped operational stage layer that sits inside a workflow domain and drives task generation and lifecycle gating.
@@ -27,7 +30,12 @@ rules:
   - `name` is the present-tense period of work.
   - `action_verb` is the verb shown for completing the current stage.
   - `status_complete_label` is the derived status after the stage completes.
+  - `status_complete_label` must be selected from `WorkflowStatusOptions` for the stage's workflow domain.
   - `completion_mode` must be `manual` or `automatic`.
+  - Seeded/default workflow stages are core stages with `is_core = true`.
+  - User-created workflow stages default to `is_core = false`.
+  - Core stages cannot be deleted or deactivated.
+  - Core stages cannot change `key`, `name`, `action_verb`, `status_complete_label`, `completion_mode`, `workflow_domain_id`, or `sort_order`.
   - A stage key must be unique within its tenant and workflow domain.
   - Stage keys are system-generated from the stage name when a stage is created.
   - Generated stage-key uniqueness must be validated before insert, using the normal Laravel validation error shape.
@@ -36,7 +44,7 @@ rules:
   - The same stage key may exist in different workflow domains.
   - Stages support active and inactive state.
   - Stages support a stage-level is_inventory_effect_stage marker when a domain adopts inventory-effect stage configuration.
-  - Admin users may create, edit, deactivate, and reactivate operational stages within the tenant/domain scope.
+  - Admin users may create, edit, deactivate, and reactivate non-core operational stages within the tenant/domain scope; core-stage edits are limited to fields outside the core lock list.
   - Workflow admin create and edit flows must require both `name` and `action_verb`.
   - Default seeding must explicitly set `completion_mode` for every seeded stage.
   - Creating, Receiving, Packing, Shipping, Invoicing, and Making stages are manual by default.
@@ -48,8 +56,8 @@ rules:
   - Current-stage chips, badges, and status surfaces must render from `workflow_stages.name` rather than `workflow_stages.action_verb`.
   - Workflow transition buttons must render from `workflow_stages.action_verb`.
   - Default stage seeding must update stale labels for existing tenant stages.
-  - Default sales workflow stages are seeded idempotently per tenant as Creating, Packing, Packed, Shipping, Invoicing, Completing, and inactive Cancelling, with Packed marked as the inventory-effect stage.
-  - Default purchasing workflow stages are seeded idempotently per tenant as Creating, Receiving, Completing, and inactive Cancelling, with Receiving marked as the inventory-effect stage.
+  - Default sales workflow stages are seeded idempotently per tenant as Creating, Packing, Shipping, Invoicing, Completing, and inactive Cancelling, with Packing marked as the inventory-effect stage and no separate Packed stage.
+  - Default purchasing workflow stages are seeded idempotently per tenant as active Creating, Receiving, and Completing stages plus inactive Cancelling; Creating completes to CREATED, Receiving completes to RECEIVED and is marked as the inventory-effect stage.
   - Default manufacturing workflow stages are seeded idempotently per tenant as Creating, Making, Completing, and inactive Cancelling, with Making marked as the inventory-effect stage.
   - Manufacturing default-stage seeding must not add defaults when a tenant already has configured manufacturing workflow stages; existing tenant-configured stages remain the operational source of truth.
   - Default inventory workflow stages are seeded idempotently per tenant as Creating, Completing, and inactive Cancelling, with Completing marked as the inventory-effect stage.
@@ -62,6 +70,7 @@ public_interface:
   - ResolveSalesWorkflowStageAction::nextActiveStage()
   - SeedDefaultWorkflowStagesForTenantAction::execute()
   - WorkflowStageInventoryEffectInvariant.yaml
+  - WorkflowStatusOptions::forDomainId()
   - docs/architecture/workflows/WorkflowDomain.yaml
   - docs/architecture/workflows/WorkflowTaskTemplate.yaml
   - workflow-manage

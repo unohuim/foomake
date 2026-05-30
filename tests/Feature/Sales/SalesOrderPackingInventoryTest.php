@@ -800,7 +800,7 @@ it('59. sales inventory posting follows the marked inventory-effect stage instea
         ->and(($this->fetchOrder)($order)->status)->toBe(SalesOrder::STATUS_SHIPPING);
 });
 
-it('60. entering an unmarked packed stage creates no stock moves when another stage owns the inventory effect', function () {
+it('60. packing to packed creates no stock moves when another stage owns the inventory effect', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
     $customer = ($this->createCustomer)($tenant);
@@ -844,7 +844,7 @@ it('61. failure at the marked inventory-effect stage leaves the sales order in t
         ->and(($this->fetchOrderMoves)($order))->toHaveCount(0);
 });
 
-it('62. default packed marker continues to preserve the existing sales inventory timing', function () {
+it('62. default packing marker continues to preserve the existing sales inventory timing', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
     $customer = ($this->createCustomer)($tenant);
@@ -877,6 +877,7 @@ it('63. cancellation still creates reversing moves after inventory posts at a mo
     ($this->markInventoryEffectStage)($tenant, 'packing');
 
     ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKING)->assertOk();
+    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKED)->assertOk();
 
     $beforeCancelCount = ($this->fetchOrderMoves)($order)->count();
 

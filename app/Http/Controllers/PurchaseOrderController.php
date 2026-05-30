@@ -361,6 +361,7 @@ class PurchaseOrderController extends Controller
             'po_number' => $purchaseOrder->po_number,
             'notes' => $purchaseOrder->notes,
             'status' => $purchaseOrder->workflowStatus(),
+            'persisted_status' => $purchaseOrder->status,
             'is_cancelled' => $purchaseOrder->workflow_cancelled_at !== null,
             'is_editable' => $purchaseOrder->isWorkflowEditable(),
             'is_back_ordered' => $purchaseOrder->back_ordered_at !== null,

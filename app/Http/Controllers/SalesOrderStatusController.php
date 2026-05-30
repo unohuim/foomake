@@ -75,7 +75,9 @@ class SalesOrderStatusController extends Controller
                     $targetStatus,
                     $packedStage->key
                 ),
-                $targetStage !== null && $targetStage->is_inventory_effect_stage => $packSalesOrderAction->execute(
+                $targetStatus !== SalesOrder::STATUS_PACKING
+                    && $targetStage !== null
+                    && $targetStage->is_inventory_effect_stage => $packSalesOrderAction->execute(
                     $salesOrder,
                     $buildPlanAction,
                     $assertWorkflowStageTasksCompletedAction,

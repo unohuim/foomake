@@ -127,7 +127,8 @@ Do not introduce new enum values without updating this document.
 **Allowed values:**
 
 - `DRAFT`
-- `SENT`
+- `CREATED`
+- `PARTIALLY_RECEIVED`
 - `RECEIVED`
 - `COMPLETED`
 - `CANCELLED`
@@ -135,16 +136,20 @@ Do not introduce new enum values without updating this document.
 **Semantic meaning:**
 
 - `DRAFT`: Purchase order is being assembled and may be edited.
-- `SENT`: Purchase order has been issued to the supplier and may receive inventory.
+- `CREATED`: Purchase order has been issued to the supplier and may receive inventory.
+- `PARTIALLY_RECEIVED`: One or more receipt lines have been posted, and at least one receivable balance remains open.
 - `RECEIVED`: All line balances have been received or short-closed.
 - `COMPLETED`: Purchase order lifecycle is complete.
 - `CANCELLED`: Purchase order has been cancelled and is terminal.
 
 **Notes:**
 
-- `purchase_orders.status` must persist only the five values above.
+- `purchase_orders.status` must persist only the six values above.
+- Purchasing workflow-stage `status_complete_label` options are provided by the workflow status option provider and include these persisted values plus `OPEN` for workflow-derived stage configuration.
+- Default seeded purchasing stages do not include a separate `PARTIALLY_RECEIVED` stage; receipt logic persists `PARTIALLY_RECEIVED` while the PO remains in the normal Receiving stage.
 - Purchase Order workflow displays may derive status from workflow fields during migration; the legacy column remains mirrored temporarily.
 - Back Order and Short Close are actions/events, not status values.
+- Do not use `PARTIAL` or `RECEIVING` as purchase order statuses.
 
 ---
 
@@ -198,7 +203,7 @@ Do not introduce new enum values without updating this document.
 **Seeded default operational values:**
 
 - `PACKING`: Default seeded sales workflow stage where operational packing begins. No stock moves have been posted yet.
-- `PACKED`: Default seeded sales workflow stage where inventory consumption has been posted.
+- `PACKED`: Result of completing the default seeded `Packing` workflow stage, where inventory consumption has been posted.
 - `SHIPPING`: Default seeded sales workflow stage where carrier pickup or shipment handoff has occurred.
 
 **Notes:**

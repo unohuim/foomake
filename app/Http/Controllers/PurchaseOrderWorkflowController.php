@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\PurchaseOrder;
+use App\Services\Purchasing\PurchaseOrderLifecycleService;
 use App\Services\Workflows\WorkflowTransitionService;
 use DomainException;
 use Illuminate\Http\JsonResponse;
@@ -19,6 +20,7 @@ class PurchaseOrderWorkflowController extends Controller
     public function complete(
         Request $request,
         PurchaseOrder $purchaseOrder,
+        PurchaseOrderLifecycleService $lifecycleService,
         WorkflowTransitionService $workflowTransitionService
     ): JsonResponse {
         try {
@@ -36,7 +38,8 @@ class PurchaseOrderWorkflowController extends Controller
                 'purchase_order' => $this->purchaseOrderPayload($purchaseOrder->fresh([
                     'currentWorkflowStage',
                     'lastCompletedWorkflowStage',
-                ])),
+                    'lines',
+                ]), $lifecycleService),
             ],
         ]);
     }
@@ -47,6 +50,7 @@ class PurchaseOrderWorkflowController extends Controller
     public function cancel(
         Request $request,
         PurchaseOrder $purchaseOrder,
+        PurchaseOrderLifecycleService $lifecycleService,
         WorkflowTransitionService $workflowTransitionService
     ): JsonResponse {
         try {
@@ -64,7 +68,8 @@ class PurchaseOrderWorkflowController extends Controller
                 'purchase_order' => $this->purchaseOrderPayload($purchaseOrder->fresh([
                     'currentWorkflowStage',
                     'lastCompletedWorkflowStage',
-                ])),
+                    'lines',
+                ]), $lifecycleService),
             ],
         ]);
     }
@@ -87,13 +92,26 @@ class PurchaseOrderWorkflowController extends Controller
      *
      * @return array<string, bool|int|string|null>
      */
-    private function purchaseOrderPayload(PurchaseOrder $purchaseOrder): array
-    {
+    private function purchaseOrderPayload(
+        PurchaseOrder $purchaseOrder,
+        PurchaseOrderLifecycleService $lifecycleService
+    ): array {
+        $lineTotals = $lifecycleService->computeLineTotals($purchaseOrder);
+
         return [
             'id' => $purchaseOrder->id,
             'status' => $purchaseOrder->workflowStatus(),
+            'persisted_status' => $purchaseOrder->status,
             'is_cancelled' => $purchaseOrder->workflow_cancelled_at !== null,
             'is_editable' => $purchaseOrder->isWorkflowEditable(),
+            'is_back_ordered' => $purchaseOrder->back_ordered_at !== null,
+            'has_receipts' => $purchaseOrder->receipts()->exists(),
+            'can_receive' => $purchaseOrder->isReceivingStage()
+                && collect($lineTotals)->contains(fn (array $totals): bool => bccomp(
+                    $totals['balance'],
+                    '0',
+                    6
+                ) === 1),
             'current_workflow_stage_id' => $purchaseOrder->current_workflow_stage_id,
             'last_completed_workflow_stage_id' => $purchaseOrder->last_completed_workflow_stage_id,
         ];

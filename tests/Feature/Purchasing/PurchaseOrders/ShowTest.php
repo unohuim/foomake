@@ -634,7 +634,7 @@ it('does not render literal blade javascript directives in the purchase order he
     expect($html)->not->toContain('@js(');
 });
 
-it('renders initialized purchase order header alpine data as valid json', function () {
+it('renders purchase order detail with header action as the only visible status surface', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
 
@@ -654,9 +654,85 @@ it('renders initialized purchase order header alpine data as valid json', functi
     $decodedHtml = html_entity_decode($html, ENT_QUOTES, 'UTF-8');
 
     expect($decodedHtml)
-        ->toContain('x-data="purchaseOrderHeader(')
         ->toContain((string) $orderId)
-        ->toContain('DRAFT');
+        ->toContain('data-purchase-order-action-button')
+        ->not->toContain('x-data="purchaseOrderHeader(')
+        ->not->toContain('data-purchase-order-status-badge');
+});
+
+it('purchase order detail source blurs received at picker after value changes', function () {
+    $source = file_get_contents(resource_path('views/purchasing/orders/show.blade.php'));
+    $pageModule = file_get_contents(resource_path('js/pages/purchasing-orders-show.js'));
+
+    expect($source)->toContain('x-on:input="collapseReceiveDatePicker($event)"')
+        ->and($source)->toContain('x-on:change="collapseReceiveDatePicker($event)"')
+        ->and($source)->toContain('step="1"')
+        ->and($source)->toContain('inputmode="numeric"')
+        ->and($pageModule)->toContain('collapseReceiveDatePicker(event)')
+        ->and($pageModule)->toContain('input.blur()')
+        ->and($pageModule)->toContain('received_quantity: this.formatWholeQuantity(line.remaining_balance)');
+});
+
+it('purchase order detail source keeps receive action binding after workflow payload refresh', function () {
+    $source = file_get_contents(resource_path('views/purchasing/orders/show.blade.php'));
+    $pageModule = file_get_contents(resource_path('js/pages/purchasing-orders-show.js'));
+    $workflowButton = file_get_contents(resource_path('js/components/workflow-action-button.js'));
+
+    expect($workflowButton)->toContain("['receive', 'short_close'].includes(action.type)")
+        ->and($workflowButton)->toContain("window.dispatchEvent(new CustomEvent('purchase-order-status-action'")
+        ->and($source)->toContain('x-on:purchase-order-status-action.window="performStatusMenuAction($event.detail)"')
+        ->and($source)->toContain('x-on:workflow-updated.document="handleWorkflowUpdated($event.detail)"')
+        ->and($pageModule)->toContain('workflowActionHandlers()')
+        ->and($pageModule)->toContain('const handlers = this.workflowActionHandlers()')
+        ->and($pageModule)->toContain('const action = option.action || option.type')
+        ->and($pageModule)->toContain('receive: () => this.openReceive()');
+});
+
+it('workflow completion payload includes receive action state for immediate slide-over eligibility', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $supplier = ($this->makeSupplier)($tenant);
+    $uom = ($this->makeUom)($tenant);
+    $item = ($this->makeItem)($tenant, $uom);
+    $option = ($this->makeOption)($tenant, $supplier, $item, $uom);
+
+    ($this->grantPermission)($user, 'purchasing-purchase-orders-create');
+    ($this->grantPermission)($user, 'purchasing-purchase-orders-receive');
+
+    $orderResponse = ($this->createOrder)($user, [
+        'supplier_id' => $supplier->id,
+        'order_date' => '2026-02-20',
+    ])
+        ->assertCreated();
+
+    $orderId = (int) ($orderResponse->json('data.id') ?? 0);
+
+    ($this->addLine)($user, $orderId, [
+        'item_purchase_option_id' => $option->id,
+        'pack_count' => 2,
+        'unit_price_cents' => 100,
+    ])->assertCreated();
+
+    $this->actingAs($user)
+        ->postJson("/purchasing/orders/{$orderId}/workflow/complete")
+        ->assertOk()
+        ->assertJsonPath('data.purchase_order.persisted_status', 'CREATED')
+        ->assertJsonPath('data.purchase_order.can_receive', true)
+        ->assertJsonPath('data.workflow.status', 'CREATED')
+        ->assertJsonFragment([
+            'type' => 'receive',
+            'label' => 'Receive',
+            'endpoint' => route('purchasing.orders.receipts.store', $orderId),
+            'method' => 'POST',
+        ]);
+});
+
+it('receipt history source displays total packs as whole numbers', function () {
+    $pageModule = file_get_contents(resource_path('js/pages/purchasing-orders-show.js'));
+
+    expect($pageModule)->toContain('receiptLineSummary(receipt)')
+        ->and($pageModule)->toContain('formatWholeQuantity')
+        ->and($pageModule)->toContain('return `${lineCount} lines, ${total} total packs`;');
 });
 
 it('renders draft action dropdown with recipe-style action descriptions', function () {
@@ -689,7 +765,7 @@ it('renders draft action dropdown with recipe-style action descriptions', functi
         ->assertDontSee('Mark this purchase order as complete.');
 });
 
-it('renders sent action dropdown with receiving-stage actions and descriptions', function () {
+it('renders created action dropdown with receiving-stage actions and descriptions', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
 
@@ -705,7 +781,7 @@ it('renders sent action dropdown with receiving-stage actions and descriptions',
     DB::table('purchase_orders')
         ->where('id', $orderId)
         ->update([
-            'status' => 'SENT',
+            'status' => 'CREATED',
             'last_completed_workflow_stage_id' => $stages['creating']->id,
             'current_workflow_stage_id' => $stages['receiving']->id,
         ]);
@@ -716,7 +792,7 @@ it('renders sent action dropdown with receiving-stage actions and descriptions',
         ->assertSee('data-purchase-order-action-button', false)
         ->assertSee('CREATED')
         ->assertSee('Receive')
-        ->assertSee('Record received inventory for this purchase order.')
+        ->assertSee('Record one receipt with one or more received lines.')
         ->assertSee('Back Order')
         ->assertSee('Mark remaining items as back ordered.')
         ->assertSee('Short Close')
@@ -743,7 +819,7 @@ it('does not render cancel action when a purchase order has receipts', function 
     DB::table('purchase_orders')
         ->where('id', $orderId)
         ->update([
-            'status' => 'SENT',
+            'status' => 'CREATED',
             'last_completed_workflow_stage_id' => $stages['creating']->id,
             'current_workflow_stage_id' => $stages['receiving']->id,
         ]);
@@ -797,7 +873,6 @@ it('renders received action dropdown with complete action description', function
         ->assertSee('Cancel')
         ->assertSee('Cancel this purchase order.')
         ->assertDontSee('Create this purchase order, and begin workflow.')
-        ->assertDontSee('Record received inventory for this purchase order.')
         ->assertDontSee('Mark remaining items as back ordered.')
         ->assertDontSee('Close remaining unreceived quantities.');
 });
@@ -829,7 +904,6 @@ it('does not expose lifecycle actions for a cancelled purchase order', function 
         ->assertSee('bg-red-50 text-red-700', false)
         ->assertDontSee('data-purchase-order-action-button', false)
         ->assertDontSee('Create this purchase order, and begin workflow.')
-        ->assertDontSee('Record received inventory for this purchase order.')
         ->assertDontSee('Mark remaining items as back ordered.')
         ->assertDontSee('Close remaining unreceived quantities.')
         ->assertDontSee('Mark this purchase order as complete.')
@@ -994,7 +1068,7 @@ it('includes receipt history in show payload after receipt event', function () {
 
     DB::table('purchase_orders')
         ->where('id', $orderId)
-        ->update(['status' => 'SENT']);
+        ->update(['status' => 'CREATED']);
 
     ($this->addLine)($user, $orderId, [
         'item_purchase_option_id' => $option->id,
@@ -1054,7 +1128,7 @@ it('shows updated status in show payload after receipt event', function () {
     ])->assertCreated();
 
     $this->actingAs($user)
-        ->patchJson("/purchasing/orders/{$orderId}/status", ['status' => 'SENT'])
+        ->patchJson("/purchasing/orders/{$orderId}/status", ['status' => 'CREATED'])
         ->assertOk();
 
     $line = DB::table('purchase_order_lines')->where('purchase_order_id', $orderId)->first();
@@ -1074,7 +1148,7 @@ it('shows updated status in show payload after receipt event', function () {
         ?? $payload['purchase_order']
         ?? [];
 
-    expect($order['status'] ?? null)->toBe('CREATED');
+    expect($order['status'] ?? null)->toBe('PARTIALLY_RECEIVED');
 });
 
 it('includes short-close history in show payload after short-close event', function () {
@@ -1098,7 +1172,7 @@ it('includes short-close history in show payload after short-close event', funct
 
     DB::table('purchase_orders')
         ->where('id', $orderId)
-        ->update(['status' => 'SENT']);
+        ->update(['status' => 'CREATED']);
 
     ($this->addLine)($user, $orderId, [
         'item_purchase_option_id' => $option->id,
@@ -1158,7 +1232,7 @@ it('shows updated status in show payload after short-close event', function () {
     ])->assertCreated();
 
     $this->actingAs($user)
-        ->patchJson("/purchasing/orders/{$orderId}/status", ['status' => 'SENT'])
+        ->patchJson("/purchasing/orders/{$orderId}/status", ['status' => 'CREATED'])
         ->assertOk();
 
     $line = DB::table('purchase_order_lines')->where('purchase_order_id', $orderId)->first();
@@ -1202,7 +1276,7 @@ it('shows received and short-closed sums in line payload after events', function
 
     DB::table('purchase_orders')
         ->where('id', $orderId)
-        ->update(['status' => 'SENT']);
+        ->update(['status' => 'CREATED']);
 
     ($this->addLine)($user, $orderId, [
         'item_purchase_option_id' => $option->id,
@@ -1266,7 +1340,7 @@ it('shows remaining balance after multiple receipts in line payload', function (
     ])->assertCreated();
 
     $this->actingAs($user)
-        ->patchJson("/purchasing/orders/{$orderId}/status", ['status' => 'SENT'])
+        ->patchJson("/purchasing/orders/{$orderId}/status", ['status' => 'CREATED'])
         ->assertOk();
 
     $line = DB::table('purchase_order_lines')->where('purchase_order_id', $orderId)->first();

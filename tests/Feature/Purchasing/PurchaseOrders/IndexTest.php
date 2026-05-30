@@ -631,7 +631,7 @@ it('index reflects updated status after receipt event', function () {
         'unit_price_cents' => 100,
     ])->assertCreated();
 
-    ($this->updateStatus)($user, $orderId, ['status' => 'SENT'])
+    ($this->updateStatus)($user, $orderId, ['status' => 'CREATED'])
         ->assertOk();
 
     $line = DB::table('purchase_order_lines')->where('purchase_order_id', $orderId)->first();
@@ -649,7 +649,7 @@ it('index reflects updated status after receipt event', function () {
     $orderData = collect($orders)->firstWhere('id', $orderId);
 
     expect($orderData)->not->toBeNull();
-    expect($orderData['status'] ?? null)->toBe('CREATED');
+    expect($orderData['status'] ?? null)->toBe('PARTIALLY_RECEIVED');
 });
 
 it('index reflects short-closed status after short-close event', function () {
@@ -677,7 +677,7 @@ it('index reflects short-closed status after short-close event', function () {
         'unit_price_cents' => 100,
     ])->assertCreated();
 
-    ($this->updateStatus)($user, $orderId, ['status' => 'SENT'])
+    ($this->updateStatus)($user, $orderId, ['status' => 'CREATED'])
         ->assertOk();
 
     $line = DB::table('purchase_order_lines')->where('purchase_order_id', $orderId)->first();
@@ -697,4 +697,18 @@ it('index reflects short-closed status after short-close event', function () {
 
     expect($orderData)->not->toBeNull();
     expect($orderData['status'] ?? null)->toBe('RECEIVED');
+});
+
+it('index receive slide-over source blurs received at picker and keeps integer quantities', function () {
+    $source = file_get_contents(resource_path('views/purchasing/orders/index.blade.php'));
+    $pageModule = file_get_contents(resource_path('js/pages/purchasing-orders-index.js'));
+
+    expect($source)->toContain('x-on:input="collapseReceiveDatePicker($event)"')
+        ->and($source)->toContain('x-on:change="collapseReceiveDatePicker($event)"')
+        ->and($source)->toContain('step="1"')
+        ->and($source)->toContain('inputmode="numeric"')
+        ->and($pageModule)->toContain('collapseReceiveDatePicker(event)')
+        ->and($pageModule)->toContain('input.blur()')
+        ->and($pageModule)->toContain("order.persisted_status = data.data?.persisted_status")
+        ->and($pageModule)->toContain("received_quantity: this.formatWholeQuantity(line.remaining_balance || '0.000000')");
 });

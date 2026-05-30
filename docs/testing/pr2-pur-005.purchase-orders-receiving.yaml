@@ -31,9 +31,10 @@ tenancy_rules:
   - Tenant-owned purchase orders, lines, receipts, short-closures, and stock moves
     must be inaccessible cross-tenant and return 404 when scoped.
 behaviors_and_decisions:
-  - Receiving allowed only in OPEN, BACK-ORDERED, PARTIALLY-RECEIVED
-  - Cancel allowed only from OPEN when no receipt events exist
-  - Manual transitions allowed: DRAFT->OPEN, OPEN<->BACK-ORDERED, OPEN->CANCELLED
+  - Receiving allowed only in CREATED or PARTIALLY_RECEIVED
+  - PARTIALLY_RECEIVED remains an approved PO status enum option, but default workflow seeding keeps one normal Receiving stage instead of a duplicate partial-receipt stage
+  - Cancel allowed only before receipt events exist
+  - Manual transition allowed: DRAFT->CREATED
   - Derived transitions after events follow precedence rules
   - Receipt creates stock_moves with type=RECEIPT and status=POSTED
   - Short-close creates no stock_moves

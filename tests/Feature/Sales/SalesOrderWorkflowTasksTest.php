@@ -60,9 +60,14 @@ beforeEach(function () {
         $stages = [];
 
         foreach ([
-            ['key' => 'packing', 'name' => 'Packing', 'sort_order' => 10],
-            ['key' => 'packed', 'name' => 'Packed', 'sort_order' => 20],
-            ['key' => 'shipping', 'name' => 'Shipping', 'sort_order' => 30],
+            [
+                'key' => 'packing',
+                'name' => 'Packing',
+                'sort_order' => 10,
+                'status_complete_label' => SalesOrder::STATUS_PACKED,
+                'is_inventory_effect_stage' => true,
+            ],
+            ['key' => 'shipping', 'name' => 'Shipping', 'sort_order' => 30, 'is_inventory_effect_stage' => false],
         ] as $stage) {
             $stages[$stage['key']] = WorkflowStage::withoutGlobalScopes()->updateOrCreate([
                 'tenant_id' => $tenant->id,
@@ -70,9 +75,11 @@ beforeEach(function () {
                 'key' => $stage['key'],
             ], [
                 'name' => $stage['name'],
+                'status_complete_label' => $stage['status_complete_label'] ?? strtoupper($stage['key']),
                 'description' => null,
                 'sort_order' => $stage['sort_order'],
                 'is_active' => true,
+                'is_inventory_effect_stage' => $stage['is_inventory_effect_stage'],
             ]);
         }
 
@@ -365,24 +372,25 @@ it('8. future stage entry uses the latest active task template configuration', f
     ($this->createLine)($tenant, $order, $item);
     ($this->createReceipt)($tenant, $item, '1.000000');
     ($this->createTemplate)($tenant, $stages['packing'], $assignee, ['title' => 'Packing task']);
-    $packedTemplate = ($this->createTemplate)($tenant, $stages['packed'], $assignee, ['title' => 'Old packed task']);
+    $shippingTemplate = ($this->createTemplate)($tenant, $stages['shipping'], $assignee, ['title' => 'Old shipping task']);
     ($this->grantPermission)($user, 'sales-sales-orders-manage');
 
     ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKING)->assertOk();
 
-    $packedTemplate->update(['title' => 'Updated packed task']);
+    $shippingTemplate->update(['title' => 'Updated shipping task']);
 
     $packingTask = Task::query()->where('domain_record_id', $order->id)->where('workflow_stage_id', $stages['packing']->id)->firstOrFail();
     ($this->completeTask)($assignee, $packingTask)->assertOk();
 
     ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKED)->assertOk();
+    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_SHIPPING)->assertOk();
 
-    $generatedPackedTask = Task::query()
+    $generatedShippingTask = Task::query()
         ->where('domain_record_id', $order->id)
-        ->where('workflow_stage_id', $stages['packed']->id)
+        ->where('workflow_stage_id', $stages['shipping']->id)
         ->firstOrFail();
 
-    expect($generatedPackedTask->title)->toBe('Updated packed task');
+    expect($generatedShippingTask->title)->toBe('Updated shipping task');
 });
 
 it('9. open tasks block packing to packed with a clear error', function () {
@@ -507,7 +515,7 @@ it('13. task completion does not bypass existing inventory rules', function () {
     ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKED)->assertStatus(422);
 });
 
-it('14. packed tasks are generated only after packing to packed succeeds', function () {
+it('14. packing to packed does not generate a duplicate packing-stage task', function () {
     $tenant = ($this->makeTenant)();
     $stages = ($this->seedSalesStages)($tenant);
     $user = ($this->makeUser)($tenant);
@@ -520,18 +528,17 @@ it('14. packed tasks are generated only after packing to packed succeeds', funct
     ($this->createLine)($tenant, $order, $item);
     ($this->createReceipt)($tenant, $item, '1.000000');
     ($this->createTemplate)($tenant, $stages['packing'], $assignee);
-    ($this->createTemplate)($tenant, $stages['packed'], $assignee, ['title' => 'Packed task']);
     ($this->grantPermission)($user, 'sales-sales-orders-manage');
 
     ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKING)->assertOk();
-    expect(Task::query()->where('workflow_stage_id', $stages['packed']->id)->exists())->toBeFalse();
+    expect(Task::query()->where('workflow_stage_id', $stages['packing']->id)->count())->toBe(1);
 
     $packingTask = Task::query()->where('workflow_stage_id', $stages['packing']->id)->firstOrFail();
     ($this->completeTask)($assignee, $packingTask)->assertOk();
 
     ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKED)->assertOk();
 
-    expect(Task::query()->where('workflow_stage_id', $stages['packed']->id)->exists())->toBeTrue();
+    expect(Task::query()->where('workflow_stage_id', $stages['packing']->id)->count())->toBe(1);
 });
 
 it('15. shipping tasks are generated only after packed to shipping succeeds', function () {
@@ -547,14 +554,12 @@ it('15. shipping tasks are generated only after packed to shipping succeeds', fu
     ($this->createLine)($tenant, $order, $item);
     ($this->createReceipt)($tenant, $item, '1.000000');
     ($this->createTemplate)($tenant, $stages['packing'], $assignee);
-    ($this->createTemplate)($tenant, $stages['packed'], $assignee);
     ($this->createTemplate)($tenant, $stages['shipping'], $assignee, ['title' => 'Shipping task']);
     ($this->grantPermission)($user, 'sales-sales-orders-manage');
 
     ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKING)->assertOk();
     ($this->completeTask)($assignee, Task::query()->where('workflow_stage_id', $stages['packing']->id)->firstOrFail())->assertOk();
     ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKED)->assertOk();
-    ($this->completeTask)($assignee, Task::query()->where('workflow_stage_id', $stages['packed']->id)->firstOrFail())->assertOk();
 
     expect(Task::query()->where('workflow_stage_id', $stages['shipping']->id)->exists())->toBeFalse();
 
@@ -750,7 +755,7 @@ it('23. deactivating a sales stage removes it from future sales order transition
     ($this->createReceipt)($tenant, $item, '1.000000');
     ($this->grantPermission)($user, 'sales-sales-orders-manage');
 
-    expect($order->fresh()->availableTransitions())->toBe([SalesOrder::STATUS_PACKED, SalesOrder::STATUS_CANCELLED]);
+    expect($order->fresh()->availableTransitions())->toBe([SalesOrder::STATUS_SHIPPING, SalesOrder::STATUS_CANCELLED]);
 });
 
 it('24. reordering active sales stages changes future sales order transition order', function () {
@@ -758,7 +763,6 @@ it('24. reordering active sales stages changes future sales order transition ord
     $stages = ($this->seedSalesStages)($tenant);
     $stages['shipping']->update(['sort_order' => 5]);
     $stages['packing']->update(['sort_order' => 10]);
-    $stages['packed']->update(['sort_order' => 20]);
     $user = ($this->makeUser)($tenant);
     $customer = ($this->createCustomer)($tenant);
     $uom = ($this->makeUom)($tenant);
@@ -775,7 +779,7 @@ it('24. reordering active sales stages changes future sales order transition ord
         ->assertJsonPath('data.status', SalesOrder::STATUS_SHIPPING);
 });
 
-it('25. seeded packing packed and shipping are defaults only and do not override db order', function () {
+it('25. seeded packing and shipping are defaults only and do not override db order', function () {
     $tenant = ($this->makeTenant)();
     ($this->seedSalesStages)($tenant);
     WorkflowStage::withoutGlobalScopes()->create([
@@ -783,6 +787,7 @@ it('25. seeded packing packed and shipping are defaults only and do not override
         'workflow_domain_id' => ($this->salesDomain)()->id,
         'key' => 'prep',
         'name' => 'Prep',
+        'status_complete_label' => 'PREP',
         'description' => null,
         'sort_order' => 1,
         'is_active' => true,
@@ -811,8 +816,13 @@ it('26. workflow domain and default sales stage seeding is idempotent', function
         ->and(WorkflowStage::withoutGlobalScopes()
             ->where('tenant_id', $tenant->id)
             ->where('workflow_domain_id', ($this->salesDomain)()->id)
-            ->whereIn('key', ['packing', 'packed', 'shipping'])
-            ->count())->toBe(3);
+            ->whereIn('key', ['packing', 'shipping'])
+            ->count())->toBe(2)
+        ->and(WorkflowStage::withoutGlobalScopes()
+            ->where('tenant_id', $tenant->id)
+            ->where('workflow_domain_id', ($this->salesDomain)()->id)
+            ->where('key', 'packed')
+            ->exists())->toBeFalse();
 });
 
 it('27. future sales order transitions use the db stage sequence instead of a hardcoded fallback', function () {
@@ -824,6 +834,7 @@ it('27. future sales order transitions use the db stage sequence instead of a ha
         'workflow_domain_id' => ($this->salesDomain)()->id,
         'key' => 'qa',
         'name' => 'QA',
+        'status_complete_label' => 'QA',
         'description' => null,
         'sort_order' => 5,
         'is_active' => true,

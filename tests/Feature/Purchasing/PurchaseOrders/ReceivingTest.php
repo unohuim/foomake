@@ -140,14 +140,20 @@ beforeEach(function () {
             'tax_cents' => 0,
             'po_number' => 'PO-' . $tenant->id,
             'notes' => null,
-            'status' => 'SENT',
+            'status' => 'CREATED',
             'po_subtotal_cents' => 0,
             'po_grand_total_cents' => 0,
         ]);
     };
 
-    $this->makeLine = function (Tenant $tenant, PurchaseOrder $order, Item $item, ItemPurchaseOption $option): PurchaseOrderLine {
-        return PurchaseOrderLine::query()->create([
+    $this->makeLine = function (
+        Tenant $tenant,
+        PurchaseOrder $order,
+        Item $item,
+        ItemPurchaseOption $option,
+        array $attributes = []
+    ): PurchaseOrderLine {
+        return PurchaseOrderLine::query()->create(array_merge([
             'tenant_id' => $tenant->id,
             'purchase_order_id' => $order->id,
             'item_id' => $item->id,
@@ -160,7 +166,7 @@ beforeEach(function () {
             'converted_unit_price_amount' => 100,
             'fx_rate' => '1.00000000',
             'fx_rate_as_of' => '2026-02-04',
-        ]);
+        ], $attributes));
     };
 
     $this->setOrderStatus = function (PurchaseOrder $order, string $status): void {
@@ -205,8 +211,49 @@ it('allows receipt creation with receive permission', function () {
     ($this->postReceipt)($user, $order, [
         'received_at' => '2026-02-04 10:00:00',
         'purchase_order_line_id' => $line->id,
-        'received_quantity' => '2.500000',
+        'received_quantity' => '2.000000',
     ])->assertCreated();
+});
+
+it('rejects decimal receipt quantities server side', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $supplier = ($this->makeSupplier)($tenant);
+    $uom = ($this->makeUom)($tenant);
+    $item = ($this->makeItem)($tenant, $uom);
+    $option = ($this->makeOption)($tenant, $supplier, $item, $uom);
+    $order = ($this->makeOrder)($tenant, $user, $supplier);
+    $line = ($this->makeLine)($tenant, $order, $item, $option);
+
+    ($this->grantPermission)($user, 'purchasing-purchase-orders-receive');
+
+    ($this->postReceipt)($user, $order, [
+        'received_at' => '2026-02-04 10:02:00',
+        'purchase_order_line_id' => $line->id,
+        'received_quantity' => '2.500000',
+    ])->assertStatus(422)
+        ->assertJsonValidationErrors(['received_quantity']);
+});
+
+it('rejects decimal quantities in multi-line receipt payloads server side', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $supplier = ($this->makeSupplier)($tenant);
+    $uom = ($this->makeUom)($tenant);
+    $item = ($this->makeItem)($tenant, $uom);
+    $option = ($this->makeOption)($tenant, $supplier, $item, $uom);
+    $order = ($this->makeOrder)($tenant, $user, $supplier);
+    $line = ($this->makeLine)($tenant, $order, $item, $option);
+
+    ($this->grantPermission)($user, 'purchasing-purchase-orders-receive');
+
+    ($this->postReceipt)($user, $order, [
+        'received_at' => '2026-02-04 10:03:00',
+        'lines' => [
+            ['purchase_order_line_id' => $line->id, 'received_quantity' => '2.500000'],
+        ],
+    ])->assertStatus(422)
+        ->assertJsonValidationErrors(['lines.0.received_quantity']);
 });
 
 it('returns receipt id in response payload', function () {
@@ -376,7 +423,7 @@ it('allows receipts when status is back-ordered', function () {
     $item = ($this->makeItem)($tenant, $uom);
     $option = ($this->makeOption)($tenant, $supplier, $item, $uom);
     $order = ($this->makeOrder)($tenant, $user, $supplier);
-    ($this->setOrderStatus)($order, 'SENT');
+    ($this->setOrderStatus)($order, 'CREATED');
     $order->forceFill(['back_ordered_at' => now()])->save();
     $line = ($this->makeLine)($tenant, $order, $item, $option);
 
@@ -397,7 +444,7 @@ it('allows receipts when status is partially received', function () {
     $item = ($this->makeItem)($tenant, $uom);
     $option = ($this->makeOption)($tenant, $supplier, $item, $uom);
     $order = ($this->makeOrder)($tenant, $user, $supplier);
-    ($this->setOrderStatus)($order, 'SENT');
+    ($this->setOrderStatus)($order, PurchaseOrder::STATUS_PARTIALLY_RECEIVED);
     $line = ($this->makeLine)($tenant, $order, $item, $option);
 
     ($this->grantPermission)($user, 'purchasing-purchase-orders-receive');
@@ -502,7 +549,7 @@ it('supports multi-line receipt payloads', function () {
     ($this->postReceipt)($user, $order, [
         'received_at' => '2026-02-04 12:30:00',
         'lines' => [
-            ['purchase_order_line_id' => $lineA->id, 'received_quantity' => '1.500000'],
+            ['purchase_order_line_id' => $lineA->id, 'received_quantity' => '1.000000'],
             ['purchase_order_line_id' => $lineB->id, 'received_quantity' => '2.000000'],
         ],
     ])->assertCreated();
@@ -535,6 +582,91 @@ it('validates receipt quantity must be greater than zero', function () {
         'received_quantity' => '0.000000',
     ])->assertStatus(422)
         ->assertJsonValidationErrors(['received_quantity']);
+});
+
+it('ignores zero and blank receipt lines while creating one multi-line receipt event', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $supplier = ($this->makeSupplier)($tenant);
+    $uom = ($this->makeUom)($tenant);
+    $itemA = ($this->makeItem)($tenant, $uom, ['name' => 'Item A']);
+    $itemB = ($this->makeItem)($tenant, $uom, ['name' => 'Item B']);
+    $itemC = ($this->makeItem)($tenant, $uom, ['name' => 'Item C']);
+    $optionA = ($this->makeOption)($tenant, $supplier, $itemA, $uom);
+    $optionB = ($this->makeOption)($tenant, $supplier, $itemB, $uom);
+    $optionC = ($this->makeOption)($tenant, $supplier, $itemC, $uom);
+    $order = ($this->makeOrder)($tenant, $user, $supplier);
+    $lineA = ($this->makeLine)($tenant, $order, $itemA, $optionA);
+    $lineB = ($this->makeLine)($tenant, $order, $itemB, $optionB);
+    $lineC = ($this->makeLine)($tenant, $order, $itemC, $optionC);
+
+    ($this->grantPermission)($user, 'purchasing-purchase-orders-receive');
+
+    ($this->postReceipt)($user, $order, [
+        'reference' => 'RCPT-MULTI',
+        'lines' => [
+            ['purchase_order_line_id' => $lineA->id, 'received_quantity' => '2.000000'],
+            ['purchase_order_line_id' => $lineB->id, 'received_quantity' => '0'],
+            ['purchase_order_line_id' => $lineC->id, 'received_quantity' => ''],
+        ],
+    ])->assertCreated();
+
+    $receipt = DB::table('purchase_order_receipts')
+        ->where('purchase_order_id', $order->id)
+        ->first();
+
+    expect(DB::table('purchase_order_receipts')->where('purchase_order_id', $order->id)->count())->toBe(1)
+        ->and(DB::table('purchase_order_receipt_lines')->where('purchase_order_receipt_id', $receipt->id)->count())->toBe(1)
+        ->and(DB::table('purchase_order_receipt_lines')->where('purchase_order_line_id', $lineA->id)->exists())->toBeTrue()
+        ->and(DB::table('purchase_order_receipt_lines')->where('purchase_order_line_id', $lineB->id)->exists())->toBeFalse()
+        ->and(DB::table('purchase_order_receipt_lines')->where('purchase_order_line_id', $lineC->id)->exists())->toBeFalse();
+});
+
+it('requires at least one positive receipt quantity in multi-line payloads', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $supplier = ($this->makeSupplier)($tenant);
+    $uom = ($this->makeUom)($tenant);
+    $item = ($this->makeItem)($tenant, $uom);
+    $option = ($this->makeOption)($tenant, $supplier, $item, $uom);
+    $order = ($this->makeOrder)($tenant, $user, $supplier);
+    $line = ($this->makeLine)($tenant, $order, $item, $option);
+
+    ($this->grantPermission)($user, 'purchasing-purchase-orders-receive');
+
+    ($this->postReceipt)($user, $order, [
+        'lines' => [
+            ['purchase_order_line_id' => $line->id, 'received_quantity' => '0'],
+            ['purchase_order_line_id' => $line->id, 'received_quantity' => ''],
+        ],
+    ])->assertStatus(422)
+        ->assertJsonValidationErrors(['lines']);
+
+    expect(DB::table('purchase_order_receipts')->count())->toBe(0)
+        ->and(DB::table('purchase_order_receipt_lines')->count())->toBe(0);
+});
+
+it('returns refreshed receipt state after a multi-line receipt succeeds', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $supplier = ($this->makeSupplier)($tenant);
+    $uom = ($this->makeUom)($tenant);
+    $item = ($this->makeItem)($tenant, $uom);
+    $option = ($this->makeOption)($tenant, $supplier, $item, $uom);
+    $order = ($this->makeOrder)($tenant, $user, $supplier);
+    $line = ($this->makeLine)($tenant, $order, $item, $option, ['pack_count' => 4]);
+
+    ($this->grantPermission)($user, 'purchasing-purchase-orders-receive');
+
+    ($this->postReceipt)($user, $order, [
+        'lines' => [
+            ['purchase_order_line_id' => $line->id, 'received_quantity' => '1.000000'],
+        ],
+    ])->assertCreated()
+        ->assertJsonPath('data.purchase_order.status', PurchaseOrder::STATUS_PARTIALLY_RECEIVED)
+        ->assertJsonPath('data.lines.0.received_sum', '1.000000')
+        ->assertJsonPath('data.lines.0.remaining_balance', '3.000000')
+        ->assertJsonPath('data.receipts.0.lines_count', 1);
 });
 
 it('validates receipt quantity against remaining balance', function () {
@@ -595,7 +727,7 @@ it('returns nested receipt errors for invalid multi-line payloads', function () 
             ['purchase_order_line_id' => $line->id, 'received_quantity' => '0.000000'],
         ],
     ])->assertStatus(422)
-        ->assertJsonValidationErrors(['lines.0.received_quantity']);
+        ->assertJsonValidationErrors(['lines']);
 });
 
 it('rejects guests on short-close creation', function () {
@@ -737,7 +869,7 @@ it('allows short-close when status is back-ordered', function () {
     $item = ($this->makeItem)($tenant, $uom);
     $option = ($this->makeOption)($tenant, $supplier, $item, $uom);
     $order = ($this->makeOrder)($tenant, $user, $supplier);
-    ($this->setOrderStatus)($order, 'SENT');
+    ($this->setOrderStatus)($order, 'CREATED');
     $order->forceFill(['back_ordered_at' => now()])->save();
     $line = ($this->makeLine)($tenant, $order, $item, $option);
 
@@ -758,7 +890,7 @@ it('allows short-close when status is partially received', function () {
     $item = ($this->makeItem)($tenant, $uom);
     $option = ($this->makeOption)($tenant, $supplier, $item, $uom);
     $order = ($this->makeOrder)($tenant, $user, $supplier);
-    ($this->setOrderStatus)($order, 'SENT');
+    ($this->setOrderStatus)($order, PurchaseOrder::STATUS_PARTIALLY_RECEIVED);
     $line = ($this->makeLine)($tenant, $order, $item, $option);
 
     ($this->grantPermission)($user, 'purchasing-purchase-orders-receive');

@@ -81,6 +81,16 @@ export function mount(rootEl, payload) {
 
             return raw;
         },
+        formatWholeQuantity(value) {
+            const normalized = normalizeDecimal(value);
+            const [whole, fraction = ''] = normalized.split('.');
+
+            if (fraction !== '' && !/^0+$/.test(fraction)) {
+                return this.formatQuantity(normalized);
+            }
+
+            return whole.replace(/^(-?)0+(?=\d)/, '$1');
+        },
         toggleActionMenu(event, orderId) {
             if (this.actionMenuOpen && this.actionMenuOrderId === orderId) {
                 this.closeActionMenu();
@@ -113,7 +123,13 @@ export function mount(rootEl, payload) {
                 return false;
             }
 
-            return order.status === 'CREATED' && !order.is_cancelled;
+            const status = order.persisted_status || order.status;
+            const hasReceivableLine = (order.lines || [])
+                .some((line) => normalizeDecimal(line.remaining_balance) !== '0.000000');
+
+            return ['CREATED', 'PARTIALLY_RECEIVED'].includes(status)
+                && hasReceivableLine
+                && !order.is_cancelled;
         },
         canBackOrder(order) {
             if (!order) {
@@ -140,12 +156,18 @@ export function mount(rootEl, payload) {
                 received_at: '',
                 reference: '',
                 notes: '',
-                lines: (order.lines || []).map((line) => ({
-                    id: line.id,
-                    item_name: line.item_name,
-                    remaining_balance: normalizeDecimal(line.remaining_balance || '0.000000'),
-                    received_quantity: normalizeDecimal(line.remaining_balance || '0.000000'),
-                })),
+                lines: (order.lines || [])
+                    .filter((line) => normalizeDecimal(line.remaining_balance || '0.000000') !== '0.000000')
+                    .map((line) => ({
+                        id: line.id,
+                        item_name: line.item_name,
+                        ordered_quantity_display: line.pack_count_display,
+                        received_quantity_display: line.received_sum_display,
+                        remaining_balance: normalizeDecimal(line.remaining_balance || '0.000000'),
+                        remaining_balance_display: line.remaining_balance_display,
+                        unit_context: line.unit_context || 'Pack quantity',
+                        received_quantity: this.formatWholeQuantity(line.remaining_balance || '0.000000'),
+                    })),
             };
             this.receiveErrors = emptyReceiveErrors();
             this.receiveLineErrors = {};
@@ -183,6 +205,17 @@ export function mount(rootEl, payload) {
             }
 
             return this.receiveLineErrors[index];
+        },
+        collapseReceiveDatePicker(event) {
+            const input = event?.target;
+
+            if (!input || typeof input.blur !== 'function') {
+                return;
+            }
+
+            if (event.type === 'change' || input.value === '' || input.validity?.valid) {
+                input.blur();
+            }
         },
         normalizeReceiveErrors(errors) {
             const defaults = emptyReceiveErrors();
@@ -262,8 +295,27 @@ export function mount(rootEl, payload) {
                     return;
                 }
 
-                window.location.reload();
-                return;
+                const data = await response.json();
+                const responseData = data.data || {};
+
+                if (responseData.purchase_order) {
+                    order.persisted_status = responseData.purchase_order.persisted_status
+                        || responseData.purchase_order.status
+                        || order.persisted_status;
+                    order.is_cancelled = Boolean(responseData.purchase_order.is_cancelled);
+                    order.is_back_ordered = Boolean(responseData.purchase_order.is_back_ordered);
+
+                    if (responseData.purchase_order.workflow_status) {
+                        order.status = responseData.purchase_order.workflow_status;
+                    }
+                }
+
+                if (Array.isArray(responseData.lines)) {
+                    order.lines = responseData.lines;
+                }
+
+                this.closeReceive();
+                this.showToast('success', 'Receipt recorded.');
             } catch (error) {
                 // eslint-disable-next-line no-console
                 console.error(error);
@@ -302,6 +354,7 @@ export function mount(rootEl, payload) {
                 const data = await response.json();
                 const updatedStatus = data.data?.status || status;
                 order.status = updatedStatus;
+                order.persisted_status = data.data?.persisted_status || order.persisted_status || updatedStatus;
                 order.is_cancelled = Boolean(data.data?.is_cancelled);
                 order.is_back_ordered = Boolean(data.data?.is_back_ordered);
                 this.showToast('success', 'Status updated.');
@@ -350,6 +403,7 @@ export function mount(rootEl, payload) {
 
                 const data = await response.json();
                 order.status = data.data?.status || order.status;
+                order.persisted_status = data.data?.persisted_status || order.persisted_status || order.status;
                 order.is_cancelled = Boolean(data.data?.is_cancelled);
                 order.is_back_ordered = Boolean(data.data?.is_back_ordered);
                 this.showToast('success', 'Action applied.');

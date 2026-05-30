@@ -1730,14 +1730,14 @@ it('48. returns paginated purchase orders for the material and excludes unrelate
         'po_grand_total_cents' => 2250,
         'shipping_cents' => 300,
         'tax_cents' => 150,
-        'status' => PurchaseOrder::STATUS_SENT,
+        'status' => PurchaseOrder::STATUS_CREATED,
         'back_ordered_at' => now(),
     ]);
     $hiddenOrder = ($this->makePurchaseOrder)($tenant, $user, $supplier, [
         'po_number' => 'PO-HIDDEN-48',
         'po_subtotal_cents' => 9900,
         'po_grand_total_cents' => 9900,
-        'status' => PurchaseOrder::STATUS_SENT,
+        'status' => PurchaseOrder::STATUS_CREATED,
     ]);
 
     ($this->makePurchaseOrderLine)($tenant, $visibleOrder, $item, $option, [
@@ -1762,7 +1762,7 @@ it('48. returns paginated purchase orders for the material and excludes unrelate
         ->and($response->json('data.0.supplier_name'))->toBe('PO Supplier')
         ->and($response->json('data.0.order_date'))->toBe('2026-05-15')
         ->and($response->json('data.0.po_grand_total_cents'))->toBe(2250)
-        ->and($response->json('data.0.status'))->toBe(PurchaseOrder::STATUS_SENT)
+        ->and($response->json('data.0.status'))->toBe(PurchaseOrder::STATUS_CREATED)
         ->and($response->json('data.0.show_url'))->toBe(route('purchasing.orders.show', $visibleOrder));
 
     $ids = collect($response->json('data'))->pluck('id')->all();

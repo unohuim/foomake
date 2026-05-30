@@ -15,8 +15,9 @@ when_not_to_use:
 rules:
   - If `workflow_cancelled_at` is not null, the derived status is `CANCELLED`.
   - If `last_completed_workflow_stage_id` is null, the derived status is `DRAFT`.
+  - Purchase Orders with receipt-derived `PARTIALLY_RECEIVED` display that status while remaining in the normal Receiving stage.
   - Otherwise the derived status is `last_completed_workflow_stage.status_complete_label`.
-  - Legacy domain status columns may be mirrored during migration but must not be the PO detail action-button display authority.
+  - Legacy domain status columns may be mirrored during migration but must not be the PO detail action-button display authority, except for receipt-derived `PARTIALLY_RECEIVED` because it has no duplicate seeded workflow stage.
   - Workflow cancellation is terminal and blocks future workflow actions.
 public_interface:
   - PurchaseOrder::workflowStatus()
@@ -25,4 +26,4 @@ example_usage: |
   Purchase Order workflow display:
     current_workflow_stage = Receiving
     last_completed_workflow_stage = Creating
-    derived_status = CREATED
+    derived_status = CREATED, or PARTIALLY_RECEIVED after a partial receipt event

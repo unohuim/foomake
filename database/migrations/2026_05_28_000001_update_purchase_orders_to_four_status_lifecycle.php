@@ -34,7 +34,7 @@ return new class extends Migration
 
         DB::table('purchase_orders')
             ->whereIn('status', ['OPEN', 'PARTIALLY-RECEIVED', 'BACK-ORDERED'])
-            ->update(['status' => PurchaseOrder::STATUS_SENT]);
+            ->update(['status' => PurchaseOrder::STATUS_CREATED]);
 
         DB::table('purchase_orders')
             ->where('status', 'SHORT-CLOSED')
@@ -43,7 +43,7 @@ return new class extends Migration
         DB::table('purchase_orders')
             ->where('status', 'CANCELLED')
             ->update([
-                'status' => PurchaseOrder::STATUS_SENT,
+                'status' => PurchaseOrder::STATUS_CREATED,
                 'cancelled_at' => DB::raw('COALESCE(updated_at, CURRENT_TIMESTAMP)'),
             ]);
     }

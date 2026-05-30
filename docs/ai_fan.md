@@ -36,36 +36,32 @@ SCOPE — DOMAIN RULES (CANONICAL)
 Purchase order status values (exact):
 
 - DRAFT
-- OPEN
-- PARTIALLY-RECEIVED
+- CREATED
+- PARTIALLY_RECEIVED
 - RECEIVED
-- BACK-ORDERED
-- SHORT-CLOSED
+- COMPLETED
 - CANCELLED
 
 Terminal states:
 
-- RECEIVED
-- SHORT-CLOSED
+- COMPLETED
 - CANCELLED
 
 Allowed manual transitions:
 
-- DRAFT → OPEN
-- OPEN ↔ BACK-ORDERED
-- OPEN → CANCELLED ONLY if no receipts exist
+- DRAFT → CREATED
+- CREATED → CANCELLED ONLY if no receipts exist
+- RECEIVED → COMPLETED
 
 Auto-derived transitions (server-set after events):
 
-- OPEN/BACK-ORDERED → PARTIALLY-RECEIVED after first receipt
-- PARTIALLY-RECEIVED → RECEIVED when fully received and no short-close exists
-- PARTIALLY-RECEIVED → SHORT-CLOSED when fully closed and any short-close exists (even if receipts exist)
+- CREATED → PARTIALLY_RECEIVED after a partial receipt
+- PARTIALLY_RECEIVED → RECEIVED when fully received or short-closed
 
 Receiving allowed only when PO status is:
 
-- OPEN
-- BACK-ORDERED
-- PARTIALLY-RECEIVED
+- CREATED
+- PARTIALLY_RECEIVED
 
 Cancellation rule:
 
@@ -80,10 +76,9 @@ Quantity unit:
 Derived status logic (exact precedence):
 
 1. For each PO line: balance = pack_count - received_sum - short_closed_sum
-2. If ALL balances = 0 and ANY short-close exists => PO status SHORT-CLOSED
-3. Else if ALL balances = 0 and total received_sum > 0 => PO status RECEIVED
-4. Else if ANY balance > 0 and ANY receipt exists => PO status PARTIALLY-RECEIVED
-5. Else keep manual status (OPEN or BACK-ORDERED, or DRAFT)
+2. If ALL balances = 0 => PO status RECEIVED
+3. Else if ANY balance > 0 and ANY receipt exists => PO status PARTIALLY_RECEIVED
+4. Else keep manual status (CREATED or DRAFT)
 
 Short-close ledger:
 
@@ -208,9 +203,9 @@ Status change (manual only):
   Payload:
 - status
   Rules:
-- allow DRAFT->OPEN, OPEN<->BACK-ORDERED
-- allow OPEN->CANCELLED only if no receipts exist
-- deny any attempt to set derived statuses directly (PARTIALLY-RECEIVED/RECEIVED/SHORT-CLOSED) (server controls these)
+- allow DRAFT->CREATED
+- allow CREATED->CANCELLED only if no receipts exist
+- deny attempts to set receipt-derived statuses directly (PARTIALLY_RECEIVED/RECEIVED)
 - return 422 with stable error shape
 
 All 422 responses:
@@ -274,12 +269,11 @@ Update Purchase Orders index:
 
 Update Purchase Order show:
 
-- Status control UI (also available here).
-- PO-level Receive button (opens multi-line receive slide-over).
-- Per-line Receive button (opens receive slide-over with that single line only).
+- Header status/action dropdown is the only receive entry point.
+- Receive opens the PO-level multi-line receive slide-over.
 - Per-line Short-Close button (opens separate short-close slide-over with that single line only).
 - Separate slide-overs: Receive and Short-Close.
-- Inputs allow decimal scale 6 and prefill with remaining open balance for that line.
+- Receive inputs are integer pack counts and prefill with remaining open balance for each receivable line.
 - Show Receipt History table and Short-Close History table.
 
 History table columns/order:
@@ -324,16 +318,15 @@ Create Pest feature tests covering:
     - receive gate: receipt creation, short-close creation, status-change endpoint
 - Status-change transitions allowed/denied (each transition positive + negative cases)
 - Cancel blocked if any receipts exist
-- Receiving allowed only in OPEN/BACK-ORDERED/PARTIALLY-RECEIVED; denied in DRAFT and terminal states
+- Receiving allowed only in CREATED/PARTIALLY_RECEIVED; denied in DRAFT and terminal states
 - Receipt creation creates:
     - receipt header + receipt lines
     - stock_moves rows with type=RECEIPT, status=POSTED, correct item_id, quantity, source_type/source_id
 - Multiple receipts over time accumulate correctly
 - Short-close allowed after partial receipt and closes remaining balance
 - Derived status precedence:
-    - becomes PARTIALLY-RECEIVED after first receipt when any balance remains
-    - becomes RECEIVED when all balances zero and no short-close exists
-    - becomes SHORT-CLOSED when all balances zero and at least one short-close exists (even with receipts)
+    - becomes PARTIALLY_RECEIVED after first receipt when any balance remains
+    - becomes RECEIVED when all balances are zero
 - Validation errors:
     - quantity > 0
     - received + short_closed <= pack_count

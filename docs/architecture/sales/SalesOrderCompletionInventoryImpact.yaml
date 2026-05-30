@@ -23,10 +23,10 @@ when_not_to_use:
   - Invoicing or payment workflows
 rules:
   - Sales orders keep DRAFT, OPEN, COMPLETED, and CANCELLED as system statuses and use tenant-scoped active sales workflow stages for operational middle stages.
-  - New tenants are seeded by default with packing, packed, and shipping operational stages, but runtime ordering is database-backed.
+  - New tenants are seeded by default with packing and shipping operational stages, but runtime ordering is database-backed.
   - Entering the seeded packing stage from OPEN validates fulfillment availability only, creates no stock moves, and reserves no inventory.
   - If any sales-order line cannot be fulfilled before entering the first operational stage, the order must remain OPEN.
-  - The seeded packed stage is the default sales inventory-effect stage.
+  - The seeded packing stage is the default sales inventory-effect stage and completes to PACKED.
   - Moving into the active sales inventory-effect stage posts inventory issue stock moves in a single database transaction.
   - If stock-move creation fails while entering the inventory-effect stage, the sales order must remain in the current stage and no partial stock moves may persist.
   - Normal stockable sales-order lines consume the sold item itself.

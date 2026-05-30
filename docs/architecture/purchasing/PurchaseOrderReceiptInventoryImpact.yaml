@@ -14,6 +14,9 @@ when_not_to_use:
   - Manual inventory adjustments outside purchase receiving
 rules:
   - Every purchase order receipt line must be recorded even when the received item is non-stockable.
+  - Purchase order receiving is submitted as one PO-level receipt event with one or more positive receipt lines.
+  - Zero and blank submitted receipt quantities are ignored before receipt persistence.
+  - At least one positive receipt quantity is required for each receipt event.
   - Stock moves are created only for receipt lines whose item has items.is_stockable = true.
   - Stockable receipt lines link to their stock move through stock_move_id.
   - Non-stockable receipt lines keep stock_move_id null.
@@ -23,7 +26,7 @@ rules:
   - Receipt conversion and quantity math use BCMath string math at scale 6; receipt creation fails transactionally when a required conversion is unavailable.
   - Receipt stock moves must remain the source of truth for inventory on-hand.
   - Receipt creation must fail transactionally if stock move creation fails.
-  - Stockable Material detail net-quantity stats treat purchase orders with status SENT as open supply and add the remaining unreceived quantity converted from supplier package UoM into item base UoM.
+  - Stockable Material detail net-quantity stats treat purchase orders with status CREATED or PARTIALLY_RECEIVED as open supply and add the remaining unreceived quantity converted from supplier package UoM into item base UoM.
 public_interface:
   - PurchaseOrderLifecycleService::createReceipt()
   - PurchaseOrderReceiptLine::stockMove()

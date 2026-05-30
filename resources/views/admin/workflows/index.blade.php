@@ -85,6 +85,12 @@
                                                     >
                                                         Inventory Effect
                                                     </span>
+                                                    <span
+                                                        x-show="stage.is_core"
+                                                        class="rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-amber-700"
+                                                    >
+                                                        Core
+                                                    </span>
                                                 </div>
                                                 <p class="mt-1 text-xs uppercase tracking-[0.2em] text-slate-500" x-text="stage.workflow_domain_key"></p>
                                                 <p class="mt-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
@@ -98,8 +104,21 @@
 
                                             <div class="flex flex-wrap gap-3 text-sm">
                                                 <button type="button" class="text-sky-700 hover:text-sky-600" x-on:click="openStageEdit(stage)">Edit</button>
-                                                <button type="button" class="text-slate-700 hover:text-slate-600" x-on:click="toggleStage(stage)">
+                                                <button
+                                                    type="button"
+                                                    class="text-slate-700 hover:text-slate-600 disabled:cursor-not-allowed disabled:text-slate-400"
+                                                    x-on:click="toggleStage(stage)"
+                                                    :disabled="stage.is_core"
+                                                >
                                                     <span x-text="stage.is_active ? 'Deactivate' : 'Reactivate'"></span>
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    class="text-rose-700 hover:text-rose-600 disabled:cursor-not-allowed disabled:text-slate-400"
+                                                    x-on:click="deleteStage(stage)"
+                                                    :disabled="stage.is_core"
+                                                >
+                                                    Delete
                                                 </button>
                                             </div>
                                         </div>
@@ -120,7 +139,7 @@
                             <div class="mt-5 space-y-4">
                                 <label class="block text-sm font-medium text-slate-700">
                                     Domain
-                                    <select class="mt-1 block w-full rounded-xl border-slate-300 text-sm shadow-sm focus:border-slate-500 focus:ring-slate-500" x-model="stageForm.workflow_domain_id">
+                                    <select class="mt-1 block w-full rounded-xl border-slate-300 text-sm shadow-sm focus:border-slate-500 focus:ring-slate-500 disabled:bg-slate-100 disabled:text-slate-500" x-model="stageForm.workflow_domain_id" x-on:change="handleStageDomainChanged()" :disabled="editingCoreStage()">
                                         <option value="">Select domain</option>
                                         <template x-for="domain in domains" :key="domain.id">
                                             <option :value="String(domain.id)" x-text="domain.name"></option>
@@ -130,22 +149,27 @@
 
                                 <label class="block text-sm font-medium text-slate-700">
                                     Name
-                                    <input type="text" class="mt-1 block w-full rounded-xl border-slate-300 text-sm shadow-sm focus:border-slate-500 focus:ring-slate-500" x-model="stageForm.name">
+                                    <input type="text" class="mt-1 block w-full rounded-xl border-slate-300 text-sm shadow-sm focus:border-slate-500 focus:ring-slate-500 disabled:bg-slate-100 disabled:text-slate-500" x-model="stageForm.name" :disabled="editingCoreStage()">
                                 </label>
 
                                 <label class="block text-sm font-medium text-slate-700">
                                     Action verb
-                                    <input type="text" class="mt-1 block w-full rounded-xl border-slate-300 text-sm shadow-sm focus:border-slate-500 focus:ring-slate-500" x-model="stageForm.action_verb">
+                                    <input type="text" class="mt-1 block w-full rounded-xl border-slate-300 text-sm shadow-sm focus:border-slate-500 focus:ring-slate-500 disabled:bg-slate-100 disabled:text-slate-500" x-model="stageForm.action_verb" :disabled="editingCoreStage()">
                                 </label>
 
                                 <label class="block text-sm font-medium text-slate-700">
                                     Status complete label
-                                    <input type="text" class="mt-1 block w-full rounded-xl border-slate-300 text-sm shadow-sm focus:border-slate-500 focus:ring-slate-500" x-model="stageForm.status_complete_label">
+                                    <select class="mt-1 block w-full rounded-xl border-slate-300 text-sm shadow-sm focus:border-slate-500 focus:ring-slate-500 disabled:bg-slate-100 disabled:text-slate-500" x-model="stageForm.status_complete_label" :disabled="editingCoreStage()">
+                                        <option value="">Select status</option>
+                                        <template x-for="status in statusOptionsForStageForm()" :key="status">
+                                            <option :value="status" x-text="status"></option>
+                                        </template>
+                                    </select>
                                 </label>
 
                                 <label class="block text-sm font-medium text-slate-700">
                                     Completion mode
-                                    <select class="mt-1 block w-full rounded-xl border-slate-300 text-sm shadow-sm focus:border-slate-500 focus:ring-slate-500" x-model="stageForm.completion_mode">
+                                    <select class="mt-1 block w-full rounded-xl border-slate-300 text-sm shadow-sm focus:border-slate-500 focus:ring-slate-500 disabled:bg-slate-100 disabled:text-slate-500" x-model="stageForm.completion_mode" :disabled="editingCoreStage()">
                                         <option value="manual">Manual</option>
                                         <option value="automatic">Automatic</option>
                                     </select>
@@ -158,11 +182,11 @@
 
                                 <label class="block text-sm font-medium text-slate-700">
                                     Sort order
-                                    <input type="number" class="mt-1 block w-full rounded-xl border-slate-300 text-sm shadow-sm focus:border-slate-500 focus:ring-slate-500" x-model="stageForm.sort_order">
+                                    <input type="number" class="mt-1 block w-full rounded-xl border-slate-300 text-sm shadow-sm focus:border-slate-500 focus:ring-slate-500 disabled:bg-slate-100 disabled:text-slate-500" x-model="stageForm.sort_order" :disabled="editingCoreStage()">
                                 </label>
 
                                 <label class="inline-flex items-center gap-3 text-sm font-medium text-slate-700" x-show="stageFormMode === 'edit'">
-                                    <input type="checkbox" class="rounded border-slate-300 text-slate-900 shadow-sm focus:ring-slate-500" x-model="stageForm.is_active">
+                                    <input type="checkbox" class="rounded border-slate-300 text-slate-900 shadow-sm focus:ring-slate-500 disabled:bg-slate-100 disabled:text-slate-500" x-model="stageForm.is_active" :disabled="editingCoreStage()">
                                     <span>Active</span>
                                 </label>
 

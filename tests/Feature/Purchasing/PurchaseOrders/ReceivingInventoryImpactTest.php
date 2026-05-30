@@ -154,7 +154,7 @@ beforeEach(function (): void {
             'tax_cents' => 0,
             'po_number' => 'PO-' . $this->poCounter,
             'notes' => null,
-            'status' => PurchaseOrder::STATUS_SENT,
+            'status' => PurchaseOrder::STATUS_CREATED,
             'po_subtotal_cents' => 0,
             'po_grand_total_cents' => 0,
         ], $attributes));
@@ -281,8 +281,8 @@ it('3. each receipt line creates a stock_move', function (): void {
 
     ($this->receive)($user, $order, [
         'lines' => [
-            ['purchase_order_line_id' => $lineA->id, 'received_quantity' => '1.250000'],
-            ['purchase_order_line_id' => $lineB->id, 'received_quantity' => '2.750000'],
+            ['purchase_order_line_id' => $lineA->id, 'received_quantity' => '1.000000'],
+            ['purchase_order_line_id' => $lineB->id, 'received_quantity' => '2.000000'],
         ],
     ])->assertCreated();
 
@@ -359,7 +359,9 @@ it('6. stock move quantity matches received quantity', function (): void {
     $supplier = ($this->makeSupplier)($tenant);
     $uom = ($this->makeUom)($tenant);
     $item = ($this->makeItem)($tenant, $uom);
-    $option = ($this->makeOption)($tenant, $supplier, $item, $uom);
+    $option = ($this->makeOption)($tenant, $supplier, $item, $uom, [
+        'pack_quantity' => '2.333333',
+    ]);
     $order = ($this->makeOrder)($tenant, $user, $supplier);
     $line = ($this->makeLine)($tenant, $order, $item, $option);
 
@@ -367,7 +369,7 @@ it('6. stock move quantity matches received quantity', function (): void {
 
     ($this->receive)($user, $order, [
         'purchase_order_line_id' => $line->id,
-        'received_quantity' => '2.333333',
+        'received_quantity' => '1.000000',
     ])->assertCreated();
 
     $receiptLine = ($this->findReceiptLine)($line);
@@ -496,7 +498,9 @@ it('11. inventory on-hand increases after receipt', function (): void {
     $supplier = ($this->makeSupplier)($tenant);
     $uom = ($this->makeUom)($tenant);
     $item = ($this->makeItem)($tenant, $uom);
-    $option = ($this->makeOption)($tenant, $supplier, $item, $uom);
+    $option = ($this->makeOption)($tenant, $supplier, $item, $uom, [
+        'pack_quantity' => '2.500000',
+    ]);
     $order = ($this->makeOrder)($tenant, $user, $supplier);
     $line = ($this->makeLine)($tenant, $order, $item, $option);
 
@@ -504,7 +508,7 @@ it('11. inventory on-hand increases after receipt', function (): void {
 
     ($this->receive)($user, $order, [
         'purchase_order_line_id' => $line->id,
-        'received_quantity' => '2.500000',
+        'received_quantity' => '1.000000',
     ])->assertCreated();
 
     $item->refresh();
@@ -552,7 +556,9 @@ it('13. partial receipt increases inventory only by received amount', function (
     $supplier = ($this->makeSupplier)($tenant);
     $uom = ($this->makeUom)($tenant);
     $item = ($this->makeItem)($tenant, $uom);
-    $option = ($this->makeOption)($tenant, $supplier, $item, $uom);
+    $option = ($this->makeOption)($tenant, $supplier, $item, $uom, [
+        'pack_quantity' => '2.500000',
+    ]);
     $order = ($this->makeOrder)($tenant, $user, $supplier);
     $line = ($this->makeLine)($tenant, $order, $item, $option, ['pack_count' => 10]);
 
@@ -560,14 +566,14 @@ it('13. partial receipt increases inventory only by received amount', function (
 
     ($this->receive)($user, $order, [
         'purchase_order_line_id' => $line->id,
-        'received_quantity' => '2.500000',
+        'received_quantity' => '1.000000',
     ])->assertCreated();
 
     $item->refresh();
     $order->refresh();
 
     expect($item->onHandQuantity())->toBe('2.500000')
-        ->and($order->status)->toBe(PurchaseOrder::STATUS_SENT);
+        ->and($order->status)->toBe(PurchaseOrder::STATUS_PARTIALLY_RECEIVED);
 });
 
 it('14. full receipt updates purchase order to RECEIVED', function (): void {
@@ -613,7 +619,7 @@ it('15. purchase order cannot become RECEIVED if stock move creation fails', fun
 
     $order->refresh();
 
-    expect($order->status)->toBe(PurchaseOrder::STATUS_SENT);
+    expect($order->status)->toBe(PurchaseOrder::STATUS_CREATED);
 });
 
 it('16. receipt transaction rolls back if stock move creation fails', function (): void {
@@ -824,7 +830,9 @@ it('24. quantity math uses BCMath and string precision', function (): void {
     $supplier = ($this->makeSupplier)($tenant);
     $uom = ($this->makeUom)($tenant);
     $item = ($this->makeItem)($tenant, $uom);
-    $option = ($this->makeOption)($tenant, $supplier, $item, $uom);
+    $option = ($this->makeOption)($tenant, $supplier, $item, $uom, [
+        'pack_quantity' => '0.333333',
+    ]);
     $order = ($this->makeOrder)($tenant, $user, $supplier);
     $line = ($this->makeLine)($tenant, $order, $item, $option, ['pack_count' => 1]);
 
@@ -832,14 +840,14 @@ it('24. quantity math uses BCMath and string precision', function (): void {
 
     ($this->receive)($user, $order, [
         'purchase_order_line_id' => $line->id,
-        'received_quantity' => '0.333333',
+        'received_quantity' => '1.000000',
     ])->assertCreated();
 
     $receiptLine = ($this->findReceiptLine)($line);
     $stockMove = StockMove::query()->first();
     $item->refresh();
 
-    expect((string) $receiptLine?->received_quantity)->toBe('0.333333')
+    expect((string) $receiptLine?->received_quantity)->toBe('1.000000')
         ->and((string) $stockMove?->quantity)->toBe('0.333333')
         ->and($item->onHandQuantity())->toBe('0.333333');
 });
@@ -850,17 +858,24 @@ it('25. receiving has no float rounding errors in quantities', function (): void
     $supplier = ($this->makeSupplier)($tenant);
     $uom = ($this->makeUom)($tenant);
     $item = ($this->makeItem)($tenant, $uom);
-    $option = ($this->makeOption)($tenant, $supplier, $item, $uom);
+    $optionA = ($this->makeOption)($tenant, $supplier, $item, $uom, [
+        'supplier_sku' => 'SKU-A-' . $item->id,
+        'pack_quantity' => '0.100000',
+    ]);
+    $optionB = ($this->makeOption)($tenant, $supplier, $item, $uom, [
+        'supplier_sku' => 'SKU-B-' . $item->id,
+        'pack_quantity' => '0.200000',
+    ]);
     $order = ($this->makeOrder)($tenant, $user, $supplier);
-    $lineA = ($this->makeLine)($tenant, $order, $item, $option, ['pack_count' => 1]);
-    $lineB = ($this->makeLine)($tenant, $order, $item, $option, ['pack_count' => 1]);
+    $lineA = ($this->makeLine)($tenant, $order, $item, $optionA, ['pack_count' => 1]);
+    $lineB = ($this->makeLine)($tenant, $order, $item, $optionB, ['pack_count' => 1]);
 
     ($this->grantReceivePermission)($user);
 
     ($this->receive)($user, $order, [
         'lines' => [
-            ['purchase_order_line_id' => $lineA->id, 'received_quantity' => '0.100000'],
-            ['purchase_order_line_id' => $lineB->id, 'received_quantity' => '0.200000'],
+            ['purchase_order_line_id' => $lineA->id, 'received_quantity' => '1.000000'],
+            ['purchase_order_line_id' => $lineB->id, 'received_quantity' => '1.000000'],
         ],
     ])->assertCreated();
 
@@ -905,7 +920,7 @@ it('27. back-ordered purchase order receipt creates stock moves', function (): v
     $item = ($this->makeItem)($tenant, $uom);
     $option = ($this->makeOption)($tenant, $supplier, $item, $uom);
     $order = ($this->makeOrder)($tenant, $user, $supplier, [
-        'status' => PurchaseOrder::STATUS_SENT,
+        'status' => PurchaseOrder::STATUS_CREATED,
         'back_ordered_at' => now(),
     ]);
     $line = ($this->makeLine)($tenant, $order, $item, $option);
@@ -938,14 +953,15 @@ it('28. partially-received purchase order receipt creates stock moves', function
     ])->assertCreated();
 
     $order->refresh();
-    expect($order->status)->toBe(PurchaseOrder::STATUS_SENT);
+    expect($order->status)->toBe(PurchaseOrder::STATUS_PARTIALLY_RECEIVED);
 
     ($this->receive)($user, $order, [
         'purchase_order_line_id' => $line->id,
         'received_quantity' => '2.000000',
     ])->assertCreated();
 
-    expect(StockMove::query()->count())->toBe(2);
+    expect($order->fresh()->status)->toBe(PurchaseOrder::STATUS_PARTIALLY_RECEIVED)
+        ->and(StockMove::query()->count())->toBe(2);
 });
 
 it('29. status transition depends on receipt plus stock move success', function (): void {
@@ -956,7 +972,7 @@ it('29. status transition depends on receipt plus stock move success', function 
     $item = ($this->makeItem)($tenant, $uom);
     $option = ($this->makeOption)($tenant, $supplier, $item, $uom);
     $order = ($this->makeOrder)($tenant, $user, $supplier, [
-        'status' => PurchaseOrder::STATUS_SENT,
+        'status' => PurchaseOrder::STATUS_CREATED,
     ]);
     $line = ($this->makeLine)($tenant, $order, $item, $option, ['pack_count' => 10]);
 
@@ -971,7 +987,7 @@ it('29. status transition depends on receipt plus stock move success', function 
 
     $order->refresh();
 
-    expect($order->status)->toBe(PurchaseOrder::STATUS_SENT);
+    expect($order->status)->toBe(PurchaseOrder::STATUS_CREATED);
 });
 
 it('30. ajax receive endpoint returns JSON success and JSON error responses only', function (): void {

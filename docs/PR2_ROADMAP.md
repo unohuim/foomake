@@ -884,23 +884,19 @@ Purchase Order Statuses
 
 DRAFT
 
-OPEN
+CREATED
 
-PARTIALLY-RECEIVED
+PARTIALLY_RECEIVED
 
 RECEIVED
 
-BACK-ORDERED
-
-SHORT-CLOSED
+COMPLETED
 
 CANCELLED
 
 Terminal States
 
-RECEIVED
-
-SHORT-CLOSED
+COMPLETED
 
 CANCELLED
 
@@ -908,21 +904,15 @@ Receiving is not allowed in terminal states.
 
 Status Transition Rules (Industry Standard)
 
-DRAFT → OPEN (manual)
+DRAFT → CREATED (manual)
 
-OPEN → CANCELLED (only if no receipts exist)
+CREATED → CANCELLED (only if no receipts exist)
 
-OPEN → BACK-ORDERED (manual)
+CREATED → PARTIALLY_RECEIVED (automatic after first partial receipt)
 
-BACK-ORDERED → OPEN (manual)
+PARTIALLY_RECEIVED → RECEIVED (automatic when fully received or short-closed)
 
-OPEN → PARTIALLY-RECEIVED (automatic after first receipt)
-
-BACK-ORDERED → PARTIALLY-RECEIVED (automatic after receipt)
-
-PARTIALLY-RECEIVED → RECEIVED (automatic when fully received)
-
-PARTIALLY-RECEIVED → SHORT-CLOSED (manual when remaining qty is short-closed)
+RECEIVED → COMPLETED (manual or workflow completion)
 
 Receiving Model (Core of This PR)
 
@@ -979,7 +969,7 @@ Received
 
 Short-closed
 
-The PO becomes SHORT-CLOSED.
+The PO becomes RECEIVED. Short-close remains history and quantity data, not a persisted status.
 
 Permissions
 
@@ -993,7 +983,7 @@ Receiving
 
 Short-closing
 
-Status changes beyond DRAFT and OPEN
+Status changes beyond DRAFT and CREATED
 
 UI Requirements
 PO Index
@@ -1010,28 +1000,23 @@ Contextual status actions
 
 PO Show Page
 
-Status control (dropdown/actions)
+Header status/action dropdown
 
-“Receive” button at PO level (multi-line)
-
-“Receive” button per line (single-line)
+Receive action is initiated only from the PO header/action dropdown
 
 Slide-over receive panel (AJAX)
 
 Receiving UX Rules
 Action Behavior
 Receive from PO Multi-line receipt
-Receive from line Single-line receipt
 Submit receipt Creates receipt + stock moves + auto status update
 Validation 422 JSON, no page refresh
 
 Receiving allowed only when status is:
 
-OPEN
+CREATED
 
-BACK-ORDERED
-
-PARTIALLY-RECEIVED
+PARTIALLY_RECEIVED
 
 Cancellation Rule
 

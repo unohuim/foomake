@@ -22,6 +22,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 
 uses(RefreshDatabase::class);
 
@@ -260,7 +261,7 @@ it('3. new purchase orders start as draft', function (): void {
     expect(PurchaseOrder::query()->firstOrFail()->status)->toBe(PurchaseOrder::STATUS_DRAFT);
 });
 
-it('4. draft purchase orders can be sent', function (): void {
+it('4. draft purchase orders can be created', function (): void {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
     $supplier = ($this->makeSupplier)($tenant);
@@ -268,21 +269,21 @@ it('4. draft purchase orders can be sent', function (): void {
 
     ($this->grantPermission)($user, 'purchasing-purchase-orders-receive');
 
-    ($this->updateStatus)($user, $order, ['status' => PurchaseOrder::STATUS_SENT])
+    ($this->updateStatus)($user, $order, ['status' => PurchaseOrder::STATUS_CREATED])
         ->assertOk()
-        ->assertJsonPath('data.status', 'CREATED');
+        ->assertJsonPath('data.status', PurchaseOrder::STATUS_CREATED);
 
-    expect($order->fresh()->status)->toBe(PurchaseOrder::STATUS_SENT);
+    expect($order->fresh()->status)->toBe(PurchaseOrder::STATUS_CREATED);
 });
 
-it('5. sent purchase orders can be marked received after all balances are closed', function (): void {
+it('5. created purchase orders can be marked received after all balances are closed', function (): void {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
     $supplier = ($this->makeSupplier)($tenant);
     $uom = ($this->makeUom)($tenant);
     $item = ($this->makeItem)($tenant, $uom);
     $option = ($this->makeOption)($tenant, $supplier, $item, $uom);
-    $order = ($this->makeOrder)($tenant, $user, $supplier, ['status' => PurchaseOrder::STATUS_SENT]);
+    $order = ($this->makeOrder)($tenant, $user, $supplier, ['status' => PurchaseOrder::STATUS_CREATED]);
     $line = ($this->makeLine)($tenant, $order, $item, $option, ['pack_count' => 2]);
 
     ($this->grantPermission)($user, 'purchasing-purchase-orders-receive');
@@ -325,6 +326,14 @@ it('7. invalid persisted status transitions are rejected', function (): void {
     expect($order->fresh()->status)->toBe(PurchaseOrder::STATUS_DRAFT);
 });
 
+it('7b. purchase order status helper includes persisted partially received status', function (): void {
+    expect(PurchaseOrder::statuses())->toContain(PurchaseOrder::STATUS_PARTIALLY_RECEIVED)
+        ->and(PurchaseOrder::statuses())->toContain(PurchaseOrder::STATUS_CREATED)
+        ->and(PurchaseOrder::statuses())->not->toContain('SENT')
+        ->and(PurchaseOrder::statuses())->not->toContain('PARTIAL')
+        ->and(PurchaseOrder::statuses())->not->toContain('RECEIVING');
+});
+
 it('8. legacy action values are rejected as persisted statuses', function (string $legacyStatus): void {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
@@ -347,7 +356,7 @@ it('9. cancel records terminal cancelled status and audit metadata', function ()
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
     $supplier = ($this->makeSupplier)($tenant);
-    $order = ($this->makeOrder)($tenant, $user, $supplier, ['status' => PurchaseOrder::STATUS_SENT]);
+    $order = ($this->makeOrder)($tenant, $user, $supplier, ['status' => PurchaseOrder::STATUS_CREATED]);
 
     ($this->grantPermission)($user, 'purchasing-purchase-orders-receive');
 
@@ -367,18 +376,18 @@ it('10. back order records a receiving-stage event without changing persisted st
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
     $supplier = ($this->makeSupplier)($tenant);
-    $order = ($this->makeOrder)($tenant, $user, $supplier, ['status' => PurchaseOrder::STATUS_SENT]);
+    $order = ($this->makeOrder)($tenant, $user, $supplier, ['status' => PurchaseOrder::STATUS_CREATED]);
 
     ($this->grantPermission)($user, 'purchasing-purchase-orders-receive');
 
     ($this->updateStatus)($user, $order, ['action' => 'back_order'])
         ->assertOk()
-        ->assertJsonPath('data.status', 'CREATED')
+        ->assertJsonPath('data.status', PurchaseOrder::STATUS_CREATED)
         ->assertJsonPath('data.is_back_ordered', true);
 
     $fresh = $order->fresh();
 
-    expect($fresh->status)->toBe(PurchaseOrder::STATUS_SENT)
+    expect($fresh->status)->toBe(PurchaseOrder::STATUS_CREATED)
         ->and($fresh->back_ordered_at)->not->toBeNull()
         ->and($fresh->back_ordered_by_user_id)->toBe($user->id);
 });
@@ -536,7 +545,7 @@ it('17. receiving different supplier package uom uses item-specific conversion f
     $packUom = ($this->makeUom)($tenant, ['symbol' => 'ea', 'category_name' => 'Count']);
     $item = ($this->makeItem)($tenant, $baseUom);
     $option = ($this->makeOption)($tenant, $supplier, $item, $packUom, ['pack_quantity' => '40.000000']);
-    $order = ($this->makeOrder)($tenant, $user, $supplier, ['status' => PurchaseOrder::STATUS_SENT]);
+    $order = ($this->makeOrder)($tenant, $user, $supplier, ['status' => PurchaseOrder::STATUS_CREATED]);
     $line = ($this->makeLine)($tenant, $order, $item, $option, ['pack_count' => 2]);
 
     ItemUomConversion::query()->create([
@@ -565,7 +574,7 @@ it('18. receiving uses tenant conversion before global conversion', function ():
     $packUom = ($this->makeUom)($tenant, ['symbol' => 'kg', 'category_name' => 'Mass']);
     $item = ($this->makeItem)($tenant, $baseUom);
     $option = ($this->makeOption)($tenant, $supplier, $item, $packUom, ['pack_quantity' => '2.000000']);
-    $order = ($this->makeOrder)($tenant, $user, $supplier, ['status' => PurchaseOrder::STATUS_SENT]);
+    $order = ($this->makeOrder)($tenant, $user, $supplier, ['status' => PurchaseOrder::STATUS_CREATED]);
     $line = ($this->makeLine)($tenant, $order, $item, $option, ['pack_count' => 1]);
 
     UomConversion::query()->create([
@@ -599,7 +608,7 @@ it('19. missing supplier package conversion blocks receiving safely', function (
     $packUom = ($this->makeUom)($tenant, ['symbol' => 'case', 'category_name' => 'Count']);
     $item = ($this->makeItem)($tenant, $baseUom);
     $option = ($this->makeOption)($tenant, $supplier, $item, $packUom);
-    $order = ($this->makeOrder)($tenant, $user, $supplier, ['status' => PurchaseOrder::STATUS_SENT]);
+    $order = ($this->makeOrder)($tenant, $user, $supplier, ['status' => PurchaseOrder::STATUS_CREATED]);
     $line = ($this->makeLine)($tenant, $order, $item, $option);
 
     ($this->grantPermission)($user, 'purchasing-purchase-orders-receive');
@@ -676,6 +685,9 @@ it('24. purchase order items source uses supplier package combobox add pattern',
     expect($itemsSource)->toContain('<x-combobox')
         ->and($itemsSource)->toContain('supplierPackageComboboxOptions')
         ->and($itemsSource)->toContain('Add supplier package')
+        ->and($itemsSource)->not->toContain('x-on:click="openReceive()"')
+        ->and($itemsSource)->not->toContain('openReceiveLine(line)')
+        ->and($itemsSource)->not->toContain('canReceiveLine(line)')
         ->and($itemsSource)->not->toContain('x-model="lineForm.item_id"')
         ->and($itemsSource)->not->toContain('handleItemChange()')
         ->and($itemsSource)->not->toContain('>Pack option');
@@ -770,7 +782,7 @@ it('28. purchase order page module has no global state and collapses workflow dr
         ->and($pageModule)->not->toContain('window.purchasingOrdersShow');
 });
 
-it('29. purchase order index displays workflow draft instead of legacy sent', function (): void {
+it('29. purchase order index displays workflow draft instead of legacy created', function (): void {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
     $supplier = ($this->makeSupplier)($tenant);
@@ -779,7 +791,7 @@ it('29. purchase order index displays workflow draft instead of legacy sent', fu
     ($this->grantPermission)($user, 'purchasing-purchase-orders-create');
 
     $order = ($this->makeOrder)($tenant, $user, $supplier, [
-        'status' => PurchaseOrder::STATUS_SENT,
+        'status' => PurchaseOrder::STATUS_CREATED,
         'last_completed_workflow_stage_id' => null,
     ]);
 
@@ -791,10 +803,10 @@ it('29. purchase order index displays workflow draft instead of legacy sent', fu
     $orderPayload = collect($payload['orders'] ?? [])->firstWhere('id', $order->id);
 
     expect($orderPayload['status'] ?? null)->toBe(PurchaseOrder::STATUS_DRAFT)
-        ->and(json_encode($orderPayload))->not->toContain(PurchaseOrder::STATUS_SENT);
+        ->and($orderPayload['workflow_status'] ?? null)->not->toBe(PurchaseOrder::STATUS_CREATED);
 });
 
-it('30. purchase order index displays last completed workflow status label', function (): void {
+it('30. purchase order index displays persisted created status during receiving stage', function (): void {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
     $supplier = ($this->makeSupplier)($tenant);
@@ -806,7 +818,7 @@ it('30. purchase order index displays last completed workflow status label', fun
     $creatingStage->forceFill(['status_complete_label' => 'CREATED'])->save();
 
     $order = ($this->makeOrder)($tenant, $user, $supplier, [
-        'status' => PurchaseOrder::STATUS_SENT,
+        'status' => PurchaseOrder::STATUS_CREATED,
         'last_completed_workflow_stage_id' => $creatingStage->id,
     ]);
 
@@ -817,7 +829,7 @@ it('30. purchase order index displays last completed workflow status label', fun
 
     $orderPayload = collect($payload['orders'] ?? [])->firstWhere('id', $order->id);
 
-    expect($orderPayload['status'] ?? null)->toBe('CREATED');
+    expect($orderPayload['status'] ?? null)->toBe(PurchaseOrder::STATUS_CREATED);
 });
 
 it('31. purchase order detail payload uses workflow derived status instead of legacy status', function (): void {
@@ -829,7 +841,7 @@ it('31. purchase order detail payload uses workflow derived status instead of le
     ($this->grantPermission)($user, 'purchasing-purchase-orders-create');
 
     $order = ($this->makeOrder)($tenant, $user, $supplier, [
-        'status' => PurchaseOrder::STATUS_SENT,
+        'status' => PurchaseOrder::STATUS_CREATED,
         'last_completed_workflow_stage_id' => null,
     ]);
 
@@ -840,7 +852,7 @@ it('31. purchase order detail payload uses workflow derived status instead of le
 
     expect($payload['purchaseOrder']['status'] ?? null)->toBe(PurchaseOrder::STATUS_DRAFT)
         ->and($payload['workflow']['status'] ?? null)->toBe(PurchaseOrder::STATUS_DRAFT)
-        ->and(json_encode($payload['purchaseOrder']))->not->toContain(PurchaseOrder::STATUS_SENT);
+        ->and($payload['purchaseOrder']['workflow_status'] ?? null)->not->toBe(PurchaseOrder::STATUS_CREATED);
 });
 
 it('32. purchase order detail payload includes selected supplier and supplier options after material package create', function (): void {
@@ -898,7 +910,7 @@ it('32c. purchase order editability remains true through creating and receiving 
     $creatingStage = ($this->purchasingStage)($tenant, 'creating');
     $receivingStage = ($this->purchasingStage)($tenant, 'receiving');
     $order = ($this->makeOrder)($tenant, $user, $supplier, [
-        'status' => PurchaseOrder::STATUS_SENT,
+        'status' => PurchaseOrder::STATUS_CREATED,
         'current_workflow_stage_id' => $creatingStage->id,
         'last_completed_workflow_stage_id' => null,
     ]);
@@ -909,7 +921,7 @@ it('32c. purchase order editability remains true through creating and receiving 
     );
 
     $order->forceFill([
-        'status' => PurchaseOrder::STATUS_SENT,
+        'status' => PurchaseOrder::STATUS_CREATED,
         'current_workflow_stage_id' => $receivingStage->id,
         'last_completed_workflow_stage_id' => $creatingStage->id,
     ])->save();
@@ -962,7 +974,7 @@ it('32e. purchase order editability locks when workflow is complete or cancelled
         'last_completed_workflow_stage_id' => $completingStage->id,
     ]);
     $cancelledOrder = ($this->makeOrder)($tenant, $user, $supplier, [
-        'status' => PurchaseOrder::STATUS_SENT,
+        'status' => PurchaseOrder::STATUS_CREATED,
         'workflow_cancelled_at' => now(),
     ]);
 
@@ -990,7 +1002,7 @@ it('32f. purchase order header autosaves during receiving before inventory stage
     $creatingStage = ($this->purchasingStage)($tenant, 'creating');
     $receivingStage = ($this->purchasingStage)($tenant, 'receiving');
     $order = ($this->makeOrder)($tenant, $user, $supplier, [
-        'status' => PurchaseOrder::STATUS_SENT,
+        'status' => PurchaseOrder::STATUS_CREATED,
         'current_workflow_stage_id' => $receivingStage->id,
         'last_completed_workflow_stage_id' => $creatingStage->id,
     ]);
@@ -1017,7 +1029,7 @@ it('32g. purchase order line add update and remove are allowed while receiving r
     $creatingStage = ($this->purchasingStage)($tenant, 'creating');
     $receivingStage = ($this->purchasingStage)($tenant, 'receiving');
     $order = ($this->makeOrder)($tenant, $user, $supplier, [
-        'status' => PurchaseOrder::STATUS_SENT,
+        'status' => PurchaseOrder::STATUS_CREATED,
         'current_workflow_stage_id' => $receivingStage->id,
         'last_completed_workflow_stage_id' => $creatingStage->id,
     ]);
@@ -1120,11 +1132,13 @@ it('34. purchase order lines source renders inline quantity tax inputs and icon 
     $source = File::get(resource_path('views/purchasing/orders/show.blade.php'));
     $pageModule = File::get(resource_path('js/pages/purchasing-orders-show.js'));
 
-    expect($source)->toContain('autosaveLineField(line, \'pack_count\')')
+    $itemsSection = Str::between($source, '<x-detail-section-card title="Items" :default-open="true">', '<x-detail-section-card title="Receipt History"');
+
+    expect($itemsSection)->toContain('autosaveLineField(line, \'pack_count\')')
         ->and($source)->toContain('inputmode="numeric"')
-        ->and($source)->toContain('x-on:focus="$el.setSelectionRange($el.value.length, $el.value.length)"')
-        ->and($source)->not->toContain('step="1"')
-        ->and($source)->not->toContain(':step="quantityStep(line)"')
+        ->and($itemsSection)->toContain('x-on:focus="$el.setSelectionRange($el.value.length, $el.value.length)"')
+        ->and($itemsSection)->not->toContain('step="1"')
+        ->and($itemsSection)->not->toContain(':step="quantityStep(line)"')
         ->and($pageModule)->not->toContain('quantityStep(line)')
         ->and($pageModule)->toContain('pack_count: this.normalizeNullableInt(line.pack_count)')
         ->and(File::get(app_path('Http/Controllers/PurchaseOrderController.php')))->toContain("'pack_count' => (int) \$line->pack_count")
@@ -1248,4 +1262,23 @@ it('38. purchase order line remove remains permission and tenant scoped', functi
     $this->actingAs($otherUser)
         ->deleteJson("/purchasing/orders/{$order->id}/lines/{$line->id}")
         ->assertNotFound();
+});
+
+it('39. purchase order status docs and schema document persisted partially received status', function (): void {
+    $enumDocs = file_get_contents(base_path('docs/ENUMS.md'));
+    $schemaDocs = file_get_contents(base_path('docs/DB_SCHEMA.md'));
+    $architectureDocs = file_get_contents(base_path('docs/architecture/purchasing/PurchaseOrderLifecycle.yaml'));
+    $workflowSeeder = file_get_contents(base_path('app/Actions/Workflows/SeedDefaultWorkflowStagesForTenantAction.php'));
+
+    expect($enumDocs)->toContain('PARTIALLY_RECEIVED')
+        ->and($enumDocs)->not->toContain('PARTIALLY-RECEIVED')
+        ->and($enumDocs)->not->toContain('SENT')
+        ->and($schemaDocs)->not->toContain('SENT')
+        ->and($architectureDocs)->not->toContain('SENT')
+        ->and($schemaDocs)->toContain('PARTIALLY_RECEIVED')
+        ->and($architectureDocs)->toContain('PARTIALLY_RECEIVED')
+        ->and($workflowSeeder)->toContain("'purchasing' => [")
+        ->and($workflowSeeder)->toContain("'status_complete_label' => 'CREATED'")
+        ->and($workflowSeeder)->not->toContain("'key' => 'partially_received'")
+        ->and(PurchaseOrder::statuses())->toContain(PurchaseOrder::STATUS_PARTIALLY_RECEIVED);
 });

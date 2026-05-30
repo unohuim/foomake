@@ -363,6 +363,8 @@ Route::middleware('auth')->group(function () {
         ->name('admin.workflows.stages.store');
     Route::patch('/admin/workflows/stages/{workflowStage}', [WorkflowStageController::class, 'update'])
         ->name('admin.workflows.stages.update');
+    Route::delete('/admin/workflows/stages/{workflowStage}', [WorkflowStageController::class, 'destroy'])
+        ->name('admin.workflows.stages.destroy');
     Route::post('/admin/workflows/stages/reorder', [WorkflowStageController::class, 'reorder'])
         ->name('admin.workflows.stages.reorder');
     Route::post('/admin/workflows/task-templates', [WorkflowTaskTemplateController::class, 'store'])

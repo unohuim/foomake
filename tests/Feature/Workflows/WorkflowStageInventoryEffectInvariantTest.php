@@ -70,6 +70,12 @@ beforeEach(function (): void {
     $this->createStage = function (Tenant $tenant, WorkflowDomain $domain, array $attributes = []): WorkflowStage {
         $sequence = $this->stageCounter;
         $this->stageCounter++;
+        $defaultStatusCompleteLabel = match ($domain->key) {
+            'sales' => 'OPEN',
+            'purchasing' => 'CREATED',
+            'manufacturing', 'inventory' => 'SCHEDULED',
+            default => 'OPEN',
+        };
 
         return WorkflowStage::withoutGlobalScopes()->create(array_merge([
             'tenant_id' => $tenant->id,
@@ -77,9 +83,11 @@ beforeEach(function (): void {
             'key' => 'stage-' . $sequence,
             'name' => 'Stage ' . $sequence,
             'action_verb' => 'STAGE ' . $sequence,
+            'status_complete_label' => $defaultStatusCompleteLabel,
             'description' => null,
             'sort_order' => 10,
             'is_active' => true,
+            'is_core' => false,
             'is_inventory_effect_stage' => false,
         ], $attributes));
     };
@@ -112,6 +120,7 @@ it('2. authenticated users without workflow-manage cannot create stages', functi
             'key' => 'quality-check',
             'name' => 'Quality Check',
             'action_verb' => 'QUALITY CHECK',
+            'status_complete_label' => 'OPEN',
             'description' => null,
             'sort_order' => 40,
             'is_inventory_effect_stage' => false,
@@ -135,11 +144,12 @@ it('4. seeded packing stage is the default inventory-effect stage', function ():
     $tenant = ($this->makeTenant)();
     ($this->seedDefaultStages)($tenant);
 
-    $packedStage = ($this->salesStages)($tenant)
-        ->firstWhere('key', 'packed');
+    $packingStage = ($this->salesStages)($tenant)
+        ->firstWhere('key', 'packing');
 
-    expect($packedStage)->not->toBeNull()
-        ->and($packedStage?->is_inventory_effect_stage)->toBeTrue();
+    expect($packingStage)->not->toBeNull()
+        ->and($packingStage?->is_inventory_effect_stage)->toBeTrue()
+        ->and(($this->salesStages)($tenant)->pluck('key')->all())->not->toContain('packed');
 });
 
 it('5. workflow admin payload exposes inventory-effect stage flags', function (): void {
@@ -153,12 +163,13 @@ it('5. workflow admin payload exposes inventory-effect stage flags', function ()
         'admin-workflows-index-payload'
     );
 
-    $packedStage = collect($payload['stages'] ?? [])
-        ->firstWhere('key', 'packed');
+    $packingStage = collect($payload['stages'] ?? [])
+        ->firstWhere('key', 'packing');
 
-    expect($packedStage)->not->toBeNull()
-        ->and($packedStage)->toHaveKey('is_inventory_effect_stage')
-        ->and($packedStage['is_inventory_effect_stage'] ?? null)->toBeTrue();
+    expect($packingStage)->not->toBeNull()
+        ->and($packingStage)->toHaveKey('is_inventory_effect_stage')
+        ->and($packingStage['is_inventory_effect_stage'] ?? null)->toBeTrue()
+        ->and(collect($payload['stages'] ?? [])->pluck('key')->all())->not->toContain('packed');
 });
 
 it('6. admin can create an additional sales stage without changing the inventory-effect stage', function (): void {
@@ -172,6 +183,7 @@ it('6. admin can create an additional sales stage without changing the inventory
         'key' => 'quality-check',
         'name' => 'Quality Check',
         'action_verb' => 'QUALITY CHECK',
+        'status_complete_label' => 'OPEN',
         'description' => 'Post-pack review',
         'sort_order' => 40,
         'is_inventory_effect_stage' => false,
@@ -192,6 +204,7 @@ it('7. creating a new marked sales stage clears the previous inventory-effect st
         'key' => 'quality-check',
         'name' => 'Quality Check',
         'action_verb' => 'QUALITY CHECK',
+        'status_complete_label' => 'OPEN',
         'description' => null,
         'sort_order' => 40,
         'is_inventory_effect_stage' => true,
@@ -202,11 +215,11 @@ it('7. creating a new marked sales stage clears the previous inventory-effect st
         ->where('key', 'quality-check')
         ->firstOrFail();
 
-    $packedStage = ($this->salesStages)($tenant)->firstWhere('key', 'packed');
+    $packingStage = ($this->salesStages)($tenant)->firstWhere('key', 'packing');
 
     expect($response->json('data.is_inventory_effect_stage'))->toBeTrue()
         ->and($qualityStage->is_inventory_effect_stage)->toBeTrue()
-        ->and($packedStage?->fresh()->is_inventory_effect_stage)->toBeFalse();
+        ->and($packingStage?->fresh()->is_inventory_effect_stage)->toBeFalse();
 });
 
 it('8. updating a sales stage to marked true clears the previous inventory-effect stage', function (): void {
@@ -228,10 +241,10 @@ it('8. updating a sales stage to marked true clears the previous inventory-effec
         'is_inventory_effect_stage' => true,
     ])->assertOk();
 
-    $packedStage = ($this->salesStages)($tenant)->firstWhere('key', 'packed');
+    $packingStage = ($this->salesStages)($tenant)->firstWhere('key', 'packing');
 
     expect($shippingStage->fresh()->is_inventory_effect_stage)->toBeTrue()
-        ->and($packedStage?->fresh()->is_inventory_effect_stage)->toBeFalse();
+        ->and($packingStage?->fresh()->is_inventory_effect_stage)->toBeFalse();
 });
 
 it('9. removing the only sales inventory-effect stage is rejected', function (): void {
@@ -240,41 +253,41 @@ it('9. removing the only sales inventory-effect stage is rejected', function ():
     ($this->grantPermission)($user, 'workflow-manage');
     ($this->seedDefaultStages)($tenant);
 
-    $packedStage = ($this->salesStages)($tenant)->firstWhere('key', 'packed');
+    $packingStage = ($this->salesStages)($tenant)->firstWhere('key', 'packing');
 
-    $this->actingAs($user)->patchJson(route('admin.workflows.stages.update', $packedStage), [
-        'workflow_domain_id' => $packedStage->workflow_domain_id,
-        'key' => $packedStage->key,
-        'name' => $packedStage->name,
-        'action_verb' => $packedStage->action_verb,
-        'description' => $packedStage->description,
-        'sort_order' => $packedStage->sort_order,
+    $this->actingAs($user)->patchJson(route('admin.workflows.stages.update', $packingStage), [
+        'workflow_domain_id' => $packingStage->workflow_domain_id,
+        'key' => $packingStage->key,
+        'name' => $packingStage->name,
+        'action_verb' => $packingStage->action_verb,
+        'description' => $packingStage->description,
+        'sort_order' => $packingStage->sort_order,
         'is_active' => true,
         'is_inventory_effect_stage' => false,
     ])->assertStatus(422)->assertJsonValidationErrors(['is_inventory_effect_stage']);
 });
 
-it('10. deactivating the current sales inventory-effect stage is rejected', function (): void {
+it('10. deactivating a core sales stage is rejected by the core lock', function (): void {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
     ($this->grantPermission)($user, 'workflow-manage');
     ($this->seedDefaultStages)($tenant);
 
-    $packedStage = ($this->salesStages)($tenant)->firstWhere('key', 'packed');
+    $packingStage = ($this->salesStages)($tenant)->firstWhere('key', 'packing');
 
-    $this->actingAs($user)->patchJson(route('admin.workflows.stages.update', $packedStage), [
-        'workflow_domain_id' => $packedStage->workflow_domain_id,
-        'key' => $packedStage->key,
-        'name' => $packedStage->name,
-        'action_verb' => $packedStage->action_verb,
-        'description' => $packedStage->description,
-        'sort_order' => $packedStage->sort_order,
+    $this->actingAs($user)->patchJson(route('admin.workflows.stages.update', $packingStage), [
+        'workflow_domain_id' => $packingStage->workflow_domain_id,
+        'key' => $packingStage->key,
+        'name' => $packingStage->name,
+        'action_verb' => $packingStage->action_verb,
+        'description' => $packingStage->description,
+        'sort_order' => $packingStage->sort_order,
         'is_active' => false,
         'is_inventory_effect_stage' => true,
-    ])->assertStatus(422)->assertJsonValidationErrors(['is_inventory_effect_stage']);
+    ])->assertStatus(422)->assertJsonValidationErrors(['is_active']);
 });
 
-it('11. sales workflow cannot be reduced to one active stage', function (): void {
+it('11. core sales stages cannot be deactivated through workflow management', function (): void {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
     ($this->grantPermission)($user, 'workflow-manage');
@@ -291,35 +304,31 @@ it('11. sales workflow cannot be reduced to one active stage', function (): void
         'sort_order' => $stages['shipping']->sort_order,
         'is_active' => false,
         'is_inventory_effect_stage' => false,
-    ])->assertOk();
+    ])->assertStatus(422)->assertJsonValidationErrors(['is_active']);
 
-    $this->actingAs($user)->patchJson(route('admin.workflows.stages.update', $stages['packed']->fresh()), [
-        'workflow_domain_id' => $stages['packed']->workflow_domain_id,
-        'key' => $stages['packed']->key,
-        'name' => $stages['packed']->name,
-        'action_verb' => $stages['packed']->action_verb,
-        'description' => $stages['packed']->description,
-        'sort_order' => $stages['packed']->sort_order,
-        'is_active' => false,
-        'is_inventory_effect_stage' => false,
-    ])->assertStatus(422)->assertJsonValidationErrors(['is_inventory_effect_stage']);
+    expect($stages['shipping']->fresh()->is_active)->toBeTrue();
 });
 
-it('12. sales workflow may deactivate non-inventory stages while one is marked', function (): void {
+it('12. sales workflow may deactivate non-core non-inventory stages while one is marked', function (): void {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
     ($this->grantPermission)($user, 'workflow-manage');
     ($this->seedDefaultStages)($tenant);
 
-    $shippingStage = ($this->salesStages)($tenant)->firstWhere('key', 'shipping');
+    $reviewStage = ($this->createStage)($tenant, ($this->salesDomain)(), [
+        'key' => 'reviewing',
+        'name' => 'Reviewing',
+        'action_verb' => 'REVIEW',
+        'sort_order' => 35,
+    ]);
 
-    $this->actingAs($user)->patchJson(route('admin.workflows.stages.update', $shippingStage), [
-        'workflow_domain_id' => $shippingStage->workflow_domain_id,
-        'key' => $shippingStage->key,
-        'name' => $shippingStage->name,
-        'action_verb' => $shippingStage->action_verb,
-        'description' => $shippingStage->description,
-        'sort_order' => $shippingStage->sort_order,
+    $this->actingAs($user)->patchJson(route('admin.workflows.stages.update', $reviewStage), [
+        'workflow_domain_id' => $reviewStage->workflow_domain_id,
+        'key' => $reviewStage->key,
+        'name' => $reviewStage->name,
+        'action_verb' => $reviewStage->action_verb,
+        'description' => $reviewStage->description,
+        'sort_order' => $reviewStage->sort_order,
         'is_active' => false,
         'is_inventory_effect_stage' => false,
     ])->assertOk();
@@ -328,7 +337,7 @@ it('12. sales workflow may deactivate non-inventory stages while one is marked',
         ->and(($this->salesStages)($tenant)->where('is_active', true)->where('is_inventory_effect_stage', true)->count())->toBe(1);
 });
 
-it('13. reordering sales stages preserves the single marked stage', function (): void {
+it('13. reordering core sales stages is rejected by the core lock', function (): void {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
     ($this->grantPermission)($user, 'workflow-manage');
@@ -338,13 +347,13 @@ it('13. reordering sales stages preserves the single marked stage', function ():
 
     $this->actingAs($user)->postJson(route('admin.workflows.stages.reorder'), [
         'workflow_domain_id' => ($this->salesDomain)()->id,
-        'ordered_ids' => [$stages['shipping']->id, $stages['packed']->id, $stages['creating']->id],
-    ])->assertOk();
+        'ordered_ids' => [$stages['shipping']->id, $stages['packing']->id, $stages['creating']->id],
+    ])->assertStatus(422)->assertJsonValidationErrors(['ordered_ids']);
 
     $refreshedStages = ($this->salesStages)($tenant);
 
     expect($refreshedStages->where('is_inventory_effect_stage', true)->count())->toBe(1)
-        ->and($refreshedStages->firstWhere('key', 'packed')?->fresh()->is_inventory_effect_stage)->toBeTrue();
+        ->and($refreshedStages->firstWhere('key', 'packing')?->fresh()->is_inventory_effect_stage)->toBeTrue();
 });
 
 it('14. inventory-effect invariant validation keeps the existing json error shape', function (): void {
@@ -353,39 +362,40 @@ it('14. inventory-effect invariant validation keeps the existing json error shap
     ($this->grantPermission)($user, 'workflow-manage');
     ($this->seedDefaultStages)($tenant);
 
-    $packedStage = ($this->salesStages)($tenant)->firstWhere('key', 'packed');
+    $packingStage = ($this->salesStages)($tenant)->firstWhere('key', 'packing');
 
-    $this->actingAs($user)->patchJson(route('admin.workflows.stages.update', $packedStage), [
-        'workflow_domain_id' => $packedStage->workflow_domain_id,
-        'key' => $packedStage->key,
-        'name' => $packedStage->name,
-        'action_verb' => $packedStage->action_verb,
-        'description' => $packedStage->description,
-        'sort_order' => $packedStage->sort_order,
+    $this->actingAs($user)->patchJson(route('admin.workflows.stages.update', $packingStage), [
+        'workflow_domain_id' => $packingStage->workflow_domain_id,
+        'key' => $packingStage->key,
+        'name' => $packingStage->name,
+        'action_verb' => $packingStage->action_verb,
+        'description' => $packingStage->description,
+        'sort_order' => $packingStage->sort_order,
         'is_active' => true,
         'is_inventory_effect_stage' => false,
     ])->assertStatus(422)
         ->assertJsonValidationErrors(['is_inventory_effect_stage']);
 });
 
-it('15. moving the marked sales stage into purchasing is rejected because sales would lose its marker', function (): void {
+it('15. moving a core sales stage into purchasing is rejected by the core lock', function (): void {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
     ($this->grantPermission)($user, 'workflow-manage');
     ($this->seedDefaultStages)($tenant);
 
-    $packedStage = ($this->salesStages)($tenant)->firstWhere('key', 'packed');
+    $packingStage = ($this->salesStages)($tenant)->firstWhere('key', 'packing');
 
-    $this->actingAs($user)->patchJson(route('admin.workflows.stages.update', $packedStage), [
+    $this->actingAs($user)->patchJson(route('admin.workflows.stages.update', $packingStage), [
         'workflow_domain_id' => ($this->purchasingDomain)()->id,
         'key' => 'receiving-check',
         'name' => 'Receiving Check',
         'action_verb' => 'RECEIVING CHECK',
-        'description' => $packedStage->description,
-        'sort_order' => $packedStage->sort_order,
+        'status_complete_label' => 'RECEIVED',
+        'description' => $packingStage->description,
+        'sort_order' => $packingStage->sort_order,
         'is_active' => true,
         'is_inventory_effect_stage' => false,
-    ])->assertStatus(422)->assertJsonValidationErrors(['is_inventory_effect_stage']);
+    ])->assertStatus(422)->assertJsonValidationErrors(['workflow_domain_id']);
 });
 
 it('16. inventory workflow domain exists as a fixed system-owned domain', function (): void {
@@ -503,7 +513,7 @@ it('23. workflow payload remains tenant scoped for inventory-effect stage state'
     WorkflowStage::withoutGlobalScopes()
         ->where('tenant_id', $tenantB->id)
         ->where('workflow_domain_id', ($this->salesDomain)()->id)
-        ->where('key', 'packed')
+        ->where('key', 'packing')
         ->update(['is_inventory_effect_stage' => false]);
 
     $payload = ($this->extractPayload)(
@@ -513,7 +523,7 @@ it('23. workflow payload remains tenant scoped for inventory-effect stage state'
 
     $tenantAStages = collect($payload['stages'] ?? []);
 
-    expect($tenantAStages->firstWhere('key', 'packed')['is_inventory_effect_stage'] ?? null)->toBeTrue()
+    expect($tenantAStages->firstWhere('key', 'packing')['is_inventory_effect_stage'] ?? null)->toBeTrue()
         ->and($tenantAStages->firstWhere('key', 'shipping')['is_inventory_effect_stage'] ?? null)->toBeFalse();
 });
 
@@ -528,6 +538,7 @@ it('24. stage store responses include the inventory-effect marker', function ():
         'key' => 'quality-check',
         'name' => 'Quality Check',
         'action_verb' => 'QUALITY CHECK',
+        'status_complete_label' => 'OPEN',
         'description' => null,
         'sort_order' => 40,
         'is_inventory_effect_stage' => true,
@@ -562,15 +573,20 @@ it('26. inactive sales stages remain visible with their marker field in show-ina
     ($this->grantPermission)($user, 'workflow-manage');
     ($this->seedDefaultStages)($tenant);
 
-    $shippingStage = ($this->salesStages)($tenant)->firstWhere('key', 'shipping');
+    $reviewStage = ($this->createStage)($tenant, ($this->salesDomain)(), [
+        'key' => 'reviewing',
+        'name' => 'Reviewing',
+        'action_verb' => 'REVIEW',
+        'sort_order' => 35,
+    ]);
 
-    $this->actingAs($user)->patchJson(route('admin.workflows.stages.update', $shippingStage), [
-        'workflow_domain_id' => $shippingStage->workflow_domain_id,
-        'key' => $shippingStage->key,
-        'name' => $shippingStage->name,
-        'action_verb' => $shippingStage->action_verb,
-        'description' => $shippingStage->description,
-        'sort_order' => $shippingStage->sort_order,
+    $this->actingAs($user)->patchJson(route('admin.workflows.stages.update', $reviewStage), [
+        'workflow_domain_id' => $reviewStage->workflow_domain_id,
+        'key' => $reviewStage->key,
+        'name' => $reviewStage->name,
+        'action_verb' => $reviewStage->action_verb,
+        'description' => $reviewStage->description,
+        'sort_order' => $reviewStage->sort_order,
         'is_active' => false,
         'is_inventory_effect_stage' => false,
     ])->assertOk();
@@ -580,12 +596,12 @@ it('26. inactive sales stages remain visible with their marker field in show-ina
         'admin-workflows-index-payload'
     );
 
-    $inactiveShippingStage = collect($payload['stages'] ?? [])
-        ->firstWhere('key', 'shipping');
+    $inactiveReviewStage = collect($payload['stages'] ?? [])
+        ->firstWhere('key', 'reviewing');
 
-    expect($inactiveShippingStage)->not->toBeNull()
-        ->and($inactiveShippingStage)->toHaveKey('is_inventory_effect_stage')
-        ->and($inactiveShippingStage['is_inventory_effect_stage'] ?? null)->toBeFalse();
+    expect($inactiveReviewStage)->not->toBeNull()
+        ->and($inactiveReviewStage)->toHaveKey('is_inventory_effect_stage')
+        ->and($inactiveReviewStage['is_inventory_effect_stage'] ?? null)->toBeFalse();
 });
 
 it('27. creating a stage whose generated key duplicates an existing stage key is rejected with validation errors', function (): void {
@@ -598,6 +614,7 @@ it('27. creating a stage whose generated key duplicates an existing stage key is
         'workflow_domain_id' => ($this->salesDomain)()->id,
         'name' => 'Quality Check',
         'action_verb' => 'QUALITY CHECK',
+        'status_complete_label' => 'OPEN',
         'description' => null,
         'sort_order' => 40,
         'is_inventory_effect_stage' => false,
@@ -607,6 +624,7 @@ it('27. creating a stage whose generated key duplicates an existing stage key is
         'workflow_domain_id' => ($this->salesDomain)()->id,
         'name' => 'quality-check',
         'action_verb' => 'QUALITY-CHECK',
+        'status_complete_label' => 'OPEN',
         'description' => null,
         'sort_order' => 50,
         'is_inventory_effect_stage' => false,
@@ -623,6 +641,7 @@ it('28. unique generated stage keys still create successfully', function (): voi
         'workflow_domain_id' => ($this->salesDomain)()->id,
         'name' => 'Quality Review',
         'action_verb' => 'QUALITY REVIEW',
+        'status_complete_label' => 'OPEN',
         'description' => null,
         'sort_order' => 40,
         'is_inventory_effect_stage' => false,

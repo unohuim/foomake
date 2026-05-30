@@ -40,7 +40,7 @@ return new class extends Migration
         DB::statement(
             "ALTER TABLE purchase_orders " .
             "ADD CONSTRAINT purchase_orders_status_allowed " .
-            "CHECK (status IN ('DRAFT', 'SENT', 'RECEIVED', 'COMPLETED', 'CANCELLED'))"
+            "CHECK (status IN ('DRAFT', 'CREATED', 'RECEIVED', 'COMPLETED', 'CANCELLED'))"
         );
     }
 

@@ -807,7 +807,7 @@ it('returns purchase order row display fields supported by the Material detail s
     $order = ($this->makePurchaseOrder)($tenant, $user, $supplier, [
         'po_number' => 'DISPLAY-1',
         'order_date' => Carbon::parse('2026-05-20')->toDateString(),
-        'status' => PurchaseOrder::STATUS_SENT,
+        'status' => PurchaseOrder::STATUS_CREATED,
         'po_grand_total_cents' => 4567,
     ]);
 

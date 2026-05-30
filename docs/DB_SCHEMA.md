@@ -43,6 +43,10 @@ Migrations remain the **sole source of truth**.
 - permission_role
 - purchase_order_lines
 - purchase_orders
+- purchase_order_receipt_lines
+- purchase_order_receipts
+- purchase_order_short_closure_lines
+- purchase_order_short_closures
 - recipes
 - recipe_lines
 - roles
@@ -334,6 +338,7 @@ Migrations remain the **sole source of truth**.
 | description       | text      | Yes      | —                                   |
 | sort_order        | unsignedInteger | No | Runtime order within domain         |
 | is_active         | boolean   | No       | Default true                        |
+| is_core           | boolean   | No       | Default false; true for seeded system stages locked from delete/deactivation/core-field edits |
 | created_at        | timestamp | Yes      | —                                   |
 | updated_at        | timestamp | Yes      | —                                   |
 
@@ -894,7 +899,7 @@ Migrations remain the **sole source of truth**.
 - Index: `(tenant_id, supplier_id)`
 - Index: `(tenant_id, current_workflow_stage_id)` (`po_tenant_current_workflow_stage_idx`)
 - Index: `(tenant_id, last_completed_workflow_stage_id)` (`po_tenant_last_workflow_stage_idx`)
-- Check: `status IN ('DRAFT', 'SENT', 'RECEIVED', 'COMPLETED', 'CANCELLED')`
+- Check: `status IN ('DRAFT', 'CREATED', 'PARTIALLY_RECEIVED', 'RECEIVED', 'COMPLETED', 'CANCELLED')`
 - Implicit (FK index): `created_by_user_id`
 - Implicit (FK index): `supplier_id`
 - Implicit (FK index): `cancelled_by_user_id`
@@ -906,8 +911,10 @@ Migrations remain the **sole source of truth**.
 
 - `shipping_cents` is stored as integer cents; PO forms accept `shipping_amount` in dollars/cents and normalize at the request boundary.
 - `tax_cents` is server-calculated from `purchase_order_lines.line_tax_rate_bps`; it is not user-entered on the PO header.
+- `PARTIALLY_RECEIVED` is persisted after at least one positive receipt line is recorded while a receivable balance remains.
+- Purchasing workflow-stage `status_complete_label` values are selected from the workflow status option provider; `purchase_orders.status` remains constrained to the persisted values above, while the workflow-stage dropdown may also expose `OPEN` for workflow-derived stage configuration. Default seeded stages do not duplicate Receiving outcomes with a separate `partially_received` stage.
 - `CANCELLED` is persisted in `status`; `cancelled_at` and `cancelled_by_user_id` are audit metadata, not display authority.
-- During workflow migration, PO detail status is derived from workflow fields while `status` remains mirrored for compatibility.
+- During workflow migration, PO detail status is derived from workflow fields while `status` remains mirrored for compatibility; receipt-derived `PARTIALLY_RECEIVED` is displayed from the mirror while the PO remains in the normal Receiving stage.
 
 ---
 
@@ -915,6 +922,12 @@ Migrations remain the **sole source of truth**.
 
 **Tenant-owned:** Yes  
 **Purpose:** Receipt event headers for purchase orders
+
+### Behavioral Notes
+
+- One receipt submit creates exactly one `purchase_order_receipts` row.
+- Multi-line receiving creates one `purchase_order_receipt_lines` row for each positive received line.
+- Zero or blank submitted receipt quantities are ignored before persistence.
 
 ### Columns
 
@@ -965,6 +978,11 @@ Migrations remain the **sole source of truth**.
 - `purchase_order_receipt_id` → purchase_order_receipts.id (CASCADE)
 - `purchase_order_line_id` → purchase_order_lines.id (CASCADE)
 - `stock_move_id` → stock_moves.id (SET NULL)
+
+### Behavioral Notes
+
+- `stock_move_id` links a stockable receipt line to its posted receipt `stock_moves` row.
+- Non-stockable received lines keep `stock_move_id` null and do not create stock moves.
 
 ### Keys & Indexes
 

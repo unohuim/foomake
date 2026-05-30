@@ -4,11 +4,34 @@ export function registerWorkflowActionButton(Alpine) {
         csrfToken,
         loading: false,
         error: '',
+        init() {
+            this.$el.addEventListener('workflow-updated', (event) => {
+                if (event.detail?.workflow) {
+                    this.workflow = event.detail.workflow;
+                }
+            });
+
+            document.addEventListener('workflow-updated', (event) => {
+                if (event.detail?.workflow) {
+                    this.workflow = event.detail.workflow;
+                }
+            });
+        },
         hasActions() {
             return Array.isArray(this.workflow.actions) && this.workflow.actions.length > 0;
         },
         async submit(action) {
             if (!action || this.loading) {
+                return;
+            }
+
+            if (['receive', 'short_close'].includes(action.type)) {
+                window.dispatchEvent(new CustomEvent('purchase-order-status-action', {
+                    detail: {
+                        ...action,
+                        action: action.type,
+                    },
+                }));
                 return;
             }
 
@@ -38,17 +61,24 @@ export function registerWorkflowActionButton(Alpine) {
                 }
 
                 this.workflow = data.data?.workflow || this.workflow;
+                const purchaseOrder = data.data?.purchase_order || {};
+                const canReceive = Object.prototype.hasOwnProperty.call(purchaseOrder, 'can_receive')
+                    ? purchaseOrder.can_receive
+                    : data.data?.can_receive;
+
                 this.$root.dispatchEvent(new CustomEvent('workflow-updated', {
                     bubbles: true,
                     detail: {
                         workflow: this.workflow,
-                        purchaseOrder: data.data?.purchase_order || {},
+                        purchaseOrder,
+                        canReceive,
                     },
                 }));
                 document.dispatchEvent(new CustomEvent('workflow-updated', {
                     detail: {
                         workflow: this.workflow,
-                        purchaseOrder: data.data?.purchase_order || {},
+                        purchaseOrder,
+                        canReceive,
                     },
                 }));
             } catch (error) {

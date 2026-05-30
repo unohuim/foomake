@@ -12,7 +12,13 @@
             $linesPayload = $purchaseOrder->lines->map(function ($line) use ($lineTotals) {
                 $packCount = bcadd((string) $line->pack_count, '0', 6);
                 $totals = $lineTotals[$line->id] ?? [];
-                $packPrecision = (int) ($line->purchaseOption?->packUom?->display_precision ?? 1);
+                $option = $line->purchaseOption;
+                $packPrecision = (int) ($option?->packUom?->display_precision ?? 1);
+                $packQuantity = $option ? bcadd((string) $option->pack_quantity, '0', 6) : null;
+                $packQuantityDisplay = $packQuantity !== null
+                    ? \App\Support\QuantityFormatter::format($packQuantity, $packPrecision)
+                    : null;
+                $packUom = $option?->packUom?->symbol ?: $option?->packUom?->name;
 
                 return [
                     'id' => $line->id,
@@ -20,6 +26,7 @@
                     'pack_count' => $packCount,
                     'pack_precision' => $packPrecision,
                     'pack_count_display' => \App\Support\QuantityFormatter::format($packCount, $packPrecision),
+                    'unit_context' => $packQuantityDisplay && $packUom ? "{$packQuantityDisplay} {$packUom} pack" : 'Pack',
                     'received_sum' => $totals['received_sum'] ?? '0.000000',
                     'received_sum_display' => \App\Support\QuantityFormatter::format($totals['received_sum'] ?? '0.000000', $packPrecision),
                     'short_closed_sum' => $totals['short_closed_sum'] ?? '0.000000',
@@ -33,6 +40,7 @@
                 'id' => $purchaseOrder->id,
                 'supplier_name' => $purchaseOrder->supplier?->company_name,
                 'status' => $purchaseOrder->workflowStatus(),
+                'persisted_status' => $purchaseOrder->status,
                 'is_cancelled' => $purchaseOrder->workflow_cancelled_at !== null,
                 'is_back_ordered' => $purchaseOrder->back_ordered_at !== null,
                 'order_date' => $purchaseOrder->order_date?->format('Y-m-d'),
@@ -185,30 +193,32 @@
         </div>
 
         <div
-            class="fixed inset-0 z-50 flex items-center justify-center"
+            class="fixed inset-0 z-50 flex justify-end"
             x-show="isReceiveOpen"
             x-cloak
             x-on:keydown.escape.window="closeReceive()"
         >
             <div class="fixed inset-0 bg-gray-900/30" x-on:click="closeReceive()"></div>
-            <div class="relative z-50 w-full max-w-2xl mx-4 bg-white rounded-lg shadow-xl">
-                <div class="p-6">
+            <div class="relative z-50 flex h-full w-full max-w-3xl flex-col bg-white shadow-xl">
+                <div class="border-b border-gray-100 p-6">
                     <div class="flex items-start justify-between">
                         <div>
-                            <h3 class="text-lg font-medium text-gray-900">Receive</h3>
+                            <h3 class="text-lg font-medium text-gray-900">Receive Purchase Order</h3>
                             <p class="mt-1 text-sm text-gray-600" x-text="receiveOrderLabel"></p>
                         </div>
                         <button
                             type="button"
-                            class="text-gray-400 hover:text-gray-600"
+                            class="inline-flex h-9 w-9 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-50 hover:text-gray-600"
                             x-on:click="closeReceive()"
                             aria-label="Close"
                         >
                             ×
                         </button>
                     </div>
+                </div>
 
-                    <div class="mt-6 space-y-4">
+                <div class="min-h-0 flex-1 overflow-y-auto p-6">
+                    <div class="space-y-4">
                         <div class="grid gap-4 sm:grid-cols-2">
                             <div>
                                 <label class="block text-xs font-semibold uppercase text-gray-500">
@@ -217,6 +227,8 @@
                                         type="datetime-local"
                                         class="mt-1 w-full rounded border-gray-300 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500"
                                         x-model="receiveForm.received_at"
+                                        x-on:input="collapseReceiveDatePicker($event)"
+                                        x-on:change="collapseReceiveDatePicker($event)"
                                     />
                                 </label>
                                 <p class="mt-1 text-xs text-red-600" x-text="receiveErrors.received_at[0]"></p>
@@ -247,10 +259,26 @@
 
                         <div class="space-y-3">
                             <template x-for="(line, index) in receiveForm.lines" :key="line.id">
-                                <div class="rounded-md border border-gray-100 bg-gray-50 p-3">
-                                    <div class="flex items-center justify-between text-sm text-gray-700">
-                                        <span class="font-medium" x-text="line.item_name || 'Item'"></span>
-                                        <span class="text-xs text-gray-500">Remaining: <span x-text="line.remaining_balance_display"></span></span>
+                                <div class="rounded-md border border-gray-100 bg-white p-4 shadow-sm">
+                                    <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                                        <div class="min-w-0">
+                                            <div class="font-medium text-gray-900" x-text="line.item_name || 'Item'"></div>
+                                            <div class="mt-1 text-xs text-gray-500" x-text="line.unit_context"></div>
+                                        </div>
+                                        <div class="grid grid-cols-3 gap-3 text-right text-xs text-gray-500">
+                                            <div>
+                                                <div class="font-semibold uppercase text-gray-400">Ordered</div>
+                                                <div class="mt-1 text-gray-700" x-text="line.ordered_quantity_display"></div>
+                                            </div>
+                                            <div>
+                                                <div class="font-semibold uppercase text-gray-400">Received</div>
+                                                <div class="mt-1 text-gray-700" x-text="line.received_quantity_display"></div>
+                                            </div>
+                                            <div>
+                                                <div class="font-semibold uppercase text-gray-400">Outstanding</div>
+                                                <div class="mt-1 text-gray-700" x-text="line.remaining_balance_display"></div>
+                                            </div>
+                                        </div>
                                     </div>
                                     <div class="mt-2">
                                         <label class="block text-xs font-semibold uppercase text-gray-500">
@@ -258,7 +286,8 @@
                                             <input
                                                 type="number"
                                                 min="0"
-                                                step="0.000001"
+                                                step="1"
+                                                inputmode="numeric"
                                                 class="mt-1 w-full rounded border-gray-300 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500"
                                                 x-model="line.received_quantity"
                                             />
@@ -271,24 +300,26 @@
 
                         <p class="text-xs text-red-600" x-text="receiveError"></p>
 
-                        <div class="mt-6 flex justify-end gap-3">
-                            <button
-                                type="button"
-                                class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md text-xs font-semibold text-gray-700 uppercase tracking-widest hover:bg-gray-50"
-                                x-on:click="closeReceive()"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                type="button"
-                                class="inline-flex items-center px-4 py-2 bg-blue-600 border border-transparent rounded-md text-xs font-semibold text-white uppercase tracking-widest hover:bg-blue-500"
-                                x-on:click="submitReceive()"
-                                :disabled="isReceiveSubmitting"
-                                :class="isReceiveSubmitting ? 'opacity-50 cursor-not-allowed' : ''"
-                            >
-                                Receive
-                            </button>
-                        </div>
+                    </div>
+                </div>
+                <div class="border-t border-gray-100 bg-white p-4">
+                    <div class="flex justify-end gap-3">
+                        <button
+                            type="button"
+                            class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md text-xs font-semibold text-gray-700 uppercase tracking-widest hover:bg-gray-50"
+                            x-on:click="closeReceive()"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            type="button"
+                            class="inline-flex items-center px-4 py-2 bg-blue-600 border border-transparent rounded-md text-xs font-semibold text-white uppercase tracking-widest hover:bg-blue-500"
+                            x-on:click="submitReceive()"
+                            :disabled="isReceiveSubmitting"
+                            :class="isReceiveSubmitting ? 'opacity-50 cursor-not-allowed' : ''"
+                        >
+                            Receive
+                        </button>
                     </div>
                 </div>
             </div>
@@ -316,9 +347,9 @@
                         type="button"
                         class="block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100"
                         x-show="actionMenuOrder && actionMenuOrder.status === 'DRAFT' && !actionMenuOrder.is_cancelled"
-                        x-on:click="submitStatusFromActionMenu('SENT')"
+                        x-on:click="submitStatusFromActionMenu('CREATED')"
                     >
-                        Send
+                        Create
                     </button>
                     <button
                         type="button"

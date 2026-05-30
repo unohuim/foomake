@@ -68,7 +68,7 @@ const purchaseOrderStatusDisplay = (record) => {
     }
 
     switch (record.status) {
-    case 'SENT':
+    case 'CREATED':
         return {
             text: record.status,
             tone: 'default',

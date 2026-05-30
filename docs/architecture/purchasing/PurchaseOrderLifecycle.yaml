@@ -15,11 +15,15 @@ when_not_to_use:
   - Sales order lifecycle changes
   - Manual inventory adjustments outside purchase receiving
 rules:
-  - purchase_orders.status persists only DRAFT, SENT, RECEIVED, COMPLETED, or CANCELLED.
+  - purchase_orders.status persists only DRAFT, CREATED, PARTIALLY_RECEIVED, RECEIVED, COMPLETED, or CANCELLED.
   - New purchase orders start in DRAFT.
   - New purchase orders enter the first active purchasing workflow stage when workflow stages exist.
-  - PO detail display status derives from workflow state rather than the legacy status column.
-  - Valid status progression is DRAFT to SENT, SENT to RECEIVED, and RECEIVED to COMPLETED.
+  - PO detail display status derives from workflow state, except receipt-derived PARTIALLY_RECEIVED is displayed while the PO remains in the normal Receiving stage.
+  - Valid status progression is DRAFT to CREATED, CREATED to PARTIALLY_RECEIVED through receipt events, PARTIALLY_RECEIVED to RECEIVED when all receivable balances are closed, and RECEIVED to COMPLETED.
+  - Every purchasing workflow stage status_complete_label must come from the workflow status option provider; persisted purchase order statuses include PARTIALLY_RECEIVED, and the workflow-stage dropdown may also expose OPEN for workflow-derived stage configuration.
+  - Default purchasing workflow stages must not create a duplicate PARTIALLY_RECEIVED receiving stage; partial receipt status is set by receipt logic while the PO remains in the normal Receiving stage.
+  - Receipt events that leave any receivable balance open persist PARTIALLY_RECEIVED.
+  - Additional partial receipt events keep PARTIALLY_RECEIVED until all receivable balances are received or short-closed.
   - Workflow stage completion mirrors legacy status only for migration compatibility.
   - Completing the purchasing inventory-effect stage applies receipt inventory impact.
   - Cancel transitions eligible purchase orders to persisted terminal status CANCELLED.
@@ -41,4 +45,4 @@ public_interface:
   - WorkflowTransitionService::completePurchaseOrderStage()
   - WorkflowTransitionService::cancelPurchaseOrder()
 example_usage: |
-  $order->forceFill(['status' => PurchaseOrder::STATUS_SENT])->save();
+  $order->forceFill(['status' => PurchaseOrder::STATUS_CREATED])->save();

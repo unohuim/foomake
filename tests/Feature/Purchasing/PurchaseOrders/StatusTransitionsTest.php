@@ -143,7 +143,7 @@ beforeEach(function () {
             'tax_cents' => 0,
             'po_number' => 'PO-' . $tenant->id,
             'notes' => null,
-            'status' => 'SENT',
+            'status' => 'CREATED',
             'po_subtotal_cents' => 0,
             'po_grand_total_cents' => 0,
         ]);
@@ -204,7 +204,7 @@ it('rejects create action without receive permission', function () {
     $order = ($this->makeOrder)($tenant, $user, $supplier);
     ($this->setOrderStatus)($order, 'DRAFT');
 
-    ($this->patchStatus)($user, $order, ['status' => 'SENT'])
+    ($this->patchStatus)($user, $order, ['status' => 'CREATED'])
         ->assertForbidden();
 
     expect($order->fresh()->status)->toBe('DRAFT');
@@ -233,11 +233,11 @@ it('blocks cross-tenant status updates', function () {
 
     ($this->grantPermission)($userA, 'purchasing-purchase-orders-receive');
 
-    ($this->patchStatus)($userA, $orderB, ['status' => 'SENT'])
+    ($this->patchStatus)($userA, $orderB, ['status' => 'CREATED'])
         ->assertNotFound();
 });
 
-it('allows draft to sent transition', function () {
+it('allows draft to created transition', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
     $supplier = ($this->makeSupplier)($tenant);
@@ -246,13 +246,13 @@ it('allows draft to sent transition', function () {
 
     ($this->grantPermission)($user, 'purchasing-purchase-orders-receive');
 
-    ($this->patchStatus)($user, $order, ['status' => 'SENT'])
+    ($this->patchStatus)($user, $order, ['status' => 'CREATED'])
         ->assertOk();
 
-    expect($order->fresh()->status)->toBe('SENT');
+    expect($order->fresh()->status)->toBe('CREATED');
 });
 
-it('create action response transitions draft to sent and returns header state', function () {
+it('create action response transitions draft to created and returns header state', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
     $supplier = ($this->makeSupplier)($tenant);
@@ -261,13 +261,13 @@ it('create action response transitions draft to sent and returns header state', 
 
     ($this->grantPermission)($user, 'purchasing-purchase-orders-receive');
 
-    ($this->patchStatus)($user, $order, ['status' => 'SENT'])
+    ($this->patchStatus)($user, $order, ['status' => 'CREATED'])
         ->assertOk()
-        ->assertJsonPath('data.status', 'CREATED')
+        ->assertJsonPath('data.status', PurchaseOrder::STATUS_CREATED)
         ->assertJsonPath('data.is_cancelled', false)
         ->assertJsonPath('data.is_back_ordered', false);
 
-    expect($order->fresh()->status)->toBe('SENT');
+    expect($order->fresh()->status)->toBe('CREATED');
 });
 
 it('create action enters first purchasing workflow stage when purchase orders support workflow stages', function () {
@@ -316,17 +316,17 @@ it('create action enters first purchasing workflow stage when purchase orders su
 
     ($this->grantPermission)($user, 'purchasing-purchase-orders-receive');
 
-    ($this->patchStatus)($user, $order, ['status' => 'SENT'])
+    ($this->patchStatus)($user, $order, ['status' => 'CREATED'])
         ->assertOk()
-        ->assertJsonPath('data.status', 'CREATED');
+        ->assertJsonPath('data.status', PurchaseOrder::STATUS_CREATED);
 
     $row = DB::table('purchase_orders')->where('id', $order->id)->first();
 
-    expect($row->status)->toBe('SENT')
+    expect($row->status)->toBe('CREATED')
         ->and($row->current_workflow_stage_id)->not->toBeNull();
 });
 
-it('allows sent to back-ordered action', function () {
+it('allows created to back-ordered action', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
     $supplier = ($this->makeSupplier)($tenant);
@@ -337,7 +337,7 @@ it('allows sent to back-ordered action', function () {
     ($this->patchStatus)($user, $order, ['action' => 'back_order'])
         ->assertOk();
 
-    expect($order->fresh()->status)->toBe('SENT')
+    expect($order->fresh()->status)->toBe('CREATED')
         ->and($order->fresh()->back_ordered_at)->not->toBeNull();
 });
 
@@ -352,7 +352,7 @@ it('rejects legacy back-ordered status transition', function () {
         ->assertStatus(422);
 });
 
-it('allows sent to cancelled action with no receipts', function () {
+it('allows created to cancelled action with no receipts', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
     $supplier = ($this->makeSupplier)($tenant);
@@ -487,7 +487,7 @@ it('rejects lifecycle transitions from cancelled purchase orders', function (str
 
     expect($order->fresh()->status)->toBe('CANCELLED');
 })->with([
-    'sent' => 'SENT',
+    'created' => 'CREATED',
     'received' => 'RECEIVED',
     'completed' => 'COMPLETED',
 ]);
@@ -505,7 +505,7 @@ it('rejects setting received status directly', function () {
         ->assertJsonValidationErrors(['status']);
 });
 
-it('rejects setting partially-received status directly', function () {
+it('rejects setting legacy hyphenated partially-received status directly', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
     $supplier = ($this->makeSupplier)($tenant);
@@ -514,6 +514,19 @@ it('rejects setting partially-received status directly', function () {
     ($this->grantPermission)($user, 'purchasing-purchase-orders-receive');
 
     ($this->patchStatus)($user, $order, ['status' => 'PARTIALLY-RECEIVED'])
+        ->assertStatus(422)
+        ->assertJsonValidationErrors(['status']);
+});
+
+it('rejects setting persisted partially received status directly', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $supplier = ($this->makeSupplier)($tenant);
+    $order = ($this->makeOrder)($tenant, $user, $supplier);
+
+    ($this->grantPermission)($user, 'purchasing-purchase-orders-receive');
+
+    ($this->patchStatus)($user, $order, ['status' => PurchaseOrder::STATUS_PARTIALLY_RECEIVED])
         ->assertStatus(422)
         ->assertJsonValidationErrors(['status']);
 });
@@ -562,7 +575,7 @@ it('derives partially-received after first receipt with remaining balance', func
         'received_quantity' => '3.000000',
     ])->assertCreated();
 
-    expect($order->fresh()->status)->toBe('SENT');
+    expect($order->fresh()->status)->toBe(PurchaseOrder::STATUS_PARTIALLY_RECEIVED);
 });
 
 it('derives received when all balances are zero and no short-close exists', function () {
@@ -652,7 +665,7 @@ it('short-close after partial receipt closes remaining balance', function () {
         'received_quantity' => '3.000000',
     ])->assertCreated();
 
-    expect($order->fresh()->status)->toBe('SENT');
+    expect($order->fresh()->status)->toBe(PurchaseOrder::STATUS_PARTIALLY_RECEIVED);
 
     ($this->postShortClose)($user, $order, [
         'short_closed_at' => '2026-02-04 11:25:00',
@@ -681,7 +694,7 @@ it('accumulates multiple receipts to reach received status', function () {
         'received_quantity' => '2.000000',
     ])->assertCreated();
 
-    expect($order->fresh()->status)->toBe('SENT');
+    expect($order->fresh()->status)->toBe(PurchaseOrder::STATUS_PARTIALLY_RECEIVED);
 
     ($this->postReceipt)($user, $order, [
         'received_at' => '2026-02-04 12:00:00',
@@ -690,6 +703,40 @@ it('accumulates multiple receipts to reach received status', function () {
     ])->assertCreated();
 
     expect($order->fresh()->status)->toBe('RECEIVED');
+});
+
+it('repeated partial receipts stay partially received until the final receipt', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $supplier = ($this->makeSupplier)($tenant);
+    $uom = ($this->makeUom)($tenant);
+    $item = ($this->makeItem)($tenant, $uom);
+    $option = ($this->makeOption)($tenant, $supplier, $item, $uom);
+    $order = ($this->makeOrder)($tenant, $user, $supplier);
+    $line = ($this->makeLine)($tenant, $order, $item, $option, 10);
+
+    ($this->grantPermission)($user, 'purchasing-purchase-orders-receive');
+
+    ($this->postReceipt)($user, $order, [
+        'purchase_order_line_id' => $line->id,
+        'received_quantity' => '2.000000',
+    ])->assertCreated();
+
+    expect($order->fresh()->status)->toBe(PurchaseOrder::STATUS_PARTIALLY_RECEIVED);
+
+    ($this->postReceipt)($user, $order, [
+        'purchase_order_line_id' => $line->id,
+        'received_quantity' => '3.000000',
+    ])->assertCreated();
+
+    expect($order->fresh()->status)->toBe(PurchaseOrder::STATUS_PARTIALLY_RECEIVED);
+
+    ($this->postReceipt)($user, $order, [
+        'purchase_order_line_id' => $line->id,
+        'received_quantity' => '5.000000',
+    ])->assertCreated();
+
+    expect($order->fresh()->status)->toBe(PurchaseOrder::STATUS_RECEIVED);
 });
 
 it('requires create permission for index even with receive permission', function () {

@@ -255,7 +255,7 @@ beforeEach(function (): void {
         Tenant $tenant,
         User $user,
         Supplier $supplier,
-        string $status = PurchaseOrder::STATUS_SENT
+        string $status = PurchaseOrder::STATUS_CREATED
     ): PurchaseOrder {
         return PurchaseOrder::query()->create([
             'tenant_id' => $tenant->id,
@@ -858,7 +858,7 @@ it('27. completed or terminal purchase orders are excluded from buy', function (
     $supplier = ($this->makeSupplier)($tenant);
     $option = ($this->makePurchaseOption)($tenant, $supplier, $item, $uom, '2.000000');
     $completedOrder = ($this->makePurchaseOrder)($tenant, $user, $supplier, PurchaseOrder::STATUS_COMPLETED);
-    $cancelledOrder = ($this->makePurchaseOrder)($tenant, $user, $supplier, PurchaseOrder::STATUS_SENT);
+    $cancelledOrder = ($this->makePurchaseOrder)($tenant, $user, $supplier, PurchaseOrder::STATUS_CREATED);
     $cancelledOrder->forceFill(['cancelled_at' => now(), 'cancelled_by_user_id' => $user->id])->save();
     ($this->makePurchaseOrderLine)($tenant, $completedOrder, $item, $option, 3);
     ($this->makePurchaseOrderLine)($tenant, $cancelledOrder, $item, $option, 2);
@@ -879,7 +879,7 @@ it('28. qualifying open purchase order quantities are included in buy', function
     $item = ($this->makeItem)($tenant, $uom);
     $supplier = ($this->makeSupplier)($tenant);
     $option = ($this->makePurchaseOption)($tenant, $supplier, $item, $uom, '1.500000');
-    $purchaseOrder = ($this->makePurchaseOrder)($tenant, $user, $supplier, PurchaseOrder::STATUS_SENT);
+    $purchaseOrder = ($this->makePurchaseOrder)($tenant, $user, $supplier, PurchaseOrder::STATUS_CREATED);
     ($this->makePurchaseOrderLine)($tenant, $purchaseOrder, $item, $option, 4);
     ($this->grantPermission)($user, 'inventory-adjustments-view');
 
@@ -898,7 +898,7 @@ it('29. purchase option pack quantity is applied when calculating buy', function
     $item = ($this->makeItem)($tenant, $uom);
     $supplier = ($this->makeSupplier)($tenant);
     $option = ($this->makePurchaseOption)($tenant, $supplier, $item, $uom, '2.250000');
-    $purchaseOrder = ($this->makePurchaseOrder)($tenant, $user, $supplier, PurchaseOrder::STATUS_SENT);
+    $purchaseOrder = ($this->makePurchaseOrder)($tenant, $user, $supplier, PurchaseOrder::STATUS_CREATED);
     ($this->makePurchaseOrderLine)($tenant, $purchaseOrder, $item, $option, 3);
     ($this->grantPermission)($user, 'inventory-adjustments-view');
 
@@ -917,7 +917,7 @@ it('29a. open purchase order buy uses package quantity when pack uom matches ite
     $item = ($this->makeItem)($tenant, $uom);
     $supplier = ($this->makeSupplier)($tenant);
     $option = ($this->makePurchaseOption)($tenant, $supplier, $item, $uom, '20.000000');
-    $purchaseOrder = ($this->makePurchaseOrder)($tenant, $user, $supplier, PurchaseOrder::STATUS_SENT);
+    $purchaseOrder = ($this->makePurchaseOrder)($tenant, $user, $supplier, PurchaseOrder::STATUS_CREATED);
     ($this->makePurchaseOrderLine)($tenant, $purchaseOrder, $item, $option, 2);
     ($this->grantPermission)($user, 'inventory-adjustments-view');
 
@@ -946,7 +946,7 @@ it('29b. open purchase order buy converts supplier package uom into item base uo
     ]);
 
     $option = ($this->makePurchaseOption)($tenant, $supplier, $item, $kilogram, '20.000000');
-    $purchaseOrder = ($this->makePurchaseOrder)($tenant, $user, $supplier, PurchaseOrder::STATUS_SENT);
+    $purchaseOrder = ($this->makePurchaseOrder)($tenant, $user, $supplier, PurchaseOrder::STATUS_CREATED);
     ($this->makePurchaseOrderLine)($tenant, $purchaseOrder, $item, $option, 1);
     ($this->grantPermission)($user, 'inventory-adjustments-view');
 
@@ -1118,7 +1118,7 @@ it('29bc. inventory buy resolves global direct conversions by uom symbol instead
     ]);
 
     $option = ($this->makePurchaseOption)($tenant, $supplier, $item, $tenantKilogram, '20.000000');
-    $purchaseOrder = ($this->makePurchaseOrder)($tenant, $user, $supplier, PurchaseOrder::STATUS_SENT);
+    $purchaseOrder = ($this->makePurchaseOrder)($tenant, $user, $supplier, PurchaseOrder::STATUS_CREATED);
     $line = ($this->makePurchaseOrderLine)($tenant, $purchaseOrder, $item, $option, 1);
     ($this->grantPermission)($user, 'inventory-adjustments-view');
 
@@ -1187,7 +1187,7 @@ it('29bd. inventory buy resolves global reverse conversions by symbol using reci
     ]);
 
     $option = ($this->makePurchaseOption)($tenant, $supplier, $item, $tenantKilogram, '20.000000');
-    $purchaseOrder = ($this->makePurchaseOrder)($tenant, $user, $supplier, PurchaseOrder::STATUS_SENT);
+    $purchaseOrder = ($this->makePurchaseOrder)($tenant, $user, $supplier, PurchaseOrder::STATUS_CREATED);
     $line = ($this->makePurchaseOrderLine)($tenant, $purchaseOrder, $item, $option, 1);
     ($this->grantPermission)($user, 'inventory-adjustments-view');
 
@@ -1238,7 +1238,7 @@ it('29be. inventory buy resolves indirect generic conversion paths by symbol', f
     ]);
 
     $option = ($this->makePurchaseOption)($tenant, $supplier, $item, $kilogram, '20.000000');
-    $purchaseOrder = ($this->makePurchaseOrder)($tenant, $user, $supplier, PurchaseOrder::STATUS_SENT);
+    $purchaseOrder = ($this->makePurchaseOrder)($tenant, $user, $supplier, PurchaseOrder::STATUS_CREATED);
     ($this->makePurchaseOrderLine)($tenant, $purchaseOrder, $item, $option, 1);
     ($this->grantPermission)($user, 'inventory-adjustments-view');
 
@@ -1285,7 +1285,7 @@ it('29c. generic conversion beats item specific conversion for open purchase ord
     ]);
 
     $option = ($this->makePurchaseOption)($tenant, $supplier, $item, $kilogram, '20.000000');
-    $purchaseOrder = ($this->makePurchaseOrder)($tenant, $user, $supplier, PurchaseOrder::STATUS_SENT);
+    $purchaseOrder = ($this->makePurchaseOrder)($tenant, $user, $supplier, PurchaseOrder::STATUS_CREATED);
     ($this->makePurchaseOrderLine)($tenant, $purchaseOrder, $item, $option, 1);
     ($this->grantPermission)($user, 'inventory-adjustments-view');
 
@@ -1313,7 +1313,7 @@ it('29d. tenant general conversion is used when no item conversion exists for op
     ]);
 
     $option = ($this->makePurchaseOption)($tenant, $supplier, $item, $kilogram, '3.500000');
-    $purchaseOrder = ($this->makePurchaseOrder)($tenant, $user, $supplier, PurchaseOrder::STATUS_SENT);
+    $purchaseOrder = ($this->makePurchaseOrder)($tenant, $user, $supplier, PurchaseOrder::STATUS_CREATED);
     ($this->makePurchaseOrderLine)($tenant, $purchaseOrder, $item, $option, 2);
     ($this->grantPermission)($user, 'inventory-adjustments-view');
 
@@ -1341,7 +1341,7 @@ it('29e. global conversion is used when no item or tenant conversion exists for 
     ]);
 
     $option = ($this->makePurchaseOption)($tenant, $supplier, $item, $kilogram, '2.000000');
-    $purchaseOrder = ($this->makePurchaseOrder)($tenant, $user, $supplier, PurchaseOrder::STATUS_SENT);
+    $purchaseOrder = ($this->makePurchaseOrder)($tenant, $user, $supplier, PurchaseOrder::STATUS_CREATED);
     ($this->makePurchaseOrderLine)($tenant, $purchaseOrder, $item, $option, 4);
     ($this->grantPermission)($user, 'inventory-adjustments-view');
 
@@ -1375,7 +1375,7 @@ it('29ea. reciprocal conversion records use package uom to item base uom directi
     ]);
 
     $option = ($this->makePurchaseOption)($tenant, $supplier, $item, $kilogram, '20.000000');
-    $purchaseOrder = ($this->makePurchaseOrder)($tenant, $user, $supplier, PurchaseOrder::STATUS_SENT);
+    $purchaseOrder = ($this->makePurchaseOrder)($tenant, $user, $supplier, PurchaseOrder::STATUS_CREATED);
     ($this->makePurchaseOrderLine)($tenant, $purchaseOrder, $item, $option, 1);
     ($this->grantPermission)($user, 'inventory-adjustments-view');
 
@@ -1395,7 +1395,7 @@ it('29f. missing package uom conversion excludes the open purchase order line sa
     $item = ($this->makeItem)($tenant, $gram);
     $supplier = ($this->makeSupplier)($tenant);
     $option = ($this->makePurchaseOption)($tenant, $supplier, $item, $kilogram, '20.000000');
-    $purchaseOrder = ($this->makePurchaseOrder)($tenant, $user, $supplier, PurchaseOrder::STATUS_SENT);
+    $purchaseOrder = ($this->makePurchaseOrder)($tenant, $user, $supplier, PurchaseOrder::STATUS_CREATED);
     ($this->makePurchaseOrderLine)($tenant, $purchaseOrder, $item, $option, 1);
     ($this->grantPermission)($user, 'inventory-adjustments-view');
 
@@ -1426,7 +1426,7 @@ it('29g. multiple open purchase order lines aggregate after package uom conversi
 
     $gramOption = ($this->makePurchaseOption)($tenant, $supplier, $item, $gram, '500.000000');
     $kilogramOption = ($this->makePurchaseOption)($tenant, $supplier, $item, $kilogram, '2.000000');
-    $purchaseOrder = ($this->makePurchaseOrder)($tenant, $user, $supplier, PurchaseOrder::STATUS_SENT);
+    $purchaseOrder = ($this->makePurchaseOrder)($tenant, $user, $supplier, PurchaseOrder::STATUS_CREATED);
     ($this->makePurchaseOrderLine)($tenant, $purchaseOrder, $item, $gramOption, 3);
     ($this->makePurchaseOrderLine)($tenant, $purchaseOrder, $item, $kilogramOption, 2);
     ($this->grantPermission)($user, 'inventory-adjustments-view');
@@ -1467,12 +1467,12 @@ it('29h. other tenant open purchase order lines are excluded before package uom 
 
     $option = ($this->makePurchaseOption)($tenant, $supplier, $item, $kilogram, '1.000000');
     $otherOption = ($this->makePurchaseOption)($otherTenant, $otherSupplier, $otherItem, $otherKilogram, '99.000000');
-    $purchaseOrder = ($this->makePurchaseOrder)($tenant, $user, $supplier, PurchaseOrder::STATUS_SENT);
+    $purchaseOrder = ($this->makePurchaseOrder)($tenant, $user, $supplier, PurchaseOrder::STATUS_CREATED);
     $otherPurchaseOrder = ($this->makePurchaseOrder)(
         $otherTenant,
         ($this->makeUser)($otherTenant),
         $otherSupplier,
-        PurchaseOrder::STATUS_SENT
+        PurchaseOrder::STATUS_CREATED
     );
     ($this->makePurchaseOrderLine)($tenant, $purchaseOrder, $item, $option, 1);
     ($this->makePurchaseOrderLine)($otherTenant, $otherPurchaseOrder, $otherItem, $otherOption, 1);
@@ -1516,7 +1516,7 @@ it('29i. completed and cancelled purchase orders are excluded from converted buy
     expect($row['buy'] ?? null)->toBe('0.000000');
 });
 
-it('29ia. completed workflow purchase order buy is excluded even when legacy status is stale sent', function (): void {
+it('29ia. completed workflow purchase order buy is excluded even when legacy status is stale created', function (): void {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
     $stages = ($this->makePurchasingWorkflowStages)($tenant);
@@ -1533,7 +1533,7 @@ it('29ia. completed workflow purchase order buy is excluded even when legacy sta
     ]);
 
     $option = ($this->makePurchaseOption)($tenant, $supplier, $item, $kilogram, '20.000000');
-    $purchaseOrder = ($this->makePurchaseOrder)($tenant, $user, $supplier, PurchaseOrder::STATUS_SENT);
+    $purchaseOrder = ($this->makePurchaseOrder)($tenant, $user, $supplier, PurchaseOrder::STATUS_CREATED);
     $purchaseOrder->forceFill([
         'current_workflow_stage_id' => null,
         'last_completed_workflow_stage_id' => $stages['completing']->id,
@@ -1547,7 +1547,7 @@ it('29ia. completed workflow purchase order buy is excluded even when legacy sta
     );
 
     expect($purchaseOrder->fresh()->workflowStatus())->toBe('COMPLETED')
-        ->and($purchaseOrder->fresh()->status)->toBe(PurchaseOrder::STATUS_SENT)
+        ->and($purchaseOrder->fresh()->status)->toBe(PurchaseOrder::STATUS_CREATED)
         ->and($row['buy'] ?? null)->toBe('0.000000');
 });
 
@@ -1571,7 +1571,7 @@ it('29j. inventory net calculation uses converted open purchase order buy quanti
     $salesOrder = ($this->makeSalesOrder)($tenant, $customer, SalesOrder::STATUS_OPEN);
     ($this->makeSalesOrderLine)($tenant, $salesOrder, $item, '250.000000');
     $option = ($this->makePurchaseOption)($tenant, $supplier, $item, $kilogram, '1.000000');
-    $purchaseOrder = ($this->makePurchaseOrder)($tenant, $user, $supplier, PurchaseOrder::STATUS_SENT);
+    $purchaseOrder = ($this->makePurchaseOrder)($tenant, $user, $supplier, PurchaseOrder::STATUS_CREATED);
     ($this->makePurchaseOrderLine)($tenant, $purchaseOrder, $item, $option, 2);
     ($this->grantPermission)($user, 'inventory-adjustments-view');
 
@@ -1606,7 +1606,7 @@ it('29k. inventory calculator preserves canonical scale for converted open purch
     ]);
 
     $option = ($this->makePurchaseOption)($tenant, $supplier, $item, $kilogram, '1.250000');
-    $purchaseOrder = ($this->makePurchaseOrder)($tenant, $user, $supplier, PurchaseOrder::STATUS_SENT);
+    $purchaseOrder = ($this->makePurchaseOrder)($tenant, $user, $supplier, PurchaseOrder::STATUS_CREATED);
     ($this->makePurchaseOrderLine)($tenant, $purchaseOrder, $item, $option, 1);
 
     $availability = app(InventoryAvailabilityCalculator::class)->forItem($item);
@@ -1631,7 +1631,7 @@ it('29l. open purchase order buy falls back to item specific conversion when no 
     ]);
 
     $option = ($this->makePurchaseOption)($tenant, $supplier, $item, $patty, '40.000000');
-    $purchaseOrder = ($this->makePurchaseOrder)($tenant, $user, $supplier, PurchaseOrder::STATUS_SENT);
+    $purchaseOrder = ($this->makePurchaseOrder)($tenant, $user, $supplier, PurchaseOrder::STATUS_CREATED);
     ($this->makePurchaseOrderLine)($tenant, $purchaseOrder, $item, $option, 1);
     ($this->grantPermission)($user, 'inventory-adjustments-view');
 
@@ -1726,7 +1726,7 @@ it('34. net uses the corrected make value', function (): void {
     $supplier = ($this->makeSupplier)($tenant);
     $option = ($this->makePurchaseOption)($tenant, $supplier, $item, $uom, '2.000000');
     $salesOrder = ($this->makeSalesOrder)($tenant, $customer, SalesOrder::STATUS_OPEN);
-    $purchaseOrder = ($this->makePurchaseOrder)($tenant, $user, $supplier, PurchaseOrder::STATUS_SENT);
+    $purchaseOrder = ($this->makePurchaseOrder)($tenant, $user, $supplier, PurchaseOrder::STATUS_CREATED);
     $recipe = ($this->makeRecipe)($tenant, $item, ['output_quantity' => '10.000000']);
     ($this->grantPermission)($user, 'inventory-adjustments-view');
 

@@ -202,7 +202,7 @@ beforeEach(function () {
             'po_grand_total_cents' => 1200,
             'po_number' => 'PO-' . $tenant->id . '-' . $option->id,
             'notes' => 'Quantity display precision fixture',
-            'status' => PurchaseOrder::STATUS_SENT,
+            'status' => PurchaseOrder::STATUS_CREATED,
         ]);
 
         $line = PurchaseOrderLine::query()->create([

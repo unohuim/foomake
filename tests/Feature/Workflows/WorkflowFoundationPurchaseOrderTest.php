@@ -210,7 +210,8 @@ it('1. workflow stages use action verb as the single workflow action field', fun
         ->and(Schema::hasColumn('workflow_stages', 'button_text'))->toBeFalse()
         ->and(Schema::hasColumn('workflow_stages', 'action_label'))->toBeFalse()
         ->and(Schema::hasColumn('workflow_stages', 'status_complete_label'))->toBeTrue()
-        ->and(Schema::hasColumn('workflow_stages', 'completion_mode'))->toBeTrue();
+        ->and(Schema::hasColumn('workflow_stages', 'completion_mode'))->toBeTrue()
+        ->and(Schema::hasColumn('workflow_stages', 'is_core'))->toBeTrue();
 });
 
 it('2. default purchasing workflow stages use present-tense names and action verbs', function (): void {
@@ -221,7 +222,195 @@ it('2. default purchasing workflow stages use present-tense names and action ver
 
     expect($stages->pluck('name')->all())->toBe(['Creating', 'Receiving', 'Completing'])
         ->and($stages->pluck('action_verb')->all())->toBe(['CREATE', 'RECEIVE', 'COMPLETE'])
-        ->and($stages->pluck('status_complete_label')->all())->toBe(['CREATED', 'RECEIVED', 'COMPLETED']);
+        ->and($stages->pluck('status_complete_label')->all())->toBe(['CREATED', 'RECEIVED', 'COMPLETED'])
+        ->and($stages->pluck('is_core')->all())->toBe([true, true, true])
+        ->and(WorkflowStage::withoutGlobalScopes()
+            ->where('tenant_id', $tenant->id)
+            ->where('workflow_domain_id', ($this->purchasingDomain)()->id)
+            ->where('key', 'partially_received')
+            ->exists())->toBeFalse();
+});
+
+it('2a. user-created workflow stages default to non-core', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    ($this->grantPermission)($user, 'workflow-manage');
+    ($this->seedWorkflow)($tenant);
+
+    $response = $this->actingAs($user)->postJson(route('admin.workflows.stages.store'), [
+        'workflow_domain_id' => ($this->purchasingDomain)()->id,
+        'name' => 'Vendor Review',
+        'action_verb' => 'REVIEW',
+        'status_complete_label' => PurchaseOrder::STATUS_PARTIALLY_RECEIVED,
+        'completion_mode' => 'manual',
+        'description' => null,
+        'sort_order' => 15,
+        'is_inventory_effect_stage' => false,
+    ])->assertCreated();
+
+    expect($response->json('data.is_core'))->toBeFalse()
+        ->and((bool) WorkflowStage::withoutGlobalScopes()->where('key', 'vendor-review')->value('is_core'))->toBeFalse();
+});
+
+it('2b. core workflow stages cannot be deleted', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    ($this->grantPermission)($user, 'workflow-manage');
+    ($this->seedWorkflow)($tenant);
+
+    $stage = ($this->stage)($tenant, 'creating');
+
+    $this->actingAs($user)
+        ->deleteJson(route('admin.workflows.stages.destroy', $stage))
+        ->assertStatus(422)
+        ->assertJsonValidationErrors(['stage']);
+
+    expect($stage->fresh())->not->toBeNull();
+});
+
+it('2c. non-core workflow stages can be deleted', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    ($this->grantPermission)($user, 'workflow-manage');
+    ($this->seedWorkflow)($tenant);
+
+    $stage = WorkflowStage::withoutGlobalScopes()->create([
+        'tenant_id' => $tenant->id,
+        'workflow_domain_id' => ($this->purchasingDomain)()->id,
+        'key' => 'vendor-review',
+        'name' => 'Vendor Review',
+        'action_verb' => 'REVIEW',
+        'status_complete_label' => PurchaseOrder::STATUS_PARTIALLY_RECEIVED,
+        'completion_mode' => 'manual',
+        'description' => null,
+        'sort_order' => 15,
+        'is_active' => true,
+        'is_core' => false,
+        'is_inventory_effect_stage' => false,
+    ]);
+
+    $this->actingAs($user)
+        ->deleteJson(route('admin.workflows.stages.destroy', $stage))
+        ->assertOk();
+
+    expect(WorkflowStage::withoutGlobalScopes()->whereKey($stage->id)->exists())->toBeFalse();
+});
+
+it('2d. core workflow stages cannot be deactivated', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    ($this->grantPermission)($user, 'workflow-manage');
+    ($this->seedWorkflow)($tenant);
+    $stage = ($this->stage)($tenant, 'creating');
+
+    $this->actingAs($user)->patchJson(route('admin.workflows.stages.update', $stage), [
+        'workflow_domain_id' => $stage->workflow_domain_id,
+        'name' => $stage->name,
+        'action_verb' => $stage->action_verb,
+        'status_complete_label' => $stage->status_complete_label,
+        'completion_mode' => $stage->completion_mode,
+        'description' => $stage->description,
+        'sort_order' => $stage->sort_order,
+        'is_active' => false,
+        'is_inventory_effect_stage' => $stage->is_inventory_effect_stage,
+    ])->assertStatus(422)->assertJsonValidationErrors(['is_active']);
+
+    expect($stage->fresh()->is_active)->toBeTrue();
+});
+
+it('2e. core workflow stage locked fields cannot be changed', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    ($this->grantPermission)($user, 'workflow-manage');
+    ($this->seedWorkflow)($tenant);
+    $stage = ($this->stage)($tenant, 'receiving');
+
+    $this->actingAs($user)->patchJson(route('admin.workflows.stages.update', $stage), [
+        'workflow_domain_id' => $stage->workflow_domain_id,
+        'name' => 'Inbound',
+        'action_verb' => $stage->action_verb,
+        'status_complete_label' => $stage->status_complete_label,
+        'completion_mode' => $stage->completion_mode,
+        'description' => $stage->description,
+        'sort_order' => $stage->sort_order,
+        'is_active' => true,
+        'is_inventory_effect_stage' => $stage->is_inventory_effect_stage,
+    ])->assertStatus(422)->assertJsonValidationErrors(['name']);
+
+    expect($stage->fresh()->name)->toBe('Receiving');
+});
+
+it('2f. arbitrary status complete labels are rejected', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    ($this->grantPermission)($user, 'workflow-manage');
+    ($this->seedWorkflow)($tenant);
+
+    $this->actingAs($user)->postJson(route('admin.workflows.stages.store'), [
+        'workflow_domain_id' => ($this->purchasingDomain)()->id,
+        'name' => 'Vendor Review',
+        'action_verb' => 'REVIEW',
+        'status_complete_label' => 'RECEIVING',
+        'completion_mode' => 'manual',
+        'description' => null,
+        'sort_order' => 15,
+        'is_inventory_effect_stage' => false,
+    ])->assertStatus(422)->assertJsonValidationErrors(['status_complete_label']);
+});
+
+it('2g. partially received remains an allowed purchasing status complete label', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    ($this->grantPermission)($user, 'workflow-manage');
+    ($this->seedWorkflow)($tenant);
+
+    $this->actingAs($user)->postJson(route('admin.workflows.stages.store'), [
+        'workflow_domain_id' => ($this->purchasingDomain)()->id,
+        'name' => 'Vendor Review',
+        'action_verb' => 'REVIEW',
+        'status_complete_label' => PurchaseOrder::STATUS_PARTIALLY_RECEIVED,
+        'completion_mode' => 'manual',
+        'description' => null,
+        'sort_order' => 15,
+        'is_inventory_effect_stage' => false,
+    ])->assertCreated();
+
+    expect(PurchaseOrder::statuses())->toContain(PurchaseOrder::STATUS_PARTIALLY_RECEIVED);
+});
+
+it('2h. purchase order partial receipt persists partially received status', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $supplier = ($this->makeSupplier)($tenant);
+    $uom = ($this->makeUom)($tenant);
+    $item = ($this->makeItem)($tenant, $uom);
+    $option = ($this->makeOption)($tenant, $supplier, $item, $uom);
+    ($this->grantPermission)($user, 'purchasing-purchase-orders-receive');
+    ($this->seedWorkflow)($tenant);
+    $order = ($this->makeOrder)($tenant, $user, $supplier, [
+        'status' => PurchaseOrder::STATUS_CREATED,
+        'current_workflow_stage_id' => ($this->stage)($tenant, 'receiving')->id,
+        'last_completed_workflow_stage_id' => ($this->stage)($tenant, 'creating')->id,
+    ]);
+    $line = ($this->makeLine)($tenant, $order, $item, $option, 2);
+
+    $this->actingAs($user)->postJson(route('purchasing.orders.receipts.store', $order), [
+        'received_at' => '2026-05-30',
+        'reference' => null,
+        'notes' => null,
+        'lines' => [
+            [
+                'purchase_order_line_id' => $line->id,
+                'received_quantity' => '1',
+            ],
+        ],
+    ])->assertCreated();
+
+    $order->refresh();
+
+    expect($order->status)->toBe(PurchaseOrder::STATUS_PARTIALLY_RECEIVED)
+        ->and($order->workflowStatus())->toBe(PurchaseOrder::STATUS_PARTIALLY_RECEIVED)
+        ->and((int) $order->current_workflow_stage_id)->toBe(($this->stage)($tenant, 'receiving')->id);
 });
 
 it('3. default seeding updates stale stage action verbs and completion labels', function (): void {
@@ -229,7 +418,7 @@ it('3. default seeding updates stale stage action verbs and completion labels', 
     ($this->seedWorkflow)($tenant);
 
     ($this->stage)($tenant, 'creating')->forceFill([
-        'action_verb' => 'SENT',
+        'action_verb' => 'CREATED',
         'status_complete_label' => 'OLD',
         'completion_mode' => 'automatic',
     ])->save();
@@ -377,7 +566,7 @@ it('12. inventory effect fires when completing the inventory-impacting stage', f
     ($this->grantPermission)($user, 'purchasing-purchase-orders-receive');
     ($this->seedWorkflow)($tenant);
     $order = ($this->makeOrder)($tenant, $user, $supplier, [
-        'status' => PurchaseOrder::STATUS_SENT,
+        'status' => PurchaseOrder::STATUS_CREATED,
         'current_workflow_stage_id' => ($this->stage)($tenant, 'receiving')->id,
         'last_completed_workflow_stage_id' => ($this->stage)($tenant, 'creating')->id,
     ]);
@@ -533,7 +722,7 @@ it('20. workflow action button script does not introduce global state', function
         ->and($source)->toContain("Alpine.data('workflowActionButton'");
 });
 
-it('21. workflow json for a new purchase order includes create and cancel actions without stale sent labels', function (): void {
+it('21. workflow json for a new purchase order includes create and cancel actions without stale created labels', function (): void {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
     ($this->grantPermission)($user, 'purchasing-purchase-orders-create');
@@ -546,7 +735,7 @@ it('21. workflow json for a new purchase order includes create and cancel action
 
     expect($show->getContent())->toContain('"label":"Create"')
         ->and($show->getContent())->toContain('"label":"Cancel"')
-        ->and($show->getContent())->not->toContain('"label":"SENT"');
+        ->and($show->getContent())->not->toContain('"label":"CREATED"');
 });
 
 it('22. default completing stages are automatic except inventory completing remains manual', function (): void {

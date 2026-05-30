@@ -377,7 +377,7 @@ $stage->is_inventory_effect_stage = true;
 Notes:
 - The fixed workflow domains are `sales`, `purchasing`, `manufacturing`, and `inventory`.
 - Default seeded stock-impacting stage sets are tenant-scoped and idempotent.
-- Default Sales inventory impact is assigned to the seeded `Packed` stage, not the pre-impact `Packing` stage.
+- Default Sales inventory impact is assigned to the seeded `Packing` stage, which completes to `PACKED`; there is no separate default `Packed` workflow stage.
 - Sales, Purchasing, Manufacturing, and Inventory each enforce exactly one active inventory-effect stage when stage defaults or admin edits touch the domain.
 
 ### Workflow Stage Task Gating
@@ -1461,6 +1461,7 @@ Notes:
 - Submitted Inventory Counts may expose previous-stage and next-stage actions using configured action verb. Previous-stage movement is Inventory Count specific and never reverses posted stock.
 - Inventory Count detail uses the shared resource-detail header plus a compact `Details` section ahead of the reusable `Materials` and `Tasks` sections. The header no longer owns counted-date / line-count / workflow-stage metadata pills; it now shows a clean workflow-status badge beside the title, while Count Date, Assigned To, and Notes live in the AJAX-autosaved `Details` section.
 - Workflow stages separate current-state display from transition-button copy: stage labels use `workflow_stages.name`, while workflow action buttons use `workflow_stages.action_verb`.
+- Seeded workflow stages are core (`is_core = true`) and cannot be deleted, deactivated, reordered, or edited across identity/status-completion fields; user-created stages default to non-core.
 - Inventory Count detail mounts reusable `Materials` and `Tasks` sections through shared `js-crud-section` payload/config rendering; the `Tasks` section is not bespoke markup, uses the existing `tasks.complete` route contract, disables the shared dots menu through config, always shows `Assigned By`, then swaps `Assigned To` for `Completed By` once the task is completed, and shows a visible inline `Complete` action only while the task is incomplete and completable.
 - Inventory Count detail `Materials` section uses the shared compact add-row contract in Draft: a reusable combobox on the left plus a `+` button on the right adds an existing selected material line through AJAX and must not open Material or Item creation.
 - Inventory Count detail `Materials` rows use two mutually exclusive modes: Draft rows use a direct inline rounded `x-mark` remove action instead of the vertical-dots row menu, while submitted workflow-stage rows hide removal and expose an AJAX Qty input on the right side instead.
@@ -2296,10 +2297,13 @@ $option = ItemPurchaseOption::create([
 Track Purchase Order lifecycle through the shared workflow foundation while mirroring the legacy status column during migration.
 
 **Rules:**
-- PO detail status is derived from workflow state: `workflow_cancelled_at` means `CANCELLED`, no completed stage means `DRAFT`, otherwise the last completed stage's `status_complete_label`.
+- PO detail status is derived from workflow state: `workflow_cancelled_at` means `CANCELLED`, no completed stage means `DRAFT`, receipt-derived `PARTIALLY_RECEIVED` is displayed while the PO remains in Receiving, otherwise the last completed stage's `status_complete_label`.
 - PO index, detail header, action-button state, row badges, and page JSON payloads must use workflow-derived status, not the legacy `purchase_orders.status` mirror column.
 - PO detail actions are driven by reusable workflow JSON and complete the current stage through AJAX.
 - Workflow action dropdown labels are presented in natural case from `workflow_stages.action_verb`.
+- The PO Receive action opens one PO-level multi-line receipt slide-over and submits one receipt event.
+- Receipt events with remaining receivable balance persist `PARTIALLY_RECEIVED`; additional partial receipts keep that status until all receivable balances are received or short-closed.
+- Purchasing workflow-stage `status_complete_label` values must come from `WorkflowStatusOptions`; `purchase_orders.status` remains constrained to persisted PO statuses, while the workflow-stage dropdown may also expose `OPEN` for workflow-derived stage configuration. Default seeded stages keep one normal Receiving stage and do not create a duplicate `PARTIALLY_RECEIVED` receiving stage.
 - Completing the configured inventory-impacting PO stage applies receipt inventory impact.
 - Cancel transitions eligible purchase orders to persisted terminal status `CANCELLED`.
 - Back Order and Short Close are action events or markers, not `purchase_orders.status` values.
@@ -2337,6 +2341,8 @@ Short-close events or non-purchasing inventory adjustments.
 
 **Notes:**
 - Receipt quantity uses package count × package quantity × resolved package-UoM-to-base-UoM conversion.
+- Zero and blank submitted receipt quantities are ignored, but each receipt event must include at least one positive received quantity.
+- One receipt submit creates one receipt header and one receipt line per positive received line.
 - Conversion precedence is item-specific, tenant/general, then global; missing conversion blocks receiving transactionally.
 - Conversion may resolve through direct, reciprocal, or multi-step paths through defined conversion records.
 

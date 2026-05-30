@@ -165,13 +165,23 @@ class WorkflowTransitionService
             && $purchaseOrder->workflow_cancelled_at === null
         ) {
             if ($currentStage) {
-                $actions[] = [
-                    'type' => 'complete_stage',
-                    'label' => $this->naturalCase((string) $currentStage->action_verb),
-                    'description' => $this->purchaseOrderStageDescription($currentStage),
-                    'endpoint' => route('purchasing.orders.workflow.complete', $purchaseOrder),
-                    'method' => 'POST',
-                ];
+                if ($currentStage->key === 'receiving') {
+                    $actions[] = [
+                        'type' => 'receive',
+                        'label' => 'Receive',
+                        'description' => 'Record one receipt with one or more received lines.',
+                        'endpoint' => route('purchasing.orders.receipts.store', $purchaseOrder),
+                        'method' => 'POST',
+                    ];
+                } else {
+                    $actions[] = [
+                        'type' => 'complete_stage',
+                        'label' => $this->naturalCase((string) $currentStage->action_verb),
+                        'description' => $this->purchaseOrderStageDescription($currentStage),
+                        'endpoint' => route('purchasing.orders.workflow.complete', $purchaseOrder),
+                        'method' => 'POST',
+                    ];
+                }
             }
 
             if ($currentStage?->key === 'receiving') {
@@ -274,7 +284,7 @@ class WorkflowTransitionService
     private function applyPurchaseOrderInventoryEffect(PurchaseOrder $purchaseOrder, User $user): void
     {
         $purchaseOrder->forceFill([
-            'status' => PurchaseOrder::STATUS_SENT,
+            'status' => PurchaseOrder::STATUS_CREATED,
         ])->save();
 
         $lineItems = $this->remainingReceiptLineItems($purchaseOrder);
@@ -332,7 +342,7 @@ class WorkflowTransitionService
     private function mirroredPurchaseOrderStatus(PurchaseOrder $purchaseOrder, WorkflowStage $completedStage): string
     {
         return match ($completedStage->key) {
-            'creating' => PurchaseOrder::STATUS_SENT,
+            'creating' => PurchaseOrder::STATUS_CREATED,
             'receiving' => PurchaseOrder::STATUS_RECEIVED,
             'completing' => PurchaseOrder::STATUS_COMPLETED,
             default => $purchaseOrder->status,

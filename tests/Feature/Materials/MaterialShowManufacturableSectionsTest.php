@@ -249,7 +249,7 @@ beforeEach(function (): void {
         return PurchaseOrder::query()->create(array_merge([
             'tenant_id' => $tenant->id,
             'supplier_id' => $supplier->id,
-            'status' => PurchaseOrder::STATUS_SENT,
+            'status' => PurchaseOrder::STATUS_CREATED,
             'po_subtotal_cents' => 0,
             'po_grand_total_cents' => 0,
         ], $attributes));
@@ -1257,7 +1257,7 @@ it('35af. purchasable stockable material shows an open purchase orders qty card'
     $item = ($this->makeItem)($tenant, $uom, ['is_stockable' => true, 'is_purchasable' => true]);
     $supplier = ($this->makeSupplier)($tenant);
     $purchaseOption = ($this->makePurchaseOption)($tenant, $item, $uom, $supplier, ['pack_quantity' => '2.000000']);
-    $purchaseOrder = ($this->makePurchaseOrder)($tenant, $supplier, ['status' => PurchaseOrder::STATUS_SENT]);
+    $purchaseOrder = ($this->makePurchaseOrder)($tenant, $supplier, ['status' => PurchaseOrder::STATUS_CREATED]);
     ($this->makePurchaseOrderLine)($tenant, $purchaseOrder, $item, $purchaseOption, 3);
 
     ($this->grantPermissions)($user, ['inventory-materials-view']);
@@ -1479,7 +1479,7 @@ it('35ao. completed and cancelled records are excluded from material inventory s
     $purchaseOption = ($this->makePurchaseOption)($tenant, $item, $uom, $supplier, ['pack_quantity' => '2.000000']);
     ($this->makePurchaseOrderLine)(
         $tenant,
-        ($this->makePurchaseOrder)($tenant, $supplier, ['status' => PurchaseOrder::STATUS_SENT]),
+        ($this->makePurchaseOrder)($tenant, $supplier, ['status' => PurchaseOrder::STATUS_CREATED]),
         $item,
         $purchaseOption,
         2
@@ -1493,7 +1493,7 @@ it('35ao. completed and cancelled records are excluded from material inventory s
     );
     ($this->makePurchaseOrderLine)(
         $tenant,
-        tap(($this->makePurchaseOrder)($tenant, $supplier, ['status' => PurchaseOrder::STATUS_SENT]), function ($order): void {
+        tap(($this->makePurchaseOrder)($tenant, $supplier, ['status' => PurchaseOrder::STATUS_CREATED]), function ($order): void {
             $order->forceFill(['cancelled_at' => now()])->save();
         }),
         $item,

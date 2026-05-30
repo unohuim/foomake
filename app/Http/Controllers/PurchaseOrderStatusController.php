@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\PurchaseOrder;
 use App\Models\WorkflowDomain;
 use App\Models\WorkflowStage;
+use App\Services\Purchasing\PurchaseOrderLifecycleService;
+use App\Services\Workflows\WorkflowTransitionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -49,20 +51,23 @@ class PurchaseOrderStatusController extends Controller
             return $this->applyAction($request, $purchaseOrder, $validated['action']);
         }
 
-        return $this->applyStatus($purchaseOrder, $validated['status']);
+        return $this->applyStatus($request, $purchaseOrder, $validated['status']);
     }
 
     /**
      * Apply a strict persisted lifecycle transition.
      */
-    private function applyStatus(PurchaseOrder $purchaseOrder, string $targetStatus): JsonResponse
+    private function applyStatus(Request $request, PurchaseOrder $purchaseOrder, string $targetStatus): JsonResponse
     {
         $currentStatus = (string) $purchaseOrder->status;
         $allowed = match (true) {
-            $targetStatus === PurchaseOrder::STATUS_SENT
+            $targetStatus === PurchaseOrder::STATUS_CREATED
                 && $currentStatus === PurchaseOrder::STATUS_DRAFT => true,
             $targetStatus === PurchaseOrder::STATUS_RECEIVED
-                && $currentStatus === PurchaseOrder::STATUS_SENT
+                && in_array($currentStatus, [
+                    PurchaseOrder::STATUS_CREATED,
+                    PurchaseOrder::STATUS_PARTIALLY_RECEIVED,
+                ], true)
                 && $this->allLineBalancesClosed($purchaseOrder) => true,
             $targetStatus === PurchaseOrder::STATUS_COMPLETED
                 && $currentStatus === PurchaseOrder::STATUS_RECEIVED => true,
@@ -99,7 +104,7 @@ class PurchaseOrderStatusController extends Controller
         $purchaseOrder->refresh();
 
         return response()->json([
-            'data' => $this->statusPayload($purchaseOrder),
+            'data' => $this->statusPayload($purchaseOrder, $request),
         ]);
     }
 
@@ -137,13 +142,13 @@ class PurchaseOrderStatusController extends Controller
             $purchaseOrder->forceFill(array_merge([
                 'back_ordered_at' => Carbon::now(),
                 'back_ordered_by_user_id' => $request->user()?->id,
-            ], $this->workflowFieldsForStatus($purchaseOrder, PurchaseOrder::STATUS_SENT)))->save();
+            ], $this->workflowFieldsForStatus($purchaseOrder, PurchaseOrder::STATUS_CREATED)))->save();
         }
 
         $purchaseOrder->refresh();
 
         return response()->json([
-            'data' => $this->statusPayload($purchaseOrder),
+            'data' => $this->statusPayload($purchaseOrder, $request),
         ]);
     }
 
@@ -171,7 +176,12 @@ class PurchaseOrderStatusController extends Controller
             ->values();
 
         return match ($targetStatus) {
-            PurchaseOrder::STATUS_SENT => [
+            PurchaseOrder::STATUS_CREATED => [
+                'last_completed_workflow_stage_id' => $stages->get('creating')?->id,
+                'current_workflow_stage_id' => $stages->get('receiving')?->id
+                    ?? $activeStages->first()?->id,
+            ],
+            PurchaseOrder::STATUS_PARTIALLY_RECEIVED => [
                 'last_completed_workflow_stage_id' => $stages->get('creating')?->id,
                 'current_workflow_stage_id' => $stages->get('receiving')?->id
                     ?? $activeStages->first()?->id,
@@ -206,14 +216,20 @@ class PurchaseOrderStatusController extends Controller
      *
      * @return array<string, bool|int|string|null>
      */
-    private function statusPayload(PurchaseOrder $purchaseOrder): array
+    private function statusPayload(PurchaseOrder $purchaseOrder, Request $request): array
     {
         $payload = [
             'status' => $purchaseOrder->workflowStatus(),
+            'persisted_status' => $purchaseOrder->status,
             'is_cancelled' => $purchaseOrder->workflow_cancelled_at !== null,
             'is_editable' => $purchaseOrder->isWorkflowEditable(),
             'is_back_ordered' => $purchaseOrder->back_ordered_at !== null,
             'has_receipts' => $this->hasReceipts($purchaseOrder),
+            'can_receive' => $this->canReceive($purchaseOrder),
+            'workflow' => app(WorkflowTransitionService::class)->purchaseOrderWorkflowPayload(
+                $purchaseOrder,
+                $request->user()
+            ),
         ];
 
         if (Schema::hasColumn('purchase_orders', 'current_workflow_stage_id')) {
@@ -232,6 +248,26 @@ class PurchaseOrderStatusController extends Controller
         return DB::table('purchase_order_receipts')
             ->where('purchase_order_id', $purchaseOrder->id)
             ->exists();
+    }
+
+    /**
+     * Determine whether the updated purchase order can immediately open the receive slide-over.
+     */
+    private function canReceive(PurchaseOrder $purchaseOrder): bool
+    {
+        if (! $purchaseOrder->isReceivingStage()) {
+            return false;
+        }
+
+        $lineTotals = app(PurchaseOrderLifecycleService::class)->computeLineTotals(
+            $purchaseOrder->fresh(['lines']) ?? $purchaseOrder
+        );
+
+        return collect($lineTotals)->contains(fn (array $totals): bool => bccomp(
+            $totals['balance'],
+            '0',
+            6
+        ) === 1);
     }
 
     /**

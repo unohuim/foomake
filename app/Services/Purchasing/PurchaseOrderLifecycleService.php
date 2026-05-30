@@ -42,6 +42,7 @@ class PurchaseOrderLifecycleService
                 ->findOrFail($order->id);
 
             $this->ensureReceivableStatus($lockedOrder);
+            $this->ensureReceiptLineItemsAreReceivable($lockedOrder, $lineItems);
 
             $receipt = PurchaseOrderReceipt::query()->create([
                 'tenant_id' => $lockedOrder->tenant_id,
@@ -174,12 +175,10 @@ class PurchaseOrderLifecycleService
 
         $nextStatus = $order->status;
 
-        if (
-            $order->status === PurchaseOrder::STATUS_SENT
-            && $allBalancesZero
-            && bccomp($totalReceived, '0', self::SCALE) >= 0
-        ) {
+        if ($allBalancesZero) {
             $nextStatus = PurchaseOrder::STATUS_RECEIVED;
+        } elseif (bccomp($totalReceived, '0', self::SCALE) === 1) {
+            $nextStatus = PurchaseOrder::STATUS_PARTIALLY_RECEIVED;
         }
 
         if ($nextStatus !== $order->status) {
@@ -213,7 +212,11 @@ class PurchaseOrderLifecycleService
             ->keyBy('key');
 
         return match ($status) {
-            PurchaseOrder::STATUS_SENT => [
+            PurchaseOrder::STATUS_CREATED => [
+                'last_completed_workflow_stage_id' => $stages->get('creating')?->id,
+                'current_workflow_stage_id' => $stages->get('receiving')?->id,
+            ],
+            PurchaseOrder::STATUS_PARTIALLY_RECEIVED => [
                 'last_completed_workflow_stage_id' => $stages->get('creating')?->id,
                 'current_workflow_stage_id' => $stages->get('receiving')?->id,
             ],
@@ -232,11 +235,54 @@ class PurchaseOrderLifecycleService
     private function ensureReceivableStatus(PurchaseOrder $order): void
     {
         $allowedStatuses = [
-            PurchaseOrder::STATUS_SENT,
+            PurchaseOrder::STATUS_CREATED,
+            PurchaseOrder::STATUS_PARTIALLY_RECEIVED,
         ];
 
         if (! in_array($order->status, $allowedStatuses, true) || $order->isCancelled()) {
             throw new DomainException('Purchase order is not in a receivable status.');
+        }
+    }
+
+    /**
+     * Validate receipt line quantities against the locked purchase order balance.
+     *
+     * @param array<int, array{line: PurchaseOrderLine, quantity: string}> $lineItems
+     */
+    private function ensureReceiptLineItemsAreReceivable(PurchaseOrder $order, array $lineItems): void
+    {
+        $lineTotals = $this->computeLineTotals($order);
+        $requestedByLine = [];
+
+        foreach ($lineItems as $item) {
+            $line = $item['line'];
+            $quantity = $this->normalizeQuantity($item['quantity']);
+
+            if ((int) $line->purchase_order_id !== (int) $order->id || (int) $line->tenant_id !== (int) $order->tenant_id) {
+                throw new DomainException('Line is invalid for this purchase order.');
+            }
+
+            if (bccomp($quantity, '0', self::SCALE) <= 0) {
+                throw new DomainException('Quantity must be greater than zero.');
+            }
+
+            $requestedByLine[$line->id] = bcadd(
+                $requestedByLine[$line->id] ?? '0.000000',
+                $quantity,
+                self::SCALE
+            );
+        }
+
+        if ($requestedByLine === []) {
+            throw new DomainException('At least one positive received quantity is required.');
+        }
+
+        foreach ($requestedByLine as $lineId => $quantity) {
+            $balance = $lineTotals[$lineId]['balance'] ?? '0.000000';
+
+            if (bccomp($quantity, $balance, self::SCALE) === 1) {
+                throw new DomainException('Quantity exceeds remaining balance.');
+            }
         }
     }
 

@@ -36,6 +36,7 @@ class SeedDefaultWorkflowStagesForTenantAction
             }
 
             $this->migrateLegacyDefaultStageKeys($tenant, (int) $domainId, $domainKey);
+            $this->removeRetiredDefaultStages($tenant, (int) $domainId, $domainKey);
 
             foreach ($stages as $stage) {
                 WorkflowStage::withoutGlobalScopes()->updateOrCreate([
@@ -65,6 +66,10 @@ class SeedDefaultWorkflowStagesForTenantAction
             'is_active' => $stage['is_active'] ?? true,
             'is_inventory_effect_stage' => $stage['is_inventory_effect_stage'],
         ];
+
+        if (Schema::hasColumn('workflow_stages', 'is_core')) {
+            $payload['is_core'] = true;
+        }
 
         if (Schema::hasColumn('workflow_stages', 'action_verb')) {
             $payload['action_verb'] = $stage['action_verb'];
@@ -127,6 +132,24 @@ class SeedDefaultWorkflowStagesForTenantAction
     }
 
     /**
+     * Remove default stages that are no longer part of seeded workflows.
+     */
+    private function removeRetiredDefaultStages(Tenant $tenant, int $domainId, string $domainKey): void
+    {
+        if ($domainKey !== 'sales' || ! Schema::hasColumn('workflow_stages', 'status_complete_label')) {
+            return;
+        }
+
+        WorkflowStage::withoutGlobalScopes()
+            ->where('tenant_id', $tenant->id)
+            ->where('workflow_domain_id', $domainId)
+            ->where('key', 'packed')
+            ->where('name', 'Packed')
+            ->where('status_complete_label', 'PACKED')
+            ->delete();
+    }
+
+    /**
      * Return legacy seeded keys that need to migrate to the current defaults.
      *
      * @return array<string, string|null>
@@ -174,7 +197,7 @@ class SeedDefaultWorkflowStagesForTenantAction
                     'status_complete_label' => 'PACKED',
                     'completion_mode' => 'manual',
                     'sort_order' => 20,
-                    'is_inventory_effect_stage' => false,
+                    'is_inventory_effect_stage' => true,
                 ],
                 [
                     'key' => 'shipping',
@@ -184,15 +207,6 @@ class SeedDefaultWorkflowStagesForTenantAction
                     'completion_mode' => 'manual',
                     'sort_order' => 30,
                     'is_inventory_effect_stage' => false,
-                ],
-                [
-                    'key' => 'packed',
-                    'name' => 'Packed',
-                    'action_verb' => 'PACKED',
-                    'status_complete_label' => 'PACKED',
-                    'completion_mode' => 'manual',
-                    'sort_order' => 25,
-                    'is_inventory_effect_stage' => true,
                 ],
                 [
                     'key' => 'invoicing',

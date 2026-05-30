@@ -181,7 +181,7 @@ class ResolveSalesWorkflowStageAction
     public function stageKeyForStatus(string $status): string
     {
         return match ($status) {
-            SalesOrder::STATUS_PACKED => 'packed',
+            SalesOrder::STATUS_PACKED => 'packing',
             default => Str::lower($status),
         };
     }

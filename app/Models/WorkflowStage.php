@@ -23,6 +23,7 @@ use Illuminate\Support\Facades\Schema;
  * @property string|null $description
  * @property int $sort_order
  * @property bool $is_active
+ * @property bool $is_core
  * @property bool $is_inventory_effect_stage
  */
 class WorkflowStage extends Model
@@ -44,6 +45,7 @@ class WorkflowStage extends Model
         'description',
         'sort_order',
         'is_active',
+        'is_core',
         'is_inventory_effect_stage',
     ];
 
@@ -52,6 +54,7 @@ class WorkflowStage extends Model
      */
     protected $casts = [
         'is_active' => 'boolean',
+        'is_core' => 'boolean',
         'is_inventory_effect_stage' => 'boolean',
     ];
 

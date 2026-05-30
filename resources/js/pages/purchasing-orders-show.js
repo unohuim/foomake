@@ -2,21 +2,6 @@ export function mount(rootEl, payload) {
     const Alpine = window.Alpine;
     const safePayload = payload || {};
 
-    document.querySelectorAll('[data-purchase-order-action-option]').forEach((button) => {
-        button.addEventListener('click', (event) => {
-            event.preventDefault();
-
-            try {
-                window.dispatchEvent(new CustomEvent('purchase-order-status-action', {
-                    detail: JSON.parse(button.dataset.purchaseOrderActionOption || '{}'),
-                }));
-            } catch (error) {
-                // eslint-disable-next-line no-console
-                console.error(error);
-            }
-        });
-    });
-
     const emptyHeaderErrors = () => ({
         supplier_id: [],
         order_date: [],
@@ -86,30 +71,6 @@ export function mount(rootEl, payload) {
             company_name: safePayload.purchaseOrder.supplier_name,
         });
     }
-
-    Alpine.data('purchaseOrderHeader', (initialState = {}) => ({
-        purchaseOrder: initialState.purchaseOrder || initialState || {},
-        workflow: initialState.workflow || {},
-        init() {
-            this.$el.addEventListener('workflow-updated', (event) => {
-                this.workflow = event.detail?.workflow || this.workflow;
-            });
-            window.addEventListener('purchase-order-status-sync', (event) => {
-                this.purchaseOrder = {
-                    ...this.purchaseOrder,
-                    ...(event.detail?.purchaseOrder || {}),
-                };
-            });
-        },
-        statusMenuOptions() {
-            return Array.isArray(this.workflow.actions) ? this.workflow.actions : [];
-        },
-        performStatusMenuAction(option) {
-            window.dispatchEvent(new CustomEvent('purchase-order-status-action', {
-                detail: option || {},
-            }));
-        },
-    }));
 
     Alpine.data('purchasingOrdersShow', () => ({
         purchaseOrder: safePayload.purchaseOrder || {},
@@ -272,6 +233,16 @@ export function mount(rootEl, payload) {
 
             return raw;
         },
+        formatWholeQuantity(value) {
+            const normalized = normalizeDecimal(value);
+            const [whole, fraction = ''] = normalized.split('.');
+
+            if (fraction !== '' && !/^0+$/.test(fraction)) {
+                return this.formatQuantity(normalized);
+            }
+
+            return whole.replace(/^(-?)0+(?=\d)/, '$1');
+        },
         lineFieldKey(line, field) {
             return `${line?.id || 'new'}:${field}`;
         },
@@ -348,8 +319,15 @@ export function mount(rootEl, payload) {
         },
         get canReceiveOrder() {
             const currentStage = this.workflow.currentStage || {};
+            const status = this.purchaseOrder.persisted_status || this.purchaseOrder.status || '';
+            const hasReceivableLine = this.lines.some((line) => normalizeDecimal(line.remaining_balance) !== '0.000000');
+            const hasReceiveAction = this.statusMenuOptions()
+                .some((action) => (action.action || action.type) === 'receive');
 
-            return currentStage.actionVerb === 'Receive' && !this.purchaseOrder.is_cancelled;
+            return (currentStage.actionVerb === 'Receive' || hasReceiveAction)
+                && ['CREATED', 'PARTIALLY_RECEIVED'].includes(status)
+                && hasReceivableLine
+                && !this.purchaseOrder.is_cancelled;
         },
         get canBackOrder() {
             return this.canReceiveOrder;
@@ -364,28 +342,33 @@ export function mount(rootEl, payload) {
         statusMenuOptions() {
             return Array.isArray(this.workflow.actions) ? this.workflow.actions : [];
         },
+        workflowActionHandlers() {
+            return {
+                receive: () => this.openReceive(),
+                short_close: () => {
+                    const line = this.lines.find((entry) => this.canShortCloseLine(entry));
+
+                    if (line) {
+                        this.openShortCloseLine(line);
+                    }
+                },
+            };
+        },
         performStatusMenuAction(option) {
             if (!option || typeof option !== 'object') {
                 return;
             }
 
-            if (option.action === 'receive') {
-                this.openReceive();
+            const action = option.action || option.type;
+            const handlers = this.workflowActionHandlers();
+
+            if (handlers[action]) {
+                handlers[action](option);
                 return;
             }
 
-            if (option.action === 'short_close') {
-                const line = this.lines.find((entry) => this.canShortCloseLine(entry));
-
-                if (line) {
-                    this.openShortCloseLine(line);
-                }
-
-                return;
-            }
-
-            if (option.action) {
-                this.submitStatusAction(option.action);
+            if (action) {
+                this.submitStatusAction(action);
                 return;
             }
 
@@ -400,13 +383,25 @@ export function mount(rootEl, payload) {
                 return;
             }
 
+            const purchaseOrder = detail?.purchaseOrder || {};
+            const persistedStatus = purchaseOrder.persisted_status
+                || purchaseOrder.status
+                || this.purchaseOrder.persisted_status
+                || workflow.status;
+
             this.workflow = workflow;
             this.purchaseOrder = {
                 ...this.purchaseOrder,
-                ...(detail?.purchaseOrder || {}),
+                ...purchaseOrder,
                 workflow_status: workflow.status,
                 status: workflow.status,
+                persisted_status: persistedStatus,
             };
+            if (Object.prototype.hasOwnProperty.call(purchaseOrder, 'can_receive')) {
+                this.canReceive = Boolean(purchaseOrder.can_receive);
+            } else if (Object.prototype.hasOwnProperty.call(detail || {}, 'canReceive')) {
+                this.canReceive = Boolean(detail.canReceive);
+            }
             this.isEditable = this.purchaseOrder.is_editable;
         },
         decorateOption(option) {
@@ -473,16 +468,13 @@ export function mount(rootEl, payload) {
         },
         receiptLineSummary(receipt) {
             const lineCount = receipt.lines_count ?? 0;
-            const total = this.formatQuantity(receipt.total_packs ?? '0.000000');
+            const total = this.formatWholeQuantity(receipt.total_packs ?? '0.000000');
             return `${lineCount} lines, ${total} total packs`;
         },
         shortCloseLineSummary(shortClose) {
             const lineCount = shortClose.lines_count ?? 0;
             const total = this.formatQuantity(shortClose.total_packs ?? '0.000000');
             return `${lineCount} lines, ${total} total packs`;
-        },
-        canReceiveLine(line) {
-            return this.canReceiveOrder && normalizeDecimal(line.remaining_balance) !== '0.000000';
         },
         canShortCloseLine(line) {
             return this.canReceiveOrder && normalizeDecimal(line.remaining_balance) !== '0.000000';
@@ -522,6 +514,17 @@ export function mount(rootEl, payload) {
 
             return this.receiveLineErrors[index];
         },
+        collapseReceiveDatePicker(event) {
+            const input = event?.target;
+
+            if (!input || typeof input.blur !== 'function') {
+                return;
+            }
+
+            if (event.type === 'change' || input.value === '' || input.validity?.valid) {
+                input.blur();
+            }
+        },
         openReceive() {
             if (!this.canReceive || !this.canReceiveOrder) {
                 return;
@@ -532,9 +535,12 @@ export function mount(rootEl, payload) {
                 .map((line) => ({
                     id: line.id,
                     item_name: line.item_name,
+                    ordered_quantity_display: line.pack_count_display,
+                    received_quantity_display: line.received_sum_display,
                     remaining_balance: normalizeDecimal(line.remaining_balance),
                     remaining_balance_display: line.remaining_balance_display,
-                    received_quantity: normalizeDecimal(line.remaining_balance),
+                    unit_context: this.lineLabel(line),
+                    received_quantity: this.formatWholeQuantity(line.remaining_balance),
                 }));
 
             if (lines.length === 0) {
@@ -546,30 +552,6 @@ export function mount(rootEl, payload) {
                 reference: '',
                 notes: '',
                 lines,
-            };
-            this.receiveErrors = emptyReceiveErrors();
-            this.receiveLineErrors = {};
-            this.receiveError = '';
-            this.isReceiveOpen = true;
-        },
-        openReceiveLine(line) {
-            if (!this.canReceiveLine(line)) {
-                return;
-            }
-
-            this.receiveForm = {
-                received_at: '',
-                reference: '',
-                notes: '',
-                lines: [
-                    {
-                        id: line.id,
-                        item_name: line.item_name,
-                        remaining_balance: normalizeDecimal(line.remaining_balance),
-                        remaining_balance_display: line.remaining_balance_display,
-                        received_quantity: normalizeDecimal(line.remaining_balance),
-                    },
-                ],
             };
             this.receiveErrors = emptyReceiveErrors();
             this.receiveLineErrors = {};
@@ -1214,8 +1196,55 @@ export function mount(rootEl, payload) {
                     return;
                 }
 
-                window.location.reload();
-                return;
+                const data = await response.json();
+                const responseData = data.data || {};
+
+                if (responseData.purchase_order) {
+                    this.purchaseOrder = {
+                        ...this.purchaseOrder,
+                        ...responseData.purchase_order,
+                        status: responseData.purchase_order.status || this.purchaseOrder.status,
+                    };
+
+                    if (responseData.purchase_order.workflow_status) {
+                        this.workflow = {
+                            ...this.workflow,
+                            status: responseData.purchase_order.workflow_status,
+                        };
+                    }
+                }
+
+                if (responseData.workflow) {
+                    this.workflow = responseData.workflow;
+                    document.dispatchEvent(new CustomEvent('workflow-updated', {
+                        detail: {
+                            workflow: this.workflow,
+                            purchaseOrder: responseData.purchase_order || {},
+                        },
+                    }));
+                    this.$root.dispatchEvent(new CustomEvent('workflow-updated', {
+                        bubbles: true,
+                        detail: {
+                            workflow: this.workflow,
+                            purchaseOrder: responseData.purchase_order || {},
+                        },
+                    }));
+                }
+
+                if (Array.isArray(responseData.lines)) {
+                    this.lines = responseData.lines;
+                }
+
+                if (Array.isArray(responseData.receipts)) {
+                    this.receipts = responseData.receipts;
+                }
+
+                if (Object.prototype.hasOwnProperty.call(responseData, 'can_receive')) {
+                    this.canReceive = Boolean(responseData.can_receive);
+                }
+
+                this.closeReceive();
+                this.showToast('success', 'Receipt recorded.');
             } catch (error) {
                 // eslint-disable-next-line no-console
                 console.error(error);
@@ -1306,17 +1335,35 @@ export function mount(rootEl, payload) {
                 }
 
                 const data = await response.json();
+                const responseData = data.data || {};
+                const { workflow, ...purchaseOrderData } = responseData;
+
                 this.purchaseOrder = {
                     ...this.purchaseOrder,
-                    ...(data.data || {}),
-                    status: data.data?.status || status,
-                    is_cancelled: Boolean(data.data?.is_cancelled),
-                    is_back_ordered: Boolean(data.data?.is_back_ordered),
+                    ...purchaseOrderData,
+                    status: purchaseOrderData.status || status,
+                    persisted_status: purchaseOrderData.persisted_status || this.purchaseOrder.persisted_status,
+                    is_cancelled: Boolean(purchaseOrderData.is_cancelled),
+                    is_back_ordered: Boolean(purchaseOrderData.is_back_ordered),
                 };
                 this.isEditable = Boolean(this.purchaseOrder.is_editable);
-                this.syncHeaderStatus();
+                if (workflow) {
+                    this.workflow = workflow;
+                    document.dispatchEvent(new CustomEvent('workflow-updated', {
+                        detail: {
+                            workflow,
+                            purchaseOrder: purchaseOrderData,
+                        },
+                    }));
+                    this.$root.dispatchEvent(new CustomEvent('workflow-updated', {
+                        bubbles: true,
+                        detail: {
+                            workflow,
+                            purchaseOrder: purchaseOrderData,
+                        },
+                    }));
+                }
                 this.showToast('success', 'Status updated.');
-                window.location.reload();
             } catch (error) {
                 // eslint-disable-next-line no-console
                 console.error(error);
@@ -1356,37 +1403,41 @@ export function mount(rootEl, payload) {
                 }
 
                 const data = await response.json();
+                const responseData = data.data || {};
+                const { workflow, ...purchaseOrderData } = responseData;
+
                 this.purchaseOrder = {
                     ...this.purchaseOrder,
-                    ...(data.data || {}),
-                    status: data.data?.status || this.purchaseOrder.status,
-                    is_cancelled: Boolean(data.data?.is_cancelled),
-                    is_back_ordered: Boolean(data.data?.is_back_ordered),
+                    ...purchaseOrderData,
+                    status: purchaseOrderData.status || this.purchaseOrder.status,
+                    persisted_status: purchaseOrderData.persisted_status || this.purchaseOrder.persisted_status,
+                    is_cancelled: Boolean(purchaseOrderData.is_cancelled),
+                    is_back_ordered: Boolean(purchaseOrderData.is_back_ordered),
                 };
                 this.isEditable = Boolean(this.purchaseOrder.is_editable);
-                this.syncHeaderStatus();
+                if (workflow) {
+                    this.workflow = workflow;
+                    document.dispatchEvent(new CustomEvent('workflow-updated', {
+                        detail: {
+                            workflow,
+                            purchaseOrder: purchaseOrderData,
+                        },
+                    }));
+                    this.$root.dispatchEvent(new CustomEvent('workflow-updated', {
+                        bubbles: true,
+                        detail: {
+                            workflow,
+                            purchaseOrder: purchaseOrderData,
+                        },
+                    }));
+                }
                 this.showToast('success', 'Action applied.');
-                window.location.reload();
             } catch (error) {
                 // eslint-disable-next-line no-console
                 console.error(error);
                 this.statusError = 'Unable to apply action.';
                 this.showToast('error', this.statusError);
             }
-        },
-        syncHeaderStatus() {
-            window.dispatchEvent(new CustomEvent('purchase-order-status-sync', {
-                detail: {
-                    purchaseOrder: {
-                        status: this.purchaseOrder.status,
-                        is_cancelled: this.purchaseOrder.is_cancelled,
-                        is_back_ordered: this.purchaseOrder.is_back_ordered,
-                        has_receipts: this.purchaseOrder.has_receipts,
-                        current_workflow_stage_id: this.purchaseOrder.current_workflow_stage_id,
-                        last_completed_workflow_stage_id: this.purchaseOrder.last_completed_workflow_stage_id,
-                    },
-                },
-            }));
         },
     }));
 }

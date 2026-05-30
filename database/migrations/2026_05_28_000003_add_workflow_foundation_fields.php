@@ -110,7 +110,7 @@ return new class extends Migration
 
         DB::table('purchase_orders')
             ->where('tenant_id', $tenant->id)
-            ->where('status', 'SENT')
+            ->where('status', 'CREATED')
             ->update([
                 'current_workflow_stage_id' => $stages['receiving'] ?? null,
                 'last_completed_workflow_stage_id' => $stages['creating'] ?? null,

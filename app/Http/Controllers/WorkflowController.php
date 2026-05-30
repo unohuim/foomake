@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Models\WorkflowDomain;
 use App\Models\WorkflowStage;
 use App\Models\WorkflowTaskTemplate;
+use App\Support\Workflows\WorkflowStatusOptions;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -63,7 +64,9 @@ class WorkflowController extends Controller
             'showInactive' => $showInactive,
             'stageStoreUrl' => route('admin.workflows.stages.store'),
             'stageUpdateUrlBase' => url('/admin/workflows/stages'),
+            'stageDeleteUrlBase' => url('/admin/workflows/stages'),
             'stageReorderUrl' => route('admin.workflows.stages.reorder'),
+            'statusOptionsByDomainId' => app(WorkflowStatusOptions::class)->byDomainId($domains),
             'taskTemplateStoreUrl' => route('admin.workflows.task-templates.store'),
             'taskTemplateUpdateUrlBase' => url('/admin/workflows/task-templates'),
             'taskTemplateReorderUrl' => route('admin.workflows.task-templates.reorder'),
@@ -109,6 +112,7 @@ class WorkflowController extends Controller
             'description' => $stage->description,
             'sort_order' => $stage->sort_order,
             'is_active' => $stage->is_active,
+            'is_core' => $stage->is_core,
             'is_inventory_effect_stage' => $stage->is_inventory_effect_stage,
             'is_seeded_sales_stage' => in_array(
                 $stage->key,

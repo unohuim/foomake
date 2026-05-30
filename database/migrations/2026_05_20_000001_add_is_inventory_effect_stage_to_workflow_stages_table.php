@@ -25,7 +25,7 @@ return new class extends Migration
         if ($salesDomainId !== null) {
             DB::table('workflow_stages')
                 ->where('workflow_domain_id', $salesDomainId)
-                ->where('key', 'packed')
+                ->where('key', 'packing')
                 ->update([
                     'is_inventory_effect_stage' => true,
                 ]);
