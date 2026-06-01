@@ -18,6 +18,8 @@ This document is the source-of-truth for **authorization intent** in this reposi
 - `system-tenants-manage`
 - `system-users-manage`
 - `system-roles-manage`
+- `admin-users-view`
+- `admin-users-manage`
 - `workflow-manage`
 
 ### Purchasing
@@ -80,6 +82,8 @@ Tenant administrator role.
 
 - `system-users-manage`
 - `system-roles-manage`
+- `admin-users-view`
+- `admin-users-manage`
 - `workflow-manage`
 - Purchasing: all purchasing permissions
 - Sales: all sales permissions
@@ -163,6 +167,9 @@ Execution-only role.
 - Sales-order line create, quantity update, and delete mutations do not introduce a separate permission slug.
 - `workflow-manage` gates the `Admin -> Workflows` navigation item and workflow configuration CRUD.
 - Admins receive `workflow-manage` by default.
+- `admin-users-view` gates tenant admin user-management visibility.
+- `admin-users-manage` gates tenant user invitation creation, resend, revocation, and role changes.
+- Admins receive both user-management permissions by default.
 - Assigned users may complete their own generated workflow tasks without requiring `workflow-manage`.
 - Assigned users do not require `sales-sales-orders-manage` solely to complete an assigned workflow task.
 - Sales-order lifecycle transitions continue requiring existing Sales Order permissions even after workflow tasks are introduced.

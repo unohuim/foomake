@@ -21,6 +21,7 @@ const sanitizeActions = (value) => {
             label: sanitizeExpression(action.label),
             tone: sanitizeExpression(action.tone, 'default'),
             handler: sanitizeExpression(action.handler),
+            showExpression: sanitizeExpression(action.showExpression, 'true'),
         }))
         .filter((action) => action.id !== '' && action.label !== '');
 };
@@ -333,6 +334,7 @@ const renderActionItems = (config) => {
                 class="${toneClasses}"
                 data-crud-action-item-${escapeHtml(action.id)}
                 role="menuitem"
+                x-show="${action.showExpression}"
                 x-on:click="open = false; ${action.handler}"
             >
                 ${escapeHtml(action.label)}

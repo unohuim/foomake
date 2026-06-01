@@ -108,6 +108,7 @@ class StockMove extends Model
 - `app/Http/Controllers/SupplierController.php`
 - `app/Http/Controllers/MaterialController.php`  
 - `app/Http/Controllers/InventoryCountController.php`  
+- `app/Http/Controllers/Admin/UserManagementController.php`
 - `resources/views/sales/products/index.blade.php`  
 - `resources/views/sales/customers/index.blade.php`  
 - `resources/views/purchasing/orders/index.blade.php`
@@ -115,6 +116,7 @@ class StockMove extends Model
 - `resources/views/materials/index.blade.php`  
 - `resources/views/inventory/counts/index.blade.php`  
 - `resources/views/manufacturing/make-orders/index.blade.php`  
+- `resources/views/admin/users/index.blade.php`
 - `resources/js/lib/crud-config.js`  
 - `resources/js/lib/generic-crud.js`  
 - `resources/js/lib/crud-page.js`  
@@ -125,6 +127,7 @@ class StockMove extends Model
 - `resources/js/pages/materials-index.js`
 - `resources/js/pages/inventory-counts-index.js`
 - `resources/js/pages/manufacturing-make-orders.js`
+- `resources/js/pages/admin-users-index.js`
 
 **Purpose:**  
 Provide a mount-only Blade shell plus server-configured shared CRUD renderer so index pages reuse one toolbar, list, empty-state, and row-action pattern without global JavaScript state.
@@ -157,7 +160,7 @@ $crudConfig = [
 ```
 
 Notes:
-- Products, Customers, Purchase Orders, Suppliers, Materials, Inventory Counts, and Make Orders are current reference implementations.
+- Products, Customers, Purchase Orders, Suppliers, Materials, Inventory Counts, Make Orders, and Admin Users are current reference implementations.
 - `detailUrlTemplate` is optional. When present, create flows may redirect to the created record detail page after success.
 - When `detailUrlTemplate` is absent, the existing inline success behavior such as list refresh remains the fallback.
 
@@ -662,6 +665,47 @@ Assigned-user task completion or existing sales-order lifecycle transitions that
 ```php
 Gate::authorize('workflow-manage');
 ```
+
+---
+
+### Tenant User Invitation Pattern
+
+**Name:** Tenant User Invitation Pattern
+**Type:** Auth / Tenancy Pattern
+**Location:**
+- `docs/architecture/auth/TenantUserInvitation.yaml`
+- `app/Models/TenantUserInvitation.php`
+- `app/Http/Controllers/Admin/UserManagementController.php`
+- `app/Http/Controllers/Auth/InvitedRegisteredUserController.php`
+- `database/migrations/2026_05_31_000001_create_tenant_user_invitations_table.php`
+
+**Purpose:**
+Allow tenant admins to invite users into their tenant while normal self-registration keeps tenant creation and email verification behavior.
+
+**When to Use:**
+Tenant admin member invitation and invited registration flows.
+
+**When Not to Use:**
+Normal self-registration, password reset, login, or cross-tenant system administration.
+
+**Public Interface:**
+- `admin-users-view`
+- `admin-users-manage`
+- `TenantUserInvitation::findByPlainToken()`
+- `admin.users.*` routes
+- `invitations.register.*` routes
+
+**Example Usage:**
+```php
+$invitation = TenantUserInvitation::findByPlainToken($token);
+```
+
+Notes:
+- Invitation URL tokens are stored as hashes.
+- Invitation emails link to the guest `/invitations/{token}/register` token route, not admin invitation-management routes.
+- Revoked invitations cannot be accepted.
+- Invited registration attaches or completes the user in the invitation tenant, verifies the invited email, and assigns the selected role.
+- Normal registration remains responsible for creating a tenant and first admin user, then requires email verification before protected app access.
 
 ---
 
@@ -3025,9 +3069,11 @@ Vendor or generated views excluded from repository checks, plus Breeze/shared la
 - `resources/js/pages/sales-products-index.js`  
 - `resources/js/pages/sales-customers-index.js`  
 - `resources/js/pages/purchasing-suppliers-index.js`
+- `resources/js/pages/admin-users-index.js`
 - `resources/views/sales/products/index.blade.php`
 - `resources/views/sales/customers/index.blade.php`
 - `resources/views/purchasing/suppliers/index.blade.php`
+- `resources/views/admin/users/index.blade.php`
 
 **Purpose:**  
 Centralize a shared config-driven CRUD renderer behind server-generated page contracts while keeping Blade index pages mount-only, moving import UX and lifecycle into a shared import component, and leaving page-specific create/export behavior plus approved data adapters in each page module.
@@ -3053,6 +3099,7 @@ Static pages, or domain workflows that exceed generic CRUD concerns.
 - Sales Products  
 - Sales Customers
 - Purchasing Suppliers
+- Admin Users
 - Recipes
 
 **Key Rules:**  

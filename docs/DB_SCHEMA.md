@@ -58,6 +58,7 @@ Migrations remain the **sole source of truth**.
 - suppliers
 - tenants
 - tasks
+- tenant_user_invitations
 - uom_categories
 - uom_conversions
 - uoms
@@ -108,7 +109,7 @@ Migrations remain the **sole source of truth**.
 
 ## customers
 
-**Tenant-owned:** Yes  
+**Tenant-owned:** Yes
 **Purpose:** Sales customer records
 
 ### Columns
@@ -147,7 +148,7 @@ Migrations remain the **sole source of truth**.
 
 ## customer_contacts
 
-**Tenant-owned:** Yes  
+**Tenant-owned:** Yes
 **Purpose:** Customer-contact relationship records for the customer detail Contacts section
 
 ### Columns
@@ -1431,6 +1432,50 @@ Migrations remain the **sole source of truth**.
 ### Keys & Indexes
 
 - PK: `id`
+
+---
+
+## tenant_user_invitations
+
+**Tenant-owned:** Yes
+**Purpose:** Tenant-scoped user invitations for adding members without creating a new tenant
+
+### Columns
+
+| Name       | Type      | Nullable | Notes                     |
+| ---------- | --------- | -------- | ------------------------- |
+| id         | bigint    | No       | Primary key               |
+| tenant_id  | bigint    | No       | FK → tenants.id (CASCADE) |
+| invited_by_user_id | bigint | Yes  | FK → users.id (SET NULL)  |
+| email      | string    | No       | Invited email address     |
+| role_id    | bigint    | No       | FK → roles.id (CASCADE)   |
+| token      | string    | No       | Unique hashed invitation token |
+| expires_at | timestamp | No       | Expiry timestamp          |
+| revoked_at | timestamp | Yes      | Revocation timestamp      |
+| accepted_at | timestamp | Yes     | Accepted timestamp        |
+| accepted_user_id | bigint | Yes   | FK → users.id (SET NULL)  |
+| created_at | timestamp | Yes      | —                         |
+| updated_at | timestamp | Yes      | —                         |
+
+### Keys & Indexes
+
+- PK: `id`
+- Unique: `token`
+- Index: `(tenant_id, email)`
+- Index: `(tenant_id, accepted_at)`
+- Index: `(tenant_id, revoked_at)`
+- Implicit (FK index): `tenant_id`
+- Implicit (FK index): `invited_by_user_id`
+- Implicit (FK index): `role_id`
+- Implicit (FK index): `accepted_user_id`
+
+### Behavioral Notes
+
+- Invitation acceptance uses a plain URL token that is hashed before lookup.
+- Revoked invitations are marked with `revoked_at` and cannot be accepted.
+- Accepted invitations are marked with `accepted_at` and `accepted_user_id`.
+- Invited registration creates or completes a user in the invitation tenant, sets email verification, and assigns the selected global role.
+- Invited registration does not create a new tenant.
 
 ---
 

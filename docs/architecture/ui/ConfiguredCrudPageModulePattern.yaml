@@ -5,10 +5,12 @@ location:
   - app/Http/Controllers/CustomerController.php
   - app/Http/Controllers/PurchaseOrderController.php
   - app/Http/Controllers/MaterialController.php
+  - app/Http/Controllers/Admin/UserManagementController.php
   - resources/views/sales/products/index.blade.php
   - resources/views/sales/customers/index.blade.php
   - resources/views/purchasing/orders/index.blade.php
   - resources/views/materials/index.blade.php
+  - resources/views/admin/users/index.blade.php
   - resources/views/manufacturing/make-orders/index.blade.php
   - resources/js/lib/crud-config.js
   - resources/js/lib/export-module.js
@@ -21,6 +23,7 @@ location:
   - resources/js/pages/sales-customers-index.js
   - resources/js/pages/purchasing-orders-index.js
   - resources/js/pages/materials-index.js
+  - resources/js/pages/admin-users-index.js
   - resources/js/pages/manufacturing-make-orders.js
 purpose: Define a reusable, server-configured CRUD page-module pattern where Blade is a mount-only shell, controllers emit typed page contracts, a shared JavaScript renderer owns generic CRUD UI, shared import and export components own their full UX and lifecycle, and page modules compose resource-specific create actions plus approved import data adapters.
 when_to_use:
@@ -70,7 +73,7 @@ rules:
   - Resource pages may provide export differences only through the server-generated CRUD contract; export-specific copy, endpoint, and visibility must not be hardcoded in page-local Blade or page-local JavaScript.
   - Resource pages must not contain export slide-over form markup or page-local export UX overrides.
   - Page-specific behavior such as create/edit form markup, row-to-form mapping, toasts, non-import/non-export validation UX, success callbacks outside import, and non-import/non-export domain-specific rendering remains in the page module.
-  - Products, Customers, Purchase Orders, Materials, Make Orders, and Recipes are current reference implementations for this pattern.
+  - Products, Customers, Purchase Orders, Materials, Make Orders, Recipes, and Admin Users are current reference implementations for this pattern.
   - Products and Customers both use the shared export module as the render-owning export component and do not keep export slide-over markup in Blade.
   - Materials uses the same shared CRUD renderer and mount-only Blade shell pattern without shared import or export.
   - Missing or invalid CRUD config must fail safely without breaking initial page load.

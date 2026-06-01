@@ -37,7 +37,7 @@ beforeEach(function (): void {
             'tenant_id' => $tenant->id,
             'name' => 'User ' . $this->userCounter,
             'email' => 'user' . $this->userCounter . '@example.test',
-            'email_verified_at' => null,
+            'email_verified_at' => now(),
             'password' => Hash::make('password'),
             'remember_token' => null,
         ]);

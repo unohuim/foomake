@@ -1,0 +1,51 @@
+name: Tenant User Invitation
+type: Auth / Tenancy Pattern
+location:
+  - app/Models/TenantUserInvitation.php
+  - app/Http/Controllers/Admin/UserManagementController.php
+  - app/Http/Controllers/Auth/InvitedRegisteredUserController.php
+  - database/migrations/2026_05_31_000001_create_tenant_user_invitations_table.php
+purpose: Allow tenant admins to invite members into their tenant while preserving normal self-registration tenant creation.
+when_to_use:
+  - Tenant admin member invitation
+  - Guest invitation acceptance
+  - Assigning a selected global role to an invited tenant member
+when_not_to_use:
+  - Normal self-registration
+  - Login or password reset identity lookup
+  - Cross-tenant platform user administration
+rules:
+  - Tenant user invitations are tenant-owned and use tenant_id.
+  - Tenant user invitation queries for authenticated admin surfaces use tenant scoping.
+  - Invitation acceptance is safe for unauthenticated users and must not depend on authenticated tenant scope.
+  - Invitation email links must use the guest token routes, not admin invitation management routes.
+  - Invitation URL tokens are stored as hashes and resolved from the plain URL token.
+  - Expired invitations cannot be accepted.
+  - Revoked invitations cannot be accepted.
+  - Already accepted invitations cannot be reused.
+  - Invited registration creates or completes a user in the invitation tenant.
+  - Invited registration sets the invited email as verified immediately.
+  - Invited registration assigns the selected global role from the invitation.
+  - Invited registration does not create a new tenant.
+  - Normal self-registration requires email verification before protected application access.
+  - Existing verified users must authenticate as the invited email before accepting an invitation.
+  - Normal self-registration continues to create a tenant and assign the first user admin responsibility.
+  - User-management access is enforced through admin-users-view and admin-users-manage gates.
+public_interface:
+  - TenantUserInvitation::findByPlainToken()
+  - admin.users.index
+  - admin.users.invitations.store
+  - admin.users.invitations.resend
+  - admin.users.invitations.revoke
+  - admin.users.invitations.show
+  - invitations.register
+  - invitations.register.store
+  - admin-users-view
+  - admin-users-manage
+example_usage: |
+  $invitation = TenantUserInvitation::findByPlainToken($plainToken);
+
+  $user = User::create([
+      'tenant_id' => $invitation->tenant_id,
+      'email' => $invitation->email,
+  ]);

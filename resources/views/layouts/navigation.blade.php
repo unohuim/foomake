@@ -12,7 +12,7 @@
         || request()->routeIs('materials.uom-categories.*');
     $purchasingActive = request()->routeIs('purchasing.*');
     $salesActive = request()->routeIs('sales.*');
-    $profileActive = request()->routeIs('profile.*') || request()->routeIs('admin.workflows.*');
+    $profileActive = request()->routeIs('profile.*') || request()->routeIs('admin.workflows.*') || request()->routeIs('admin.users.*');
 
     $canViewPurchaseOrders = $user?->can('purchasing-purchase-orders-create') ?? false;
     $canViewSuppliers = $user?->can('purchasing-suppliers-view') ?? false;
@@ -22,6 +22,7 @@
     $canManageProducts = $user?->can('inventory-products-manage') ?? false;
     $canOpenSalesOrders = $navigationEligibility['salesOrdersEnabled'] ?? false;
     $canManageSystemUsers = $user?->can('system-users-manage') ?? false;
+    $canViewAdminUsers = $user?->can('admin-users-view') ?? false;
     $canManageWorkflows = $user?->can('workflow-manage') ?? false;
     $canOpenPurchaseOrders = $navigationEligibility['purchaseOrdersEnabled'] ?? false;
     $canViewInventory = $user?->can('inventory-adjustments-view') ?? false;
@@ -263,6 +264,12 @@
                     @if ($canManageWorkflows)
                         <x-nav-dropdown-link :href="route('admin.workflows.index')" :active="request()->routeIs('admin.workflows.*')" data-profile-workflows-link="desktop">
                             {{ __('Workflows') }}
+                        </x-nav-dropdown-link>
+                    @endif
+
+                    @if ($canViewAdminUsers)
+                        <x-nav-dropdown-link :href="route('admin.users.index')" :active="request()->routeIs('admin.users.*')">
+                            {{ __('Users') }}
                         </x-nav-dropdown-link>
                     @endif
 
@@ -526,6 +533,12 @@
             @if ($canManageWorkflows)
                 <x-nav-link :href="route('admin.workflows.index')" :active="request()->routeIs('admin.workflows.*')" mobile data-profile-workflows-link="mobile">
                     {{ __('Workflows') }}
+                </x-nav-link>
+            @endif
+
+            @if ($canViewAdminUsers)
+                <x-nav-link :href="route('admin.users.index')" :active="request()->routeIs('admin.users.*')" mobile>
+                    {{ __('Users') }}
                 </x-nav-link>
             @endif
 

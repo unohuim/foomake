@@ -54,7 +54,7 @@ This keeps navigation aligned with current process-based domain ownership.
 
 ### PR2-MAT-001 — Materials Navigation + Index ✅ (Implemented, later expanded)
 
-**Goal**  
+**Goal**
 Expose Materials as a first-class domain with read-only visibility.
 
 **Includes**
@@ -82,7 +82,7 @@ Expose Materials as a first-class domain with read-only visibility.
 
 ### PR2-UOM-001 — UoM Categories CRUD (AJAX) ✅ (Implemented)
 
-**Goal**  
+**Goal**
 Allow managing UoM Categories required by Units and Items.
 
 **Includes**
@@ -1135,6 +1135,36 @@ Each component:
 
 - Single responsibility
 - Documented in `ARCHITECTURE_INVENTORY.md`
+
+---
+
+### PR2-ADMIN-001 — Tenant Admin User Management + Invitations
+
+**Goal**
+Allow tenant admins to invite members into their tenant and choose the member role at invite time.
+
+**Includes**
+
+- Tenant admin user-management UI
+- Token-based tenant user invitations
+- Email verification for normal self-registration
+- Invitation acceptance through guest registration
+- Invited registration creates or completes a user in the inviting tenant
+- Invited registration verifies the invited email immediately
+- Invited registration assigns the selected global role
+- Normal self-registration continues creating a new tenant and admin user
+
+**Permissions**
+
+- View: `admin-users-view`
+- Manage invitations: `admin-users-manage`
+
+**Rules**
+
+- Invitations are tenant-owned and include tenant, email, selected role, hashed token, expiry, revoked timestamp, accepted timestamp, and accepted user.
+- Expired, invalid, revoked, already accepted, and cross-tenant invitation access must fail safely.
+- Normally registered users must verify email before accessing protected application areas.
+- Authorization uses permission gates; UI visibility is not the source of truth.
 
 ---
 

@@ -24,6 +24,7 @@ class AdminLoginUserSeeder extends Seeder
                 'name' => 'admin',
                 'password' => Hash::make('password'),
                 'tenant_id' => $tenant->id,
+                'email_verified_at' => now(),
             ]
         );
     }

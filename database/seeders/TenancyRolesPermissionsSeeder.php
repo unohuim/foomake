@@ -23,6 +23,8 @@ class TenancyRolesPermissionsSeeder extends Seeder
             'system-tenants-manage',
             'system-users-manage',
             'system-roles-manage',
+            'admin-users-view',
+            'admin-users-manage',
             'workflow-manage',
         ];
 

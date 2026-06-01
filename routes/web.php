@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Admin\UserManagementController;
 use App\Http\Controllers\InventoryController;
 use App\Http\Controllers\InventoryCountController;
 use App\Http\Controllers\ItemController;
@@ -45,7 +46,7 @@ Route::get('/dashboard', function () {
     return view('dashboard');
 })->middleware(['auth', 'verified'])->name('dashboard');
 
-Route::middleware('auth')->group(function () {
+Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/navigation/state', NavigationStateController::class)
         ->name('navigation.state');
 
@@ -377,6 +378,19 @@ Route::middleware('auth')->group(function () {
         ->name('admin.workflows.task-templates.reorder');
     Route::patch('/tasks/{task}/complete', [TaskCompletionController::class, 'update'])
         ->name('tasks.complete');
+
+    Route::get('/admin/users', [UserManagementController::class, 'index'])
+        ->name('admin.users.index');
+    Route::get('/admin/users/list', [UserManagementController::class, 'list'])
+        ->name('admin.users.list');
+    Route::post('/admin/users/invitations', [UserManagementController::class, 'storeInvitation'])
+        ->name('admin.users.invitations.store');
+    Route::post('/admin/users/invitations/{invitation}/resend', [UserManagementController::class, 'resendInvitation'])
+        ->name('admin.users.invitations.resend');
+    Route::delete('/admin/users/invitations/{invitation}', [UserManagementController::class, 'revokeInvitation'])
+        ->name('admin.users.invitations.revoke');
+    Route::get('/admin/users/invitations/{invitation}', [UserManagementController::class, 'showInvitation'])
+        ->name('admin.users.invitations.show');
 
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::get('/profile/connectors', [ProfileConnectorController::class, 'index'])

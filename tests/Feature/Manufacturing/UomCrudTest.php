@@ -30,7 +30,7 @@ beforeEach(function () {
             'tenant_id' => $tenant->id,
             'name' => 'User ' . $email,
             'email' => $email,
-            'email_verified_at' => null,
+            'email_verified_at' => now(),
             'password' => Hash::make('password'),
             'remember_token' => null,
         ]);
