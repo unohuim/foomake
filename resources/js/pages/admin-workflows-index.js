@@ -68,6 +68,16 @@ export function mount(rootEl, payload) {
                     && (this.showInactive || stage.is_active);
             });
         },
+        eligibleUsersForTaskForm() {
+            if (!this.taskTemplateForm.workflow_domain_id) {
+                return [];
+            }
+
+            return this.users.filter((user) => {
+                return Array.isArray(user.eligible_workflow_domain_ids)
+                    && user.eligible_workflow_domain_ids.map(String).includes(String(this.taskTemplateForm.workflow_domain_id));
+            });
+        },
         showToast(type, message) {
             this.toast.type = type;
             this.toast.message = message;

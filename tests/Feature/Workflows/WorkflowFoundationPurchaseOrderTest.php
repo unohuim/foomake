@@ -516,6 +516,91 @@ it('9. purchase order detail renders the reusable workflow action button', funct
         ->assertSee('Create this purchase order, and begin workflow.');
 });
 
+it('9a. purchase order detail workflow payload exposes assigned current-stage task completion', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $supplier = ($this->makeSupplier)($tenant);
+    ($this->grantPermission)($user, 'purchasing-purchase-orders-create');
+    ($this->grantPermission)($user, 'purchasing-purchase-orders-receive');
+    ($this->seedWorkflow)($tenant);
+
+    $stage = ($this->stage)($tenant, 'creating');
+    $order = ($this->makeOrder)($tenant, $user, $supplier, [
+        'current_workflow_stage_id' => $stage->id,
+    ]);
+
+    $task = Task::query()->create([
+        'tenant_id' => $tenant->id,
+        'workflow_domain_id' => ($this->purchasingDomain)()->id,
+        'domain_record_id' => $order->id,
+        'workflow_stage_id' => $stage->id,
+        'workflow_task_template_id' => null,
+        'assigned_to_user_id' => $user->id,
+        'title' => 'Confirm vendor terms',
+        'description' => 'Review terms before creating the PO.',
+        'sort_order' => 1,
+        'status' => 'open',
+    ]);
+
+    $response = $this->actingAs($user)->get(route('purchasing.orders.show', $order))->assertOk();
+
+    preg_match(
+        '/<script type="application\\/json" id="purchasing-orders-show-payload">\\s*(.*?)\\s*<\\/script>/s',
+        $response->getContent(),
+        $matches
+    );
+
+    $payload = json_decode($matches[1] ?? '[]', true);
+    $taskPayload = collect($payload['workflow']['currentStageTasks'] ?? [])->first();
+
+    expect($taskPayload)->not->toBeNull()
+        ->and($taskPayload['id'] ?? null)->toBe($task->id)
+        ->and($taskPayload['title'] ?? null)->toBe('Confirm vendor terms')
+        ->and($taskPayload['can_complete'] ?? null)->toBeTrue()
+        ->and($taskPayload['complete_url'] ?? null)->toBe(route('tasks.complete', $task));
+});
+
+it('9b. purchase order stage entry generates tasks for the configured default assignee', function (): void {
+    $tenant = ($this->makeTenant)();
+    $creator = ($this->makeUser)($tenant);
+    $assignee = ($this->makeUser)($tenant);
+    $supplier = ($this->makeSupplier)($tenant);
+    ($this->grantPermission)($creator, 'purchasing-purchase-orders-create');
+    ($this->grantPermission)($creator, 'purchasing-purchase-orders-receive');
+    ($this->grantPermission)($assignee, 'purchasing-purchase-orders-create');
+    ($this->grantPermission)($assignee, 'purchasing-purchase-orders-receive');
+    ($this->seedWorkflow)($tenant);
+
+    $stage = ($this->stage)($tenant, 'creating');
+    WorkflowTaskTemplate::query()->create([
+        'tenant_id' => $tenant->id,
+        'workflow_domain_id' => ($this->purchasingDomain)()->id,
+        'workflow_stage_id' => $stage->id,
+        'default_assignee_user_id' => $assignee->id,
+        'title' => 'Confirm vendor terms',
+        'description' => null,
+        'sort_order' => 1,
+        'is_active' => true,
+    ]);
+    $order = ($this->makeOrder)($tenant, $creator, $supplier);
+
+    $response = $this->actingAs($assignee)->get(route('purchasing.orders.show', $order))->assertOk();
+
+    preg_match(
+        '/<script type="application\\/json" id="purchasing-orders-show-payload">\\s*(.*?)\\s*<\\/script>/s',
+        $response->getContent(),
+        $matches
+    );
+
+    $payload = json_decode($matches[1] ?? '[]', true);
+    $taskPayload = collect($payload['workflow']['currentStageTasks'] ?? [])->first();
+
+    expect($taskPayload)->not->toBeNull()
+        ->and($taskPayload['title'] ?? null)->toBe('Confirm vendor terms')
+        ->and($taskPayload['assigned_to_user_id'] ?? null)->toBe($assignee->id)
+        ->and($taskPayload['can_complete'] ?? null)->toBeTrue();
+});
+
 it('10. completing a stage sets last completed stage and advances to the next stage', function (): void {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);

@@ -150,6 +150,7 @@ export function mount(rootEl, payload) {
         shortCloseError: '',
         isShortCloseSubmitting: false,
         statusError: '',
+        workflowTaskSavingIds: [],
         toast: {
             visible: false,
             message: '',
@@ -403,6 +404,46 @@ export function mount(rootEl, payload) {
                 this.canReceive = Boolean(detail.canReceive);
             }
             this.isEditable = this.purchaseOrder.is_editable;
+        },
+        async completeWorkflowTask(task) {
+            if (!task?.can_complete || !task.complete_url || this.workflowTaskSavingIds.includes(task.id)) {
+                return;
+            }
+
+            this.workflowTaskSavingIds.push(task.id);
+
+            try {
+                const response = await fetch(task.complete_url, {
+                    method: 'PATCH',
+                    headers: {
+                        Accept: 'application/json',
+                        'X-CSRF-TOKEN': this.csrfToken,
+                    },
+                });
+
+                if (!response.ok) {
+                    this.showToast('error', 'Unable to complete workflow task.');
+                    return;
+                }
+
+                const data = await response.json();
+                const updatedTask = data.data || {};
+                const tasks = Array.isArray(this.workflow.currentStageTasks)
+                    ? this.workflow.currentStageTasks
+                    : [];
+
+                this.workflow = {
+                    ...this.workflow,
+                    currentStageTasks: tasks.map((entry) => (
+                        entry.id === task.id ? updatedTask : entry
+                    )),
+                };
+                this.showToast('success', 'Workflow task completed.');
+            } catch (error) {
+                this.showToast('error', 'Unable to complete workflow task.');
+            } finally {
+                this.workflowTaskSavingIds = this.workflowTaskSavingIds.filter((id) => id !== task.id);
+            }
         },
         decorateOption(option) {
             const quantity = option.pack_quantity_display || this.formatQuantity(option.pack_quantity);

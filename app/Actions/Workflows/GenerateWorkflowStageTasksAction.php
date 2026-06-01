@@ -6,6 +6,7 @@ use App\Models\Task;
 use App\Models\User;
 use App\Models\WorkflowStage;
 use App\Models\WorkflowTaskTemplate;
+use App\Support\Workflows\WorkflowAssignmentPermissions;
 use DomainException;
 
 /**
@@ -46,9 +47,11 @@ class GenerateWorkflowStageTasksAction
                 continue;
             }
 
-            $assigneeId = $preferredAssigneeUserId
-                ?? $template->default_assignee_user_id
-                ?? $this->firstTenantUserId($tenantId);
+            $assigneeId = $this->resolveAssigneeId(
+                $tenantId,
+                $stage,
+                $preferredAssigneeUserId ?? $template->default_assignee_user_id
+            );
 
             Task::withoutGlobalScopes()->create([
                 'tenant_id' => $tenantId,
@@ -68,19 +71,46 @@ class GenerateWorkflowStageTasksAction
     }
 
     /**
+     * Resolve a preferred eligible assignee or fall back to the first eligible tenant user.
+     *
+     * @throws DomainException
+     */
+    private function resolveAssigneeId(int $tenantId, WorkflowStage $stage, ?int $preferredAssigneeUserId): int
+    {
+        $stage->loadMissing('workflowDomain');
+        $domainKey = $stage->workflowDomain?->key;
+        $assignmentPermissions = app(WorkflowAssignmentPermissions::class);
+
+        if ($preferredAssigneeUserId !== null && $domainKey !== null) {
+            $preferredUser = User::query()
+                ->where('tenant_id', $tenantId)
+                ->find($preferredAssigneeUserId);
+
+            if (
+                $preferredUser !== null
+                && $assignmentPermissions->userCanBeAssignedToDomain($preferredUser, $domainKey)
+            ) {
+                return (int) $preferredUser->id;
+            }
+        }
+
+        return $this->firstEligibleTenantUserId($tenantId, (string) $domainKey);
+    }
+
+    /**
      * Resolve the fallback assignee for generated workflow tasks.
      *
      * @throws DomainException
      */
-    private function firstTenantUserId(int $tenantId): int
+    private function firstEligibleTenantUserId(int $tenantId, string $domainKey): int
     {
-        $userId = User::query()
-            ->where('tenant_id', $tenantId)
+        $userId = app(WorkflowAssignmentPermissions::class)
+            ->eligibleUsersQuery($tenantId, $domainKey)
             ->orderBy('id')
             ->value('id');
 
         if (! $userId) {
-            throw new DomainException('Workflow tasks require an assigned user.');
+            throw new DomainException('Workflow tasks require an eligible assigned user.');
         }
 
         return (int) $userId;

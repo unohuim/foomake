@@ -8,9 +8,11 @@ use App\Models\User;
 use App\Models\WorkflowDomain;
 use App\Models\WorkflowStage;
 use App\Models\WorkflowTaskTemplate;
+use App\Support\Workflows\WorkflowAssignmentPermissions;
 use App\Support\Workflows\WorkflowStatusOptions;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Gate;
 
 /**
@@ -60,7 +62,7 @@ class WorkflowController extends Controller
             'domains' => $domains->map(fn (WorkflowDomain $domain): array => $this->domainData($domain))->values()->all(),
             'stages' => $stages->map(fn (WorkflowStage $stage): array => $this->stageData($stage))->values()->all(),
             'taskTemplates' => $templates->map(fn (WorkflowTaskTemplate $template): array => $this->taskTemplateData($template))->values()->all(),
-            'users' => $users->map(fn (User $user): array => $this->userData($user))->values()->all(),
+            'users' => $users->map(fn (User $user): array => $this->userData($user, $domains))->values()->all(),
             'showInactive' => $showInactive,
             'stageStoreUrl' => route('admin.workflows.stages.store'),
             'stageUpdateUrlBase' => url('/admin/workflows/stages'),
@@ -150,12 +152,22 @@ class WorkflowController extends Controller
      *
      * @return array<string, int|string>
      */
-    private function userData(User $user): array
+    private function userData(User $user, Collection $domains): array
     {
+        $assignmentPermissions = app(WorkflowAssignmentPermissions::class);
+
         return [
             'id' => $user->id,
             'name' => $user->name,
             'email' => $user->email,
+            'eligible_workflow_domain_ids' => $domains
+                ->filter(
+                    fn (WorkflowDomain $domain): bool => $assignmentPermissions
+                        ->userCanBeAssignedToDomain($user, $domain->key)
+                )
+                ->pluck('id')
+                ->values()
+                ->all(),
         ];
     }
 }

@@ -268,6 +268,40 @@ Notes:
 - Make Orders index rows may opt out of the row-actions menu and render a direct inline `x-mark` archive button when archive is the only row-level action exposed there.
 - Both of those direct row actions remain AJAX-first, update the UI immediately without a full-page refresh, and show feedback only on failure.
 
+### Dashboard Todo Section
+
+**Name:** Dashboard Todo Section
+**Type:** UI / Read Model Pattern
+**Location:**
+- `app/Http/Controllers/DashboardController.php`
+- `app/Support/Workflows/WorkflowAssignmentPermissions.php`
+- `resources/views/dashboard.blade.php`
+- `tests/Feature/DashboardTodoTest.php`
+
+**Purpose:**
+Surface assigned workflow responsibilities and generated workflow-stage tasks on the authenticated dashboard without introducing a standalone tasks module.
+
+**When to Use:**
+Fixed dashboard visibility for existing assigned work that already has a safe resource detail route and a matching permission Gate.
+
+Assignment controls for workflow-owned records or generated workflow tasks should use the shared workflow assignment permission map so users are only assigned work they can see.
+
+**When Not to Use:**
+Dashboard customization, draggable widgets, ad hoc task creation, or new task routes.
+
+**Public Interface:**
+- Dashboard route `/dashboard`
+- `Todo` detail-section accordion
+- `WorkflowAssignmentPermissions::eligibleUsersQuery()`
+- Existing `tasks.complete` route for assigned task completion
+- Existing resource detail route links
+
+**Example Usage:**
+```php
+// Assigned Make Orders use the documented Make Order ownership field.
+MakeOrder::query()->where('made_by_user_id', auth()->id());
+```
+
 ### Shared Ingredients Detail Section Pattern
 
 **Name:** Shared Ingredients Detail Section Pattern

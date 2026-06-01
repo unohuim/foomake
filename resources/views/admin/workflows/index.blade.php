@@ -279,7 +279,7 @@
                             <div class="mt-5 space-y-4">
                                 <label class="block text-sm font-medium text-slate-700">
                                     Domain
-                                    <select class="mt-1 block w-full rounded-xl border-slate-300 text-sm shadow-sm focus:border-slate-500 focus:ring-slate-500" x-model="taskTemplateForm.workflow_domain_id">
+                                    <select class="mt-1 block w-full rounded-xl border-slate-300 text-sm shadow-sm focus:border-slate-500 focus:ring-slate-500" x-model="taskTemplateForm.workflow_domain_id" x-on:change="taskTemplateForm.default_assignee_user_id = ''">
                                         <option value="">Select domain</option>
                                         <template x-for="domain in domains" :key="domain.id">
                                             <option :value="String(domain.id)" x-text="domain.name"></option>
@@ -310,8 +310,8 @@
                                 <label class="block text-sm font-medium text-slate-700">
                                     Default Assignee
                                     <select class="mt-1 block w-full rounded-xl border-slate-300 text-sm shadow-sm focus:border-slate-500 focus:ring-slate-500" x-model="taskTemplateForm.default_assignee_user_id">
-                                        <option value="">First tenant user</option>
-                                        <template x-for="user in users" :key="user.id">
+                                        <option value="">First eligible user</option>
+                                        <template x-for="user in eligibleUsersForTaskForm()" :key="user.id">
                                             <option :value="String(user.id)" x-text="`${user.name} (${user.email})`"></option>
                                         </template>
                                     </select>

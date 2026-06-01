@@ -120,6 +120,49 @@
                 <p class="mt-3 text-xs text-red-600" x-text="headerError"></p>
             </x-detail-section-card>
 
+            <x-detail-section-card
+                title="Tasks"
+                :description="__('Complete current stage tasks before moving the purchase order forward.')"
+                :default-open="false"
+            >
+                <div class="divide-y divide-gray-100 rounded-xl border border-gray-200 bg-white">
+                    <template x-if="(workflow.currentStageTasks || []).length === 0">
+                        <div class="px-4 py-4 text-sm text-gray-500">{{ __('No tasks for the current workflow stage.') }}</div>
+                    </template>
+
+                    <template x-for="task in workflow.currentStageTasks || []" :key="task.id">
+                        <div class="flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+                            <div class="min-w-0 flex-1">
+                                <p class="text-sm font-medium text-gray-900" x-text="task.title"></p>
+                                <p class="mt-1 text-sm text-gray-500" x-show="task.description" x-text="task.description"></p>
+                                <p class="mt-1 text-xs text-gray-500" x-show="task.assigned_to_user_name">
+                                    <span>{{ __('Assigned To') }}:</span>
+                                    <span x-text="task.assigned_to_user_name"></span>
+                                </p>
+                            </div>
+
+                            <div class="flex items-center gap-2">
+                                <span
+                                    class="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium"
+                                    x-bind:class="task.is_completed ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'"
+                                    x-text="task.is_completed ? 'Completed' : 'Open'"
+                                ></span>
+
+                                <button
+                                    type="button"
+                                    class="inline-flex h-9 items-center justify-center rounded-lg border border-gray-300 px-3 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                                    x-show="task.can_complete"
+                                    x-on:click="completeWorkflowTask(task)"
+                                    x-bind:disabled="workflowTaskSavingIds.includes(task.id)"
+                                >
+                                    {{ __('Complete') }}
+                                </button>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </x-detail-section-card>
+
             <x-detail-section-card title="Items" :default-open="true">
                 <div class="space-y-4">
                     <div class="space-y-2" x-show="isEditable">

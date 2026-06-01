@@ -6,6 +6,7 @@ use App\Actions\Workflows\AssertWorkflowStageTasksCompletedAction;
 use App\Actions\Workflows\GenerateWorkflowStageTasksAction;
 use App\Models\PurchaseOrder;
 use App\Models\PurchaseOrderLine;
+use App\Models\Task;
 use App\Models\User;
 use App\Models\WorkflowDomain;
 use App\Models\WorkflowStage;
@@ -50,6 +51,12 @@ class WorkflowTransitionService
         $purchaseOrder->forceFill([
             'current_workflow_stage_id' => $firstStage->id,
         ])->save();
+
+        $this->generateTasks->execute(
+            (int) $purchaseOrder->tenant_id,
+            (int) $purchaseOrder->id,
+            $firstStage
+        );
 
         return $purchaseOrder->fresh([
             'currentWorkflowStage',
@@ -221,7 +228,61 @@ class WorkflowTransitionService
                 'name' => $currentStage->name,
                 'actionVerb' => $this->naturalCase((string) $currentStage->action_verb),
             ] : null,
+            'currentStageTasks' => $this->currentStageTasks($purchaseOrder, $currentStage, $user),
             'actions' => $actions,
+        ];
+    }
+
+    /**
+     * Build current-stage task payloads for the purchase order detail workflow panel.
+     *
+     * @return array<int, array<string, int|string|bool|null>>
+     */
+    private function currentStageTasks(PurchaseOrder $purchaseOrder, ?WorkflowStage $currentStage, ?User $viewer): array
+    {
+        if ($currentStage === null) {
+            return [];
+        }
+
+        return Task::query()
+            ->with(['assignedTo', 'completedBy'])
+            ->where('tenant_id', $purchaseOrder->tenant_id)
+            ->where('workflow_domain_id', $currentStage->workflow_domain_id)
+            ->where('domain_record_id', $purchaseOrder->id)
+            ->where('workflow_stage_id', $currentStage->id)
+            ->orderBy('sort_order')
+            ->orderBy('id')
+            ->get()
+            ->map(fn (Task $task): array => $this->taskData($task, $viewer?->id))
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Build workflow task payload data.
+     *
+     * @return array<string, int|string|bool|null>
+     */
+    private function taskData(Task $task, ?int $viewerUserId): array
+    {
+        return [
+            'id' => $task->id,
+            'workflow_stage_id' => $task->workflow_stage_id,
+            'workflow_task_template_id' => $task->workflow_task_template_id,
+            'assigned_to_user_id' => $task->assigned_to_user_id,
+            'assigned_to_user_name' => $task->assignedTo?->name,
+            'title' => $task->title,
+            'description' => $task->description,
+            'sort_order' => $task->sort_order,
+            'status' => $task->status,
+            'is_completed' => $task->isCompleted(),
+            'can_complete' => ! $task->isCompleted()
+                && $viewerUserId !== null
+                && (int) $task->assigned_to_user_id === (int) $viewerUserId,
+            'completed_at' => $task->completed_at?->toISOString(),
+            'completed_by_user_id' => $task->completed_by_user_id,
+            'completed_by_user_name' => $task->completedBy?->name,
+            'complete_url' => route('tasks.complete', $task),
         ];
     }
 
@@ -272,8 +333,7 @@ class WorkflowTransitionService
             $this->generateTasks->execute(
                 $purchaseOrder->tenant_id,
                 $purchaseOrder->id,
-                $nextStage,
-                $user->id
+                $nextStage
             );
         }
     }

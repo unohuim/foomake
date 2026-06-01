@@ -93,7 +93,15 @@ class TenancyRolesPermissionsSeeder extends Seeder
             'purchasing' => array_merge($purchasingPermissions, $reportsPermissions),
             'sales' => array_merge($salesPermissions, $reportsPermissions),
             'inventory' => array_merge($inventoryPermissions, $reportsPermissions),
-            'tasker' => array_merge(['inventory-make-orders-execute'], $reportsPermissions),
+            'tasker' => array_merge([
+                'purchasing-purchase-orders-create',
+                'purchasing-purchase-orders-receive',
+                'sales-sales-orders-manage',
+                'inventory-adjustments-view',
+                'inventory-adjustments-execute',
+                'inventory-make-orders-view',
+                'inventory-make-orders-execute',
+            ], $reportsPermissions),
         ];
 
         foreach ($rolePermissions as $roleName => $permissionList) {

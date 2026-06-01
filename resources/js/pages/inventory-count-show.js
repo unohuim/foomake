@@ -15,41 +15,12 @@ export function mount(rootEl, payload) {
     rootEl.querySelectorAll('[data-js-crud-section-root]').forEach((sectionRootEl) => {
         const sectionKey = sectionRootEl.dataset.sectionKey || '';
         const sectionConfig = sectionsPayload[sectionKey] || null;
-        const adapters = sectionKey === 'tasks'
-            ? {
-                handleAction: async ({ action, record }) => {
-                    const safeRecord = asRecord(record);
 
-                    if (action.handlerKey !== 'completeTask' || !safeRecord.complete_url) {
-                        return;
-                    }
+        if (sectionKey === 'tasks') {
+            return;
+        }
 
-                    const response = await fetch(safeRecord.complete_url, {
-                        method: 'PATCH',
-                        headers: {
-                            Accept: 'application/json',
-                            'X-CSRF-TOKEN': csrfToken,
-                        },
-                    });
-
-                    const data = await response.json().catch(() => ({}));
-                    const responseData = asRecord(data);
-
-                    if (!response.ok) {
-                        window.dispatchEvent(new CustomEvent(inventoryCountToastEvent, {
-                            detail: {
-                                type: 'error',
-                                message: responseData.message || 'Unable to complete task.',
-                            },
-                        }));
-
-                        return;
-                    }
-
-                    window.location.reload();
-                },
-            }
-            : sectionKey === 'countLines'
+        const adapters = sectionKey === 'countLines'
                 ? {
                     normalizeRow: (record) => {
                         const safeRecord = asRecord(record);
@@ -372,6 +343,86 @@ export function mount(rootEl, payload) {
             this._toastTimeoutId = window.setTimeout(() => {
                 this.toast.show = false;
             }, 2500);
+        },
+
+        async completeInventoryCountTask(event) {
+            const form = event?.target;
+
+            if (!(form instanceof HTMLFormElement) || !form.action) {
+                return;
+            }
+
+            const button = form.querySelector('[data-inventory-count-task-complete-button]');
+
+            if (button) {
+                button.disabled = true;
+                button.classList.add('cursor-not-allowed', 'opacity-50');
+            }
+
+            try {
+                const response = await fetch(form.action, {
+                    method: 'POST',
+                    headers: {
+                        Accept: 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest',
+                    },
+                    body: new FormData(form),
+                });
+
+                const data = await response.json().catch(() => ({}));
+                const responseData = asRecord(data);
+
+                if (!response.ok) {
+                    this.showToast('error', responseData.message || 'Unable to complete task.');
+
+                    if (button) {
+                        button.disabled = false;
+                        button.classList.remove('cursor-not-allowed', 'opacity-50');
+                    }
+
+                    return;
+                }
+
+                const task = asRecord(responseData.data);
+                const row = form.closest('[data-inventory-count-task-row]');
+                const status = row?.querySelector('[data-inventory-count-task-status]');
+                const assignedTo = row?.querySelector('[data-inventory-count-task-assigned-to]');
+                const completedBy = row?.querySelector('[data-inventory-count-task-completed-by]');
+                const completedByName = completedBy?.querySelector('[data-inventory-count-task-completed-by-name]');
+
+                if (status) {
+                    status.textContent = task.status || 'completed';
+                    status.classList.remove('bg-gray-200', 'text-gray-700');
+                    status.classList.add('bg-emerald-100', 'text-emerald-700');
+                }
+
+                assignedTo?.remove();
+
+                if (completedBy) {
+                    completedBy.classList.remove('hidden');
+
+                    if (completedByName) {
+                        if (!completedBy.textContent.includes('Completed By:')) {
+                            const label = document.createElement('span');
+                            label.className = 'text-gray-500';
+                            label.textContent = 'Completed By: ';
+                            completedBy.prepend(label);
+                        }
+
+                        completedByName.textContent = task.completed_by_user_name || '—';
+                    }
+                }
+
+                form.remove();
+                this.showToast('success', 'Task completed.');
+            } catch (error) {
+                this.showToast('error', 'Unable to complete task.');
+
+                if (button) {
+                    button.disabled = false;
+                    button.classList.remove('cursor-not-allowed', 'opacity-50');
+                }
+            }
         },
 
         async saveDetails(field) {

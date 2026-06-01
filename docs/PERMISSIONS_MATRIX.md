@@ -148,8 +148,13 @@ Stock and production-focused role.
 
 ### Tasker
 
-Execution-only role.
+Cross-domain workflow execution role.
 
+- `purchasing-purchase-orders-create`
+- `purchasing-purchase-orders-receive`
+- `sales-sales-orders-manage`
+- `inventory-adjustments-view`
+- `inventory-adjustments-execute`
 - `inventory-make-orders-view`
 - `inventory-make-orders-execute`
 - `reports-view`
@@ -171,7 +176,9 @@ Execution-only role.
 - `admin-users-manage` gates tenant user invitation creation, resend, revocation, and role changes.
 - Admins receive both user-management permissions by default.
 - Assigned users may complete their own generated workflow tasks without requiring `workflow-manage`.
-- Assigned users do not require `sales-sales-orders-manage` solely to complete an assigned workflow task.
+- Users assigned workflow-stage responsibility or generated workflow tasks must have minimum visibility for that resource type before assignment.
+- Assignment option lists must filter out users who lack the current workflow domain's required visibility/execution permissions.
+- Assigned users do not require `workflow-manage` solely to complete an assigned workflow task.
 - Sales-order lifecycle transitions continue requiring existing Sales Order permissions even after workflow tasks are introduced.
 - Navigation clickability for Sales Orders, Purchase Orders, and Make Orders is not permission-only:
   - permissions and `@can` checks still govern whether the user may see the relevant nav branch

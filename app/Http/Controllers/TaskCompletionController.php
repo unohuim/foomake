@@ -6,6 +6,7 @@ use App\Actions\Tasks\CompleteTaskAction;
 use App\Models\Task;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\RedirectResponse;
 
 /**
  * Complete assigned workflow tasks.
@@ -15,9 +16,13 @@ class TaskCompletionController extends Controller
     /**
      * Complete the provided task.
      */
-    public function update(Request $request, Task $task, CompleteTaskAction $completeTaskAction): JsonResponse
+    public function update(Request $request, Task $task, CompleteTaskAction $completeTaskAction): JsonResponse|RedirectResponse
     {
         $completedTask = $completeTaskAction->execute($task, $request->user());
+
+        if (! $request->expectsJson()) {
+            return redirect()->back();
+        }
 
         return response()->json([
             'data' => $this->taskData($completedTask, $request->user()?->id),
@@ -52,4 +57,3 @@ class TaskCompletionController extends Controller
         ];
     }
 }
-

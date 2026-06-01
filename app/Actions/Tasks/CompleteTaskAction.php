@@ -2,6 +2,7 @@
 
 namespace App\Actions\Tasks;
 
+use App\Models\InventoryCount;
 use App\Models\Task;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
@@ -18,12 +19,13 @@ class CompleteTaskAction
     {
         return DB::transaction(function () use ($task, $user): Task {
             $lockedTask = Task::query()
+                ->with('workflowDomain')
                 ->whereKey($task->id)
                 ->lockForUpdate()
                 ->firstOrFail();
 
             if (
-                (int) $lockedTask->assigned_to_user_id !== (int) $user->id
+                ! $this->userCanCompleteTask($lockedTask, $user)
                 && ! $user->hasRole('super-admin')
             ) {
                 abort(403);
@@ -42,5 +44,25 @@ class CompleteTaskAction
             return $lockedTask->fresh(['assignedTo', 'completedBy']);
         });
     }
-}
 
+    /**
+     * Determine whether the user can complete the assigned operational task.
+     */
+    private function userCanCompleteTask(Task $task, User $user): bool
+    {
+        if ((int) $task->assigned_to_user_id === (int) $user->id) {
+            return true;
+        }
+
+        if ($task->workflowDomain?->key !== 'inventory') {
+            return false;
+        }
+
+        return InventoryCount::query()
+            ->withoutGlobalScopes()
+            ->where('tenant_id', $task->tenant_id)
+            ->whereKey($task->domain_record_id)
+            ->where('assigned_to_user_id', $user->id)
+            ->exists();
+    }
+}

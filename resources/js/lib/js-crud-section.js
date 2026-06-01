@@ -99,6 +99,7 @@ const normalizeSectionConfig = (config) => {
         csrfToken: asString(safeConfig.csrfToken),
         defaultOpen: asBoolean(safeConfig.defaultOpen),
         mobilePageSize: Number.isInteger(safeConfig.mobilePageSize) ? safeConfig.mobilePageSize : null,
+        initialRecords: asArray(safeConfig.initialRecords || safeConfig.initial_records),
         showRowActionsMenu: safeConfig.showRowActionsMenu !== false,
         toolbarToggles: asArray(safeConfig.toolbarToggles).map((toggle) => ({
             key: asString(toggle?.key),
@@ -799,12 +800,12 @@ const createSectionState = (section, adapters, hostEl) => ({
     isSubmitting: false,
     formMode: 'create',
     editingId: null,
-    records: [],
+    records: asArray(section.initialRecords).map((record) => asRecord(record)),
     meta: {
         current_page: 1,
         last_page: 1,
         per_page: 10,
-        total: 0,
+        total: asArray(section.initialRecords).length,
     },
     form: buildEmptyForm(section),
     errors: {},
@@ -852,6 +853,10 @@ const createSectionState = (section, adapters, hostEl) => ({
                     this.updateSectionConfig(nextSection);
                 },
             };
+        }
+
+        if (this.records.length > 0) {
+            this.hasLoaded = true;
         }
 
         if (this.isOpen && !this.hasLoaded) {
@@ -914,12 +919,16 @@ const createSectionState = (section, adapters, hostEl) => ({
     visibleActions(record) {
         const hasExplicitAvailableActions = Array.isArray(record.availableActions) || Array.isArray(record.available_actions);
         const availableActions = asArray(record.availableActions || record.available_actions);
+        const canComplete = Boolean(record.canComplete || record.can_complete);
 
         if (!hasExplicitAvailableActions && availableActions.length === 0) {
-            return this.section.actions;
+            return this.section.actions.filter((action) => action.id !== 'complete' || canComplete);
         }
 
-        return this.section.actions.filter((action) => availableActions.includes(action.id));
+        return this.section.actions.filter((action) => (
+            availableActions.includes(action.id)
+            || (action.id === 'complete' && canComplete)
+        ));
     },
     actionLabel(record, action) {
         const labels = asRecord(record.actionLabels || record.action_labels);

@@ -3,7 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Models\WorkflowStage;
+use App\Models\WorkflowDomain;
 use App\Models\WorkflowTaskTemplate;
+use App\Models\User;
+use App\Support\Workflows\WorkflowAssignmentPermissions;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -152,7 +155,37 @@ class WorkflowTaskTemplateController extends Controller
             });
         }
 
+        if (
+            isset($validated['default_assignee_user_id'])
+            && ! $this->userCanBeAssignedToWorkflowDomain(
+                (int) $validated['default_assignee_user_id'],
+                (int) $validated['workflow_domain_id']
+            )
+        ) {
+            return tap([], function (): void {
+                abort(response()->json([
+                    'message' => 'The given data was invalid.',
+                    'errors' => [
+                        'default_assignee_user_id' => ['The selected user cannot be assigned to this workflow domain.'],
+                    ],
+                ], 422));
+            });
+        }
+
         return $validated;
+    }
+
+    /**
+     * Determine whether the selected user can be assigned to work in the workflow domain.
+     */
+    private function userCanBeAssignedToWorkflowDomain(int $userId, int $workflowDomainId): bool
+    {
+        $user = User::query()->find($userId);
+        $domainKey = WorkflowDomain::query()->whereKey($workflowDomainId)->value('key');
+
+        return $user !== null
+            && $domainKey !== null
+            && app(WorkflowAssignmentPermissions::class)->userCanBeAssignedToDomain($user, $domainKey);
     }
 
     /**

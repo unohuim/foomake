@@ -17,6 +17,7 @@ use App\Models\User;
 use App\Models\WorkflowDomain;
 use App\Models\WorkflowStage;
 use App\Support\QuantityFormatter;
+use App\Support\Workflows\WorkflowAssignmentPermissions;
 use DomainException;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\JsonResponse;
@@ -568,6 +569,18 @@ class MakeOrderController extends Controller
                 Rule::exists('users', 'id')->where('tenant_id', $request->user()->tenant_id),
             ],
         ]);
+
+        if (
+            isset($validated['made_by_user_id'])
+            && ! $this->userCanBeAssignedToWorkflow((int) $validated['made_by_user_id'], 'manufacturing')
+        ) {
+            return response()->json([
+                'message' => 'The given data was invalid.',
+                'errors' => [
+                    'made_by_user_id' => ['The selected user cannot be assigned to Make Orders.'],
+                ],
+            ], 422);
+        }
 
         $makeOrderModel->made_by_user_id = isset($validated['made_by_user_id'])
             ? (int) $validated['made_by_user_id']
@@ -1684,8 +1697,8 @@ class MakeOrderController extends Controller
      */
     private function tenantAssigneeOptionsPayload(int $tenantId): array
     {
-        $assignedUsers = User::query()
-            ->where('tenant_id', $tenantId)
+        $assignedUsers = app(WorkflowAssignmentPermissions::class)
+            ->eligibleUsersQuery($tenantId, 'manufacturing')
             ->orderBy('name')
             ->orderBy('id')
             ->get(['id', 'name'])
@@ -1702,6 +1715,17 @@ class MakeOrderController extends Controller
             ],
             ...$assignedUsers,
         ];
+    }
+
+    /**
+     * Determine whether the selected user has minimum visibility for workflow assignment.
+     */
+    private function userCanBeAssignedToWorkflow(int $userId, string $domainKey): bool
+    {
+        $user = User::query()->find($userId);
+
+        return $user !== null
+            && app(WorkflowAssignmentPermissions::class)->userCanBeAssignedToDomain($user, $domainKey);
     }
 
     /**

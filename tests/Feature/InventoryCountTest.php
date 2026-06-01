@@ -1802,14 +1802,90 @@ it('incomplete task rows expose a Complete button in the tasks section payload',
 
     $payload = json_decode($matches[1] ?? '[]', true);
     $taskPayload = collect($payload['count']['current_stage_tasks'] ?? [])->first();
+    $sectionTaskPayload = collect($payload['sections']['tasks']['initialRecords'] ?? [])->first();
 
     expect($taskPayload)->not->toBeNull()
         ->and($taskPayload['is_completed'] ?? null)->toBeFalse()
         ->and($taskPayload['available_actions'] ?? null)->toBe(['complete'])
+        ->and($taskPayload['availableActions'] ?? null)->toBe(['complete'])
         ->and($taskPayload['status'] ?? null)->toBe('open')
         ->and($taskPayload['assigned_by_user_name'] ?? null)->toBe($creator->name)
         ->and($taskPayload['assigned_to_display'] ?? null)->toBe($assignee->name)
         ->and($taskPayload['completed_by_display'] ?? null)->toBe('');
+
+    expect($sectionTaskPayload)->not->toBeNull()
+        ->and($sectionTaskPayload['id'] ?? null)->toBe($taskPayload['id'])
+        ->and($sectionTaskPayload['can_complete'] ?? null)->toBeTrue()
+        ->and($sectionTaskPayload['available_actions'] ?? null)->toBe(['complete'])
+        ->and($sectionTaskPayload['availableActions'] ?? null)->toBe(['complete']);
+
+    expect($response->getContent())->toContain('action="' . route('tasks.complete', $task) . '"')
+        ->and($response->getContent())->toContain('Complete')
+        ->and($response->getContent())->toContain('x-on:submit.prevent="completeInventoryCountTask($event)"')
+        ->and($response->getContent())->toContain('data-inventory-count-task-row')
+        ->and($response->getContent())->toContain('data-inventory-count-task-status')
+        ->and($response->getContent())->toContain('data-inventory-count-task-complete-form')
+        ->and($response->getContent())->toContain('data-inventory-count-tasks-section')
+        ->and($response->getContent())->not->toContain('data-section-key="tasks"');
+});
+
+it('current inventory count assignee can complete open current-stage tasks after reassignment', function () {
+    $tenant = Tenant::factory()->create();
+    $creator = ($this->makeUser)($tenant);
+    $originalAssignee = ($this->makeUser)($tenant);
+    $currentAssignee = ($this->makeUser)($tenant);
+
+    ($this->grantPermission)($creator, 'inventory-adjustments-view');
+    ($this->grantPermission)($creator, 'inventory-adjustments-execute');
+    ($this->grantPermission)($originalAssignee, 'inventory-adjustments-view');
+    ($this->grantPermission)($originalAssignee, 'inventory-adjustments-execute');
+    ($this->grantPermission)($currentAssignee, 'inventory-adjustments-view');
+    ($this->grantPermission)($currentAssignee, 'inventory-adjustments-execute');
+    ($this->seedInventoryWorkflow)($tenant);
+
+    $openStage = ($this->inventoryStages)($tenant)->firstWhere('key', 'creating');
+    ($this->createInventoryTaskTemplate)($tenant, $openStage, $originalAssignee, [
+        'title' => 'Count review',
+    ]);
+
+    $count = ($this->createDraftCountViaApi)($creator, [
+        'assigned_to_user_id' => $originalAssignee->id,
+    ]);
+
+    ($this->submitCount)($creator, $count)->assertOk();
+
+    $task = Task::withoutGlobalScopes()
+        ->where('tenant_id', $tenant->id)
+        ->where('domain_record_id', $count->id)
+        ->where('workflow_stage_id', $openStage->id)
+        ->firstOrFail();
+
+    $this->actingAs($creator)->patchJson('/inventory/counts/' . $count->id, [
+        'counted_at' => $count->fresh()->counted_at->toISOString(),
+        'notes' => 'Reassigned count',
+        'assigned_to_user_id' => $currentAssignee->id,
+    ])->assertOk();
+
+    $response = $this->actingAs($currentAssignee)->get('/inventory/counts/' . $count->id)->assertOk();
+
+    preg_match(
+        '/<script type="application\\/json" id="inventory-count-show-payload">\\s*(.*?)\\s*<\\/script>/s',
+        $response->getContent(),
+        $matches
+    );
+
+    $payload = json_decode($matches[1] ?? '[]', true);
+    $taskPayload = collect($payload['sections']['tasks']['initialRecords'] ?? [])->firstWhere('id', $task->id);
+
+    expect($taskPayload)->not->toBeNull()
+        ->and($taskPayload['can_complete'] ?? null)->toBeTrue()
+        ->and($taskPayload['available_actions'] ?? null)->toBe(['complete']);
+
+    $this->actingAs($currentAssignee)
+        ->patchJson(route('tasks.complete', $task))
+        ->assertOk()
+        ->assertJsonPath('data.is_completed', true)
+        ->assertJsonPath('data.completed_by_user_id', $currentAssignee->id);
 });
 
 it('advance requires current inventory workflow tasks to be completed before moving forward', function () {

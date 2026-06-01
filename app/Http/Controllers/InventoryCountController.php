@@ -12,6 +12,7 @@ use App\Models\Task;
 use App\Models\User;
 use App\Models\WorkflowStage;
 use App\Support\QuantityFormatter;
+use App\Support\Workflows\WorkflowAssignmentPermissions;
 use DomainException;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\JsonResponse;
@@ -30,8 +31,8 @@ class InventoryCountController extends Controller
     {
         Gate::authorize('inventory-adjustments-view');
 
-        $users = User::query()
-            ->where('tenant_id', $request->user()->tenant_id)
+        $users = app(WorkflowAssignmentPermissions::class)
+            ->eligibleUsersQuery((int) $request->user()->tenant_id, 'inventory')
             ->orderBy('name')
             ->orderBy('id')
             ->get();
@@ -148,6 +149,18 @@ class InventoryCountController extends Controller
             ],
         ]);
 
+        if (
+            isset($validated['assigned_to_user_id'])
+            && ! $this->userCanBeAssignedToInventoryWorkflow((int) $validated['assigned_to_user_id'])
+        ) {
+            return response()->json([
+                'message' => 'The given data was invalid.',
+                'errors' => [
+                    'assigned_to_user_id' => ['The selected user cannot be assigned to Inventory Counts.'],
+                ],
+            ], 422);
+        }
+
         $count = InventoryCount::query()->forceCreate([
             'tenant_id' => $request->user()->tenant_id,
             'created_by_user_id' => $request->user()->id,
@@ -191,6 +204,19 @@ class InventoryCountController extends Controller
             ],
         ]);
 
+        if (
+            array_key_exists('assigned_to_user_id', $validated)
+            && $validated['assigned_to_user_id'] !== null
+            && ! $this->userCanBeAssignedToInventoryWorkflow((int) $validated['assigned_to_user_id'])
+        ) {
+            return response()->json([
+                'message' => 'The given data was invalid.',
+                'errors' => [
+                    'assigned_to_user_id' => ['The selected user cannot be assigned to Inventory Counts.'],
+                ],
+            ], 422);
+        }
+
         $count->counted_at = Carbon::parse($validated['counted_at']);
         $count->notes = $validated['notes'] ?? null;
 
@@ -202,6 +228,7 @@ class InventoryCountController extends Controller
         }
 
         $count->save();
+        $this->syncOpenCurrentStageTaskAssignment($count);
 
         $count->load(['workflowStage', 'assignedToUser'])->loadCount('lines');
 
@@ -737,8 +764,8 @@ class InventoryCountController extends Controller
      */
     private function tenantAssigneeOptionsPayload(int $tenantId): array
     {
-        return User::query()
-            ->where('tenant_id', $tenantId)
+        return app(WorkflowAssignmentPermissions::class)
+            ->eligibleUsersQuery($tenantId, 'inventory')
             ->orderBy('name')
             ->orderBy('id')
             ->get()
@@ -748,6 +775,39 @@ class InventoryCountController extends Controller
             ])
             ->values()
             ->all();
+    }
+
+    /**
+     * Determine whether the selected user has minimum visibility for Inventory Count assignment.
+     */
+    private function userCanBeAssignedToInventoryWorkflow(int $userId): bool
+    {
+        $user = User::query()->find($userId);
+
+        return $user !== null
+            && app(WorkflowAssignmentPermissions::class)->userCanBeAssignedToDomain($user, 'inventory');
+    }
+
+    /**
+     * Keep open generated tasks aligned with the current Inventory Count assignee.
+     */
+    private function syncOpenCurrentStageTaskAssignment(InventoryCount $inventoryCount): void
+    {
+        if ($inventoryCount->workflow_stage_id === null || $inventoryCount->assigned_to_user_id === null) {
+            return;
+        }
+
+        $inventoryCount->loadMissing('workflowStage');
+
+        Task::withoutGlobalScopes()
+            ->where('tenant_id', $inventoryCount->tenant_id)
+            ->where('workflow_domain_id', $inventoryCount->workflowStage?->workflow_domain_id)
+            ->where('domain_record_id', $inventoryCount->id)
+            ->where('workflow_stage_id', $inventoryCount->workflow_stage_id)
+            ->where('status', Task::STATUS_OPEN)
+            ->update([
+                'assigned_to_user_id' => $inventoryCount->assigned_to_user_id,
+            ]);
     }
 
     /**
@@ -1075,6 +1135,7 @@ class InventoryCountController extends Controller
             'emptyState' => 'No tasks for the current stage.',
             'csrfToken' => csrf_token(),
             'defaultOpen' => true,
+            'initialRecords' => $this->currentStageTasksData($inventoryCount),
             'permissions' => [
                 'canCreate' => false,
             ],
@@ -1297,13 +1358,16 @@ class InventoryCountController extends Controller
     private function taskPayload(Task $task, ?int $viewerUserId): array
     {
         $isCompleted = $task->isCompleted() || $task->completed_at !== null;
-        $canComplete = ! $isCompleted
-            && $viewerUserId !== null
-            && (int) $task->assigned_to_user_id === (int) $viewerUserId;
         $inventoryCount = InventoryCount::query()
             ->withoutGlobalScopes()
             ->where('tenant_id', $task->tenant_id)
             ->find($task->domain_record_id);
+        $canComplete = ! $isCompleted
+            && $viewerUserId !== null
+            && (
+                (int) $task->assigned_to_user_id === (int) $viewerUserId
+                || (int) $inventoryCount?->assigned_to_user_id === (int) $viewerUserId
+            );
 
         return [
             'id' => $task->id,
@@ -1327,6 +1391,7 @@ class InventoryCountController extends Controller
             'completed_by_display' => $isCompleted ? ($task->completedBy?->name ?? '—') : '',
             'complete_url' => route('tasks.complete', $task),
             'available_actions' => $canComplete ? ['complete'] : [],
+            'availableActions' => $canComplete ? ['complete'] : [],
         ];
     }
 }

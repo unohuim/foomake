@@ -24,10 +24,15 @@ rules:
   - Completed tasks remain visible.
   - Already-generated tasks remain unchanged when templates are edited later.
   - Re-entering a stage or retrying a transition must not create duplicate generated tasks for the same template and stage-entry slice.
+  - Workflow task assignment options must exclude users lacking minimum visibility for the workflow domain.
+  - Generated workflow task fallback assignment must choose the first eligible tenant user for the workflow domain, not the first tenant user.
+  - Dashboard task completion must reuse the existing assigned-user task completion contract.
 public_interface:
   - CompleteTaskAction::execute()
   - GenerateWorkflowStageTasksAction::execute()
   - Task::query()
+  - WorkflowAssignmentPermissions::eligibleUsersQuery()
+  - Dashboard Todo read model
   - docs/architecture/workflows/WorkflowTaskTemplate.yaml
   - docs/architecture/workflows/WorkflowStageTaskGating.yaml
 example_usage: |

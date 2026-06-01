@@ -101,7 +101,7 @@ Allow managing UoM Categories required by Units and Items.
 
 ### PR2-UOM-002 — Units of Measure CRUD (AJAX) ✅ (Implemented)
 
-**Goal**  
+**Goal**
 Allow managing Units of Measure within categories.
 
 **Includes**
@@ -308,7 +308,7 @@ Add architecture YAML:
 
 ### PR2-MAT-002 — Create Material (AJAX) ✅ (Implemented, renumbered)
 
-**Goal**  
+**Goal**
 Allow creating a Material once UoMs exist.
 
 **Includes**
@@ -1206,6 +1206,27 @@ Tenant scoping is already implemented in the current codebase.
 ---
 
 ## DOMAIN 5 — UI Component Refactor (Post-PR2 Cleanup)
+
+### PR2-DASH-001 — Dashboard Todo Section ✅ (Implemented)
+
+**Goal**
+Give invited and task-focused users a simple dashboard landing section for assigned workflow work.
+
+**Includes**
+
+- Fixed Dashboard `Todo` section using the existing detail-section accordion style
+- Grouped lists for assigned workflow responsibilities and workflow-stage tasks
+- Assigned users can complete their own open workflow-stage tasks from the dashboard through the shared task completion route
+- Tenant-scoped and Gate-filtered assigned-work queries
+- Links only to existing safe resource detail routes
+- No dedicated `/tasks` URI, dashboard widget framework, or drag/drop
+
+**Permissions**
+
+- Uses existing resource Gates for linked/data-visible resources
+- No new permission slugs
+
+---
 
 ### PR2-UI-001 — Navigation-Only Tailwind Refactor
 

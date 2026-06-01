@@ -136,10 +136,7 @@
                 data-section-key="countLines"
             ></div>
 
-            <div
-                data-js-crud-section-root
-                data-section-key="tasks"
-            >
+            <div data-inventory-count-tasks-section>
                 @php
                     $currentStageTasks = $payload['count']['current_stage_tasks'] ?? [];
                 @endphp
@@ -158,12 +155,18 @@
                         @if (count($currentStageTasks) > 0)
                             <div class="space-y-3">
                                 @foreach ($currentStageTasks as $task)
-                                    <article class="rounded-xl border border-gray-100 bg-gray-50 p-3 sm:p-4">
+                                    <article
+                                        class="rounded-xl border border-gray-100 bg-gray-50 p-3 sm:p-4"
+                                        data-inventory-count-task-row
+                                    >
                                         <div class="flex flex-col sm:flex-row gap-4 sm:items-center sm:justify-between">
                                             <div class="min-w-0 flex-1">
                                                 <div class="flex items-center gap-3">
                                                     <p class="truncate text-sm font-semibold text-gray-900">{{ $task['title'] ?? __('Task') }}</p>
-                                                    <span class="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium {{ ($task['is_completed'] ?? false) ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-200 text-gray-700' }}">
+                                                    <span
+                                                        class="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium {{ ($task['is_completed'] ?? false) ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-200 text-gray-700' }}"
+                                                        data-inventory-count-task-status
+                                                    >
                                                         {{ $task['status'] ?? __('open') }}
                                                     </span>
                                                 </div>
@@ -173,15 +176,19 @@
                                                         <span class="text-gray-700">{{ $task['assigned_by_user_name'] ?? '—' }}</span>
                                                     </p>
                                                     @if (($task['assigned_to_display'] ?? '') !== '')
-                                                        <p class="text-sm text-gray-600">
+                                                        <p class="text-sm text-gray-600" data-inventory-count-task-assigned-to>
                                                             <span class="text-gray-500">{{ __('Assigned To: ') }}</span>
                                                             <span class="text-gray-700">{{ $task['assigned_to_display'] }}</span>
                                                         </p>
                                                     @endif
                                                     @if (($task['completed_by_display'] ?? '') !== '')
-                                                        <p class="text-sm text-gray-600">
+                                                        <p class="text-sm text-gray-600" data-inventory-count-task-completed-by>
                                                             <span class="text-gray-500">{{ __('Completed By: ') }}</span>
-                                                            <span class="text-gray-700">{{ $task['completed_by_display'] }}</span>
+                                                            <span class="text-gray-700" data-inventory-count-task-completed-by-name>{{ $task['completed_by_display'] }}</span>
+                                                        </p>
+                                                    @else
+                                                        <p class="hidden text-sm text-gray-600" data-inventory-count-task-completed-by>
+                                                            <span class="text-gray-700" data-inventory-count-task-completed-by-name></span>
                                                         </p>
                                                     @endif
                                                 </div>
@@ -189,12 +196,18 @@
 
                                             @if (($task['available_actions'] ?? []) === ['complete'] && ! empty($task['complete_url']))
                                                 <div class="flex items-center justify-end gap-3 self-center">
-                                                    <form method="POST" action="{{ $task['complete_url'] }}">
+                                                    <form
+                                                        method="POST"
+                                                        action="{{ $task['complete_url'] }}"
+                                                        x-on:submit.prevent="completeInventoryCountTask($event)"
+                                                        data-inventory-count-task-complete-form
+                                                    >
                                                         @csrf
                                                         @method('PATCH')
                                                         <button
                                                             type="submit"
                                                             class="inline-flex items-center rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold uppercase tracking-widest text-slate-700 transition hover:bg-slate-50"
+                                                            data-inventory-count-task-complete-button
                                                         >
                                                             {{ __('Complete') }}
                                                         </button>
