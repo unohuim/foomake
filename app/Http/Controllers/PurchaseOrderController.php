@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\Workflows\CanViewAssignedWorkflowResourceAction;
 use App\Models\ItemPurchaseOption;
 use App\Models\PurchaseOrder;
 use App\Models\PurchaseOrderLine;
@@ -144,7 +145,16 @@ class PurchaseOrderController extends Controller
         WorkflowTransitionService $workflowTransitionService
     ): View
     {
-        Gate::authorize('purchasing-purchase-orders-create');
+        abort_unless((int) $purchaseOrder->tenant_id === (int) $request->user()->tenant_id, 404);
+        abort_unless(
+            Gate::allows('purchasing-purchase-orders-create')
+                || app(CanViewAssignedWorkflowResourceAction::class)->execute(
+                    $request->user(),
+                    $purchaseOrder,
+                    'purchasing'
+                ),
+            403
+        );
 
         $purchaseOrder->load([
             'supplier',

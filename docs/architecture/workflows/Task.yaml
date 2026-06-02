@@ -1,6 +1,7 @@
 name: Task
 type: Tenant-Scoped Generated Record Rule
 location:
+  - app/Actions/Workflows/CanViewAssignedWorkflowResourceAction.php
   - app/Actions/Tasks/CompleteTaskAction.php
   - app/Actions/Workflows/GenerateWorkflowStageTasksAction.php
   - app/Models/Task.php
@@ -24,10 +25,12 @@ rules:
   - Completed tasks remain visible.
   - Already-generated tasks remain unchanged when templates are edited later.
   - Re-entering a stage or retrying a transition must not create duplicate generated tasks for the same template and stage-entry slice.
-  - Workflow task assignment options must exclude users lacking minimum visibility for the workflow domain.
+  - Workflow task assignment options must exclude users lacking the workflow domain's assignment credential.
+  - Assignment-scoped resource detail visibility is granted to direct workflow resource assignees and users assigned to generated workflow-stage tasks on that resource.
   - Generated workflow task fallback assignment must choose the first eligible tenant user for the workflow domain, not the first tenant user.
-  - Dashboard task completion must reuse the existing assigned-user task completion contract.
+  - Dashboard Todo is a view-only read model and must not expose task completion controls.
 public_interface:
+  - CanViewAssignedWorkflowResourceAction::execute()
   - CompleteTaskAction::execute()
   - GenerateWorkflowStageTasksAction::execute()
   - Task::query()

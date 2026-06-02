@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Actions\Inventory\AdvanceInventoryCountWorkflowStageAction;
+use App\Actions\Workflows\CanViewAssignedWorkflowResourceAction;
 use App\Actions\Workflows\ResolveInventoryWorkflowStageAction;
 use App\Actions\Workflows\SeedDefaultWorkflowStagesForTenantAction;
 use App\Models\InventoryCount;
@@ -10,6 +11,7 @@ use App\Models\InventoryCountLine;
 use App\Models\Item;
 use App\Models\Task;
 use App\Models\User;
+use App\Models\WorkflowDomain;
 use App\Models\WorkflowStage;
 use App\Support\QuantityFormatter;
 use App\Support\Workflows\WorkflowAssignmentPermissions;
@@ -29,7 +31,7 @@ class InventoryCountController extends Controller
      */
     public function index(Request $request): View
     {
-        Gate::authorize('inventory-adjustments-view');
+        $this->authorizeInventoryCountsIndex();
 
         $users = app(WorkflowAssignmentPermissions::class)
             ->eligibleUsersQuery((int) $request->user()->tenant_id, 'inventory')
@@ -59,7 +61,7 @@ class InventoryCountController extends Controller
      */
     public function list(Request $request): JsonResponse
     {
-        Gate::authorize('inventory-adjustments-view');
+        $this->authorizeInventoryCountsIndex();
 
         $crudConfig = $this->countsCrudConfig();
         $validated = $request->validate([
@@ -97,14 +99,15 @@ class InventoryCountController extends Controller
      */
     public function show(Request $request, int $inventoryCount): View
     {
-        Gate::authorize('inventory-adjustments-view');
-
         $count = $this->findInventoryCount($request, $inventoryCount);
+        $this->authorizeInventoryCountView($request, $count);
 
         $count->load(['workflowStage', 'lines.item.baseUom']);
         $count->loadCount('lines');
 
-        $items = $this->countLineSelectableItems($request, $count);
+        $items = Gate::allows('inventory-adjustments-execute')
+            ? $this->countLineSelectableItems($request, $count)
+            : collect();
 
         $resolver = app(ResolveInventoryWorkflowStageAction::class);
         $this->ensureInventoryWorkflowStagesExist(
@@ -188,21 +191,35 @@ class InventoryCountController extends Controller
         Gate::authorize('inventory-adjustments-execute');
 
         $count = $this->findInventoryCount($request, $inventoryCount);
+        $this->authorizeInventoryCountView($request, $count);
 
         if ($response = $this->ensureEditableDetails($count)) {
             return $response;
         }
 
-        $validated = $request->validate([
-            'counted_at' => ['required', 'date'],
-            'notes' => ['nullable', 'string'],
-            'assigned_to_user_id' => [
-                'sometimes',
-                'nullable',
-                'integer',
-                Rule::exists('users', 'id')->where('tenant_id', $request->user()->tenant_id),
-            ],
-        ]);
+        $canEditMetadata = Gate::allows('inventory-adjustments-view');
+
+        if (
+            ! $canEditMetadata
+            && ($request->has('counted_at') || $request->has('assigned_to_user_id'))
+        ) {
+            abort(403);
+        }
+
+        $validated = $request->validate($canEditMetadata
+            ? [
+                'counted_at' => ['required', 'date'],
+                'notes' => ['nullable', 'string'],
+                'assigned_to_user_id' => [
+                    'sometimes',
+                    'nullable',
+                    'integer',
+                    Rule::exists('users', 'id')->where('tenant_id', $request->user()->tenant_id),
+                ],
+            ]
+            : [
+                'notes' => ['nullable', 'string'],
+            ]);
 
         if (
             array_key_exists('assigned_to_user_id', $validated)
@@ -217,10 +234,13 @@ class InventoryCountController extends Controller
             ], 422);
         }
 
-        $count->counted_at = Carbon::parse($validated['counted_at']);
         $count->notes = $validated['notes'] ?? null;
 
-        if (array_key_exists('assigned_to_user_id', $validated)) {
+        if ($canEditMetadata) {
+            $count->counted_at = Carbon::parse($validated['counted_at']);
+        }
+
+        if ($canEditMetadata && array_key_exists('assigned_to_user_id', $validated)) {
             $count->assigned_to_user_id = $validated['assigned_to_user_id'] === null
                 ? null
                 : (int) $validated['assigned_to_user_id'];
@@ -374,9 +394,8 @@ class InventoryCountController extends Controller
      */
     public function listLines(Request $request, int $inventoryCount): JsonResponse
     {
-        Gate::authorize('inventory-adjustments-view');
-
         $count = $this->findInventoryCount($request, $inventoryCount);
+        $this->authorizeInventoryCountView($request, $count);
         $canEditCountedQuantity = Gate::allows('inventory-adjustments-execute')
             && $this->ensureWorkflowStageCountedQuantityEditable($count) === null;
         $showsCountedQuantity = $count->workflow_stage_id !== null;
@@ -400,9 +419,8 @@ class InventoryCountController extends Controller
      */
     public function listTasks(Request $request, int $inventoryCount): JsonResponse
     {
-        Gate::authorize('inventory-adjustments-view');
-
         $count = $this->findInventoryCount($request, $inventoryCount);
+        $this->authorizeInventoryCountView($request, $count);
         $count->load('workflowStage');
 
         $paginator = Task::withoutGlobalScopes()
@@ -603,6 +621,37 @@ class InventoryCountController extends Controller
     }
 
     /**
+     * Authorize read access for an inventory count detail resource.
+     */
+    private function authorizeInventoryCountView(Request $request, InventoryCount $inventoryCount): void
+    {
+        if (Gate::allows('inventory-adjustments-view')) {
+            return;
+        }
+
+        abort_unless(
+            app(CanViewAssignedWorkflowResourceAction::class)->execute(
+                $request->user(),
+                $inventoryCount,
+                'inventory',
+                $inventoryCount->assigned_to_user_id
+            ),
+            403
+        );
+    }
+
+    /**
+     * Authorize inventory count index access.
+     */
+    private function authorizeInventoryCountsIndex(): void
+    {
+        abort_unless(
+            Gate::allows('inventory-adjustments-view') || Gate::allows('inventory-adjustments-execute'),
+            403
+        );
+    }
+
+    /**
      * Ensure the inventory count is still in draft setup and editable.
      */
     private function ensureEditableDraft(InventoryCount $inventoryCount): ?JsonResponse
@@ -723,14 +772,23 @@ class InventoryCountController extends Controller
     {
         $inventoryCount->loadMissing(['workflowStage', 'assignedToUser']);
         $inventoryCount->loadCount('lines');
+        $showDetailsSection = Gate::allows('inventory-adjustments-view');
+        $canEditNotes = $canExecute && $this->ensureEditableDetails($inventoryCount) === null;
+        $canEditMetadata = $canEditNotes && $showDetailsSection;
 
         return [
             'id' => $inventoryCount->id,
             'counted_at' => $inventoryCount->counted_at->format('Y-m-d H:i'),
             'counted_at_iso' => $inventoryCount->counted_at->format('Y-m-d\TH:i'),
             'notes' => $inventoryCount->notes ?? '',
-            'can_edit_details' => $canExecute && $this->ensureEditableDetails($inventoryCount) === null,
-            'assignee_options' => $canExecute ? $this->tenantAssigneeOptionsPayload((int) $inventoryCount->tenant_id) : [],
+            'can_edit_details' => $canEditMetadata,
+            'can_edit_notes' => $canEditNotes,
+            'can_edit_counted_at' => $canEditMetadata,
+            'can_edit_assignment' => $canEditMetadata,
+            'show_details_section' => $showDetailsSection,
+            'assignee_options' => $canEditMetadata
+                ? $this->tenantAssigneeOptionsPayload((int) $inventoryCount->tenant_id)
+                : [],
             'status' => $inventoryCount->status,
             'lifecycle_status_label' => $inventoryCount->status === 'posted' ? 'Posted' : 'Draft',
             'created_by_user_id' => $inventoryCount->created_by_user_id,
@@ -820,6 +878,26 @@ class InventoryCountController extends Controller
             ->with(['workflowStage', 'assignedToUser'])
             ->withCount('lines');
 
+        if (! Gate::allows('inventory-adjustments-view')) {
+            $inventoryDomainId = WorkflowDomain::query()
+                ->where('key', 'inventory')
+                ->value('id');
+
+            $query->where(function ($assignedQuery) use ($request, $inventoryDomainId): void {
+                $assignedQuery->where('assigned_to_user_id', $request->user()->id);
+
+                if ($inventoryDomainId !== null) {
+                    $assignedQuery->orWhereIn('id', function ($taskQuery) use ($request, $inventoryDomainId): void {
+                        $taskQuery->select('domain_record_id')
+                            ->from('tasks')
+                            ->where('tenant_id', $request->user()->tenant_id)
+                            ->where('workflow_domain_id', $inventoryDomainId)
+                            ->where('assigned_to_user_id', $request->user()->id);
+                    });
+                }
+            });
+        }
+
         if ($search !== '') {
             $query->where(function ($builder) use ($search): void {
                 $builder->where('notes', 'like', '%' . $search . '%');
@@ -883,7 +961,8 @@ class InventoryCountController extends Controller
      */
     private function countsCrudConfig(): array
     {
-        $canManageCounts = Gate::allows('inventory-adjustments-execute');
+        $canManageCounts = Gate::allows('inventory-adjustments-view')
+            && Gate::allows('inventory-adjustments-execute');
 
         return [
             'resource' => 'inventory-counts',

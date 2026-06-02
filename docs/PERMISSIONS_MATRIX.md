@@ -53,6 +53,7 @@ This document is the source-of-truth for **authorization intent** in this reposi
 - `inventory-products-view`
 - `inventory-products-manage`
 - `inventory-recipes-view`
+- `inventory-stock-view`
 - `inventory-adjustments-view`
 - `inventory-adjustments-execute`
 - `inventory-make-orders-view`
@@ -150,12 +151,10 @@ Stock and production-focused role.
 
 Cross-domain workflow execution role.
 
-- `purchasing-purchase-orders-create`
 - `purchasing-purchase-orders-receive`
-- `sales-sales-orders-manage`
-- `inventory-adjustments-view`
+- `sales-sales-orders-update`
+- `inventory-stock-view`
 - `inventory-adjustments-execute`
-- `inventory-make-orders-view`
 - `inventory-make-orders-execute`
 - `reports-view`
 
@@ -176,8 +175,11 @@ Cross-domain workflow execution role.
 - `admin-users-manage` gates tenant user invitation creation, resend, revocation, and role changes.
 - Admins receive both user-management permissions by default.
 - Assigned users may complete their own generated workflow tasks without requiring `workflow-manage`.
-- Users assigned workflow-stage responsibility or generated workflow tasks must have minimum visibility for that resource type before assignment.
-- Assignment option lists must filter out users who lack the current workflow domain's required visibility/execution permissions.
+- `inventory-stock-view` grants read-only Stock -> Inventory availability visibility and does not grant Inventory Counts index/detail visibility.
+- Inventory Counts index shows all tenant counts to `inventory-adjustments-view` users and only assigned counts/task-related counts to `inventory-adjustments-execute` users without broad view.
+- Users assigned workflow-stage responsibility or generated workflow tasks must have the workflow execution/update credential required by that workflow domain before assignment.
+- Assignment-scoped resource visibility is granted by the resource Gate/policy for direct resource assignees and users assigned to generated workflow-stage tasks on that resource.
+- Assignment option lists must filter out users who lack the current workflow domain's required assignment credential.
 - Assigned users do not require `workflow-manage` solely to complete an assigned workflow task.
 - Sales-order lifecycle transitions continue requiring existing Sales Order permissions even after workflow tasks are introduced.
 - Navigation clickability for Sales Orders, Purchase Orders, and Make Orders is not permission-only:

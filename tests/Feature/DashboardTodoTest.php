@@ -345,7 +345,6 @@ it('9. assigned make order workflow responsibility links to its resource', funct
 it('10. assigned inventory count workflow responsibility appears', function (): void {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
-    ($this->grantPermission)($user, 'inventory-adjustments-view');
     $count = ($this->makeInventoryCount)($tenant, $user);
 
     $this->actingAs($user)
@@ -357,7 +356,6 @@ it('10. assigned inventory count workflow responsibility appears', function (): 
 it('11. assigned inventory count workflow responsibility links to its resource', function (): void {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
-    ($this->grantPermission)($user, 'inventory-adjustments-view');
     $count = ($this->makeInventoryCount)($tenant, $user);
 
     $this->actingAs($user)
@@ -513,7 +511,7 @@ it('21. task row shows status when available', function (): void {
         ->assertSee('Open');
 });
 
-it('22. dashboard exposes complete-task actions for assigned open tasks', function (): void {
+it('22. dashboard remains view-only and does not expose complete-task actions for assigned open tasks', function (): void {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
     ($this->grantPermission)($user, 'inventory-make-orders-view');
@@ -524,8 +522,9 @@ it('22. dashboard exposes complete-task actions for assigned open tasks', functi
     $this->actingAs($user)
         ->get(route('dashboard'))
         ->assertOk()
-        ->assertSee('Complete')
-        ->assertSee(route('tasks.complete', $task), false);
+        ->assertSee($task->title)
+        ->assertDontSee('Complete')
+        ->assertDontSee(route('tasks.complete', $task), false);
 });
 
 it('23. dashboard does not introduce a tasks route link', function (): void {
@@ -552,7 +551,8 @@ it('24. dashboard does not include draggable or customizable widget controls', f
 it('25. users without relevant permissions do not see unauthorized resource data', function (): void {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
-    $makeOrder = ($this->makeMakeOrder)($tenant, $user);
+    $otherUser = ($this->makeUser)($tenant);
+    $makeOrder = ($this->makeMakeOrder)($tenant, $otherUser);
 
     $this->actingAs($user)
         ->get(route('dashboard'))
@@ -573,21 +573,28 @@ it('26. super-admin bypass remains aligned with Gate before behavior', function 
         ->assertSee('Make Order #' . $makeOrder->id);
 });
 
-it('27. seeded tasker role includes workflow assignment visibility and execution permissions', function (): void {
+it('27. seeded tasker role includes workflow execution credentials without broad view permissions', function (): void {
     $this->seed(TenancyRolesPermissionsSeeder::class);
 
     $tasker = Role::query()->where('name', 'tasker')->firstOrFail();
 
     foreach ([
-        'purchasing-purchase-orders-create',
         'purchasing-purchase-orders-receive',
-        'sales-sales-orders-manage',
-        'inventory-adjustments-view',
+        'sales-sales-orders-update',
+        'inventory-stock-view',
         'inventory-adjustments-execute',
-        'inventory-make-orders-view',
         'inventory-make-orders-execute',
     ] as $slug) {
         expect($tasker->permissions()->where('slug', $slug)->exists())->toBeTrue();
+    }
+
+    foreach ([
+        'purchasing-purchase-orders-create',
+        'sales-sales-orders-manage',
+        'inventory-adjustments-view',
+        'inventory-make-orders-view',
+    ] as $slug) {
+        expect($tasker->permissions()->where('slug', $slug)->exists())->toBeFalse();
     }
 });
 
@@ -623,6 +630,35 @@ it('29. seeded tasker user sees assigned inventory count stage Todo task', funct
         ->assertOk()
         ->assertSee('Count freezer stock')
         ->assertSee(route('inventory.counts.show', $count), false);
+});
+
+it('29b. assigned inventory count Todo task appears without broad inventory view permission', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $stage = ($this->makeWorkflowStage)($tenant, 'inventory', 'Counting');
+    $count = ($this->makeInventoryCount)($tenant, null, ['workflow_stage_id' => $stage->id]);
+    ($this->makeTask)($tenant, $user, $stage, $count->id, ['title' => 'Count freezer shelf']);
+
+    $this->actingAs($user)
+        ->get(route('dashboard'))
+        ->assertOk()
+        ->assertSee('Count freezer shelf')
+        ->assertSee(route('inventory.counts.show', $count), false);
+});
+
+it('29c. dashboard does not show unauthorized inventory count links', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $otherUser = ($this->makeUser)($tenant);
+    $stage = ($this->makeWorkflowStage)($tenant, 'inventory', 'Counting');
+    $count = ($this->makeInventoryCount)($tenant, $otherUser, ['workflow_stage_id' => $stage->id]);
+    ($this->makeTask)($tenant, $otherUser, $stage, $count->id, ['title' => 'Other counter task']);
+
+    $this->actingAs($user)
+        ->get(route('dashboard'))
+        ->assertOk()
+        ->assertDontSee('Other counter task')
+        ->assertDontSee(route('inventory.counts.show', $count), false);
 });
 
 it('30. seeded tasker user sees assigned purchase order stage Todo task', function (): void {
@@ -733,7 +769,7 @@ it('36. Workflow admin assignee payload identifies domain-eligible users only', 
     $salesEligible = ($this->makeUser)($tenant, ['name' => 'Sales Eligible']);
     $ineligible = ($this->makeUser)($tenant, ['name' => 'No Sales Access']);
     ($this->grantPermission)($admin, 'workflow-manage');
-    ($this->grantPermission)($salesEligible, 'sales-sales-orders-manage');
+    ($this->grantPermission)($salesEligible, 'sales-sales-orders-update');
     $salesDomain = WorkflowDomain::query()->firstOrCreate(
         ['key' => 'sales'],
         ['name' => 'Sales', 'sort_order' => 10]
@@ -806,7 +842,7 @@ it('39. generated workflow tasks require an eligible tenant user', function (): 
         ->toThrow(DomainException::class, 'Workflow tasks require an eligible assigned user.');
 });
 
-it('40. assigned user can complete a task from the dashboard', function (): void {
+it('40. assigned dashboard task does not render a server completion form', function (): void {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
     ($this->grantPermission)($user, 'inventory-make-orders-view');
@@ -815,12 +851,13 @@ it('40. assigned user can complete a task from the dashboard', function (): void
     $task = ($this->makeTask)($tenant, $user, $stage, $makeOrder->id);
 
     $this->actingAs($user)
-        ->from(route('dashboard'))
-        ->patch(route('tasks.complete', $task))
-        ->assertRedirect(route('dashboard'));
+        ->get(route('dashboard'))
+        ->assertOk()
+        ->assertSee($task->title)
+        ->assertDontSee('<form method="POST" action="' . route('tasks.complete', $task) . '">', false);
 
-    expect($task->fresh()->status)->toBe(Task::STATUS_COMPLETED)
-        ->and($task->fresh()->completed_by_user_id)->toBe($user->id);
+    expect($task->fresh()->status)->toBe(Task::STATUS_OPEN)
+        ->and($task->fresh()->completed_by_user_id)->toBeNull();
 });
 
 it('41. dashboard hides completed assigned tasks', function (): void {
@@ -843,7 +880,7 @@ it('41. dashboard hides completed assigned tasks', function (): void {
         ->assertDontSee(route('tasks.complete', $task), false);
 });
 
-it('42. another user cannot complete a dashboard task assignment', function (): void {
+it('42. dashboard task links do not expose another users completion route', function (): void {
     $tenant = ($this->makeTenant)();
     $assignee = ($this->makeUser)($tenant);
     $otherUser = ($this->makeUser)($tenant);
@@ -854,9 +891,10 @@ it('42. another user cannot complete a dashboard task assignment', function (): 
     $task = ($this->makeTask)($tenant, $assignee, $stage, $makeOrder->id);
 
     $this->actingAs($otherUser)
-        ->from(route('dashboard'))
-        ->patch(route('tasks.complete', $task))
-        ->assertForbidden();
+        ->get(route('dashboard'))
+        ->assertOk()
+        ->assertDontSee($task->title)
+        ->assertDontSee(route('tasks.complete', $task), false);
 
     expect($task->fresh()->status)->toBe(Task::STATUS_OPEN);
 });

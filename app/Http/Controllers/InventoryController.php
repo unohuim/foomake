@@ -15,7 +15,7 @@ class InventoryController extends Controller
      */
     public function index(): View
     {
-        Gate::authorize('inventory-adjustments-view');
+        $this->authorizeStockView();
 
         return view('inventory.index', [
             'crudConfig' => $this->inventoryCrudConfig(),
@@ -30,7 +30,7 @@ class InventoryController extends Controller
      */
     public function list(Request $request, InventoryAvailabilityIndexReadModel $readModel): JsonResponse
     {
-        Gate::authorize('inventory-adjustments-view');
+        $this->authorizeStockView();
 
         $crudConfig = $this->inventoryCrudConfig();
         $validated = $request->validate([
@@ -116,5 +116,16 @@ class InventoryController extends Controller
             ],
             'actions' => [],
         ];
+    }
+
+    /**
+     * Authorize read-only inventory availability access.
+     */
+    private function authorizeStockView(): void
+    {
+        abort_unless(
+            Gate::allows('inventory-stock-view') || Gate::allows('inventory-adjustments-view'),
+            403
+        );
     }
 }

@@ -2,12 +2,15 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\Workflows\CanViewAssignedWorkflowResourceAction;
 use App\Models\InventoryCount;
 use App\Models\MakeOrder;
 use App\Models\PurchaseOrder;
 use App\Models\SalesOrder;
 use App\Models\Task;
+use App\Models\User;
 use Illuminate\Contracts\View\View;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Gate;
@@ -28,8 +31,8 @@ class DashboardController extends Controller
 
         return view('dashboard', [
             'todo' => [
-                'responsibilities' => $this->workflowResponsibilities($tenantId, $userId),
-                'stageTasks' => $this->stageTasks($tenantId, $userId),
+                'responsibilities' => $this->workflowResponsibilities($user, $tenantId, $userId),
+                'stageTasks' => $this->stageTasks($user, $tenantId, $userId),
             ],
         ]);
     }
@@ -39,25 +42,12 @@ class DashboardController extends Controller
      *
      * @return array<int, array<string, string|null>>
      */
-    private function workflowResponsibilities(int $tenantId, int $userId): array
+    private function workflowResponsibilities(User $user, int $tenantId, int $userId): array
     {
-        $responsibilities = [];
-
-        if (Gate::allows('inventory-make-orders-view')) {
-            $responsibilities = array_merge(
-                $responsibilities,
-                $this->makeOrderResponsibilities($tenantId, $userId)
-            );
-        }
-
-        if (Gate::allows('inventory-adjustments-view')) {
-            $responsibilities = array_merge(
-                $responsibilities,
-                $this->inventoryCountResponsibilities($tenantId, $userId)
-            );
-        }
-
-        return $responsibilities;
+        return array_merge(
+            $this->makeOrderResponsibilities($user, $tenantId, $userId),
+            $this->inventoryCountResponsibilities($user, $tenantId, $userId)
+        );
     }
 
     /**
@@ -65,7 +55,7 @@ class DashboardController extends Controller
      *
      * @return array<int, array<string, string|null>>
      */
-    private function makeOrderResponsibilities(int $tenantId, int $userId): array
+    private function makeOrderResponsibilities(User $user, int $tenantId, int $userId): array
     {
         return MakeOrder::query()
             ->where('tenant_id', $tenantId)
@@ -76,6 +66,13 @@ class DashboardController extends Controller
             ->orderByDesc('id')
             ->limit(10)
             ->get()
+            ->filter(fn (MakeOrder $makeOrder): bool => $this->canViewWorkflowResource(
+                $user,
+                $makeOrder,
+                'manufacturing',
+                $makeOrder->made_by_user_id,
+                'inventory-make-orders-view'
+            ))
             ->map(fn (MakeOrder $makeOrder): array => [
                 'title' => 'Make Order #' . $makeOrder->id,
                 'resource' => $makeOrder->outputItem?->name ?? 'Make Order #' . $makeOrder->id,
@@ -93,7 +90,7 @@ class DashboardController extends Controller
      *
      * @return array<int, array<string, string|null>>
      */
-    private function inventoryCountResponsibilities(int $tenantId, int $userId): array
+    private function inventoryCountResponsibilities(User $user, int $tenantId, int $userId): array
     {
         return InventoryCount::query()
             ->where('tenant_id', $tenantId)
@@ -103,6 +100,13 @@ class DashboardController extends Controller
             ->orderByDesc('id')
             ->limit(10)
             ->get()
+            ->filter(fn (InventoryCount $inventoryCount): bool => $this->canViewWorkflowResource(
+                $user,
+                $inventoryCount,
+                'inventory',
+                $inventoryCount->assigned_to_user_id,
+                'inventory-adjustments-view'
+            ))
             ->map(fn (InventoryCount $inventoryCount): array => [
                 'title' => 'Inventory Count #' . $inventoryCount->id,
                 'resource' => 'Inventory Count #' . $inventoryCount->id,
@@ -121,7 +125,7 @@ class DashboardController extends Controller
      *
      * @return array<int, array<string, bool|string|null>>
      */
-    private function stageTasks(int $tenantId, int $userId): array
+    private function stageTasks(User $user, int $tenantId, int $userId): array
     {
         $tasks = Task::query()
             ->where('tenant_id', $tenantId)
@@ -133,10 +137,10 @@ class DashboardController extends Controller
             ->limit(25)
             ->get();
 
-        $resources = $this->taskResources($tasks, $tenantId);
+        $resources = $this->taskResources($user, $tasks, $tenantId);
 
         return $tasks
-            ->map(function (Task $task) use ($resources, $userId): ?array {
+            ->map(function (Task $task) use ($resources): ?array {
                 $resource = $resources[$task->id] ?? null;
 
                 if ($resource === null) {
@@ -150,8 +154,6 @@ class DashboardController extends Controller
                     'dueDate' => $resource['dueDate'],
                     'status' => $this->statusLabel($task->status),
                     'url' => $resource['url'],
-                    'canComplete' => ! $task->isCompleted() && (int) $task->assigned_to_user_id === $userId,
-                    'completeUrl' => route('tasks.complete', $task),
                 ];
             })
             ->filter()
@@ -165,15 +167,15 @@ class DashboardController extends Controller
      * @param Collection<int, Task> $tasks
      * @return array<int, array{label: string, dueDate: string|null, url: string}>
      */
-    private function taskResources(Collection $tasks, int $tenantId): array
+    private function taskResources(User $user, Collection $tasks, int $tenantId): array
     {
         $resources = [];
         $tasksByDomain = $tasks->groupBy(fn (Task $task): string => (string) $task->workflowDomain?->key);
 
-        $resources += $this->makeOrderTaskResources($tasksByDomain->get('manufacturing', collect()), $tenantId);
-        $resources += $this->inventoryCountTaskResources($tasksByDomain->get('inventory', collect()), $tenantId);
-        $resources += $this->salesOrderTaskResources($tasksByDomain->get('sales', collect()), $tenantId);
-        $resources += $this->purchaseOrderTaskResources($tasksByDomain->get('purchasing', collect()), $tenantId);
+        $resources += $this->makeOrderTaskResources($user, $tasksByDomain->get('manufacturing', collect()), $tenantId);
+        $resources += $this->inventoryCountTaskResources($user, $tasksByDomain->get('inventory', collect()), $tenantId);
+        $resources += $this->salesOrderTaskResources($user, $tasksByDomain->get('sales', collect()), $tenantId);
+        $resources += $this->purchaseOrderTaskResources($user, $tasksByDomain->get('purchasing', collect()), $tenantId);
 
         return $resources;
     }
@@ -184,9 +186,9 @@ class DashboardController extends Controller
      * @param Collection<int, Task> $tasks
      * @return array<int, array{label: string, dueDate: string|null, url: string}>
      */
-    private function makeOrderTaskResources(Collection $tasks, int $tenantId): array
+    private function makeOrderTaskResources(User $user, Collection $tasks, int $tenantId): array
     {
-        if ($tasks->isEmpty() || ! Gate::allows('inventory-make-orders-view')) {
+        if ($tasks->isEmpty()) {
             return [];
         }
 
@@ -197,10 +199,19 @@ class DashboardController extends Controller
             ->keyBy('id');
 
         return $tasks
-            ->mapWithKeys(function (Task $task) use ($makeOrders): array {
+            ->mapWithKeys(function (Task $task) use ($makeOrders, $user): array {
                 $makeOrder = $makeOrders->get($task->domain_record_id);
 
-                if (! $makeOrder) {
+                if (
+                    ! $makeOrder
+                    || ! $this->canViewWorkflowResource(
+                        $user,
+                        $makeOrder,
+                        'manufacturing',
+                        $makeOrder->made_by_user_id,
+                        'inventory-make-orders-view'
+                    )
+                ) {
                     return [];
                 }
 
@@ -221,9 +232,9 @@ class DashboardController extends Controller
      * @param Collection<int, Task> $tasks
      * @return array<int, array{label: string, dueDate: string|null, url: string}>
      */
-    private function inventoryCountTaskResources(Collection $tasks, int $tenantId): array
+    private function inventoryCountTaskResources(User $user, Collection $tasks, int $tenantId): array
     {
-        if ($tasks->isEmpty() || ! Gate::allows('inventory-adjustments-view')) {
+        if ($tasks->isEmpty()) {
             return [];
         }
 
@@ -234,10 +245,19 @@ class DashboardController extends Controller
             ->keyBy('id');
 
         return $tasks
-            ->mapWithKeys(function (Task $task) use ($counts): array {
+            ->mapWithKeys(function (Task $task) use ($counts, $user): array {
                 $count = $counts->get($task->domain_record_id);
 
-                if (! $count) {
+                if (
+                    ! $count
+                    || ! $this->canViewWorkflowResource(
+                        $user,
+                        $count,
+                        'inventory',
+                        $count->assigned_to_user_id,
+                        'inventory-adjustments-view'
+                    )
+                ) {
                     return [];
                 }
 
@@ -258,9 +278,9 @@ class DashboardController extends Controller
      * @param Collection<int, Task> $tasks
      * @return array<int, array{label: string, dueDate: string|null, url: string}>
      */
-    private function salesOrderTaskResources(Collection $tasks, int $tenantId): array
+    private function salesOrderTaskResources(User $user, Collection $tasks, int $tenantId): array
     {
-        if ($tasks->isEmpty() || ! Gate::allows('sales-sales-orders-manage')) {
+        if ($tasks->isEmpty()) {
             return [];
         }
 
@@ -271,10 +291,13 @@ class DashboardController extends Controller
             ->keyBy('id');
 
         return $tasks
-            ->mapWithKeys(function (Task $task) use ($orders): array {
+            ->mapWithKeys(function (Task $task) use ($orders, $user): array {
                 $order = $orders->get($task->domain_record_id);
 
-                if (! $order) {
+                if (
+                    ! $order
+                    || ! $this->canViewWorkflowResource($user, $order, 'sales', null, 'sales-sales-orders-manage')
+                ) {
                     return [];
                 }
 
@@ -295,9 +318,9 @@ class DashboardController extends Controller
      * @param Collection<int, Task> $tasks
      * @return array<int, array{label: string, dueDate: string|null, url: string}>
      */
-    private function purchaseOrderTaskResources(Collection $tasks, int $tenantId): array
+    private function purchaseOrderTaskResources(User $user, Collection $tasks, int $tenantId): array
     {
-        if ($tasks->isEmpty() || ! Gate::allows('purchasing-purchase-orders-create')) {
+        if ($tasks->isEmpty()) {
             return [];
         }
 
@@ -308,10 +331,19 @@ class DashboardController extends Controller
             ->keyBy('id');
 
         return $tasks
-            ->mapWithKeys(function (Task $task) use ($orders): array {
+            ->mapWithKeys(function (Task $task) use ($orders, $user): array {
                 $order = $orders->get($task->domain_record_id);
 
-                if (! $order) {
+                if (
+                    ! $order
+                    || ! $this->canViewWorkflowResource(
+                        $user,
+                        $order,
+                        'purchasing',
+                        null,
+                        'purchasing-purchase-orders-create'
+                    )
+                ) {
                     return [];
                 }
 
@@ -336,5 +368,24 @@ class DashboardController extends Controller
             Task::STATUS_COMPLETED => 'Completed',
             default => ucfirst($status),
         };
+    }
+
+    /**
+     * Determine whether a dashboard row may link to the workflow resource.
+     */
+    private function canViewWorkflowResource(
+        User $user,
+        Model $resource,
+        string $workflowDomainKey,
+        ?int $responsibleUserId,
+        string $permission
+    ): bool {
+        return Gate::forUser($user)->allows($permission)
+            || app(CanViewAssignedWorkflowResourceAction::class)->execute(
+                $user,
+                $resource,
+                $workflowDomainKey,
+                $responsibleUserId
+            );
     }
 }

@@ -273,6 +273,7 @@ Notes:
 **Name:** Dashboard Todo Section
 **Type:** UI / Read Model Pattern
 **Location:**
+- `app/Actions/Workflows/CanViewAssignedWorkflowResourceAction.php`
 - `app/Http/Controllers/DashboardController.php`
 - `app/Support/Workflows/WorkflowAssignmentPermissions.php`
 - `resources/views/dashboard.blade.php`
@@ -284,16 +285,18 @@ Surface assigned workflow responsibilities and generated workflow-stage tasks on
 **When to Use:**
 Fixed dashboard visibility for existing assigned work that already has a safe resource detail route and a matching permission Gate.
 
-Assignment controls for workflow-owned records or generated workflow tasks should use the shared workflow assignment permission map so users are only assigned work they can see.
+Assignment controls for workflow-owned records or generated workflow tasks should use the shared workflow assignment permission map so users are only assigned work they have the right workflow credential to perform.
+
+Resource detail Gates/policies remain the source of truth. Assigned workflow resource visibility is granted through `CanViewAssignedWorkflowResourceAction` when the current user is directly assigned to the resource or assigned to a generated workflow-stage task on that resource.
 
 **When Not to Use:**
-Dashboard customization, draggable widgets, ad hoc task creation, or new task routes.
+Dashboard customization, draggable widgets, ad hoc task creation, task completion controls, or new task routes.
 
 **Public Interface:**
 - Dashboard route `/dashboard`
 - `Todo` detail-section accordion
+- `CanViewAssignedWorkflowResourceAction::execute()`
 - `WorkflowAssignmentPermissions::eligibleUsersQuery()`
-- Existing `tasks.complete` route for assigned task completion
 - Existing resource detail route links
 
 **Example Usage:**

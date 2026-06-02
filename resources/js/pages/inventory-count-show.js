@@ -324,7 +324,20 @@ export function mount(rootEl, payload) {
                 : String(value);
         },
 
-        detailsPayload() {
+        detailsPayload(field) {
+            if (field === 'notes') {
+                return {
+                    notes: this.details.notes,
+                };
+            }
+
+            if (field === 'counted_at') {
+                return {
+                    counted_at: this.details.counted_at_iso,
+                    notes: this.details.notes,
+                };
+            }
+
             return {
                 counted_at: this.details.counted_at_iso,
                 notes: this.details.notes,
@@ -426,7 +439,19 @@ export function mount(rootEl, payload) {
         },
 
         async saveDetails(field) {
-            if (!this.count.update_url || !this.count.can_edit_details) {
+            if (!this.count.update_url) {
+                return;
+            }
+
+            if (field === 'notes' && !this.count.can_edit_notes) {
+                return;
+            }
+
+            if (field === 'counted_at' && !this.count.can_edit_counted_at) {
+                return;
+            }
+
+            if (field === 'assigned_to_user_id' && !this.count.can_edit_assignment) {
                 return;
             }
 
@@ -462,7 +487,7 @@ export function mount(rootEl, payload) {
                         'Content-Type': 'application/json',
                         'X-CSRF-TOKEN': this.csrf,
                     },
-                    body: JSON.stringify(this.detailsPayload()),
+                    body: JSON.stringify(this.detailsPayload(field)),
                 });
 
                 const data = await response.json().catch(() => ({}));

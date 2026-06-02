@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\Workflows\CanViewAssignedWorkflowResourceAction;
 use App\Actions\Workflows\ResolveSalesWorkflowStageAction;
 use App\Http\Requests\Sales\ImportExternalSalesOrdersRequest;
 use App\Http\Requests\Sales\ListSalesOrdersRequest;
@@ -24,6 +25,7 @@ use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -78,9 +80,18 @@ class SalesOrderController extends Controller
     /**
      * Display the sales order detail page.
      */
-    public function show(SalesOrder $salesOrder): View
+    public function show(Request $request, SalesOrder $salesOrder): View
     {
-        Gate::authorize('sales-sales-orders-manage');
+        abort_unless((int) $salesOrder->tenant_id === (int) $request->user()->tenant_id, 404);
+        abort_unless(
+            Gate::allows('sales-sales-orders-manage')
+                || app(CanViewAssignedWorkflowResourceAction::class)->execute(
+                    $request->user(),
+                    $salesOrder,
+                    'sales'
+                ),
+            403
+        );
 
         $salesOrder->load(['customer.contacts', 'contact', 'lines.item']);
         $customers = Customer::query()

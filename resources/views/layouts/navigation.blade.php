@@ -25,7 +25,10 @@
     $canViewAdminUsers = $user?->can('admin-users-view') ?? false;
     $canManageWorkflows = $user?->can('workflow-manage') ?? false;
     $canOpenPurchaseOrders = $navigationEligibility['purchaseOrdersEnabled'] ?? false;
-    $canViewInventory = $user?->can('inventory-adjustments-view') ?? false;
+    $canViewStockInventory = ($user?->can('inventory-stock-view') ?? false)
+        || ($user?->can('inventory-adjustments-view') ?? false);
+    $canViewInventoryCounts = ($user?->can('inventory-adjustments-view') ?? false)
+        || ($user?->can('inventory-adjustments-execute') ?? false);
     $canViewMakeOrders = $user?->can('inventory-make-orders-view') ?? false;
     $canOpenMakeOrders = $navigationEligibility['makeOrdersEnabled'] ?? false;
     $canViewMaterials = $user?->can('inventory-materials-view') ?? false;
@@ -35,7 +38,7 @@
     $showPurchasingNav = $canViewPurchaseOrders || $canViewSuppliers;
     $showSalesNav = $canManageCustomers || $canManageSalesOrders || $canViewProducts || $canManageProducts;
     $showManufacturingNav = $canViewMakeOrders || $canViewMaterials || $canViewRecipes;
-    $showStockNav = $canViewInventory || $canManageMaterials;
+    $showStockNav = $canViewStockInventory || $canViewInventoryCounts || $canManageMaterials;
 @endphp
 
 <nav x-data="{ open: false }" class="border-b border-slate-800 bg-slate-950 shadow-lg shadow-slate-950/20">
@@ -195,15 +198,17 @@
                         </x-slot>
 
                         <x-slot name="content">
-                            @can('inventory-adjustments-view')
+                            @if ($canViewStockInventory)
                                 <x-nav-dropdown-link :href="route('inventory.index')" :active="request()->routeIs('inventory.index')">
                                     {{ __('Inventory') }}
                                 </x-nav-dropdown-link>
+                            @endif
 
+                            @if ($canViewInventoryCounts)
                                 <x-nav-dropdown-link :href="route('inventory.counts.index')" :active="request()->routeIs('inventory.counts.*')">
                                     {{ __('Inventory Counts') }}
                                 </x-nav-dropdown-link>
-                            @endcan
+                            @endif
 
                             @can('inventory-materials-manage')
                                 <div
@@ -466,15 +471,17 @@
                     </x-slot>
 
                     <x-slot name="content">
-                        @can('inventory-adjustments-view')
+                        @if ($canViewStockInventory)
                             <x-nav-dropdown-link :href="route('inventory.index')" :active="request()->routeIs('inventory.index')" mobile>
                                 {{ __('Inventory') }}
                             </x-nav-dropdown-link>
+                        @endif
 
+                        @if ($canViewInventoryCounts)
                             <x-nav-dropdown-link :href="route('inventory.counts.index')" :active="request()->routeIs('inventory.counts.*')" mobile>
                                 {{ __('Inventory Counts') }}
                             </x-nav-dropdown-link>
-                        @endcan
+                        @endif
 
                         @can('inventory-materials-manage')
                             <div

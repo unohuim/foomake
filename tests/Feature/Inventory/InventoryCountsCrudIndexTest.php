@@ -7,6 +7,7 @@ use App\Models\InventoryCountLine;
 use App\Models\Item;
 use App\Models\Permission;
 use App\Models\Role;
+use App\Models\Task;
 use App\Models\Tenant;
 use App\Models\Uom;
 use App\Models\UomCategory;
@@ -164,6 +165,112 @@ it('4. forbids authenticated users without the inventory count view permission f
     $this->actingAs($this->user)
         ->getJson(route('inventory.counts.list'))
         ->assertForbidden();
+});
+
+it('4a. allows assigned workflow users to access the inventory counts index', function (): void {
+    ($this->grantPermission)($this->user, 'inventory-adjustments-execute');
+
+    $count = ($this->makeCount)([
+        'assigned_to_user_id' => $this->user->id,
+        'notes' => 'Assigned direct count',
+    ]);
+
+    $this->actingAs($this->user)
+        ->get(route('inventory.counts.index'))
+        ->assertOk()
+        ->assertSee('Inventory Counts')
+        ->assertSee('data-page="inventory-counts-index"', false);
+});
+
+it('4b. assigned workflow users see only directly assigned counts in the list endpoint', function (): void {
+    ($this->grantPermission)($this->user, 'inventory-adjustments-execute');
+
+    $assignedCount = ($this->makeCount)([
+        'assigned_to_user_id' => $this->user->id,
+        'notes' => 'Visible assigned count',
+    ]);
+    $hiddenCount = ($this->makeCount)([
+        'notes' => 'Hidden unassigned count',
+    ]);
+
+    $response = $this->actingAs($this->user)
+        ->getJson(route('inventory.counts.list'))
+        ->assertOk();
+
+    expect(collect($response->json('data'))->pluck('id'))->toContain($assignedCount->id)
+        ->and(collect($response->json('data'))->pluck('id'))->not->toContain($hiddenCount->id);
+});
+
+it('4c. assigned workflow users see counts with tasks assigned to them in the list endpoint', function (): void {
+    ($this->grantPermission)($this->user, 'inventory-adjustments-execute');
+
+    app(EnsureWorkflowDomainsSeededAction::class)->execute();
+    app(SeedDefaultWorkflowStagesForTenantAction::class)->execute($this->tenant);
+    $inventoryDomain = WorkflowDomain::query()->where('key', 'inventory')->firstOrFail();
+    $stage = WorkflowStage::withoutGlobalScopes()
+        ->where('tenant_id', $this->tenant->id)
+        ->where('workflow_domain_id', $inventoryDomain->id)
+        ->orderBy('sort_order')
+        ->firstOrFail();
+    $taskAssignedCount = ($this->makeCount)([
+        'workflow_stage_id' => $stage->id,
+        'notes' => 'Visible task count',
+    ]);
+    $hiddenCount = ($this->makeCount)([
+        'workflow_stage_id' => $stage->id,
+        'notes' => 'Hidden task count',
+    ]);
+
+    Task::query()->forceCreate([
+        'tenant_id' => $this->tenant->id,
+        'workflow_domain_id' => $inventoryDomain->id,
+        'domain_record_id' => $taskAssignedCount->id,
+        'workflow_stage_id' => $stage->id,
+        'workflow_task_template_id' => null,
+        'assigned_to_user_id' => $this->user->id,
+        'title' => 'Assigned index task',
+        'description' => null,
+        'sort_order' => 10,
+        'status' => Task::STATUS_OPEN,
+    ]);
+
+    $response = $this->actingAs($this->user)
+        ->getJson(route('inventory.counts.list'))
+        ->assertOk();
+
+    expect(collect($response->json('data'))->pluck('id'))->toContain($taskAssignedCount->id)
+        ->and(collect($response->json('data'))->pluck('id'))->not->toContain($hiddenCount->id);
+});
+
+it('4d. assigned workflow users do not see cross tenant assigned counts in the list endpoint', function (): void {
+    ($this->grantPermission)($this->user, 'inventory-adjustments-execute');
+
+    $otherTenant = Tenant::factory()->create();
+    $crossTenantCount = InventoryCount::query()->forceCreate([
+        'tenant_id' => $otherTenant->id,
+        'assigned_to_user_id' => $this->user->id,
+        'counted_at' => now()->startOfMinute(),
+        'notes' => 'Cross tenant assigned count',
+    ]);
+
+    $response = $this->actingAs($this->user)
+        ->getJson(route('inventory.counts.list'))
+        ->assertOk();
+
+    expect(collect($response->json('data'))->pluck('id'))->not->toContain($crossTenantCount->id);
+});
+
+it('4e. assigned workflow users do not get the inventory count create toolbar action from the index', function (): void {
+    ($this->grantPermission)($this->user, 'inventory-adjustments-execute');
+    ($this->makeCount)([
+        'assigned_to_user_id' => $this->user->id,
+    ]);
+
+    $config = ($this->extractCrudConfig)(
+        $this->actingAs($this->user)->get(route('inventory.counts.index'))
+    );
+
+    expect($config['permissions']['showCreate'] ?? null)->toBeFalse();
 });
 
 it('5. allows users with the inventory count view permission to access the index', function (): void {

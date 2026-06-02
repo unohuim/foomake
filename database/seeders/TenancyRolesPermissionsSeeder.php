@@ -58,6 +58,7 @@ class TenancyRolesPermissionsSeeder extends Seeder
             'inventory-products-view',
             'inventory-products-manage',
             'inventory-recipes-view',
+            'inventory-stock-view',
             'inventory-adjustments-view',
             'inventory-adjustments-execute',
             'inventory-make-orders-view',
@@ -94,12 +95,10 @@ class TenancyRolesPermissionsSeeder extends Seeder
             'sales' => array_merge($salesPermissions, $reportsPermissions),
             'inventory' => array_merge($inventoryPermissions, $reportsPermissions),
             'tasker' => array_merge([
-                'purchasing-purchase-orders-create',
                 'purchasing-purchase-orders-receive',
-                'sales-sales-orders-manage',
-                'inventory-adjustments-view',
+                'sales-sales-orders-update',
+                'inventory-stock-view',
                 'inventory-adjustments-execute',
-                'inventory-make-orders-view',
                 'inventory-make-orders-execute',
             ], $reportsPermissions),
         ];

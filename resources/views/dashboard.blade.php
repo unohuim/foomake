@@ -107,19 +107,6 @@
                                                                     {{ $task['status'] }}
                                                                 </span>
                                                             @endif
-
-                                                            @if (($task['canComplete'] ?? false) && ! empty($task['completeUrl']))
-                                                                <form method="POST" action="{{ $task['completeUrl'] }}">
-                                                                    @csrf
-                                                                    @method('PATCH')
-                                                                    <button
-                                                                        type="submit"
-                                                                        class="inline-flex h-8 items-center justify-center rounded-lg border border-gray-300 px-3 text-xs font-semibold uppercase tracking-widest text-gray-700 transition hover:bg-gray-50"
-                                                                    >
-                                                                        Complete
-                                                                    </button>
-                                                                </form>
-                                                            @endif
                                                         </div>
                                                     </div>
                                                 </li>

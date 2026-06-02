@@ -18,10 +18,10 @@ class WorkflowAssignmentPermissions
     public function requiredPermissionsForDomain(string $domainKey): array
     {
         return match ($domainKey) {
-            'inventory' => ['inventory-adjustments-view', 'inventory-adjustments-execute'],
-            'manufacturing' => ['inventory-make-orders-view', 'inventory-make-orders-execute'],
-            'purchasing' => ['purchasing-purchase-orders-create', 'purchasing-purchase-orders-receive'],
-            'sales' => ['sales-sales-orders-manage'],
+            'inventory' => ['inventory-adjustments-execute'],
+            'manufacturing' => ['inventory-make-orders-execute'],
+            'purchasing' => ['purchasing-purchase-orders-receive'],
+            'sales' => ['sales-sales-orders-update'],
             default => [],
         };
     }

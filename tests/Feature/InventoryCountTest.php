@@ -103,6 +103,10 @@ beforeEach(function () {
                 'counted_at_iso',
                 'notes',
                 'can_edit_details',
+                'can_edit_notes',
+                'can_edit_counted_at',
+                'can_edit_assignment',
+                'show_details_section',
                 'assignee_options',
                 'status',
                 'lifecycle_status_label',
@@ -239,7 +243,13 @@ it('enforces view permission for index/show and execute does not imply view', fu
 
     ($this->grantPermission)($user, 'inventory-adjustments-view');
     $this->actingAs($user)->get('/inventory/counts')->assertOk();
-    $this->actingAs($user)->get('/inventory/counts/' . $count->id)->assertOk();
+    $this->actingAs($user)
+        ->get('/inventory/counts/' . $count->id)
+        ->assertOk()
+        ->assertSee('Details')
+        ->assertSee('Notes')
+        ->assertDontSee('Count Date')
+        ->assertDontSee('Assigned To');
 });
 
 it('requires execute permission for all mutations (count CRUD, line CRUD, submit, advance, post)', function () {
@@ -285,35 +295,245 @@ it('requires execute permission for all mutations (count CRUD, line CRUD, submit
     $this->actingAs($user)->postJson('/inventory/counts/' . $count->id . '/post')->assertForbidden();
 });
 
-it('allows execute-only users to mutate, while still blocking index/show', function () {
+it('allows execute-only users to view assigned counts and update notes only', function () {
     $tenant = Tenant::factory()->create();
     $user = ($this->makeUser)($tenant);
+    $assignee = ($this->makeUser)($tenant);
 
     ($this->grantPermission)($user, 'inventory-adjustments-execute');
 
-    $this->actingAs($user)->get('/inventory/counts')->assertForbidden();
+    $this->actingAs($user)->get('/inventory/counts')->assertOk();
 
     $count = ($this->createDraftCountViaApi)($user, [
         'notes' => 'Execute-only create',
     ]);
 
-    $this->actingAs($user)->get('/inventory/counts/' . $count->id)->assertForbidden();
+    $this->actingAs($user)->get('/inventory/counts/' . $count->id)->assertOk();
 
-    $updatedAt = now()->addMinutes(10)->seconds(0);
     $resp = $this->actingAs($user)->patchJson('/inventory/counts/' . $count->id, [
-        'counted_at' => $updatedAt->toISOString(),
         'notes' => 'Execute-only update',
-        'assigned_to_user_id' => $user->id,
     ]);
 
-    $resp->assertOk();
+    $resp->assertOk()
+        ->assertJsonPath('count.notes', 'Execute-only update')
+        ->assertJsonPath('count.can_edit_notes', true)
+        ->assertJsonPath('count.can_edit_details', false)
+        ->assertJsonPath('count.can_edit_counted_at', false)
+        ->assertJsonPath('count.can_edit_assignment', false);
     ($this->assertCountPayloadShape)($resp);
+
+    $this->actingAs($user)->patchJson('/inventory/counts/' . $count->id, [
+        'counted_at' => now()->addMinutes(10)->seconds(0)->toISOString(),
+        'notes' => 'Blocked metadata update',
+        'assigned_to_user_id' => $user->id,
+    ])->assertForbidden();
+
+    $this->actingAs($user)->patchJson('/inventory/counts/' . $count->id, [
+        'assigned_to_user_id' => $assignee->id,
+    ])->assertForbidden();
+});
+
+it('allows a tasker assigned to an inventory count to view that count without broad view permission', function () {
+    $tenant = Tenant::factory()->create();
+    $tasker = ($this->makeUser)($tenant);
+    $count = InventoryCount::query()->forceCreate([
+        'tenant_id' => $tenant->id,
+        'assigned_to_user_id' => $tasker->id,
+        'counted_at' => Carbon::parse('2026-06-01 16:45:00'),
+    ]);
+
+    $response = $this->actingAs($tasker)
+        ->get('/inventory/counts/' . $count->id)
+        ->assertOk()
+        ->assertSee('Inventory Count')
+        ->assertSee('June 1, 2026 at 4:45 PM')
+        ->assertDontSee('Details')
+        ->assertDontSee('Notes')
+        ->assertDontSee('Count Date')
+        ->assertDontSee('Assigned To');
+
+    preg_match(
+        '/<script type="application\\/json" id="inventory-count-show-payload">\\s*(.*?)\\s*<\\/script>/s',
+        $response->getContent(),
+        $matches
+    );
+
+    $payload = json_decode($matches[1] ?? '[]', true);
+    $countPayload = $payload['count'] ?? [];
+
+    expect($countPayload['can_edit_notes'] ?? null)->toBeFalse()
+        ->and($countPayload['can_edit_details'] ?? null)->toBeFalse()
+        ->and($countPayload['can_edit_counted_at'] ?? null)->toBeFalse()
+        ->and($countPayload['can_edit_assignment'] ?? null)->toBeFalse()
+        ->and($countPayload['show_details_section'] ?? null)->toBeFalse()
+        ->and($countPayload['assignee_options'] ?? null)->toBe([]);
+});
+
+it('blocks a tasker who is not assigned to an inventory count or any of its tasks', function () {
+    $tenant = Tenant::factory()->create();
+    $tasker = ($this->makeUser)($tenant);
+    $otherUser = ($this->makeUser)($tenant);
+    $count = InventoryCount::query()->forceCreate([
+        'tenant_id' => $tenant->id,
+        'assigned_to_user_id' => $otherUser->id,
+        'counted_at' => now(),
+    ]);
+
+    $this->actingAs($tasker)
+        ->get('/inventory/counts/' . $count->id)
+        ->assertForbidden();
+});
+
+it('allows a tasker assigned to an inventory workflow-stage task to view the related count', function () {
+    $tenant = Tenant::factory()->create();
+    $tasker = ($this->makeUser)($tenant);
+    $otherUser = ($this->makeUser)($tenant);
+    ($this->seedInventoryWorkflow)($tenant);
+    $stage = ($this->inventoryStages)($tenant)->first();
+    $count = InventoryCount::query()->forceCreate([
+        'tenant_id' => $tenant->id,
+        'assigned_to_user_id' => $otherUser->id,
+        'workflow_stage_id' => $stage->id,
+        'counted_at' => now(),
+    ]);
+
+    Task::query()->forceCreate([
+        'tenant_id' => $tenant->id,
+        'workflow_domain_id' => $stage->workflow_domain_id,
+        'domain_record_id' => $count->id,
+        'workflow_stage_id' => $stage->id,
+        'workflow_task_template_id' => null,
+        'assigned_to_user_id' => $tasker->id,
+        'title' => 'Assigned count task',
+        'description' => null,
+        'sort_order' => 10,
+        'status' => Task::STATUS_OPEN,
+    ]);
+
+    $this->actingAs($tasker)
+        ->get('/inventory/counts/' . $count->id)
+        ->assertOk()
+        ->assertSee('Assigned count task');
+});
+
+it('keeps cross-tenant assigned inventory counts inaccessible', function () {
+    $tenant = Tenant::factory()->create();
+    $otherTenant = Tenant::factory()->create();
+    $tasker = ($this->makeUser)($tenant);
+    $count = InventoryCount::query()->forceCreate([
+        'tenant_id' => $otherTenant->id,
+        'assigned_to_user_id' => $tasker->id,
+        'counted_at' => now(),
+    ]);
+
+    $this->actingAs($tasker)
+        ->get('/inventory/counts/' . $count->id)
+        ->assertNotFound();
+});
+
+it('keeps cross-tenant assigned inventory tasks from granting count access', function () {
+    $tenant = Tenant::factory()->create();
+    $otherTenant = Tenant::factory()->create();
+    $tasker = ($this->makeUser)($tenant);
+    ($this->seedInventoryWorkflow)($otherTenant);
+    $stage = ($this->inventoryStages)($otherTenant)->first();
+    $count = InventoryCount::query()->forceCreate([
+        'tenant_id' => $otherTenant->id,
+        'workflow_stage_id' => $stage->id,
+        'counted_at' => now(),
+    ]);
+
+    Task::query()->forceCreate([
+        'tenant_id' => $otherTenant->id,
+        'workflow_domain_id' => $stage->workflow_domain_id,
+        'domain_record_id' => $count->id,
+        'workflow_stage_id' => $stage->id,
+        'workflow_task_template_id' => null,
+        'assigned_to_user_id' => $tasker->id,
+        'title' => 'Cross tenant task',
+        'description' => null,
+        'sort_order' => 10,
+        'status' => Task::STATUS_OPEN,
+    ]);
+
+    $this->actingAs($tasker)
+        ->get('/inventory/counts/' . $count->id)
+        ->assertNotFound();
+});
+
+it('allows users with normal inventory count view permission to keep viewing counts', function () {
+    $tenant = Tenant::factory()->create();
+    $viewer = ($this->makeUser)($tenant);
+    ($this->grantPermission)($viewer, 'inventory-adjustments-view');
+    $count = InventoryCount::query()->forceCreate([
+        'tenant_id' => $tenant->id,
+        'counted_at' => now(),
+    ]);
+
+    $this->actingAs($viewer)
+        ->get('/inventory/counts/' . $count->id)
+        ->assertOk();
+});
+
+it('allows super-admin users to view inventory counts through Gate before behavior', function () {
+    $tenant = Tenant::factory()->create();
+    $admin = ($this->makeUser)($tenant);
+    $role = Role::query()->forceCreate(['name' => 'super-admin']);
+    $admin->roles()->syncWithoutDetaching([$role->id]);
+    $count = InventoryCount::query()->forceCreate([
+        'tenant_id' => $tenant->id,
+        'counted_at' => now(),
+    ]);
+
+    $this->actingAs($admin)
+        ->get('/inventory/counts/' . $count->id)
+        ->assertOk();
+});
+
+it('lets assigned inventory count viewers load line and task sections without broad view permission', function () {
+    $tenant = Tenant::factory()->create();
+    $tasker = ($this->makeUser)($tenant);
+    ($this->seedInventoryWorkflow)($tenant);
+    $stage = ($this->inventoryStages)($tenant)->first();
+    $count = InventoryCount::query()->forceCreate([
+        'tenant_id' => $tenant->id,
+        'assigned_to_user_id' => $tasker->id,
+        'workflow_stage_id' => $stage->id,
+        'counted_at' => now(),
+    ]);
+
+    $this->actingAs($tasker)
+        ->getJson('/inventory/counts/' . $count->id . '/lines')
+        ->assertOk();
+
+    $this->actingAs($tasker)
+        ->getJson('/inventory/counts/' . $count->id . '/tasks')
+        ->assertOk();
+});
+
+it('renders the inventory count date under the header title without mutating storage', function () {
+    $tenant = Tenant::factory()->create();
+    $viewer = ($this->makeUser)($tenant);
+    ($this->grantPermission)($viewer, 'inventory-adjustments-view');
+    $countedAt = Carbon::parse('2026-06-01 16:45:00');
+    $count = InventoryCount::query()->forceCreate([
+        'tenant_id' => $tenant->id,
+        'counted_at' => $countedAt,
+    ]);
+
+    $this->actingAs($viewer)
+        ->get('/inventory/counts/' . $count->id)
+        ->assertOk()
+        ->assertSee('June 1, 2026 at 4:45 PM');
+
+    expect($count->fresh()->counted_at->format('Y-m-d H:i:s'))->toBe('2026-06-01 16:45:00');
 });
 
 it('validates count create/update payloads (update requires counted_at) and updates counted_at on success', function () {
     $tenant = Tenant::factory()->create();
     $user = ($this->makeUser)($tenant);
 
+    ($this->grantPermission)($user, 'inventory-adjustments-view');
     ($this->grantPermission)($user, 'inventory-adjustments-execute');
 
     $this->actingAs($user)->postJson('/inventory/counts', [
@@ -967,6 +1187,10 @@ it('detail payload exposes editable details data and tenant assignee options', f
     $countPayload = $payload['count'] ?? [];
 
     expect($countPayload['can_edit_details'] ?? null)->toBeTrue()
+        ->and($countPayload['can_edit_notes'] ?? null)->toBeTrue()
+        ->and($countPayload['can_edit_counted_at'] ?? null)->toBeTrue()
+        ->and($countPayload['can_edit_assignment'] ?? null)->toBeTrue()
+        ->and($countPayload['show_details_section'] ?? null)->toBeTrue()
         ->and($countPayload['counted_at_iso'] ?? null)->toBeString()
         ->and($countPayload['notes'] ?? null)->toBe('')
         ->and($countPayload['assigned_to_user_id'] ?? null)->toBe($assignee->id)
@@ -2014,6 +2238,7 @@ it('open stage blocks new material adds while still allowing counted qty updates
     $user = ($this->makeUser)($tenant);
     $assignee = ($this->makeUser)($tenant);
 
+    ($this->grantPermission)($user, 'inventory-adjustments-view');
     ($this->grantPermission)($user, 'inventory-adjustments-execute');
     ($this->seedInventoryWorkflow)($tenant);
 
@@ -2067,6 +2292,7 @@ it('inventory count details ajax updates persist in draft and reject invalid dat
     $assignee = ($this->makeUser)($tenant);
     $otherTenantUser = ($this->makeUser)($otherTenant);
 
+    ($this->grantPermission)($user, 'inventory-adjustments-view');
     ($this->grantPermission)($user, 'inventory-adjustments-execute');
 
     $count = ($this->createDraftCountViaApi)($user, [

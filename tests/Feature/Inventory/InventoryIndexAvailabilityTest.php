@@ -426,7 +426,7 @@ it('2. rejects guests from the inventory list endpoint', function (): void {
         ->assertUnauthorized();
 });
 
-it('3. forbids authenticated users without the inventory view permission from the index', function (): void {
+it('3. forbids authenticated users without the inventory stock view permission from the index', function (): void {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
 
@@ -434,7 +434,7 @@ it('3. forbids authenticated users without the inventory view permission from th
         ->assertForbidden();
 });
 
-it('4. forbids authenticated users without the inventory view permission from the list endpoint', function (): void {
+it('4. forbids authenticated users without the inventory stock view permission from the list endpoint', function (): void {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
 
@@ -442,7 +442,27 @@ it('4. forbids authenticated users without the inventory view permission from th
         ->assertForbidden();
 });
 
-it('5. authorized users can view the inventory index', function (): void {
+it('5. users with inventory stock view can view the inventory index', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    ($this->grantPermission)($user, 'inventory-stock-view');
+
+    ($this->inventoryIndex)($user)
+        ->assertOk()
+        ->assertSee('Inventory');
+});
+
+it('6. users with inventory stock view can load the inventory list endpoint', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    ($this->grantPermission)($user, 'inventory-stock-view');
+
+    ($this->inventoryList)($user)
+        ->assertOk()
+        ->assertJsonStructure(['data', 'meta']);
+});
+
+it('6a. users with inventory adjustments view can still view the inventory index', function (): void {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
     ($this->grantPermission)($user, 'inventory-adjustments-view');
@@ -452,7 +472,7 @@ it('5. authorized users can view the inventory index', function (): void {
         ->assertSee('Inventory');
 });
 
-it('6. authorized users can load the inventory list endpoint', function (): void {
+it('6b. users with inventory adjustments view can still load the inventory list endpoint', function (): void {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
     ($this->grantPermission)($user, 'inventory-adjustments-view');

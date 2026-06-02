@@ -162,7 +162,35 @@ it('shows the materials link when the user has inventory materials view permissi
         ->assertSee(route('materials.index'), false);
 });
 
-it('shows stock links when the user has inventory adjustments view permission', function () {
+it('shows stock inventory link when the user has inventory stock view permission', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermission)($user, 'inventory-stock-view');
+
+    ($this->render)($user)
+        ->assertOk()
+        ->assertSee('Stock')
+        ->assertSee('Inventory')
+        ->assertSee(route('inventory.index'), false)
+        ->assertDontSee('Inventory Counts')
+        ->assertDontSee(route('inventory.counts.index'), false);
+});
+
+it('shows inventory counts link when the user has inventory workflow execution permission', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermission)($user, 'inventory-adjustments-execute');
+
+    ($this->render)($user)
+        ->assertOk()
+        ->assertSee('Stock')
+        ->assertSee('Inventory Counts')
+        ->assertSee(route('inventory.counts.index'), false);
+});
+
+it('shows stock and inventory count links when the user has inventory adjustments view permission', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
 

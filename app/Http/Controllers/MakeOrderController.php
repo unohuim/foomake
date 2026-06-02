@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Actions\Manufacturing\MoveMakeOrderWorkflowStageAction;
+use App\Actions\Workflows\CanViewAssignedWorkflowResourceAction;
 use App\Actions\Workflows\ResolveManufacturingWorkflowStageAction;
 use App\Actions\Workflows\SeedDefaultWorkflowStagesForTenantAction;
 use App\Models\Item;
@@ -104,8 +105,17 @@ class MakeOrderController extends Controller
      */
     public function show(Request $request, MakeOrder $makeOrder): View
     {
-        Gate::authorize('inventory-make-orders-view');
         abort_unless((int) $makeOrder->tenant_id === (int) $request->user()->tenant_id, 404);
+        abort_unless(
+            Gate::allows('inventory-make-orders-view')
+                || app(CanViewAssignedWorkflowResourceAction::class)->execute(
+                    $request->user(),
+                    $makeOrder,
+                    'manufacturing',
+                    $makeOrder->made_by_user_id
+                ),
+            403
+        );
 
         $this->ensureManufacturingWorkflowStagesExist($request);
 
