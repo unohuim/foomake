@@ -26,36 +26,15 @@
         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
             <div data-crud-root></div>
 
-            <div
-                class="fixed inset-0 z-50 overflow-hidden"
-                x-show="isFormOpen"
-                x-cloak
-                role="dialog"
-                aria-modal="true"
+            <x-slide-over-shell
+                open="isFormOpen"
+                close="closeForm()"
+                submit="submitForm()"
+                title-expression="formMode === 'create' ? 'Create customer' : 'Edit customer'"
+                description="Manage customer details without leaving the page."
+                title-id="customer-form-slide-over-title"
             >
-                <div class="absolute inset-0 overflow-hidden">
-                    <div
-                        class="absolute inset-0 bg-gray-500 bg-opacity-25 transition-opacity"
-                        x-show="isFormOpen"
-                        x-on:click="closeForm()"
-                    ></div>
-
-                    <div class="pointer-events-none fixed inset-y-0 right-0 flex max-w-full pl-10">
-                        <div class="pointer-events-auto w-screen max-w-md">
-                            <form class="flex h-full flex-col bg-white shadow-xl" x-on:submit.prevent="submitForm()">
-                                <div class="flex-1 overflow-y-auto p-6">
-                                    <div class="flex items-start justify-between">
-                                        <div>
-                                            <h2 class="text-lg font-medium text-gray-900" x-text="formMode === 'create' ? 'Create customer' : 'Edit customer'"></h2>
-                                            <p class="mt-1 text-sm text-gray-600">Manage customer details without leaving the page.</p>
-                                        </div>
-                                        <button type="button" class="rounded-md text-gray-400 hover:text-gray-500" x-on:click="closeForm()">
-                                            <span class="sr-only">Close panel</span>
-                                            ✕
-                                        </button>
-                                    </div>
-
-                                    <div class="mt-6 space-y-4">
+                                    <div class="space-y-4">
                                         <div>
                                             <label class="block text-sm font-medium text-gray-700">
                                                 Name
@@ -207,9 +186,8 @@
                                     </div>
 
                                     <p class="mt-4 text-sm text-red-600" x-show="generalError" x-text="generalError"></p>
-                                </div>
 
-                                <div class="flex shrink-0 justify-end gap-3 border-t border-gray-200 px-6 py-4">
+                <x-slot name="footer">
                                     <button
                                         type="button"
                                         class="inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-widest text-gray-700 shadow-sm transition hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
@@ -225,12 +203,8 @@
                                     >
                                         <span x-text="formMode === 'create' ? 'Create Customer' : 'Save Customer'"></span>
                                     </button>
-                                </div>
-                            </form>
-                        </div>
-                    </div>
-                </div>
-            </div>
+                </x-slot>
+            </x-slide-over-shell>
 
         </div>
     </div>

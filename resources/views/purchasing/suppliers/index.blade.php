@@ -25,40 +25,15 @@
         <div class="mx-auto flex h-full min-h-0 w-full max-w-7xl flex-1 flex-col overflow-hidden sm:px-6 lg:px-8">
             <div class="flex h-full min-h-0 flex-1 flex-col" data-crud-root></div>
 
-            <div
-                class="fixed inset-0 z-50 overflow-hidden"
-                x-show="isFormOpen"
-                x-cloak
-                role="dialog"
-                aria-modal="true"
+            <x-slide-over-shell
+                open="isFormOpen"
+                close="closeForm()"
+                submit="submitForm()"
+                title-expression="formMode === 'create' ? 'Add supplier' : 'Edit supplier'"
+                description="Manage supplier details without leaving the page."
+                title-id="supplier-form-slide-over-title"
             >
-                <div class="absolute inset-0 overflow-hidden">
-                    <div
-                        class="absolute inset-0 bg-gray-500 bg-opacity-25 transition-opacity"
-                        x-show="isFormOpen"
-                        x-on:click="closeForm()"
-                    ></div>
-
-                    <div class="pointer-events-none fixed inset-y-0 right-0 flex max-w-full pl-10">
-                        <div class="pointer-events-auto w-screen max-w-md">
-                            <form class="flex h-full flex-col bg-white shadow-xl" x-on:submit.prevent="submitForm()">
-                                <div class="flex-1 overflow-y-auto p-6">
-                                    <div class="flex items-start justify-between">
-                                        <div>
-                                            <h2 class="text-lg font-medium text-gray-900" x-text="formMode === 'create' ? 'Add supplier' : 'Edit supplier'"></h2>
-                                            <p class="mt-1 text-sm text-gray-600">Manage supplier details without leaving the page.</p>
-                                        </div>
-                                        <button
-                                            type="button"
-                                            class="text-gray-400 hover:text-gray-500"
-                                            x-on:click="closeForm()"
-                                        >
-                                            <span class="sr-only">Close panel</span>
-                                            x
-                                        </button>
-                                    </div>
-
-                                    <div class="mt-6" x-show="generalError">
+                                    <div x-show="generalError">
                                         <div class="rounded-md bg-red-50 p-3 text-sm text-red-700" x-text="generalError"></div>
                                     </div>
 
@@ -120,9 +95,7 @@
                                             <p class="mt-1 text-sm text-red-600" x-show="errors.currency_code" x-text="errors.currency_code[0]"></p>
                                         </div>
                                     </div>
-                                </div>
-
-                                <div class="flex justify-end gap-3 border-t border-gray-100 bg-white px-6 py-4">
+                <x-slot name="footer">
                                     <button
                                         type="button"
                                         class="inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-widest text-gray-700 shadow-sm transition hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
@@ -138,12 +111,8 @@
                                         x-text="formMode === 'create' ? 'Add Supplier' : 'Save Supplier'"
                                     >
                                     </button>
-                                </div>
-                            </form>
-                        </div>
-                    </div>
-                </div>
-            </div>
+                </x-slot>
+            </x-slide-over-shell>
 
             <div
                 class="fixed inset-0 z-50 flex items-center justify-center"

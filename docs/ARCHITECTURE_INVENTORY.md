@@ -2607,7 +2607,7 @@ Unrelated or optional domains.
 
 **Name:** Slide-Over Form Pattern  
 **Type:** UI Pattern  
-**Location:** `resources/views/materials/partials/create-material-slide-over.blade.php`
+**Location:** `resources/views/components/slide-over-shell.blade.php`
 
 **Purpose:**  
 Create or edit entities without leaving the current page.
@@ -2619,13 +2619,24 @@ CRUD forms with multiple fields.
 Confirmations or single-field actions.
 
 **Public Interface:**  
-- Blade partial with Alpine state and form markup
+- `<x-slide-over-shell>` Blade component
+- Props: `open`, `close`, optional `submit`, `title`, `title-expression`, `description`, `description-expression`, `title-id`, and `max-width`
+- Named `footer` slot for resource-specific actions
 
 **Example Usage:**  
 ```blade
-<form x-on:submit.prevent="submitCreate()">
+<x-slide-over-shell
+    open="isCreateOpen"
+    close="closeCreate()"
+    submit="submitCreate()"
+    title="Create Material"
+    title-id="create-material-slide-over-title"
+>
     <input type="text" x-model="form.name" />
-</form>
+    <x-slot name="footer">
+        <button type="submit">Save</button>
+    </x-slot>
+</x-slide-over-shell>
 ```
 
 ---

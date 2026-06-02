@@ -1,7 +1,7 @@
 name: Slide-Over Form Pattern
 type: UI Pattern
 location:
-  - resources/views/materials/partials/create-material-slide-over.blade.php
+  - resources/views/components/slide-over-shell.blade.php
 purpose: Create or edit entities without leaving the current page.
 when_to_use:
   - CRUD forms with multiple fields
@@ -11,9 +11,22 @@ when_not_to_use:
 rules:
   - Alpine directives use single-quoted JavaScript strings.
   - HTML attributes use double quotes.
+  - Create and edit Blade drawers must use the shared slide-over shell component for backdrop, panel, header, close button, form frame, and footer frame.
+  - Resource-specific Blade may provide body fields, validation messages, footer actions, and existing page-scoped Alpine handlers.
+  - Confirmation modals and JavaScript-owned shared import/export drawers are separate patterns and must not be forced through this Blade component.
 public_interface:
-  - Blade partial with Alpine state and form markup
+  - <x-slide-over-shell open="..." close="..." submit="..." title="..." title-id="...">
+  - Named footer slot for resource-specific actions
 example_usage: |
-  <form x-on:submit.prevent="submitCreate()">
+  <x-slide-over-shell
+      open="isCreateOpen"
+      close="closeCreate()"
+      submit="submitCreate()"
+      title="Create Material"
+      title-id="create-material-slide-over-title"
+  >
       <input type="text" x-model="form.name" />
-  </form>
+      <x-slot name="footer">
+          <button type="submit">Save</button>
+      </x-slot>
+  </x-slide-over-shell>

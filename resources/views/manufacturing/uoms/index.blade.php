@@ -105,22 +105,14 @@
                         </template>
                     </div>
 
-                    <div x-cloak x-show="formOpen" class="fixed inset-0 z-50 flex items-start justify-end">
-                        <div class="fixed inset-0 bg-gray-900/50" @click="closeForm"></div>
-                        <div class="relative bg-white shadow-xl w-full max-w-md h-full p-6 overflow-y-auto">
-                            <div class="flex items-center justify-between">
-                                <h4 class="text-lg font-medium text-gray-900" x-text="isEditing ? '{{ __('Edit Unit of Measure') }}' : '{{ __('Create Unit of Measure') }}'"></h4>
-                                <button type="button" class="text-gray-400 hover:text-gray-500" @click="closeForm">
-                                    <span class="sr-only">{{ __('Close') }}</span>
-                                    <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                                        <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
-                                    </svg>
-                                </button>
-                            </div>
-
-                            <p class="mt-1 text-sm text-gray-500">{{ __('Provide a name, symbol, and category for this unit.') }}</p>
-
-                            <div class="mt-6 space-y-4">
+                    <x-slide-over-shell
+                        open="formOpen"
+                        close="closeForm"
+                        title-expression="isEditing ? '{{ __('Edit Unit of Measure') }}' : '{{ __('Create Unit of Measure') }}'"
+                        description="{{ __('Provide a name, symbol, and category for this unit.') }}"
+                        title-id="uom-form-slide-over-title"
+                    >
+                            <div class="space-y-4">
                                 <div>
                                     <label for="uom-name" class="block text-sm font-medium text-gray-700">{{ __('Name') }}</label>
                                     <input id="uom-name" type="text" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500" x-model="form.name" />
@@ -151,16 +143,15 @@
                                 </div>
                             </div>
 
-                            <div class="mt-6 flex items-center justify-end gap-3">
+                        <x-slot name="footer">
                                 <button type="button" class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50" @click="closeForm">
                                     {{ __('Cancel') }}
                                 </button>
                                 <button type="button" class="inline-flex items-center px-4 py-2 bg-blue-600 border border-transparent rounded-md text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50" :disabled="isSubmitting" @click="submitForm">
                                     <span x-text="isSubmitting ? '{{ __('Saving...') }}' : (isEditing ? '{{ __('Save') }}' : '{{ __('Create') }}')"></span>
                                 </button>
-                            </div>
-                        </div>
-                    </div>
+                        </x-slot>
+                    </x-slide-over-shell>
 
                     <div x-cloak x-show="deleteOpen" class="fixed inset-0 z-50 flex items-center justify-center">
                         <div class="fixed inset-0 bg-gray-900/50" @click="closeDelete"></div>

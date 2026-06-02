@@ -172,24 +172,13 @@
                         </div>
                     </section>
 
-                    <div x-cloak x-show="generalFormOpen" class="fixed inset-0 z-50 overflow-hidden">
-                        <div class="absolute inset-0 overflow-hidden">
-                            <div class="fixed inset-0 bg-gray-900/50" @click="closeGeneralForm"></div>
-                            <div class="pointer-events-none fixed inset-y-0 right-0 flex max-w-full pl-10">
-                                <div class="pointer-events-auto w-screen max-w-md">
-                                    <div class="flex h-full flex-col bg-white shadow-xl">
-                                        <div class="flex-1 overflow-y-auto p-6">
-                                            <div class="flex items-center justify-between">
-                                                <h4 class="text-lg font-medium text-gray-900" x-text="generalIsEditing ? '{{ __('Edit Conversion') }}' : '{{ __('Create Conversion') }}'"></h4>
-                                                <button type="button" class="text-gray-400 hover:text-gray-500" @click="closeGeneralForm">
-                                                    <span class="sr-only">{{ __('Close') }}</span>
-                                                    <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                                                        <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
-                                                    </svg>
-                                                </button>
-                                            </div>
-
-                                            <div class="mt-6 space-y-4">
+                    <x-slide-over-shell
+                        open="generalFormOpen"
+                        close="closeGeneralForm"
+                        title-expression="generalIsEditing ? '{{ __('Edit Conversion') }}' : '{{ __('Create Conversion') }}'"
+                        title-id="general-uom-conversion-form-slide-over-title"
+                    >
+                                            <div class="space-y-4">
                                 <div>
                                     <label for="general-from-uom" class="block text-sm font-medium text-gray-700">{{ __('From UoM') }}</label>
                                     <select id="general-from-uom" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500" x-model="generalForm.from_uom_id">
@@ -218,40 +207,23 @@
                                     <p class="mt-1 text-sm text-red-600" x-text="generalErrors.multiplier ? generalErrors.multiplier[0] : ''"></p>
                                 </div>
                                             </div>
-                                        </div>
-
-                                        <div class="flex justify-end gap-3 border-t border-gray-100 bg-white px-6 py-4">
+                        <x-slot name="footer">
                                             <button type="button" class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50" @click="closeGeneralForm">
                                                 {{ __('Cancel') }}
                                             </button>
                                             <button type="button" class="inline-flex items-center px-4 py-2 bg-blue-600 border border-transparent rounded-md text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50" :disabled="isSubmitting" @click="submitGeneralForm">
                                                 <span x-text="generalIsEditing ? '{{ __('Save') }}' : '{{ __('Create') }}'"></span>
                                             </button>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                        </x-slot>
+                    </x-slide-over-shell>
 
-                    <div x-cloak x-show="itemFormOpen" class="fixed inset-0 z-50 overflow-hidden">
-                        <div class="absolute inset-0 overflow-hidden">
-                            <div class="fixed inset-0 bg-gray-900/50" @click="closeItemForm"></div>
-                            <div class="pointer-events-none fixed inset-y-0 right-0 flex max-w-full pl-10">
-                                <div class="pointer-events-auto w-screen max-w-md">
-                                    <div class="flex h-full flex-col bg-white shadow-xl">
-                                        <div class="flex-1 overflow-y-auto p-6">
-                                            <div class="flex items-center justify-between">
-                                                <h4 class="text-lg font-medium text-gray-900" x-text="itemIsEditing ? '{{ __('Edit Item Conversion') }}' : '{{ __('Create Item Conversion') }}'"></h4>
-                                                <button type="button" class="text-gray-400 hover:text-gray-500" @click="closeItemForm">
-                                                    <span class="sr-only">{{ __('Close') }}</span>
-                                                    <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                                                        <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
-                                                    </svg>
-                                                </button>
-                                            </div>
-
-                                            <div class="mt-6 space-y-4">
+                    <x-slide-over-shell
+                        open="itemFormOpen"
+                        close="closeItemForm"
+                        title-expression="itemIsEditing ? '{{ __('Edit Item Conversion') }}' : '{{ __('Create Item Conversion') }}'"
+                        title-id="item-uom-conversion-form-slide-over-title"
+                    >
+                                            <div class="space-y-4">
                                 <div>
                                     <label for="item-selector" class="block text-sm font-medium text-gray-700">{{ __('Item') }}</label>
                                     <select id="item-selector" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500" x-model="itemForm.item_id">
@@ -291,21 +263,15 @@
                                     <p class="mt-1 text-sm text-red-600" x-text="itemErrors.conversion_factor ? itemErrors.conversion_factor[0] : ''"></p>
                                 </div>
                                             </div>
-                                        </div>
-
-                                        <div class="flex justify-end gap-3 border-t border-gray-100 bg-white px-6 py-4">
+                        <x-slot name="footer">
                                             <button type="button" class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50" @click="closeItemForm">
                                                 {{ __('Cancel') }}
                                             </button>
                                             <button type="button" class="inline-flex items-center px-4 py-2 bg-blue-600 border border-transparent rounded-md text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50" :disabled="isSubmitting" @click="submitItemForm">
                                                 <span x-text="itemIsEditing ? '{{ __('Save') }}' : '{{ __('Create') }}'"></span>
                                             </button>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                        </x-slot>
+                    </x-slide-over-shell>
 
                     <div x-cloak x-show="deleteOpen" class="fixed inset-0 z-50 flex items-center justify-center">
                         <div class="fixed inset-0 bg-gray-900/50" @click="closeDelete"></div>
