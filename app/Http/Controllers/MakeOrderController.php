@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Actions\Manufacturing\MoveMakeOrderWorkflowStageAction;
+use App\Actions\Notes\BuildNotesFeedPayloadAction;
 use App\Actions\Workflows\CanViewAssignedWorkflowResourceAction;
 use App\Actions\Workflows\ResolveManufacturingWorkflowStageAction;
 use App\Actions\Workflows\SeedDefaultWorkflowStagesForTenantAction;
@@ -137,6 +138,11 @@ class MakeOrderController extends Controller
             ],
             'workflow' => $this->makeOrderWorkflowPayload($makeOrder, $request->user()),
             'ingredients' => $this->makeOrderIngredientsPayload($makeOrder),
+            'notesFeed' => app(BuildNotesFeedPayloadAction::class)->execute(
+                $makeOrder,
+                route('manufacturing.make-orders.notes.index', $makeOrder),
+                route('manufacturing.make-orders.notes.store', $makeOrder)
+            ),
             'csrf_token' => $request->session()->token(),
         ];
 
@@ -1305,7 +1311,7 @@ class MakeOrderController extends Controller
         }
 
         return [
-            'default_open' => true,
+            'default_open' => false,
             'transition_url' => route('manufacturing.make-orders.workflow-stage.update', $makeOrder),
             'can_move_stage' => Gate::allows('inventory-make-orders-execute')
                 && ! in_array($makeOrder->status, [MakeOrder::STATUS_MADE, MakeOrder::STATUS_CANCELLED], true),

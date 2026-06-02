@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\HasTenantScope;
+use App\Models\Concerns\HasNotes;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -30,6 +31,7 @@ use Illuminate\Support\Carbon;
  */
 class MakeOrder extends Model
 {
+    use HasNotes;
     use HasTenantScope;
 
     private const QUANTITY_SCALE = 6;

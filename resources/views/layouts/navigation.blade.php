@@ -2,11 +2,11 @@
     $user = auth()->user();
     $navigationEligibility = app(\App\Navigation\NavigationEligibility::class)->forUser($user);
 
-    $manufacturingActive = (request()->routeIs('materials.*') && !request()->routeIs('materials.uom-categories.*'))
-        || request()->routeIs('manufacturing.make-orders.*')
+    $manufacturingActive = request()->routeIs('manufacturing.make-orders.*')
         || request()->routeIs('manufacturing.recipes.*');
     $stockActive = request()->routeIs('inventory.*')
         || request()->routeIs('inventory.counts.*')
+        || request()->routeIs('materials.*')
         || request()->routeIs('manufacturing.uoms.*')
         || request()->routeIs('manufacturing.uom-conversions.*')
         || request()->routeIs('materials.uom-categories.*');
@@ -37,8 +37,8 @@
 
     $showPurchasingNav = $canViewPurchaseOrders || $canViewSuppliers;
     $showSalesNav = $canManageCustomers || $canManageSalesOrders || $canViewProducts || $canManageProducts;
-    $showManufacturingNav = $canViewMakeOrders || $canViewMaterials || $canViewRecipes;
-    $showStockNav = $canViewStockInventory || $canViewInventoryCounts || $canManageMaterials;
+    $showManufacturingNav = $canViewMakeOrders || $canViewRecipes;
+    $showStockNav = $canViewStockInventory || $canViewInventoryCounts || $canViewMaterials || $canManageMaterials;
 @endphp
 
 <nav x-data="{ open: false }" class="border-b border-slate-800 bg-slate-950 shadow-lg shadow-slate-950/20">
@@ -176,12 +176,6 @@
                                 @endif
                             @endcan
 
-                            @can('inventory-materials-view')
-                                <x-nav-dropdown-link :href="route('materials.index')" :active="request()->routeIs('materials.*')">
-                                    {{ __('Materials') }}
-                                </x-nav-dropdown-link>
-                            @endcan
-
                             @can('inventory-recipes-view')
                                 <x-nav-dropdown-link :href="route('manufacturing.recipes.index')" :active="request()->routeIs('manufacturing.recipes.*')">
                                     {{ __('Recipes') }}
@@ -207,6 +201,12 @@
                             @if ($canViewInventoryCounts)
                                 <x-nav-dropdown-link :href="route('inventory.counts.index')" :active="request()->routeIs('inventory.counts.*')">
                                     {{ __('Inventory Counts') }}
+                                </x-nav-dropdown-link>
+                            @endif
+
+                            @if ($canViewMaterials || $canManageMaterials)
+                                <x-nav-dropdown-link :href="route('materials.index')" :active="request()->routeIs('materials.*') && !request()->routeIs('materials.uom-categories.*')">
+                                    {{ __('Materials') }}
                                 </x-nav-dropdown-link>
                             @endif
 
@@ -449,12 +449,6 @@
                             @endif
                         @endcan
 
-                        @can('inventory-materials-view')
-                            <x-nav-dropdown-link :href="route('materials.index')" :active="request()->routeIs('materials.*')" mobile>
-                                {{ __('Materials') }}
-                            </x-nav-dropdown-link>
-                        @endcan
-
                         @can('inventory-recipes-view')
                             <x-nav-dropdown-link :href="route('manufacturing.recipes.index')" :active="request()->routeIs('manufacturing.recipes.*')" mobile>
                                 {{ __('Recipes') }}
@@ -480,6 +474,12 @@
                         @if ($canViewInventoryCounts)
                             <x-nav-dropdown-link :href="route('inventory.counts.index')" :active="request()->routeIs('inventory.counts.*')" mobile>
                                 {{ __('Inventory Counts') }}
+                            </x-nav-dropdown-link>
+                        @endif
+
+                        @if ($canViewMaterials || $canManageMaterials)
+                            <x-nav-dropdown-link :href="route('materials.index')" :active="request()->routeIs('materials.*') && !request()->routeIs('materials.uom-categories.*')" mobile>
+                                {{ __('Materials') }}
                             </x-nav-dropdown-link>
                         @endif
 

@@ -154,6 +154,14 @@ beforeEach(function () {
             'assigned_to_user_id' => $user->id,
         ], $payload);
 
+        if (isset($payload['assigned_to_user_id'])) {
+            $assignee = User::query()->find((int) $payload['assigned_to_user_id']);
+
+            if ($assignee instanceof User && (int) $assignee->tenant_id === (int) $user->tenant_id) {
+                ($this->grantPermission)($assignee, 'inventory-adjustments-execute');
+            }
+        }
+
         $response = $this->actingAs($user)->postJson('/inventory/counts', $payload);
 
         $response->assertCreated();
@@ -195,6 +203,8 @@ beforeEach(function () {
         User $defaultAssignee,
         array $overrides = []
     ): WorkflowTaskTemplate {
+        ($this->grantPermission)($defaultAssignee, 'inventory-adjustments-execute');
+
         return WorkflowTaskTemplate::withoutGlobalScopes()->create(array_merge([
             'tenant_id' => $tenant->id,
             'workflow_domain_id' => $stage->workflow_domain_id,
@@ -238,7 +248,7 @@ it('enforces view permission for index/show and execute does not imply view', fu
     $this->actingAs($user)->get('/inventory/counts/' . $count->id)->assertForbidden();
 
     ($this->grantPermission)($user, 'inventory-adjustments-execute');
-    $this->actingAs($user)->get('/inventory/counts')->assertForbidden();
+    $this->actingAs($user)->get('/inventory/counts')->assertOk();
     $this->actingAs($user)->get('/inventory/counts/' . $count->id)->assertForbidden();
 
     ($this->grantPermission)($user, 'inventory-adjustments-view');
@@ -248,8 +258,8 @@ it('enforces view permission for index/show and execute does not imply view', fu
         ->assertOk()
         ->assertSee('Details')
         ->assertSee('Notes')
-        ->assertDontSee('Count Date')
-        ->assertDontSee('Assigned To');
+        ->assertSee('Count Date')
+        ->assertSee('Assigned To');
 });
 
 it('requires execute permission for all mutations (count CRUD, line CRUD, submit, advance, post)', function () {
@@ -348,9 +358,9 @@ it('allows a tasker assigned to an inventory count to view that count without br
         ->assertSee('Inventory Count')
         ->assertSee('June 1, 2026 at 4:45 PM')
         ->assertDontSee('Details')
-        ->assertDontSee('Notes')
+        ->assertSee('Notes')
         ->assertDontSee('Count Date')
-        ->assertDontSee('Assigned To');
+        ->assertDontSee('>Assigned To<', false);
 
     preg_match(
         '/<script type="application\\/json" id="inventory-count-show-payload">\\s*(.*?)\\s*<\\/script>/s',
@@ -1083,7 +1093,7 @@ it('detail page mounts reusable sections for count lines and tasks', function ()
 
     expect($response->getContent())->toContain('data-js-crud-section-root')
         ->and($response->getContent())->toContain('data-section-key="countLines"')
-        ->and($response->getContent())->toContain('data-section-key="tasks"')
+        ->and($response->getContent())->toContain('data-inventory-count-tasks-section')
         ->and($response->getContent())->not->toContain('<table class="min-w-full text-sm">');
 });
 
@@ -1151,7 +1161,6 @@ it('detail page cleans legacy header pills and renders a Details section with ed
     expect($response->getContent())->not->toContain('Counted:')
         ->and($response->getContent())->not->toContain('Line Items:')
         ->and($response->getContent())->not->toContain('Workflow Stage:')
-        ->and($response->getContent())->not->toContain('No notes')
         ->and($response->getContent())->toContain('Details')
         ->and($response->getContent())->toContain('Count Date')
         ->and($response->getContent())->toContain('Assigned To')
@@ -1160,6 +1169,11 @@ it('detail page cleans legacy header pills and renders a Details section with ed
         ->and($response->getContent())->toContain('x-model="details.notes"')
         ->and($response->getContent())->toContain('workflow_status_badge')
         ->and($response->getContent())->toContain('data-section-key="countLines"');
+
+    $source = file_get_contents(resource_path('views/inventory/counts/show.blade.php'));
+
+    expect($source)->toContain('title="Details"')
+        ->and($source)->toContain(':default-open="false"');
 });
 
 it('detail payload exposes editable details data and tenant assignee options', function () {
@@ -2043,6 +2057,8 @@ it('incomplete task rows expose a Complete button in the tasks section payload',
         ->and($sectionTaskPayload['available_actions'] ?? null)->toBe(['complete'])
         ->and($sectionTaskPayload['availableActions'] ?? null)->toBe(['complete']);
 
+    $task = Task::query()->findOrFail((int) $taskPayload['id']);
+
     expect($response->getContent())->toContain('action="' . route('tasks.complete', $task) . '"')
         ->and($response->getContent())->toContain('Complete')
         ->and($response->getContent())->toContain('x-on:submit.prevent="completeInventoryCountTask($event)"')
@@ -2240,6 +2256,7 @@ it('open stage blocks new material adds while still allowing counted qty updates
 
     ($this->grantPermission)($user, 'inventory-adjustments-view');
     ($this->grantPermission)($user, 'inventory-adjustments-execute');
+    ($this->grantPermission)($assignee, 'inventory-adjustments-execute');
     ($this->seedInventoryWorkflow)($tenant);
 
     $uom = ($this->makeUom)($tenant);
@@ -2294,6 +2311,7 @@ it('inventory count details ajax updates persist in draft and reject invalid dat
 
     ($this->grantPermission)($user, 'inventory-adjustments-view');
     ($this->grantPermission)($user, 'inventory-adjustments-execute');
+    ($this->grantPermission)($assignee, 'inventory-adjustments-execute');
 
     $count = ($this->createDraftCountViaApi)($user, [
         'assigned_to_user_id' => null,
@@ -2624,7 +2642,7 @@ it('detail page shows breadcrumb workflow metadata materials tasks and no post u
         ->assertDontSee('Submit Count')
         ->assertSee('COMPLETE')
         ->assertSee('data-section-key="countLines"', false)
-        ->assertSee('data-section-key="tasks"', false)
+        ->assertSee('data-inventory-count-tasks-section', false)
         ->assertDontSee('data-crud-root', false);
 });
 

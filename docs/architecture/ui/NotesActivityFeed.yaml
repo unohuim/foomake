@@ -1,0 +1,43 @@
+name: Notes Activity Feed
+type: UI and Domain Pattern
+location:
+  - app/Actions/Notes/AuthorizeNoteableAccessAction.php
+  - app/Actions/Notes/BuildNotesFeedPayloadAction.php
+  - app/Http/Controllers/NoteController.php
+  - app/Models/Concerns/HasNotes.php
+  - app/Models/Note.php
+  - resources/views/components/notes-feed.blade.php
+  - resources/js/components/notes-feed.js
+purpose: Provide a reusable tenant-scoped Activity & Notes timeline for explicitly supported resource detail pages.
+when_to_use:
+  - Adding internal plain-text comments to a tenant-owned resource detail page
+  - Rendering a timeline-style notes section inside an existing resource detail accordion layout
+  - Listing or creating notes through parent-resource authorization
+when_not_to_use:
+  - Customer-facing notes or external collaboration
+  - Attachments, mood pickers, mentions, editing, deletion, or rich-text authoring
+  - Resources that have not explicitly opted into the HasNotes relationship
+rules:
+  - Notes must be stored in one polymorphic notes table rather than domain-specific notes tables.
+  - Supported resources must opt in explicitly through the notes relationship.
+  - Notes must include tenant_id and must be queried through the authenticated tenant boundary.
+  - Note list and create endpoints must authorize against the parent resource before returning or mutating notes.
+  - Note visibility must not override parent resource authorization.
+  - V1 notes are internal plain text only.
+  - The feed must render inside the existing detail-section accordion style.
+  - User comments must render as boxed comment cards in a timeline feed.
+  - The composer must submit through AJAX and update the feed without introducing global JavaScript state.
+  - Attachments, mood pickers, mentions, editing, and deleting must not be exposed in V1.
+public_interface:
+  - HasNotes::notes()
+  - NoteController resource note index and store routes
+  - x-notes-feed Blade component
+  - notesFeed Alpine component
+example_usage: |
+  <x-notes-feed :config="$payload['notesFeed']" />
+
+  $payload['notesFeed'] = app(BuildNotesFeedPayloadAction::class)->execute(
+      $inventoryCount,
+      route('inventory.counts.notes.index', $inventoryCount),
+      route('inventory.counts.notes.store', $inventoryCount)
+  );

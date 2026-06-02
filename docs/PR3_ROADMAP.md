@@ -613,7 +613,7 @@ Prepare the app for ecommerce product imports, starting with WooCommerce, while 
 - Sales → Products navigation and index
 - `GET /sales/products`
 - Products is a filtered sales-facing view of normal `items` where `is_sellable = true`
-- Imported ecommerce products are created as normal `items`, so they also remain visible on Manufacturing → Materials
+- Imported ecommerce products are created as normal `items`, so they also remain visible on Stock → Materials
 - Item fields:
     - `is_active`
     - `external_source`

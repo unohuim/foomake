@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\HasTenantScope;
+use App\Models\Concerns\HasNotes;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -23,6 +24,7 @@ use Illuminate\Support\Carbon;
  */
 class InventoryCount extends Model
 {
+    use HasNotes;
     use HasTenantScope;
 
     protected $fillable = [

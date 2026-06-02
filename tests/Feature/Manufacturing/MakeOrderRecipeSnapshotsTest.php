@@ -970,7 +970,7 @@ it('34. make order detail workflow payload includes due date assignee and availa
         'manufacturing-make-orders-show-payload'
     );
 
-    expect(data_get($payload, 'workflow.default_open'))->toBeTrue()
+    expect(data_get($payload, 'workflow.default_open'))->toBeFalse()
         ->and(data_get($payload, 'workflow.current_stage.id'))->toBe($stageA->id)
         ->and(data_get($payload, 'workflow.current_stage.name'))->toBe('Production')
         ->and(data_get($payload, 'workflow.made_by_user_id'))->toBe($assignee->id)
@@ -999,6 +999,7 @@ it('34a. make order workflow payload exposes editable tenant scoped assignee opt
     ($this->grantPermission)($user, 'inventory-make-orders-manage');
     ($this->grantPermission)($user, 'inventory-make-orders-execute');
     ($this->grantPermission)($user, 'inventory-make-orders-view');
+    ($this->grantPermission)($tenantAssignee, 'inventory-make-orders-execute');
 
     $domain = WorkflowDomain::query()->firstOrCreate([
         'key' => 'manufacturing',
@@ -1062,7 +1063,7 @@ it('34a. make order workflow payload exposes editable tenant scoped assignee opt
         ->values()
         ->all();
 
-    expect(data_get($payload, 'workflow.default_open'))->toBeTrue()
+    expect(data_get($payload, 'workflow.default_open'))->toBeFalse()
         ->and(data_get($payload, 'workflow.made_by_user_id'))->toBeNull()
         ->and(data_get($payload, 'workflow.owner_user_name'))->toBeNull()
         ->and(data_get($payload, 'workflow.current_stage.name'))->toBe('Production')

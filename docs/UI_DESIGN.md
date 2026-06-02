@@ -425,7 +425,6 @@ Focus: production execution and operational primitives.
 **Dropdown items:**
 
 - Orders (Make Orders)
-- Materials
 - Recipes
 
 Manufacturing owns **production execution and recipe-oriented primitives**.  
@@ -441,6 +440,7 @@ Focus: stock visibility, inventory adjustment workflows, and unit-of-measure adm
 
 - Inventory
 - Inventory Counts
+- Materials
 - UoM subsection (collapsed by default)
   - UoM Categories
   - Units of Measure (UoM)

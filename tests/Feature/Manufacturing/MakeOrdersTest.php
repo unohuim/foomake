@@ -1915,6 +1915,7 @@ test('authorized user can change make order owner via made_by_user_id without ch
     $user = ($this->makeUser)($tenant);
     $assignee = ($this->makeUser)($tenant);
     ($this->grantPermissions)($user, ['inventory-make-orders-view', 'inventory-make-orders-execute']);
+    ($this->grantPermission)($assignee, 'inventory-make-orders-execute');
 
     [$productionStage] = ($this->createManufacturingWorkflowStages)($tenant);
 
@@ -2311,6 +2312,8 @@ test('entering workflow from draft does not erase make order owner and generated
     $makeOrderAssignee = ($this->makeUser)($tenant);
     $taskAssignee = ($this->makeUser)($tenant);
     ($this->grantPermissions)($user, ['inventory-make-orders-view', 'inventory-make-orders-execute']);
+    ($this->grantPermission)($makeOrderAssignee, 'inventory-make-orders-execute');
+    ($this->grantPermission)($taskAssignee, 'inventory-make-orders-execute');
 
     $domain = WorkflowDomain::query()->firstOrCreate(
         ['key' => 'manufacturing'],

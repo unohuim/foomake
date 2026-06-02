@@ -12,6 +12,7 @@ use App\Http\Controllers\MaterialDraftPurchaseOrderController;
 use App\Http\Controllers\MaterialPurchaseOrderController;
 use App\Http\Controllers\MaterialSupplierPackageController;
 use App\Http\Controllers\NavigationStateController;
+use App\Http\Controllers\NoteController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\CustomerContactController;
 use App\Http\Controllers\ProfileController;
@@ -92,6 +93,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/inventory/counts/{inventoryCount}/tasks', [InventoryCountController::class, 'listTasks'])
         ->name('inventory.counts.tasks.index');
     Route::get('/manufacturing/inventory-counts/{inventoryCount}/tasks', [InventoryCountController::class, 'listTasks']);
+    Route::get('/inventory/counts/{inventoryCount}/notes', [NoteController::class, 'inventoryCountIndex'])
+        ->name('inventory.counts.notes.index');
+    Route::post('/inventory/counts/{inventoryCount}/notes', [NoteController::class, 'inventoryCountStore'])
+        ->name('inventory.counts.notes.store');
     Route::post('/inventory/counts/{inventoryCount}/lines', [InventoryCountController::class, 'storeLine'])
         ->name('inventory.counts.lines.store');
     Route::post('/manufacturing/inventory-counts/{inventoryCount}/lines', [InventoryCountController::class, 'storeLine']);
@@ -235,6 +240,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('manufacturing.make-orders.schedule');
     Route::post('/manufacturing/make-orders/{makeOrder}/make', [MakeOrderController::class, 'make'])
         ->name('manufacturing.make-orders.make');
+    Route::get('/manufacturing/make-orders/{makeOrder}/notes', [NoteController::class, 'makeOrderIndex'])
+        ->name('manufacturing.make-orders.notes.index');
+    Route::post('/manufacturing/make-orders/{makeOrder}/notes', [NoteController::class, 'makeOrderStore'])
+        ->name('manufacturing.make-orders.notes.store');
 
     Route::get('/purchasing/suppliers', [SupplierController::class, 'index'])
         ->name('purchasing.suppliers.index');
@@ -284,6 +293,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('purchasing.orders.receipts.store');
     Route::post('/purchasing/orders/{purchaseOrder}/short-closures', [PurchaseOrderShortClosureController::class, 'store'])
         ->name('purchasing.orders.short-closures.store');
+    Route::get('/purchasing/orders/{purchaseOrder}/notes', [NoteController::class, 'purchaseOrderIndex'])
+        ->name('purchasing.orders.notes.index');
+    Route::post('/purchasing/orders/{purchaseOrder}/notes', [NoteController::class, 'purchaseOrderStore'])
+        ->name('purchasing.orders.notes.store');
 
     Route::post('/purchasing/orders/{purchaseOrderId}/lines', [PurchaseOrderLineController::class, 'store'])
         ->name('purchasing.orders.lines.store');
@@ -339,6 +352,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('sales.orders.status.update');
     Route::delete('/sales/orders/{salesOrder}', [SalesOrderController::class, 'destroy'])
         ->name('sales.orders.destroy');
+    Route::get('/sales/orders/{salesOrder}/notes', [NoteController::class, 'salesOrderIndex'])
+        ->name('sales.orders.notes.index');
+    Route::post('/sales/orders/{salesOrder}/notes', [NoteController::class, 'salesOrderStore'])
+        ->name('sales.orders.notes.store');
     Route::post('/sales/orders/{salesOrder}/lines', [SalesOrderLineController::class, 'store'])
         ->name('sales.orders.lines.store');
     Route::patch('/sales/orders/{salesOrder}/lines/{line}', [SalesOrderLineController::class, 'update'])

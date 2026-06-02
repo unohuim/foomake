@@ -9,7 +9,7 @@ This version explicitly accounts for the **dependency chain**:
 
 > **UoM Category → UoM → Item (Material)**
 
-and uses **process-based top-level navigation**, with Materials grouped under **Manufacturing**.
+and uses **process-based top-level navigation**, with Materials grouped under **Stock**.
 
 ---
 
@@ -33,16 +33,18 @@ and uses **process-based top-level navigation**, with Materials grouped under **
 
 ### Current Navigation Pattern
 
-- **Purchasing** and **Manufacturing** are the current top-level domain menus
-- **Materials** is reached via **Manufacturing → Materials**
+- **Purchasing**, **Manufacturing**, and **Stock** are current top-level domain menus
+- **Materials** is reached via **Stock → Materials**
 - Manufacturing dropdown currently includes:
+    - Make Orders
+    - Recipes
+- Stock dropdown currently includes:
     - Inventory
     - Inventory Counts
-    - Orders (Make Orders)
     - Materials
-    - Recipes
     - Units of Measure
     - UoM Categories
+    - UoM Conversions
 
 This keeps navigation aligned with current process-based domain ownership.
 
@@ -1224,6 +1226,26 @@ Give invited and task-focused users a simple dashboard landing section for assig
 **Permissions**
 
 - Uses existing resource Gates for linked/data-visible resources
+- No new permission slugs
+
+---
+
+### PR2-NOTES-001 — Resource Activity & Notes Feed
+
+**Goal**
+Add a reusable tenant-scoped Activity & Notes timeline to selected workflow/resource detail pages.
+
+**Includes**
+
+- One polymorphic `notes` table
+- Explicit resource opt-in for Inventory Counts, Make Orders, Purchase Orders, and Sales Orders
+- Existing parent-resource Gates and assignment-scoped resource visibility as the authorization source
+- Timeline-style feed with boxed user comment cards and a bottom comment composer
+- AJAX comment create without attachments, mood picker, mentions, editing, or deletion in V1
+
+**Permissions**
+
+- Uses existing parent resource Gates
 - No new permission slugs
 
 ---

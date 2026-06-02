@@ -128,7 +128,7 @@ it('shows the manufacturing group only when at least one manufacturing route is 
         ->assertOk()
         ->assertDontSee('Manufacturing');
 
-    ($this->grantPermission)($user, 'inventory-materials-view');
+    ($this->grantPermission)($user, 'inventory-recipes-view');
 
     ($this->render)($user)
         ->assertOk()
@@ -158,6 +158,8 @@ it('shows the materials link when the user has inventory materials view permissi
 
     ($this->render)($user)
         ->assertOk()
+        ->assertSee('Stock')
+        ->assertDontSee('Manufacturing')
         ->assertSee('Materials')
         ->assertSee(route('materials.index'), false);
 });
@@ -510,12 +512,14 @@ it('renders dropdown triggers for grouped navigation', function () {
     ($this->grantPermissions)($user, [
         'inventory-materials-view',
         'inventory-adjustments-view',
+        'inventory-recipes-view',
         'purchasing-suppliers-view',
     ]);
 
     ($this->render)($user)
         ->assertOk()
         ->assertSee('data-nav-dropdown-trigger="purchasing"', false)
+        ->assertSee('data-nav-dropdown-trigger="stock"', false)
         ->assertSee('data-nav-dropdown-trigger="manufacturing"', false);
 });
 
@@ -655,6 +659,7 @@ it('keeps moved stock links out of the manufacturing dropdown content', function
 
     expect($manufacturingSegment)->not->toContain("__('Inventory')")
         ->and($manufacturingSegment)->not->toContain("__('Inventory Counts')")
+        ->and($manufacturingSegment)->not->toContain("__('Materials')")
         ->and($manufacturingSegment)->not->toContain("__('UoM Categories')")
         ->and($manufacturingSegment)->not->toContain("__('Units of Measure')")
         ->and($manufacturingSegment)->not->toContain("__('UoM Conversions')");
@@ -677,6 +682,7 @@ it('renders mobile nested groups as accordion sections', function () {
     ($this->grantPermissions)($user, [
         'inventory-materials-view',
         'inventory-adjustments-view',
+        'inventory-recipes-view',
         'purchasing-suppliers-view',
     ]);
 
@@ -729,6 +735,7 @@ it('hides unauthorized manufacturing and purchasing links', function () {
 
     ($this->render)($user)
         ->assertOk()
+        ->assertSee('Stock')
         ->assertSee('Materials')
         ->assertDontSee('Suppliers')
         ->assertDontSee('Make Orders')
@@ -738,7 +745,7 @@ it('hides unauthorized manufacturing and purchasing links', function () {
         ->assertDontSee('UoM Categories');
 });
 
-it('does not render moved stock links for users without the existing stock gates', function () {
+it('renders materials in stock without rendering other stock links for materials-only users', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
 
@@ -746,7 +753,8 @@ it('does not render moved stock links for users without the existing stock gates
 
     ($this->render)($user)
         ->assertOk()
-        ->assertDontSee('Stock')
+        ->assertSee('Stock')
+        ->assertSee('Materials')
         ->assertDontSee('Inventory Counts')
         ->assertDontSee('Units of Measure')
         ->assertDontSee('UoM Conversions')
@@ -859,6 +867,7 @@ it('does not show the manufacturing group when only stock permissions are presen
         ->assertDontSee('Manufacturing')
         ->assertSee('Inventory')
         ->assertSee('Inventory Counts')
+        ->assertSee('Materials')
         ->assertSee('Units of Measure')
         ->assertSee('UoM Conversions')
         ->assertSee('UoM Categories');
@@ -869,15 +878,14 @@ it('keeps moved stock links out of manufacturing when rendering manufacturing sp
     $user = ($this->makeUser)($tenant);
 
     ($this->grantPermissions)($user, [
-        'inventory-materials-view',
         'inventory-recipes-view',
     ]);
 
     ($this->render)($user)
         ->assertOk()
         ->assertSee('Manufacturing')
-        ->assertSee('Materials')
         ->assertSee('Recipes')
+        ->assertDontSee('Materials')
         ->assertDontSee('Inventory Counts')
         ->assertDontSee('Units of Measure')
         ->assertDontSee('UoM Conversions')
@@ -934,6 +942,20 @@ it('marks stock as active on uom pages and leaves manufacturing inactive there',
         ->and($content)->not->toMatch('/border border-slate-600 bg-slate-800[^"]*"[^>]*data-nav-dropdown-trigger="manufacturing"/');
 });
 
+it('marks stock as active on materials pages and leaves manufacturing inactive there', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermission)($user, 'inventory-materials-view');
+
+    $content = ($this->render)($user, 'materials.index')
+        ->assertOk()
+        ->getContent();
+
+    expect($content)->toMatch('/border border-slate-600 bg-slate-800[^"]*"[^>]*data-nav-dropdown-trigger="stock"/')
+        ->and($content)->not->toMatch('/border border-slate-600 bg-slate-800[^"]*"[^>]*data-nav-dropdown-trigger="manufacturing"/');
+});
+
 it('marks the profile dropdown active on workflow pages', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
@@ -974,7 +996,7 @@ it('does not show manufacturing group when only purchasing permissions are prese
         ->assertDontSee('Manufacturing');
 });
 
-it('does not show purchasing group when only manufacturing permissions are present', function () {
+it('does not show purchasing group when only stock materials permissions are present', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
 
@@ -982,6 +1004,7 @@ it('does not show purchasing group when only manufacturing permissions are prese
 
     ($this->render)($user)
         ->assertOk()
-        ->assertSee('Manufacturing')
+        ->assertSee('Stock')
+        ->assertDontSee('Manufacturing')
         ->assertDontSee('Purchasing');
 });

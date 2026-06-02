@@ -247,7 +247,7 @@ it('3a. sales navigation appears before other domain navigation groups', functio
 
     ($this->grantPermission)($user, 'sales-sales-orders-manage');
     ($this->grantPermission)($user, 'purchasing-suppliers-view');
-    ($this->grantPermission)($user, 'inventory-materials-view');
+    ($this->grantPermission)($user, 'inventory-recipes-view');
 
     $content = ($this->renderDashboard)($user)
         ->assertOk()

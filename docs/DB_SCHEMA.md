@@ -38,6 +38,7 @@ Migrations remain the **sole source of truth**.
 - job_batches
 - jobs
 - make_orders
+- notes
 - password_reset_tokens
 - permissions
 - permission_role
@@ -179,7 +180,7 @@ Migrations remain the **sole source of truth**.
 
 ## external_product_source_connections
 
-**Tenant-owned:** Yes  
+**Tenant-owned:** Yes
 **Purpose:** Minimal prep-only stored connection state for stubbed external product imports
 
 ### Columns
@@ -205,7 +206,7 @@ Migrations remain the **sole source of truth**.
 
 ## sales_orders
 
-**Tenant-owned:** Yes  
+**Tenant-owned:** Yes
 **Purpose:** Sales order headers shared by the Sales Orders index, the Sales Order detail page, and grouped external-import identity
 
 ### Columns
@@ -751,6 +752,46 @@ Migrations remain the **sole source of truth**.
 - When `actual_output_qty` is null, completed output falls back to `expected_output_qty`.
 - `output_quantity` and `actual_output_quantity` remain only as compatibility mirrors during the migration rollout and must not be the primary application contract.
 - Existing Make Orders keep their `recipe_id`, `recipe_version_id`, and `make_order_lines` snapshots even when later recipe versions change.
+
+---
+
+## notes
+
+**Tenant-owned:** Yes
+**Purpose:** Polymorphic internal notes attached to explicitly supported tenant resources
+
+### Columns
+
+| Name           | Type      | Nullable | Notes                                  |
+| -------------- | --------- | -------- | -------------------------------------- |
+| id             | bigint    | No       | Primary key                            |
+| tenant_id      | bigint    | No       | FK → tenants.id (CASCADE)              |
+| noteable_type  | string    | No       | Polymorphic parent model type          |
+| noteable_id    | bigint    | No       | Polymorphic parent model id            |
+| author_user_id | bigint    | No       | FK → users.id (CASCADE)                |
+| body           | text      | No       | Plain-text note body                   |
+| visibility     | string    | No       | Defaults to `internal`; see `docs/ENUMS.md` |
+| is_pinned      | boolean   | No       | Defaults to `false`                    |
+| edited_at      | timestamp | Yes      | Reserved for future edit support       |
+| deleted_at     | timestamp | Yes      | Soft delete timestamp                  |
+| created_at     | timestamp | Yes      | —                                      |
+| updated_at     | timestamp | Yes      | —                                      |
+
+### Keys & Indexes
+
+- PK: `id`
+- Index: `(tenant_id, noteable_type, noteable_id, created_at)`
+- Index: `(tenant_id, author_user_id)`
+- Index: `(tenant_id, created_at)`
+- Implicit (FK index): tenant_id
+- Implicit (FK index): author_user_id
+
+### Behavioral Notes
+
+- Notes are tenant-scoped and attach through one polymorphic table.
+- Supported resources opt in explicitly; V1 supports Inventory Counts, Make Orders, Purchase Orders, and Sales Orders.
+- Users may list or create notes only when authorized to access the parent resource.
+- V1 stores plain text only and does not expose attachments, mood picker, mentions, editing, or deletion controls.
 
 ---
 

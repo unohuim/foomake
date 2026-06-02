@@ -305,6 +305,44 @@ Dashboard customization, draggable widgets, ad hoc task creation, task completio
 MakeOrder::query()->where('made_by_user_id', auth()->id());
 ```
 
+### Notes Activity Feed
+
+**Name:** Notes Activity Feed
+**Type:** UI / Domain Pattern
+**Location:**
+- `app/Actions/Notes/AuthorizeNoteableAccessAction.php`
+- `app/Actions/Notes/BuildNotesFeedPayloadAction.php`
+- `app/Http/Controllers/NoteController.php`
+- `app/Models/Concerns/HasNotes.php`
+- `app/Models/Note.php`
+- `resources/views/components/notes-feed.blade.php`
+- `resources/js/components/notes-feed.js`
+- `docs/architecture/ui/NotesActivityFeed.yaml`
+
+**Purpose:**
+Provide a reusable tenant-scoped Activity & Notes timeline for explicitly supported resource detail pages.
+
+**When to Use:**
+Internal plain-text comments on supported tenant-owned resource detail pages where parent-resource authorization decides note visibility and creation.
+
+**When Not to Use:**
+Customer-facing notes, attachments, rich text, mood pickers, mentions, editing, deletion, or resources that have not explicitly opted into `HasNotes`.
+
+**Public Interface:**
+- `HasNotes::notes()`
+- Resource note index/store routes
+- `<x-notes-feed :config="$payload['notesFeed']" />`
+- `notesFeed` Alpine component
+
+**Example Usage:**
+```php
+$payload['notesFeed'] = app(BuildNotesFeedPayloadAction::class)->execute(
+    $inventoryCount,
+    route('inventory.counts.notes.index', $inventoryCount),
+    route('inventory.counts.notes.store', $inventoryCount)
+);
+```
+
 ### Shared Ingredients Detail Section Pattern
 
 **Name:** Shared Ingredients Detail Section Pattern

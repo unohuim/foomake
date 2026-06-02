@@ -1,8 +1,8 @@
-name: Manufacturing Top Nav Dropdown Pattern
+name: Process Top Nav Dropdown Pattern
 type: UI Pattern
 location:
   - resources/views/layouts/navigation.blade.php
-purpose: Group manufacturing-owned operational primitives under a single top navigation dropdown.
+purpose: Group process-owned operational primitives under their appropriate top navigation dropdown.
 when_to_use:
   - A process domain owns mandatory supporting subdomains and operational primitives
 when_not_to_use:
@@ -10,11 +10,13 @@ when_not_to_use:
 rules:
   - The dropdown appears in the top horizontal navigation.
   - Active state is subtle and consistent with the navigation style.
+  - Manufacturing owns Make Orders and Recipes.
+  - Stock owns Inventory, Inventory Counts, Materials, and unit-of-measure administration.
 public_interface:
   - Blade markup and Alpine interaction in the navigation layout
 example_usage: |
   <x-dropdown>
-      <x-slot name="trigger">Manufacturing</x-slot>
+      <x-slot name="trigger">Stock</x-slot>
       <x-slot name="content">
           <x-dropdown-link href="/inventory">Inventory</x-dropdown-link>
           <x-dropdown-link href="/materials">Materials</x-dropdown-link>

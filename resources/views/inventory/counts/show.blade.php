@@ -95,7 +95,7 @@
                     :description="($payload['count']['can_edit_details'] ?? false)
                         ? __('Update count metadata separately from material lines and workflow tasks.')
                         : __('Review count notes separately from material lines and workflow tasks.')"
-                    :default-open="true"
+                    :default-open="false"
                 >
                     <div class="space-y-3">
                         @if (($payload['count']['can_edit_counted_at'] ?? false) || ($payload['count']['can_edit_assignment'] ?? false))
@@ -240,6 +240,8 @@
                     </div>
                 </section>
             </div>
+
+            <x-notes-feed :config="$notesFeed" />
         </div>
     </div>
 </x-resource-detail-layout>

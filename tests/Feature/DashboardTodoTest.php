@@ -207,10 +207,11 @@ beforeEach(function (): void {
             'sort_order' => $sortOrders[$domainKey] ?? 100,
         ]);
 
-        return WorkflowStage::withoutGlobalScopes()->forceCreate([
+        return WorkflowStage::withoutGlobalScopes()->updateOrCreate([
             'tenant_id' => $tenant->id,
             'workflow_domain_id' => $domain->id,
             'key' => Str::slug($stageName),
+        ], [
             'name' => $stageName,
             'action_verb' => $stageName,
             'status_complete_label' => strtoupper(Str::slug($stageName, '_')),

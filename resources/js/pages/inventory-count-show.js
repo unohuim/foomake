@@ -359,7 +359,7 @@ export function mount(rootEl, payload) {
         },
 
         async completeInventoryCountTask(event) {
-            const form = event?.target;
+            const form = event ? event.target : null;
 
             if (!(form instanceof HTMLFormElement) || !form.action) {
                 return;
@@ -398,10 +398,12 @@ export function mount(rootEl, payload) {
 
                 const task = asRecord(responseData.data);
                 const row = form.closest('[data-inventory-count-task-row]');
-                const status = row?.querySelector('[data-inventory-count-task-status]');
-                const assignedTo = row?.querySelector('[data-inventory-count-task-assigned-to]');
-                const completedBy = row?.querySelector('[data-inventory-count-task-completed-by]');
-                const completedByName = completedBy?.querySelector('[data-inventory-count-task-completed-by-name]');
+                const status = row ? row.querySelector('[data-inventory-count-task-status]') : null;
+                const assignedTo = row ? row.querySelector('[data-inventory-count-task-assigned-to]') : null;
+                const completedBy = row ? row.querySelector('[data-inventory-count-task-completed-by]') : null;
+                const completedByName = completedBy
+                    ? completedBy.querySelector('[data-inventory-count-task-completed-by-name]')
+                    : null;
 
                 if (status) {
                     status.textContent = task.status || 'completed';
@@ -409,7 +411,9 @@ export function mount(rootEl, payload) {
                     status.classList.add('bg-emerald-100', 'text-emerald-700');
                 }
 
-                assignedTo?.remove();
+                if (assignedTo) {
+                    assignedTo.remove();
+                }
 
                 if (completedBy) {
                     completedBy.classList.remove('hidden');

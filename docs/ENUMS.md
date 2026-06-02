@@ -19,6 +19,28 @@ Do not introduce new enum values without updating this document.
 
 ---
 
+## Notes
+
+### Note Visibility
+
+**Name:** Note visibility
+**Storage location(s):** `notes.visibility` (string column)
+**Allowed values:**
+
+- `internal`
+
+**Semantic meaning:**
+
+- `internal`: Tenant-internal plain-text note visible to users authorized to access the parent resource.
+
+**Notes:**
+
+- V1 supports internal notes only.
+- Visibility does not override parent resource authorization or tenant scoping.
+- Do not introduce external/customer-facing note visibility without an explicit migration, backfill plan, and UI/authorization update.
+
+---
+
 ## Inventory
 
 ### Inventory Count Status (Computed)

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Actions\Workflows\CanViewAssignedWorkflowResourceAction;
+use App\Actions\Notes\BuildNotesFeedPayloadAction;
 use App\Models\ItemPurchaseOption;
 use App\Models\PurchaseOrder;
 use App\Models\PurchaseOrderLine;
@@ -231,6 +232,11 @@ class PurchaseOrderController extends Controller
             'lineDeleteUrlBase' => url("/purchasing/orders/{$purchaseOrder->id}/lines"),
             'receiptStoreUrl' => route('purchasing.orders.receipts.store', $purchaseOrder),
             'shortCloseStoreUrl' => route('purchasing.orders.short-closures.store', $purchaseOrder),
+            'notesFeed' => app(BuildNotesFeedPayloadAction::class)->execute(
+                $purchaseOrder,
+                route('purchasing.orders.notes.index', $purchaseOrder),
+                route('purchasing.orders.notes.store', $purchaseOrder)
+            ),
             'statusUpdateUrl' => route('purchasing.orders.status.update', $purchaseOrder),
             'indexUrl' => route('purchasing.orders.index'),
             'canReceive' => $canReceive,

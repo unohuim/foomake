@@ -639,6 +639,7 @@ it('24. admin can create and edit a workflow task template', function () {
     $user = ($this->makeUser)($tenant);
     $assignee = ($this->makeUser)($tenant);
     ($this->grantPermission)($user, 'workflow-manage');
+    ($this->grantPermission)($assignee, 'sales-sales-orders-update');
     $stage = ($this->createStage)($tenant, ($this->salesDomain)(), ['key' => 'packing']);
 
     $response = $this->actingAs($user)->postJson(route('admin.workflows.task-templates.store'), [

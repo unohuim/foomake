@@ -651,7 +651,8 @@ it('21. purchase order details source removes draft delete save and shipping fie
     $detailsSource = substr($source, strpos($source, '<x-detail-section-card title="Details"'));
     $detailsSource = substr($detailsSource, 0, strpos($detailsSource, '<x-detail-section-card title="Items"'));
 
-    expect($detailsSource)->not->toContain('Delete draft')
+    expect($detailsSource)->toContain(':default-open="false"')
+        ->and($detailsSource)->not->toContain('Delete draft')
         ->and($detailsSource)->not->toContain('Save details')
         ->and($detailsSource)->not->toContain('Shipping');
 });

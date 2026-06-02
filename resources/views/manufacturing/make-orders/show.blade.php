@@ -108,7 +108,7 @@
         <x-detail-section-card
             title="Details"
             :description="__('Runs, expected output, actual output, due date, and assignment live here. Workflow movement stays in the header action.')"
-            :default-open="$payload['workflow']['default_open'] ?? true"
+            :default-open="$payload['workflow']['default_open'] ?? false"
         >
             <div class="space-y-3" data-make-order-workflow-metadata-row>
                 <div class="grid grid-cols-3 gap-2">
@@ -234,5 +234,7 @@
             :show-actions="true"
             :show-row-actions-menu="false"
         />
+
+        <x-notes-feed :config="$payload['notesFeed']" />
     </div>
 </x-resource-detail-layout>

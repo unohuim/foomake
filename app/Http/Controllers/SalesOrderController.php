@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\Notes\BuildNotesFeedPayloadAction;
 use App\Actions\Workflows\CanViewAssignedWorkflowResourceAction;
 use App\Actions\Workflows\ResolveSalesWorkflowStageAction;
 use App\Http\Requests\Sales\ImportExternalSalesOrdersRequest;
@@ -110,6 +111,11 @@ class SalesOrderController extends Controller
             'updateUrl' => route('sales.orders.update', $salesOrder),
             'deleteUrl' => route('sales.orders.destroy', $salesOrder),
             'lineStoreUrlBase' => url('/sales/orders'),
+            'notesFeed' => app(BuildNotesFeedPayloadAction::class)->execute(
+                $salesOrder,
+                route('sales.orders.notes.index', $salesOrder),
+                route('sales.orders.notes.store', $salesOrder)
+            ),
             'indexUrl' => route('sales.orders.index'),
             'csrfToken' => csrf_token(),
         ];

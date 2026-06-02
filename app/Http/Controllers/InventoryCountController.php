@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Actions\Inventory\AdvanceInventoryCountWorkflowStageAction;
+use App\Actions\Notes\BuildNotesFeedPayloadAction;
 use App\Actions\Workflows\CanViewAssignedWorkflowResourceAction;
 use App\Actions\Workflows\ResolveInventoryWorkflowStageAction;
 use App\Actions\Workflows\SeedDefaultWorkflowStagesForTenantAction;
@@ -121,6 +122,11 @@ class InventoryCountController extends Controller
         return view('inventory.counts.show', [
             'inventoryCount' => $count,
             'items' => $items,
+            'notesFeed' => app(BuildNotesFeedPayloadAction::class)->execute(
+                $count,
+                route('inventory.counts.notes.index', $count),
+                route('inventory.counts.notes.store', $count)
+            ),
             'previousWorkflowActionLabel' => $this->workflowActionButtonText($previousStage),
             'previousWorkflowActionEvent' => $this->previousWorkflowActionEvent($count, $previousStage),
             'nextWorkflowActionLabel' => $this->workflowActionButtonText($nextStage),

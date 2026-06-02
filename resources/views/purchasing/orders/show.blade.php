@@ -57,7 +57,7 @@
         </div>
 
         <div class="mx-auto max-w-5xl space-y-4 px-1 sm:space-y-6 sm:px-6 lg:px-8" data-purchase-order-detail-content>
-            <x-detail-section-card title="Details" :default-open="true">
+            <x-detail-section-card title="Details" :default-open="false">
                 <div class="grid gap-6 sm:grid-cols-2">
                     <div class="max-w-sm">
                         <label class="block text-xs font-semibold uppercase text-gray-500">
@@ -423,6 +423,8 @@
                     No short-closes yet.
                 </div>
             </x-detail-section-card>
+
+            <x-notes-feed :config="$payload['notesFeed']" />
         </div>
 
         <div

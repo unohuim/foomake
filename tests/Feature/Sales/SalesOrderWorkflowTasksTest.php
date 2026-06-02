@@ -163,21 +163,27 @@ beforeEach(function () {
         'status' => 'POSTED',
     ]);
 
-    $this->createTemplate = fn (
+    $this->createTemplate = function (
         Tenant $tenant,
         WorkflowStage $stage,
         ?User $assignee = null,
         array $attributes = []
-    ): WorkflowTaskTemplate => WorkflowTaskTemplate::withoutGlobalScopes()->create(array_merge([
-        'tenant_id' => $tenant->id,
-        'workflow_domain_id' => ($this->salesDomain)()->id,
-        'workflow_stage_id' => $stage->id,
-        'title' => 'Template ' . fake()->unique()->word(),
-        'description' => null,
-        'sort_order' => 10,
-        'is_active' => true,
-        'default_assignee_user_id' => $assignee?->id,
-    ], $attributes));
+    ): WorkflowTaskTemplate {
+        if ($assignee !== null) {
+            ($this->grantPermission)($assignee, 'sales-sales-orders-update');
+        }
+
+        return WorkflowTaskTemplate::withoutGlobalScopes()->create(array_merge([
+            'tenant_id' => $tenant->id,
+            'workflow_domain_id' => ($this->salesDomain)()->id,
+            'workflow_stage_id' => $stage->id,
+            'title' => 'Template ' . fake()->unique()->word(),
+            'description' => null,
+            'sort_order' => 10,
+            'is_active' => true,
+            'default_assignee_user_id' => $assignee?->id,
+        ], $attributes));
+    };
 
     $this->transitionOrder = fn (User $user, SalesOrder $order, string $status) => $this->actingAs($user)->patchJson(
         route('sales.orders.status.update', $order),
@@ -270,6 +276,7 @@ it('4. repeated transition calls do not duplicate tasks for the same stage', fun
     ($this->createReceipt)($tenant, $item, '1.000000');
     ($this->createTemplate)($tenant, $stages['packing'], null, ['title' => 'Only once']);
     ($this->grantPermission)($user, 'sales-sales-orders-manage');
+    ($this->grantPermission)($user, 'sales-sales-orders-update');
 
     ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKING)->assertOk();
     ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKING)->assertStatus(422);
@@ -321,6 +328,7 @@ it('6. generated tasks default assignee to the first tenant user when no explici
     ($this->createReceipt)($tenant, $item, '1.000000');
     ($this->createTemplate)($tenant, $stages['packing'], null, ['title' => 'Fallback assignee']);
     ($this->grantPermission)($manager, 'sales-sales-orders-manage');
+    ($this->grantPermission)($firstUser, 'sales-sales-orders-update');
 
     ($this->transitionOrder)($manager, $order, SalesOrder::STATUS_PACKING)->assertOk();
 

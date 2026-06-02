@@ -211,6 +211,8 @@
                     </div>
                 </div>
             </section>
+
+            <x-notes-feed :config="$payload['notesFeed']" />
         </div>
     </div>
 </x-resource-detail-layout>
