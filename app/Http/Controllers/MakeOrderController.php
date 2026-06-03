@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Actions\Manufacturing\MoveMakeOrderWorkflowStageAction;
 use App\Actions\Notes\BuildNotesFeedPayloadAction;
+use App\Actions\Workflows\BuildWorkflowProgressStepsAction;
 use App\Actions\Workflows\CanViewAssignedWorkflowResourceAction;
 use App\Actions\Workflows\ResolveManufacturingWorkflowStageAction;
 use App\Actions\Workflows\SeedDefaultWorkflowStagesForTenantAction;
@@ -135,6 +136,11 @@ class MakeOrderController extends Controller
                 ['label' => 'Make Orders', 'url' => route('manufacturing.make-orders.index'), 'current' => false],
                 ['label' => 'Make Order ' . $makeOrder->id, 'url' => null, 'current' => true],
             ],
+            'workflowProgressSteps' => app(BuildWorkflowProgressStepsAction::class)->execute(
+                (int) $request->user()->tenant_id,
+                'manufacturing',
+                $makeOrder->workflow_stage_id === null ? null : (int) $makeOrder->workflow_stage_id
+            ),
             'workflow' => $this->makeOrderWorkflowPayload($makeOrder, $request->user()),
             'ingredients' => $this->makeOrderIngredientsPayload($makeOrder),
             'notesFeed' => app(BuildNotesFeedPayloadAction::class)->execute(

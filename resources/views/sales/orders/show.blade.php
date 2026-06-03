@@ -25,7 +25,7 @@
     <script type="application/json" id="sales-orders-show-payload">@json($payload)</script>
 
     <div
-        class="py-12"
+        class="pt-6 pb-12"
         data-page="sales-orders-show"
         data-payload="sales-orders-show-payload"
         x-data="salesOrdersShow"
@@ -39,6 +39,11 @@
         </div>
 
         <div class="max-w-6xl mx-auto space-y-6 sm:px-6 lg:px-8">
+            <x-ui.workflow-progress
+                :steps="$payload['workflowProgressSteps'] ?? []"
+                data-workflow-progress-panel
+            />
+
             <div class="bg-white border border-gray-100 shadow-sm sm:rounded-lg">
                 <div class="p-6">
                     <div class="flex items-start justify-between gap-4">

@@ -1835,6 +1835,36 @@ Notes:
 
 ---
 
+### Workflow Progress Panel
+
+**Name:** Workflow Progress Panel
+**Type:** UI Component / Read Model Pattern
+**Location:**
+- `docs/architecture/ui/WorkflowProgressPanel.yaml`
+- `app/Actions/Workflows/BuildWorkflowProgressStepsAction.php`
+- `resources/views/components/ui/workflow-progress.blade.php`
+
+**Purpose:**
+Render a read-only DRAFT-first progress panel for workflow-enabled resource detail pages using tenant-configured workflow stages.
+
+**When to Use:**
+Sales Order, Purchase Order, Make Order, Inventory Count, or future workflow-enabled detail pages that need passive workflow position display below the resource header.
+
+**When Not to Use:**
+Workflow transitions, task completion, workflow stage administration, breadcrumbs, or primary navigation.
+
+**Public Interface:**
+- `BuildWorkflowProgressStepsAction::execute()`
+- `<x-ui.workflow-progress :steps="$workflowProgressSteps" />`
+
+Notes:
+- The first visual step is always `DRAFT`.
+- Active tenant-configured stage names render after `DRAFT` in stage order.
+- The component is read-only and must not expose transition controls.
+- Existing resource authorization remains the source of truth.
+
+---
+
 ### Shared Resource Detail Header Breadcrumb Component
 
 **Name:** Shared Resource Detail Header Breadcrumb Component  

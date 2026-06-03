@@ -2,8 +2,9 @@
 
 namespace App\Http\Controllers;
 
-use App\Actions\Workflows\CanViewAssignedWorkflowResourceAction;
 use App\Actions\Notes\BuildNotesFeedPayloadAction;
+use App\Actions\Workflows\BuildWorkflowProgressStepsAction;
+use App\Actions\Workflows\CanViewAssignedWorkflowResourceAction;
 use App\Models\ItemPurchaseOption;
 use App\Models\PurchaseOrder;
 use App\Models\PurchaseOrderLine;
@@ -190,9 +191,16 @@ class PurchaseOrderController extends Controller
         $lineTotals = $lifecycleService->computeLineTotals($purchaseOrder);
         $canReceive = Gate::allows('purchasing-purchase-orders-receive');
 
+        $workflowPayload = $workflowTransitionService->purchaseOrderWorkflowPayload($purchaseOrder, $request->user());
+
         $payload = [
             'purchaseOrder' => $this->purchaseOrderPayload($purchaseOrder),
-            'workflow' => $workflowTransitionService->purchaseOrderWorkflowPayload($purchaseOrder, $request->user()),
+            'workflow' => $workflowPayload,
+            'workflowProgressSteps' => app(BuildWorkflowProgressStepsAction::class)->execute(
+                (int) $request->user()->tenant_id,
+                'purchasing',
+                isset($workflowPayload['currentStage']['id']) ? (int) $workflowPayload['currentStage']['id'] : null
+            ),
             'lines' => $purchaseOrder->lines->map(function (PurchaseOrderLine $line) use ($tenantCurrency, $lineTotals) {
                 return $this->linePayload($line, $tenantCurrency, $lineTotals[$line->id] ?? []);
             })->values()->all(),

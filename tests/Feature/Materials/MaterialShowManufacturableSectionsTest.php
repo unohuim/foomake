@@ -1843,18 +1843,24 @@ it('38. shared app layout keeps sticky shell navigation and header above the det
 
 it('39. recipe create slide over stays fixed above sticky shell chrome and closes on backdrop click', function (): void {
     $source = file_get_contents(resource_path('views/manufacturing/recipes/partials/create-recipe-slide-over.blade.php'));
+    $shellSource = file_get_contents(resource_path('views/components/slide-over-shell.blade.php'));
 
-    expect($source)->toContain('fixed inset-0 z-50')
-        ->and($source)->toContain('absolute inset-0 bg-gray-500 bg-opacity-25 transition-opacity')
-        ->and($source)->toContain('x-on:click="closeCreate()"');
+    expect($source)->toContain('<x-slide-over-shell')
+        ->and($source)->toContain('close="closeCreate()"')
+        ->and($shellSource)->toContain('fixed inset-0 z-50')
+        ->and($shellSource)->toContain('absolute inset-0 bg-gray-500 bg-opacity-25 transition-opacity')
+        ->and($shellSource)->toContain('x-on:click="{{ $close }}"');
 });
 
 it('40. make order create slide over stays fixed above sticky shell chrome and closes on backdrop click', function (): void {
     $source = file_get_contents(resource_path('views/manufacturing/make-orders/partials/create-make-order-slide-over.blade.php'));
+    $shellSource = file_get_contents(resource_path('views/components/slide-over-shell.blade.php'));
 
-    expect($source)->toContain('fixed inset-0 z-50')
-        ->and($source)->toContain('absolute inset-0 bg-gray-500 bg-opacity-25 transition-opacity')
-        ->and($source)->toContain('x-on:click="closeMakeOrderForm()"');
+    expect($source)->toContain('<x-slide-over-shell')
+        ->and($source)->toContain('close="closeMakeOrderForm()"')
+        ->and($shellSource)->toContain('fixed inset-0 z-50')
+        ->and($shellSource)->toContain('absolute inset-0 bg-gray-500 bg-opacity-25 transition-opacity')
+        ->and($shellSource)->toContain('x-on:click="{{ $close }}"');
 });
 
 it('41. material detail renders slide over layers outside the scrollable detail content container', function (): void {
@@ -1878,17 +1884,17 @@ it('42. material detail uses the shared resource detail header breadcrumb compon
         ->and($source)->not->toContain('<x-resource-breadcrumbs :items="$breadcrumbItems" />');
 });
 
-it('43. shared resource detail header breadcrumb component keeps the breadcrumb below the material header body', function (): void {
+it('43. shared resource detail header breadcrumb component keeps the breadcrumb above the material header body', function (): void {
     $source = file_get_contents(resource_path('views/components/resource-detail-header-breadcrumb.blade.php'));
 
     expect($source)->toContain('data-resource-detail-header-body')
         ->and($source)->toContain('data-resource-detail-breadcrumb')
-        ->and($source)->toContain('order-last');
+        ->and($source)->toContain('order-first');
 });
 
 it('43b. shared breadcrumb component preserves connected chevron separator line styling', function (): void {
-    $source = file_get_contents(resource_path('views/components/resource-breadcrumbs.blade.php'));
+    $source = file_get_contents(resource_path('views/components/ui/breadcrumbs.blade.php'));
 
     expect($source)->toContain('border-y border-gray-200')
-        ->and($source)->toContain('data-breadcrumb-chevron-separator');
+        ->and($source)->toContain('viewBox="0 0 24 44"');
 });

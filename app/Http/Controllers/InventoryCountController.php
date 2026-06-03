@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Actions\Inventory\AdvanceInventoryCountWorkflowStageAction;
 use App\Actions\Notes\BuildNotesFeedPayloadAction;
+use App\Actions\Workflows\BuildWorkflowProgressStepsAction;
 use App\Actions\Workflows\CanViewAssignedWorkflowResourceAction;
 use App\Actions\Workflows\ResolveInventoryWorkflowStageAction;
 use App\Actions\Workflows\SeedDefaultWorkflowStagesForTenantAction;
@@ -133,6 +134,11 @@ class InventoryCountController extends Controller
             'nextWorkflowActionEvent' => $this->nextWorkflowActionEvent($count, $nextStage),
             'payload' => [
                 'count' => $this->countPayload($count, Gate::allows('inventory-adjustments-execute')),
+                'workflowProgressSteps' => app(BuildWorkflowProgressStepsAction::class)->execute(
+                    (int) $request->user()->tenant_id,
+                    'inventory',
+                    $count->workflow_stage_id === null ? null : (int) $count->workflow_stage_id
+                ),
                 'sections' => [
                     'countLines' => $this->countLinesSectionConfig($request, $count, $items),
                     'tasks' => $this->tasksSectionConfig($count),

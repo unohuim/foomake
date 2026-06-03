@@ -69,7 +69,7 @@
     <script type="application/json" id="inventory-count-show-payload">@json($payload)</script>
 
     <div
-        class="py-12"
+        class="pt-6 pb-12"
         data-page="inventory-count-show"
         data-payload="inventory-count-show-payload"
         x-data="inventoryCountShow"
@@ -86,6 +86,11 @@
                     <span x-text="toast.message"></span>
                 </div>
             </div>
+
+            <x-ui.workflow-progress
+                :steps="$payload['workflowProgressSteps'] ?? []"
+                data-workflow-progress-panel
+            />
 
             @if ($payload['count']['show_details_section'] ?? false)
                 <x-detail-section-card

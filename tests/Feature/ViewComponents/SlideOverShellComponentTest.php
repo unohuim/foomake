@@ -83,7 +83,7 @@ it('4. binds the configured close action to backdrop and close button', function
 BLADE
     );
 
-    expect(substr_count($html, 'x-on:click="closePanel()"'))->toBe(2);
+    expect(substr_count($html, 'x-on:click="closePanel()"'))->toBe(3);
 });
 
 it('5. binds the configured submit action when provided', function () {

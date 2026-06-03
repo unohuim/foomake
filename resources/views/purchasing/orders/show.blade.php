@@ -45,7 +45,7 @@
 
     <script type="application/json" id="purchasing-orders-show-payload">@json($payload)</script>
 
-    <div class="py-8 sm:py-12">
+    <div class="pt-4 pb-8 sm:pt-6 sm:pb-12">
         <div class="fixed right-6 top-6 z-50" x-show="toast.visible">
             <div
                 class="rounded-md px-4 py-3 text-sm shadow-md"
@@ -55,6 +55,11 @@
         </div>
 
         <div class="mx-auto max-w-5xl space-y-4 px-1 sm:space-y-6 sm:px-6 lg:px-8" data-purchase-order-detail-content>
+            <x-ui.workflow-progress
+                :steps="$payload['workflowProgressSteps'] ?? []"
+                data-workflow-progress-panel
+            />
+
             <x-detail-section-card title="Details" :default-open="false">
                 <div class="grid gap-6 sm:grid-cols-2">
                     <div class="max-w-sm">

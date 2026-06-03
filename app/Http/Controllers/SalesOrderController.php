@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Actions\Notes\BuildNotesFeedPayloadAction;
+use App\Actions\Workflows\BuildWorkflowProgressStepsAction;
 use App\Actions\Workflows\CanViewAssignedWorkflowResourceAction;
 use App\Actions\Workflows\ResolveSalesWorkflowStageAction;
 use App\Http\Requests\Sales\ImportExternalSalesOrdersRequest;
@@ -106,6 +107,12 @@ class SalesOrderController extends Controller
 
         $payload = [
             'order' => $this->orderData($salesOrder),
+            'workflowProgressSteps' => app(BuildWorkflowProgressStepsAction::class)->execute(
+                (int) $request->user()->tenant_id,
+                'sales',
+                null,
+                $salesOrder->status
+            ),
             'customers' => $customers->map(fn (Customer $customer): array => $this->customerOptionData($customer))->values()->all(),
             'sellableItems' => $sellableItems->map(fn (Item $item): array => $this->sellableItemData($item))->values()->all(),
             'updateUrl' => route('sales.orders.update', $salesOrder),

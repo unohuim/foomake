@@ -1,0 +1,37 @@
+name: Workflow Progress Panel
+type: UI Component
+location:
+  - app/Actions/Workflows/BuildWorkflowProgressStepsAction.php
+  - resources/views/components/ui/workflow-progress.blade.php
+purpose: Render read-only DRAFT-first workflow progress for workflow-enabled resource detail pages from tenant-configured workflow stages.
+when_to_use:
+  - Showing passive workflow position on workflow-enabled resource detail pages
+  - Rendering Sales Order, Purchase Order, Make Order, or Inventory Count progress below the resource header
+when_not_to_use:
+  - Workflow stage transitions
+  - Workflow stage administration
+  - Task completion controls
+  - Breadcrumbs or primary navigation
+rules:
+  - The first visual step must always be DRAFT.
+  - Active tenant-configured workflow stage names must render after DRAFT in workflow stage sort order.
+  - DRAFT is current when the resource has not entered an operational workflow stage.
+  - DRAFT is completed when the resource has an active current workflow stage.
+  - Stages before the current stage render completed.
+  - The matching current stage renders aria-current="step".
+  - Stages after the current stage render upcoming.
+  - Workflow progress is read-only and must not expose transition actions, task completion controls, drag and drop, or stage configuration.
+  - Existing resource page authorization remains authoritative; the progress panel must not grant access to any page or data.
+  - The panel must use Blade and Tailwind utilities only.
+  - The panel must not introduce Vue, Tailwind Plus scripts, external UI packages, inline styles, CSS files, or global JavaScript state.
+public_interface:
+  - BuildWorkflowProgressStepsAction::execute()
+  - <x-ui.workflow-progress :steps="$workflowProgressSteps" />
+example_usage: |
+  $workflowProgressSteps = app(BuildWorkflowProgressStepsAction::class)->execute(
+      tenantId: $tenantId,
+      domainKey: 'inventory',
+      currentWorkflowStageId: $inventoryCount->workflow_stage_id,
+  );
+
+  <x-ui.workflow-progress :steps="$workflowProgressSteps" />

@@ -179,22 +179,22 @@ test('4. materials use the same shared resource detail header breadcrumb compone
     expect($source)->toContain('x-resource-detail-header-breadcrumb');
 });
 
-test('5. breadcrumb renders at the bottom of the shared header component contract', function (): void {
+test('5. breadcrumb renders at the top of the shared header component contract', function (): void {
     $source = File::get(resource_path('views/components/resource-detail-header-breadcrumb.blade.php'));
 
     expect($source)->toContain('data-resource-detail-header')
         ->and($source)->toContain('data-resource-detail-breadcrumb')
-        ->and($source)->toContain('order-last');
+        ->and($source)->toContain('order-first');
 });
 
 test('6. breadcrumb left edge aligns with title container via shared component classes', function (): void {
     $source = File::get(resource_path('views/components/resource-detail-header-breadcrumb.blade.php'));
-    $breadcrumbSource = File::get(resource_path('views/components/resource-breadcrumbs.blade.php'));
+    $breadcrumbSource = File::get(resource_path('views/components/ui/breadcrumbs.blade.php'));
 
     expect($source)->toContain('max-w-5xl')
-        ->and($source)->toContain('px-1 sm:px-6 lg:px-8')
+        ->and($source)->toContain('px-4 sm:px-6 lg:px-8')
         ->and($breadcrumbSource)->toContain('border-y border-gray-200')
-        ->and($breadcrumbSource)->toContain('data-breadcrumb-chevron-separator');
+        ->and($breadcrumbSource)->toContain('viewBox="0 0 24 44"');
 });
 
 test('7. header renders the recipe name as the main title', function (): void {

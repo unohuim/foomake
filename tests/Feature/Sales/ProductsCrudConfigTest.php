@@ -758,7 +758,7 @@ it('35. products edit slideout is populated from the selected row data', functio
     $blade = file_get_contents(base_path('resources/views/sales/products/index.blade.php'));
 
     expect($source)->toContain('const productToForm = (product) => ({')
-        ->and($blade)->toContain("x-text=\"panelMode === 'create' ? 'Add New Product' : 'Edit Product'\"")
+        ->and($blade)->toContain("title-expression=\"panelMode === 'create' ? 'Add New Product' : 'Edit Product'\"")
         ->and($blade)->toContain("x-model=\"createForm.name\"")
         ->and($blade)->toContain("x-model=\"createForm.base_uom_id\"")
         ->and($blade)->toContain("x-model=\"createForm.default_price_amount\"");

@@ -104,7 +104,12 @@
         ></div>
     </div>
 
-    <div class="mx-auto max-w-5xl space-y-4 px-1 py-8 sm:space-y-6 sm:px-6 sm:py-12 lg:px-8">
+    <div class="mx-auto max-w-5xl space-y-4 px-1 pt-4 pb-8 sm:space-y-6 sm:px-6 sm:pt-6 sm:pb-12 lg:px-8">
+        <x-ui.workflow-progress
+            :steps="$payload['workflowProgressSteps'] ?? []"
+            data-workflow-progress-panel
+        />
+
         <x-detail-section-card
             title="Details"
             :description="__('Runs, expected output, actual output, due date, and assignment live here. Workflow movement stays in the header action.')"

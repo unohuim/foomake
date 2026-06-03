@@ -588,9 +588,8 @@ it('22. make order detail breadcrumb renders home make orders and id label', fun
         'manufacturing-make-orders-show-payload'
     );
 
-    expect(data_get($payload, 'breadcrumbs.0.label'))->toBe('Home')
-        ->and(data_get($payload, 'breadcrumbs.1.label'))->toBe('Make Orders')
-        ->and(data_get($payload, 'breadcrumbs.2.label'))->toBe('Make Order ' . $makeOrderId)
+    expect(data_get($payload, 'breadcrumbs.0.label'))->toBe('Make Orders')
+        ->and(data_get($payload, 'breadcrumbs.1.label'))->toBe('Make Order ' . $makeOrderId)
         ->and(data_get($payload, 'makeOrder.title'))->toBe('Make Order ' . $makeOrderId);
 });
 
