@@ -1808,12 +1808,40 @@ Notes:
 
 ---
 
+### Breadcrumbs Component
+
+**Name:** Breadcrumbs Component
+**Type:** UI Component
+**Location:**
+- `docs/architecture/ui/Breadcrumbs.yaml`
+- `resources/views/components/ui/breadcrumbs.blade.php`
+
+**Purpose:**
+Render one reusable full-width Blade breadcrumb bar with a Home link, connected chevron separators, and accessible current-page state.
+
+**When to Use:**
+Resource detail breadcrumb trails and other page-level breadcrumb bars.
+
+**When Not to Use:**
+Primary application navigation or workflow step indicators.
+
+**Public Interface:**
+- `<x-ui.breadcrumbs :items="$breadcrumbItems" />`
+
+Notes:
+- The component renders Home itself; page-provided items should not include Home.
+- The last item is current by default unless an item explicitly sets `current`.
+- Page-local breadcrumb bars and retired legacy breadcrumb components should not be used.
+
+---
+
 ### Shared Resource Detail Header Breadcrumb Component
 
 **Name:** Shared Resource Detail Header Breadcrumb Component  
 **Type:** UI Layout Pattern  
 **Location:**  
 - `docs/architecture/ui/ResourceDetailHeaderBreadcrumb.yaml`  
+- `resources/views/components/ui/breadcrumbs.blade.php`
 - `resources/views/components/resource-detail-header-breadcrumb.blade.php`  
 - `resources/views/materials/show.blade.php`  
 - `resources/views/manufacturing/recipes/show.blade.php`  
@@ -1829,7 +1857,7 @@ Index pages or standalone navigation bars.
 
 **Public Interface:**  
 - `<x-resource-detail-header-breadcrumb />`
-- `<x-resource-breadcrumbs />`
+- `<x-ui.breadcrumbs />`
 
 Notes:
 - Recipes and Materials must not hand-roll their own resource header or breadcrumb wrappers.
@@ -1940,6 +1968,8 @@ $makeOrder->lines()->create([
 **Type:** UI Layout Invariant  
 **Location:**  
 - `docs/architecture/ui/ResourceDetailBreadcrumbAlignment.yaml`  
+- `resources/views/components/ui/breadcrumbs.blade.php`
+- `resources/views/components/resource-detail-header-breadcrumb.blade.php`
 - `resources/views/manufacturing/recipes/show.blade.php`
 
 **Purpose:**  
@@ -1956,7 +1986,8 @@ Notes:
 - Breadcrumbs must not drift in an independent max-width wrapper.
 
 **Public Interface:**  
-- `resources/views/components/resource-breadcrumbs.blade.php`  
+- `resources/views/components/ui/breadcrumbs.blade.php`
+- `resources/views/components/resource-detail-header-breadcrumb.blade.php`
 - `resources/views/manufacturing/recipes/show.blade.php`
 
 ---

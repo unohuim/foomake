@@ -9,16 +9,14 @@
     @php
         $breadcrumbItems = [
             [
-                'label' => 'Home',
-                'url' => url('/'),
-            ],
-            [
                 'label' => 'Materials',
                 'url' => route('materials.index'),
+                'current' => false,
             ],
             [
                 'label' => $item->name,
                 'url' => null,
+                'current' => true,
             ],
         ];
     @endphp

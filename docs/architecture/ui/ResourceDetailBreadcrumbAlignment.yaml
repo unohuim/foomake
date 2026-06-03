@@ -2,6 +2,7 @@ name: Resource Detail Header Breadcrumb Alignment
 type: UI Layout Invariant
 location:
   - resources/views/components/resource-detail-header-breadcrumb.blade.php
+  - resources/views/components/ui/breadcrumbs.blade.php
   - resources/views/materials/show.blade.php
   - resources/views/manufacturing/recipes/show.blade.php
 purpose: Keep resource detail breadcrumbs and titles visually aligned through the shared resource-detail header component so the breadcrumb home icon shares the same left edge and layout container as the detail title.
@@ -13,12 +14,14 @@ when_not_to_use:
   - Standalone navigation bars unrelated to a resource detail view
 rules:
   - Resource detail breadcrumbs and the resource detail header title must share the same layout container contract.
+  - Resource detail breadcrumbs must render through <x-ui.breadcrumbs> inside the shared resource detail header component.
   - The breadcrumb must sit at the bottom of the resource detail header.
   - The breadcrumb home icon left edge must align horizontally with the resource title text left edge.
   - Breadcrumbs must not use an independent centered or max-width container that drifts away from the header container.
   - Materials and Recipes must use the shared resource-detail header breadcrumb component or its exact contract.
 public_interface:
   - resources/views/components/resource-detail-header-breadcrumb.blade.php
+  - resources/views/components/ui/breadcrumbs.blade.php
 example_usage: |
   <x-resource-detail-header-breadcrumb :items="$breadcrumbItems" :title="$recipe->name">
       <div class="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-gray-500">

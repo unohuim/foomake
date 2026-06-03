@@ -3,16 +3,14 @@
         $isDraftSetup = $inventoryCount->workflow_stage_id === null && $inventoryCount->posted_at === null;
         $breadcrumbItems = [
             [
-                'label' => 'Home',
-                'url' => url('/'),
-            ],
-            [
                 'label' => 'Inventory Counts',
                 'url' => route('inventory.counts.index'),
+                'current' => false,
             ],
             [
                 'label' => 'ID# ' . $inventoryCount->id,
                 'url' => null,
+                'current' => true,
             ],
         ];
     @endphp

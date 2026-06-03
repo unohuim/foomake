@@ -2,28 +2,24 @@
     @php
         $breadcrumbItems = [
             [
-                'label' => 'Home',
-                'url' => url('/'),
-            ],
-            [
                 'label' => 'Customers',
                 'url' => route('sales.customers.index'),
+                'current' => false,
             ],
             [
                 'label' => $customer->name,
                 'url' => null,
+                'current' => true,
             ],
         ];
     @endphp
 
     <x-slot name="header">
-        <div>
-            <h2 class="font-semibold text-xl text-gray-800 leading-tight">
-                {{ __('Customer: :name', ['name' => $customer->name]) }}
-            </h2>
-
-            <x-resource-breadcrumbs :items="$breadcrumbItems" />
-        </div>
+        <x-resource-detail-header-breadcrumb
+            :items="$breadcrumbItems"
+            :title="__('Customer: :name', ['name' => $customer->name])"
+            title-class="font-semibold text-xl text-gray-800 leading-tight"
+        />
     </x-slot>
 
     <script type="application/json" id="sales-customers-show-payload">@json($payload)</script>

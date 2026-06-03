@@ -17,7 +17,11 @@
     @if ($alpineExpression !== null) x-data="{{ $alpineExpression }}" @endif
     data-resource-detail-header
 >
-    <div class="max-w-5xl px-1 sm:px-6 lg:px-8" data-resource-detail-header-body>
+    <div class="order-first w-full" data-resource-detail-breadcrumb>
+        <x-ui.breadcrumbs :items="$items" :full-bleed="true" />
+    </div>
+
+    <div class="max-w-5xl px-4 sm:px-6 lg:px-8" data-resource-detail-header-body>
         <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div class="min-w-0 flex-1">
                 <div class="flex flex-wrap items-center gap-3" data-resource-detail-header-title-row>
@@ -45,9 +49,5 @@
                 </div>
             @endisset
         </div>
-    </div>
-
-    <div class="order-last max-w-5xl px-1 sm:px-6 lg:px-8" data-resource-detail-breadcrumb>
-        <x-resource-breadcrumbs :items="$items" :full-bleed="false" />
     </div>
 </div>

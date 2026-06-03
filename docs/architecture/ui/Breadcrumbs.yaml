@@ -1,0 +1,31 @@
+name: Breadcrumbs
+type: UI Component
+location:
+  - resources/views/components/ui/breadcrumbs.blade.php
+purpose: Provide one reusable Blade breadcrumb bar with a Home link, connected chevron separators, full-width parent-spanning horizontal borders, and accessible current-page state.
+when_to_use:
+  - Rendering resource detail breadcrumb trails
+  - Rendering a full-width breadcrumb bar inside a page or detail header container
+when_not_to_use:
+  - Primary application navigation
+  - Inline step indicators or workflow progress controls
+rules:
+  - Breadcrumb rendering must use the shared Blade component instead of page-local breadcrumb bars.
+  - The Home icon is rendered by the component and must not be included in page-provided items.
+  - Page-provided items use label, optional url, and optional current keys.
+  - The last item is current by default when no item explicitly sets current.
+  - Current items must render aria-current="page".
+  - Non-current items with URLs must render as links.
+  - Items without URLs must render as non-clickable text.
+  - The breadcrumb nav must use full-width border-y styling within its parent container.
+  - Chevron separators must use the connected Tailwind Plus-style SVG shape.
+  - The component must use Blade and Tailwind utilities only.
+  - The component must not introduce Vue, Heroicons Vue, external UI packages, inline styles, CSS files, or global JavaScript state.
+public_interface:
+  - resources/views/components/ui/breadcrumbs.blade.php
+  - <x-ui.breadcrumbs :items="$breadcrumbItems" />
+example_usage: |
+  <x-ui.breadcrumbs :items="[
+      ['label' => 'Inventory Counts', 'url' => route('inventory.counts.index')],
+      ['label' => 'ID# 1'],
+  ]" />

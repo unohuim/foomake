@@ -11,16 +11,14 @@
             : 'PO #' . $purchaseOrder->id;
         $breadcrumbItems = [
             [
-                'label' => 'Home',
-                'url' => url('/'),
-            ],
-            [
                 'label' => 'Purchase Orders',
                 'url' => route('purchasing.orders.index'),
+                'current' => false,
             ],
             [
                 'label' => $purchaseOrderTitle,
                 'url' => null,
+                'current' => true,
             ],
         ];
     @endphp

@@ -2,6 +2,7 @@ name: Resource Detail Header Breadcrumb
 type: UI Layout Pattern
 location:
   - resources/views/components/resource-detail-header-breadcrumb.blade.php
+  - resources/views/components/ui/breadcrumbs.blade.php
   - resources/views/materials/show.blade.php
   - resources/views/manufacturing/recipes/show.blade.php
   - resources/views/manufacturing/make-orders/show.blade.php
@@ -14,6 +15,7 @@ when_not_to_use:
   - Standalone navigation bars unrelated to a resource detail view
 rules:
   - Resource detail pages must use one shared header and breadcrumb component or match its exact contract.
+  - Resource detail header breadcrumbs must render through the shared <x-ui.breadcrumbs> component.
   - The breadcrumb must sit at the bottom of the resource detail header.
   - The breadcrumb container and title container must share the same max-width and horizontal padding contract.
   - The breadcrumb home icon left edge must align horizontally with the resource title left edge.
@@ -44,7 +46,7 @@ rules:
   - Make Order detail headers should keep recipe name and runs on the first metadata row and output item plus expected output quantity on the second metadata row.
 public_interface:
   - resources/views/components/resource-detail-header-breadcrumb.blade.php
-  - resources/views/components/resource-breadcrumbs.blade.php
+  - resources/views/components/ui/breadcrumbs.blade.php
 example_usage: |
   <x-resource-detail-header-breadcrumb :items="$breadcrumbItems" :title="$makeOrder->title">
       <x-slot name="metadata">

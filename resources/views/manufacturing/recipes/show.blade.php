@@ -8,16 +8,14 @@
     @php
         $breadcrumbItems = [
             [
-                'label' => 'Home',
-                'url' => url('/'),
-            ],
-            [
                 'label' => 'Recipes',
                 'url' => route('manufacturing.recipes.index'),
+                'current' => false,
             ],
             [
                 'label' => $recipe->name,
                 'url' => null,
+                'current' => true,
             ],
         ];
 

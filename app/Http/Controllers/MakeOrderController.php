@@ -132,9 +132,8 @@ class MakeOrderController extends Controller
         $payload = [
             'makeOrder' => $this->makeOrderDetailPayload($makeOrder),
             'breadcrumbs' => [
-                ['label' => 'Home', 'url' => url('/')],
-                ['label' => 'Make Orders', 'url' => route('manufacturing.make-orders.index')],
-                ['label' => 'Make Order ' . $makeOrder->id, 'url' => null],
+                ['label' => 'Make Orders', 'url' => route('manufacturing.make-orders.index'), 'current' => false],
+                ['label' => 'Make Order ' . $makeOrder->id, 'url' => null, 'current' => true],
             ],
             'workflow' => $this->makeOrderWorkflowPayload($makeOrder, $request->user()),
             'ingredients' => $this->makeOrderIngredientsPayload($makeOrder),

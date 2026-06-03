@@ -2,28 +2,24 @@
     @php
         $breadcrumbItems = [
             [
-                'label' => 'Home',
-                'url' => url('/'),
-            ],
-            [
                 'label' => 'Suppliers',
                 'url' => route('purchasing.suppliers.index'),
+                'current' => false,
             ],
             [
                 'label' => $supplier->company_name,
                 'url' => null,
+                'current' => true,
             ],
         ];
     @endphp
 
     <x-slot name="header">
-        <div>
-            <h2 class="font-semibold text-xl text-gray-800 leading-tight">
-                {{ $supplier->company_name }}
-            </h2>
-
-            <x-resource-breadcrumbs :items="$breadcrumbItems" />
-        </div>
+        <x-resource-detail-header-breadcrumb
+            :items="$breadcrumbItems"
+            :title="$supplier->company_name"
+            title-class="font-semibold text-xl text-gray-800 leading-tight"
+        />
     </x-slot>
 
     @php

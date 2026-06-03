@@ -23,7 +23,7 @@
             <!-- Page Heading -->
             @isset($header)
                 <header class="{{ $stickyShell ? 'sticky top-16 z-30 shrink-0 bg-white shadow' : 'bg-white shadow' }}">
-                    <div class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
+                    <div class="max-w-7xl mx-auto pb-6  px-4 sm:px-6 lg:px-8">
                         {{ $header }}
                     </div>
                 </header>
