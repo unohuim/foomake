@@ -1,8 +1,10 @@
 @props([
     'steps' => [],
+    'do_draft' => false,
 ])
 
 @php
+    $shouldShowDraft = filter_var($do_draft, FILTER_VALIDATE_BOOLEAN);
     $normalizedSteps = collect($steps)
         ->map(fn ($step, $index) => [
             'label' => (string) data_get($step, 'label', ''),
@@ -13,8 +15,21 @@
             'current' => (bool) data_get($step, 'current', data_get($step, 'status') === 'current'),
             'number' => str_pad((string) ($index + 1), 2, '0', STR_PAD_LEFT),
         ])
-        ->filter(fn ($step) => $step['label'] !== '')
+        ->filter(fn ($step) => $step['label'] !== '' && ($shouldShowDraft || $step['label'] !== 'DRAFT'))
+        ->values()
+        ->map(fn ($step, $index) => array_merge($step, [
+            'number' => str_pad((string) ($index + 1), 2, '0', STR_PAD_LEFT),
+        ]))
         ->values();
+
+    if ($normalizedSteps->isNotEmpty() && $normalizedSteps->where('current', true)->isEmpty()) {
+        $normalizedSteps = $normalizedSteps
+            ->map(fn ($step, $index) => array_merge($step, [
+                'status' => $index === 0 ? 'current' : $step['status'],
+                'current' => $index === 0,
+            ]))
+            ->values();
+    }
 @endphp
 
 @if ($normalizedSteps->isNotEmpty())

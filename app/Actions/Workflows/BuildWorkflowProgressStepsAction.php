@@ -21,7 +21,9 @@ class BuildWorkflowProgressStepsAction
         int $tenantId,
         string $domainKey,
         ?int $currentWorkflowStageId = null,
-        ?string $currentWorkflowStageKey = null
+        ?string $currentWorkflowStageKey = null,
+        ?int $completedWorkflowStageId = null,
+        bool $workflowCompleted = false
     ): array {
         app(EnsureWorkflowDomainsSeededAction::class)->execute();
 
@@ -41,21 +43,30 @@ class BuildWorkflowProgressStepsAction
             ->orderBy('id')
             ->get();
 
-        $currentStage = $this->currentStage($stages, $currentWorkflowStageId, $currentWorkflowStageKey);
+        $currentStage = $workflowCompleted
+            ? null
+            : $this->currentStage($stages, $currentWorkflowStageId, $currentWorkflowStageKey);
+        $completedStage = $workflowCompleted
+            ? $this->currentStage($stages, $completedWorkflowStageId, $currentWorkflowStageKey)
+            : null;
 
         return collect([
             [
                 'label' => 'DRAFT',
-                'status' => $currentStage ? 'completed' : 'current',
+                'status' => $currentStage || $workflowCompleted ? 'completed' : 'current',
                 'url' => null,
-                'current' => $currentStage === null,
+                'current' => ! $workflowCompleted && $currentStage === null,
             ],
         ])
             ->merge($stages->map(fn (WorkflowStage $stage): array => [
                 'label' => (string) $stage->name,
-                'status' => $this->stageStatus($stage, $currentStage),
+                'status' => $workflowCompleted
+                    ? $this->completedStageStatus($stage, $completedStage)
+                    : $this->stageStatus($stage, $currentStage),
                 'url' => null,
-                'current' => $currentStage !== null && (int) $stage->id === (int) $currentStage->id,
+                'current' => ! $workflowCompleted
+                    && $currentStage !== null
+                    && (int) $stage->id === (int) $currentStage->id,
             ]))
             ->values()
             ->all();
@@ -103,6 +114,26 @@ class BuildWorkflowProgressStepsAction
         }
 
         return (int) $stage->sort_order < (int) $currentStage->sort_order ? 'completed' : 'upcoming';
+    }
+
+    /**
+     * Resolve the display status for a completed workflow stage.
+     */
+    private function completedStageStatus(WorkflowStage $stage, ?WorkflowStage $completedStage): string
+    {
+        if ($completedStage === null) {
+            return 'completed';
+        }
+
+        if ((int) $stage->id === (int) $completedStage->id) {
+            return 'completed';
+        }
+
+        if ((int) $stage->sort_order === (int) $completedStage->sort_order) {
+            return (int) $stage->id < (int) $completedStage->id ? 'completed' : 'upcoming';
+        }
+
+        return (int) $stage->sort_order < (int) $completedStage->sort_order ? 'completed' : 'upcoming';
     }
 
     /**

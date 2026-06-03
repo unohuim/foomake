@@ -139,7 +139,12 @@ class MakeOrderController extends Controller
             'workflowProgressSteps' => app(BuildWorkflowProgressStepsAction::class)->execute(
                 (int) $request->user()->tenant_id,
                 'manufacturing',
-                $makeOrder->workflow_stage_id === null ? null : (int) $makeOrder->workflow_stage_id
+                $makeOrder->status !== MakeOrder::STATUS_MADE && $makeOrder->workflow_stage_id !== null
+                    ? (int) $makeOrder->workflow_stage_id
+                    : null,
+                null,
+                $makeOrder->workflow_stage_id === null ? null : (int) $makeOrder->workflow_stage_id,
+                $makeOrder->status === MakeOrder::STATUS_MADE
             ),
             'workflow' => $this->makeOrderWorkflowPayload($makeOrder, $request->user()),
             'ingredients' => $this->makeOrderIngredientsPayload($makeOrder),
@@ -1778,6 +1783,10 @@ class MakeOrderController extends Controller
      */
     private function makeOrderWorkflowState(MakeOrder $makeOrder): string
     {
+        if ($makeOrder->status === MakeOrder::STATUS_MADE) {
+            return $makeOrder->workflowStage?->status_complete_label ?? MakeOrder::STATUS_MADE;
+        }
+
         if ($makeOrder->workflow_stage_id === null) {
             return MakeOrder::STATUS_DRAFT;
         }

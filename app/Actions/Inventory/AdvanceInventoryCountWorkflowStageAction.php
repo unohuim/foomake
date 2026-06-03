@@ -6,6 +6,7 @@ use App\Actions\Workflows\AssertWorkflowStageTasksCompletedAction;
 use App\Actions\Workflows\GenerateWorkflowStageTasksAction;
 use App\Actions\Workflows\ResolveInventoryWorkflowStageAction;
 use App\Models\InventoryCount;
+use App\Models\WorkflowStage;
 use DomainException;
 use Illuminate\Support\Facades\DB;
 
@@ -14,6 +15,8 @@ use Illuminate\Support\Facades\DB;
  */
 class AdvanceInventoryCountWorkflowStageAction
 {
+    private const AUTOMATIC_COMPLETION_MODE = 'automatic';
+
     /**
      * Submit a draft Inventory Count into the first active inventory workflow stage.
      *
@@ -42,23 +45,15 @@ class AdvanceInventoryCountWorkflowStageAction
                 throw new DomainException('Inventory workflow stages are not configured for this tenant.');
             }
 
-            $lockedCount->workflow_stage_id = $firstStage->id;
             $lockedCount->tasked_by_user_id = $taskedByUserId;
-            $lockedCount->save();
-
-            app(GenerateWorkflowStageTasksAction::class)->execute(
-                (int) $lockedCount->tenant_id,
-                (int) $lockedCount->id,
-                $firstStage,
-                $lockedCount->assigned_to_user_id
-            );
+            $this->enterStageAndCompleteAutomaticStages($lockedCount, $firstStage, $taskedByUserId);
 
             return $lockedCount->fresh(['workflowStage']);
         });
     }
 
     /**
-     * Advance an Inventory Count to the next workflow stage, posting if the effect stage is entered.
+     * Advance an Inventory Count, completing the current stage and stopping at the next manual stage.
      *
      * @throws DomainException
      */
@@ -92,31 +87,19 @@ class AdvanceInventoryCountWorkflowStageAction
                 'Complete all tasks for this stage before moving the inventory count forward.'
             );
 
-            $nextStage = $resolver->nextActiveStage($lockedCount);
-
-            if (! $nextStage) {
-                if (! $currentStage->is_inventory_effect_stage) {
-                    throw new DomainException('Inventory count has no next workflow stage.');
-                }
-
+            if ($currentStage->is_inventory_effect_stage) {
                 app(PostInventoryCountAction::class)->execute($lockedCount, $userId);
 
                 return $lockedCount->fresh(['workflowStage']);
             }
 
-            $lockedCount->workflow_stage_id = $nextStage->id;
-            $lockedCount->save();
+            $nextStage = $resolver->nextActiveStage($lockedCount);
 
-            if ($nextStage->is_inventory_effect_stage) {
-                app(PostInventoryCountAction::class)->execute($lockedCount, $userId);
-            } else {
-                app(GenerateWorkflowStageTasksAction::class)->execute(
-                    (int) $lockedCount->tenant_id,
-                    (int) $lockedCount->id,
-                    $nextStage,
-                    $lockedCount->assigned_to_user_id
-                );
+            if (! $nextStage) {
+                throw new DomainException('Inventory count has no next workflow stage.');
             }
+
+            $this->enterStageAndCompleteAutomaticStages($lockedCount, $nextStage, $userId);
 
             return $lockedCount->fresh(['workflowStage']);
         });
@@ -208,5 +191,63 @@ class AdvanceInventoryCountWorkflowStageAction
 
             return $lockedCount->fresh(['workflowStage']);
         });
+    }
+
+    /**
+     * Enter a target stage, completing automatic stages until a manual stage or final posting is reached.
+     */
+    private function enterStageAndCompleteAutomaticStages(
+        InventoryCount $inventoryCount,
+        WorkflowStage $targetStage,
+        int $userId
+    ): void {
+        $resolver = app(ResolveInventoryWorkflowStageAction::class);
+        $stage = $targetStage;
+
+        while ($stage !== null) {
+            $inventoryCount->workflow_stage_id = $stage->id;
+            $inventoryCount->tasked_by_user_id = $userId;
+            $inventoryCount->save();
+
+            if ($stage->completion_mode !== self::AUTOMATIC_COMPLETION_MODE) {
+                app(GenerateWorkflowStageTasksAction::class)->execute(
+                    (int) $inventoryCount->tenant_id,
+                    (int) $inventoryCount->id,
+                    $stage,
+                    $inventoryCount->assigned_to_user_id
+                );
+
+                return;
+            }
+
+            if ($stage->is_inventory_effect_stage) {
+                app(PostInventoryCountAction::class)->execute($inventoryCount, $userId);
+
+                return;
+            }
+
+            $this->assertCanMovePastScheduling($inventoryCount, $stage);
+
+            $inventoryCount->setRelation('workflowStage', $stage);
+            $stage = $resolver->nextActiveStage($inventoryCount);
+        }
+    }
+
+    /**
+     * Require at least one material before the automatic Scheduling stage can complete.
+     *
+     * @throws DomainException
+     */
+    private function assertCanMovePastScheduling(InventoryCount $inventoryCount, WorkflowStage $stage): void
+    {
+        if ((string) $stage->key !== 'scheduling') {
+            return;
+        }
+
+        if ($inventoryCount->lines()->exists()) {
+            return;
+        }
+
+        throw new DomainException('Add at least one material item before moving past Scheduling.');
     }
 }

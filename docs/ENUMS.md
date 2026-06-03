@@ -61,6 +61,8 @@ Do not introduce new enum values without updating this document.
 
 - This is a computed status derived solely from `posted_at`.
 - Do not store or persist a separate status column.
+- This lifecycle value is not a workflow-stage status and must not be rendered as an Inventory workflow header/status-complete label.
+- Inventory workflow-stage `status_complete_label` options are provided by the workflow status option provider and include workflow-derived labels such as `SCHEDULED`, `COUNTED`, and `COMPLETED`; these are separate from computed `draft` / `posted` lifecycle values.
 
 ---
 

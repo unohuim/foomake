@@ -119,36 +119,38 @@
                 <div class="grid grid-cols-3 gap-2">
                     <div class="space-y-1">
                         <p class="text-[10px] font-semibold uppercase tracking-wide text-gray-500 sm:text-xs">{{ __('Runs') }}</p>
-                        <input
-                            type="text"
+                        <x-ui.smart-number-input
+                            name="runs"
+                            type="decimal"
+                            precision="6"
                             value="{{ $makeOrderPayload['runs_text'] ?? '' }}"
-                            class="block w-full rounded-xl border border-gray-300 bg-white px-2.5 py-2 text-xs text-gray-900 shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 sm:px-3 sm:text-sm"
                             x-model="makeOrder.runs_text"
-                            x-on:input="recalculateExpectedOutputQtyFromRuns()"
-                            x-on:change="saveMakeOrderDetailQuantity('runs')"
+                            after-input="recalculateExpectedOutputQtyFromRuns()"
+                            after-change="saveMakeOrderDetailQuantity('runs')"
                         />
                     </div>
 
                     <div class="space-y-1">
                         <p class="text-[10px] font-semibold uppercase tracking-wide text-gray-500 sm:text-xs">{{ __('Expected Output') }}</p>
-                        <input
-                            type="text"
+                        <x-ui.smart-number-input
+                            name="expected_output_qty"
+                            type="decimal"
+                            precision="6"
                             value="{{ $makeOrderPayload['expected_output_qty_text'] ?? '' }}"
-                            readonly
-                            aria-readonly="true"
-                            class="block w-full cursor-not-allowed rounded-xl border border-gray-300 bg-gray-50 px-2.5 py-2 text-xs text-gray-600 shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 sm:px-3 sm:text-sm"
+                            :readonly="true"
                             x-model="makeOrder.expected_output_qty_text"
                         />
                     </div>
 
                     <div class="space-y-1">
                         <p class="text-[10px] font-semibold uppercase tracking-wide text-gray-500 sm:text-xs">{{ __('Actual Output') }}</p>
-                        <input
-                            type="text"
+                        <x-ui.smart-number-input
+                            name="actual_output_qty"
+                            type="decimal"
+                            precision="6"
                             value="{{ $makeOrderPayload['actual_output_qty_text'] ?? '' }}"
-                            class="block w-full rounded-xl border border-gray-300 bg-white px-2.5 py-2 text-xs text-gray-900 shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 sm:px-3 sm:text-sm"
                             x-model="makeOrder.actual_output_qty_text"
-                            x-on:change="saveMakeOrderDetailQuantity('actual_output_qty')"
+                            after-change="saveMakeOrderDetailQuantity('actual_output_qty')"
                         />
                     </div>
                 </div>

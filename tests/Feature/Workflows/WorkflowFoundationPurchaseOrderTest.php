@@ -853,7 +853,17 @@ it('23. default work stages before completion remain manual', function (): void 
         ->and(($this->domainStage)($tenant, 'sales', 'packing')->completion_mode)->toBe('manual')
         ->and(($this->domainStage)($tenant, 'sales', 'shipping')->completion_mode)->toBe('manual')
         ->and(($this->domainStage)($tenant, 'sales', 'invoicing')->completion_mode)->toBe('manual')
-        ->and(($this->domainStage)($tenant, 'manufacturing', 'making')->completion_mode)->toBe('manual');
+        ->and(($this->domainStage)($tenant, 'manufacturing', 'making')->completion_mode)->toBe('manual')
+        ->and(($this->domainStage)($tenant, 'inventory', 'counting')->completion_mode)->toBe('manual');
+});
+
+it('23a. default inventory scheduling stage is automatic', function (): void {
+    $tenant = ($this->makeTenant)();
+    ($this->seedWorkflow)($tenant);
+
+    expect(($this->domainStage)($tenant, 'inventory', 'scheduling')->completion_mode)->toBe('automatic')
+        ->and(($this->domainStage)($tenant, 'inventory', 'scheduling')->status_complete_label)->toBe('SCHEDULED')
+        ->and(($this->domainStage)($tenant, 'inventory', 'counting')->status_complete_label)->toBe('COUNTED');
 });
 
 it('24. cancel remains available beside the primary current stage action', function (): void {

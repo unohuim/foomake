@@ -33,11 +33,11 @@
 
         <div>
             <label for="recipe-version-output-quantity" class="block text-sm font-medium text-gray-700">{{ __('Output Qty') }}</label>
-            <input
+            <x-ui.smart-number-input
                 id="recipe-version-output-quantity"
-                type="text"
-                inputmode="decimal"
-                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                name="output_quantity"
+                type="decimal"
+                precision="6"
                 x-model="versionForm.output_quantity"
             />
             <p class="mt-1 text-sm text-red-600" x-show="versionErrors.output_quantity.length" x-text="versionErrors.output_quantity[0]"></p>

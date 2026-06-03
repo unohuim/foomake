@@ -30,10 +30,11 @@
             <label class="text-sm font-medium text-gray-700" for="counted_quantity">
                 {{ __('Counted Quantity') }}
             </label>
-            <input
+            <x-ui.smart-number-input
                 id="counted_quantity"
-                type="text"
-                class="w-full rounded-md border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+                name="counted_quantity"
+                type="decimal"
+                precision="6"
                 x-model="lineForm.counted_quantity"
             />
             <p class="text-sm text-red-600" x-show="errors.line.counted_quantity" x-text="errors.line.counted_quantity?.[0]"></p>

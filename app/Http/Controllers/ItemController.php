@@ -10,10 +10,10 @@ use App\Models\InventoryCount;
 use App\Models\InventoryCountLine;
 use App\Models\Item;
 use App\Models\Recipe;
-use App\Models\Supplier;
 use App\Models\Uom;
 use App\Models\User;
 use App\Support\QuantityFormatter;
+use App\Support\Purchasing\SupplierPackageFormConfig;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -428,6 +428,8 @@ class ItemController extends Controller
      */
     private function supplierPackagesSectionConfig(Request $request, Item $item, bool $canManagePurchasing): array
     {
+        $formConfig = new SupplierPackageFormConfig();
+
         return [
             'resource' => 'supplier-packages',
             'title' => 'Supplier Packages',
@@ -438,6 +440,7 @@ class ItemController extends Controller
             'permissions' => [
                 'canCreate' => $canManagePurchasing,
             ],
+            'createAction' => $formConfig->createAction(),
             'endpoints' => [
                 'list' => route('materials.supplier-packages.index', $item),
                 'create' => route('materials.supplier-packages.store', $item),
@@ -445,92 +448,7 @@ class ItemController extends Controller
                 'remove' => url("/materials/{$item->id}/supplier-packages/{id}"),
                 'conversionCreate' => route('manufacturing.uom-conversions.items.store'),
             ],
-            'fields' => [
-                [
-                    'name' => 'supplier_id',
-                    'label' => 'Supplier',
-                    'type' => 'combobox',
-                    'required' => true,
-                    'options' => Supplier::query()
-                        ->where('tenant_id', $request->user()->tenant_id)
-                        ->orderBy('company_name')
-                        ->get(['id', 'company_name'])
-                        ->map(fn (Supplier $supplier): array => [
-                            'value' => (string) $supplier->id,
-                            'label' => $supplier->company_name,
-                        ])
-                        ->values()
-                        ->all(),
-                    'inlineCreate' => $canManagePurchasing
-                        ? [
-                            'label' => '+ New Supplier',
-                            'storeUrl' => route('purchasing.suppliers.store'),
-                            'fields' => [
-                                [
-                                    'name' => 'company_name',
-                                    'label' => 'Company name',
-                                    'type' => 'text',
-                                    'required' => true,
-                                ],
-                                [
-                                    'name' => 'email',
-                                    'label' => 'Email',
-                                    'type' => 'email',
-                                    'required' => false,
-                                ],
-                                [
-                                    'name' => 'phone',
-                                    'label' => 'Phone',
-                                    'type' => 'text',
-                                    'required' => false,
-                                ],
-                                [
-                                    'name' => 'url',
-                                    'label' => 'URL',
-                                    'type' => 'url',
-                                    'required' => false,
-                                ],
-                            ],
-                        ]
-                        : null,
-                ],
-                [
-                    'name' => 'pack_quantity',
-                    'label' => 'Package quantity',
-                    'type' => 'text',
-                    'required' => true,
-                ],
-                [
-                    'name' => 'pack_uom_id',
-                    'label' => 'Package UoM',
-                    'type' => 'select',
-                    'required' => true,
-                    'rowGroup' => 'package-uom-price',
-                    'options' => Uom::query()
-                        ->where('tenant_id', $request->user()->tenant_id)
-                        ->orderBy('symbol')
-                        ->get(['id', 'symbol', 'name'])
-                        ->map(fn (Uom $uom): array => [
-                            'value' => (string) $uom->id,
-                            'label' => sprintf('%s (%s)', $uom->name, $uom->symbol),
-                        ])
-                        ->values()
-                        ->all(),
-                ],
-                [
-                    'name' => 'supplier_sku',
-                    'label' => 'Supplier SKU',
-                    'type' => 'text',
-                    'required' => false,
-                ],
-                [
-                    'name' => 'price_amount',
-                    'label' => 'Price',
-                    'type' => 'text',
-                    'required' => true,
-                    'rowGroup' => 'package-uom-price',
-                ],
-            ],
+            'fields' => $formConfig->fieldsForMaterial($request, $canManagePurchasing),
             'rowLayout' => [
                 'primaryText' => [
                     'field' => 'display.primaryText',

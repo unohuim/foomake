@@ -3,10 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\Purchasing\SupplierUpdateRequest;
-use App\Models\Item;
 use App\Models\Supplier;
-use App\Models\Uom;
 use App\Services\Purchasing\SupplierDeleteGuard;
+use App\Support\Purchasing\SupplierPackageFormConfig;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -128,6 +127,8 @@ class SupplierController extends Controller
      */
     private function supplierPackagesSectionConfig(Request $request, Supplier $supplier, bool $canManageSuppliers): array
     {
+        $formConfig = new SupplierPackageFormConfig();
+
         return [
             'resource' => 'supplier-packages',
             'title' => 'Supplier Packages',
@@ -141,15 +142,9 @@ class SupplierController extends Controller
             'permissions' => [
                 'canCreate' => $canManageSuppliers,
             ],
-            'createAction' => [
-                'type' => 'slide-over',
-                'label' => 'Add Supplier Package',
-                'title' => 'Add Supplier Package',
-                'submitLabel' => 'Save package',
-                'prefill' => [
-                    'supplier_id' => $supplier->id,
-                ],
-            ],
+            'createAction' => $formConfig->createAction([
+                'supplier_id' => $supplier->id,
+            ]),
             'endpoints' => [
                 'list' => route('purchasing.suppliers.purchase-options.index', $supplier),
                 'create' => route('purchasing.suppliers.purchase-options.store', $supplier),
@@ -157,61 +152,7 @@ class SupplierController extends Controller
                 'remove' => url("/purchasing/suppliers/{$supplier->id}/purchase-options/{id}"),
                 'conversionCreate' => route('manufacturing.uom-conversions.items.store'),
             ],
-            'fields' => [
-                [
-                    'name' => 'item_id',
-                    'label' => 'Material',
-                    'type' => 'combobox',
-                    'required' => true,
-                    'options' => Item::query()
-                        ->where('tenant_id', $request->user()->tenant_id)
-                        ->where('is_purchasable', true)
-                        ->orderBy('name')
-                        ->get(['id', 'name'])
-                        ->map(fn (Item $item): array => [
-                            'value' => (string) $item->id,
-                            'label' => $item->name,
-                        ])
-                        ->values()
-                        ->all(),
-                ],
-                [
-                    'name' => 'pack_quantity',
-                    'label' => 'Package quantity',
-                    'type' => 'text',
-                    'required' => true,
-                ],
-                [
-                    'name' => 'pack_uom_id',
-                    'label' => 'Package UoM',
-                    'type' => 'select',
-                    'required' => true,
-                    'rowGroup' => 'package-uom-price',
-                    'options' => Uom::query()
-                        ->where('tenant_id', $request->user()->tenant_id)
-                        ->orderBy('symbol')
-                        ->get(['id', 'symbol', 'name'])
-                        ->map(fn (Uom $uom): array => [
-                            'value' => (string) $uom->id,
-                            'label' => sprintf('%s (%s)', $uom->name, $uom->symbol),
-                        ])
-                        ->values()
-                        ->all(),
-                ],
-                [
-                    'name' => 'supplier_sku',
-                    'label' => 'Supplier SKU',
-                    'type' => 'text',
-                    'required' => false,
-                ],
-                [
-                    'name' => 'price_amount',
-                    'label' => 'Price',
-                    'type' => 'text',
-                    'required' => false,
-                    'rowGroup' => 'package-uom-price',
-                ],
-            ],
+            'fields' => $formConfig->fieldsForSupplier($request, $supplier),
             'rowLayout' => [
                 'primaryText' => [
                     'field' => 'display.primaryText',

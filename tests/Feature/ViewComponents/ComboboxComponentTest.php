@@ -16,6 +16,8 @@ beforeEach(function () {
     $this->comboboxSource = fn (): string => File::get(resource_path('views/components/combobox.blade.php'));
     $this->comboItemSource = fn (): string => File::get(resource_path('views/components/combo-item.blade.php'));
     $this->comboboxJsSource = fn (): string => File::get(resource_path('js/components/combobox.js'));
+    $this->crudSectionSource = fn (): string => File::get(resource_path('js/lib/js-crud-section.js'));
+    $this->purchaseOrderCreateSource = fn (): string => File::get(resource_path('js/lib/js-purchase-order-create.js'));
 });
 
 it('1. renders the combobox component wrapper', function () {
@@ -207,4 +209,30 @@ it('21. combobox exposes option state for metadata driven filtering and display'
     expect($source)->toContain('normalizedOptions')
         ->and($source)->toContain('search_text')
         ->and($source)->toContain('meta');
+});
+
+it('22. combobox can close when focus leaves the component root', function () {
+    $source = ($this->comboboxJsSource)();
+
+    expect($source)->toContain('handleFocusAway(event)')
+        ->and($source)->toContain('this.$el.contains(event.relatedTarget)')
+        ->and($source)->toContain('this.closeDropdown()');
+});
+
+it('23. blade combobox wires focus-away close behavior', function () {
+    $source = ($this->comboboxSource)();
+
+    expect($source)->toContain('x-on:focusout="handleFocusAway($event)"');
+});
+
+it('24. shared js crud combobox wires focus-away close behavior', function () {
+    $source = ($this->crudSectionSource)();
+
+    expect($source)->toContain('x-on:focusout="handleFocusAway($event)"');
+});
+
+it('25. purchase order create combobox wires focus-away close behavior', function () {
+    $source = ($this->purchaseOrderCreateSource)();
+
+    expect($source)->toContain('x-on:focusout="handleFocusAway($event)"');
 });

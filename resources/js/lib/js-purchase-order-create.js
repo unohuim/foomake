@@ -68,6 +68,7 @@ const renderPurchaseOrderCreate = (config) => `
                             x-modelable="selectedValue"
                             x-model="form.supplier_id"
                             x-on:click.outside="closeDropdown()"
+                            x-on:focusout="handleFocusAway($event)"
                             x-on:keydown.arrow-down.prevent="highlightNext()"
                             x-on:keydown.arrow-up.prevent="highlightPrevious()"
                             x-on:keydown.enter.prevent="selectHighlighted()"

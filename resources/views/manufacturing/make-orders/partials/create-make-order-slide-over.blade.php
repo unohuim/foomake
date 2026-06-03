@@ -33,11 +33,11 @@
             <label for="make-order-runs" class="block text-sm font-medium text-gray-700">
                 {{ __('Runs') }}
             </label>
-            <input
+            <x-ui.smart-number-input
                 id="make-order-runs"
-                type="text"
-                inputmode="decimal"
-                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                name="runs"
+                type="decimal"
+                precision="6"
                 x-model="makeOrderForm.runs"
                 placeholder="0.000000"
             />
@@ -53,6 +53,7 @@
                 type="date"
                 class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
                 x-model="makeOrderForm.due_date"
+                x-on:click="$el.showPicker?.()"
             />
             <p class="mt-1 text-xs text-red-600" x-cloak x-show="makeOrderFormErrors.due_date.length" x-text="makeOrderFormErrors.due_date[0]"></p>
         </div>

@@ -235,15 +235,14 @@
                                         <td class="px-4 py-3 text-sm text-gray-700" x-text="lineLabel(line)"></td>
                                         <td class="px-4 py-3 text-sm text-gray-700">
                                             <div class="flex items-center gap-2">
-                                                <input
-                                                    type="text"
-                                                    inputmode="numeric"
-                                                    class="w-20 rounded-lg border border-gray-300 px-2 py-1.5 text-right text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500 disabled:cursor-not-allowed disabled:bg-gray-100"
+                                                <x-ui.smart-number-input
+                                                    name="pack_count"
+                                                    type="integer"
+                                                    class="w-20"
                                                     x-model="line.pack_count"
-                                                    :disabled="!isEditable"
-                                                    x-on:focus="$el.setSelectionRange($el.value.length, $el.value.length)"
-                                                    x-on:blur="autosaveLineField(line, 'pack_count')"
-                                                    x-on:change="autosaveLineField(line, 'pack_count')"
+                                                    disabled-expression="!isEditable"
+                                                    after-blur="autosaveLineField(line, 'pack_count')"
+                                                    after-change="autosaveLineField(line, 'pack_count')"
                                                 />
                                                 <span class="inline-flex h-5 w-5 shrink-0 items-center justify-center">
                                                     <svg data-line-autosave-success-icon class="h-5 w-5 text-lime-400 transition-opacity" x-bind:class="lineFieldSaved(line, 'pack_count') ? 'opacity-100' : 'opacity-0'" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
@@ -255,15 +254,15 @@
                                         </td>
                                         <td class="px-4 py-3 text-sm text-gray-700">
                                             <div class="flex items-center gap-2">
-                                                <input
-                                                    type="text"
-                                                    inputmode="decimal"
-                                                    class="w-20 rounded-lg border border-gray-300 px-2 py-1.5 text-right text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500 disabled:cursor-not-allowed disabled:bg-gray-100"
+                                                <x-ui.smart-number-input
+                                                    name="tax_percent"
+                                                    type="percent"
+                                                    precision="1"
+                                                    class="w-20"
                                                     x-model="line.tax_percent"
-                                                    :disabled="!isEditable"
-                                                    x-on:focus="$el.setSelectionRange($el.value.length, $el.value.length)"
-                                                    x-on:blur="autosaveLineField(line, 'tax_percent')"
-                                                    x-on:change="autosaveLineField(line, 'tax_percent')"
+                                                    disabled-expression="!isEditable"
+                                                    after-blur="autosaveLineField(line, 'tax_percent')"
+                                                    after-change="autosaveLineField(line, 'tax_percent')"
                                                 />
                                                 <span class="inline-flex h-5 w-5 shrink-0 items-center justify-center">
                                                     <svg data-line-autosave-success-icon class="h-5 w-5 text-lime-400 transition-opacity" x-bind:class="lineFieldSaved(line, 'tax_percent') ? 'opacity-100' : 'opacity-0'" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
@@ -307,12 +306,21 @@
                             </label>
                             <label class="block text-xs font-semibold uppercase text-gray-500">
                                 Pack count
-                                <input type="text" inputmode="numeric" class="mt-1 w-full rounded border-gray-300 text-right text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500" x-model="editForm.pack_count" x-on:focus="$el.setSelectionRange($el.value.length, $el.value.length)" />
+                                <x-ui.smart-number-input
+                                    name="pack_count"
+                                    type="integer"
+                                    x-model="editForm.pack_count"
+                                />
                                 <span class="mt-1 block text-xs text-red-600" x-text="editErrors.pack_count[0]"></span>
                             </label>
                             <label class="block text-xs font-semibold uppercase text-gray-500">
                                 Tax %
-                                <input type="text" inputmode="decimal" class="mt-1 w-full rounded border-gray-300 text-right text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500" x-model="editForm.tax_percent" x-on:focus="$el.setSelectionRange($el.value.length, $el.value.length)" />
+                                <x-ui.smart-number-input
+                                    name="tax_percent"
+                                    type="percent"
+                                    precision="1"
+                                    x-model="editForm.tax_percent"
+                                />
                                 <span class="mt-1 block text-xs text-red-600" x-text="editErrors.tax_percent[0]"></span>
                             </label>
                             <div class="flex items-end justify-end gap-3">
@@ -341,14 +349,14 @@
                     <div class="flex items-center justify-between py-3">
                         <dt class="text-gray-600">Shipping</dt>
                         <dd class="flex items-center gap-2 font-medium text-gray-900">
-                            <input
-                                type="text"
-                                inputmode="decimal"
-                                class="w-28 rounded border-gray-300 text-right text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                            <x-ui.smart-number-input
+                                name="shipping_amount"
+                                type="money"
+                                class="w-28"
                                 x-model="form.shipping_amount"
-                                :disabled="!isEditable"
-                                x-on:blur="autosaveField('shipping_amount')"
-                                x-on:change="autosaveField('shipping_amount')"
+                                disabled-expression="!isEditable"
+                                after-blur="autosaveField('shipping_amount')"
+                                after-change="autosaveField('shipping_amount')"
                             />
                             <svg data-autosave-success-icon class="h-5 w-5 shrink-0 text-lime-400" x-show="savedFields.shipping_amount" x-cloak xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75" />
@@ -588,12 +596,11 @@
                                     <div class="mt-2">
                                         <label class="block text-xs font-semibold uppercase text-gray-500">
                                             Receive quantity
-                                            <input
-                                                type="number"
+                                            <x-ui.smart-number-input
+                                                name="received_quantity"
+                                                type="integer"
                                                 min="0"
                                                 step="1"
-                                                inputmode="numeric"
-                                                class="mt-1 w-full rounded border-gray-300 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500"
                                                 x-model="line.received_quantity"
                                             />
                                         </label>
@@ -693,11 +700,12 @@
                         <div>
                             <label class="block text-xs font-semibold uppercase text-gray-500">
                                 Short-close quantity
-                                <input
-                                    type="number"
+                                <x-ui.smart-number-input
+                                    name="short_closed_quantity"
+                                    type="decimal"
+                                    precision="6"
                                     min="0"
                                     step="0.000001"
-                                    class="mt-1 w-full rounded border-gray-300 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500"
                                     x-model="shortCloseForm.short_closed_quantity"
                                 />
                             </label>

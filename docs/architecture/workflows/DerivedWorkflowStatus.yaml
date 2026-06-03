@@ -1,6 +1,7 @@
 name: Derived Workflow Status
 type: Workflow Status Rule
 location:
+  - app/Http/Controllers/InventoryCountController.php
   - app/Models/PurchaseOrder.php
   - app/Services/Workflows/WorkflowTransitionService.php
   - database/migrations/2026_05_28_000003_add_workflow_foundation_fields.php
@@ -17,6 +18,8 @@ rules:
   - If `last_completed_workflow_stage_id` is null, the derived status is `DRAFT`.
   - Purchase Orders with receipt-derived `PARTIALLY_RECEIVED` display that status while remaining in the normal Receiving stage.
   - Otherwise the derived status is `last_completed_workflow_stage.status_complete_label`.
+  - Inventory Counts do not yet store `last_completed_workflow_stage_id`; their detail header infers derived status from active Inventory stage order and must never render the computed posted lifecycle value as a workflow status.
+  - Posted Inventory Counts render the current inventory-effect stage's `status_complete_label`, not `Posted`.
   - Legacy domain status columns may be mirrored during migration but must not be the PO detail action-button display authority, except for receipt-derived `PARTIALLY_RECEIVED` because it has no duplicate seeded workflow stage.
   - Workflow cancellation is terminal and blocks future workflow actions.
 public_interface:

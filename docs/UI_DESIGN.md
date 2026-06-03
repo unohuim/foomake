@@ -210,6 +210,7 @@ Expected shared components include:
 - Toast
 - Empty state
 - Confirm dialog
+- Smart number input
 
 ---
 

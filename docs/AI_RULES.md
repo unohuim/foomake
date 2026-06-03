@@ -8,6 +8,9 @@ These rules govern all AI-assisted development on this repository.
 
 - Before editing anything, ensure that you have presented a plan that has been approved, whether or not a plan was explicitly asked for.
 - AI must be >95% certain of requirements before a plan may be proposed.
+- Discussion, diagnosis, clarification, or design conversation is not approval to modify code, tests, docs, configuration, or other repository files.
+- AI may only edit files after the human explicitly asks for implementation or file changes, using clear wording such as “implement,” “make the change,” “fix it,” “update the file,” or equivalent.
+- When the human appears to be discussing options or asking conceptual questions, AI must respond in discussion mode only and must not run write operations.
 
 ---
 

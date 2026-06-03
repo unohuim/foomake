@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Models\InventoryCount;
 use App\Models\InventoryCountLine;
 use App\Models\Item;
+use App\Models\Note;
 use App\Models\Permission;
 use App\Models\Role;
 use App\Models\Task;
@@ -460,9 +461,9 @@ it('15b. the inventory counts list endpoint keeps the counter column nullable fo
         ->and($record['counter_email'])->toBeNull();
 });
 
-it('15c. the inventory counts list status column shows the current workflow stage label for scheduled counts', function (): void {
+it('15c. the inventory counts list status column shows the workflow status label for scheduled counts', function (): void {
     ($this->grantPermission)($this->user, 'inventory-adjustments-view');
-    $openStage = ($this->inventoryStage)('creating');
+    $openStage = ($this->inventoryStage)('counting');
 
     $count = ($this->makeCount)([
         'workflow_stage_id' => $openStage->id,
@@ -475,7 +476,7 @@ it('15c. the inventory counts list status column shows the current workflow stag
     )->firstWhere('id', $count->id);
 
     expect($record)->not->toBeNull()
-        ->and($record['status_label'] ?? null)->toBe('Creating')
+        ->and($record['status_label'] ?? null)->toBe('SCHEDULED')
         ->and($record['status'] ?? null)->toBe('draft');
 });
 
@@ -494,7 +495,7 @@ it('15d. the inventory counts list status column does not use posted lifecycle t
     )->firstWhere('id', $count->id);
 
     expect($record)->not->toBeNull()
-        ->and($record['status_label'] ?? null)->toBe('Completing')
+        ->and($record['status_label'] ?? null)->toBe('COMPLETED')
         ->and($record['posted_at'] ?? null)->not->toBe('—');
 });
 
@@ -557,6 +558,28 @@ it('19. create validation errors still return the expected json validation respo
 
     $response->assertStatus(422)
         ->assertJsonValidationErrors(['counted_at']);
+});
+
+it('19a. creating an inventory count with notes creates an authored notes feed record', function (): void {
+    ($this->grantPermission)($this->user, 'inventory-adjustments-execute');
+
+    $response = $this->actingAs($this->user)
+        ->postJson(route('inventory.counts.store'), [
+            'counted_at' => '2026-05-19 09:30',
+            'notes' => '  Opening freezer cycle count  ',
+        ])
+        ->assertCreated();
+
+    $count = InventoryCount::query()->findOrFail((int) $response->json('count.id'));
+    $note = Note::query()
+        ->where('tenant_id', $this->tenant->id)
+        ->where('noteable_type', InventoryCount::class)
+        ->where('noteable_id', $count->id)
+        ->first();
+
+    expect($note)->not->toBeNull()
+        ->and($note?->author_user_id)->toBe($this->user->id)
+        ->and($note?->body)->toBe('Opening freezer cycle count');
 });
 
 it('20. existing create behavior persists the count with the expected draft data', function (): void {
@@ -735,6 +758,7 @@ it('29. the counted at field source auto collapses the native picker after date 
     $pageSource = file_get_contents(resource_path('js/pages/inventory-counts-index.js'));
 
     expect($source)->toContain('type="datetime-local"')
+        ->and($source)->toContain('x-on:click="$el.showPicker?.()"')
         ->and($source)->toContain('x-on:change="handleCountedAtChange($event)"')
         ->and($source)->toContain('x-on:input="handleCountedAtChange($event)"')
         ->and($pageSource)->toContain('handleCountedAtChange(event)')

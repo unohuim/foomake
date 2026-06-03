@@ -402,13 +402,13 @@ it('16. inventory workflow domain exists as a fixed system-owned domain', functi
     expect(($this->inventoryDomain)()->name)->toBe('Inventory');
 });
 
-it('17. inventory defaults seed creating and completing with completing as the marker', function (): void {
+it('17. inventory defaults seed scheduling counting and completing with completing as the marker', function (): void {
     $tenant = ($this->makeTenant)();
     ($this->seedDefaultStages)($tenant);
 
     $inventoryStages = ($this->domainStages)($tenant, ($this->inventoryDomain)());
 
-    expect($inventoryStages->pluck('key')->all())->toBe(['creating', 'completing'])
+    expect($inventoryStages->pluck('key')->all())->toBe(['scheduling', 'counting', 'completing'])
         ->and($inventoryStages->firstWhere('key', 'completing')?->is_inventory_effect_stage)->toBeTrue()
         ->and($inventoryStages->where('is_active', true)->where('is_inventory_effect_stage', true)->count())->toBe(1);
 });

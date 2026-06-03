@@ -182,7 +182,12 @@
 
                                 <label class="block text-sm font-medium text-slate-700">
                                     Sort order
-                                    <input type="number" class="mt-1 block w-full rounded-xl border-slate-300 text-sm shadow-sm focus:border-slate-500 focus:ring-slate-500 disabled:bg-slate-100 disabled:text-slate-500" x-model="stageForm.sort_order" :disabled="editingCoreStage()">
+                                    <x-ui.smart-number-input
+                                        name="sort_order"
+                                        type="integer"
+                                        x-model="stageForm.sort_order"
+                                        disabled-expression="editingCoreStage()"
+                                    />
                                 </label>
 
                                 <label class="inline-flex items-center gap-3 text-sm font-medium text-slate-700" x-show="stageFormMode === 'edit'">
@@ -319,7 +324,11 @@
 
                                 <label class="block text-sm font-medium text-slate-700">
                                     Sort order
-                                    <input type="number" class="mt-1 block w-full rounded-xl border-slate-300 text-sm shadow-sm focus:border-slate-500 focus:ring-slate-500" x-model="taskTemplateForm.sort_order">
+                                    <x-ui.smart-number-input
+                                        name="sort_order"
+                                        type="integer"
+                                        x-model="taskTemplateForm.sort_order"
+                                    />
                                 </label>
 
                                 <label class="inline-flex items-center gap-3 text-sm font-medium text-slate-700" x-show="taskTemplateFormMode === 'edit'">

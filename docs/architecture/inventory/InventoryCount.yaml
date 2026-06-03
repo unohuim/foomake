@@ -15,13 +15,16 @@ rules:
   - Count creation records created_by_user_id and tasked_by_user_id audit fields on the inventory count.
   - Assignment is optional during draft setup; when present it is reused for generated workflow tasks.
   - Actual workflow assignment uses generated tasks assigned through tasks.assigned_to_user_id.
-  - Submitted counts move into the first active Inventory workflow stage for the tenant.
-  - Submitted counts default into SCHEDULED when the seeded Inventory workflow stages are unchanged.
-  - Submitting a count generates workflow tasks for the entered Inventory stage using the shared task system.
+  - Submitted counts enter the first active Inventory workflow stage for the tenant and automatically complete automatic stages until a manual stage is reached.
+  - Moving past the seeded Scheduling stage requires at least one attached Inventory Count material line.
+  - With seeded Inventory stages, pressing Schedule enters automatic Scheduling, completes it, and lands in manual Counting with visible status SCHEDULED.
+  - Submitting a count generates workflow tasks only for the manual Inventory stage that remains current after automatic stages complete.
   - Leaving the current Inventory workflow stage is blocked while required current-stage tasks remain open.
   - Inventory count detail uses the shared resource-detail header plus reusable detail-section pattern with a Details section, a Materials section, and a Tasks section.
-  - Inventory Count detail headers should not use rounded metadata pills for counted date, line count, workflow stage, or notes; the header should instead show a clean workflow-status badge beside the title and move editable metadata into the Details section.
-  - Inventory Count detail workflow-status badges should render from the current stage `name`, while workflow action buttons should render from the target stage `action_verb`.
+  - Inventory Count detail headers should not use rounded metadata pills for counted date, line count, workflow stage, or notes; the header should show the counted date with a clean workflow-derived status badge underneath and move editable metadata into the Details section.
+  - Inventory Count detail workflow-status badges must not render the computed posted lifecycle value; `posted` is a storage lifecycle marker and must not appear as a workflow-stage status.
+  - Inventory Count detail workflow-status badges should render Draft before the first Inventory workflow stage is completed, the previous completed stage's `status_complete_label` while sitting in a later non-posted stage, and the current inventory-effect stage's `status_complete_label` after posting.
+  - Posted Inventory Count workflow progress should mark the inventory-effect stage complete and render no current workflow step.
   - The Inventory Count `Details` section keeps Count Date, Assigned To, and Notes together in one compact responsive layout consistent with other detail-edit sections.
   - Inventory Count `Details` updates use the existing inventory count update route through AJAX/autosave and may remain editable after submission until the count reaches a posted or inventory-effect stage.
   - Empty Inventory Count detail Notes should render as blank editable content and should not show placeholder dashes.
@@ -66,15 +69,17 @@ rules:
   - The Inventory Count create counted_at field blurs the native picker after a real value change and may move focus to the next logical field without clearing the selected datetime value.
   - Duplicate item_id values are rejected within the same inventory count, while the same material may appear on different inventory counts.
   - Count lines may omit counted_quantity during draft/setup and non-effect workflow stages.
-  - Every count line must have counted_quantity before posting or advancing into the inventory-effect stage.
+  - Every count line must have counted_quantity before posting or completing the inventory-effect stage.
   - Posting inventory counts creates stock moves only for stockable items on the count.
   - Non-stockable count lines remain valid workflow records but do not generate stock moves when posted.
-  - Advancing into the Inventory inventory-effect stage posts the count through PostInventoryCountAction.
+  - Advancing into a manual Inventory inventory-effect stage does not post the count.
+  - Completing the current Inventory inventory-effect stage posts the count through PostInventoryCountAction.
   - Posting must remain transactional and idempotent through posted_at guarding.
   - The direct /post compatibility path may move a count directly to the inventory-effect stage before posting.
   - Posting sets posted_at and posted_by_user_id.
   - Draft detail pages expose only the next valid workflow action, defaulting to SCHEDULE when seeded stages are unchanged.
   - Submitted non-terminal counts may expose both previous-stage and next-stage actions using stage names only.
+  - A current non-posted inventory-effect stage exposes a terminal `Complete` action even when the configured stage action verb was used to enter that stage.
   - Previous-stage actions are Inventory Count specific, are hidden on Draft/first-stage/posted states, and never reverse stock moves.
   - Inventory Count previous and next buttons must be resolved from configured stage order, not hardcoded stage keys.
   - Visible Post Count actions are hidden from the UI while the backend /post route remains compatible.

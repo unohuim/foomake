@@ -138,7 +138,14 @@
 
                                 <div>
                                     <label for="uom-display-precision" class="block text-sm font-medium text-gray-700">{{ __('Display Precision') }}</label>
-                                    <input id="uom-display-precision" type="number" min="0" max="6" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500" x-model="form.display_precision" />
+                                    <x-ui.smart-number-input
+                                        id="uom-display-precision"
+                                        name="display_precision"
+                                        type="integer"
+                                        min="0"
+                                        max="6"
+                                        x-model="form.display_precision"
+                                    />
                                     <p class="mt-1 text-sm text-red-600" x-text="errors.display_precision ? errors.display_precision[0] : ''"></p>
                                 </div>
                             </div>

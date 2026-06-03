@@ -54,6 +54,9 @@ If any conflicts are detected between sources, work MUST pause and be escalated 
 ## Workflow
 
 - Codex must never proceed based on inferred or partial intent.
+- Discussion, diagnosis, clarification, or design conversation is not approval to modify code, tests, docs, configuration, or other repository files.
+- Codex may only edit files after the human explicitly asks for implementation or file changes, using clear wording such as “implement,” “make the change,” “fix it,” “update the file,” or equivalent.
+- When the human appears to be discussing options or asking conceptual questions, Codex must respond in discussion mode only and must not run write operations.
 
 ---
 

@@ -1,0 +1,46 @@
+name: Smart Number Input
+type: UI Architecture Invariant
+location:
+  - resources/views/components/ui/smart-number-input.blade.php
+  - resources/js/components/smart-number-input.js
+purpose: Provide one reusable Blade and Alpine number-entry control that formats numeric display text while preserving canonical submitted values.
+when_to_use:
+  - Numeric form fields that need grouped display formatting
+  - Quantity, count, money, price, tax, percent, and decimal entry fields
+  - Fields where local Alpine state can emit canonical values to a page-owned persistence flow
+when_not_to_use:
+  - Non-numeric fields
+  - Fields whose visible value intentionally differs from its business meaning, such as inputs explicitly labeled as cents
+  - JavaScript-rendered string templates that cannot safely mount Blade components
+rules:
+  - The component must expose one flexible API instead of separate value-type components.
+  - Blade-rendered numeric fields must use the Blade component.
+  - JavaScript-rendered numeric fields must use the shared JavaScript smart-number renderer.
+  - Blade and JavaScript renderers must reuse the same Alpine data module so parsing, comma formatting, event payloads, and canonical raw-value behavior remain consistent.
+  - Type-specific behavior must be selected through the type prop.
+  - The visible input may format thousands separators while the hidden input preserves the canonical raw value.
+  - Display formatting must not become a persistence layer or mutate server-owned storage rules.
+  - Quantity display precision must come from the item or UOM display precision whenever item context exists.
+  - Quantity values must remain string-safe and must not use floating point math.
+  - Money inputs may support cents-backed canonical values when a caller explicitly requests that raw mode.
+  - The component dispatches smart-number-input:changed events for page-owned listeners and may also dispatch a caller-configured event.
+  - Input-source changed events must debounce for 300 milliseconds by default; change and blur source events must dispatch immediately after clearing any pending input debounce.
+  - The component must not write to the database directly or imply that a database save succeeded.
+  - Save-success UI such as a green checkmark must be owned by parent page logic after a successful persistence response.
+  - Alpine state must remain local to the component and must not introduce global JavaScript state.
+  - Blade markup must not contain executable script tags.
+  - Styling must use Tailwind utilities only.
+public_interface:
+  - <x-ui.smart-number-input name="quantity" type="decimal" precision="6" />
+  - type values integer, decimal, money, percent
+  - raw-mode value or cents
+  - debounce-ms integer, default 300
+  - smart-number-input:changed event payload with name, rawValue, displayValue, type, currency, precision, and source
+example_usage: |
+  <x-ui.smart-number-input
+      name="shipping_amount"
+      type="money"
+      x-model="form.shipping_amount"
+      after-change="autosaveField('shipping_amount')"
+      after-blur="autosaveField('shipping_amount')"
+  />

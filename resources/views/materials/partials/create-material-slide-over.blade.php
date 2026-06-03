@@ -41,11 +41,11 @@
 
             <div class="sm:col-span-2">
                 <label for="material-starting-quantity" class="block text-sm font-medium text-gray-700">Starting Qty</label>
-                <input
+                <x-ui.smart-number-input
                     id="material-starting-quantity"
-                    type="text"
-                    inputmode="decimal"
-                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                    name="starting_quantity"
+                    type="decimal"
+                    precision="6"
                     x-model="form.starting_quantity"
                 />
                 <p class="mt-1 text-sm text-red-600" x-show="errors.starting_quantity" x-text="errors.starting_quantity[0]"></p>

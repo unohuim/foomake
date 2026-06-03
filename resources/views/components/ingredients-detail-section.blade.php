@@ -100,12 +100,14 @@
                         <td class="px-3 py-3">
                             <template x-if="ingredients.can_edit">
                                 <div class="flex items-center gap-2">
-                                    <input
-                                        type="text"
-                                        class="block w-32 rounded-lg border-gray-300 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                                    <x-ui.smart-number-input
+                                        name="quantity"
+                                        type="decimal"
+                                        precision="6"
+                                        class="w-32"
                                         x-model="line.quantity_input"
-                                        x-on:change="saveIngredientQuantity(line)"
-                                        x-on:blur="saveIngredientQuantity(line)"
+                                        after-change="saveIngredientQuantity(line)"
+                                        after-blur="saveIngredientQuantity(line)"
                                     />
                                     <span class="text-emerald-600" x-show="ingredientSavedState[line.id] === 'saved'">
                                         <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">

@@ -1580,8 +1580,11 @@ Notes:
 - Draft creation does not require assignment; if a count-level assignee is present it is reused when workflow tasks are generated.
 - Workflow task assignment uses generated `tasks.assigned_to_user_id` rather than a separate inventory-count-only task system.
 - Draft detail exposes only the next valid workflow action, defaulting to `SCHEDULE` when seeded inventory stages are unchanged.
+- Moving past the seeded Scheduling stage requires at least one attached Inventory Count material line.
+- With seeded Inventory stages, pressing Schedule enters automatic Scheduling, completes it, and lands in manual Counting with visible status `SCHEDULED`.
 - Submitted Inventory Counts may expose previous-stage and next-stage actions using configured action verb. Previous-stage movement is Inventory Count specific and never reverses posted stock.
-- Inventory Count detail uses the shared resource-detail header plus a compact `Details` section ahead of the reusable `Materials` and `Tasks` sections. The header no longer owns counted-date / line-count / workflow-stage metadata pills; it now shows a clean workflow-status badge beside the title, while Count Date, Assigned To, and Notes live in the AJAX-autosaved `Details` section.
+- Inventory Count detail uses the shared resource-detail header plus a compact `Details` section ahead of the reusable `Materials` and `Tasks` sections. The header shows the counted date with a clean workflow-derived status badge underneath, while Count Date, Assigned To, and Notes live in the AJAX-autosaved `Details` section.
+- Inventory Count detail workflow-status badges must never show the computed posted lifecycle value; `posted` is storage lifecycle only and not a workflow-stage status.
 - Workflow stages separate current-state display from transition-button copy: stage labels use `workflow_stages.name`, while workflow action buttons use `workflow_stages.action_verb`.
 - Seeded workflow stages are core (`is_core = true`) and cannot be deleted, deactivated, reordered, or edited across identity/status-completion fields; user-created stages default to non-core.
 - Inventory Count detail mounts reusable `Materials` and `Tasks` sections through shared `js-crud-section` payload/config rendering; the `Tasks` section is not bespoke markup, uses the existing `tasks.complete` route contract, disables the shared dots menu through config, always shows `Assigned By`, then swaps `Assigned To` for `Completed By` once the task is completed, and shows a visible inline `Complete` action only while the task is incomplete and completable.
@@ -1589,7 +1592,7 @@ Notes:
 - Inventory Count detail `Materials` rows use two mutually exclusive modes: Draft rows use a direct inline rounded `x-mark` remove action instead of the vertical-dots row menu, while submitted workflow-stage rows hide removal and expose an AJAX Qty input on the right side instead.
 - Draft Inventory Count detail `Materials` rows do not show QTY labels or QTY inputs, and workflow-stage rows do not show remove actions.
 - Inventory Count detail `Details` metadata may still be updated after workflow entry, but posting / inventory-effect stages remain mutation-locked.
-- Seeded Inventory Count workflow stages use Creating and Completing as stage names, with `SCHEDULE` and `COMPLETE` as the corresponding workflow action verbs; Inventory Completing remains manual because it is inventory-impacting.
+- Seeded Inventory Count workflow stages use Scheduling, Counting, and Completing as stage names. Scheduling is automatic and completes to `SCHEDULED`, Counting is manual and completes to `COUNTED`, and Completing is the manual inventory-effect stage that posts only when the current stage is completed.
 - Entering any workflow stage hides the Inventory Count Materials combobox add row and server-side line creation is rejected.
 - Workflow-stage Inventory Count QTY edits use the existing line update route, normalize counted quantities to canonical scale 6, and return refreshed row payloads for immediate shared-section updates.
 - Workflow-stage Inventory Count QTY inputs display using the counted item's base UoM display precision instead of raw canonical scale-6 storage.
@@ -1603,7 +1606,7 @@ Notes:
 - Material detail net quantity uses the formula `on hand - open sales + open purchase + open make outputs - open make ingredients`, with all quantity math kept at canonical scale 6 and displayed through the shared quantity formatter.
 - Open make-order output in that stats strip and in the inventory availability read model uses `expected_output_qty`, while completed make-order output reaches `On Hand` and `Net Qty` through ledger stock moves that use `actual_output_qty` when present.
 - Shared section metadata rendering filters explicit empty metadata values so mutually exclusive task-row labels do not render placeholder rows.
-- Inventory Count index `Status` reflects the current workflow stage label rather than the posted lifecycle label.
+- Inventory Count index `Status` reflects the workflow-derived status label rather than the current stage label or posted lifecycle label.
 - Count lines may leave `counted_quantity` blank during draft/setup, but posting must fail until every line has a quantity.
 - Posting inventory counts creates stock moves only for stockable count lines.
 - The direct `/inventory/counts/{count}/post` route remains a compatibility path and may move the count to the Inventory inventory-effect stage before posting.
@@ -1845,7 +1848,7 @@ Notes:
 - `resources/views/components/ui/workflow-progress.blade.php`
 
 **Purpose:**
-Render a read-only DRAFT-first progress panel for workflow-enabled resource detail pages using tenant-configured workflow stages.
+Render a read-only progress panel for workflow-enabled resource detail pages using tenant-configured workflow stages, with optional `DRAFT` display.
 
 **When to Use:**
 Sales Order, Purchase Order, Make Order, Inventory Count, or future workflow-enabled detail pages that need passive workflow position display below the resource header.
@@ -1855,11 +1858,13 @@ Workflow transitions, task completion, workflow stage administration, breadcrumb
 
 **Public Interface:**
 - `BuildWorkflowProgressStepsAction::execute()`
-- `<x-ui.workflow-progress :steps="$workflowProgressSteps" />`
+- `<x-ui.workflow-progress :steps="$workflowProgressSteps" :do_draft="true" />`
 
 Notes:
-- The first visual step is always `DRAFT`.
-- Active tenant-configured stage names render after `DRAFT` in stage order.
+- `do_draft` defaults to `false`; when false, the visual progress bar omits `DRAFT`.
+- When `do_draft` is true, the first visual step is `DRAFT`.
+- Active tenant-configured stage names render in stage order.
+- Completed workflows render with no current step and mark completed stages as checked, including `DRAFT` only when `do_draft` is true.
 - The component is read-only and must not expose transition controls.
 - Existing resource authorization remains the source of truth.
 
@@ -2468,6 +2473,36 @@ $option = ItemPurchaseOption::create([
     'pack_quantity' => '10.000000',
     'pack_uom_id' => $kg->id,
 ]);
+```
+
+### Supplier Package Form Config
+
+**Name:** Supplier Package Form Config  
+**Type:** Reusable Purchasing Form Contract  
+**Location:**  
+- `app/Support/Purchasing/SupplierPackageFormConfig.php`
+- `docs/architecture/purchasing/SupplierPackageFormConfig.yaml`
+
+**Purpose:**  
+Keep the supplier-package drawer form design consistent across Material detail and Supplier detail while allowing each page to provide its own fixed parent context and endpoints.
+
+**When to Use:**  
+Supplier-package create/edit drawer fields inside reusable detail-section CRUD surfaces.
+
+**When Not to Use:**  
+Unrelated purchasing forms, persistence, validation, or authorization.
+
+**Public Interface:**  
+- `SupplierPackageFormConfig::createAction()`
+- `SupplierPackageFormConfig::fieldsForMaterial()`
+- `SupplierPackageFormConfig::fieldsForSupplier()`
+
+**Example Usage:**  
+```php
+$formConfig = new SupplierPackageFormConfig();
+
+$section['createAction'] = $formConfig->createAction(['supplier_id' => $supplier->id]);
+$section['fields'] = $formConfig->fieldsForSupplier($request, $supplier);
 ```
 
 ### Purchase Order Lifecycle
@@ -3285,6 +3320,51 @@ Notes:
         <div class="flex h-full min-h-0 flex-1 flex-col" data-crud-root></div>
     </div>
 </div>
+```
+
+---
+
+### Smart Number Input
+
+**Name:** Smart Number Input  
+**Type:** UI Component Pattern  
+**Location:**  
+- `docs/architecture/ui/SmartNumberInput.yaml`  
+- `resources/views/components/ui/smart-number-input.blade.php`  
+- `resources/js/components/smart-number-input.js`
+
+**Purpose:**  
+Provide one reusable Blade + Alpine number-entry control that formats display text with grouped digits while preserving canonical raw values for server-owned persistence.
+
+**When to Use:**  
+Numeric input fields for quantities, counts, money amounts, prices, taxes, percentages, and decimal values where the caller can bind or submit a canonical scalar value.
+
+**When Not to Use:**  
+Fields whose visible label intentionally asks for a storage unit such as cents, or JavaScript-rendered string templates where a Blade component cannot safely mount.
+
+**Public Interface:**  
+- `<x-ui.smart-number-input name="quantity" type="decimal" precision="6" />`
+- Blade-rendered numeric fields use `<x-ui.smart-number-input ... />`
+- JavaScript-rendered numeric fields use the shared JS smart-number renderer in `resources/js/lib/js-crud-section.js`
+- `type`: `integer`, `decimal`, `money`, or `percent`
+- `raw-mode`: `value` or `cents`
+- Optional event payload with `name`, `rawValue`, `displayValue`, `type`, `currency`, `precision`, and `source`
+
+Notes:
+- Both renderers reuse the same `smartNumberInput` Alpine data module so live comma formatting and raw-value behavior do not drift.
+- Quantity precision comes from the item/UOM display precision when item context exists; canonical server normalization remains backend-owned.
+- Both renderers dispatch `smart-number-input:changed` for parent listeners; the component does not persist data or show save-success UI.
+- Input-source changed events debounce for 300 milliseconds by default; change and blur source events dispatch immediately after clearing any pending input debounce.
+- Save-success indicators such as green checkmarks belong to parent page logic after a successful persistence response.
+
+**Example Usage:**  
+```blade
+<x-ui.smart-number-input
+    name="shipping_amount"
+    type="money"
+    x-model="form.shipping_amount"
+    after-change="autosaveField('shipping_amount')"
+/>
 ```
 
 ---

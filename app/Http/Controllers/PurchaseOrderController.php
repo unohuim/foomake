@@ -199,7 +199,14 @@ class PurchaseOrderController extends Controller
             'workflowProgressSteps' => app(BuildWorkflowProgressStepsAction::class)->execute(
                 (int) $request->user()->tenant_id,
                 'purchasing',
-                isset($workflowPayload['currentStage']['id']) ? (int) $workflowPayload['currentStage']['id'] : null
+                isset($workflowPayload['currentStage']['id']) ? (int) $workflowPayload['currentStage']['id'] : null,
+                null,
+                $purchaseOrder->last_completed_workflow_stage_id === null
+                    ? null
+                    : (int) $purchaseOrder->last_completed_workflow_stage_id,
+                ! isset($workflowPayload['currentStage']['id'])
+                    && $purchaseOrder->last_completed_workflow_stage_id !== null
+                    && $purchaseOrder->workflowStatus() === PurchaseOrder::STATUS_COMPLETED
             ),
             'lines' => $purchaseOrder->lines->map(function (PurchaseOrderLine $line) use ($tenantCurrency, $lineTotals) {
                 return $this->linePayload($line, $tenantCurrency, $lineTotals[$line->id] ?? []);

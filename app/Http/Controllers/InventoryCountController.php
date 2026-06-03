@@ -11,6 +11,7 @@ use App\Actions\Workflows\SeedDefaultWorkflowStagesForTenantAction;
 use App\Models\InventoryCount;
 use App\Models\InventoryCountLine;
 use App\Models\Item;
+use App\Models\Note;
 use App\Models\Task;
 use App\Models\User;
 use App\Models\WorkflowDomain;
@@ -23,6 +24,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
 
@@ -130,14 +132,19 @@ class InventoryCountController extends Controller
             ),
             'previousWorkflowActionLabel' => $this->workflowActionButtonText($previousStage),
             'previousWorkflowActionEvent' => $this->previousWorkflowActionEvent($count, $previousStage),
-            'nextWorkflowActionLabel' => $this->workflowActionButtonText($nextStage),
+            'nextWorkflowActionLabel' => $this->workflowActionButtonText($nextStage, $count),
             'nextWorkflowActionEvent' => $this->nextWorkflowActionEvent($count, $nextStage),
             'payload' => [
                 'count' => $this->countPayload($count, Gate::allows('inventory-adjustments-execute')),
                 'workflowProgressSteps' => app(BuildWorkflowProgressStepsAction::class)->execute(
                     (int) $request->user()->tenant_id,
                     'inventory',
-                    $count->workflow_stage_id === null ? null : (int) $count->workflow_stage_id
+                    $count->posted_at === null && $count->workflow_stage_id !== null
+                        ? (int) $count->workflow_stage_id
+                        : null,
+                    null,
+                    $count->workflow_stage_id === null ? null : (int) $count->workflow_stage_id,
+                    $count->posted_at !== null
                 ),
                 'sections' => [
                     'countLines' => $this->countLinesSectionConfig($request, $count, $items),
@@ -176,23 +183,49 @@ class InventoryCountController extends Controller
             ], 422);
         }
 
-        $count = InventoryCount::query()->forceCreate([
-            'tenant_id' => $request->user()->tenant_id,
-            'created_by_user_id' => $request->user()->id,
-            'tasked_by_user_id' => $request->user()->id,
-            'assigned_to_user_id' => isset($validated['assigned_to_user_id'])
-                ? (int) $validated['assigned_to_user_id']
-                : null,
-            'counted_at' => Carbon::parse($validated['counted_at']),
-            'workflow_stage_id' => null,
-            'notes' => $validated['notes'] ?? null,
-        ]);
+        $count = DB::transaction(function () use ($request, $validated): InventoryCount {
+            $count = InventoryCount::query()->forceCreate([
+                'tenant_id' => $request->user()->tenant_id,
+                'created_by_user_id' => $request->user()->id,
+                'tasked_by_user_id' => $request->user()->id,
+                'assigned_to_user_id' => isset($validated['assigned_to_user_id'])
+                    ? (int) $validated['assigned_to_user_id']
+                    : null,
+                'counted_at' => Carbon::parse($validated['counted_at']),
+                'workflow_stage_id' => null,
+                'notes' => $validated['notes'] ?? null,
+            ]);
+
+            $this->createInitialNoteFromCountNotes($count, $request);
+
+            return $count;
+        });
 
         $count->load(['workflowStage', 'assignedToUser'])->loadCount('lines');
 
         return response()->json([
             'count' => $this->countPayload($count),
         ], 201);
+    }
+
+    /**
+     * Create the initial Notes feed entry from non-blank create-form notes.
+     */
+    private function createInitialNoteFromCountNotes(InventoryCount $count, Request $request): void
+    {
+        $body = trim((string) ($count->notes ?? ''));
+
+        if ($body === '') {
+            return;
+        }
+
+        Note::query()->forceCreate([
+            'tenant_id' => (int) $count->tenant_id,
+            'noteable_type' => InventoryCount::class,
+            'noteable_id' => (int) $count->id,
+            'author_user_id' => (int) $request->user()->id,
+            'body' => $body,
+        ]);
     }
 
     /**
@@ -787,6 +820,7 @@ class InventoryCountController extends Controller
         $showDetailsSection = Gate::allows('inventory-adjustments-view');
         $canEditNotes = $canExecute && $this->ensureEditableDetails($inventoryCount) === null;
         $canEditMetadata = $canEditNotes && $showDetailsSection;
+        $canViewMetadata = $showDetailsSection;
 
         return [
             'id' => $inventoryCount->id,
@@ -795,10 +829,12 @@ class InventoryCountController extends Controller
             'notes' => $inventoryCount->notes ?? '',
             'can_edit_details' => $canEditMetadata,
             'can_edit_notes' => $canEditNotes,
+            'can_view_counted_at' => $canViewMetadata,
+            'can_view_assignment' => $canViewMetadata,
             'can_edit_counted_at' => $canEditMetadata,
             'can_edit_assignment' => $canEditMetadata,
             'show_details_section' => $showDetailsSection,
-            'assignee_options' => $canEditMetadata
+            'assignee_options' => $canViewMetadata
                 ? $this->tenantAssigneeOptionsPayload((int) $inventoryCount->tenant_id)
                 : [],
             'status' => $inventoryCount->status,
@@ -950,7 +986,7 @@ class InventoryCountController extends Controller
             'counted_at_iso' => $inventoryCount->counted_at->format('Y-m-d\TH:i'),
             'notes' => $inventoryCount->notes ?? '',
             'status' => $inventoryCount->status,
-            'status_label' => $this->workflowStageStatusLabel($inventoryCount),
+            'status_label' => $this->workflowStatusLabel($inventoryCount),
             'lifecycle_status' => $inventoryCount->status,
             'assigned_to_user_id' => $inventoryCount->assigned_to_user_id,
             'counter_email' => $inventoryCount->assignedToUser?->email,
@@ -1067,10 +1103,11 @@ class InventoryCountController extends Controller
             'counted_quantity' => $line->counted_quantity,
             'counted_quantity_display' => $line->counted_quantity === null
                 ? '—'
-                : QuantityFormatter::formatForUom($line->counted_quantity, $line->item?->baseUom, 1),
+                : QuantityFormatter::formatForUom($line->counted_quantity, $line->item?->baseUom),
             'counted_quantity_input' => $line->counted_quantity === null
                 ? ''
-                : QuantityFormatter::formatForUom($line->counted_quantity, $line->item?->baseUom, 1),
+                : QuantityFormatter::formatForUom($line->counted_quantity, $line->item?->baseUom),
+            'uom_display_precision' => (int) ($line->item?->baseUom?->display_precision ?? QuantityFormatter::MAX_PRECISION),
             'can_edit_counted_quantity' => $canEditCountedQuantity,
             'shows_counted_quantity' => $showsCountedQuantity,
             'notes' => $line->notes ?? '',
@@ -1308,22 +1345,27 @@ class InventoryCountController extends Controller
     private function workflowStatusLabel(InventoryCount $inventoryCount): string
     {
         if ($inventoryCount->workflow_stage_id === null) {
-            return $inventoryCount->posted_at !== null ? 'Posted' : 'Draft';
+            return $inventoryCount->posted_at !== null ? 'COMPLETED' : 'Draft';
         }
 
-        return $inventoryCount->workflowStage?->name ?? 'Unknown';
-    }
+        $resolver = app(ResolveInventoryWorkflowStageAction::class);
+        $currentStage = $resolver->currentStage($inventoryCount);
 
-    /**
-     * Return the workflow-stage label used by the Inventory Counts index status column.
-     */
-    private function workflowStageStatusLabel(InventoryCount $inventoryCount): string
-    {
-        if ($inventoryCount->workflow_stage_id === null) {
-            return 'Draft';
+        if (! $currentStage) {
+            return 'Unknown';
         }
 
-        return $inventoryCount->workflowStage?->name ?? 'Unknown';
+        if ($inventoryCount->posted_at !== null) {
+            return $currentStage->status_complete_label ?: $currentStage->name;
+        }
+
+        $previousStage = $resolver->previousActiveStage($inventoryCount);
+
+        if ($previousStage) {
+            return $previousStage->status_complete_label ?: $previousStage->name;
+        }
+
+        return 'Draft';
     }
 
     /**
@@ -1339,6 +1381,12 @@ class InventoryCountController extends Controller
 
         if ($inventoryCount->workflow_stage_id === null) {
             return $resolver->firstActiveStage($inventoryCount);
+        }
+
+        $currentStage = $resolver->currentStage($inventoryCount);
+
+        if ($currentStage?->is_inventory_effect_stage) {
+            return $currentStage;
         }
 
         return $resolver->nextActiveStage($inventoryCount);
@@ -1387,10 +1435,23 @@ class InventoryCountController extends Controller
     /**
      * Resolve the visible action-button text for a workflow stage target.
      */
-    private function workflowActionButtonText(?WorkflowStage $workflowStage): ?string
+    private function workflowActionButtonText(
+        ?WorkflowStage $workflowStage,
+        ?InventoryCount $inventoryCount = null
+    ): ?string
     {
         if (! $workflowStage) {
             return null;
+        }
+
+        if (
+            $inventoryCount !== null
+            && $inventoryCount->posted_at === null
+            && $inventoryCount->workflow_stage_id !== null
+            && (int) $inventoryCount->workflow_stage_id === (int) $workflowStage->id
+            && $workflowStage->is_inventory_effect_stage
+        ) {
+            return 'Complete';
         }
 
         return $workflowStage->action_verb ?: $workflowStage->name;

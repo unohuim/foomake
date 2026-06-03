@@ -15,12 +15,12 @@ uses(RefreshDatabase::class);
 beforeEach(function (): void {
     $this->tenantCounter = 1;
 
-    $this->renderWorkflowProgress = function (array $steps): string {
+    $this->renderWorkflowProgress = function (array $steps, bool $doDraft = true): string {
         return Blade::render(
             <<<'BLADE'
-<x-ui.workflow-progress :steps="$steps" />
+<x-ui.workflow-progress :steps="$steps" :do_draft="$doDraft" />
 BLADE,
-            ['steps' => $steps]
+            ['steps' => $steps, 'doDraft' => $doDraft]
         );
     };
 
@@ -74,13 +74,17 @@ BLADE,
         Tenant $tenant,
         string $domainKey,
         ?int $currentStageId = null,
-        ?string $currentStageKey = null
+        ?string $currentStageKey = null,
+        ?int $completedStageId = null,
+        bool $workflowCompleted = false
     ): array {
         return app(BuildWorkflowProgressStepsAction::class)->execute(
             (int) $tenant->id,
             $domainKey,
             $currentStageId,
-            $currentStageKey
+            $currentStageKey,
+            $completedStageId,
+            $workflowCompleted
         );
     };
 
@@ -113,6 +117,47 @@ it('2. workflow progress component renders DRAFT as the first step', function ()
 
     expect($steps[0]['label'])->toBe('DRAFT')
         ->and($steps[0]['status'])->toBe('current');
+});
+
+it('2a. workflow progress component hides DRAFT by default unless do_draft is true', function (): void {
+    $steps = [
+        ['label' => 'DRAFT', 'status' => 'completed'],
+        ['label' => 'Prep', 'status' => 'current'],
+    ];
+
+    $defaultHtml = Blade::render(
+        <<<'BLADE'
+<x-ui.workflow-progress :steps="$steps" />
+BLADE,
+        ['steps' => $steps]
+    );
+    $draftHtml = ($this->renderWorkflowProgress)($steps, true);
+
+    expect($defaultHtml)->not->toContain('DRAFT')
+        ->and($defaultHtml)->toContain('Prep')
+        ->and($defaultHtml)->toContain('>01<')
+        ->and($draftHtml)->toContain('DRAFT')
+        ->and($draftHtml)->toContain('Prep');
+});
+
+it('2b. workflow progress component marks the first visible stage current when DRAFT is hidden and current', function (): void {
+    $html = Blade::render(
+        <<<'BLADE'
+<x-ui.workflow-progress :steps="$steps" />
+BLADE,
+        [
+            'steps' => [
+                ['label' => 'DRAFT', 'status' => 'current', 'current' => true],
+                ['label' => 'Prep', 'status' => 'upcoming', 'current' => false],
+                ['label' => 'Counting', 'status' => 'upcoming', 'current' => false],
+            ],
+        ]
+    );
+
+    expect($html)->not->toContain('DRAFT')
+        ->and($html)->toContain('Prep')
+        ->and($html)->toContain('aria-current="step"')
+        ->and($html)->toContain('border-2 border-indigo-600');
 });
 
 it('3. workflow progress steps render configured stage names after DRAFT', function (): void {
@@ -181,6 +226,24 @@ it('8. stages after current render as upcoming', function (): void {
     expect($stepsByLabel->get('Prep')['status'])->toBe('current')
         ->and($stepsByLabel->get('Counting')['status'])->toBe('upcoming')
         ->and($stepsByLabel->get('Reviewing')['status'])->toBe('upcoming');
+});
+
+it('8a. completed workflows render every step through the completed stage as completed with no current step', function (): void {
+    $tenant = ($this->makeTenant)();
+    $stages = ($this->makeStages)($tenant, 'inventory');
+
+    $steps = ($this->buildSteps)($tenant, 'inventory', null, null, $stages['reviewing']->id, true);
+    $stepsByLabel = collect($steps)->keyBy('label');
+
+    expect($stepsByLabel->get('DRAFT')['status'])->toBe('completed')
+        ->and($stepsByLabel->get('Prep')['status'])->toBe('completed')
+        ->and($stepsByLabel->get('Counting')['status'])->toBe('completed')
+        ->and($stepsByLabel->get('Reviewing')['status'])->toBe('completed')
+        ->and(collect($steps)->where('current', true)->count())->toBe(0);
+
+    $html = ($this->renderWorkflowProgress)($steps);
+
+    expect($html)->not->toContain('aria-current="step"');
 });
 
 it('9. completed steps render check icon styling', function (): void {
@@ -305,6 +368,13 @@ it('22. detail controllers build workflow progress after normal page authorizati
         ->and(($this->purchaseOrderControllerSource)())->toContain('BuildWorkflowProgressStepsAction')
         ->and(($this->salesOrderControllerSource)())->toContain('abort_unless')
         ->and(($this->salesOrderControllerSource)())->toContain('BuildWorkflowProgressStepsAction');
+});
+
+it('22a. detail controllers pass completed workflow state into the shared progress builder', function (): void {
+    expect(($this->inventoryCountControllerSource)())->toContain('$count->posted_at !== null')
+        ->and(($this->makeOrderControllerSource)())->toContain('$makeOrder->status === MakeOrder::STATUS_MADE')
+        ->and(($this->purchaseOrderControllerSource)())->toContain('$purchaseOrder->workflowStatus() === PurchaseOrder::STATUS_COMPLETED')
+        ->and(($this->salesOrderControllerSource)())->toContain('$salesOrder->status === SalesOrder::STATUS_COMPLETED');
 });
 
 it('23. workflow progress stage query is tenant scoped and active only', function (): void {

@@ -75,6 +75,7 @@
                                                     type="date"
                                                     class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                                                     x-model="form.order_date"
+                                                    x-on:click="$el.showPicker?.()"
                                                 />
                                             </label>
                                             <p class="mt-1 text-sm text-red-600" x-text="errors.order_date[0]"></p>

@@ -1,0 +1,34 @@
+name: Supplier Package Form Config
+type: Reusable Purchasing Form Contract
+location:
+  - app/Support/Purchasing/SupplierPackageFormConfig.php
+  - app/Http/Controllers/ItemController.php
+  - app/Http/Controllers/SupplierController.php
+purpose: Keep supplier-package create and edit drawer form design consistent across material and supplier detail pages while preserving page-specific parent context and endpoints.
+when_to_use:
+  - Rendering supplier-package form fields inside a reusable detail-section CRUD drawer
+  - Sharing supplier-package drawer title, description, button text, field labels, field order, and row layout across parent detail pages
+  - Switching only the fixed parent context between material-scoped and supplier-scoped supplier-package sections
+when_not_to_use:
+  - Building unrelated purchasing forms
+  - Replacing parent-page endpoint, permission, row-action, or list contracts
+  - Performing supplier-package persistence or validation
+rules:
+  - Supplier-package drawer copy, package quantity label, UoM label, SKU label, Price label, grouped row layout, and smart-number metadata must be defined in one shared form config contract.
+  - Material detail fixes the item context and uses a supplier selector as the first field.
+  - Supplier detail fixes the supplier context and uses a material selector as the first field.
+  - Page controllers remain responsible for endpoints, authorization flags, section context, row layout read models, and row actions.
+  - The shared form config must not perform persistence, validation, authorization, or tenant mutation.
+  - Price fields must use the smart-number money contract with the supplier currency resolved from the selected or fixed supplier context.
+  - Quantity fields must use the smart-number decimal contract and preserve BCMath-compatible string values.
+public_interface:
+  - SupplierPackageFormConfig::createAction()
+  - SupplierPackageFormConfig::fieldsForMaterial()
+  - SupplierPackageFormConfig::fieldsForSupplier()
+example_usage: |
+  $formConfig = new SupplierPackageFormConfig();
+
+  $section = [
+      'createAction' => $formConfig->createAction(['supplier_id' => $supplier->id]),
+      'fields' => $formConfig->fieldsForSupplier($request, $supplier),
+  ];

@@ -28,12 +28,21 @@ const normalizeField = (field) => {
         name: asString(safeField.name),
         label: asString(safeField.label),
         type: asString(safeField.type, 'text'),
+        numberType: asString(safeField.numberType, 'decimal'),
+        precision: safeField.precision,
+        currency: asString(safeField.currency),
+        currencyFromField: asString(safeField.currencyFromField),
+        currencyOptionField: asString(safeField.currencyOptionField, 'currency_code'),
+        rawMode: asString(safeField.rawMode, 'value'),
+        debounceMs: safeField.debounceMs,
         required: Boolean(safeField.required),
         options: asArray(safeField.options).map((option) => ({
+            ...asRecord(option),
             value: asString(option?.value),
             label: asString(option?.label),
         })),
         rowGroup: asString(safeField.rowGroup),
+        width: asString(safeField.width),
         inlineCreate: {
             label: asString(inlineCreate.label, 'Create'),
             storeUrl: asString(inlineCreate.storeUrl),
@@ -156,7 +165,7 @@ const fieldMarkup = `
     <template x-for="(row, rowIndex) in fieldRows()" :key="\`field-row-\${rowIndex}\`">
         <div :class="rowClass(row)">
             <template x-for="field in row" :key="field.name">
-                <div>
+                <div :class="fieldWrapperClass(field)">
                     <label class="block text-xs font-semibold uppercase tracking-wide text-gray-500" :for="\`section-field-\${field.name}\`" x-text="field.label"></label>
 
                     <template x-if="field.type === 'select'">
@@ -187,6 +196,7 @@ const fieldMarkup = `
                             x-modelable="selectedValue"
                             x-model="form[field.name]"
                             x-on:click.outside="closeDropdown()"
+                            x-on:focusout="handleFocusAway($event)"
                             x-on:keydown.arrow-down.prevent="highlightNext()"
                             x-on:keydown.arrow-up.prevent="highlightPrevious()"
                             x-on:keydown.enter.prevent="selectHighlighted()"
@@ -267,7 +277,45 @@ const fieldMarkup = `
                         </div>
                     </template>
 
-                    <template x-if="field.type !== 'select' && field.type !== 'combobox'">
+                    <template x-if="field.type === 'smart-number'">
+                        <div
+                            class="mt-1"
+                            data-smart-number-input-root
+                            x-data="smartNumberInput({
+                                name: field.name,
+                                value: form[field.name],
+                                type: field.numberType || 'decimal',
+                                currency: smartNumberFieldCurrency(field),
+                                precision: smartNumberFieldPrecision(field),
+                                debounceMs: field.debounceMs || 300,
+                                rawMode: field.rawMode || 'value',
+                            })"
+                            x-modelable="rawValue"
+                            x-model="form[field.name]"
+                        >
+                            <span class="flex w-full items-center rounded-lg border border-gray-300 bg-white shadow-sm transition focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/20">
+                                <template x-if="field.numberType === 'money'">
+                                    <span class="pointer-events-none flex shrink-0 items-center pl-3 text-sm text-gray-500">$</span>
+                                </template>
+                                <input
+                                    type="text"
+                                    class="block min-w-0 flex-1 border-0 bg-transparent px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-0"
+                                    :id="\`section-field-\${field.name}\`"
+                                    inputmode="decimal"
+                                    x-model="displayValue"
+                                    x-bind:size="inputSize()"
+                                    x-on:input="handleInput($event)"
+                                    x-on:change="handleChange($event)"
+                                    x-on:blur="handleBlur($event)"
+                                />
+                                <template x-if="field.numberType === 'money' && smartNumberFieldCurrency(field) !== ''">
+                                    <span class="pointer-events-none flex shrink-0 items-center border-l border-gray-200 px-3 text-xs font-medium uppercase tracking-wide text-gray-500" x-text="smartNumberFieldCurrency(field)"></span>
+                                </template>
+                            </span>
+                        </div>
+                    </template>
+
+                    <template x-if="field.type !== 'select' && field.type !== 'combobox' && field.type !== 'smart-number'">
                         <input
                             :type="['email', 'url', 'date', 'datetime-local'].includes(field.type) ? field.type : 'text'"
                             class="mt-1 block w-full rounded-lg border-gray-300 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500"
@@ -489,6 +537,7 @@ const renderCrudSection = () => `
                             x-model="addRowValue"
                             x-effect="configuredOptions = section.addRow.options"
                             x-on:click.outside="closeDropdown()"
+                            x-on:focusout="handleFocusAway($event)"
                             x-on:keydown.arrow-down.prevent="highlightNext()"
                             x-on:keydown.arrow-up.prevent="highlightPrevious()"
                             x-on:keydown.enter.prevent="selectHighlighted()"
@@ -634,7 +683,53 @@ const renderCrudSection = () => `
                                                     />
                                                 </label>
                                             </template>
-                                            <template x-if="meta.type !== 'input'">
+                                            <template x-if="meta.type === 'smart-number'">
+                                                <label class="flex items-center gap-2.5 text-sm">
+                                                    <template x-if="meta.showSuccessIcon">
+                                                        <svg class="h-5 w-5 shrink-0 text-emerald-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75" />
+                                                            <path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                                                        </svg>
+                                                    </template>
+                                                    <template x-if="meta.label">
+                                                        <span class="text-gray-500" x-text="meta.labelBare ? meta.label : \`\${meta.label}: \`"></span>
+                                                    </template>
+                                                    <span
+                                                        data-smart-number-input-root
+                                                        class="w-24"
+                                                        x-data="smartNumberInput({
+                                                            name: meta.field,
+                                                            value: record[meta.field],
+                                                            type: meta.numberType || 'decimal',
+                                                            currency: meta.currency || '',
+                                                            precision: smartNumberPrecision(record, meta),
+                                                            debounceMs: meta.debounceMs || 300,
+                                                            emitOnChange: false,
+                                                            rawMode: meta.rawMode || 'value',
+                                                        })"
+                                                        x-init="$watch(() => record[meta.field], (value) => {
+                                                            rawValue = value === null || value === undefined ? '' : String(value);
+                                                            displayValue = formatDisplayValue(rawValue);
+                                                        })"
+                                                        x-modelable="rawValue"
+                                                        x-on:smart-number-input:changed="handleSmartNumberMetaChanged(record, meta, $event.detail)"
+                                                    >
+                                                        <span class="flex w-full items-center rounded-lg border border-gray-300 bg-white shadow-sm transition focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/20">
+                                                            <input
+                                                                type="text"
+                                                                class="block min-w-0 flex-1 border-0 bg-transparent px-3 py-1.5 text-right text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-0"
+                                                                inputmode="decimal"
+                                                                x-model="displayValue"
+                                                                x-bind:size="inputSize()"
+                                                                x-on:input="handleInput($event); syncSmartNumberMetaValue(record, meta, rawValue)"
+                                                                x-on:change="handleChange($event); syncSmartNumberMetaValue(record, meta, rawValue)"
+                                                                x-on:blur="handleBlur($event); syncSmartNumberMetaValue(record, meta, rawValue)"
+                                                            />
+                                                        </span>
+                                                    </span>
+                                                </label>
+                                            </template>
+                                            <template x-if="meta.type !== 'input' && meta.type !== 'smart-number'">
                                                 <p class="text-sm" :class="meta.strong ? 'font-semibold text-gray-900' : 'text-gray-600'">
                                                     <template x-if="meta.label">
                                                         <span class="text-gray-500" x-text="meta.labelBare ? meta.label : \`\${meta.label}: \`"></span>
@@ -683,33 +778,74 @@ const renderCrudSection = () => `
         </div>
 
         <div
-            class="fixed inset-0 z-40 flex justify-end bg-gray-900/30"
+            class="fixed inset-0 z-50 overflow-hidden"
             x-show="isFormOpen"
             x-cloak
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="js-crud-section-create-title"
         >
-            <div class="flex h-full w-full max-w-xl flex-col overflow-y-auto bg-white shadow-xl">
-                <div class="flex items-center justify-between border-b border-gray-100 px-4 py-4 sm:px-6">
-                    <div>
-                        <h4 class="text-lg font-semibold text-gray-900" x-text="createFormTitle()"></h4>
-                        <p class="mt-1 text-sm text-gray-500" x-show="createFormDescription() !== ''" x-text="createFormDescription()"></p>
+            <div class="absolute inset-0 overflow-hidden">
+                <div
+                    class="absolute inset-0 bg-gray-500 bg-opacity-25 transition-opacity"
+                    x-show="isFormOpen"
+                    x-on:click="closeForm()"
+                ></div>
+
+                <div
+                    tabindex="0"
+                    class="absolute inset-0 pl-10 focus:outline-none sm:pl-16"
+                    x-on:click="closeForm()"
+                >
+                    <div class="pointer-events-none fixed inset-y-0 right-0 flex max-w-full pl-10">
+                        <div class="pointer-events-auto w-screen max-w-md" x-on:click.stop>
+                            <form
+                                class="relative flex h-full flex-col divide-y divide-gray-200 bg-white shadow-xl"
+                                x-show="isFormOpen"
+                                x-on:submit.prevent="submitForm()"
+                            >
+                                <div class="h-0 flex-1 overflow-y-auto">
+                                    <div class="bg-blue-600 px-4 py-6 sm:px-6">
+                                        <div class="flex items-start justify-between gap-4">
+                                            <div>
+                                                <h4 id="js-crud-section-create-title" class="text-lg font-semibold text-white" x-text="createFormTitle()"></h4>
+                                                <p class="mt-1 text-sm text-blue-100" x-show="createFormDescription() !== ''" x-text="createFormDescription()"></p>
+                                            </div>
+
+                                            <div class="flex h-7 items-center">
+                                                <button
+                                                    type="button"
+                                                    class="relative rounded-md text-blue-100 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+                                                    x-on:click="closeForm()"
+                                                >
+                                                    <span class="absolute -inset-2.5"></span>
+                                                    <span class="sr-only">Close panel</span>
+                                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true" class="size-6">
+                                                        <path d="M6 18 18 6M6 6l12 12" stroke-linecap="round" stroke-linejoin="round" />
+                                                    </svg>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="space-y-5 px-4 py-6 sm:px-6">
+                                        <p class="text-sm text-red-600" x-show="formError" x-text="formError"></p>
+                                        ${fieldMarkup}
+                                    </div>
+                                </div>
+
+                                <div class="flex shrink-0 justify-end gap-3 px-4 py-4 sm:px-6">
+                                    <button type="button" class="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 transition hover:bg-gray-50" x-on:click="closeForm()">Cancel</button>
+                                    <button
+                                        type="submit"
+                                        class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+                                        x-bind:disabled="isSubmitting"
+                                        x-text="createFormSubmitLabel()"
+                                    ></button>
+                                </div>
+                            </form>
+                        </div>
                     </div>
-                    <button type="button" class="text-sm text-gray-500 transition hover:text-gray-700" x-on:click="closeForm()">Close</button>
-                </div>
-
-                <div class="flex-1 space-y-5 px-4 py-5 sm:px-6">
-                    <p class="text-sm text-red-600" x-show="formError" x-text="formError"></p>
-                    ${fieldMarkup}
-                </div>
-
-                <div class="flex items-center justify-end gap-3 border-t border-gray-100 px-4 py-4 sm:px-6">
-                    <button type="button" class="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 transition hover:bg-gray-50" x-on:click="closeForm()">Cancel</button>
-                    <button
-                        type="button"
-                        class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
-                        x-bind:disabled="isSubmitting"
-                        x-on:click="submitForm()"
-                        x-text="createFormSubmitLabel()"
-                    ></button>
                 </div>
             </div>
         </div>
@@ -1117,7 +1253,30 @@ const createSectionState = (section, adapters, hostEl) => ({
         return rows;
     },
     rowClass(row) {
-        return row.length > 1 ? 'grid grid-cols-1 gap-4 sm:grid-cols-2' : '';
+        if (row.length <= 1) {
+            return '';
+        }
+
+        if (row.some((field) => field.width === 'short') && row.some((field) => field.width === 'right')) {
+            return 'grid grid-cols-1 gap-4 sm:grid-cols-[minmax(0,10rem)_minmax(0,1fr)]';
+        }
+
+        if (row.some((field) => field.width === 'short')) {
+            return 'grid grid-cols-1 gap-4 sm:grid-cols-[minmax(0,10rem)_minmax(0,1fr)]';
+        }
+
+        return 'grid grid-cols-1 gap-4 sm:grid-cols-2';
+    },
+    fieldWrapperClass(field) {
+        if (field.width === 'short') {
+            return 'min-w-0';
+        }
+
+        if (field.width === 'right') {
+            return 'min-w-0';
+        }
+
+        return '';
     },
     recordClass(record) {
         const baseClass = asString(this.section.recordClass, 'rounded-xl border border-gray-100 bg-gray-50 p-3 sm:p-4');
@@ -1505,6 +1664,64 @@ const createSectionState = (section, adapters, hostEl) => ({
         } catch (error) {
             this.sectionError = 'Unable to update record.';
         }
+    },
+    smartNumberPrecision(record, meta) {
+        const precisionField = asString(meta.precisionField);
+        const configuredPrecision = meta.precision;
+
+        if (precisionField !== '') {
+            const precision = parseInt(resolvePathValue(record, precisionField, configuredPrecision), 10);
+
+            if (Number.isInteger(precision)) {
+                return precision;
+            }
+        }
+
+        const precision = parseInt(configuredPrecision, 10);
+
+        return Number.isInteger(precision) ? precision : 0;
+    },
+    smartNumberFieldPrecision(field) {
+        const precision = parseInt(field.precision, 10);
+
+        return Number.isInteger(precision) ? precision : 0;
+    },
+    smartNumberFieldCurrency(field) {
+        const configuredCurrency = asString(field.currency);
+
+        if (configuredCurrency !== '') {
+            return configuredCurrency.toUpperCase();
+        }
+
+        const currencyFromField = asString(field.currencyFromField);
+
+        if (currencyFromField === '') {
+            return '';
+        }
+
+        const selectedValue = asString(this.form[currencyFromField]);
+        const sourceField = this.section.fields.find((candidate) => candidate.name === currencyFromField);
+
+        if (!sourceField || selectedValue === '') {
+            return '';
+        }
+
+        const selectedOption = sourceField.options.find((option) => asString(option.value) === selectedValue);
+        const optionCurrencyField = asString(field.currencyOptionField, 'currency_code');
+        const optionCurrency = asString(selectedOption?.[optionCurrencyField]);
+
+        return optionCurrency.toUpperCase();
+    },
+    syncSmartNumberMetaValue(record, meta, rawValue) {
+        if (!meta.field) {
+            return;
+        }
+
+        record[meta.field] = rawValue;
+    },
+    async handleSmartNumberMetaChanged(record, meta, detail) {
+        this.syncSmartNumberMetaValue(record, meta, detail?.rawValue);
+        await this.performInlineMetaAction(record, meta);
     },
     async performInlineMetaAction(record, meta) {
         if (typeof this.adapters.handleInlineMetaAction === 'function') {

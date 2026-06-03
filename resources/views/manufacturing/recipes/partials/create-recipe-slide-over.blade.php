@@ -62,16 +62,15 @@
 
         <div>
             <label for="recipe-output-quantity" class="block text-sm font-medium text-gray-700">{{ __('Output per Run') }}</label>
-            <input
+            <x-ui.smart-number-input
                 id="recipe-output-quantity"
-                type="text"
-                inputmode="decimal"
-                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                :disabled="isFulfillmentRecipeType(createForm.recipe_type)"
-                :class="isFulfillmentRecipeType(createForm.recipe_type) ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : ''"
+                name="output_quantity"
+                type="decimal"
+                precision="6"
+                disabled-expression="isFulfillmentRecipeType(createForm.recipe_type)"
                 placeholder="0.000000"
+                after-blur="normalizeCreateOutputQuantity()"
                 x-model="createForm.output_quantity"
-                x-on:blur="normalizeCreateOutputQuantity()"
             />
             <p class="mt-1 text-xs text-gray-500" x-show="isFulfillmentRecipeType(createForm.recipe_type)">
                 {{ __('Fulfillment recipes always produce exactly 1 unit.') }}

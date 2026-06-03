@@ -28,10 +28,11 @@
 
         <div>
             <label for="recipe-line-quantity" class="block text-sm font-medium text-gray-700">{{ __('Quantity') }}</label>
-            <input
+            <x-ui.smart-number-input
                 id="recipe-line-quantity"
-                type="text"
-                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                name="quantity"
+                type="decimal"
+                precision="6"
                 placeholder="0.000000"
                 x-model="lineForm.quantity"
             />

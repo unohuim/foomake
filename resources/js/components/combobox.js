@@ -133,6 +133,13 @@ export function registerCombobox(Alpine) {
             this.highlightedIndex = -1;
             this.syncQueryFromSelection();
         },
+        handleFocusAway(event) {
+            if (this.$el.contains(event.relatedTarget)) {
+                return;
+            }
+
+            this.closeDropdown();
+        },
         handleQueryInput(value) {
             if (this.isDisabled()) {
                 return;

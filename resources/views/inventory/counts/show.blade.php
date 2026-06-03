@@ -101,9 +101,9 @@
                     :default-open="false"
                 >
                     <div class="space-y-3">
-                        @if (($payload['count']['can_edit_counted_at'] ?? false) || ($payload['count']['can_edit_assignment'] ?? false))
+                        @if (($payload['count']['can_view_counted_at'] ?? false) || ($payload['count']['can_view_assignment'] ?? false))
                             <div class="grid grid-cols-2 gap-2">
-                                @if ($payload['count']['can_edit_counted_at'] ?? false)
+                                @if ($payload['count']['can_view_counted_at'] ?? false)
                                     <div class="space-y-1">
                                         <p class="text-[10px] font-semibold uppercase tracking-wide text-gray-500 sm:text-xs">{{ __('Count Date') }}</p>
                                         <input
@@ -116,7 +116,7 @@
                                     </div>
                                 @endif
 
-                                @if ($payload['count']['can_edit_assignment'] ?? false)
+                                @if ($payload['count']['can_view_assignment'] ?? false)
                                     <div class="space-y-1">
                                         <p class="text-[10px] font-semibold uppercase tracking-wide text-gray-500 sm:text-xs">{{ __('Assigned To') }}</p>
                                         <x-dropdown-select

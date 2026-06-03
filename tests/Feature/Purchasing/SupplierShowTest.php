@@ -351,7 +351,10 @@ it('configures the plus button create slide-over through the shared section cont
 
     expect($section['permissions']['canCreate'])->toBeTrue()
         ->and($section['createAction']['type'] ?? null)->toBe('slide-over')
-        ->and($section['createAction']['label'] ?? null)->toBe('Add Supplier Package');
+        ->and($section['createAction']['label'] ?? null)->toBe('Add Supplier Package')
+        ->and($section['createAction']['title'] ?? null)->toBe('Supplier Package')
+        ->and($section['createAction']['description'] ?? null)->toBe('Create a supplier pack to purchase.')
+        ->and($section['createAction']['submitLabel'] ?? null)->toBe('Create');
 });
 
 it('configures a material field for create because supplier context is fixed', function () {
@@ -390,6 +393,46 @@ it('fixes supplier from detail context instead of making supplier selectable', f
         ->and($section['context']['supplier_id'] ?? null)->toBe($supplier->id)
         ->and($section['createAction']['prefill']['supplier_id'] ?? null)->toBe($supplier->id)
         ->and(collect($section['fields'])->pluck('name')->all())->not()->toContain('supplier_id');
+});
+
+it('uses the shared supplier package form labels layout and smart number contract', function () {
+    $tenant = ($this->makeTenant)(['currency_code' => 'USD']);
+    $user = ($this->makeUser)($tenant);
+    $supplier = ($this->makeSupplier)($tenant, ['currency_code' => 'CAD']);
+    $uom = ($this->makeUom)($tenant);
+
+    ($this->makeItem)($tenant, $uom, ['name' => 'Granulated Sugar']);
+    ($this->grantPermission)($user, 'purchasing-suppliers-view');
+    ($this->grantPermission)($user, 'purchasing-suppliers-manage');
+
+    $payload = ($this->extractSupplierPayload)(($this->getShow)($user, $supplier)->assertOk());
+    $fields = collect($payload['sections']['supplierPackages']['fields'])->keyBy('name');
+
+    expect($fields->get('pack_quantity'))->toMatchArray([
+        'label' => 'Qty',
+        'type' => 'smart-number',
+        'numberType' => 'decimal',
+        'precision' => 6,
+        'rowGroup' => 'package-quantity-uom',
+        'width' => 'short',
+    ])->and($fields->get('pack_uom_id'))->toMatchArray([
+        'label' => 'UoM',
+        'type' => 'select',
+        'rowGroup' => 'package-quantity-uom',
+    ])->and($fields->get('supplier_sku'))->toMatchArray([
+        'label' => 'SKU',
+        'type' => 'text',
+        'rowGroup' => 'supplier-sku-price',
+        'width' => 'short',
+    ])->and($fields->get('price_amount'))->toMatchArray([
+        'label' => 'Price',
+        'type' => 'smart-number',
+        'numberType' => 'money',
+        'precision' => 2,
+        'currency' => 'CAD',
+        'rowGroup' => 'supplier-sku-price',
+        'width' => 'right',
+    ]);
 });
 
 it('configures row menu actions as exactly Edit Purchase Delete', function () {

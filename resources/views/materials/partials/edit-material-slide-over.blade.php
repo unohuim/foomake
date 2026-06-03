@@ -47,11 +47,10 @@
             <div class="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
                 <div class="sm:col-span-2">
                     <label for="edit-material-default-price-amount" class="block text-xs font-medium text-gray-600">Amount</label>
-                    <input
+                    <x-ui.smart-number-input
                         id="edit-material-default-price-amount"
-                        type="text"
-                        inputmode="decimal"
-                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                        name="default_price_amount"
+                        type="money"
                         x-model="editForm.default_price_amount"
                     />
                     <p class="mt-1 text-sm text-red-600" x-show="editErrors.default_price_amount" x-text="editErrors.default_price_amount[0]"></p>

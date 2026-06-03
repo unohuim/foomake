@@ -31,6 +31,7 @@ beforeEach(function () {
     $this->inventoryCountLineFormSource = fn (): string => File::get(resource_path('views/inventory/counts/partials/line-form.blade.php'));
     $this->uomsSource = fn (): string => File::get(resource_path('views/manufacturing/uoms/index.blade.php'));
     $this->uomConversionsSource = fn (): string => File::get(resource_path('views/manufacturing/uom-conversions/index.blade.php'));
+    $this->jsCrudSectionSource = fn (): string => File::get(resource_path('js/lib/js-crud-section.js'));
 });
 
 it('1. renders a fixed right-side slide-over shell', function () {
@@ -284,6 +285,12 @@ it('23. make order create and edit slide-over uses the shared shell component', 
         ->and($source)->toContain('submitMakeOrderForm()');
 });
 
+it('23a. create slide-over date fields open the native picker when clicking the field', function () {
+    expect(($this->makeOrderSource)())->toContain('x-on:click="$el.showPicker?.()"')
+        ->and(($this->salesOrdersSource)())->toContain('x-on:click="$el.showPicker?.()"')
+        ->and(($this->inventoryCountFormSource)())->toContain('x-on:click="$el.showPicker?.()"');
+});
+
 it('24. configured CRUD index form drawers use the shared shell component', function () {
     expect(($this->adminUsersSource)())->toContain('<x-slide-over-shell')
         ->and(($this->salesProductsSource)())->toContain('<x-slide-over-shell')
@@ -336,4 +343,16 @@ it('28. converted blade views do not keep bespoke right drawer form shells', fun
             ->and($source)->not->toContain('<form class="h-full flex flex-col"')
             ->and($source)->not->toContain('pointer-events-none fixed inset-y-0 right-0');
     }
+});
+
+it('29. configured detail section create drawer mirrors the shared slide-over shell structure', function () {
+    $source = ($this->jsCrudSectionSource)();
+
+    expect($source)->toContain('role="dialog"')
+        ->and($source)->toContain('aria-modal="true"')
+        ->and($source)->toContain('fixed inset-0 z-50 overflow-hidden')
+        ->and($source)->toContain('pointer-events-none fixed inset-y-0 right-0 flex max-w-full pl-10')
+        ->and($source)->toContain('relative flex h-full flex-col divide-y divide-gray-200 bg-white shadow-xl')
+        ->and($source)->not->toContain('fixed inset-0 z-40 flex justify-end bg-gray-900/30')
+        ->and($source)->not->toContain('flex h-full w-full max-w-xl flex-col overflow-y-auto bg-white shadow-xl');
 });

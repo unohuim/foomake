@@ -111,7 +111,9 @@ class SalesOrderController extends Controller
                 (int) $request->user()->tenant_id,
                 'sales',
                 null,
-                $salesOrder->status
+                $salesOrder->status,
+                null,
+                $salesOrder->status === SalesOrder::STATUS_COMPLETED
             ),
             'customers' => $customers->map(fn (Customer $customer): array => $this->customerOptionData($customer))->values()->all(),
             'sellableItems' => $sellableItems->map(fn (Item $item): array => $this->sellableItemData($item))->values()->all(),

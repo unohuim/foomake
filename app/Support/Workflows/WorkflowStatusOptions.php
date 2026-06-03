@@ -47,7 +47,7 @@ class WorkflowStatusOptions
                 ...PurchaseOrder::statuses(),
             ])),
             'manufacturing' => ['DRAFT', 'SCHEDULED', 'IN PROGRESS', 'COMPLETED', 'CANCELLED'],
-            'inventory' => ['DRAFT', 'SCHEDULED', 'COMPLETED', 'CANCELLED'],
+            'inventory' => ['DRAFT', 'SCHEDULED', 'COUNTED', 'COMPLETED', 'CANCELLED'],
             default => [],
         };
     }

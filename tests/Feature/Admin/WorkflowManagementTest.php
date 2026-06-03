@@ -203,7 +203,7 @@ it('5. seeded sales operational stages exist with exact keys', function () {
     expect($keys)->toBe(['creating', 'packing', 'shipping', 'invoicing', 'completing']);
 });
 
-it('6. sales does not seed legacy system lifecycle statuses while inventory seeds creating and completing', function () {
+it('6. sales does not seed legacy system lifecycle statuses while inventory seeds scheduling counting and completing', function () {
     $tenant = ($this->makeTenant)();
     $this->actingAs(($this->makeUser)($tenant));
     app(\App\Actions\Workflows\SeedDefaultWorkflowStagesForTenantAction::class)->execute($tenant);
@@ -223,7 +223,8 @@ it('6. sales does not seed legacy system lifecycle statuses while inventory seed
     expect($salesStageKeys)->not->toContain('draft')
         ->and($salesStageKeys)->not->toContain('open')
         ->and($salesStageKeys)->not->toContain('cancelled')
-        ->and($inventoryStageKeys)->toContain('creating')
+        ->and($inventoryStageKeys)->toContain('scheduling')
+        ->and($inventoryStageKeys)->toContain('counting')
         ->and($inventoryStageKeys)->toContain('completing');
 });
 
@@ -333,6 +334,30 @@ it('12c. stage config payload includes non-empty approved purchasing status opti
         ->and($purchasingStatusOptions)->toContain('CANCELLED')
         ->and($purchasingStageLabels)->not->toContain('OPEN')
         ->and($purchasingStageLabels)->not->toContain('PARTIALLY_RECEIVED');
+});
+
+it('12ca. default inventory stages seed scheduling counting and completing defaults with workflow status labels and no posted stage status', function () {
+    $tenant = ($this->makeTenant)();
+
+    app(\App\Actions\Workflows\SeedDefaultWorkflowStagesForTenantAction::class)->execute($tenant);
+
+    $stages = WorkflowStage::withoutGlobalScopes()
+        ->where('tenant_id', $tenant->id)
+        ->where('workflow_domain_id', ($this->inventoryDomain)()->id)
+        ->where('is_active', true)
+        ->orderBy('sort_order')
+        ->orderBy('id')
+        ->get();
+
+    expect($stages->pluck('key')->all())->toBe(['scheduling', 'counting', 'completing'])
+        ->and($stages->pluck('name')->all())->toBe(['Scheduling', 'Counting', 'Completing'])
+        ->and($stages->pluck('completion_mode')->all())->toBe(['automatic', 'manual', 'manual'])
+        ->and($stages->pluck('status_complete_label')->all())->toBe(['SCHEDULED', 'COUNTED', 'COMPLETED'])
+        ->and($stages->pluck('status_complete_label')->all())->not->toContain('POSTED')
+        ->and($stages->pluck('status_complete_label')->all())->not->toContain('Posted')
+        ->and(app(\App\Support\Workflows\WorkflowStatusOptions::class)->forDomainKey('inventory'))->toContain('COUNTED')
+        ->and(app(\App\Support\Workflows\WorkflowStatusOptions::class)->forDomainKey('inventory'))->not->toContain('POSTED')
+        ->and(app(\App\Support\Workflows\WorkflowStatusOptions::class)->forDomainKey('inventory'))->not->toContain('Posted');
 });
 
 it('12d. stage config source keeps existing valid status selected when domain changes', function () {
@@ -629,7 +654,7 @@ it('23. inventory workflow system stages are reorderable while sales still exclu
         ->pluck('key')
         ->all();
 
-    expect($inventoryStages)->toBe(['creating', 'completing'])
+    expect($inventoryStages)->toBe(['scheduling', 'counting', 'completing'])
         ->and($salesStageKeys)->not->toContain('scheduled')
         ->and($salesStageKeys)->toContain('completing');
 });

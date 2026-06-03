@@ -777,6 +777,71 @@ it('14. section config uses supplier package create and edit fields from configu
     ]);
 });
 
+it('14a. supplier package numeric fields use the smart number field contract', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $uom = ($this->makeUom)($tenant);
+    $item = ($this->makeItem)($tenant, $uom);
+    ($this->makeSupplier)($tenant, ['currency_code' => 'CAD']);
+
+    ($this->grantPermissions)($user, ['inventory-materials-view', 'purchasing-suppliers-view']);
+
+    $section = ($this->extractSectionConfig)(($this->getShow)($user, $item));
+    $fields = collect($section['fields'] ?? [])->keyBy('name');
+    $supplierOptions = collect($fields->get('supplier_id')['options'] ?? []);
+
+    expect($fields->get('pack_quantity'))->toMatchArray([
+        'type' => 'smart-number',
+        'numberType' => 'decimal',
+        'precision' => 6,
+        'rowGroup' => 'package-quantity-uom',
+        'width' => 'short',
+    ])->and($fields->get('price_amount'))->toMatchArray([
+        'type' => 'smart-number',
+        'numberType' => 'money',
+        'precision' => 2,
+        'currencyFromField' => 'supplier_id',
+        'currencyOptionField' => 'currency_code',
+        'rowGroup' => 'supplier-sku-price',
+        'width' => 'right',
+    ])->and($supplierOptions->first()['currency_code'] ?? null)->toBe('CAD');
+});
+
+it('14b. supplier package create fields group quantity with uom and sku with price', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $uom = ($this->makeUom)($tenant);
+    $item = ($this->makeItem)($tenant, $uom);
+
+    ($this->grantPermissions)($user, ['inventory-materials-view', 'purchasing-suppliers-view']);
+
+    $section = ($this->extractSectionConfig)(($this->getShow)($user, $item));
+    $fields = collect($section['fields'] ?? [])->keyBy('name');
+
+    expect($fields->get('pack_quantity')['rowGroup'] ?? null)->toBe('package-quantity-uom')
+        ->and($fields->get('pack_uom_id')['rowGroup'] ?? null)->toBe('package-quantity-uom')
+        ->and($fields->get('pack_quantity')['width'] ?? null)->toBe('short')
+        ->and($fields->get('supplier_sku')['rowGroup'] ?? null)->toBe('supplier-sku-price')
+        ->and($fields->get('supplier_sku')['width'] ?? null)->toBe('short')
+        ->and($fields->get('price_amount')['rowGroup'] ?? null)->toBe('supplier-sku-price')
+        ->and($fields->get('price_amount')['width'] ?? null)->toBe('right');
+});
+
+it('14c. supplier package create drawer uses supplier pack header copy', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $uom = ($this->makeUom)($tenant);
+    $item = ($this->makeItem)($tenant, $uom);
+
+    ($this->grantPermissions)($user, ['inventory-materials-view', 'purchasing-suppliers-view']);
+
+    $section = ($this->extractSectionConfig)(($this->getShow)($user, $item));
+
+    expect($section['createAction']['title'] ?? null)->toBe('Supplier Package')
+        ->and($section['createAction']['description'] ?? null)->toBe('Create a supplier pack to purchase.')
+        ->and($section['createAction']['submitLabel'] ?? null)->toBe('Create');
+});
+
 it('15. section config exposes config driven row actions and no delete action id', function (): void {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
