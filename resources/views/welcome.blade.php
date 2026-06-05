@@ -328,9 +328,9 @@
                         x-on:click="closeLogin()"
                     ></div>
 
-                    <div class="absolute inset-y-0 right-0 flex max-w-full pl-8 sm:pl-12">
+                    <div class="absolute inset-y-0 right-0 flex max-w-full sm:pl-12">
                         <div
-                            class="w-screen max-w-md transform-gpu bg-white shadow-2xl"
+                            class="w-[22rem] max-w-full transform-gpu bg-white shadow-2xl sm:w-screen sm:max-w-md"
                             x-show="isLoginOpen"
                             x-transition:enter="transform transition ease-in-out duration-300 sm:duration-500"
                             x-transition:enter-start="translate-x-full"
