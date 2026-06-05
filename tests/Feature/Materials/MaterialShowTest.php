@@ -139,7 +139,7 @@ test('material show page renders the base uom dropdown with tenant uom options',
 test('material show page renders base uom as a static badge without manage permission', function (): void {
     ($this->grantPermission)($this->user, 'inventory-materials-view');
 
-    $uom = ($this->makeUom)(['name' => 'Test Gram', 'symbol' => 'test-g']);
+    $uom = ($this->makeUom)();
     $item = ($this->makeItem)($uom);
 
     $response = ($this->getShowPage)($this->user, $item);
@@ -150,7 +150,7 @@ test('material show page renders base uom as a static badge without manage permi
         ->assertDontSee('data-material-name-editor', false)
         ->assertDontSee('materialNameEditor', false)
         ->assertDontSee('Edit material name', false)
-        ->assertSee('Test Gram', false);
+        ->assertSee($uom->name, false);
 });
 
 test('material show page renders inventory stats through alpine payload state', function (): void {

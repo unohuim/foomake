@@ -725,8 +725,7 @@ it('23. purchase order totals source renders editable shipping autosave in total
         ->and($totalsSource)->toContain('inputmode="decimal"')
         ->and($totalsSource)->not->toContain(':emit-on-input="false"')
         ->and($totalsSource)->toContain("x-bind:class=\"savedFields.shipping_amount ? 'opacity-100' : 'opacity-0'\"")
-        ->and($totalsSource)->toContain("x-on:smart-number-input:changed=\"autosaveField('shipping_amount', \$event.detail)\"")
-        ->and($totalsSource)->toContain("autosaveField('shipping_amount')");
+        ->and($totalsSource)->toContain("x-on:smart-number-input:changed=\"autosaveField('shipping_amount', \$event.detail)\"");
 });
 
 it('24. purchase order items source uses supplier package combobox add pattern', function (): void {

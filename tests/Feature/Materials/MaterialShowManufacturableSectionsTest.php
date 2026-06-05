@@ -659,7 +659,7 @@ it('16b. material detail payload exposes type toggle state and update authorizat
     ($this->grantPermissions)($user, [
         'inventory-materials-view',
         'inventory-materials-manage',
-        'manufacturing-recipes-view',
+        'inventory-recipes-view',
         'inventory-adjustments-view',
     ]);
 
@@ -1370,7 +1370,7 @@ it('35aca. material inventory stats use compact mobile labels, grouped quantitie
         ->and($content)->toContain('flex h-full items-center justify-between')
         ->and($content)->toContain('px-2 py-2 sm:px-6 sm:py-5')
         ->and($content)->toContain('text-xl font-semibold tracking-tight text-slate-900 sm:text-2xl')
-        ->and($content)->toContain('sm:grid-cols-5')
+        ->and($content)->toContain('desktopGridClass()')
         ->and($content)->toContain('hidden truncate whitespace-nowrap sm:block')
         ->and($content)->not->toContain('lg:grid-cols-5')
         ->and($content)->toContain('SO Qty')

@@ -1696,13 +1696,13 @@ it('shared detail section source supports inline task actions when the row actio
         ->and($source)->toContain('ariaLabel: asString(safeAction.ariaLabel)')
         ->and($source)->toContain("Object.prototype.hasOwnProperty.call(safeEntry, 'fallback')")
         ->and($source)->toContain('x-show="!section.showRowActionsMenu && visibleActions(record).length > 0"')
-        ->and($source)->toContain('x-show="shouldShowRowActionsMenu(record)"')
+        ->and($source)->toContain('x-show="rowActionsMenuVisible(record)"')
         ->and($source)->toContain('flex flex-wrap items-center gap-4')
         ->and($source)->toContain('flex items-center justify-end gap-3 self-center')
         ->and($source)->toContain('items-center justify-end gap-2 self-center')
         ->and($source)->toContain("action.icon === 'x-mark'")
         ->and($source)->toContain('rounded-full border border-slate-300')
-        ->and($source)->toContain('flex flex-col sm:flex-row');
+        ->and($source)->toContain('flex flex-col gap-4 sm:flex-row');
 });
 
 it('draft inventory count materials render the inline x-mark remove contract instead of the vertical dots menu', function () {

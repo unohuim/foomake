@@ -286,7 +286,7 @@ BLADE
 it('21. component is registered through the app bundle', function (): void {
     $source = ($this->appJsSource)();
 
-    expect($source)->toContain("import { registerSmartNumberInput } from './components/smart-number-input'")
+    expect($source)->toContain('import { registerSmartNumberInput } from "./components/smart-number-input"')
         ->and($source)->toContain('registerSmartNumberInput(Alpine)');
 });
 
@@ -444,7 +444,8 @@ it('37. inventory count row qty precision is owned by the count line uom', funct
     $source = ($this->inventoryCountControllerSource)();
 
     expect($source)->toContain("'uom_display_precision' =>")
-        ->and($source)->toContain('$line->uom?->display_precision');
+        ->and($source)->toContain('$lineUom = $line->snapshotUom() ?? $line->uom ?? $line->item?->baseUom')
+        ->and($source)->toContain('$lineUom?->display_precision');
 });
 
 it('38. inventory count row qty no longer uses the plain input meta type', function (): void {

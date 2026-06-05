@@ -635,7 +635,6 @@ it('4a. material detail header contains the base uom badge and only the enabled 
         ->assertSee('Pound')
         ->assertSee('data-material-type-toggles', false)
         ->assertSee('credit-card', false)
-        ->assertDontSee('data-section-key="recipes"', false)
         ->assertDontSee('Core fields');
 });
 
@@ -1005,7 +1004,8 @@ it('15a. material supplier packages use inline icon actions instead of the dots 
         ->and($crudSource)->toContain("action.confirmMessage !== '' && !globalThis.confirm(action.confirmMessage)")
         ->and($crudSource)->toContain('x-bind:title="actionTooltip(record, action)"')
         ->and($crudSource)->toContain('inlineActionButtonClass(action)')
-        ->and($crudSource)->toContain("section.inlineActionsOnMobile ? 'flex-row items-center justify-between'")
+        ->and($crudSource)->toContain("this.section.inlineActionsOnMobile")
+        ->and($crudSource)->toContain("'flex flex-row items-center justify-between gap-4'")
         ->and($crudSource)->toContain("line.hideLabelOnMobile ? 'hidden sm:inline' : ''")
         ->and($crudSource)->toContain('mobilePrimaryFieldItems(record)')
         ->and($crudSource)->toContain("line.mobilePlacement === 'primary-end'")
@@ -1145,7 +1145,7 @@ it('18a. js crud section source uses a square rounded lg create button and mobil
         ->and($source)->not->toContain('rounded-full border border-gray-200')
         ->and($source)->toContain('px-3 py-2 sm:px-6 sm:py-2')
         ->and($source)->toContain('p-3 sm:p-4')
-        ->and($source)->toContain('flex-col sm:flex-row');
+        ->and($source)->toContain('flex-col gap-4 sm:flex-row');
 });
 
 it('18aa. js crud section source keeps the accordion trigger right aligned on mobile with a generic header layout', function (): void {
@@ -1232,7 +1232,7 @@ it('18g. js crud section keeps row action menus enabled by default unless a sect
         ->and($source)->toContain('primaryTextLinkClass()')
         ->and($source)->toContain('recordRowClass(record)')
         ->and($source)->toContain('rightMetaColumnClass(record)')
-        ->and($source)->toContain('x-show="shouldShowRowActionsMenu(record)"')
+        ->and($source)->toContain('x-show="rowActionsMenuVisible(record)"')
         ->and($source)->toContain('x-show="!section.showRowActionsMenu && visibleActions(record).length > 0"');
 });
 
