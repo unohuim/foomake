@@ -3,7 +3,7 @@ set -euo pipefail
 
 errors=0
 
-if rg -n "\?\.[A-Za-z_$][\\w$]*\s*=" resources/js; then
+if rg -n -P "\?\.[A-Za-z_$][\w$]*\s*(?:[+\-*/%|&^]|\?\?)?=(?!=|>)" resources/js; then
   echo "ERROR: Optional-chaining assignment on LHS is not allowed."
   errors=1
 fi

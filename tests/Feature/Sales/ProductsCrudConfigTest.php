@@ -684,7 +684,7 @@ it('28a. shared crud mobile renderer keeps the primary label visible on mobile',
 
     expect($rendererSource)->toContain('<div class="h-full min-h-0 md:hidden" data-crud-mobile-cards>')
         ->and($rendererSource)->toContain('class="flex h-full min-h-0 flex-col"')
-        ->and($rendererSource)->toContain('class="min-h-0 flex-1 overflow-y-auto p-4" data-crud-records-scroll')
+        ->and($rendererSource)->toContain('class="min-h-0 flex-1 overflow-y-auto ${scrollPaddingClass}" data-crud-records-scroll')
         ->and($rendererSource)->toContain('${renderToolbar(config, \'mobile\')}')
         ->and($rendererSource)->toContain('class="min-w-0 flex flex-1 flex-col"')
         ->and($rendererSource)->toContain('class="flex min-w-0 items-start gap-3"')

@@ -678,7 +678,7 @@ it('22. the inventory count show route still works and renders existing count in
         ->get(route('inventory.counts.show', $count))
         ->assertOk()
         ->assertSee('Inventory Count')
-        ->assertSee($count->counted_at->format('Y-m-d H:i'))
+        ->assertSee($count->counted_at->format('F j, Y'))
         ->assertSee('Detail notes')
         ->assertSee('Materials')
         ->assertDontSee('Count Lines')

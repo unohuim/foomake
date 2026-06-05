@@ -95,9 +95,10 @@ it('allows users with inventory-materials-view permission to view the material d
         ->assertSee($item->name)
         ->assertSee($uom->name)
         ->assertSee('Materials')
-        ->assertSee('Purchasable')
-        ->assertSee('Sellable')
-        ->assertSee('Manufacturable')
+        ->assertSee('data-material-type-toggles', false)
+        ->assertSee('shopping-cart', false)
+        ->assertSee('credit-card', false)
+        ->assertSee('cog', false)
         ->assertDontSee('Back to Materials')
         ->assertSee(route('materials.index'), false);
 });

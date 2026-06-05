@@ -1082,7 +1082,7 @@ it('keeps Material detail purchase orders behavior as the existing read-only sec
 
     expect($section['resource'] ?? null)->toBe('material-purchase-orders')
         ->and($section['permissions']['canCreate'] ?? null)->toBeFalse()
-        ->and(collect($section['actions'] ?? [])->pluck('label')->all())->toBe(['View']);
+        ->and(collect($section['actions'] ?? [])->pluck('label')->all())->toBe([]);
 });
 
 it('wires supplier purchase order create through the page module without global state', function () {

@@ -52,6 +52,9 @@ Route::get('/learn/{slug}', [MarketingPageController::class, 'show'])
 Route::get('/sitemap.xml', [MarketingPageController::class, 'sitemap'])
     ->name('marketing.sitemap');
 
+Route::view('/privacy', 'privacy')
+    ->name('privacy');
+
 Route::get('/dashboard', DashboardController::class)
     ->middleware(['auth', 'verified'])
     ->name('dashboard');

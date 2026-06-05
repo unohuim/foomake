@@ -1,11 +1,13 @@
-import './bootstrap';
+import "./bootstrap";
 
-import Alpine from 'alpinejs';
-import { registerCombobox } from './components/combobox';
-import { registerDropdownSelect } from './components/dropdown-select';
-import { registerNotesFeed } from './components/notes-feed';
-import { registerSmartNumberInput } from './components/smart-number-input';
-import { registerWorkflowActionButton } from './components/workflow-action-button';
+import.meta.glob(["../img/**"]);
+
+import Alpine from "alpinejs";
+import { registerCombobox } from "./components/combobox";
+import { registerDropdownSelect } from "./components/dropdown-select";
+import { registerNotesFeed } from "./components/notes-feed";
+import { registerSmartNumberInput } from "./components/smart-number-input";
+import { registerWorkflowActionButton } from "./components/workflow-action-button";
 
 window.Alpine = Alpine;
 registerCombobox(Alpine);
@@ -15,8 +17,8 @@ registerSmartNumberInput(Alpine);
 registerWorkflowActionButton(Alpine);
 
 // Page module contract: export function mount(rootEl, payload)
-const pageModules = import.meta.glob('./pages/*.js');
-const nestedPageModules = import.meta.glob('./pages/**/*.js');
+const pageModules = import.meta.glob("./pages/*.js");
+const nestedPageModules = import.meta.glob("./pages/**/*.js");
 const availablePageModules = { ...pageModules, ...nestedPageModules };
 
 (async () => {
@@ -29,23 +31,27 @@ const availablePageModules = { ...pageModules, ...nestedPageModules };
         Alpine.start();
     };
 
-    const rootEl = document.querySelector('[data-page]');
+    const rootEl = document.querySelector("[data-page]");
 
     if (!rootEl) {
         startAlpineOnce();
         return;
     }
 
-    const slug = rootEl.getAttribute('data-page');
-    const payloadId = rootEl.getAttribute('data-payload');
+    const slug = rootEl.getAttribute("data-page");
+    const payloadId = rootEl.getAttribute("data-payload");
     let payload = {};
 
     if (payloadId) {
         const payloadEl = document.getElementById(payloadId);
 
-        if (payloadEl && payloadEl.tagName === 'SCRIPT' && payloadEl.type === 'application/json') {
+        if (
+            payloadEl &&
+            payloadEl.tagName === "SCRIPT" &&
+            payloadEl.type === "application/json"
+        ) {
             try {
-                payload = JSON.parse(payloadEl.textContent || '{}');
+                payload = JSON.parse(payloadEl.textContent || "{}");
             } catch (error) {
                 payload = {};
             }
@@ -66,7 +72,7 @@ const availablePageModules = { ...pageModules, ...nestedPageModules };
     try {
         const module = await loader();
 
-        if (typeof module.mount !== 'function') {
+        if (typeof module.mount !== "function") {
             if (import.meta.env?.DEV) {
                 console.error(`[pages] Missing mount() for ${slug}.`);
             }

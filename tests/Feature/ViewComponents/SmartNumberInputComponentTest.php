@@ -440,11 +440,11 @@ it('36. inventory count row qty uses js smart number meta contract', function ()
         ->and($source)->toContain("precisionField: 'uom_display_precision'");
 });
 
-it('37. inventory count row qty precision is owned by the item uom', function (): void {
+it('37. inventory count row qty precision is owned by the count line uom', function (): void {
     $source = ($this->inventoryCountControllerSource)();
 
     expect($source)->toContain("'uom_display_precision' =>")
-        ->and($source)->toContain('$line->item?->baseUom?->display_precision');
+        ->and($source)->toContain('$line->uom?->display_precision');
 });
 
 it('38. inventory count row qty no longer uses the plain input meta type', function (): void {

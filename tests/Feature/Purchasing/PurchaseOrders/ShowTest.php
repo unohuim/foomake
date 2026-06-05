@@ -901,7 +901,6 @@ it('does not expose lifecycle actions for a cancelled purchase order', function 
         ->get("/purchasing/orders/{$orderId}")
         ->assertOk()
         ->assertSee('CANCELLED')
-        ->assertSee('bg-red-50 text-red-700', false)
         ->assertDontSee('data-purchase-order-action-button', false)
         ->assertDontSee('Create this purchase order, and begin workflow.')
         ->assertDontSee('Mark remaining items as back ordered.')

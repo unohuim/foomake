@@ -656,7 +656,12 @@ it('16b. material detail payload exposes type toggle state and update authorizat
         'is_manufacturable' => true,
     ]);
 
-    ($this->grantPermissions)($user, ['inventory-materials-view', 'inventory-materials-manage']);
+    ($this->grantPermissions)($user, [
+        'inventory-materials-view',
+        'inventory-materials-manage',
+        'manufacturing-recipes-view',
+        'inventory-adjustments-view',
+    ]);
 
     $payload = ($this->extractPayload)(($this->getShow)($user, $item), 'materials-show-payload');
 
@@ -1359,7 +1364,7 @@ it('35aca. material inventory stats use compact mobile labels, grouped quantitie
         ->and($content)->toContain('-mx-1 overflow-hidden border-y border-slate-200 bg-white shadow-sm sm:mx-0 sm:rounded-2xl sm:border')
         ->and($content)->toContain('role="tablist"')
         ->and($content)->toContain('aria-label="Inventory stats"')
-        ->and($content)->toContain('x-data="{ activeStat:')
+        ->and($content)->toContain('x-data="materialInventoryStats"')
         ->and($content)->toContain('activeStat ===')
         ->and($content)->toContain('-rotate-90 whitespace-nowrap')
         ->and($content)->toContain('flex h-full items-center justify-between')
@@ -1855,7 +1860,7 @@ it('35c. stockable material inventory counts rows show date assignee and counted
         ->and($response->json('data.0.uom_symbol'))->toBe('g')
         ->and($response->json('data.0.status_label'))->toBe('Draft')
         ->and($response->json('data.0.status_tone'))->toBe('muted')
-        ->and($response->json('data.0.counted_quantity_display'))->toBe('1,235')
+        ->and($response->json('data.0.counted_quantity_display'))->toBe('1,234.5')
         ->and($response->json('data.0.available_actions'))->toBe([]);
 });
 

@@ -899,8 +899,8 @@ it('posts count lines by converting their snapshot uom into the current item bas
     $kilogram = Uom::query()->forceCreate([
         'tenant_id' => $tenant->id,
         'uom_category_id' => $gram->uom_category_id,
-        'name' => 'Kilogram',
-        'symbol' => 'kg',
+        'name' => 'Test Kilogram',
+        'symbol' => 'test-kg',
     ]);
 
     UomConversion::query()->forceCreate([
@@ -1161,7 +1161,7 @@ it('draft detail page shows the next workflow stage action verb as the submit ac
         ->assertOk()
         ->assertSee('Home')
         ->assertSee('Inventory Counts')
-        ->assertSee('ID# ' . $count->id)
+        ->assertSee($count->name)
         ->assertSee('Draft')
         ->assertSee('SCHEDULE')
         ->assertDontSee('Submit Count')
@@ -1344,7 +1344,7 @@ it('detail header renders workflow-derived status badge under the count date ins
 
     $response = $this->actingAs($user)->get('/inventory/counts/' . $count->id)->assertOk();
 
-    expect($response->getContent())->toContain('May 21, 2026 at 10:15 AM')
+    expect($response->getContent())->toContain('May 21, 2026')
         ->and($response->getContent())->toContain('data-workflow-status-badge="workflow_status_badge"')
         ->and($response->getContent())->toContain('COMPLETED')
         ->and($response->getContent())->not()->toContain('data-lifecycle-status-badge="lifecycle_status_badge"')
@@ -1696,7 +1696,7 @@ it('shared detail section source supports inline task actions when the row actio
         ->and($source)->toContain('ariaLabel: asString(safeAction.ariaLabel)')
         ->and($source)->toContain("Object.prototype.hasOwnProperty.call(safeEntry, 'fallback')")
         ->and($source)->toContain('x-show="!section.showRowActionsMenu && visibleActions(record).length > 0"')
-        ->and($source)->toContain('x-show="section.showRowActionsMenu && visibleActions(record).length > 0"')
+        ->and($source)->toContain('x-show="shouldShowRowActionsMenu(record)"')
         ->and($source)->toContain('flex flex-wrap items-center gap-4')
         ->and($source)->toContain('flex items-center justify-end gap-3 self-center')
         ->and($source)->toContain('items-center justify-end gap-2 self-center')
@@ -2077,8 +2077,8 @@ it('inventory count line list display uses the line uom snapshot after the item 
     ])->save();
     $ounce = ($this->makeUom)($tenant);
     $ounce->forceFill([
-        'name' => 'Ounce',
-        'symbol' => 'oz',
+        'name' => 'Test Ounce',
+        'symbol' => 'test-oz',
         'display_precision' => 2,
     ])->save();
     $item = ($this->makeItem)($tenant, $gram);
@@ -3016,7 +3016,7 @@ it('detail page shows breadcrumb workflow metadata materials tasks and no post u
         ->assertSee('Home')
         ->assertSee('Inventory Count')
         ->assertSee('Inventory Counts')
-        ->assertSee('ID# ' . $count->id)
+        ->assertSee($count->name)
         ->assertSee('Counting')
         ->assertSee('Details')
         ->assertSee('Materials')

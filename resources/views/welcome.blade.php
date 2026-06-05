@@ -295,6 +295,9 @@
                                 <a href="{{ route('marketing.pages.show', ['slug' => 'mrp-for-small-manufacturers']) }}" class="hover:text-blue-800">
                                     MRP for small manufacturers
                                 </a>
+                                <a href="{{ route('privacy') }}" class="hover:text-blue-800">
+                                    Privacy
+                                </a>
                             </div>
                         </div>
                     </div>

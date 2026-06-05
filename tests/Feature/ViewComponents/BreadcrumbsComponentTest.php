@@ -112,7 +112,7 @@ it('8. keeps the inner list full width inside the parent', function () {
 BLADE
     );
 
-    expect($html)->toContain('flex w-full items-center space-x-4 px-4 sm:px-6 lg:px-8');
+    expect($html)->toContain('flex w-full items-stretch space-x-4 px-4 sm:px-6 lg:px-8');
 });
 
 it('9. can render a full-bleed page-width bar', function () {
@@ -123,7 +123,7 @@ BLADE
     );
 
     expect($html)->toContain('w-screen -translate-x-1/2 border-y border-gray-200 bg-white')
-        ->and($html)->toContain('mx-auto flex w-full max-w-7xl items-center');
+        ->and($html)->toContain('mx-auto flex w-full max-w-7xl items-stretch');
 });
 
 it('10. preserves passed attributes', function () {

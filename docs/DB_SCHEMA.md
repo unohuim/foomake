@@ -3,7 +3,7 @@
 This document inventories **all database tables and columns** as defined by migrations.
 It exists to bootstrap **accurate, lossless context** for humans and AI.
 
-This file is **descriptive only**.  
+This file is **descriptive only**.
 Migrations remain the **sole source of truth**.
 
 ---
@@ -64,6 +64,7 @@ Migrations remain the **sole source of truth**.
 - uom_conversions
 - uoms
 - users
+- visitor_attributions
 - workflow_domains
 - workflow_stages
 - workflow_task_templates
@@ -72,7 +73,7 @@ Migrations remain the **sole source of truth**.
 
 ## cache
 
-**Tenant-owned:** No  
+**Tenant-owned:** No
 **Purpose:** Application cache store
 
 ### Columns
@@ -91,7 +92,7 @@ Migrations remain the **sole source of truth**.
 
 ## cache_locks
 
-**Tenant-owned:** No  
+**Tenant-owned:** No
 **Purpose:** Distributed cache locking
 
 ### Columns
@@ -299,7 +300,7 @@ Migrations remain the **sole source of truth**.
 
 ## workflow_domains
 
-**Tenant-owned:** No  
+**Tenant-owned:** No
 **Purpose:** Fixed system-owned workflow-domain records used to scope workflow stages, task templates, and generated tasks
 
 ### Columns
@@ -357,7 +358,7 @@ Migrations remain the **sole source of truth**.
 
 ## workflow_task_templates
 
-**Tenant-owned:** Yes  
+**Tenant-owned:** Yes
 **Purpose:** Tenant-scoped task-template configuration for workflow-stage task generation
 
 ### Columns
@@ -391,7 +392,7 @@ Migrations remain the **sole source of truth**.
 
 ## tasks
 
-**Tenant-owned:** Yes  
+**Tenant-owned:** Yes
 **Purpose:** Tenant-scoped generated workflow tasks snapshotting task-template data against a domain record
 
 ### Columns
@@ -432,7 +433,7 @@ Migrations remain the **sole source of truth**.
 
 ## failed_jobs
 
-**Tenant-owned:** No  
+**Tenant-owned:** No
 **Purpose:** Queue failure tracking
 
 ### Columns
@@ -456,7 +457,7 @@ Migrations remain the **sole source of truth**.
 
 ## inventory_counts
 
-**Tenant-owned:** Yes  
+**Tenant-owned:** Yes
 **Purpose:** Inventory count sessions
 
 ### Columns
@@ -492,7 +493,7 @@ Migrations remain the **sole source of truth**.
 
 ## inventory_count_lines
 
-**Tenant-owned:** Yes  
+**Tenant-owned:** Yes
 **Purpose:** Line items for inventory counts
 
 ### Columns
@@ -526,7 +527,7 @@ Migrations remain the **sole source of truth**.
 
 ## item_purchase_options
 
-**Tenant-owned:** Yes  
+**Tenant-owned:** Yes
 **Purpose:** Purchase pack definitions
 
 ### Columns
@@ -556,7 +557,7 @@ Migrations remain the **sole source of truth**.
 
 ## item_purchase_option_prices
 
-**Tenant-owned:** Yes  
+**Tenant-owned:** Yes
 **Purpose:** Purchase option price snapshots
 
 ### Columns
@@ -588,7 +589,7 @@ Migrations remain the **sole source of truth**.
 
 ## item_uom_conversions
 
-**Tenant-owned:** Yes  
+**Tenant-owned:** Yes
 **Purpose:** Item-specific cross-category UoM conversions
 
 ### Columns
@@ -614,7 +615,7 @@ Migrations remain the **sole source of truth**.
 
 ## items
 
-**Tenant-owned:** Yes  
+**Tenant-owned:** Yes
 **Purpose:** Stock-tracked items
 
 ### Columns
@@ -649,7 +650,7 @@ Migrations remain the **sole source of truth**.
 
 ## job_batches
 
-**Tenant-owned:** No  
+**Tenant-owned:** No
 **Purpose:** Queue batch tracking
 
 ### Columns
@@ -675,7 +676,7 @@ Migrations remain the **sole source of truth**.
 
 ## jobs
 
-**Tenant-owned:** No  
+**Tenant-owned:** No
 **Purpose:** Queue jobs
 
 ### Columns
@@ -699,7 +700,7 @@ Migrations remain the **sole source of truth**.
 
 ## make_orders
 
-**Tenant-owned:** Yes  
+**Tenant-owned:** Yes
 **Purpose:** Persisted make orders with lifecycle
 
 ### Columns
@@ -801,7 +802,7 @@ Migrations remain the **sole source of truth**.
 
 ## password_reset_tokens
 
-**Tenant-owned:** No  
+**Tenant-owned:** No
 **Purpose:** Password reset tokens
 
 ### Columns
@@ -820,7 +821,7 @@ Migrations remain the **sole source of truth**.
 
 ## permissions
 
-**Tenant-owned:** No  
+**Tenant-owned:** No
 **Purpose:** Permission slugs
 
 ### Columns
@@ -841,7 +842,7 @@ Migrations remain the **sole source of truth**.
 
 ## permission_role
 
-**Tenant-owned:** No  
+**Tenant-owned:** No
 **Purpose:** Role-permission mapping
 
 ### Columns
@@ -865,7 +866,7 @@ Migrations remain the **sole source of truth**.
 
 ## purchase_order_lines
 
-**Tenant-owned:** Yes  
+**Tenant-owned:** Yes
 **Purpose:** Purchase order line items with price snapshots
 
 ### Columns
@@ -907,7 +908,7 @@ Migrations remain the **sole source of truth**.
 
 ## purchase_orders
 
-**Tenant-owned:** Yes  
+**Tenant-owned:** Yes
 **Purpose:** Purchase order headers
 
 ### Columns
@@ -966,7 +967,7 @@ Migrations remain the **sole source of truth**.
 
 ## purchase_order_receipts
 
-**Tenant-owned:** Yes  
+**Tenant-owned:** Yes
 **Purpose:** Receipt event headers for purchase orders
 
 ### Behavioral Notes
@@ -1003,7 +1004,7 @@ Migrations remain the **sole source of truth**.
 
 ## purchase_order_receipt_lines
 
-**Tenant-owned:** Yes  
+**Tenant-owned:** Yes
 **Purpose:** Receipt event line items for purchase orders
 
 ### Columns
@@ -1045,7 +1046,7 @@ Migrations remain the **sole source of truth**.
 
 ## purchase_order_short_closures
 
-**Tenant-owned:** Yes  
+**Tenant-owned:** Yes
 **Purpose:** Short-close event headers for purchase orders
 
 ### Columns
@@ -1076,7 +1077,7 @@ Migrations remain the **sole source of truth**.
 
 ## purchase_order_short_closure_lines
 
-**Tenant-owned:** Yes  
+**Tenant-owned:** Yes
 **Purpose:** Short-close event line items for purchase orders
 
 ### Columns
@@ -1104,7 +1105,7 @@ Migrations remain the **sole source of truth**.
 
 ## recipes
 
-**Tenant-owned:** Yes  
+**Tenant-owned:** Yes
 **Purpose:** Recipe definitions for manufacturing and fulfillment output composition
 
 ### Columns
@@ -1147,7 +1148,7 @@ Migrations remain the **sole source of truth**.
 
 ## recipe_lines
 
-**Tenant-owned:** Yes  
+**Tenant-owned:** Yes
 **Purpose:** Recipe line items
 
 ### Columns
@@ -1183,7 +1184,7 @@ Migrations remain the **sole source of truth**.
 
 ## recipe_versions
 
-**Tenant-owned:** Yes  
+**Tenant-owned:** Yes
 **Purpose:** Versioned execution templates owned by a recipe parent
 
 ### Columns
@@ -1228,7 +1229,7 @@ Migrations remain the **sole source of truth**.
 
 ## recipe_version_lines
 
-**Tenant-owned:** Yes  
+**Tenant-owned:** Yes
 **Purpose:** Version-owned input lines for a recipe execution template
 
 ### Columns
@@ -1261,7 +1262,7 @@ Migrations remain the **sole source of truth**.
 
 ## recipe_version_checkouts
 
-**Tenant-owned:** Yes  
+**Tenant-owned:** Yes
 **Purpose:** Persist the current user editing context for recipe versions
 
 ### Columns
@@ -1300,7 +1301,7 @@ Migrations remain the **sole source of truth**.
 
 ## make_order_lines
 
-**Tenant-owned:** Yes  
+**Tenant-owned:** Yes
 **Purpose:** Snapshotted execution lines owned by a Make Order
 
 ### Columns
@@ -1330,7 +1331,7 @@ Migrations remain the **sole source of truth**.
 
 ## roles
 
-**Tenant-owned:** No  
+**Tenant-owned:** No
 **Purpose:** Global roles
 
 ### Columns
@@ -1351,7 +1352,7 @@ Migrations remain the **sole source of truth**.
 
 ## roles_users
 
-**Tenant-owned:** No  
+**Tenant-owned:** No
 **Purpose:** Role-user mapping
 
 ### Columns
@@ -1375,7 +1376,7 @@ Migrations remain the **sole source of truth**.
 
 ## sessions
 
-**Tenant-owned:** No  
+**Tenant-owned:** No
 **Purpose:** Session storage
 
 ### Columns
@@ -1432,7 +1433,7 @@ Migrations remain the **sole source of truth**.
 
 ## stock_moves
 
-**Tenant-owned:** Yes  
+**Tenant-owned:** Yes
 **Purpose:** Append-only inventory ledger
 
 ### Columns
@@ -1468,7 +1469,7 @@ Migrations remain the **sole source of truth**.
 
 ## suppliers
 
-**Tenant-owned:** Yes  
+**Tenant-owned:** Yes
 **Purpose:** Supplier registry
 
 ### Columns
@@ -1495,7 +1496,7 @@ Migrations remain the **sole source of truth**.
 
 ## tenants
 
-**Tenant-owned:** No  
+**Tenant-owned:** No
 **Purpose:** Tenant registry
 
 ### Columns
@@ -1560,7 +1561,7 @@ Migrations remain the **sole source of truth**.
 
 ## uom_categories
 
-**Tenant-owned:** Yes (system defaults use `tenant_id = NULL`)  
+**Tenant-owned:** Yes (system defaults use `tenant_id = NULL`)
 **Purpose:** Unit-of-measure categories
 
 ### Columns
@@ -1583,7 +1584,7 @@ Migrations remain the **sole source of truth**.
 
 ## uom_conversions
 
-**Tenant-owned:** Mixed (`tenant_id = null` for global/system rows)  
+**Tenant-owned:** Mixed (`tenant_id = null` for global/system rows)
 **Purpose:** Global and tenant-managed UoM conversions
 
 ### Columns
@@ -1610,7 +1611,7 @@ Migrations remain the **sole source of truth**.
 
 ## uoms
 
-**Tenant-owned:** Yes (system defaults use `tenant_id = NULL`)  
+**Tenant-owned:** Yes (system defaults use `tenant_id = NULL`)
 **Purpose:** Units of measure
 
 ### Columns
@@ -1637,7 +1638,7 @@ Migrations remain the **sole source of truth**.
 
 ## users
 
-**Tenant-owned:** No (auth-safe)  
+**Tenant-owned:** No (auth-safe)
 **Purpose:** Authentication identities
 
 ### Columns
@@ -1659,6 +1660,47 @@ Migrations remain the **sole source of truth**.
 - PK: `id`
 - Unique: `email`
 - Index: `tenant_id`
+
+---
+
+## visitor_attributions
+
+**Tenant-owned:** No
+**Purpose:** Minimal first-party public-page source attribution that can be linked to a registered user.
+
+### Columns
+
+| Name                | Type      | Nullable | Notes                     |
+| ------------------- | --------- | -------- | ------------------------- |
+| id                  | bigint    | No       | Primary key               |
+| visitor_id          | string    | No       | Unique first-party visitor identifier |
+| user_id             | bigint    | Yes      | FK → users.id (SET NULL)  |
+| first_landing_page  | text      | Yes      | First captured landing URL |
+| first_referrer      | text      | Yes      | First captured referrer   |
+| first_utm_source    | string    | Yes      | —                         |
+| first_utm_medium    | string    | Yes      | —                         |
+| first_utm_campaign  | string    | Yes      | —                         |
+| first_utm_content   | string    | Yes      | —                         |
+| first_utm_term      | string    | Yes      | —                         |
+| latest_landing_page | text      | Yes      | Latest captured landing URL |
+| latest_referrer     | text      | Yes      | Latest captured referrer  |
+| latest_utm_source   | string    | Yes      | —                         |
+| latest_utm_medium   | string    | Yes      | —                         |
+| latest_utm_campaign | string    | Yes      | —                         |
+| latest_utm_content  | string    | Yes      | —                         |
+| latest_utm_term     | string    | Yes      | —                         |
+| first_seen_at       | timestamp | No       | First anonymous capture time |
+| last_seen_at        | timestamp | No       | Latest anonymous capture time |
+| converted_at        | timestamp | Yes      | Set when linked to registration |
+| created_at          | timestamp | Yes      | —                         |
+| updated_at          | timestamp | Yes      | —                         |
+
+### Keys & Indexes
+
+- PK: `id`
+- Unique: `visitor_id`
+- Index: `user_id`
+- Index: `created_at`
 
 ---
 

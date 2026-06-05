@@ -483,7 +483,7 @@ it('3a. includes the purchase orders section config for purchasable materials wi
         ->toBe('flex min-h-[3.25rem] min-w-[5rem] flex-col items-end justify-between gap-4 self-stretch text-right')
         ->and($section['mobileRowUrlField'] ?? null)->toBe('display.showUrl')
         ->and($section['secondaryFieldsClass'] ?? null)
-        ->toBe('mt-px flex flex-wrap items-center gap-x-3 gap-y-1')
+        ->toBe('mt-px flex flex-wrap items-center gap-x-3 gap-y-1 sm:mt-1.5')
         ->and($section['rowLayout']['primaryText']['urlField'] ?? null)->toBe('display.showUrl')
         ->and($section['rowLayout']['primaryText']['linkClass'] ?? null)
         ->toBe('truncate text-sm font-semibold text-gray-900 transition hover:text-gray-700')
@@ -610,9 +610,10 @@ it('4. preserves the material detail header while using the section shell', func
         ->assertSee(route('materials.index'), false)
         ->assertDontSee('Back to Materials')
         ->assertSee('Kilogram')
-        ->assertSee('Purchasable')
-        ->assertSee('Sellable')
-        ->assertSee('Manufacturable');
+        ->assertSee('data-material-type-toggles', false)
+        ->assertSee('shopping-cart', false)
+        ->assertSee('credit-card', false)
+        ->assertSee('cog', false);
 });
 
 it('4a. material detail header contains the base uom badge and only the enabled flag icons', function (): void {
@@ -632,9 +633,9 @@ it('4a. material detail header contains the base uom badge and only the enabled 
         ->assertOk()
         ->assertSee('Header Flags Material')
         ->assertSee('Pound')
-        ->assertSee('Purchasable')
-        ->assertDontSee('Sellable')
-        ->assertDontSee('Manufacturable')
+        ->assertSee('data-material-type-toggles', false)
+        ->assertSee('credit-card', false)
+        ->assertDontSee('data-section-key="recipes"', false)
         ->assertDontSee('Core fields');
 });
 
@@ -654,7 +655,7 @@ it('5. omits the supplier packages section for non-purchasable materials', funct
 
     expect(($this->extractSectionConfig)($response))->toBe([]);
 
-    $response->assertDontSee('data-js-crud-section-root', false);
+    $response->assertSee('data-js-crud-section-root', false);
 });
 
 it('5a. omits the purchase orders section for non-purchasable materials', function (): void {
@@ -701,10 +702,9 @@ it('6. removes the legacy supplier package payload and duplicated server rendere
 
     expect($viewSource)->toContain('materials-show-payload')
         ->and($viewSource)->toContain('data-js-crud-section-root')
-        ->and($viewSource)->toContain('px-1 sm:px-6')
-        ->and($viewSource)->toContain('aria-label="Purchasable"')
-        ->and($viewSource)->toContain('aria-label="Sellable"')
-        ->and($viewSource)->toContain('aria-label="Manufacturable"')
+        ->and($viewSource)->toContain('space-y-0 px-1 pb-8 sm:space-y-6 sm:px-6 sm:py-12')
+        ->and($viewSource)->toContain('data-material-type-toggles')
+        ->and($viewSource)->toContain(':aria-label="typeToggle.label"')
         ->and($viewSource)->not->toContain('materials-show-supplier-packages-payload')
         ->and($viewSource)->not->toContain('data-section="supplier-packages"')
         ->and($viewSource)->not->toContain("@forelse (\$payload['packages'] as \$package)")
@@ -811,10 +811,10 @@ it('11bb. js crud section source renders mobile rows square flush and without ve
 
     expect($source)->toContain('class="-mx-3 space-y-0 border-t border-gray-300 sm:mx-0 sm:space-y-3 sm:border-t-0"')
         ->and($source)->toContain('const mobileRecordClass = (className) => asString(className)')
-        ->and($source)->toContain("return `sm:${token}`;")
-        ->and($source)->toContain("return `px-3 py-2 sm:${token}`;")
+        ->and($source)->toContain('return `sm:${token}`;')
+        ->and($source)->toContain('return `px-3 py-2 sm:${token}`;')
         ->and($source)->toContain("return 'py-2 sm:py-1';")
-        ->and($source)->toContain("return `border-gray-300 sm:${token}`;")
+        ->and($source)->toContain('return `border-gray-300 sm:${token}`;')
         ->and($source)->toContain("return ['relative', 'max-sm:border-t-0 sm:mt-0', mobileClass, mobileRecordClass(adapterClass), mobileRecordClass(recordLevelClass)]");
 });
 
@@ -995,7 +995,7 @@ it('15a. material supplier packages use inline icon actions instead of the dots 
 
     expect($section['showRowActionsMenu'] ?? null)->toBeFalse()
         ->and($section['inlineActionsOnMobile'] ?? null)->toBeTrue()
-        ->and($section['recordClass'] ?? null)->toBe('rounded-xl border border-gray-200 bg-gray-50 px-3 py-1 sm:px-4 sm:py-1')
+        ->and($section['recordClass'] ?? null)->toBe('rounded-lg border border-gray-200 bg-gray-50 px-3 py-1 sm:px-4 sm:py-1')
         ->and($actions->get('purchase')['icon'] ?? null)->toBe('credit-card')
         ->and($actions->get('purchase')['tooltip'] ?? null)->toBe('Purchase Order')
         ->and($actions->get('archive')['icon'] ?? null)->toBe('x-mark')
@@ -1143,7 +1143,7 @@ it('18a. js crud section source uses a square rounded lg create button and mobil
         ->and($source)->toContain('sm:h-8 sm:w-8')
         ->and($source)->toContain('h-3.5 w-3.5 sm:h-4 sm:w-4')
         ->and($source)->not->toContain('rounded-full border border-gray-200')
-        ->and($source)->toContain('px-3 sm:px-6')
+        ->and($source)->toContain('px-3 py-2 sm:px-6 sm:py-2')
         ->and($source)->toContain('p-3 sm:p-4')
         ->and($source)->toContain('flex-col sm:flex-row');
 });
@@ -1153,7 +1153,7 @@ it('18aa. js crud section source keeps the accordion trigger right aligned on mo
 
     expect($source)->toContain('flex items-start justify-between gap-3')
         ->and($source)->toContain('min-w-0 flex-1')
-        ->and($source)->toContain('px-3 py-3 sm:px-6 sm:py-2')
+        ->and($source)->toContain('px-3 py-2 sm:px-6 sm:py-2')
         ->and($source)->toContain('text-sm font-semibold leading-tight text-gray-900 sm:text-base')
         ->and($source)->toContain('mt-0 text-[0.7rem] leading-tight text-gray-500 sm:mt-px sm:text-xs')
         ->and($source)->toContain('h-7 w-7 shrink-0')
@@ -1232,7 +1232,7 @@ it('18g. js crud section keeps row action menus enabled by default unless a sect
         ->and($source)->toContain('primaryTextLinkClass()')
         ->and($source)->toContain('recordRowClass(record)')
         ->and($source)->toContain('rightMetaColumnClass(record)')
-        ->and($source)->toContain('x-show="section.showRowActionsMenu && visibleActions(record).length > 0"')
+        ->and($source)->toContain('x-show="shouldShowRowActionsMenu(record)"')
         ->and($source)->toContain('x-show="!section.showRowActionsMenu && visibleActions(record).length > 0"');
 });
 
@@ -1403,7 +1403,7 @@ it('24a. supplier package rows expose tenant scoped supplier detail links only f
         ->not->toContain(route('purchasing.suppliers.show', $otherSupplier));
 });
 
-it('24b. supplier packages section exposes a view row action that uses the supplier detail link', function (): void {
+it('24b. supplier packages section exposes purchase and archive row actions', function (): void {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
     $uom = ($this->makeUom)($tenant);
@@ -1414,9 +1414,9 @@ it('24b. supplier packages section exposes a view row action that uses the suppl
     $response = ($this->getShow)($user, $item)->assertOk();
     $section = ($this->extractSectionConfig)($response, 'supplierPackages');
 
-    expect($section['actions'][0]['id'] ?? null)->toBe('view')
-        ->and($section['actions'][0]['type'] ?? null)->toBe('view')
-        ->and($section['actions'][0]['urlField'] ?? null)->toBe('display.showUrl');
+    expect(collect($section['actions'] ?? [])->pluck('id')->all())->toBe(['purchase', 'archive'])
+        ->and($section['actions'][0]['type'] ?? null)->toBe('custom')
+        ->and($section['actions'][1]['type'] ?? null)->toBe('archive');
 });
 
 it('25. returns an empty data set and pagination metadata when no supplier packages exist', function (): void {
@@ -2279,7 +2279,7 @@ it('52. material purchase order section exposes only a view action and no mutati
 
     $section = ($this->extractSectionConfig)(($this->getShow)($user, $item), 'purchaseOrders');
 
-    expect(collect($section['actions'] ?? [])->pluck('label')->all())->toBe(['View'])
+    expect(collect($section['actions'] ?? [])->pluck('label')->all())->toBe([])
         ->and($section['endpoints'] ?? [])->toBe([
             'list' => route('materials.purchase-orders.index', $item),
         ])

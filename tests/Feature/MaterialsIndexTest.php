@@ -274,7 +274,7 @@ it('10. crud config includes the materials detail redirect template', function (
     expect($config['detailUrlTemplate'] ?? null)->toBe(url('/materials/{id}'));
 });
 
-it('11. crud config exposes the shared vertical dot action menu labels for managers', function (): void {
+it('11. crud config omits row actions because material activation is handled by the shared toggle', function (): void {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
 
@@ -283,18 +283,7 @@ it('11. crud config exposes the shared vertical dot action menu labels for manag
     $config = ($this->extractCrudConfig)(($this->getIndex)($user));
 
     expect($config['labels']['actionsAriaLabel'] ?? null)->toBe('Material actions')
-        ->and($config['actions'] ?? null)->toBe([
-            [
-                'id' => 'edit',
-                'label' => 'Edit',
-                'tone' => 'default',
-            ],
-            [
-                'id' => 'delete',
-                'label' => 'Delete',
-                'tone' => 'warning',
-            ],
-        ]);
+        ->and($config['actions'] ?? null)->toBe([]);
 });
 
 it('12. crud config hides edit and delete actions for view-only users', function (): void {
@@ -648,8 +637,8 @@ it('22c. materials page module persists mobile active toggle changes through the
         ->and($pageSource)->toContain('materialFlagBadges(record)')
         ->and($pageSource)->toContain('canManageMaterials()')
         ->and($pageSource)->toContain('async toggleMaterialActive(toggleDetail)')
-        ->and($pageSource)->toContain("is_active: Boolean(toggleDetail.checked)")
-        ->and($pageSource)->toContain("this.showToast('success', 'Material updated.')")
+        ->and($pageSource)->toContain('is_active: nextValue')
+        ->and($pageSource)->toContain('${record.name || \'Material\'} ${record.is_active ? \'Active\' : \'Inactive\'}')
         ->and($pageSource)->toContain('buildItemEndpoint(this.endpoints.update, record.id)');
 });
 

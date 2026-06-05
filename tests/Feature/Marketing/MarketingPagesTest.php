@@ -126,7 +126,7 @@ MARKDOWN);
 it('14. renders the food manufacturing MRP page', function (): void {
     $this->get('/learn/food-manufacturing-mrp')
         ->assertOk()
-        ->assertSee('food manufacturing MRP');
+        ->assertSee('Food manufacturing MRP');
 });
 
 it('15. renders the inventory management page', function (): void {

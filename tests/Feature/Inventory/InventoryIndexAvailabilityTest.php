@@ -703,7 +703,7 @@ it('18ad. inventory page module wires the shared mobile active toggle handler', 
         ->and($pageSource)->toContain('async toggleInventoryMaterialActive(toggleDetail)')
         ->and($pageSource)->toContain("is_active: nextValue")
         ->and($pageSource)->toContain('default_price_amount: record.default_price_amount ||')
-        ->and($pageSource)->toContain("this.showToast('success', 'Material updated.')")
+        ->and($pageSource)->toContain('${record.item || \'Material\'} ${record.is_active ? \'Active\' : \'Inactive\'}')
         ->and($viewSource)->toContain('<x-ui.toast visible="toast.visible" type="toast.type" message="toast.message" />');
 });
 

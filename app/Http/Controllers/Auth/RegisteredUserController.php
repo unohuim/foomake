@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers\Auth;
 
+use App\Actions\Marketing\LinkVisitorAttributionToUserAction;
 use App\Http\Controllers\Controller;
+use App\Http\Middleware\CaptureVisitorAttribution;
 use App\Models\Role;
 use App\Models\Tenant;
 use App\Models\User;
@@ -29,7 +31,7 @@ class RegisteredUserController extends Controller
      *
      * @throws \Illuminate\Validation\ValidationException
      */
-    public function store(Request $request): RedirectResponse
+    public function store(Request $request, LinkVisitorAttributionToUserAction $linkAttribution): RedirectResponse
     {
         $request->validate([
             'name' => ['required', 'string', 'max:255'],
@@ -53,6 +55,11 @@ class RegisteredUserController extends Controller
         ]);
 
         $user->roles()->syncWithoutDetaching([$adminRole->id]);
+
+        $linkAttribution->execute(
+            $request->cookies->get(CaptureVisitorAttribution::COOKIE_NAME),
+            $user,
+        );
 
         event(new Registered($user));
 

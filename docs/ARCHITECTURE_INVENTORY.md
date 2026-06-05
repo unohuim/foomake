@@ -263,6 +263,40 @@ cta_url: "/register"
 ---
 ```
 
+### First-Party Attribution
+
+**Name:** First-Party Attribution
+**Type:** Marketing Privacy Pattern
+**Location:**
+- `app/Http/Middleware/CaptureVisitorAttribution.php`
+- `app/Actions/Marketing/LinkVisitorAttributionToUserAction.php`
+- `app/Models/VisitorAttribution.php`
+- `database/migrations/2026_06_05_000001_create_visitor_attributions_table.php`
+- `docs/architecture/marketing/FirstPartyAttribution.yaml`
+
+**Purpose:**
+Capture minimal first-party source attribution for anonymous public-page visitors and link it to a registered user when registration occurs.
+
+**When to Use:**
+Public marketing attribution, registration source linkage, and future demo request source linkage.
+
+**When Not to Use:**
+Authenticated app route analytics, behavioral tracking, third-party analytics, advertising pixels, heatmaps, or session replay.
+
+**Public Interface:**
+- `foomake_visitor_id` cookie
+- `VisitorAttribution`
+- `CaptureVisitorAttribution` middleware
+- `LinkVisitorAttributionToUserAction::execute()`
+
+**Example Usage:**
+```php
+$linkAttribution->execute(
+    $request->cookies->get(CaptureVisitorAttribution::COOKIE_NAME),
+    $user,
+);
+```
+
 ### Reusable CRUD Detail Section Pattern
 
 **Name:** Reusable CRUD Detail Section Pattern  

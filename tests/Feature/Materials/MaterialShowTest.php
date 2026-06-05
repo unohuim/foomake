@@ -117,8 +117,8 @@ test('material show page renders the base uom dropdown with tenant uom options',
     $otherUom = Uom::query()->create([
         'tenant_id' => $this->tenant->id,
         'uom_category_id' => $uom->uom_category_id,
-        'name' => 'Kilogram',
-        'symbol' => 'kg',
+        'name' => 'Test Kilogram',
+        'symbol' => 'test-kg',
     ]);
     $item = ($this->makeItem)($uom);
 
@@ -133,13 +133,13 @@ test('material show page renders the base uom dropdown with tenant uom options',
         ->assertSee('"base_uom_name"', false)
         ->assertSee('"uom_options"', false)
         ->assertSee((string) $otherUom->id, false)
-        ->assertSee('Kilogram', false);
+        ->assertSee('Test Kilogram', false);
 });
 
 test('material show page renders base uom as a static badge without manage permission', function (): void {
     ($this->grantPermission)($this->user, 'inventory-materials-view');
 
-    $uom = ($this->makeUom)(['name' => 'Gram', 'symbol' => 'g']);
+    $uom = ($this->makeUom)(['name' => 'Test Gram', 'symbol' => 'test-g']);
     $item = ($this->makeItem)($uom);
 
     $response = ($this->getShowPage)($this->user, $item);
@@ -150,7 +150,7 @@ test('material show page renders base uom as a static badge without manage permi
         ->assertDontSee('data-material-name-editor', false)
         ->assertDontSee('materialNameEditor', false)
         ->assertDontSee('Edit material name', false)
-        ->assertSee('Gram', false);
+        ->assertSee('Test Gram', false);
 });
 
 test('material show page renders inventory stats through alpine payload state', function (): void {
