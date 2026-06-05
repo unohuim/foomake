@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Models\VisitorAttribution;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 
 uses(RefreshDatabase::class);
@@ -216,6 +217,109 @@ it('15. registration does not create duplicate attribution row', function (): vo
         ]);
 
     expect(VisitorAttribution::query()->count())->toBe(1);
+});
+
+it('15a. visitor attribution row exists before login linkage', function (): void {
+    $visitorId = (string) Str::uuid();
+
+    $this->withCookie($this->visitorCookieName, $visitorId)
+        ->get('/?utm_source=linkedin')
+        ->assertOk();
+
+    $attribution = VisitorAttribution::query()->sole();
+
+    expect($attribution->visitor_id)->toBe($visitorId)
+        ->and($attribution->user_id)->toBeNull()
+        ->and($attribution->converted_at)->toBeNull();
+});
+
+it('15b. login links matching visitor attribution to the authenticated user', function (): void {
+    $visitorId = (string) Str::uuid();
+
+    $this->withCookie($this->visitorCookieName, $visitorId)
+        ->get('/?utm_source=linkedin')
+        ->assertOk();
+
+    $tenant = Tenant::query()->create([
+        'tenant_name' => 'Login Tenant',
+    ]);
+
+    $user = User::query()->create([
+        'tenant_id' => $tenant->id,
+        'name' => 'Login User',
+        'email' => 'login-attribution@example.test',
+        'email_verified_at' => now(),
+        'password' => Hash::make('password'),
+    ]);
+
+    $this->withCookie($this->visitorCookieName, $visitorId)
+        ->post('/login', [
+            'email' => 'login-attribution@example.test',
+            'password' => 'password',
+        ])
+        ->assertRedirect('/dashboard');
+
+    $attribution = VisitorAttribution::query()->sole();
+
+    expect($attribution->user_id)->toBe($user->id)
+        ->and($attribution->converted_at)->not->toBeNull()
+        ->and(VisitorAttribution::query()->count())->toBe(1);
+});
+
+it('15c. login without visitor cookie does not error or create attribution linkage', function (): void {
+    $tenant = Tenant::query()->create([
+        'tenant_name' => 'Direct Login Tenant',
+    ]);
+
+    User::query()->create([
+        'tenant_id' => $tenant->id,
+        'name' => 'Direct Login User',
+        'email' => 'direct-login@example.test',
+        'email_verified_at' => now(),
+        'password' => Hash::make('password'),
+    ]);
+
+    $this->post('/login', [
+        'email' => 'direct-login@example.test',
+        'password' => 'password',
+    ])->assertRedirect('/dashboard');
+
+    expect(VisitorAttribution::query()->count())->toBe(0);
+});
+
+it('15d. login with mismatched visitor id does not create bad linkage', function (): void {
+    $existingVisitorId = (string) Str::uuid();
+    $mismatchedVisitorId = (string) Str::uuid();
+
+    $this->withCookie($this->visitorCookieName, $existingVisitorId)
+        ->get('/?utm_source=linkedin')
+        ->assertOk();
+
+    $tenant = Tenant::query()->create([
+        'tenant_name' => 'Mismatch Login Tenant',
+    ]);
+
+    User::query()->create([
+        'tenant_id' => $tenant->id,
+        'name' => 'Mismatch Login User',
+        'email' => 'mismatch-login@example.test',
+        'email_verified_at' => now(),
+        'password' => Hash::make('password'),
+    ]);
+
+    $this->withCookie($this->visitorCookieName, $mismatchedVisitorId)
+        ->post('/login', [
+            'email' => 'mismatch-login@example.test',
+            'password' => 'password',
+        ])
+        ->assertRedirect('/dashboard');
+
+    $attribution = VisitorAttribution::query()->sole();
+
+    expect($attribution->visitor_id)->toBe($existingVisitorId)
+        ->and($attribution->user_id)->toBeNull()
+        ->and($attribution->converted_at)->toBeNull()
+        ->and(VisitorAttribution::query()->count())->toBe(1);
 });
 
 it('16. registration without visitor cookie still follows normal auth flow', function (): void {

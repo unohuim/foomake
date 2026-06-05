@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers\Auth;
 
+use App\Actions\Marketing\LinkVisitorAttributionToUserAction;
 use App\Http\Controllers\Controller;
+use App\Http\Middleware\CaptureVisitorAttribution;
 use App\Http\Requests\Auth\LoginRequest;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -22,11 +24,20 @@ class AuthenticatedSessionController extends Controller
     /**
      * Handle an incoming authentication request.
      */
-    public function store(LoginRequest $request): RedirectResponse
+    public function store(LoginRequest $request, LinkVisitorAttributionToUserAction $linkAttribution): RedirectResponse
     {
         $request->authenticate();
 
         $request->session()->regenerate();
+
+        $user = $request->user();
+
+        if ($user !== null) {
+            $linkAttribution->execute(
+                $request->cookies->get(CaptureVisitorAttribution::COOKIE_NAME),
+                $user,
+            );
+        }
 
         return redirect()->intended(route('dashboard', absolute: false));
     }
