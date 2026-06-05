@@ -9,6 +9,8 @@
         <link rel="preconnect" href="https://fonts.bunny.net">
         <link href="https://fonts.bunny.net/css?family=figtree:400,500,600,700&display=swap" rel="stylesheet" />
 
+        <link rel="icon" href="/img/foomake_fav.ico?v=3" type="image/x-icon">
+
         @vite(['resources/css/app.css', 'resources/js/app.js'])
     </head>
     <body class="bg-[#f7f9fc] font-sans text-slate-950 antialiased">
@@ -57,7 +59,7 @@
                 <nav class="mx-auto flex max-w-7xl items-center justify-between px-4 py-5 sm:px-6 lg:px-8" aria-label="Global">
                     <a href="{{ url('/') }}" class="flex items-center gap-3">
                         @if ($logoAsset)
-                            <img src="{{ $logoAsset }}" alt="{{ config('app.name', 'Factory Manager') }}" class="h-20 w-auto object-contain sm:h-24">
+                            <img src="{{ $logoAsset }}" alt="{{ config('app.name', 'Factory Manager') }}" class="h-12 w-auto object-contain sm:h-14">
                         @else
                             <span class="flex h-20 w-20 items-center justify-center rounded-md bg-blue-950 text-base font-semibold text-white shadow-sm sm:h-24 sm:w-24">
                                 FM
@@ -352,7 +354,7 @@
                                 <div class="flex min-w-0 flex-1">
                                     <button
                                         type="button"
-                                        class="flex w-14 shrink-0 items-center justify-center bg-[#11284c] text-xs font-semibold uppercase text-white transition hover:bg-[#173864]"
+                                        class="flex w-14 shrink-0 items-center justify-center bg-[#11284c] text-sm font-semibold uppercase text-white"
                                         x-on:click="authPanel = 'register'; $nextTick(() => $refs.registerName?.focus())"
                                     >
                                         <span class="-rotate-90 whitespace-nowrap">Register</span>
@@ -379,7 +381,7 @@
                                                     welcome
                                                 </h2>
                                                 <p class="mt-2 text-center text-sm text-stone-500">
-                                                    Create an account for your production board.
+                                                    your sanity awaits
                                                 </p>
                                             </div>
 
@@ -457,7 +459,7 @@
 
                                     <button
                                         type="button"
-                                        class="flex w-14 shrink-0 items-center justify-center border-l border-white bg-[#11284c] text-xs font-semibold uppercase text-white transition hover:bg-[#173864]"
+                                        class="flex w-14 shrink-0 items-center justify-center border-l border-white bg-[#11284c] text-sm font-semibold uppercase text-white"
                                         x-on:click="authPanel = 'login'; $nextTick(() => $refs.loginEmail?.focus())"
                                     >
                                         <span class="-rotate-90 whitespace-nowrap">Login</span>

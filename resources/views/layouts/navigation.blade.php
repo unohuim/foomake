@@ -39,19 +39,28 @@
     $showSalesNav = $canManageCustomers || $canManageSalesOrders || $canViewProducts || $canManageProducts;
     $showManufacturingNav = $canViewMakeOrders || $canViewRecipes;
     $showStockNav = $canViewStockInventory || $canViewInventoryCounts || $canViewMaterials || $canManageMaterials;
+
+
+    $logoAsset = file_exists(resource_path('img/foomake_logo_square_white.png'))
+        ? \Illuminate\Support\Facades\Vite::asset('resources/img/foomake_logo_square_white.png')
+        : null;
 @endphp
 
 <nav x-data="{ open: false }" class="border-b border-slate-800 bg-slate-950 shadow-lg shadow-slate-950/20">
     <div class="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
         <div class="flex items-center gap-3">
             <a href="{{ route('dashboard') }}" class="flex items-center rounded-full border border-transparent p-2 transition duration-200 ease-out hover:border-slate-700 hover:bg-slate-900/80">
-                <x-application-logo class="block h-8 w-auto fill-current text-white" />
+                @if ($logoAsset)
+                    <img src="{{ $logoAsset }}" alt="{{ config('app.name', 'Factory Manager') }}" class="h-20 w-auto object-contain sm:h-24">
+                @else
+                    <span class="flex h-20 w-20 items-center justify-center rounded-md bg-blue-950 text-base font-semibold text-white shadow-sm sm:h-24 sm:w-24">
+                        FM
+                    </span>
+                @endif
             </a>
 
             <div class="hidden items-center gap-2 sm:flex">
-                <x-nav-link :href="route('dashboard')" :active="request()->routeIs('dashboard')">
-                    {{ __('Dashboard') }}
-                </x-nav-link>
+
 
                 @if ($showSalesNav)
                     <x-nav-dropdown :active="$salesActive" align="left" data-nav-dropdown-trigger="sales">
