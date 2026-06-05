@@ -675,7 +675,8 @@ it('28. shared crud renderer owns the toolbar list cards empty state and action 
         ->and($rendererSource)->toContain('data-crud-action-cell')
         ->and($rendererSource)->toContain('data-crud-action-trigger')
         ->and($rendererSource)->toContain('data-crud-action-menu')
-        ->and($rendererSource)->toContain('class="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-gray-100 bg-white shadow-sm" data-crud-renderer');
+        ->and($rendererSource)->toContain('class="flex h-full min-h-0 flex-col overflow-hidden border border-gray-100 bg-white shadow-sm" data-crud-renderer')
+        ->and($rendererSource)->not->toContain('rounded-lg border border-gray-100 bg-white shadow-sm" data-crud-renderer');
 });
 
 it('28a. shared crud mobile renderer keeps the primary label visible on mobile', function () {

@@ -1,0 +1,29 @@
+name: InventoryBalance
+type: Eloquent Model / Derived Read Model
+location:
+  - app/Models/InventoryBalance.php
+  - app/Actions/Inventory/ApplyStockMoveToInventoryBalanceAction.php
+  - app/Actions/Inventory/CalculateItemOnHandQuantityAction.php
+purpose: Maintain tenant-scoped per-item per-UoM inventory balances derived from posted stock moves so inventory reads do not scan the full stock-move ledger.
+when_to_use:
+  - Calculating on-hand inventory for an item
+  - Validating whether existing inventory can be represented in a changed item base UoM
+  - Updating derived balances after a posted stock move is created
+when_not_to_use:
+  - Replacing the stock-move ledger as the source of truth
+  - Recording planned supply or demand
+  - Mutating historical stock moves
+rules:
+  - Stock moves remain the source of truth for inventory history.
+  - Inventory balances are derived from posted stock moves and grouped by tenant_id, item_id, and uom_id.
+  - Inventory balances must be updated when a posted stock move is created.
+  - On-hand quantity must convert balance rows into the item's current base UoM before summing.
+  - Base UoM changes require conversion coverage from the current base UoM and every non-zero balance UoM into the requested new base UoM.
+  - Missing conversion coverage must fail the calculation or reject the base UoM change instead of silently returning an incorrect quantity.
+public_interface:
+  - InventoryBalance
+  - ApplyStockMoveToInventoryBalanceAction::execute()
+  - CalculateItemOnHandQuantityAction::execute()
+  - CanConvertInventoryBalancesToUomAction::execute()
+example_usage: |
+  $onHand = app(CalculateItemOnHandQuantityAction::class)->execute($item);

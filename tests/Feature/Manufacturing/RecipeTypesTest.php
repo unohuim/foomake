@@ -1087,7 +1087,7 @@ it('52. fulfillment selection defaults output quantity to one in the recipes cre
 it('53. fulfillment output quantity input is disabled in the create form', function () {
     $createSource = File::get(resource_path('views/manufacturing/recipes/partials/create-recipe-slide-over.blade.php'));
 
-    expect($createSource)->toContain(':disabled="isFulfillmentRecipeType(createForm.recipe_type)"');
+    expect($createSource)->toContain('disabled-expression="isFulfillmentRecipeType(createForm.recipe_type)"');
 });
 
 it('54. fulfillment recipe stores output quantity as 1.000000 regardless of submitted value', function () {

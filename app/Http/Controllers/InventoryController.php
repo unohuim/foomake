@@ -67,12 +67,14 @@ class InventoryController extends Controller
      */
     private function inventoryCrudConfig(): array
     {
+        $canManageMaterials = Gate::allows('inventory-materials-manage');
+
         return [
             'resource' => 'inventory',
             'endpoints' => [
                 'list' => route('inventory.list'),
                 'create' => '',
-                'update' => '',
+                'update' => url('/materials/{id}'),
                 'delete' => '',
             ],
             'columns' => ['item', 'on_hand', 'sell', 'buy', 'make', 'net'],
@@ -94,6 +96,7 @@ class InventoryController extends Controller
                 'showExport' => false,
                 'showImport' => false,
                 'showCreate' => false,
+                'canManageMaterials' => $canManageMaterials,
             ],
             'rowDisplay' => [
                 'columns' => [
@@ -111,8 +114,20 @@ class InventoryController extends Controller
             ],
             'mobileCard' => [
                 'titleExpression' => "record.item || '—'",
-                'subtitleExpression' => "record.item_uom_name || '—'",
+                'titleAsideExpression' => "record.item_uom_name || record.item_uom_symbol || '—'",
+                'subtitleExpression' => '',
                 'bodyExpression' => 'inventoryAvailabilitySummary(record)',
+                'badgesExpression' => 'inventoryMaterialFlagBadges(record)',
+                'urlExpression' => 'record.show_url',
+                'showActions' => false,
+                'toggle' => [
+                    'name' => 'is_active',
+                    'checkedExpression' => 'Boolean(record.is_active)',
+                    'disabledExpression' => '!canManageMaterials()',
+                    'eventName' => 'inventory-material-active-toggle',
+                    'handler' => 'toggleInventoryMaterialActive(toggleDetail)',
+                    'ariaLabelExpression' => '`Toggle ${record.item || "material"} active state`',
+                ],
             ],
             'actions' => [],
         ];

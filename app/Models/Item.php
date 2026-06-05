@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Actions\Inventory\CalculateItemOnHandQuantityAction;
 use App\Models\Concerns\HasTenantScope;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -16,8 +17,6 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 class Item extends Model
 {
     use HasTenantScope;
-
-    private const QUANTITY_SCALE = 6;
 
     protected $fillable = [
         'tenant_id',
@@ -78,6 +77,14 @@ class Item extends Model
     /**
      * @return HasMany
      */
+    public function inventoryBalances(): HasMany
+    {
+        return $this->hasMany(InventoryBalance::class);
+    }
+
+    /**
+     * @return HasMany
+     */
     public function recipes(): HasMany
     {
         return $this->hasMany(Recipe::class);
@@ -121,19 +128,6 @@ class Item extends Model
      */
     public function onHandQuantity(): string
     {
-        $total = '0.000000';
-
-        $quantities = $this->stockMoves()
-            ->where(function ($query): void {
-                $query->where('status', 'POSTED')
-                    ->orWhereNull('status');
-            })
-            ->pluck('quantity');
-
-        foreach ($quantities as $quantity) {
-            $total = bcadd($total, (string) $quantity, self::QUANTITY_SCALE);
-        }
-
-        return $total;
+        return app(CalculateItemOnHandQuantityAction::class)->execute($this);
     }
 }

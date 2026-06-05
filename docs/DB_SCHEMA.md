@@ -258,7 +258,7 @@ Migrations remain the **sole source of truth**.
 
 ## sales_order_lines
 
-**Tenant-owned:** Yes  
+**Tenant-owned:** Yes
 **Purpose:** Sales order line items with immutable price snapshots and optional imported source-line identity for the Sales Order detail page and external CSV import/export
 
 ### Columns
@@ -322,7 +322,7 @@ Migrations remain the **sole source of truth**.
 
 ## workflow_stages
 
-**Tenant-owned:** Yes  
+**Tenant-owned:** Yes
 **Purpose:** Tenant-scoped operational workflow stages within a fixed workflow domain
 
 ### Columns
@@ -464,6 +464,7 @@ Migrations remain the **sole source of truth**.
 | Name              | Type      | Nullable | Notes                     |
 | ----------------- | --------- | -------- | ------------------------- |
 | id                | bigint    | No       | Primary key               |
+| name              | string    | No       | Human-readable count name |
 | tenant_id         | bigint    | No       | FK → tenants.id (CASCADE) |
 | created_by_user_id | bigint   | Yes      | FK → users.id (SET NULL)  |
 | tasked_by_user_id | bigint    | Yes      | FK → users.id (SET NULL)  |
@@ -502,6 +503,7 @@ Migrations remain the **sole source of truth**.
 | tenant_id          | bigint        | No       | FK → tenants.id (CASCADE) |
 | inventory_count_id | bigint        | No       | Part of composite FK      |
 | item_id            | bigint        | No       | FK → items.id (CASCADE)   |
+| uom_id             | bigint        | Yes      | FK → uoms.id; counted UoM snapshot |
 | counted_quantity   | decimal(18,6) | Yes      | Nullable until completion/posting |
 | notes              | text          | Yes      | —                         |
 | created_at         | timestamp     | Yes      | —                         |
@@ -511,12 +513,14 @@ Migrations remain the **sole source of truth**.
 
 - `(inventory_count_id, tenant_id)` → inventory_counts.(id, tenant_id) (CASCADE)
 - `item_id` → items.id (CASCADE)
+- `uom_id` → uoms.id (SET NULL)
 
 ### Keys & Indexes
 
 - PK: `id`
 - Implicit (FK index): `tenant_id`
 - Implicit (FK index): `item_id`
+- Implicit (FK index): `uom_id`
 
 ---
 
@@ -1393,6 +1397,39 @@ Migrations remain the **sole source of truth**.
 
 ---
 
+## inventory_balances
+
+**Tenant-owned:** Yes
+**Purpose:** Derived per-item per-UoM on-hand balance rows from posted stock moves
+
+### Columns
+
+| Name       | Type          | Nullable | Notes                     |
+| ---------- | ------------- | -------- | ------------------------- |
+| id         | bigint        | No       | Primary key               |
+| tenant_id  | bigint        | No       | FK → tenants.id (CASCADE) |
+| item_id    | bigint        | No       | FK → items.id (CASCADE)   |
+| uom_id     | bigint        | No       | FK → uoms.id (CASCADE)    |
+| quantity   | decimal(18,6) | No       | Signed derived balance    |
+| created_at | timestamp     | Yes      | —                         |
+| updated_at | timestamp     | Yes      | —                         |
+
+### Keys & Indexes
+
+- PK: `id`
+- Unique: `(tenant_id, item_id, uom_id)`
+- Index: `(tenant_id, item_id)`
+- Implicit (FK index): tenant_id, item_id, uom_id
+
+### Behavioral Notes
+
+- `stock_moves` remain the source of truth.
+- Balance rows are updated when posted stock moves are created.
+- On-hand reads convert balance rows into the item's current base UoM before summing.
+- Base UoM changes require conversion coverage from the current base UoM and existing non-zero balance UoMs to the requested new base UoM.
+
+---
+
 ## stock_moves
 
 **Tenant-owned:** Yes  
@@ -1421,6 +1458,7 @@ Migrations remain the **sole source of truth**.
 
 ### Behavioral Notes
 
+- Posted stock moves update `inventory_balances` for `(tenant_id, item_id, uom_id)`.
 - Purchase receipt stock moves may use `source_type = purchase_order_receipt_line`.
 - Sales-order completion stock moves use `source_type = App\Models\SalesOrderLine` and `source_id = sales_order_lines.id`.
 - Sales-order completion creates `issue` stock moves in the item base UoM with the line quantity as a signed negative ledger amount.

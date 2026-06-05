@@ -11,6 +11,7 @@ use App\Models\Task;
 use App\Models\Tenant;
 use App\Models\Uom;
 use App\Models\UomCategory;
+use App\Models\UomConversion;
 use App\Models\User;
 use App\Models\WorkflowDomain;
 use App\Models\WorkflowStage;
@@ -99,6 +100,7 @@ beforeEach(function () {
         $response->assertJsonStructure([
             'count' => [
                 'id',
+                'name',
                 'counted_at',
                 'counted_at_iso',
                 'notes',
@@ -149,6 +151,7 @@ beforeEach(function () {
 
     $this->createDraftCountViaApi = function (User $user, array $payload = []): InventoryCount {
         $payload = array_merge([
+            'name' => 'Draft Count ' . Str::random(10),
             'counted_at' => now()->toISOString(),
             'notes' => 'Draft ' . Str::random(10),
             'assigned_to_user_id' => $user->id,
@@ -370,7 +373,7 @@ it('allows a tasker assigned to an inventory count to view that count without br
         ->get('/inventory/counts/' . $count->id)
         ->assertOk()
         ->assertSee('Inventory Count')
-        ->assertSee('June 1, 2026 at 4:45 PM')
+        ->assertSee('June 1, 2026')
         ->assertDontSee('Details')
         ->assertSee('Notes')
         ->assertDontSee('Count Date')
@@ -548,7 +551,8 @@ it('renders the inventory count date under the header title without mutating sto
     $this->actingAs($viewer)
         ->get('/inventory/counts/' . $count->id)
         ->assertOk()
-        ->assertSee('June 1, 2026 at 4:45 PM');
+        ->assertSee('June 1, 2026')
+        ->assertDontSee('June 1, 2026 at 4:45 PM');
 
     expect($count->fresh()->counted_at->format('Y-m-d H:i:s'))->toBe('2026-06-01 16:45:00');
 });
@@ -561,14 +565,17 @@ it('validates count create/update payloads (update requires counted_at) and upda
     ($this->grantPermission)($user, 'inventory-adjustments-execute');
 
     $this->actingAs($user)->postJson('/inventory/counts', [
+        'name' => 'Missing counted at count',
         'notes' => 'Missing counted_at',
     ])->assertStatus(422);
 
     $this->actingAs($user)->postJson('/inventory/counts', [
+        'name' => 'Invalid counted at count',
         'counted_at' => 'not-a-date',
     ])->assertStatus(422);
 
     $this->actingAs($user)->postJson('/inventory/counts', [
+        'name' => 'Bad assignee count',
         'counted_at' => now()->toISOString(),
         'assigned_to_user_id' => 999999,
     ])->assertStatus(422);
@@ -592,6 +599,7 @@ it('validates count create/update payloads (update requires counted_at) and upda
     $newCountedAt = now()->addDays(2)->seconds(0);
 
     $resp = $this->actingAs($user)->patchJson('/inventory/counts/' . $count->id, [
+        'name' => 'Updated inventory count name',
         'counted_at' => $newCountedAt->toISOString(),
         'notes' => 'Updated',
         'assigned_to_user_id' => $user->id,
@@ -602,8 +610,10 @@ it('validates count create/update payloads (update requires counted_at) and upda
 
     $count->refresh();
     expect($count->counted_at->format('Y-m-d H:i'))->toBe($newCountedAt->format('Y-m-d H:i'));
-    expect($resp->json('count.counted_at'))->toBe($newCountedAt->format('Y-m-d H:i'));
-    expect($resp->json('count.counted_at_iso'))->toBe($newCountedAt->format('Y-m-d\TH:i'));
+    expect($count->name)->toBe('Updated inventory count name');
+    expect($resp->json('count.counted_at'))->toBe($newCountedAt->format('F j, Y'));
+    expect($resp->json('count.name'))->toBe('Updated inventory count name');
+    expect($resp->json('count.counted_at_iso'))->toBe($newCountedAt->format('Y-m-d'));
 });
 
 it('create succeeds without assigned_to_user_id and keeps assignment null until explicitly set', function () {
@@ -613,6 +623,7 @@ it('create succeeds without assigned_to_user_id and keeps assignment null until 
     ($this->grantPermission)($user, 'inventory-adjustments-execute');
 
     $response = $this->actingAs($user)->postJson('/inventory/counts', [
+        'name' => 'Unassigned cycle count',
         'counted_at' => now()->toISOString(),
         'notes' => 'No assignment yet',
     ]);
@@ -622,7 +633,8 @@ it('create succeeds without assigned_to_user_id and keeps assignment null until 
 
     $count = InventoryCount::query()->findOrFail((int) $response->json('count.id'));
 
-    expect($count->assigned_to_user_id)->toBeNull()
+    expect($count->name)->toBe('Unassigned cycle count')
+        ->and($count->assigned_to_user_id)->toBeNull()
         ->and($count->created_by_user_id)->toBe($user->id)
         ->and($count->tasked_by_user_id)->toBe($user->id);
 });
@@ -720,8 +732,8 @@ it('creates/updates/deletes draft counts and lines with correct JSON shape + sta
     $update->assertOk();
     ($this->assertCountPayloadShape)($update);
     expect((int) $update->json('count.id'))->toBe($count->id);
-    expect($update->json('count.counted_at'))->toBe($updatedAt->format('Y-m-d H:i'));
-    expect($update->json('count.counted_at_iso'))->toBe($updatedAt->format('Y-m-d\TH:i'));
+    expect($update->json('count.counted_at'))->toBe($updatedAt->format('F j, Y'));
+    expect($update->json('count.counted_at_iso'))->toBe($updatedAt->format('Y-m-d'));
     expect($update->json('count.assigned_to_user_id'))->toBe($user->id);
 
     $uom = ($this->makeUom)($tenant);
@@ -732,6 +744,8 @@ it('creates/updates/deletes draft counts and lines with correct JSON shape + sta
         'counted_quantity' => '5.000000',
         'notes' => 'Line',
     ]);
+
+    expect($line->uom_id)->toBe($uom->id);
 
     $lineUpdate = $this->actingAs($user)->patchJson('/inventory/counts/' . $count->id . '/lines/' . $line->id, [
         'item_id' => $item->id,
@@ -873,6 +887,93 @@ it('post requires at least one line: no lines returns 422 and creates no adjustm
 
     $after = ($this->countAdjustmentsFor)($tenant, $count);
     expect($after)->toBe($before);
+});
+
+it('posts count lines by converting their snapshot uom into the current item base uom', function () {
+    $tenant = Tenant::factory()->create();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermission)($user, 'inventory-adjustments-execute');
+
+    $gram = ($this->makeUom)($tenant);
+    $kilogram = Uom::query()->forceCreate([
+        'tenant_id' => $tenant->id,
+        'uom_category_id' => $gram->uom_category_id,
+        'name' => 'Kilogram',
+        'symbol' => 'kg',
+    ]);
+
+    UomConversion::query()->forceCreate([
+        'tenant_id' => $tenant->id,
+        'from_uom_id' => $gram->id,
+        'to_uom_id' => $kilogram->id,
+        'multiplier' => '0.00100000',
+    ]);
+
+    $item = ($this->makeItem)($tenant, $kilogram);
+
+    $item->stockMoves()->create([
+        'tenant_id' => $tenant->id,
+        'uom_id' => $kilogram->id,
+        'quantity' => '2.000000',
+        'type' => 'receipt',
+    ]);
+
+    $count = InventoryCount::query()->forceCreate([
+        'tenant_id' => $tenant->id,
+        'counted_at' => now(),
+    ]);
+
+    InventoryCountLine::query()->forceCreate([
+        'tenant_id' => $tenant->id,
+        'inventory_count_id' => $count->id,
+        'item_id' => $item->id,
+        'uom_id' => $gram->id,
+        'counted_quantity' => '5000.000000',
+    ]);
+
+    ($this->postCount)($user, $count)->assertOk();
+
+    $move = StockMove::query()
+        ->where('tenant_id', $tenant->id)
+        ->where('type', 'inventory_count_adjustment')
+        ->where('source_type', InventoryCount::class)
+        ->where('source_id', $count->id)
+        ->where('item_id', $item->id)
+        ->firstOrFail();
+
+    expect($move->uom_id)->toBe($kilogram->id)
+        ->and($move->quantity)->toBe('3.000000');
+});
+
+it('rejects posting when a count line snapshot uom cannot convert into the current item base uom', function () {
+    $tenant = Tenant::factory()->create();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermission)($user, 'inventory-adjustments-execute');
+
+    $each = ($this->makeUom)($tenant);
+    $kilogram = ($this->makeUom)($tenant);
+    $item = ($this->makeItem)($tenant, $kilogram);
+
+    $count = InventoryCount::query()->forceCreate([
+        'tenant_id' => $tenant->id,
+        'counted_at' => now(),
+    ]);
+
+    InventoryCountLine::query()->forceCreate([
+        'tenant_id' => $tenant->id,
+        'inventory_count_id' => $count->id,
+        'item_id' => $item->id,
+        'uom_id' => $each->id,
+        'counted_quantity' => '5.000000',
+    ]);
+
+    ($this->postCount)($user, $count)
+        ->assertStatus(422)
+        ->assertJson(['message' => 'Inventory count line quantity cannot be converted to the item base UoM.']);
+
+    expect(($this->countAdjustmentsFor)($tenant, $count))->toBe(0);
 });
 
 it('posts: creates adjustment moves, locks the count, blocks all future mutations, blocks double-post, returns full payload, and returns 422 message on draft-guard', function () {
@@ -1206,9 +1307,8 @@ it('detail page cleans legacy header pills and renders a Details section with ed
         ->and($response->getContent())->toContain('Details')
         ->and($response->getContent())->toContain('Count Date')
         ->and($response->getContent())->toContain('Assigned To')
-        ->and($response->getContent())->toContain('Notes')
         ->and($response->getContent())->toContain('x-model="details.counted_at_iso"')
-        ->and($response->getContent())->toContain('x-model="details.notes"')
+        ->and($response->getContent())->not->toContain('x-model="details.notes"')
         ->and($response->getContent())->toContain('workflow_status_badge')
         ->and($response->getContent())->toContain('data-section-key="countLines"');
 
@@ -1965,6 +2065,45 @@ it('workflow-stage qty input display uses uom precision two with two decimals', 
         ->and($line['counted_quantity_display'])->toBe('2300.00');
 });
 
+it('inventory count line list display uses the line uom snapshot after the item base uom changes', function () {
+    $tenant = Tenant::factory()->create();
+    $user = ($this->makeUser)($tenant);
+    $gram = ($this->makeUom)($tenant);
+    $gram->forceFill([
+        'tenant_id' => null,
+        'name' => 'Gram',
+        'symbol' => 'g',
+        'display_precision' => 0,
+    ])->save();
+    $ounce = ($this->makeUom)($tenant);
+    $ounce->forceFill([
+        'name' => 'Ounce',
+        'symbol' => 'oz',
+        'display_precision' => 2,
+    ])->save();
+    $item = ($this->makeItem)($tenant, $gram);
+
+    ($this->grantPermission)($user, 'inventory-adjustments-view');
+    ($this->grantPermission)($user, 'inventory-adjustments-execute');
+
+    $count = ($this->createDraftCountViaApi)($user);
+    ($this->createLineViaApi)($user, $count, [
+        'item_id' => $item->id,
+        'counted_quantity' => '2300.000000',
+    ]);
+
+    $item->forceFill(['base_uom_id' => $ounce->id])->save();
+
+    $line = $this->actingAs($user)
+        ->getJson(route('inventory.counts.lines.index', $count))
+        ->assertOk()
+        ->json('data.0');
+
+    expect($line['item_display'])->toBe($item->name . ' (g)')
+        ->and($line['counted_quantity_display'])->toBe('2300')
+        ->and($line['uom_display_precision'])->toBe(0);
+});
+
 it('workflow-stage qty input display uses uom precision six with six decimals', function () {
     $tenant = Tenant::factory()->create();
     $user = ($this->makeUser)($tenant);
@@ -2487,7 +2626,7 @@ it('open stage blocks new material adds while still allowing counted qty updates
         'notes' => 'Updated while open',
         'assigned_to_user_id' => $assignee->id,
     ])->assertOk()
-        ->assertJsonPath('count.counted_at', $updatedAt->format('Y-m-d H:i'))
+        ->assertJsonPath('count.counted_at', $updatedAt->format('F j, Y'))
         ->assertJsonPath('count.notes', 'Updated while open')
         ->assertJsonPath('count.assigned_to_user_id', $assignee->id);
 
@@ -2533,8 +2672,8 @@ it('inventory count details ajax updates persist in draft and reject invalid dat
         'notes' => 'Cycle count notes',
         'assigned_to_user_id' => $assignee->id,
     ])->assertOk()
-        ->assertJsonPath('count.counted_at', $updatedAt->format('Y-m-d H:i'))
-        ->assertJsonPath('count.counted_at_iso', $updatedAt->format('Y-m-d\TH:i'))
+        ->assertJsonPath('count.counted_at', $updatedAt->format('F j, Y'))
+        ->assertJsonPath('count.counted_at_iso', $updatedAt->format('Y-m-d'))
         ->assertJsonPath('count.notes', 'Cycle count notes')
         ->assertJsonPath('count.assigned_to_user_id', $assignee->id)
         ->assertJsonPath('count.assigned_to_user_name', $assignee->name);
@@ -2786,6 +2925,7 @@ it('repeating advance or post after completion does not double post inventory mo
 
     ($this->submitCount)($user, $count)->assertOk();
     ($this->advanceCount)($user, $count)->assertOk();
+    ($this->advanceCount)($user, $count)->assertOk();
 
     $before = ($this->countAdjustmentsFor)($tenant, $count);
 
@@ -2886,7 +3026,7 @@ it('detail page shows breadcrumb workflow metadata materials tasks and no post u
         ->assertDontSee('Lifecycle Status')
         ->assertDontSee('Post Count')
         ->assertDontSee('Submit Count')
-        ->assertSee('COMPLETE')
+        ->assertSee('Submit')
         ->assertSee('data-section-key="countLines"', false)
         ->assertSee('data-inventory-count-tasks-section', false)
         ->assertDontSee('data-crud-root', false);
@@ -2905,7 +3045,7 @@ it('inventory count detail uses the shared resource detail header breadcrumb com
         ->and($componentSource)->toContain('data-resource-detail-header-metadata');
 });
 
-it('first active workflow stage hides the previous-stage button and shows the next stage button only', function () {
+it('first manual workflow stage exposes previous and next stage buttons after automatic scheduling', function () {
     $tenant = Tenant::factory()->create();
     $user = ($this->makeUser)($tenant);
 
@@ -2923,9 +3063,10 @@ it('first active workflow stage hides the previous-stage button and shows the ne
 
     $response = $this->actingAs($user)->get('/inventory/counts/' . $count->id)->assertOk();
 
-    expect($response->getContent())->not->toContain("window.dispatchEvent(new CustomEvent('inventory-count-previous'))")
+    expect($response->getContent())->toContain("window.dispatchEvent(new CustomEvent('inventory-count-previous'))")
         ->and($response->getContent())->toContain("window.dispatchEvent(new CustomEvent('inventory-count-advance'))")
         ->and($response->getContent())->toContain('Submit')
+        ->and($response->getContent())->toContain('SCHEDULE')
         ->and($response->getContent())->not->toContain('Back to');
 });
 
@@ -3197,6 +3338,7 @@ it('previous-stage action is blocked after inventory has posted', function () {
     ($this->ensureCountHasMaterial)($user, $tenant, $count);
 
     ($this->submitCount)($user, $count)->assertOk();
+    ($this->advanceCount)($user, $count)->assertOk();
     ($this->advanceCount)($user, $count)->assertOk();
 
     $this->actingAs($user)->postJson(route('inventory.counts.previous', $count))

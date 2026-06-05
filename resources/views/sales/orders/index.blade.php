@@ -15,13 +15,7 @@
         data-import-config='@json($importConfig)'
         x-data="salesOrdersIndex"
     >
-        <div class="fixed top-6 right-6 z-50" x-show="toast.visible">
-            <div
-                class="rounded-md px-4 py-3 text-sm shadow-md"
-                :class="toast.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'"
-                x-text="toast.message"
-            ></div>
-        </div>
+        <x-ui.toast visible="toast.visible" type="toast.type" message="toast.message" />
 
         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
             <div data-crud-root></div>

@@ -44,6 +44,7 @@ export function mount(rootEl, payload) {
     mountCrudRenderer(crudRootEl, rendererConfig);
 
     const emptyErrors = () => ({
+        name: [],
         counted_at: [],
         notes: [],
         assigned_to_user_id: [],
@@ -52,6 +53,7 @@ export function mount(rootEl, payload) {
 
     const emptyForm = () => ({
         id: null,
+        name: '',
         counted_at: '',
         notes: '',
         assigned_to_user_id: '',
@@ -129,6 +131,10 @@ export function mount(rootEl, payload) {
                 return record?.posted_at || '—';
             }
 
+            if (column === 'name') {
+                return record?.name || '—';
+            }
+
             if (column === 'lines_count') {
                 return record?.lines_count ?? '—';
             }
@@ -175,6 +181,7 @@ export function mount(rootEl, payload) {
             return {
                 ...emptyErrors(),
                 ...errors,
+                name: Array.isArray(errors.name) ? errors.name : [],
                 counted_at: Array.isArray(errors.counted_at) ? errors.counted_at : [],
                 notes: Array.isArray(errors.notes) ? errors.notes : [],
                 assigned_to_user_id: Array.isArray(errors.assigned_to_user_id) ? errors.assigned_to_user_id : [],
@@ -192,7 +199,7 @@ export function mount(rootEl, payload) {
 
             this.toast.timeoutId = setTimeout(() => {
                 this.toast.show = false;
-            }, 2500);
+            }, 1500);
         },
         async fetchCounts() {
             await this.crud.fetchList({
@@ -239,6 +246,7 @@ export function mount(rootEl, payload) {
             this.errors = emptyErrors();
             this.form = {
                 id: null,
+                name: '',
                 counted_at: '',
                 notes: '',
                 assigned_to_user_id: '',
@@ -257,6 +265,7 @@ export function mount(rootEl, payload) {
             this.errors = emptyErrors();
             this.form = {
                 id: record.id,
+                name: record.name || '',
                 counted_at: record.counted_at_iso || '',
                 notes: record.notes || '',
                 assigned_to_user_id: record.assigned_to_user_id || '',
@@ -287,6 +296,7 @@ export function mount(rootEl, payload) {
             if (this.form.method === 'POST') {
                 await this.crud.submitCreate({
                     body: {
+                        name: this.form.name,
                         counted_at: this.form.counted_at,
                         notes: this.form.notes,
                         assigned_to_user_id: this.form.assigned_to_user_id,
@@ -323,6 +333,7 @@ export function mount(rootEl, payload) {
                         'X-CSRF-TOKEN': this.csrf,
                     },
                 body: JSON.stringify({
+                    name: this.form.name,
                     counted_at: this.form.counted_at,
                     notes: this.form.notes,
                     assigned_to_user_id: this.form.assigned_to_user_id,

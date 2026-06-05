@@ -167,7 +167,7 @@ class SupplierController extends Controller
                     [
                         'label' => 'SKU',
                         'field' => 'display.skuText',
-                        'fallback' => '—',
+                        'fallback' => '',
                     ],
                 ],
                 'badges' => [

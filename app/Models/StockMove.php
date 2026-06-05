@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Actions\Inventory\ApplyStockMoveToInventoryBalanceAction;
 use App\Models\Concerns\HasTenantScope;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -42,6 +43,10 @@ class StockMove extends Model
             if ($item && (int) $stockMove->uom_id !== (int) $item->base_uom_id) {
                 throw new InvalidArgumentException('Stock move UoM must match item base UoM.');
             }
+        });
+
+        static::created(function (StockMove $stockMove): void {
+            app(ApplyStockMoveToInventoryBalanceAction::class)->execute($stockMove);
         });
     }
 

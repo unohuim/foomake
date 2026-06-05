@@ -376,6 +376,7 @@ it('17. list endpoint returns the materials row data required by the shared crud
         'name' => 'Flour',
         'base_uom_name' => 'Kilogram',
         'base_uom_symbol' => $symbol,
+        'is_active' => true,
         'is_stockable' => false,
         'is_purchasable' => true,
         'is_sellable' => false,
@@ -568,6 +569,88 @@ it('22. materials page module uses the shared crud renderer and configured crud 
         ->and($pageSource)->toContain('this.crud.fetchList({')
         ->and($pageSource)->toContain('is_stockable')
         ->and($createSource)->toContain('x-model="form.is_stockable"');
+});
+
+it('22a. materials mobile crud config renders clickable rows with badges and an active toggle', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermissions)($user, ['inventory-materials-view', 'inventory-materials-manage']);
+
+    $config = ($this->extractCrudConfig)(($this->getIndex)($user));
+
+    expect($config['mobileCard']['urlExpression'] ?? null)->toBe('record.show_url')
+        ->and($config['rowToggle']['label'] ?? null)->toBe('Active')
+        ->and($config['rowToggle']['name'] ?? null)->toBe('is_active')
+        ->and($config['rowToggle']['checkedExpression'] ?? null)->toBe('Boolean(record.is_active)')
+        ->and($config['rowToggle']['handler'] ?? null)->toBe('toggleMaterialActive(toggleDetail)')
+        ->and($config['actions'] ?? null)->toBe([])
+        ->and($config['mobileCard']['titleAsideExpression'] ?? null)->toBe('materialMobileUomLabel(record)')
+        ->and($config['mobileCard']['layout'] ?? null)->toBe('flush-stacked')
+        ->and($config['mobileCard']['badgesExpression'] ?? null)->toBe('')
+        ->and($config['mobileCard']['iconBadgesExpression'] ?? null)->toBe('materialFlagIconBadges(record)')
+        ->and($config['mobileCard']['showActions'] ?? null)->toBeFalse()
+        ->and($config['mobileCard']['toggle']['name'] ?? null)->toBe('is_active')
+        ->and($config['mobileCard']['toggle']['checkedExpression'] ?? null)->toBe('Boolean(record.is_active)')
+        ->and($config['mobileCard']['toggle']['eventName'] ?? null)->toBe('material-active-toggle')
+        ->and($config['mobileCard']['toggle']['handler'] ?? null)->toBe('toggleMaterialActive(toggleDetail)')
+        ->and($config['mobileCard']['toggle']['disabledExpression'] ?? null)->toBe('!canManageMaterials()');
+});
+
+it('22b. shared crud mobile renderer emits row toggle events and uses lime active styling', function (): void {
+    $rendererSource = file_get_contents(resource_path('js/lib/crud-page.js'));
+    $configSource = file_get_contents(resource_path('js/lib/crud-config.js'));
+    $toggleSource = file_get_contents(resource_path('js/components/toggle.js'));
+    $componentSource = file_get_contents(resource_path('views/components/ui/toggle.blade.php'));
+
+    expect($rendererSource)->toContain("from '../components/toggle'")
+        ->and($rendererSource)->toContain('renderToggle')
+        ->and($rendererSource)->toContain('rowToggle')
+        ->and($rendererSource)->toContain('hasRowToggle')
+        ->and($rendererSource)->toContain("config.rowToggle.label || 'Active'")
+        ->and($rendererSource)->toContain('data-crud-mobile-row')
+        ->and($rendererSource)->toContain('x-on:click="')
+        ->and($rendererSource)->toContain('window.location.assign')
+        ->and($rendererSource)->toContain('iconBadgesExpression')
+        ->and($rendererSource)->toContain("badge.icon === 'rectangle-group'")
+        ->and($rendererSource)->toContain("badge.icon === 'credit-card'")
+        ->and($rendererSource)->toContain("badge.icon === 'shopping-cart'")
+        ->and($rendererSource)->toContain("badge.icon === 'cog'")
+        ->and($rendererSource)->toContain("config.mobileCard.layout === 'flush-stacked'")
+        ->and($rendererSource)->toContain('border-t border-gray-300 space-y-0')
+        ->and($rendererSource)->toContain('border-b border-gray-300')
+        ->and($rendererSource)->toContain('px-4 py-2')
+        ->and($configSource)->toContain('layout: sanitizeLabel(rawMobileCard.layout)')
+        ->and($configSource)->toContain('iconBadgesExpression: sanitizeLabel(rawMobileCard.iconBadgesExpression)')
+        ->and($configSource)->toContain('rowToggle: {')
+        ->and($configSource)->toContain('label: sanitizeLabel(rawRowToggle.label)')
+        ->and($configSource)->toContain('titleAsideExpression: sanitizeLabel(rawMobileCard.titleAsideExpression)')
+        ->and($configSource)->toContain('badgesExpression: sanitizeLabel(rawMobileCard.badgesExpression)')
+        ->and($configSource)->toContain('urlExpression: sanitizeLabel(rawMobileCard.urlExpression)')
+        ->and($configSource)->toContain('showActions: rawMobileCard.showActions !== false')
+        ->and($configSource)->toContain('toggle: {')
+        ->and($toggleSource)->toContain("role=\"switch\"")
+        ->and($toggleSource)->toContain('bg-lime-500')
+        ->and($toggleSource)->toContain("\$dispatch")
+        ->and($toggleSource)->toContain('toggleDetail')
+        ->and($toggleSource)->toContain('record')
+        ->and($toggleSource)->toContain('id')
+        ->and($componentSource)->toContain('role="switch"')
+        ->and($componentSource)->toContain('bg-lime-500')
+        ->and($componentSource)->toContain("\$dispatch");
+});
+
+it('22c. materials page module persists mobile active toggle changes through the existing update endpoint', function (): void {
+    $pageSource = file_get_contents(resource_path('js/pages/materials-index.js'));
+
+    expect($pageSource)->toContain('materialMobileUomLabel(record)')
+        ->and($pageSource)->toContain('materialFlagIconBadges(record)')
+        ->and($pageSource)->toContain('materialFlagBadges(record)')
+        ->and($pageSource)->toContain('canManageMaterials()')
+        ->and($pageSource)->toContain('async toggleMaterialActive(toggleDetail)')
+        ->and($pageSource)->toContain("is_active: Boolean(toggleDetail.checked)")
+        ->and($pageSource)->toContain("this.showToast('success', 'Material updated.')")
+        ->and($pageSource)->toContain('buildItemEndpoint(this.endpoints.update, record.id)');
 });
 
 it('23. materials page module removes duplicate page local action menu state and methods', function (): void {

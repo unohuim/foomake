@@ -64,6 +64,10 @@ beforeEach(function (): void {
         return $this->actingAs($user)->getJson(route('materials.show', $item));
     };
 
+    $this->getShowPage = function (User $user, Item $item) {
+        return $this->actingAs($user)->get(route('materials.show', $item));
+    };
+
     $this->postCreate = function (User $user, array $payload = []) {
         return $this->actingAs($user)->postJson(route('materials.store'), $payload);
     };
@@ -103,6 +107,67 @@ test('material show includes planning price fields when set', function (): void 
     $response->assertOk()
         ->assertJsonPath('data.default_price_amount', '4.20')
         ->assertJsonPath('data.default_price_currency_code', 'USD');
+});
+
+test('material show page renders the base uom dropdown with tenant uom options', function (): void {
+    ($this->grantPermission)($this->user, 'inventory-materials-view');
+    ($this->grantPermission)($this->user, 'inventory-materials-manage');
+
+    $uom = ($this->makeUom)();
+    $otherUom = Uom::query()->create([
+        'tenant_id' => $this->tenant->id,
+        'uom_category_id' => $uom->uom_category_id,
+        'name' => 'Kilogram',
+        'symbol' => 'kg',
+    ]);
+    $item = ($this->makeItem)($uom);
+
+    $response = ($this->getShowPage)($this->user, $item);
+
+    $response->assertOk()
+        ->assertSee('data-material-base-uom-dropdown', false)
+        ->assertSee('data-material-name-editor', false)
+        ->assertSee('materialNameEditor', false)
+        ->assertSee('Edit material name', false)
+        ->assertSee('materialBaseUomDropdown', false)
+        ->assertSee('"base_uom_name"', false)
+        ->assertSee('"uom_options"', false)
+        ->assertSee((string) $otherUom->id, false)
+        ->assertSee('Kilogram', false);
+});
+
+test('material show page renders base uom as a static badge without manage permission', function (): void {
+    ($this->grantPermission)($this->user, 'inventory-materials-view');
+
+    $uom = ($this->makeUom)(['name' => 'Gram', 'symbol' => 'g']);
+    $item = ($this->makeItem)($uom);
+
+    $response = ($this->getShowPage)($this->user, $item);
+
+    $response->assertOk()
+        ->assertDontSee('data-material-base-uom-dropdown', false)
+        ->assertDontSee('materialBaseUomDropdown', false)
+        ->assertDontSee('data-material-name-editor', false)
+        ->assertDontSee('materialNameEditor', false)
+        ->assertDontSee('Edit material name', false)
+        ->assertSee('Gram', false);
+});
+
+test('material show page renders inventory stats through alpine payload state', function (): void {
+    ($this->grantPermission)($this->user, 'inventory-materials-view');
+
+    $uom = ($this->makeUom)();
+    $item = ($this->makeItem)($uom, [
+        'is_stockable' => true,
+    ]);
+
+    $response = ($this->getShowPage)($this->user, $item);
+
+    $response->assertOk()
+        ->assertSee('data-material-inventory-stats', false)
+        ->assertSee('x-data="materialInventoryStats"', false)
+        ->assertSee('x-text="uomSymbol(card)"', false)
+        ->assertSee('"inventoryStats"', false);
 });
 
 test('material show includes planning price fields when null', function (): void {

@@ -476,12 +476,33 @@ it('3a. includes the purchase orders section config for purchasable materials wi
         ->and($section['permissions']['canCreate'] ?? null)->toBeFalse()
         ->and($section['defaultOpen'] ?? null)->toBeFalse()
         ->and(array_key_exists('createUrl', $section))->toBeFalse()
-        ->and($section['actions'][0]['id'] ?? null)->toBe('view')
-        ->and($section['actions'][0]['label'] ?? null)->toBe('View')
-        ->and($section['actions'][0]['type'] ?? null)->toBe('view');
+        ->and($section['showRowActionsMenu'] ?? null)->toBeFalse()
+        ->and($section['recordClass'] ?? null)->toBe('rounded-lg border border-gray-200 bg-gray-50 px-3 py-1 sm:px-4 sm:py-1')
+        ->and($section['rowClass'] ?? null)->toBe('flex flex-row items-start justify-between gap-4')
+        ->and($section['rightMetaClass'] ?? null)
+        ->toBe('flex min-h-[3.25rem] min-w-[5rem] flex-col items-end justify-between gap-4 self-stretch text-right')
+        ->and($section['mobileRowUrlField'] ?? null)->toBe('display.showUrl')
+        ->and($section['secondaryFieldsClass'] ?? null)
+        ->toBe('mt-px flex flex-wrap items-center gap-x-3 gap-y-1')
+        ->and($section['rowLayout']['primaryText']['urlField'] ?? null)->toBe('display.showUrl')
+        ->and($section['rowLayout']['primaryText']['linkClass'] ?? null)
+        ->toBe('truncate text-sm font-semibold text-gray-900 transition hover:text-gray-700')
+        ->and($section['rowLayout']['secondaryFields'][0]['field'] ?? null)->toBe('display.supplierText')
+        ->and($section['rowLayout']['secondaryFields'][1]['field'] ?? null)
+        ->toBe('display.materialQuantityCostText')
+        ->and($section['rowLayout']['secondaryFields'][1]['textClass'] ?? null)
+        ->toContain('sm:whitespace-nowrap')
+        ->and($section['rowLayout']['secondaryFields'][1]['fullWidth'] ?? null)->toBeTrue()
+        ->and($section['rowLayout']['secondaryFields'])->toHaveCount(2)
+        ->and($section['rowLayout']['rightMeta'][0]['field'] ?? null)->toBe('display.orderDateText')
+        ->and($section['rowLayout']['rightMeta'][0]['textClass'] ?? null)->toContain('text-xs')
+        ->and($section['rowLayout']['rightMeta'][1]['field'] ?? null)->toBe('display.materialLineTotalAmountText')
+        ->and($section['rowLayout']['rightMeta'][1]['suffixField'] ?? null)
+        ->toBe('display.materialLineTotalCurrencyText')
+        ->and($section['actions'] ?? null)->toBe([]);
 });
 
-it('3b. keeps the purchase orders section read only with no create capability or mutation row actions', function (): void {
+it('3b. keeps the purchase orders section read only with no row actions', function (): void {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
     $uom = ($this->makeUom)($tenant);
@@ -496,7 +517,8 @@ it('3b. keeps the purchase orders section read only with no create capability or
         ->and($section['fields'] ?? [])->toBe([])
         ->and(array_keys($section['endpoints'] ?? []))->toBe(['list'])
         ->and(array_key_exists('createUrl', $section))->toBeFalse()
-        ->and($actionIds)->toBe(['view'])
+        ->and($section['showRowActionsMenu'] ?? null)->toBeFalse()
+        ->and($actionIds)->toBe([])
         ->and($actionIds)->not->toContain('edit')
         ->and($actionIds)->not->toContain('remove')
         ->and($actionIds)->not->toContain('archive');
@@ -691,12 +713,27 @@ it('6. removes the legacy supplier package payload and duplicated server rendere
         ->and($viewSource)->not->toContain('<h3 class="text-lg font-medium text-gray-900">Base UoM</h3>');
 });
 
-it('7. js crud section source renders a rounded accordion card shell', function (): void {
+it('7. js crud section source renders a responsive accordion card shell', function (): void {
     $source = file_get_contents(resource_path('js/lib/js-crud-section.js'));
 
-    expect($source)->toContain('rounded-2xl')
+    expect($source)->toContain('-mx-1 !-mt-px overflow-visible border border-gray-500 bg-white shadow-sm first:!mt-0')
+        ->and($source)->toContain('sm:mx-0 sm:!mt-6 sm:first:!mt-0 sm:rounded-2xl sm:border-gray-200')
+        ->and($source)->toContain('class="flex items-start justify-between gap-3 px-3 py-2 sm:px-6 sm:py-2"')
+        ->and($source)->toContain('class="border-t border-gray-100 px-3 py-2 sm:px-6 sm:py-5"')
+        ->and($source)->toContain('class="mb-2 flex flex-col gap-2 sm:mb-4 sm:gap-3"')
+        ->and($source)->toContain("targetEl.classList.add('!-mt-px', 'first:!mt-0', 'sm:!mt-6', 'sm:first:!mt-0')")
         ->and($source)->toContain('aria-expanded')
         ->and($source)->toContain('data-js-crud-section-card');
+});
+
+it('7a. js crud section source closes sibling accordions only on mobile', function (): void {
+    $source = file_get_contents(resource_path('js/lib/js-crud-section.js'));
+
+    expect($source)->toContain("globalThis.matchMedia('(max-width: 639px)').matches")
+        ->and($source)->toContain('if (nextOpen && this.isMobileViewport())')
+        ->and($source)->toContain('this.closeSiblingSections();')
+        ->and($source)->toContain('closeSection()')
+        ->and($source)->toContain("querySelectorAll(':scope > [data-js-crud-section-root]')");
 });
 
 it('8. js crud section source defaults the accordion closed', function (): void {
@@ -725,6 +762,85 @@ it('11. js crud section source fetches pagination pages explicitly', function ()
     $source = file_get_contents(resource_path('js/lib/js-crud-section.js'));
 
     expect($source)->toContain("params.set('page', String(page))");
+});
+
+it('11a. js crud section source defaults accordion rows to five records per page', function (): void {
+    $source = file_get_contents(resource_path('js/lib/js-crud-section.js'));
+
+    expect($source)->toContain('perPage: normalizePositiveInteger(pagination.perPage, 5)')
+        ->and($source)->toContain('perPageOptions: normalizePaginationOptions(pagination.perPageOptions)')
+        ->and($source)->toContain('allowPerPageChange: Boolean(pagination.allowPerPageChange)')
+        ->and($source)->toContain("params.set('per_page', String(this.paginationPerPage()))");
+});
+
+it('11b. js crud section source renders shared pagination controls for accordion rows', function (): void {
+    $source = file_get_contents(resource_path('js/lib/js-crud-section.js'));
+
+    expect($source)->toContain('paginatedRecords()')
+        ->and($source)->toContain('paginationLastPage()')
+        ->and($source)->toContain('paginationCurrentPage()')
+        ->and($source)->toContain('goToPaginationPage(paginationCurrentPage() - 1)')
+        ->and($source)->toContain('goToPaginationPage(paginationCurrentPage() + 1)')
+        ->and($source)->toContain('data-js-crud-section-pagination');
+});
+
+it('11bc. js crud section source uses card footer page button pagination styling', function (): void {
+    $source = file_get_contents(resource_path('js/lib/js-crud-section.js'));
+
+    expect($source)->toContain('paginationPages()')
+        ->and($source)->toContain('paginationPageItem(page, current)')
+        ->and($source)->toContain('paginationEllipsisItem(position)')
+        ->and($source)->toContain('paginationShowingFrom()')
+        ->and($source)->toContain('paginationShowingTo()')
+        ->and($source)->toContain('paginationTotal()')
+        ->and($source)->toContain('flex items-center justify-between border-t border-gray-200 bg-white px-4 py-3 sm:px-6')
+        ->and($source)->toContain('isolate inline-flex -space-x-px rounded-md shadow-sm')
+        ->and($source)->toContain("page.current ? 'z-10 bg-blue-600 text-white")
+        ->and($source)->toContain("x-bind:aria-current=\"page.current ? 'page' : null\"");
+});
+
+it('11ba. js crud section source keeps paginated accordion row height stable', function (): void {
+    $source = file_get_contents(resource_path('js/lib/js-crud-section.js'));
+
+    expect($source)->toContain('data-js-crud-section-records')
+        ->and($source)->toContain("section.pagination.enabled && paginationLastPage() > 1 ? 'min-h-[22rem] sm:min-h-[20rem]' : ''");
+});
+
+it('11bb. js crud section source renders mobile rows square flush and without vertical row gaps', function (): void {
+    $source = file_get_contents(resource_path('js/lib/js-crud-section.js'));
+
+    expect($source)->toContain('class="-mx-3 space-y-0 border-t border-gray-300 sm:mx-0 sm:space-y-3 sm:border-t-0"')
+        ->and($source)->toContain('const mobileRecordClass = (className) => asString(className)')
+        ->and($source)->toContain("return `sm:${token}`;")
+        ->and($source)->toContain("return `px-3 py-2 sm:${token}`;")
+        ->and($source)->toContain("return 'py-2 sm:py-1';")
+        ->and($source)->toContain("return `border-gray-300 sm:${token}`;")
+        ->and($source)->toContain("return ['relative', 'max-sm:border-t-0 sm:mt-0', mobileClass, mobileRecordClass(adapterClass), mobileRecordClass(recordLevelClass)]");
+});
+
+it('11c. js crud section source resets and clamps pagination as rows change', function (): void {
+    $source = file_get_contents(resource_path('js/lib/js-crud-section.js'));
+
+    expect($source)->toContain('resetPagination()')
+        ->and($source)->toContain('clampPaginationPage()')
+        ->and($source)->toContain('this.resetPagination();')
+        ->and($source)->toContain('this.clampPaginationPage();');
+});
+
+it('11d. reusable section list endpoints honor the shared per page parameter', function (): void {
+    $controllerSources = [
+        file_get_contents(app_path('Http/Controllers/MaterialSupplierPackageController.php')),
+        file_get_contents(app_path('Http/Controllers/MaterialPurchaseOrderController.php')),
+        file_get_contents(app_path('Http/Controllers/InventoryCountController.php')),
+        file_get_contents(app_path('Http/Controllers/ItemController.php')),
+        file_get_contents(app_path('Http/Controllers/RecipeController.php')),
+        file_get_contents(app_path('Http/Controllers/MakeOrderController.php')),
+    ];
+
+    foreach ($controllerSources as $source) {
+        expect($source)->toContain("'per_page' => ['nullable', 'integer', 'min:1', 'max:50']")
+            ->and($source)->toContain('->paginate($perPage)');
+    }
 });
 
 it('12. section config exposes create capability when the user can manage supplier packages', function (): void {
@@ -842,7 +958,7 @@ it('14c. supplier package create drawer uses supplier pack header copy', functio
         ->and($section['createAction']['submitLabel'] ?? null)->toBe('Create');
 });
 
-it('15. section config exposes config driven row actions and no delete action id', function (): void {
+it('15. material supplier packages expose purchase and archive row actions without view edit remove or delete actions', function (): void {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
     $uom = ($this->makeUom)($tenant);
@@ -853,10 +969,118 @@ it('15. section config exposes config driven row actions and no delete action id
     $section = ($this->extractSectionConfig)(($this->getShow)($user, $item));
     $actionIds = collect($section['actions'] ?? [])->pluck('id')->all();
 
-    expect($actionIds)->toContain('edit')
-        ->and($actionIds)->toContain('remove')
+    expect($actionIds)->toContain('purchase')
         ->and($actionIds)->toContain('archive')
+        ->and($actionIds)->not->toContain('view')
+        ->and($actionIds)->not->toContain('edit')
+        ->and($actionIds)->not->toContain('remove')
         ->and($actionIds)->not->toContain('delete');
+});
+
+it('15a. material supplier packages use inline icon actions instead of the dots menu', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $uom = ($this->makeUom)($tenant);
+    $item = ($this->makeItem)($tenant, $uom);
+
+    ($this->grantPermissions)($user, [
+        'inventory-materials-view',
+        'purchasing-suppliers-view',
+        'purchasing-suppliers-manage',
+    ]);
+
+    $section = ($this->extractSectionConfig)(($this->getShow)($user, $item));
+    $actions = collect($section['actions'] ?? [])->keyBy('id');
+    $crudSource = file_get_contents(resource_path('js/lib/js-crud-section.js'));
+
+    expect($section['showRowActionsMenu'] ?? null)->toBeFalse()
+        ->and($section['inlineActionsOnMobile'] ?? null)->toBeTrue()
+        ->and($section['recordClass'] ?? null)->toBe('rounded-xl border border-gray-200 bg-gray-50 px-3 py-1 sm:px-4 sm:py-1')
+        ->and($actions->get('purchase')['icon'] ?? null)->toBe('credit-card')
+        ->and($actions->get('purchase')['tooltip'] ?? null)->toBe('Purchase Order')
+        ->and($actions->get('archive')['icon'] ?? null)->toBe('x-mark')
+        ->and($actions->get('archive')['tooltip'] ?? null)->toBe('Archive')
+        ->and($actions->get('archive')['confirmMessage'] ?? null)->toBe('Are you sure you want to archive this supplier package?')
+        ->and($crudSource)->toContain("action.icon === 'credit-card'")
+        ->and($crudSource)->toContain("action.confirmMessage !== '' && !globalThis.confirm(action.confirmMessage)")
+        ->and($crudSource)->toContain('x-bind:title="actionTooltip(record, action)"')
+        ->and($crudSource)->toContain('inlineActionButtonClass(action)')
+        ->and($crudSource)->toContain("section.inlineActionsOnMobile ? 'flex-row items-center justify-between'")
+        ->and($crudSource)->toContain("line.hideLabelOnMobile ? 'hidden sm:inline' : ''")
+        ->and($crudSource)->toContain('mobilePrimaryFieldItems(record)')
+        ->and($crudSource)->toContain("line.mobilePlacement === 'primary-end'")
+        ->and($crudSource)->toContain('gap-4 sm:gap-3')
+        ->and($crudSource)->toContain('hidden shrink-0 text-xs text-gray-700 max-sm:block')
+        ->and($crudSource)->not->toContain('ml-auto hidden shrink-0 text-xs text-gray-700 max-sm:block')
+        ->and($crudSource)->toContain('text-xs sm:text-sm')
+        ->and($crudSource)->toContain('hover:border-blue-600')
+        ->and($crudSource)->toContain('text-xs font-medium text-gray-500')
+        ->and($crudSource)->toContain('M2.25 8.25h19.5');
+});
+
+it('15b. material supplier package row config renders price amount and small currency beside sku', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $uom = ($this->makeUom)($tenant);
+    $item = ($this->makeItem)($tenant, $uom);
+
+    ($this->grantPermissions)($user, ['inventory-materials-view', 'purchasing-suppliers-view']);
+
+    $section = ($this->extractSectionConfig)(($this->getShow)($user, $item));
+    $secondaryFields = collect(data_get($section, 'rowLayout.secondaryFields', []));
+    $secondaryFieldNames = $secondaryFields->pluck('field')->all();
+    $priceField = $secondaryFields->firstWhere('label', 'Price');
+
+    expect($secondaryFieldNames)->toBe([
+        'display.packageText',
+        'display.skuText',
+        'price_amount',
+    ])->and($priceField['suffixField'] ?? null)->toBe('current_price_currency_code')
+        ->and($secondaryFields->firstWhere('label', 'SKU')['fallback'] ?? null)->toBe('')
+        ->and($secondaryFields->pluck('hideLabelOnMobile')->all())->toBe([true, true, true])
+        ->and($secondaryFields->pluck('compactOnMobile')->all())->toBe([true, true, true])
+        ->and($priceField['mobilePlacement'] ?? null)->toBe('primary-end')
+        ->and(data_get($section, 'rowLayout.rightMeta'))->toBe([]);
+});
+
+it('15ba. supplier package row adapters leave blank sku values blank instead of rendering a placeholder', function (): void {
+    $materialPageSource = file_get_contents(resource_path('js/pages/materials-show.js'));
+    $supplierPageSource = file_get_contents(resource_path('js/pages/purchasing-suppliers-show.js'));
+    $materialControllerSource = file_get_contents(app_path('Http/Controllers/ItemController.php'));
+    $supplierControllerSource = file_get_contents(app_path('Http/Controllers/SupplierController.php'));
+
+    expect($materialPageSource)->toContain('skuText: asString(record.supplier_sku),')
+        ->and($supplierPageSource)->toContain('skuText: asString(record.supplier_sku),')
+        ->and($materialPageSource)->not->toContain("skuText: asString(record.supplier_sku, '—')")
+        ->and($supplierPageSource)->not->toContain("skuText: asString(record.supplier_sku, '—')")
+        ->and($materialControllerSource)->toContain("'fallback' => ''")
+        ->and($supplierControllerSource)->toContain("'fallback' => ''");
+});
+
+it('15c. supplier package rows fall back to latest purchase order line price when current price is missing', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $uom = ($this->makeUom)($tenant, ['symbol' => 'kg-msp-15c']);
+    $item = ($this->makeItem)($tenant, $uom);
+    $supplier = ($this->makeSupplier)($tenant);
+    $option = ($this->makeOption)($tenant, $supplier, $item, $uom);
+    $purchaseOrder = ($this->makePurchaseOrder)($tenant, $user, $supplier);
+    ($this->makePurchaseOrderLine)($tenant, $purchaseOrder, $item, $option, [
+        'unit_price_currency_code' => 'CAD',
+        'converted_unit_price_amount' => 4321,
+        'unit_price_cents' => 4321,
+        'line_subtotal_cents' => 8642,
+    ]);
+
+    ($this->grantPermissions)($user, ['inventory-materials-view', 'purchasing-suppliers-view']);
+
+    $response = ($this->getPackages)($user, $item)->assertOk();
+    $row = collect($response->json('data'))->firstWhere('id', $option->id);
+
+    expect($row['current_price_display'] ?? null)->toBe('CAD 43.21')
+        ->and($row['current_price_cents'] ?? null)->toBe(4321)
+        ->and($row['current_price_currency_code'] ?? null)->toBe('CAD')
+        ->and($row['price_amount'] ?? null)->toBe('43.21');
 });
 
 it('16. js crud section source uses config driven fields for create and edit slide overs', function (): void {
@@ -915,7 +1139,9 @@ it('18a. js crud section source uses a square rounded lg create button and mobil
     $source = file_get_contents(resource_path('js/lib/js-crud-section.js'));
 
     expect($source)->toContain('rounded-lg border border-gray-300')
-        ->and($source)->toContain('h-10 w-10')
+        ->and($source)->toContain('h-7 w-7')
+        ->and($source)->toContain('sm:h-8 sm:w-8')
+        ->and($source)->toContain('h-3.5 w-3.5 sm:h-4 sm:w-4')
         ->and($source)->not->toContain('rounded-full border border-gray-200')
         ->and($source)->toContain('px-3 sm:px-6')
         ->and($source)->toContain('p-3 sm:p-4')
@@ -927,7 +1153,13 @@ it('18aa. js crud section source keeps the accordion trigger right aligned on mo
 
     expect($source)->toContain('flex items-start justify-between gap-3')
         ->and($source)->toContain('min-w-0 flex-1')
-        ->and($source)->toContain('h-10 w-10')
+        ->and($source)->toContain('px-3 py-3 sm:px-6 sm:py-2')
+        ->and($source)->toContain('text-sm font-semibold leading-tight text-gray-900 sm:text-base')
+        ->and($source)->toContain('mt-0 text-[0.7rem] leading-tight text-gray-500 sm:mt-px sm:text-xs')
+        ->and($source)->toContain('h-7 w-7 shrink-0')
+        ->and($source)->toContain('sm:h-8 sm:w-8')
+        ->and($source)->toContain('h-3.5 w-3.5 text-gray-400')
+        ->and($source)->toContain('sm:h-4 sm:w-4')
         ->and($source)->toContain('shrink-0')
         ->and($source)->not->toContain('rounded-full border border-gray-200');
 });
@@ -974,7 +1206,8 @@ it('18e. js crud section card shell does not clip row action dropdowns', functio
     $source = file_get_contents(resource_path('js/lib/js-crud-section.js'));
 
     expect($source)->toContain('data-js-crud-section-card')
-        ->and($source)->toContain('overflow-visible rounded-2xl')
+        ->and($source)->toContain('overflow-visible border border-gray-500')
+        ->and($source)->toContain('sm:rounded-2xl')
         ->and($source)->not->toContain('overflow-hidden rounded-2xl');
 });
 
@@ -989,6 +1222,16 @@ it('18g. js crud section keeps row action menus enabled by default unless a sect
     $source = file_get_contents(resource_path('js/lib/js-crud-section.js'));
 
     expect($source)->toContain('showRowActionsMenu: safeConfig.showRowActionsMenu !== false')
+        ->and($source)->toContain('rowClass: asString(safeConfig.rowClass)')
+        ->and($source)->toContain('rightMetaClass: asString(safeConfig.rightMetaClass)')
+        ->and($source)->toContain('showRowActionsMenuOnMobile: safeConfig.showRowActionsMenuOnMobile !== false')
+        ->and($source)->toContain('mobileRowUrlField: asString(safeConfig.mobileRowUrlField)')
+        ->and($source)->toContain('secondaryFieldsClass: asString(safeConfig.secondaryFieldsClass)')
+        ->and($source)->toContain('rowActionsMenuVisible(record)')
+        ->and($source)->toContain('mobileRowUrl(record)')
+        ->and($source)->toContain('primaryTextLinkClass()')
+        ->and($source)->toContain('recordRowClass(record)')
+        ->and($source)->toContain('rightMetaColumnClass(record)')
         ->and($source)->toContain('x-show="section.showRowActionsMenu && visibleActions(record).length > 0"')
         ->and($source)->toContain('x-show="!section.showRowActionsMenu && visibleActions(record).length > 0"');
 });
@@ -1022,11 +1265,24 @@ it('19b. purchase orders row layout is expressed through config and page adapter
     expect($controllerSource)->toContain("'purchaseOrders'")
         ->and($controllerSource)->toContain("'resource' => 'material-purchase-orders'")
         ->and($controllerSource)->toContain("'rowLayout' =>")
+        ->and($controllerSource)->toContain("'field' => 'display.supplierText'")
+        ->and($controllerSource)->toContain("'field' => 'display.materialQuantityCostText'")
+        ->and($controllerSource)->toContain("'field' => 'display.materialLineTotalAmountText'")
+        ->and($controllerSource)->toContain("'suffixField' => 'display.materialLineTotalCurrencyText'")
+        ->and($controllerSource)->toContain("'showRowActionsMenu' => false")
+        ->and($controllerSource)->toContain("'rowClass' => 'flex flex-row items-start justify-between gap-4'")
+        ->and($controllerSource)->toContain("'rightMetaClass' => 'flex min-h-[3.25rem] min-w-[5rem] flex-col items-end justify-between gap-4 self-stretch text-right'")
+        ->and($controllerSource)->toContain("'mobileRowUrlField' => 'display.showUrl'")
+        ->and($controllerSource)->toContain("'secondaryFieldsClass' => 'mt-px flex flex-wrap items-center gap-x-3 gap-y-1'")
+        ->and($controllerSource)->toContain("'urlField' => 'display.showUrl'")
+        ->and($controllerSource)->toContain("'linkClass' => 'truncate text-sm font-semibold text-gray-900 transition hover:text-gray-700'")
         ->and($controllerSource)->toContain("'urlField' => 'display.showUrl'")
         ->and($pageSource)->toContain('purchaseOrders:')
         ->and($pageSource)->toContain('showUrl')
         ->and($pageSource)->toContain('poNumberText')
-        ->and($pageSource)->toContain('totalText')
+        ->and($pageSource)->toContain('supplierText')
+        ->and($pageSource)->toContain('materialQuantityCostText')
+        ->and($pageSource)->toContain('materialLineTotalCurrencyText')
         ->and($pageSource)->toContain('statusText');
 });
 
@@ -1179,7 +1435,7 @@ it('25. returns an empty data set and pagination metadata when no supplier packa
     expect($response->json('data'))->toBe([]);
 });
 
-it('26. represents archived packages consistently in the list payload', function (): void {
+it('26. excludes archived packages from the material supplier package list payload', function (): void {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
     $uom = ($this->makeUom)($tenant, ['symbol' => 'kg-msp-26']);
@@ -1199,9 +1455,15 @@ it('26. represents archived packages consistently in the list payload', function
     $response = ($this->getPackages)($user, $item)->assertOk();
     $row = collect($response->json('data'))->firstWhere('id', $option->id);
 
-    expect($row['state'] ?? null)->toBe('archived')
-        ->and($row['is_active'] ?? null)->toBeFalse()
-        ->and($row['available_actions'] ?? [])->toContain('edit');
+    expect($row)->toBeNull()
+        ->and($response->json('meta.total'))->toBe(0);
+});
+
+it('26aa. material supplier package list source filters archived rows after archive actions', function (): void {
+    $controllerSource = file_get_contents(app_path('Http/Controllers/MaterialSupplierPackageController.php'));
+
+    expect($controllerSource)->toContain("->where('is_active', true)")
+        ->and($controllerSource)->toContain("'result' => 'archived'");
 });
 
 it('26a. active supplier package rows include the purchase action when the user can create purchase orders', function (): void {
@@ -1221,7 +1483,31 @@ it('26a. active supplier package rows include the purchase action when the user 
     $response = ($this->getPackages)($user, $item)->assertOk();
     $row = collect($response->json('data'))->firstWhere('id', $option->id);
 
-    expect($row['available_actions'] ?? [])->toContain('purchase');
+    expect($row['available_actions'] ?? [])->toContain('purchase')
+        ->and($row['available_actions'] ?? [])->not->toContain('view')
+        ->and($row['available_actions'] ?? [])->not->toContain('edit');
+});
+
+it('26b. active supplier package rows include the archive action when the user can manage supplier packages', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $uom = ($this->makeUom)($tenant, ['symbol' => 'kg-msp-26b']);
+    $item = ($this->makeItem)($tenant, $uom);
+    $supplier = ($this->makeSupplier)($tenant);
+    $option = ($this->makeOption)($tenant, $supplier, $item, $uom);
+
+    ($this->grantPermissions)($user, [
+        'inventory-materials-view',
+        'purchasing-suppliers-view',
+        'purchasing-suppliers-manage',
+    ]);
+
+    $response = ($this->getPackages)($user, $item)->assertOk();
+    $row = collect($response->json('data'))->firstWhere('id', $option->id);
+
+    expect($row['available_actions'] ?? [])->toContain('archive')
+        ->and($row['available_actions'] ?? [])->not->toContain('view')
+        ->and($row['available_actions'] ?? [])->not->toContain('edit');
 });
 
 it('27. requires authentication for supplier package create requests', function (): void {
@@ -1806,7 +2092,9 @@ it('48. returns paginated purchase orders for the material and excludes unrelate
     ]);
 
     ($this->makePurchaseOrderLine)($tenant, $visibleOrder, $item, $option, [
-        'line_subtotal_cents' => 1200,
+        'pack_count' => 5,
+        'line_subtotal_cents' => 2500,
+        'unit_price_currency_code' => 'CAD',
     ]);
     ($this->makePurchaseOrderLine)($tenant, $visibleOrder, $otherItem, $otherOption, [
         'line_subtotal_cents' => 600,
@@ -1825,8 +2113,14 @@ it('48. returns paginated purchase orders for the material and excludes unrelate
     expect($response->json('data.0.id'))->toBe($visibleOrder->id)
         ->and($response->json('data.0.po_number'))->toBe('PO-48')
         ->and($response->json('data.0.supplier_name'))->toBe('PO Supplier')
-        ->and($response->json('data.0.order_date'))->toBe('2026-05-15')
+        ->and($response->json('data.0.order_date'))->toBe('May 15, 2026')
         ->and($response->json('data.0.po_grand_total_cents'))->toBe(2250)
+        ->and($response->json('data.0.material_quantity_display'))->toBe('50.0')
+        ->and($response->json('data.0.material_uom_symbol'))->toBe('kg-msp-48')
+        ->and($response->json('data.0.material_line_total_amount_display'))->toBe('25.00')
+        ->and($response->json('data.0.material_line_total_currency_code'))->toBe('CAD')
+        ->and($response->json('data.0.material_unit_cost_amount_display'))->toBe('0.50')
+        ->and($response->json('data.0.material_unit_cost_currency_code'))->toBe('CAD')
         ->and($response->json('data.0.status'))->toBe(PurchaseOrder::STATUS_CREATED)
         ->and($response->json('data.0.show_url'))->toBe(route('purchasing.orders.show', $visibleOrder));
 
@@ -1834,6 +2128,52 @@ it('48. returns paginated purchase orders for the material and excludes unrelate
 
     expect($ids)->toContain($visibleOrder->id)
         ->and($ids)->not->toContain($hiddenOrder->id);
+});
+
+it('48a. uses purchase order package uom for material purchase order row totals', function (): void {
+    $tenant = ($this->makeTenant)(['currency_code' => 'CAD']);
+    $user = ($this->makeUser)($tenant);
+    $baseUom = ($this->makeUom)($tenant, ['symbol' => 'kg-msp-48a']);
+    $packUom = Uom::query()->create([
+        'tenant_id' => $tenant->id,
+        'uom_category_id' => $baseUom->uom_category_id,
+        'name' => 'Pound MSP 48a',
+        'symbol' => 'lb-msp-48a',
+    ]);
+    $item = ($this->makeItem)($tenant, $baseUom, ['name' => 'Converted PO Material']);
+    $supplier = ($this->makeSupplier)($tenant, ['company_name' => 'Converted PO Supplier']);
+    $option = ($this->makeOption)($tenant, $supplier, $item, $packUom, [
+        'pack_quantity' => '10.000000',
+    ]);
+    $order = ($this->makePurchaseOrder)($tenant, $user, $supplier, [
+        'po_number' => 'PO-48A',
+        'po_subtotal_cents' => 3000,
+        'po_grand_total_cents' => 3000,
+        'status' => PurchaseOrder::STATUS_CREATED,
+    ]);
+
+    UomConversion::query()->create([
+        'tenant_id' => $tenant->id,
+        'from_uom_id' => $packUom->id,
+        'to_uom_id' => $baseUom->id,
+        'multiplier' => '0.500000',
+    ]);
+    ($this->makePurchaseOrderLine)($tenant, $order, $item, $option, [
+        'pack_count' => 3,
+        'line_subtotal_cents' => 3000,
+        'unit_price_currency_code' => 'CAD',
+    ]);
+
+    ($this->grantPermissions)($user, ['inventory-materials-view', 'purchasing-purchase-orders-create']);
+
+    $response = ($this->getMaterialPurchaseOrders)($user, $item)->assertOk();
+
+    expect($response->json('data.0.material_quantity_display'))->toBe('30.0')
+        ->and($response->json('data.0.material_uom_symbol'))->toBe('lb-msp-48a')
+        ->and($response->json('data.0.material_line_total_amount_display'))->toBe('30.00')
+        ->and($response->json('data.0.material_line_total_currency_code'))->toBe('CAD')
+        ->and($response->json('data.0.material_unit_cost_amount_display'))->toBe('1.00')
+        ->and($response->json('data.0.material_unit_cost_currency_code'))->toBe('CAD');
 });
 
 it('49. excludes cross tenant purchase orders even if rogue lines reference the current material id', function (): void {
@@ -1947,41 +2287,26 @@ it('52. material purchase order section exposes only a view action and no mutati
         ->and(array_key_exists('createUrl', $section))->toBeFalse();
 });
 
-it('53. supplier packages page module includes a reusable purchase order create module contract', function (): void {
+it('53. supplier package purchase action uses direct draft purchase order creation and redirect', function (): void {
     $pageSource = file_get_contents(resource_path('js/pages/materials-show.js'));
-    $moduleSource = file_get_contents(resource_path('js/lib/js-purchase-order-create.js'));
     $controllerSource = file_get_contents(app_path('Http/Controllers/ItemController.php'));
 
-    expect($pageSource)->toContain('mountPurchaseOrderCreate(')
-        ->and($pageSource)->toContain('openFromSupplierPackage')
+    expect($pageSource)->toContain('createPurchaseOrderFromSupplierPackage')
+        ->and($pageSource)->toContain("item_purchase_option_id: record.item_purchase_option_id ?? record.id")
+        ->and($pageSource)->toContain('window.location.assign(data.data.show_url)')
         ->and($controllerSource)->toContain("'handlerKey' => 'purchase'")
-        ->and($moduleSource)->toContain('supplier_id')
-        ->and($moduleSource)->toContain('item_purchase_option_id')
-        ->and($moduleSource)->toContain('pack_count')
-        ->and($moduleSource)->toContain('availablePackages')
-        ->and($moduleSource)->toContain('isSubmitting')
-        ->and($moduleSource)->toContain('errors')
-        ->and($moduleSource)->toContain('data-purchase-order-create-panel')
-        ->and($moduleSource)->toContain('x-show="isOpen"')
-        ->and($moduleSource)->toContain('Alpine.reactive')
-        ->and($moduleSource)->toContain('window.location.href')
-        ->and($moduleSource)->not->toContain('window.purchaseOrderCreate');
+        ->and($pageSource)->not->toContain('window.purchaseOrderCreate');
 });
 
-it('54. supplier package purchase action preselects supplier and package while leaving quantity empty', function (): void {
+it('54. supplier package purchase action does not open the purchase order create drawer', function (): void {
     $pageSource = file_get_contents(resource_path('js/pages/materials-show.js'));
-    $moduleSource = file_get_contents(resource_path('js/lib/js-purchase-order-create.js'));
 
-    expect($pageSource)->toContain('openFromSupplierPackage')
+    expect($pageSource)->toContain('createPurchaseOrderFromSupplierPackage')
         ->and($pageSource)->toContain("action.handlerKey === 'purchase'")
-        ->and($pageSource)->toContain('record.item_purchase_option_id ?? record.id')
-        ->and($moduleSource)->toContain('supplier_id: toStringValue(prefill.supplier_id)')
-        ->and($moduleSource)->toContain('item_purchase_option_id: toStringValue(prefill.item_purchase_option_id)')
-        ->and($moduleSource)->toContain('this.isOpen = true')
-        ->and($moduleSource)->toContain("pack_count: ''");
+        ->and($pageSource)->not->toContain('openFromSupplierPackage');
 });
 
-it('55. supplier packages config exposes a custom purchase row action while keeping the header plus for package create only', function (): void {
+it('55. supplier packages config exposes only purchase and destructive row actions while keeping the header plus for package create only', function (): void {
     $controllerSource = file_get_contents(app_path('Http/Controllers/ItemController.php'));
     $crudSource = file_get_contents(resource_path('js/lib/js-crud-section.js'));
 
@@ -2045,7 +2370,6 @@ it('58. creates a draft purchase order with exactly one line from a supplier pac
     $response = ($this->postMaterialPurchaseOrder)($user, $item, [
         'supplier_id' => $supplier->id,
         'item_purchase_option_id' => $option->id,
-        'pack_count' => '3',
     ])->assertCreated();
 
     $purchaseOrderId = $response->json('data.id');
@@ -2057,18 +2381,54 @@ it('58. creates a draft purchase order with exactly one line from a supplier pac
         'tenant_id' => $tenant->id,
         'supplier_id' => $supplier->id,
         'status' => PurchaseOrder::STATUS_DRAFT,
-        'po_subtotal_cents' => 7500,
-        'po_grand_total_cents' => 7500,
+        'po_subtotal_cents' => 2500,
+        'po_grand_total_cents' => 2500,
     ]);
 
     $this->assertDatabaseHas('purchase_order_lines', [
         'purchase_order_id' => $purchaseOrderId,
         'item_id' => $item->id,
         'item_purchase_option_id' => $option->id,
-        'pack_count' => 3,
+        'pack_count' => 1,
         'unit_price_cents' => 2500,
-        'line_subtotal_cents' => 7500,
+        'line_subtotal_cents' => 2500,
     ]);
+});
+
+it('58b. package created purchase orders open details by default when date or po number are missing', function (): void {
+    $tenant = ($this->makeTenant)(['currency_code' => 'USD']);
+    $user = ($this->makeUser)($tenant);
+    $uom = ($this->makeUom)($tenant, ['symbol' => 'kg-msp-58b']);
+    $item = ($this->makeItem)($tenant, $uom, ['name' => 'PO Details Open Material']);
+    $supplier = ($this->makeSupplier)($tenant, ['company_name' => 'PO Details Open Supplier']);
+    $option = ($this->makeOption)($tenant, $supplier, $item, $uom);
+    ($this->makePrice)($tenant, $option, [
+        'price_cents' => 1250,
+        'converted_price_cents' => 1250,
+        'price_currency_code' => 'USD',
+    ]);
+
+    ($this->grantPermissions)($user, [
+        'inventory-materials-view',
+        'purchasing-suppliers-view',
+        'purchasing-purchase-orders-create',
+    ]);
+
+    $response = ($this->postMaterialPurchaseOrder)($user, $item, [
+        'item_purchase_option_id' => $option->id,
+    ])->assertCreated();
+
+    $showResponse = ($this->getPurchaseOrderShow)(
+        $user,
+        PurchaseOrder::query()->findOrFail((int) $response->json('data.id'))
+    )->assertOk();
+    $detailsSection = Str::between(
+        $showResponse->getContent(),
+        '<h3 class="text-lg font-semibold text-gray-900">Details</h3>',
+        '<h3 class="text-lg font-semibold text-gray-900">Items</h3>'
+    );
+
+    expect($detailsSection)->toContain('x-data="{ open: true }"');
 });
 
 it('58a. keeps the copied purchase order line price historical after the supplier package price changes later', function (): void {
@@ -2219,10 +2579,9 @@ it('63. validates missing and invalid supplier package purchase order create inp
         'purchasing-purchase-orders-create',
     ]);
 
-    ($this->postMaterialPurchaseOrder)($user, $item, [
-        'pack_count' => '0',
-    ])->assertStatus(422)
-        ->assertJsonValidationErrors(['item_purchase_option_id', 'pack_count']);
+    ($this->postMaterialPurchaseOrder)($user, $item, [])->assertStatus(422)
+        ->assertJsonValidationErrors(['item_purchase_option_id'])
+        ->assertJsonMissingValidationErrors(['pack_count']);
 });
 
 it('64. rejects zero negative and decimal pack counts for supplier package purchase order creation', function (): void {

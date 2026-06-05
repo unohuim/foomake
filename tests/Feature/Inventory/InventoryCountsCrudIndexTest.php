@@ -85,6 +85,7 @@ beforeEach(function (): void {
     $this->makeCount = function (array $overrides = []): InventoryCount {
         return InventoryCount::query()->forceCreate(array_merge([
             'tenant_id' => $this->tenant->id,
+            'name' => 'Inventory count ' . Str::random(8),
             'counted_at' => now()->startOfMinute(),
             'notes' => 'Inventory count notes',
         ], $overrides));
@@ -509,15 +510,15 @@ it('16. the inventory counts list endpoint returns the expected shared crud meta
 
     expect($response->json('meta.sort.column'))->toBe('counted_at')
         ->and($response->json('meta.sort.direction'))->toBe('desc')
-        ->and($response->json('meta.allowed_sort_columns'))->toBe(['counted_at', 'status', 'lines_count', 'posted_at'])
+        ->and($response->json('meta.allowed_sort_columns'))->toBe(['name', 'counted_at', 'status', 'lines_count', 'posted_at'])
         ->and($response->json('meta.total'))->toBe(1);
 });
 
 it('17. the inventory counts list endpoint supports search without exposing other records', function (): void {
     ($this->grantPermission)($this->user, 'inventory-adjustments-view');
 
-    ($this->makeCount)(['notes' => 'Vanilla beans count']);
-    ($this->makeCount)(['notes' => 'Cocoa powder count']);
+    ($this->makeCount)(['name' => 'Vanilla Count', 'notes' => 'Vanilla beans count']);
+    ($this->makeCount)(['name' => 'Cocoa Count', 'notes' => 'Cocoa powder count']);
 
     $response = $this->actingAs($this->user)
         ->getJson(route('inventory.counts.list', ['search' => 'Vanilla']))
@@ -533,6 +534,7 @@ it('18. users with execute permission can create an inventory count through the 
 
     $response = $this->actingAs($this->user)
         ->postJson(route('inventory.counts.store'), [
+            'name' => 'Freezer cycle count',
             'counted_at' => '2026-05-19 09:30',
             'notes' => 'Create flow preserved',
             'assigned_to_user_id' => $this->user->id,
@@ -541,6 +543,7 @@ it('18. users with execute permission can create an inventory count through the 
     $response->assertCreated();
 
     expect($response->json('count.id'))->not->toBeNull()
+        ->and($response->json('count.name'))->toBe('Freezer cycle count')
         ->and($response->json('count.status'))->toBe('draft')
         ->and($response->json('count.assigned_to_user_id'))->toBe($this->user->id)
         ->and($response->json('count.created_by_user_id'))->toBe($this->user->id)
@@ -560,11 +563,24 @@ it('19. create validation errors still return the expected json validation respo
         ->assertJsonValidationErrors(['counted_at']);
 });
 
+it('19b. inventory count create requires a name', function (): void {
+    ($this->grantPermission)($this->user, 'inventory-adjustments-execute');
+
+    $this->actingAs($this->user)
+        ->postJson(route('inventory.counts.store'), [
+            'counted_at' => '2026-05-19 09:30',
+            'notes' => 'Missing name',
+        ])
+        ->assertStatus(422)
+        ->assertJsonValidationErrors(['name']);
+});
+
 it('19a. creating an inventory count with notes creates an authored notes feed record', function (): void {
     ($this->grantPermission)($this->user, 'inventory-adjustments-execute');
 
     $response = $this->actingAs($this->user)
         ->postJson(route('inventory.counts.store'), [
+            'name' => 'Opening freezer count',
             'counted_at' => '2026-05-19 09:30',
             'notes' => '  Opening freezer cycle count  ',
         ])
@@ -589,6 +605,7 @@ it('20. existing create behavior persists the count with the expected draft data
 
     $response = $this->actingAs($this->user)
         ->post(route('inventory.counts.store'), [
+            'name' => 'Ajax count',
             'counted_at' => $countedAt,
             'notes' => 'Ajax create',
             'assigned_to_user_id' => $this->user->id,
@@ -604,6 +621,7 @@ it('20. existing create behavior persists the count with the expected draft data
 
     expect($count)->not->toBeNull()
         ->and($count?->status)->toBe('draft')
+        ->and($count?->name)->toBe('Ajax count')
         ->and($count?->notes)->toBe('Ajax create')
         ->and($count?->counted_at->format('Y-m-d H:i'))->toBe($countedAt)
         ->and($count?->assigned_to_user_id)->toBe($this->user->id)
@@ -616,6 +634,7 @@ it('20b. create also succeeds without an assigned user when the UI leaves assign
 
     $response = $this->actingAs($this->user)
         ->postJson(route('inventory.counts.store'), [
+            'name' => 'Unassigned create count',
             'counted_at' => '2026-05-19 10:15',
             'notes' => 'Unassigned create',
         ]);
@@ -638,6 +657,7 @@ it('21. users with only the view permission cannot create an inventory count', f
 
     $this->actingAs($this->user)
         ->postJson(route('inventory.counts.store'), [
+            'name' => 'Blocked count',
             'counted_at' => '2026-05-19 09:30',
             'notes' => 'Blocked create',
         ])
@@ -721,6 +741,7 @@ it('27. inventory count execute permission still allows create even without the 
 
     $this->actingAs($this->user)
         ->postJson(route('inventory.counts.store'), [
+            'name' => 'Execute only count',
             'counted_at' => '2026-05-19 09:30',
             'notes' => 'Execute only create',
             'assigned_to_user_id' => $this->user->id,
@@ -738,7 +759,10 @@ it('28. the create slide over renders the assigned user field for workflow task 
         ->get(route('inventory.counts.index'))
         ->assertOk();
 
-    expect($response->getContent())->toContain('Assigned User')
+    expect($response->getContent())->toContain('Name')
+        ->and($response->getContent())->toContain('inventory_count_name')
+        ->and($response->getContent())->toContain('x-model="form.name"')
+        ->and($response->getContent())->toContain('Assigned User')
         ->and($response->getContent())->toContain('assigned_to_user_id')
         ->and($response->getContent())->toContain('Select a user');
 });
@@ -776,6 +800,8 @@ it('30. the shared crud config exposes a Counter column and the mobile card summ
     );
 
     expect($config['columns'] ?? [])->toContain('counter')
+        ->and($config['columns'] ?? [])->toContain('name')
+        ->and($config['headers']['name'] ?? null)->toBe('Name')
         ->and($config['headers']['counter'] ?? null)->toBe('Assigned')
         ->and($config['mobileCard']['bodyExpression'] ?? null)->toContain('inventoryCountSummary(record)');
 });

@@ -35,7 +35,7 @@
         data-payload="{{ $payloadId }}"
         x-data="purchasingSuppliersShow"
     >
-        <div class="mx-auto max-w-5xl space-y-4 px-1 py-8 sm:space-y-6 sm:px-6 sm:py-12 lg:px-8">
+        <div class="mx-auto max-w-5xl space-y-0 px-1 py-8 sm:space-y-6 sm:px-6 sm:py-12 lg:px-8">
             @if (! empty($payload['purchaseOrderCreate']))
                 <div data-purchase-order-create-root></div>
             @endif

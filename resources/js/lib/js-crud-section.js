@@ -6,6 +6,52 @@ const asString = (value, fallback = '') => (typeof value === 'string' && value.t
 
 const asBoolean = (value) => Boolean(value);
 
+const normalizePositiveInteger = (value, fallback) => {
+    const number = Number(value);
+
+    return Number.isInteger(number) && number > 0 ? number : fallback;
+};
+
+const normalizePaginationOptions = (value) => {
+    const options = asArray(value)
+        .map((option) => Number(option))
+        .filter((option) => Number.isInteger(option) && option > 0);
+
+    return options.length > 0 ? options : [5, 10, 25];
+};
+
+const mobileRecordClass = (className) => asString(className)
+    .split(/\s+/)
+    .filter((token) => token !== '')
+    .map((token) => {
+        if (token.includes(':')) {
+            return token;
+        }
+
+        if (token === 'rounded-xl' || token === 'rounded-lg') {
+            return `sm:${token}`;
+        }
+
+        if (token === 'p-3' || token === 'p-4') {
+            return `px-3 py-2 sm:${token}`;
+        }
+
+        if (token === 'py-1') {
+            return 'py-2 sm:py-1';
+        }
+
+        if (token === 'px-4') {
+            return 'px-3 sm:px-4';
+        }
+
+        if (token.startsWith('border-gray-')) {
+            return `border-gray-300 sm:${token}`;
+        }
+
+        return token;
+    })
+    .join(' ');
+
 const resolvePathValue = (source, path, fallback = '') => {
     if (!path) {
         return fallback;
@@ -63,9 +109,11 @@ const normalizeAction = (action) => {
         id: asString(safeAction.id),
         label: asString(safeAction.label),
         ariaLabel: asString(safeAction.ariaLabel),
+        confirmMessage: asString(safeAction.confirmMessage),
         type: asString(safeAction.type, asString(safeAction.id)),
         tone: asString(safeAction.tone, 'default'),
         icon: asString(safeAction.icon),
+        tooltip: asString(safeAction.tooltip),
         urlField: asString(safeAction.urlField),
         endpointKey: asString(safeAction.endpointKey, 'remove'),
         method: asString(safeAction.method, 'DELETE').toUpperCase(),
@@ -77,10 +125,20 @@ const normalizeLayoutEntry = (entry) => {
     const safeEntry = asRecord(entry);
 
     return {
+        key: asString(safeEntry.key),
+        type: asString(safeEntry.type),
         label: asString(safeEntry.label),
         field: asString(safeEntry.field),
         urlField: asString(safeEntry.urlField),
         suffixField: asString(safeEntry.suffixField),
+        hideLabelOnMobile: Boolean(safeEntry.hideLabelOnMobile),
+        compactOnMobile: Boolean(safeEntry.compactOnMobile),
+        mobilePlacement: asString(safeEntry.mobilePlacement),
+        textClass: asString(safeEntry.textClass),
+        textValueClass: asString(safeEntry.textValueClass),
+        linkClass: asString(safeEntry.linkClass),
+        suffixClass: asString(safeEntry.suffixClass),
+        fullWidth: Boolean(safeEntry.fullWidth),
         fallback: Object.prototype.hasOwnProperty.call(safeEntry, 'fallback')
             ? String(safeEntry.fallback ?? '')
             : '—',
@@ -98,6 +156,7 @@ const normalizeSectionConfig = (config) => {
     const createActionPrefill = asRecord(createAction.prefill);
     const addRow = asRecord(safeConfig.addRow);
     const addRowAction = asRecord(addRow.action);
+    const pagination = asRecord(safeConfig.pagination);
 
     return {
         resource: asString(safeConfig.resource),
@@ -105,10 +164,23 @@ const normalizeSectionConfig = (config) => {
         description: asString(safeConfig.description),
         emptyState: asString(safeConfig.emptyState, 'No records found.'),
         recordClass: asString(safeConfig.recordClass),
+        rowClass: asString(safeConfig.rowClass),
+        rightMetaClass: asString(safeConfig.rightMetaClass),
+        rowActionsMenuClass: asString(safeConfig.rowActionsMenuClass),
+        showRowActionsMenuOnMobile: safeConfig.showRowActionsMenuOnMobile !== false,
+        mobileRowUrlField: asString(safeConfig.mobileRowUrlField),
+        secondaryFieldsClass: asString(safeConfig.secondaryFieldsClass),
+        inlineActionsOnMobile: Boolean(safeConfig.inlineActionsOnMobile),
         csrfToken: asString(safeConfig.csrfToken),
         defaultOpen: asBoolean(safeConfig.defaultOpen),
         mobilePageSize: Number.isInteger(safeConfig.mobilePageSize) ? safeConfig.mobilePageSize : null,
         initialRecords: asArray(safeConfig.initialRecords || safeConfig.initial_records),
+        pagination: {
+            enabled: pagination.enabled !== false,
+            perPage: normalizePositiveInteger(pagination.perPage, 5),
+            perPageOptions: normalizePaginationOptions(pagination.perPageOptions),
+            allowPerPageChange: Boolean(pagination.allowPerPageChange),
+        },
         showRowActionsMenu: safeConfig.showRowActionsMenu !== false,
         toolbarToggles: asArray(safeConfig.toolbarToggles).map((toggle) => ({
             key: asString(toggle?.key),
@@ -377,8 +449,9 @@ const fieldMarkup = `
 const actionMenuMarkup = `
     <div
         class="relative inline-flex overflow-visible"
+        :class="section.rowActionsMenuClass"
         x-data="{ open: false }"
-        x-show="section.showRowActionsMenu && visibleActions(record).length > 0"
+        x-show="rowActionsMenuVisible(record)"
         x-on:keydown.escape.window="open = false"
         x-on:click.outside="open = false"
     >
@@ -420,63 +493,62 @@ const inlineActionsMarkup = `
         x-show="!section.showRowActionsMenu && visibleActions(record).length > 0"
     >
         <template x-for="action in visibleActions(record)" :key="\`\${record.id}-inline-\${action.id}\`">
-            <template x-if="action.icon === 'x-mark'">
-                <button
-                    type="button"
-                    class="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-300 text-slate-500 transition hover:bg-slate-50 hover:text-slate-700"
-                    x-bind:aria-label="action.ariaLabel || actionLabel(record, action)"
-                    x-on:click="performAction(record, action)"
-                >
+            <button
+                type="button"
+                class="inline-flex items-center transition"
+                :class="inlineActionButtonClass(action)"
+                x-bind:aria-label="action.ariaLabel || actionLabel(record, action)"
+                x-bind:title="actionTooltip(record, action)"
+                x-on:click="performAction(record, action)"
+            >
+                <template x-if="action.icon === 'credit-card'">
+                    <svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 0 0 2.25-2.25V6.75A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25v10.5A2.25 2.25 0 0 0 4.5 19.5Z" />
+                    </svg>
+                </template>
+                <template x-if="action.icon === 'x-mark'">
                     <svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
                     </svg>
-                </button>
-            </template>
-            <template x-if="action.icon !== 'x-mark'">
-                <button
-                    type="button"
-                    class="inline-flex items-center rounded-lg border px-3 py-1.5 text-xs font-semibold uppercase tracking-widest transition"
-                    :class="action.tone === 'warning'
-                        ? 'border-yellow-300 text-yellow-700 hover:bg-yellow-50'
-                        : 'border-slate-300 text-slate-700 hover:bg-slate-50'"
-                    x-text="actionLabel(record, action)"
-                    x-on:click="performAction(record, action)"
-                ></button>
-            </template>
+                </template>
+                <template x-if="action.icon !== 'x-mark' && action.icon !== 'credit-card'">
+                    <span x-text="actionLabel(record, action)"></span>
+                </template>
+            </button>
         </template>
     </div>
 `;
 
 const renderCrudSection = () => `
     <section
-        class="overflow-visible rounded-2xl border border-gray-200 bg-white shadow-sm"
+        class="-mx-1 !-mt-px overflow-visible border border-gray-500 bg-white shadow-sm first:!mt-0 sm:mx-0 sm:!mt-6 sm:first:!mt-0 sm:rounded-2xl sm:border-gray-200"
         data-js-crud-section-card
         x-data="jsCrudSection($el)"
     >
-        <div class="flex items-start justify-between gap-3 px-3 py-4 sm:px-6 sm:py-5">
+        <div class="flex items-start justify-between gap-3 px-3 py-2 sm:px-6 sm:py-2">
             <div class="min-w-0 flex-1">
-                <h3 class="text-lg font-semibold text-gray-900" x-text="section.title"></h3>
-                <p class="mt-1 text-sm text-gray-500" x-text="section.description"></p>
+                <h3 class="text-sm font-semibold leading-tight text-gray-900 sm:text-base" x-text="section.title"></h3>
+                <p class="mt-0 text-[0.7rem] leading-tight text-gray-500 sm:mt-px sm:text-xs" x-text="section.description"></p>
             </div>
             <button
                 type="button"
-                class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-gray-300 text-gray-600 transition hover:bg-gray-50 hover:text-gray-900"
+                class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-gray-300 text-gray-600 transition hover:bg-gray-50 hover:text-gray-900 sm:h-8 sm:w-8"
                 aria-expanded="false"
                 x-bind:aria-expanded="isOpen ? 'true' : 'false'"
                 x-on:click="toggleOpen()"
                 aria-label="Toggle section"
                 data-js-crud-section-toggle
             >
-                <svg class="h-5 w-5 text-gray-400 transition" :class="isOpen ? 'rotate-180' : ''" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+                <svg class="h-3.5 w-3.5 text-gray-400 transition sm:h-4 sm:w-4" :class="isOpen ? 'rotate-180' : ''" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
                     <path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
                 </svg>
             </button>
         </div>
 
-        <div class="border-t border-gray-100 px-3 sm:px-6 py-4 sm:py-5" x-show="isOpen" x-cloak>
-            <div class="mb-4 flex flex-col gap-3">
+        <div class="border-t border-gray-100 px-3 py-2 sm:px-6 sm:py-5" x-show="isOpen" x-cloak>
+            <div class="mb-2 flex flex-col gap-2 sm:mb-4 sm:gap-3">
                 <p class="text-sm text-red-600" x-show="sectionError" x-text="sectionError"></p>
-                <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
                     <div class="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center" x-show="section.toolbarToggles.length > 0">
                         <template x-for="toggle in section.toolbarToggles" :key="toggle.key">
                             <button
@@ -502,13 +574,13 @@ const renderCrudSection = () => `
                     <div class="flex w-full justify-end sm:ml-auto sm:w-auto" data-js-crud-section-create-wrapper>
                         <button
                             type="button"
-                            class="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-gray-300 text-gray-600 transition hover:bg-gray-50 hover:text-gray-900"
+                            class="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-gray-300 text-gray-600 transition hover:bg-gray-50 hover:text-gray-900 sm:h-8 sm:w-8"
                             x-show="section.permissions.canCreate"
                             x-on:click.stop.prevent="openCreateForm()"
                             aria-label="Create"
                             data-js-crud-section-create-button
                         >
-                            <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+                            <svg class="h-3.5 w-3.5 sm:h-4 sm:w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
                             </svg>
                         </button>
@@ -611,27 +683,39 @@ const renderCrudSection = () => `
                 <div class="flex justify-end sm:shrink-0" data-detail-section-add-row-right>
                     <button
                         type="button"
-                        class="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-gray-300 text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                        class="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-gray-300 text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 sm:h-8 sm:w-8"
                         x-bind:disabled="addRowValue === '' || addRowSubmitting"
                         x-bind:aria-label="section.addRow.action.ariaLabel || 'Add record'"
                         x-on:click.stop.prevent="submitAddRow()"
                     >
-                        <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+                        <svg class="h-3.5 w-3.5 sm:h-4 sm:w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
                         </svg>
                     </button>
                 </div>
             </div>
 
-            <div class="space-y-3" x-show="records.length > 0">
-                <template x-for="record in records" :key="record.id">
+            <div
+                class="-mx-3 space-y-0 border-t border-gray-300 sm:mx-0 sm:space-y-3 sm:border-t-0"
+                :class="section.pagination.enabled && paginationLastPage() > 1 ? 'min-h-[22rem] sm:min-h-[20rem]' : ''"
+                x-show="records.length > 0"
+                data-js-crud-section-records
+            >
+                <template x-for="record in paginatedRecords()" :key="record.id">
                     <article :class="recordClass(record)">
-                        <div class="flex flex-col sm:flex-row gap-4 sm:items-center sm:justify-between">
+                        <template x-if="mobileRowUrl(record) !== ''">
+                            <a
+                                class="absolute inset-0 z-10 sm:hidden"
+                                x-bind:href="mobileRowUrl(record)"
+                                x-bind:aria-label="\`View \${primaryText(record)}\`"
+                            ></a>
+                        </template>
+                        <div :class="recordRowClass(record)">
                             <div class="min-w-0 flex-1">
-                                <div class="flex items-center gap-3">
+                                <div class="flex items-center gap-4 sm:gap-3">
                                     <template x-if="primaryTextUrl(record) !== ''">
                                         <a
-                                            class="truncate text-sm font-semibold text-blue-700 transition hover:text-blue-600 hover:underline"
+                                            :class="primaryTextLinkClass()"
                                             x-bind:href="primaryTextUrl(record)"
                                             x-text="primaryText(record)"
                                         ></a>
@@ -641,27 +725,42 @@ const renderCrudSection = () => `
                                     </template>
                                     <template x-for="badge in badgeItems(record)" :key="\`\${record.id}-\${badge.text}-badge\`">
                                         <span
-                                            class="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium"
-                                            :class="badge.toneClass"
+                                            class="inline-flex items-center rounded-full px-2.5 py-1 font-medium"
+                                            :class="[badge.toneClass, badge.textClass || 'text-xs']"
                                             x-text="badge.text"
                                         ></span>
                                     </template>
-                                </div>
-                                <div class="mt-1 flex flex-wrap items-center gap-4">
-                                    <template x-for="line in secondaryFieldItems(record)" :key="\`\${record.id}-\${line.label}-secondary\`">
-                                        <p class="text-sm text-gray-600">
-                                            <template x-if="line.label">
-                                                <span class="text-gray-500" x-text="\`\${line.label}: \`"></span>
+                                    <template x-for="line in mobilePrimaryFieldItems(record)" :key="\`\${record.id}-\${line.label}-mobile-primary\`">
+                                        <p class="hidden shrink-0 text-xs text-gray-700 max-sm:block">
+                                            <span x-text="line.text"></span>
+                                            <template x-if="line.suffix">
+                                                <span class="ml-1 align-baseline text-[0.65rem] font-medium text-gray-500" x-text="line.suffix"></span>
                                             </template>
-                                            <span class="text-gray-700" x-text="line.text"></span>
+                                        </p>
+                                    </template>
+                                </div>
+                                <div :class="secondaryFieldsClass(record)">
+                                    <template x-for="line in secondaryFieldItems(record)" :key="\`\${record.id}-\${line.key}-secondary\`">
+                                        <p class="text-gray-600" :class="secondaryLineClass(line)">
+                                            <template x-if="line.label">
+                                                <span
+                                                    class="text-gray-500"
+                                                    :class="line.hideLabelOnMobile ? 'hidden sm:inline' : ''"
+                                                    x-text="\`\${line.label}: \`"
+                                                ></span>
+                                            </template>
+                                            <span :class="line.textValueClass || 'text-gray-700'" x-text="line.text"></span>
+                                            <template x-if="line.suffix">
+                                                <span class="ml-1 align-baseline text-xs font-medium text-gray-500" x-text="line.suffix"></span>
+                                            </template>
                                         </p>
                                     </template>
                                 </div>
                             </div>
 
-                            <div class="flex items-center justify-end gap-3 self-center">
-                                <div class="text-left sm:text-right">
-                                    <template x-for="meta in rightMetaItems(record)" :key="\`\${record.id}-\${meta.label}-meta\`">
+                            <div class="relative z-20 flex items-center justify-end gap-3 self-center">
+                                <div :class="rightMetaColumnClass(record)">
+                                    <template x-for="meta in rightMetaItems(record)" :key="\`\${record.id}-\${meta.key}-meta\`">
                                         <div>
                                             <template x-if="meta.type === 'input'">
                                                 <label class="flex items-center gap-2.5 text-sm">
@@ -729,12 +828,26 @@ const renderCrudSection = () => `
                                                     </span>
                                                 </label>
                                             </template>
-                                            <template x-if="meta.type !== 'input' && meta.type !== 'smart-number'">
-                                                <p class="text-sm" :class="meta.strong ? 'font-semibold text-gray-900' : 'text-gray-600'">
+                                            <template x-if="meta.type === 'badge'">
+                                                <span
+                                                    class="inline-flex items-center rounded-full px-2 py-0.5 text-[0.55rem] font-semibold uppercase tracking-wide"
+                                                    :class="[meta.toneClass, meta.textClass]"
+                                                    x-text="meta.text"
+                                                ></span>
+                                            </template>
+                                            <template x-if="meta.type !== 'input' && meta.type !== 'smart-number' && meta.type !== 'badge'">
+                                                <p :class="[meta.textClass || 'text-sm', meta.strong ? 'font-semibold text-gray-900' : 'text-gray-600']">
                                                     <template x-if="meta.label">
                                                         <span class="text-gray-500" x-text="meta.labelBare ? meta.label : \`\${meta.label}: \`"></span>
                                                     </template>
                                                     <span x-text="meta.text"></span>
+                                                    <template x-if="meta.suffix">
+                                                        <span
+                                                            class="ml-1 align-baseline font-medium text-gray-500"
+                                                            :class="meta.suffixClass || 'text-xs'"
+                                                            x-text="meta.suffix"
+                                                        ></span>
+                                                    </template>
                                                 </p>
                                             </template>
                                         </div>
@@ -754,26 +867,99 @@ const renderCrudSection = () => `
                 x-text="section.emptyState"
             ></div>
 
-            <div class="mt-4 flex items-center justify-between" x-show="meta.last_page > 1">
-                <button
-                    type="button"
-                    class="rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
-                    x-on:click="fetchPage(meta.current_page - 1)"
-                    x-bind:disabled="meta.current_page <= 1 || isLoading"
-                >
-                    Previous
-                </button>
-                <p class="text-sm text-gray-500">
-                    Page <span x-text="meta.current_page"></span> of <span x-text="meta.last_page"></span>
-                </p>
-                <button
-                    type="button"
-                    class="rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
-                    x-on:click="fetchPage(meta.current_page + 1)"
-                    x-bind:disabled="meta.current_page >= meta.last_page || isLoading"
-                >
-                    Next
-                </button>
+            <div
+                class="mt-4 flex items-center justify-between border-t border-gray-200 bg-white px-4 py-3 sm:px-6"
+                x-show="section.pagination.enabled && paginationLastPage() > 1"
+                data-js-crud-section-pagination
+            >
+                <div class="flex flex-1 justify-between sm:hidden">
+                    <button
+                        type="button"
+                        class="relative inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                        x-on:click="goToPaginationPage(paginationCurrentPage() - 1)"
+                        x-bind:disabled="paginationCurrentPage() <= 1 || isLoading"
+                    >Previous</button>
+                    <button
+                        type="button"
+                        class="relative ml-3 inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                        x-on:click="goToPaginationPage(paginationCurrentPage() + 1)"
+                        x-bind:disabled="paginationCurrentPage() >= paginationLastPage() || isLoading"
+                    >Next</button>
+                </div>
+
+                <div class="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between">
+                    <div>
+                        <p class="text-sm text-gray-700">
+                            Showing
+                            <span class="font-medium" x-text="paginationShowingFrom()"></span>
+                            to
+                            <span class="font-medium" x-text="paginationShowingTo()"></span>
+                            of
+                            <span class="font-medium" x-text="paginationTotal()"></span>
+                            results
+                        </p>
+                    </div>
+
+                    <div class="flex items-center gap-3">
+                        <template x-if="section.pagination.allowPerPageChange">
+                            <label class="flex items-center gap-2 text-sm text-gray-500">
+                                <span>Rows</span>
+                                <select
+                                    class="rounded-md border-gray-300 py-1.5 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                                    x-model.number="section.pagination.perPage"
+                                    x-on:change="resetPagination(); goToPaginationPage(1)"
+                                >
+                                    <template x-for="option in section.pagination.perPageOptions" :key="\`pagination-option-\${option}\`">
+                                        <option :value="option" x-text="option"></option>
+                                    </template>
+                                </select>
+                            </label>
+                        </template>
+
+                        <nav aria-label="Pagination" class="isolate inline-flex -space-x-px rounded-md shadow-sm">
+                            <button
+                                type="button"
+                                class="relative inline-flex items-center rounded-l-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 transition hover:bg-gray-50 focus:z-20 focus:outline-offset-0 disabled:cursor-not-allowed disabled:opacity-50"
+                                x-on:click="goToPaginationPage(paginationCurrentPage() - 1)"
+                                x-bind:disabled="paginationCurrentPage() <= 1 || isLoading"
+                            >
+                                <span class="sr-only">Previous</span>
+                                <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true" class="size-5">
+                                    <path d="M11.78 5.22a.75.75 0 0 1 0 1.06L8.06 10l3.72 3.72a.75.75 0 1 1-1.06 1.06l-4.25-4.25a.75.75 0 0 1 0-1.06l4.25-4.25a.75.75 0 0 1 1.06 0Z" clip-rule="evenodd" fill-rule="evenodd" />
+                                </svg>
+                            </button>
+
+                            <template x-for="page in paginationPages()" :key="\`pagination-page-\${page.key}\`">
+                                <template x-if="page.type === 'ellipsis'">
+                                    <span class="relative inline-flex items-center px-4 py-2 text-sm font-semibold text-gray-700 ring-1 ring-inset ring-gray-300 focus:outline-offset-0">...</span>
+                                </template>
+                                <template x-if="page.type === 'page'">
+                                    <button
+                                        type="button"
+                                        class="relative inline-flex items-center px-4 py-2 text-sm font-semibold transition focus:z-20"
+                                        :class="page.current ? 'z-10 bg-blue-600 text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600' : 'text-gray-900 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:outline-offset-0'"
+                                        x-bind:aria-current="page.current ? 'page' : null"
+                                        x-bind:disabled="isLoading || page.current"
+                                        x-text="page.label"
+                                        x-on:click="goToPaginationPage(page.value)"
+                                    ></button>
+                                </template>
+                            </template>
+
+                            <button
+                                type="button"
+                                class="relative inline-flex items-center rounded-r-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 transition hover:bg-gray-50 focus:z-20 focus:outline-offset-0 disabled:cursor-not-allowed disabled:opacity-50"
+                                x-on:click="goToPaginationPage(paginationCurrentPage() + 1)"
+                                x-bind:disabled="paginationCurrentPage() >= paginationLastPage() || isLoading"
+                            >
+                                <span class="sr-only">Next</span>
+                                <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true" class="size-5">
+                                    <path d="M8.22 5.22a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 1 1-1.06-1.06L11.94 10 8.22 6.28a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd" fill-rule="evenodd" />
+                                </svg>
+                            </button>
+                        </nav>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -908,6 +1094,7 @@ const resolveUrl = (template, id) => asString(template).replace('{id}', encodeUR
 
 const defaultToneClass = (tone) => ({
     success: 'bg-emerald-100 text-emerald-700',
+    info: 'bg-sky-100 text-sky-700',
     warning: 'bg-yellow-100 text-yellow-700',
     danger: 'bg-red-100 text-red-700',
     muted: 'bg-gray-200 text-gray-700',
@@ -926,6 +1113,31 @@ const buildLayoutText = (record, entry) => {
     return parts.join(' ');
 };
 
+const buildLayoutBaseText = (record, entry) => {
+    const base = resolvePathValue(record, entry.field, '');
+
+    if (base === null || base === undefined || String(base) === '') {
+        return entry.fallback;
+    }
+
+    return String(base);
+};
+
+const buildLayoutSuffixText = (record, entry) => {
+    const base = resolvePathValue(record, entry.field, '');
+    const suffix = resolvePathValue(record, entry.suffixField, '');
+
+    if (base === null || base === undefined || String(base) === '') {
+        return '';
+    }
+
+    if (suffix === null || suffix === undefined || String(suffix) === '') {
+        return '';
+    }
+
+    return String(suffix);
+};
+
 const createSectionState = (section, adapters, hostEl) => ({
     section,
     adapters,
@@ -937,10 +1149,11 @@ const createSectionState = (section, adapters, hostEl) => ({
     formMode: 'create',
     editingId: null,
     records: asArray(section.initialRecords).map((record) => asRecord(record)),
+    paginationPage: 1,
     meta: {
         current_page: 1,
-        last_page: 1,
-        per_page: 10,
+        last_page: Math.max(Math.ceil(asArray(section.initialRecords).length / section.pagination.perPage), 1),
+        per_page: section.pagination.perPage,
         total: asArray(section.initialRecords).length,
     },
     form: buildEmptyForm(section),
@@ -982,6 +1195,9 @@ const createSectionState = (section, adapters, hostEl) => ({
 
         if (rootEl) {
             rootEl._jsCrudSectionApi = {
+                close: () => {
+                    this.closeSection();
+                },
                 refresh: async (page = 1) => {
                     await this.fetchPage(page);
                 },
@@ -999,14 +1215,152 @@ const createSectionState = (section, adapters, hostEl) => ({
             this.fetchPage(1);
         }
     },
+    hasRemotePagination() {
+        return this.section.endpoints.list !== '';
+    },
+    paginationPerPage() {
+        const mobilePageSize = Number.isInteger(this.section.mobilePageSize) ? this.section.mobilePageSize : null;
+
+        if (
+            mobilePageSize !== null
+            && mobilePageSize > 0
+            && typeof globalThis.matchMedia === 'function'
+            && globalThis.matchMedia('(max-width: 639px)').matches
+        ) {
+            return mobilePageSize;
+        }
+
+        return normalizePositiveInteger(this.section.pagination.perPage, 5);
+    },
+    paginationCurrentPage() {
+        return this.hasRemotePagination() ? this.meta.current_page : this.paginationPage;
+    },
+    paginationLastPage() {
+        if (this.hasRemotePagination()) {
+            return Math.max(normalizePositiveInteger(this.meta.last_page, 1), 1);
+        }
+
+        return Math.max(Math.ceil(this.records.length / this.paginationPerPage()), 1);
+    },
+    paginationTotal() {
+        return this.hasRemotePagination() ? normalizePositiveInteger(this.meta.total, 0) : this.records.length;
+    },
+    paginationShowingFrom() {
+        if (this.paginationTotal() === 0) {
+            return 0;
+        }
+
+        return ((this.paginationCurrentPage() - 1) * this.paginationPerPage()) + 1;
+    },
+    paginationShowingTo() {
+        return Math.min(this.paginationCurrentPage() * this.paginationPerPage(), this.paginationTotal());
+    },
+    paginationPages() {
+        const current = this.paginationCurrentPage();
+        const last = this.paginationLastPage();
+
+        if (last <= 7) {
+            return Array.from({ length: last }, (_, index) => this.paginationPageItem(index + 1, current));
+        }
+
+        const pages = [
+            this.paginationPageItem(1, current),
+        ];
+        const windowStart = Math.max(2, current - 1);
+        const windowEnd = Math.min(last - 1, current + 1);
+
+        if (windowStart > 2) {
+            pages.push(this.paginationEllipsisItem('start'));
+        }
+
+        for (let page = windowStart; page <= windowEnd; page += 1) {
+            pages.push(this.paginationPageItem(page, current));
+        }
+
+        if (windowEnd < last - 1) {
+            pages.push(this.paginationEllipsisItem('end'));
+        }
+
+        pages.push(this.paginationPageItem(last, current));
+
+        return pages;
+    },
+    paginationPageItem(page, current) {
+        return {
+            type: 'page',
+            key: `page-${page}`,
+            value: page,
+            label: String(page),
+            current: page === current,
+        };
+    },
+    paginationEllipsisItem(position) {
+        return {
+            type: 'ellipsis',
+            key: `ellipsis-${position}`,
+        };
+    },
+    paginatedRecords() {
+        if (!this.section.pagination.enabled || this.hasRemotePagination()) {
+            return this.records;
+        }
+
+        const page = this.paginationCurrentPage();
+        const perPage = this.paginationPerPage();
+        const offset = (page - 1) * perPage;
+
+        return this.records.slice(offset, offset + perPage);
+    },
+    resetPagination() {
+        this.paginationPage = 1;
+    },
+    clampPaginationPage() {
+        this.paginationPage = Math.min(Math.max(this.paginationPage, 1), this.paginationLastPage());
+    },
+    async goToPaginationPage(page) {
+        const targetPage = Math.min(Math.max(Number(page) || 1, 1), this.paginationLastPage());
+
+        if (this.hasRemotePagination()) {
+            await this.fetchPage(targetPage);
+            return;
+        }
+
+        this.paginationPage = targetPage;
+        this.clampPaginationPage();
+    },
     async toggleOpen() {
         const nextOpen = !this.isOpen;
+
+        if (nextOpen && this.isMobileViewport()) {
+            this.closeSiblingSections();
+        }
 
         this.isOpen = nextOpen;
 
         if (nextOpen && !this.hasLoaded) {
             await this.fetchPage(1);
         }
+    },
+    closeSection() {
+        this.isOpen = false;
+    },
+    closeSiblingSections() {
+        const rootEl = hostEl?.closest('[data-js-crud-section-root]');
+        const parentEl = rootEl?.parentElement;
+
+        if (!rootEl || !parentEl) {
+            return;
+        }
+
+        parentEl
+            .querySelectorAll(':scope > [data-js-crud-section-root]')
+            .forEach((sectionRoot) => {
+                if (sectionRoot === rootEl) {
+                    return;
+                }
+
+                sectionRoot._jsCrudSectionApi?.close?.();
+            });
     },
     normalizeRow(record) {
         const adapter = this.adapters.normalizeRow;
@@ -1023,17 +1377,65 @@ const createSectionState = (section, adapters, hostEl) => ({
     primaryTextUrl(record) {
         return asString(resolvePathValue(record, this.section.rowLayout.primaryText.urlField));
     },
+    primaryTextLinkClass() {
+        return asString(
+            this.section.rowLayout.primaryText.linkClass,
+            'truncate text-sm font-semibold text-blue-700 transition hover:text-blue-600 hover:underline'
+        );
+    },
+    mobileRowUrl(record) {
+        return asString(resolvePathValue(record, this.section.mobileRowUrlField));
+    },
     secondaryFieldItems(record) {
-        return this.section.rowLayout.secondaryFields.map((entry) => ({
+        return this.section.rowLayout.secondaryFields.map((entry, index) => ({
+            key: entry.key || entry.field || `secondary-${index}`,
             label: entry.label,
-            text: buildLayoutText(record, entry),
-        })).filter((entry) => entry.text !== '');
+            text: buildLayoutBaseText(record, entry),
+            suffix: buildLayoutSuffixText(record, entry),
+            hideLabelOnMobile: entry.hideLabelOnMobile,
+            compactOnMobile: entry.compactOnMobile,
+            mobilePlacement: entry.mobilePlacement,
+            textClass: entry.textClass,
+            textValueClass: entry.textValueClass,
+            fullWidth: entry.fullWidth,
+        })).filter((entry) => entry.text !== '' || entry.suffix !== '');
+    },
+    mobilePrimaryFieldItems(record) {
+        return this.secondaryFieldItems(record)
+            .filter((entry) => entry.mobilePlacement === 'primary-end');
+    },
+    secondaryLineClass(line) {
+        const classes = [
+            line.textClass || (line.compactOnMobile ? 'text-xs sm:text-sm' : 'text-sm'),
+        ];
+
+        if (line.mobilePlacement === 'primary-end') {
+            classes.push('hidden sm:block');
+        }
+
+        if (line.fullWidth) {
+            classes.push('basis-full');
+        }
+
+        return classes.join(' ');
+    },
+    secondaryFieldsClass(record) {
+        const baseClass = asString(
+            this.section.secondaryFieldsClass,
+            'mt-1 flex flex-wrap items-center gap-4'
+        );
+        const recordLevelClass = asString(record.secondaryFieldsClass);
+
+        return [baseClass, recordLevelClass]
+            .filter((value) => value !== '')
+            .join(' ');
     },
     badgeItems(record) {
         return this.section.rowLayout.badges
             .map((entry) => ({
                 text: buildLayoutText(record, entry),
                 toneClass: defaultToneClass(asString(resolvePathValue(record, entry.toneField, 'muted'))),
+                textClass: entry.textClass,
             }))
             .filter((badge) => badge.text !== '—' && badge.text !== '');
     },
@@ -1046,11 +1448,28 @@ const createSectionState = (section, adapters, hostEl) => ({
             }));
         }
 
-        return this.section.rowLayout.rightMeta.map((entry) => ({
+        return this.section.rowLayout.rightMeta.map((entry, index) => ({
+            key: entry.key || entry.field || `right-meta-${index}`,
+            type: entry.type,
             label: entry.label,
-            text: buildLayoutText(record, entry),
+            text: buildLayoutBaseText(record, entry),
+            suffix: buildLayoutSuffixText(record, entry),
+            toneClass: defaultToneClass(asString(resolvePathValue(record, entry.toneField, 'muted'))),
+            textClass: entry.textClass,
+            suffixClass: entry.suffixClass,
             strong: entry.strong,
         }));
+    },
+    isMobileViewport() {
+        return typeof globalThis.matchMedia === 'function'
+            && globalThis.matchMedia('(max-width: 639px)').matches;
+    },
+    rowActionsMenuVisible(record) {
+        if (!this.section.showRowActionsMenu || this.visibleActions(record).length === 0) {
+            return false;
+        }
+
+        return this.section.showRowActionsMenuOnMobile || !this.isMobileViewport();
     },
     visibleActions(record) {
         const hasExplicitAvailableActions = Array.isArray(record.availableActions) || Array.isArray(record.available_actions);
@@ -1070,6 +1489,20 @@ const createSectionState = (section, adapters, hostEl) => ({
         const labels = asRecord(record.actionLabels || record.action_labels);
 
         return labels[action.id] || action.label;
+    },
+    actionTooltip(record, action) {
+        return action.tooltip || action.ariaLabel || this.actionLabel(record, action);
+    },
+    inlineActionButtonClass(action) {
+        if (action.icon === 'credit-card' || action.icon === 'x-mark') {
+            return action.icon === 'x-mark'
+                ? 'h-8 w-8 justify-center rounded-full border border-slate-300 text-slate-500 hover:border-blue-600 hover:bg-blue-50 hover:text-blue-700'
+                : 'h-8 w-8 justify-center rounded-full border border-slate-300 text-slate-600 hover:border-blue-600 hover:bg-blue-50 hover:text-blue-700';
+        }
+
+        return action.tone === 'warning'
+            ? 'rounded-lg border border-yellow-300 px-3 py-1.5 text-xs font-semibold uppercase tracking-widest text-yellow-700 hover:bg-yellow-50'
+            : 'rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold uppercase tracking-widest text-slate-700 hover:bg-slate-50';
     },
     firstError(fieldName) {
         const values = this.errors[fieldName];
@@ -1288,8 +1721,33 @@ const createSectionState = (section, adapters, hostEl) => ({
             }))
             : '';
         const recordLevelClass = asString(record.rowClass);
+        const mobileClass = mobileRecordClass(baseClass);
 
-        return [baseClass, adapterClass, recordLevelClass]
+        return ['relative', 'max-sm:border-t-0 sm:mt-0', mobileClass, mobileRecordClass(adapterClass), mobileRecordClass(recordLevelClass)]
+            .filter((value) => value !== '')
+            .join(' ');
+    },
+    recordRowClass(record) {
+        const baseClass = asString(
+            this.section.rowClass,
+            this.section.inlineActionsOnMobile
+                ? 'flex flex-row items-center justify-between gap-4'
+                : 'flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between'
+        );
+        const recordLevelClass = asString(record.rowContainerClass);
+
+        return [baseClass, recordLevelClass]
+            .filter((value) => value !== '')
+            .join(' ');
+    },
+    rightMetaColumnClass(record) {
+        const baseClass = asString(
+            this.section.rightMetaClass,
+            'flex min-w-[5rem] flex-col items-end justify-center gap-2 text-right'
+        );
+        const recordLevelClass = asString(record.rightMetaClass);
+
+        return [baseClass, recordLevelClass]
             .filter((value) => value !== '')
             .join(' ');
     },
@@ -1313,6 +1771,9 @@ const createSectionState = (section, adapters, hostEl) => ({
         if (!this.section.permissions.canCreate && this.isFormOpen && this.formMode === 'create') {
             this.closeForm();
         }
+
+        this.resetPagination();
+        this.clampPaginationPage();
     },
     findField(fieldName) {
         return this.section.fields.find((field) => field.name === fieldName) || null;
@@ -1390,16 +1851,7 @@ const createSectionState = (section, adapters, hostEl) => ({
 
         const params = new URLSearchParams();
         params.set('page', String(page));
-        const mobilePageSize = Number.isInteger(this.section.mobilePageSize) ? this.section.mobilePageSize : null;
-
-        if (
-            mobilePageSize !== null
-            && mobilePageSize > 0
-            && typeof globalThis.matchMedia === 'function'
-            && globalThis.matchMedia('(max-width: 639px)').matches
-        ) {
-            params.set('per_page', String(mobilePageSize));
-        }
+        params.set('per_page', String(this.paginationPerPage()));
 
         if (typeof this.adapters.buildListParams === 'function') {
             const adapterParams = this.adapters.buildListParams(this.toggleValues, this.section);
@@ -1432,10 +1884,11 @@ const createSectionState = (section, adapters, hostEl) => ({
             this.meta = {
                 current_page: data.meta?.current_page || 1,
                 last_page: data.meta?.last_page || 1,
-                per_page: data.meta?.per_page || 10,
+                per_page: data.meta?.per_page || this.paginationPerPage(),
                 total: data.meta?.total || 0,
             };
             this.hasLoaded = true;
+            this.clampPaginationPage();
         } catch (error) {
             this.sectionError = 'Unable to load records.';
         } finally {
@@ -1473,6 +1926,7 @@ const createSectionState = (section, adapters, hostEl) => ({
         this.toggleValues[key] = checked === null
             ? !this.toggleValues[key]
             : Boolean(checked);
+        this.resetPagination();
         await this.fetchPage(1);
     },
     openEditForm(record) {
@@ -1593,7 +2047,13 @@ const createSectionState = (section, adapters, hostEl) => ({
             }
 
             this.isFormOpen = false;
-            await this.fetchPage(this.meta.current_page || 1);
+            const nextPage = this.formMode === 'create' ? 1 : this.paginationCurrentPage();
+
+            if (this.formMode === 'create') {
+                this.resetPagination();
+            }
+
+            await this.fetchPage(nextPage);
         } catch (error) {
             this.formError = 'Unable to save record.';
         } finally {
@@ -1601,6 +2061,10 @@ const createSectionState = (section, adapters, hostEl) => ({
         }
     },
     async performAction(record, action) {
+        if (action.confirmMessage !== '' && !globalThis.confirm(action.confirmMessage)) {
+            return;
+        }
+
         switch (action.type) {
         case 'view': {
             const targetUrl = asString(resolvePathValue(record, action.urlField));
@@ -1661,6 +2125,7 @@ const createSectionState = (section, adapters, hostEl) => ({
             }
 
             await this.fetchPage(this.meta.current_page || 1);
+            this.clampPaginationPage();
         } catch (error) {
             this.sectionError = 'Unable to update record.';
         }
@@ -1751,6 +2216,7 @@ export function mountCrudSection(targetEl, input) {
 
     targetEl._jsCrudSectionConfig = section;
     targetEl._jsCrudSectionAdapters = adapters;
+    targetEl.classList.add('!-mt-px', 'first:!mt-0', 'sm:!mt-6', 'sm:first:!mt-0');
     targetEl.innerHTML = renderCrudSection();
 
     Alpine.data('jsCrudSection', (el) => createSectionState(

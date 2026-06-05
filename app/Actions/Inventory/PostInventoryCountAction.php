@@ -3,7 +3,9 @@
 namespace App\Actions\Inventory;
 
 use App\Models\InventoryCount;
+use App\Models\InventoryCountLine;
 use App\Models\StockMove;
+use App\Support\Uom\UomConversionPathResolver;
 use Brick\Math\BigDecimal;
 use Brick\Math\RoundingMode;
 use DomainException;
@@ -17,6 +19,11 @@ use Illuminate\Support\Facades\DB;
  */
 class PostInventoryCountAction
 {
+    public function __construct(
+        private readonly UomConversionPathResolver $conversionPathResolver
+    ) {
+    }
+
     /**
      * Post the inventory count and create variance stock moves.
      *
@@ -38,7 +45,7 @@ class PostInventoryCountAction
                 throw new DomainException('Inventory count is posted and cannot be modified.');
             }
 
-            $lines = $lockedCount->lines()->with('item')->get();
+            $lines = $lockedCount->lines()->with(['item.baseUom', 'uom'])->get();
 
             if ($lines->isEmpty()) {
                 throw new DomainException('Inventory count must have at least one line.');
@@ -63,7 +70,7 @@ class PostInventoryCountAction
                 $itemsById[$line->item_id] = $line->item;
 
                 $countedByItem[$line->item_id] = ($countedByItem[$line->item_id] ?? BigDecimal::zero())
-                    ->plus(BigDecimal::of($line->counted_quantity));
+                    ->plus(BigDecimal::of($this->countedQuantityInCurrentBaseUom($line)));
             }
 
             foreach ($countedByItem as $itemId => $countedQuantity) {
@@ -100,5 +107,40 @@ class PostInventoryCountAction
 
             return $lockedCount;
         });
+    }
+
+    /**
+     * Return the counted line quantity converted into the item's current base UoM.
+     *
+     * @throws DomainException
+     */
+    private function countedQuantityInCurrentBaseUom(InventoryCountLine $line): string
+    {
+        $item = $line->item;
+
+        if ($item === null || $item->baseUom === null) {
+            throw new DomainException('Inventory count line item base UoM is required.');
+        }
+
+        $lineUom = $line->snapshotUom() ?? $line->uom ?? $item->baseUom;
+
+        if ((int) $lineUom->id === (int) $item->baseUom->id) {
+            return (string) $line->counted_quantity;
+        }
+
+        $quantity = $this->conversionPathResolver->convertQuantity(
+            (int) $line->tenant_id,
+            (int) $item->id,
+            $lineUom,
+            $item->baseUom,
+            (string) $line->counted_quantity,
+            UomConversionPathResolver::PRECEDENCE_ITEM_FIRST
+        );
+
+        if ($quantity === null) {
+            throw new DomainException('Inventory count line quantity cannot be converted to the item base UoM.');
+        }
+
+        return $quantity;
     }
 }

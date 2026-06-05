@@ -2,6 +2,7 @@
 
 namespace App\Support\Inventory;
 
+use App\Actions\Inventory\CalculateItemOnHandQuantityAction;
 use App\Models\Item;
 use App\Models\MakeOrder;
 use App\Models\PurchaseOrder;
@@ -10,7 +11,6 @@ use App\Models\Recipe;
 use App\Models\RecipeLine;
 use App\Models\SalesOrder;
 use App\Models\SalesOrderLine;
-use App\Models\StockMove;
 use App\Support\QuantityFormatter;
 use Illuminate\Support\Collection;
 
@@ -22,7 +22,8 @@ class InventoryAvailabilityIndexReadModel
     private const SCALE = 6;
 
     public function __construct(
-        private readonly InventoryBuyUomConversionResolver $buyUomConversionResolver
+        private readonly InventoryBuyUomConversionResolver $buyUomConversionResolver,
+        private readonly CalculateItemOnHandQuantityAction $calculateItemOnHandQuantityAction
     ) {
     }
 
@@ -45,7 +46,7 @@ class InventoryAvailabilityIndexReadModel
         }
 
         $itemIds = $items->pluck('id')->all();
-        $onHandByItemId = $this->onHandQuantities($tenantId, $itemIds);
+        $onHandByItemId = $this->onHandQuantities($items);
         $sellByItemId = $this->sellQuantities($tenantId, $itemIds);
         $buyByItemId = $this->buyQuantities($tenantId, $itemIds);
         $makeByItemId = $this->makeQuantities($tenantId, $itemIds);
@@ -65,8 +66,18 @@ class InventoryAvailabilityIndexReadModel
             return [
                 'id' => $item->id,
                 'item' => $item->name,
+                'base_uom_id' => $item->base_uom_id,
                 'item_uom_name' => $item->baseUom?->name,
+                'item_uom_symbol' => $item->baseUom?->symbol,
+                'is_active' => (bool) $item->is_active,
+                'is_stockable' => (bool) $item->is_stockable,
+                'is_purchasable' => (bool) $item->is_purchasable,
+                'is_sellable' => (bool) $item->is_sellable,
+                'is_manufacturable' => (bool) $item->is_manufacturable,
+                'default_price_amount' => $this->formatCentsToAmount($item->default_price_cents),
+                'default_price_currency_code' => $item->default_price_currency_code,
                 'show_url' => route('materials.show', $item),
+                'update_url' => route('materials.update', $item),
                 'on_hand' => $onHand,
                 'on_hand_display' => QuantityFormatter::formatForUom($onHand, $item->baseUom, self::SCALE),
                 'sell' => $sell,
@@ -92,8 +103,18 @@ class InventoryAvailabilityIndexReadModel
             ->firstWhere('id', $item->id) ?? [
             'id' => $item->id,
             'item' => $item->name,
+            'base_uom_id' => $item->base_uom_id,
             'item_uom_name' => $item->baseUom?->name,
+            'item_uom_symbol' => $item->baseUom?->symbol,
+            'is_active' => (bool) $item->is_active,
+            'is_stockable' => (bool) $item->is_stockable,
+            'is_purchasable' => (bool) $item->is_purchasable,
+            'is_sellable' => (bool) $item->is_sellable,
+            'is_manufacturable' => (bool) $item->is_manufacturable,
+            'default_price_amount' => $this->formatCentsToAmount($item->default_price_cents),
+            'default_price_currency_code' => $item->default_price_currency_code,
             'show_url' => route('materials.show', $item),
+            'update_url' => route('materials.update', $item),
             'on_hand' => $this->zero(),
             'on_hand_display' => QuantityFormatter::formatForUom($this->zero(), $item->baseUom, self::SCALE),
             'sell' => $this->zero(),
@@ -108,29 +129,17 @@ class InventoryAvailabilityIndexReadModel
     }
 
     /**
-     * Aggregate posted stock-move balances per item.
+     * Aggregate converted inventory balances per item.
      *
-     * @param array<int, int> $itemIds
+     * @param Collection<int, Item> $items
      * @return array<int, string>
      */
-    private function onHandQuantities(int $tenantId, array $itemIds): array
+    private function onHandQuantities(Collection $items): array
     {
         $quantities = [];
 
-        $moves = StockMove::query()
-            ->where('tenant_id', $tenantId)
-            ->whereIn('item_id', $itemIds)
-            ->where(function ($query): void {
-                $query->where('status', 'POSTED')
-                    ->orWhereNull('status');
-            })
-            ->get(['item_id', 'quantity']);
-
-        foreach ($moves as $move) {
-            $itemId = (int) $move->item_id;
-            $quantities[$itemId] = isset($quantities[$itemId])
-                ? bcadd($quantities[$itemId], (string) $move->quantity, self::SCALE)
-                : bcadd((string) $move->quantity, '0', self::SCALE);
+        foreach ($items as $item) {
+            $quantities[(int) $item->id] = $this->calculateItemOnHandQuantityAction->execute($item);
         }
 
         return $quantities;
@@ -402,5 +411,21 @@ class InventoryAvailabilityIndexReadModel
     private function zero(): string
     {
         return '0.000000';
+    }
+
+    /**
+     * Format cents into a decimal amount string.
+     */
+    private function formatCentsToAmount(?int $cents): ?string
+    {
+        if ($cents === null) {
+            return null;
+        }
+
+        $negative = $cents < 0;
+        $absoluteCents = abs($cents);
+        $amount = intdiv($absoluteCents, 100) . '.' . str_pad((string) ($absoluteCents % 100), 2, '0', STR_PAD_LEFT);
+
+        return $negative ? '-' . $amount : $amount;
     }
 }

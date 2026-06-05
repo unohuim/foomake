@@ -96,15 +96,9 @@
 
     <script type="application/json" id="manufacturing-make-orders-show-payload">@json($payload)</script>
 
-    <div class="fixed right-6 top-6 z-50" x-cloak x-show="toast.visible">
-        <div
-            class="rounded-md px-4 py-3 text-sm shadow-md"
-            :class="toast.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'"
-            x-text="toast.message"
-        ></div>
-    </div>
+    <x-ui.toast visible="toast.visible" type="toast.type" message="toast.message" />
 
-    <div class="mx-auto max-w-5xl space-y-4 px-1 pt-4 pb-8 sm:space-y-6 sm:px-6 sm:pt-6 sm:pb-12 lg:px-8">
+    <div class="mx-auto max-w-5xl space-y-0 px-1 pt-4 pb-8 sm:space-y-6 sm:px-6 sm:pt-6 sm:pb-12 lg:px-8">
         <x-ui.workflow-progress
             :steps="$payload['workflowProgressSteps'] ?? []"
             data-workflow-progress-panel

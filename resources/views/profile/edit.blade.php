@@ -11,6 +11,8 @@
         data-payload="profile-edit-payload"
         x-data="profileEdit"
     >
+        <x-ui.toast visible="toast.visible" type="toast.type" message="toast.message" />
+
         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 space-y-6">
             <div class="p-4 sm:p-8 bg-white shadow sm:rounded-lg">
                 <div class="max-w-xl">
@@ -33,6 +35,6 @@
     </div>
 
     <script type="application/json" id="profile-edit-payload">
-        @json((object) [])
+        @json(['status' => session('status')])
     </script>
 </x-app-layout>

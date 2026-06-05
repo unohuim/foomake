@@ -10,12 +10,19 @@ when_not_to_use:
 rules:
   - Lines belong to a single inventory count.
   - Each line references a single item and counted quantity.
+  - Lines snapshot `uom_id` when the item is added to the count.
+  - Historical line display uses the line `uom_id`, not the item's current base UoM.
+  - Snapshot UoM resolution may use a tenant UoM or a global system UoM; it must not resolve another tenant's UoM.
+  - Posting converts counted quantity from line `uom_id` into the item's current base UoM before variance adjustment.
 public_interface:
   - inventoryCount()
   - item()
+  - uom()
+  - snapshotUom()
 example_usage: |
   $line = $inventoryCount->lines()->create([
       'tenant_id' => $tenant->id,
       'item_id' => $item->id,
+      'uom_id' => $item->base_uom_id,
       'counted_quantity' => '5.000000',
   ]);

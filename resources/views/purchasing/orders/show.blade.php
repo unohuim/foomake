@@ -21,6 +21,9 @@
                 'current' => true,
             ],
         ];
+        $detailsDefaultOpen = blank($purchaseOrder->supplier_id)
+            || blank($purchaseOrder->order_date)
+            || blank($purchaseOrder->po_number);
     @endphp
 
     <x-slot name="header">
@@ -46,125 +49,62 @@
     <script type="application/json" id="purchasing-orders-show-payload">@json($payload)</script>
 
     <div class="pt-4 pb-8 sm:pt-6 sm:pb-12">
-        <div class="fixed right-6 top-6 z-50" x-show="toast.visible">
-            <div
-                class="rounded-md px-4 py-3 text-sm shadow-md"
-                :class="toast.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'"
-                x-text="toast.message"
-            ></div>
-        </div>
+        <x-ui.toast visible="toast.visible" type="toast.type" message="toast.message" />
 
-        <div class="mx-auto max-w-5xl space-y-4 px-1 sm:space-y-6 sm:px-6 lg:px-8" data-purchase-order-detail-content>
-            <x-ui.workflow-progress
-                :steps="$payload['workflowProgressSteps'] ?? []"
-                data-workflow-progress-panel
-            />
+        <div class="mx-auto w-full min-w-0 max-w-7xl space-y-0 px-1 sm:space-y-6 sm:px-6 lg:px-8" data-purchase-order-detail-content>
+            <div data-workflow-progress-panel x-html="workflowProgressHtml()"></div>
 
-            <x-detail-section-card title="Details" :default-open="false">
-                <div class="grid gap-6 sm:grid-cols-2">
-                    <div class="max-w-sm">
-                        <label class="block text-xs font-semibold uppercase text-gray-500">
-                            Supplier
-                            <span class="mt-2 flex items-center gap-2">
-                                <select class="w-full rounded border-gray-300 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500" x-model="form.supplier_id" :disabled="!isEditable" x-init="$nextTick(() => { $el.value = form.supplier_id })" x-effect="$nextTick(() => { $el.value = form.supplier_id })" x-on:change="autosaveField('supplier_id')">
-                                    <option value="">Select supplier</option>
-                                    <template x-for="supplier in suppliers" :key="supplier.id">
-                                        <option x-bind:value="supplier.id" x-text="supplier.company_name"></option>
-                                    </template>
-                                </select>
-                                <svg data-autosave-success-icon class="h-5 w-5 shrink-0 text-lime-400" x-show="savedFields.supplier_id" x-cloak xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75" />
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
-                                </svg>
-                            </span>
-                        </label>
-                        <p class="mt-1 text-xs text-red-600" x-text="headerErrors.supplier_id[0]"></p>
-                    </div>
-                    <div class="max-w-xs">
-                        <label class="block text-xs font-semibold uppercase text-gray-500">
-                            Order date
-                            <span class="mt-2 flex items-center gap-2">
-                                <input type="date" class="w-full rounded border-gray-300 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500" x-model="form.order_date" :disabled="!isEditable" x-on:change="autosaveField('order_date')" x-on:blur="autosaveField('order_date')" />
-                                <svg data-autosave-success-icon class="h-5 w-5 shrink-0 text-lime-400" x-show="savedFields.order_date" x-cloak xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75" />
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
-                                </svg>
-                            </span>
-                        </label>
-                        <p class="mt-1 text-xs text-red-600" x-text="headerErrors.order_date[0]"></p>
-                    </div>
-                    <div class="max-w-sm">
-                        <label class="block text-xs font-semibold uppercase text-gray-500">
-                            PO number
-                            <span class="mt-2 flex items-center gap-2">
-                                <input type="text" class="w-full rounded border-gray-300 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500" x-model="form.po_number" :disabled="!isEditable" x-on:blur="autosaveField('po_number')" />
-                                <svg data-autosave-success-icon class="h-5 w-5 shrink-0 text-lime-400" x-show="savedFields.po_number" x-cloak xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75" />
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
-                                </svg>
-                            </span>
-                        </label>
-                        <p class="mt-1 text-xs text-red-600" x-text="headerErrors.po_number[0]"></p>
-                    </div>
-                    <div class="max-w-2xl sm:col-span-2">
-                        <label class="block text-xs font-semibold uppercase text-gray-500">
-                            Notes
-                            <span class="mt-2 flex items-start gap-2">
-                                <textarea rows="3" class="w-full rounded border-gray-300 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500" x-model="form.notes" :disabled="!isEditable" x-on:blur="autosaveField('notes')"></textarea>
-                                <svg data-autosave-success-icon class="mt-2 h-5 w-5 shrink-0 text-lime-400" x-show="savedFields.notes" x-cloak xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75" />
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
-                                </svg>
-                            </span>
-                        </label>
-                        <p class="mt-1 text-xs text-red-600" x-text="headerErrors.notes[0]"></p>
-                    </div>
-                </div>
-                <p class="mt-3 text-xs text-red-600" x-text="headerError"></p>
-            </x-detail-section-card>
-
-            <x-detail-section-card
-                title="Tasks"
-                :description="__('Complete current stage tasks before moving the purchase order forward.')"
-                :default-open="false"
-            >
-                <div class="divide-y divide-gray-100 rounded-xl border border-gray-200 bg-white">
-                    <template x-if="(workflow.currentStageTasks || []).length === 0">
-                        <div class="px-4 py-4 text-sm text-gray-500">{{ __('No tasks for the current workflow stage.') }}</div>
-                    </template>
-
-                    <template x-for="task in workflow.currentStageTasks || []" :key="task.id">
-                        <div class="flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
-                            <div class="min-w-0 flex-1">
-                                <p class="text-sm font-medium text-gray-900" x-text="task.title"></p>
-                                <p class="mt-1 text-sm text-gray-500" x-show="task.description" x-text="task.description"></p>
-                                <p class="mt-1 text-xs text-gray-500" x-show="task.assigned_to_user_name">
-                                    <span>{{ __('Assigned To') }}:</span>
-                                    <span x-text="task.assigned_to_user_name"></span>
-                                </p>
+            <div class="grid w-full min-w-0 gap-4 sm:gap-6 lg:grid-cols-4 lg:items-start" data-purchase-order-detail-grid>
+                <div class="min-w-0 space-y-0 sm:space-y-6 lg:col-span-3" data-purchase-order-main-column>
+                    <x-detail-section-card title="Details" :default-open="$detailsDefaultOpen">
+                        <div class="grid gap-6 sm:grid-cols-2">
+                            <div class="max-w-sm">
+                                <label class="block text-xs font-semibold uppercase text-gray-500">
+                                    Supplier
+                                    <span class="mt-2 flex items-center gap-2">
+                                        <select class="w-full rounded border-gray-300 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500" x-model="form.supplier_id" :disabled="!isEditable" x-init="$nextTick(() => { $el.value = form.supplier_id })" x-effect="$nextTick(() => { $el.value = form.supplier_id })" x-on:change="autosaveField('supplier_id')">
+                                            <option value="">Select supplier</option>
+                                            <template x-for="supplier in suppliers" :key="supplier.id">
+                                                <option x-bind:value="supplier.id" x-text="supplier.company_name"></option>
+                                            </template>
+                                        </select>
+                                        <svg data-autosave-success-icon class="h-5 w-5 shrink-0 text-lime-400" x-show="savedFields.supplier_id" x-cloak xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75" />
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                                        </svg>
+                                    </span>
+                                </label>
+                                <p class="mt-1 text-xs text-red-600" x-text="headerErrors.supplier_id[0]"></p>
                             </div>
-
-                            <div class="flex items-center gap-2">
-                                <span
-                                    class="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium"
-                                    x-bind:class="task.is_completed ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'"
-                                    x-text="task.is_completed ? 'Completed' : 'Open'"
-                                ></span>
-
-                                <button
-                                    type="button"
-                                    class="inline-flex h-9 items-center justify-center rounded-lg border border-gray-300 px-3 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
-                                    x-show="task.can_complete"
-                                    x-on:click="completeWorkflowTask(task)"
-                                    x-bind:disabled="workflowTaskSavingIds.includes(task.id)"
-                                >
-                                    {{ __('Complete') }}
-                                </button>
+                            <div class="max-w-xs">
+                                <label class="block text-xs font-semibold uppercase text-gray-500">
+                                    Order date
+                                    <span class="mt-2 flex items-center gap-2">
+                                        <input type="date" class="w-full rounded border-gray-300 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500" x-model="form.order_date" :disabled="!isEditable" x-on:change="autosaveField('order_date')" x-on:blur="autosaveField('order_date')" />
+                                        <svg data-autosave-success-icon class="h-5 w-5 shrink-0 text-lime-400" x-show="savedFields.order_date" x-cloak xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75" />
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                                        </svg>
+                                    </span>
+                                </label>
+                                <p class="mt-1 text-xs text-red-600" x-text="headerErrors.order_date[0]"></p>
+                            </div>
+                            <div class="max-w-sm">
+                                <label class="block text-xs font-semibold uppercase text-gray-500">
+                                    PO number
+                                    <span class="mt-2 flex items-center gap-2">
+                                        <input type="text" class="w-full rounded border-gray-300 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500" x-model="form.po_number" :disabled="!isEditable" x-on:blur="autosaveField('po_number')" />
+                                        <svg data-autosave-success-icon class="h-5 w-5 shrink-0 text-lime-400" x-show="savedFields.po_number" x-cloak xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75" />
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                                        </svg>
+                                    </span>
+                                </label>
+                                <p class="mt-1 text-xs text-red-600" x-text="headerErrors.po_number[0]"></p>
                             </div>
                         </div>
-                    </template>
-                </div>
-            </x-detail-section-card>
+                        <p class="mt-3 text-xs text-red-600" x-text="headerError"></p>
+                    </x-detail-section-card>
 
             <x-detail-section-card title="Items" :default-open="true">
                 <div class="space-y-4">
@@ -238,11 +178,12 @@
                                                 <x-ui.smart-number-input
                                                     name="pack_count"
                                                     type="integer"
+                                                    inputmode="numeric"
                                                     class="w-20"
                                                     x-model="line.pack_count"
                                                     disabled-expression="!isEditable"
-                                                    after-blur="autosaveLineField(line, 'pack_count')"
-                                                    after-change="autosaveLineField(line, 'pack_count')"
+                                                    after-focus="$el.setSelectionRange($el.value.length, $el.value.length)"
+                                                    x-on:smart-number-input:changed="autosaveLineField(line, 'pack_count', $event.detail)"
                                                 />
                                                 <span class="inline-flex h-5 w-5 shrink-0 items-center justify-center">
                                                     <svg data-line-autosave-success-icon class="h-5 w-5 text-lime-400 transition-opacity" x-bind:class="lineFieldSaved(line, 'pack_count') ? 'opacity-100' : 'opacity-0'" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
@@ -261,8 +202,7 @@
                                                     class="w-20"
                                                     x-model="line.tax_percent"
                                                     disabled-expression="!isEditable"
-                                                    after-blur="autosaveLineField(line, 'tax_percent')"
-                                                    after-change="autosaveLineField(line, 'tax_percent')"
+                                                    x-on:smart-number-input:changed="autosaveLineField(line, 'tax_percent', $event.detail)"
                                                 />
                                                 <span class="inline-flex h-5 w-5 shrink-0 items-center justify-center">
                                                     <svg data-line-autosave-success-icon class="h-5 w-5 text-lime-400 transition-opacity" x-bind:class="lineFieldSaved(line, 'tax_percent') ? 'opacity-100' : 'opacity-0'" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
@@ -309,6 +249,7 @@
                                 <x-ui.smart-number-input
                                     name="pack_count"
                                     type="integer"
+                                    inputmode="numeric"
                                     x-model="editForm.pack_count"
                                 />
                                 <span class="mt-1 block text-xs text-red-600" x-text="editErrors.pack_count[0]"></span>
@@ -340,7 +281,10 @@
                 </div>
             </x-detail-section-card>
 
-            <x-detail-section-card title="Totals" :default-open="true">
+                </div>
+
+                <div class="min-w-0 space-y-0 sm:space-y-6 lg:col-span-1" data-purchase-order-side-column>
+                    <x-detail-section-card title="Totals" :default-open="true">
                 <dl class="divide-y divide-gray-100 text-sm">
                     <div class="flex items-center justify-between py-3">
                         <dt class="text-gray-600">Subtotal</dt>
@@ -349,19 +293,21 @@
                     <div class="flex items-center justify-between py-3">
                         <dt class="text-gray-600">Shipping</dt>
                         <dd class="flex items-center gap-2 font-medium text-gray-900">
+                            <span class="inline-flex h-5 w-5 shrink-0 items-center justify-center">
+                                <svg data-autosave-success-icon class="h-5 w-5 text-lime-400 transition-opacity" x-bind:class="savedFields.shipping_amount ? 'opacity-100' : 'opacity-0'" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75" />
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                                </svg>
+                            </span>
                             <x-ui.smart-number-input
                                 name="shipping_amount"
                                 type="money"
+                                inputmode="decimal"
                                 class="w-28"
                                 x-model="form.shipping_amount"
                                 disabled-expression="!isEditable"
-                                after-blur="autosaveField('shipping_amount')"
-                                after-change="autosaveField('shipping_amount')"
+                                x-on:smart-number-input:changed="autosaveField('shipping_amount', $event.detail)"
                             />
-                            <svg data-autosave-success-icon class="h-5 w-5 shrink-0 text-lime-400" x-show="savedFields.shipping_amount" x-cloak xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75" />
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
-                            </svg>
                         </dd>
                     </div>
                     <div class="flex items-center justify-between py-3">
@@ -374,68 +320,116 @@
                     </div>
                 </dl>
             </x-detail-section-card>
+                </div>
 
-            <x-detail-section-card title="Receipt History" :default-open="false">
-                <div class="overflow-x-auto" x-show="receipts.length > 0">
-                    <table class="min-w-full divide-y divide-gray-100">
-                        <thead>
-                            <tr>
-                                <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Received At</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Received By</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Reference</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Notes</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Lines</th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-gray-100">
-                            <template x-for="receipt in receipts" :key="receipt.id">
-                                <tr>
-                                    <td class="px-4 py-3 text-sm text-gray-700" x-text="receipt.received_at || '—'"></td>
-                                    <td class="px-4 py-3 text-sm text-gray-700" x-text="receipt.received_by || '—'"></td>
-                                    <td class="px-4 py-3 text-sm text-gray-700" x-text="receipt.reference || '—'"></td>
-                                    <td class="px-4 py-3 text-sm text-gray-700" x-text="receipt.notes || '—'"></td>
-                                    <td class="px-4 py-3 text-sm text-gray-700" x-text="receiptLineSummary(receipt)"></td>
-                                </tr>
+                <div class="min-w-0 space-y-0 sm:space-y-6 lg:col-span-3" data-purchase-order-main-lower-column>
+                    <x-notes-feed :config="$payload['notesFeed']" />
+
+                    <x-detail-section-card
+                        title="Tasks"
+                        :description="__('Complete current stage tasks before moving the purchase order forward.')"
+                        :default-open="false"
+                    >
+                        <div class="divide-y divide-gray-100 rounded-xl border border-gray-200 bg-white">
+                            <template x-if="(workflow.currentStageTasks || []).length === 0">
+                                <div class="px-4 py-4 text-sm text-gray-500">{{ __('No tasks for the current workflow stage.') }}</div>
                             </template>
-                        </tbody>
-                    </table>
-                </div>
-                <div class="rounded-lg border border-dashed border-gray-200 bg-gray-50 p-4 text-sm text-gray-600" x-show="receipts.length === 0">
-                    No receipts yet.
-                </div>
-            </x-detail-section-card>
 
-            <x-detail-section-card title="Short-Close History" :default-open="false">
-                <div class="overflow-x-auto" x-show="shortClosures.length > 0">
-                    <table class="min-w-full divide-y divide-gray-100">
-                        <thead>
-                            <tr>
-                                <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Short-Closed At</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Short-Closed By</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Reference</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Notes</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Lines</th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-gray-100">
-                            <template x-for="shortClose in shortClosures" :key="shortClose.id">
-                                <tr>
-                                    <td class="px-4 py-3 text-sm text-gray-700" x-text="shortClose.short_closed_at || '—'"></td>
-                                    <td class="px-4 py-3 text-sm text-gray-700" x-text="shortClose.short_closed_by || '—'"></td>
-                                    <td class="px-4 py-3 text-sm text-gray-700" x-text="shortClose.reference || '—'"></td>
-                                    <td class="px-4 py-3 text-sm text-gray-700" x-text="shortClose.notes || '—'"></td>
-                                    <td class="px-4 py-3 text-sm text-gray-700" x-text="shortCloseLineSummary(shortClose)"></td>
-                                </tr>
+                            <template x-for="task in workflow.currentStageTasks || []" :key="task.id">
+                                <div class="flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+                                    <div class="min-w-0 flex-1">
+                                        <p class="text-sm font-medium text-gray-900" x-text="task.title"></p>
+                                        <p class="mt-1 text-sm text-gray-500" x-show="task.description" x-text="task.description"></p>
+                                        <p class="mt-1 text-xs text-gray-500" x-show="task.assigned_to_user_name">
+                                            <span>{{ __('Assigned To') }}:</span>
+                                            <span x-text="task.assigned_to_user_name"></span>
+                                        </p>
+                                    </div>
+
+                                    <div class="flex items-center gap-2">
+                                        <span
+                                            class="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium"
+                                            x-bind:class="task.is_completed ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'"
+                                            x-text="task.is_completed ? 'Completed' : 'Open'"
+                                        ></span>
+
+                                        <button
+                                            type="button"
+                                            class="inline-flex h-9 items-center justify-center rounded-lg border border-gray-300 px-3 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                                            x-show="task.can_complete"
+                                            x-on:click="completeWorkflowTask(task)"
+                                            x-bind:disabled="workflowTaskSavingIds.includes(task.id)"
+                                        >
+                                            {{ __('Complete') }}
+                                        </button>
+                                    </div>
+                                </div>
                             </template>
-                        </tbody>
-                    </table>
-                </div>
-                <div class="rounded-lg border border-dashed border-gray-200 bg-gray-50 p-4 text-sm text-gray-600" x-show="shortClosures.length === 0">
-                    No short-closes yet.
-                </div>
-            </x-detail-section-card>
+                        </div>
+                    </x-detail-section-card>
 
-            <x-notes-feed :config="$payload['notesFeed']" />
+                    <x-detail-section-card title="Receipt History" :default-open="false">
+                        <div class="overflow-x-auto" x-show="receipts.length > 0">
+                            <table class="min-w-full divide-y divide-gray-100">
+                                <thead>
+                                    <tr>
+                                        <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Received At</th>
+                                        <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Received By</th>
+                                        <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Reference</th>
+                                        <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Notes</th>
+                                        <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Lines</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-gray-100">
+                                    <template x-for="receipt in receipts" :key="receipt.id">
+                                        <tr>
+                                            <td class="px-4 py-3 text-sm text-gray-700" x-text="receipt.received_at || '—'"></td>
+                                            <td class="px-4 py-3 text-sm text-gray-700" x-text="receipt.received_by || '—'"></td>
+                                            <td class="px-4 py-3 text-sm text-gray-700" x-text="receipt.reference || '—'"></td>
+                                            <td class="px-4 py-3 text-sm text-gray-700" x-text="receipt.notes || '—'"></td>
+                                            <td class="px-4 py-3 text-sm text-gray-700" x-text="receiptLineSummary(receipt)"></td>
+                                        </tr>
+                                    </template>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="rounded-lg border border-dashed border-gray-200 bg-gray-50 p-4 text-sm text-gray-600" x-show="receipts.length === 0">
+                            No receipts yet.
+                        </div>
+                    </x-detail-section-card>
+
+                    <x-detail-section-card title="Short-Close History" :default-open="false">
+                        <div class="overflow-x-auto" x-show="shortClosures.length > 0">
+                            <table class="min-w-full divide-y divide-gray-100">
+                                <thead>
+                                    <tr>
+                                        <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Short-Closed At</th>
+                                        <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Short-Closed By</th>
+                                        <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Reference</th>
+                                        <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Notes</th>
+                                        <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Lines</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-gray-100">
+                                    <template x-for="shortClose in shortClosures" :key="shortClose.id">
+                                        <tr>
+                                            <td class="px-4 py-3 text-sm text-gray-700" x-text="shortClose.short_closed_at || '—'"></td>
+                                            <td class="px-4 py-3 text-sm text-gray-700" x-text="shortClose.short_closed_by || '—'"></td>
+                                            <td class="px-4 py-3 text-sm text-gray-700" x-text="shortClose.reference || '—'"></td>
+                                            <td class="px-4 py-3 text-sm text-gray-700" x-text="shortClose.notes || '—'"></td>
+                                            <td class="px-4 py-3 text-sm text-gray-700" x-text="shortCloseLineSummary(shortClose)"></td>
+                                        </tr>
+                                    </template>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="rounded-lg border border-dashed border-gray-200 bg-gray-50 p-4 text-sm text-gray-600" x-show="shortClosures.length === 0">
+                            No short-closes yet.
+                        </div>
+                    </x-detail-section-card>
+                </div>
+            </div>
+
         </div>
 
         <div
@@ -599,6 +593,7 @@
                                             <x-ui.smart-number-input
                                                 name="received_quantity"
                                                 type="integer"
+                                                inputmode="numeric"
                                                 min="0"
                                                 step="1"
                                                 x-model="line.received_quantity"

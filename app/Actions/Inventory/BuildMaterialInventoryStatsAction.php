@@ -48,7 +48,7 @@ class BuildMaterialInventoryStatsAction
         $netQuantity = bcsub($netQuantity, $openMakeIngredient, self::SCALE);
 
         $cards = collect([
-            $this->card('on_hand', 'On Hand', $onHand, $item),
+            $this->card('on_hand', 'On hand', $onHand, $item),
             $this->salesCard($item, $openSales),
             $this->purchaseCard($item, $openPurchase),
             $this->makeCard($item, $openMakeNet, $openMakeOutput, $openMakeIngredient),
@@ -210,7 +210,7 @@ class BuildMaterialInventoryStatsAction
             return null;
         }
 
-        return $this->card('open_sales', 'Open Sales Orders Qty', $quantity, $item);
+        return $this->card('open_sales', 'Open SO', $quantity, $item);
     }
 
     /**
@@ -222,7 +222,7 @@ class BuildMaterialInventoryStatsAction
             return null;
         }
 
-        return $this->card('open_purchase', 'Open Purchase Orders Qty', $quantity, $item);
+        return $this->card('open_purchase', 'Open PO', $quantity, $item);
     }
 
     /**
@@ -242,7 +242,7 @@ class BuildMaterialInventoryStatsAction
             return null;
         }
 
-        return $this->card('open_make', 'Open Make Orders Impact', $netQuantity, $item);
+        return $this->card('open_make', 'Open MO', $netQuantity, $item);
     }
 
     /**
@@ -250,13 +250,57 @@ class BuildMaterialInventoryStatsAction
      */
     private function card(string $key, string $label, string $quantity, Item $item): array
     {
+        $quantityDisplay = QuantityFormatter::formatForUom($quantity, $item->baseUom, 2);
+
         return [
             'key' => $key,
             'label' => $label,
             'quantity' => $quantity,
-            'quantity_display' => QuantityFormatter::formatForUom($quantity, $item->baseUom, 2),
+            'quantity_display' => $quantityDisplay,
+            'quantity_display_grouped' => $this->formatGroupedQuantity($quantityDisplay),
+            'compact_label' => $this->compactLabel($key, $label),
+            'mobile_label' => $this->mobileLabel($key, $label),
             'uom_symbol' => (string) ($item->baseUom?->symbol ?? ''),
         ];
+    }
+
+    private function compactLabel(string $key, string $label): string
+    {
+        return match ($key) {
+            'on_hand' => 'Hand',
+            'open_purchase' => 'PO',
+            'open_make' => 'MO',
+            'open_sales' => 'SO',
+            'net' => 'Net',
+            default => $label,
+        };
+    }
+
+    private function mobileLabel(string $key, string $label): string
+    {
+        return match ($key) {
+            'open_purchase' => 'PO Qty',
+            'open_make' => 'MO Qty',
+            'open_sales' => 'SO Qty',
+            default => $label,
+        };
+    }
+
+    private function formatGroupedQuantity(string $quantity): string
+    {
+        $trimmed = trim($quantity);
+
+        if ($trimmed === '' || ! preg_match('/^-?\d+(?:\.\d+)?$/', $trimmed)) {
+            return $quantity;
+        }
+
+        $isNegative = str_starts_with($trimmed, '-');
+        $absolute = $isNegative ? substr($trimmed, 1) : $trimmed;
+        [$wholePart, $fractionPart] = array_pad(explode('.', $absolute, 2), 2, '');
+        $groupedWhole = preg_replace('/\B(?=(\d{3})+(?!\d))/', ',', $wholePart) ?? $wholePart;
+        $formatted = $fractionPart === '' ? $groupedWhole : $groupedWhole . '.' . $fractionPart;
+
+        return $isNegative ? '-' . $formatted : $formatted;
     }
 
     private function sumReceivedForPurchaseOrderLine(int $lineId, int $tenantId): string

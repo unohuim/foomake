@@ -1,6 +1,6 @@
 <x-app-layout>
     <x-slot name="header">
-        <h2 class="font-semibold text-xl text-gray-800 leading-tight">
+        <h2 class="pt-8 font-semibold text-xl text-gray-800 leading-tight">
             {{ __('Materials') }}
         </h2>
     </x-slot>
@@ -14,13 +14,7 @@
         data-crud-config='@json($crudConfig)'
         x-data="materialsIndex"
     >
-        <div class="fixed top-6 right-6 z-50" x-show="toast.visible">
-            <div
-                class="rounded-md px-4 py-3 text-sm shadow-md"
-                :class="toast.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'"
-                x-text="toast.message"
-            ></div>
-        </div>
+        <x-ui.toast visible="toast.visible" type="toast.type" message="toast.message" />
 
         <div class="mx-auto flex h-full min-h-0 w-full max-w-7xl flex-1 flex-col overflow-hidden sm:px-6 lg:px-8">
             <div class="flex h-full min-h-0 flex-1 flex-col" data-crud-root></div>

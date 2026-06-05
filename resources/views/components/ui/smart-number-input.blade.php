@@ -21,6 +21,7 @@
     'afterInput' => null,
     'afterChange' => null,
     'afterBlur' => null,
+    'afterFocus' => null,
     'prefix' => null,
     'suffix' => null,
     'rawMode' => 'value',
@@ -90,6 +91,7 @@
             x-on:input="handleInput($event){{ $afterInput ? '; ' . $afterInput : '' }}"
             x-on:change="handleChange($event){{ $afterChange ? '; ' . $afterChange : '' }}"
             x-on:blur="handleBlur($event){{ $afterBlur ? '; ' . $afterBlur : '' }}"
+            @if ($afterFocus) x-on:focus="{{ $afterFocus }}" @endif
             @if ($disabledExpression) x-bind:disabled="{{ $disabledExpression }}" @endif
             @if ($readonlyExpression) x-bind:readonly="{{ $readonlyExpression }}" @endif
             @disabled($disabled)

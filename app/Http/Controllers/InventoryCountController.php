@@ -106,7 +106,7 @@ class InventoryCountController extends Controller
         $count = $this->findInventoryCount($request, $inventoryCount);
         $this->authorizeInventoryCountView($request, $count);
 
-        $count->load(['workflowStage', 'lines.item.baseUom']);
+        $count->load(['workflowStage', 'lines.item.baseUom', 'lines.uom']);
         $count->loadCount('lines');
 
         $items = Gate::allows('inventory-adjustments-execute')
@@ -162,6 +162,7 @@ class InventoryCountController extends Controller
         Gate::authorize('inventory-adjustments-execute');
 
         $validated = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
             'counted_at' => ['required', 'date'],
             'notes' => ['nullable', 'string'],
             'assigned_to_user_id' => [
@@ -191,6 +192,7 @@ class InventoryCountController extends Controller
                 'assigned_to_user_id' => isset($validated['assigned_to_user_id'])
                     ? (int) $validated['assigned_to_user_id']
                     : null,
+                'name' => $validated['name'],
                 'counted_at' => Carbon::parse($validated['counted_at']),
                 'workflow_stage_id' => null,
                 'notes' => $validated['notes'] ?? null,
@@ -253,6 +255,7 @@ class InventoryCountController extends Controller
 
         $validated = $request->validate($canEditMetadata
             ? [
+                'name' => ['sometimes', 'required', 'string', 'max:255'],
                 'counted_at' => ['required', 'date'],
                 'notes' => ['nullable', 'string'],
                 'assigned_to_user_id' => [
@@ -280,6 +283,10 @@ class InventoryCountController extends Controller
         }
 
         $count->notes = $validated['notes'] ?? null;
+
+        if ($canEditMetadata && array_key_exists('name', $validated)) {
+            $count->name = $validated['name'];
+        }
 
         if ($canEditMetadata) {
             $count->counted_at = Carbon::parse($validated['counted_at']);
@@ -444,11 +451,12 @@ class InventoryCountController extends Controller
         $canEditCountedQuantity = Gate::allows('inventory-adjustments-execute')
             && $this->ensureWorkflowStageCountedQuantityEditable($count) === null;
         $showsCountedQuantity = $count->workflow_stage_id !== null;
+        $perPage = $this->perPageFromRequest($request);
         $paginator = $count->lines()
             ->where('tenant_id', $request->user()->tenant_id)
-            ->with('item.baseUom')
+            ->with(['item.baseUom', 'uom'])
             ->orderByDesc('id')
-            ->paginate(10);
+            ->paginate($perPage);
 
         return response()->json([
             'data' => collect($paginator->items())
@@ -468,6 +476,8 @@ class InventoryCountController extends Controller
         $this->authorizeInventoryCountView($request, $count);
         $count->load('workflowStage');
 
+        $perPage = $this->perPageFromRequest($request);
+
         $paginator = Task::withoutGlobalScopes()
             ->where('tenant_id', $request->user()->tenant_id)
             ->where('workflow_domain_id', $count->workflowStage?->workflow_domain_id)
@@ -480,7 +490,7 @@ class InventoryCountController extends Controller
             ->with(['assignedTo', 'completedBy'])
             ->orderBy('sort_order')
             ->orderBy('id')
-            ->paginate(10);
+            ->paginate($perPage);
 
         return response()->json([
             'data' => collect($paginator->items())
@@ -521,15 +531,21 @@ class InventoryCountController extends Controller
             'notes' => ['nullable', 'string'],
         ]);
 
+        $item = Item::query()
+            ->where('tenant_id', $request->user()->tenant_id)
+            ->whereKey($validated['item_id'])
+            ->firstOrFail();
+
         $line = InventoryCountLine::query()->forceCreate([
             'tenant_id' => $request->user()->tenant_id,
             'inventory_count_id' => $count->id,
-            'item_id' => $validated['item_id'],
+            'item_id' => $item->id,
+            'uom_id' => $item->base_uom_id,
             'counted_quantity' => $validated['counted_quantity'] ?? null,
             'notes' => $validated['notes'] ?? null,
         ]);
 
-        $line->load('item.baseUom');
+        $line->load(['item.baseUom', 'uom']);
 
         return response()->json([
             'line' => $this->linePayload($line, false, false),
@@ -569,7 +585,7 @@ class InventoryCountController extends Controller
 
             $lineModel->counted_quantity = $validated['counted_quantity'] ?? null;
             $lineModel->save();
-            $lineModel->load('item.baseUom');
+            $lineModel->load(['item.baseUom', 'uom']);
 
             return response()->json([
                 'line' => $this->linePayload($lineModel, true, true),
@@ -598,12 +614,18 @@ class InventoryCountController extends Controller
             'notes' => ['nullable', 'string'],
         ]);
 
-        $lineModel->item_id = $validated['item_id'];
+        $item = Item::query()
+            ->where('tenant_id', $request->user()->tenant_id)
+            ->whereKey($validated['item_id'])
+            ->firstOrFail();
+
+        $lineModel->item_id = $item->id;
+        $lineModel->uom_id = $item->base_uom_id;
         $lineModel->counted_quantity = $validated['counted_quantity'] ?? null;
         $lineModel->notes = $validated['notes'] ?? null;
         $lineModel->save();
 
-        $lineModel->load('item.baseUom');
+        $lineModel->load(['item.baseUom', 'uom']);
 
         $canEditCountedQuantity = $this->ensureWorkflowStageCountedQuantityEditable($count) === null;
         $showsCountedQuantity = $count->workflow_stage_id !== null;
@@ -636,7 +658,7 @@ class InventoryCountController extends Controller
 
         $remainingLines = $count->lines()
             ->where('tenant_id', $request->user()->tenant_id)
-            ->with('item.baseUom')
+            ->with(['item.baseUom', 'uom'])
             ->orderByDesc('id')
             ->get()
             ->map(fn (InventoryCountLine $remainingLine): array => $this->linePayload($remainingLine, false, false))
@@ -824,8 +846,9 @@ class InventoryCountController extends Controller
 
         return [
             'id' => $inventoryCount->id,
-            'counted_at' => $inventoryCount->counted_at->format('Y-m-d H:i'),
-            'counted_at_iso' => $inventoryCount->counted_at->format('Y-m-d\TH:i'),
+            'name' => $inventoryCount->name,
+            'counted_at' => $inventoryCount->counted_at->format('F j, Y'),
+            'counted_at_iso' => $inventoryCount->counted_at->format('Y-m-d'),
             'notes' => $inventoryCount->notes ?? '',
             'can_edit_details' => $canEditMetadata,
             'can_edit_notes' => $canEditNotes,
@@ -835,7 +858,7 @@ class InventoryCountController extends Controller
             'can_edit_assignment' => $canEditMetadata,
             'show_details_section' => $showDetailsSection,
             'assignee_options' => $canViewMetadata
-                ? $this->tenantAssigneeOptionsPayload((int) $inventoryCount->tenant_id)
+                ? $this->tenantAssigneeOptionsPayload((int) $inventoryCount->tenant_id, $inventoryCount->assignedToUser)
                 : [],
             'status' => $inventoryCount->status,
             'lifecycle_status_label' => $inventoryCount->status === 'posted' ? 'Posted' : 'Draft',
@@ -849,8 +872,8 @@ class InventoryCountController extends Controller
             'workflow_status_label' => $this->workflowStatusLabel($inventoryCount),
             'is_draft_setup' => $this->isDraftSetup($inventoryCount),
             'is_submitted' => $inventoryCount->workflow_stage_id !== null && $inventoryCount->posted_at === null,
-            'posted_at_display' => $inventoryCount->posted_at?->format('Y-m-d H:i'),
-            'posted_at_iso' => $inventoryCount->posted_at?->format('Y-m-d\TH:i'),
+            'posted_at_display' => $inventoryCount->posted_at?->format('F j, Y'),
+            'posted_at_iso' => $inventoryCount->posted_at?->format('Y-m-d'),
             'lines_count' => $inventoryCount->lines_count,
             'current_stage_tasks' => $this->currentStageTasksData($inventoryCount),
             'show_url' => route('inventory.counts.show', $inventoryCount),
@@ -868,13 +891,27 @@ class InventoryCountController extends Controller
      *
      * @return array<int, array{value: string, label: string}>
      */
-    private function tenantAssigneeOptionsPayload(int $tenantId): array
+    private function tenantAssigneeOptionsPayload(int $tenantId, ?User $selectedUser = null): array
     {
-        return app(WorkflowAssignmentPermissions::class)
+        $eligibleUsers = app(WorkflowAssignmentPermissions::class)
             ->eligibleUsersQuery($tenantId, 'inventory')
             ->orderBy('name')
             ->orderBy('id')
-            ->get()
+            ->get();
+
+        if (
+            $selectedUser !== null
+            && (int) $selectedUser->tenant_id === $tenantId
+            && ! $eligibleUsers->contains(fn (User $user): bool => (int) $user->id === (int) $selectedUser->id)
+        ) {
+            $eligibleUsers->push($selectedUser);
+        }
+
+        return $eligibleUsers
+            ->sortBy([
+                ['name', 'asc'],
+                ['id', 'asc'],
+            ])
             ->map(fn (User $user): array => [
                 'value' => (string) $user->id,
                 'label' => $user->name,
@@ -948,7 +985,8 @@ class InventoryCountController extends Controller
 
         if ($search !== '') {
             $query->where(function ($builder) use ($search): void {
-                $builder->where('notes', 'like', '%' . $search . '%');
+                $builder->where('name', 'like', '%' . $search . '%')
+                    ->orWhere('notes', 'like', '%' . $search . '%');
 
                 if (ctype_digit($search)) {
                     $builder->orWhereKey((int) $search);
@@ -957,6 +995,9 @@ class InventoryCountController extends Controller
         }
 
         return match ($sortColumn) {
+            'name' => $query
+                ->orderBy('name', $direction)
+                ->orderByDesc('counted_at'),
             'status' => $query
                 ->orderByRaw('CASE WHEN posted_at IS NULL THEN 0 ELSE 1 END ' . $direction)
                 ->orderByDesc('counted_at'),
@@ -982,16 +1023,17 @@ class InventoryCountController extends Controller
     {
         return [
             'id' => $inventoryCount->id,
-            'counted_at' => $inventoryCount->counted_at->format('Y-m-d H:i'),
-            'counted_at_iso' => $inventoryCount->counted_at->format('Y-m-d\TH:i'),
+            'name' => $inventoryCount->name,
+            'counted_at' => $inventoryCount->counted_at->format('F j, Y'),
+            'counted_at_iso' => $inventoryCount->counted_at->format('Y-m-d'),
             'notes' => $inventoryCount->notes ?? '',
             'status' => $inventoryCount->status,
             'status_label' => $this->workflowStatusLabel($inventoryCount),
             'lifecycle_status' => $inventoryCount->status,
             'assigned_to_user_id' => $inventoryCount->assigned_to_user_id,
             'counter_email' => $inventoryCount->assignedToUser?->email,
-            'posted_at' => $inventoryCount->posted_at?->format('Y-m-d H:i') ?? '—',
-            'posted_at_iso' => $inventoryCount->posted_at?->format('Y-m-d\TH:i'),
+            'posted_at' => $inventoryCount->posted_at?->format('F j, Y') ?? '—',
+            'posted_at_iso' => $inventoryCount->posted_at?->format('Y-m-d'),
             'lines_count' => $inventoryCount->lines_count ?? 0,
             'show_url' => route('inventory.counts.show', $inventoryCount),
             'update_url' => route('inventory.counts.update', $inventoryCount),
@@ -1021,15 +1063,16 @@ class InventoryCountController extends Controller
                 'delete' => url('/inventory/counts/{id}'),
             ],
             'detailUrlTemplate' => url('/inventory/counts/{id}'),
-            'columns' => ['counted_at', 'status', 'counter', 'lines_count', 'posted_at'],
+            'columns' => ['name', 'counted_at', 'status', 'counter', 'lines_count', 'posted_at'],
             'headers' => [
+                'name' => 'Name',
                 'counted_at' => 'Counted At',
                 'status' => 'Status',
                 'counter' => 'Assigned',
                 'lines_count' => 'Items',
                 'posted_at' => 'Posted At',
             ],
-            'sortable' => ['counted_at', 'status', 'lines_count', 'posted_at'],
+            'sortable' => ['name', 'counted_at', 'status', 'lines_count', 'posted_at'],
             'labels' => [
                 'searchPlaceholder' => 'Search inventory counts',
                 'createTitle' => 'Create Inventory Count',
@@ -1044,9 +1087,12 @@ class InventoryCountController extends Controller
             ],
             'rowDisplay' => [
                 'columns' => [
-                    'counted_at' => [
+                    'name' => [
                         'kind' => 'linked-text',
                         'urlExpression' => 'record.show_url',
+                    ],
+                    'counted_at' => [
+                        'kind' => 'text',
                     ],
                     'status' => ['kind' => 'text'],
                     'counter' => ['kind' => 'text'],
@@ -1055,7 +1101,7 @@ class InventoryCountController extends Controller
                 ],
             ],
             'mobileCard' => [
-                'titleExpression' => "record.counted_at || '—'",
+                'titleExpression' => "record.name || '—'",
                 'subtitleExpression' => 'record.status_label || "—"',
                 'bodyExpression' => 'inventoryCountSummary(record)',
             ],
@@ -1096,18 +1142,20 @@ class InventoryCountController extends Controller
         bool $showsCountedQuantity = false
     ): array
     {
+        $lineUom = $line->snapshotUom() ?? $line->uom ?? $line->item?->baseUom;
+
         return [
             'id' => $line->id,
             'item_id' => $line->item_id,
-            'item_display' => $line->item->name . ' (' . $line->item->baseUom->symbol . ')',
+            'item_display' => $line->item->name . ' (' . $lineUom?->symbol . ')',
             'counted_quantity' => $line->counted_quantity,
             'counted_quantity_display' => $line->counted_quantity === null
                 ? '—'
-                : QuantityFormatter::formatForUom($line->counted_quantity, $line->item?->baseUom),
+                : QuantityFormatter::formatForUom($line->counted_quantity, $lineUom),
             'counted_quantity_input' => $line->counted_quantity === null
                 ? ''
-                : QuantityFormatter::formatForUom($line->counted_quantity, $line->item?->baseUom),
-            'uom_display_precision' => (int) ($line->item?->baseUom?->display_precision ?? QuantityFormatter::MAX_PRECISION),
+                : QuantityFormatter::formatForUom($line->counted_quantity, $lineUom),
+            'uom_display_precision' => (int) ($lineUom?->display_precision ?? QuantityFormatter::MAX_PRECISION),
             'can_edit_counted_quantity' => $canEditCountedQuantity,
             'shows_counted_quantity' => $showsCountedQuantity,
             'notes' => $line->notes ?? '',
@@ -1329,6 +1377,18 @@ class InventoryCountController extends Controller
             'per_page' => $paginator->perPage(),
             'total' => $paginator->total(),
         ];
+    }
+
+    /**
+     * Resolve the page size for reusable detail-section list endpoints.
+     */
+    private function perPageFromRequest(Request $request): int
+    {
+        $validated = $request->validate([
+            'per_page' => ['nullable', 'integer', 'min:1', 'max:50'],
+        ]);
+
+        return (int) ($validated['per_page'] ?? 5);
     }
 
     /**

@@ -8,7 +8,7 @@
                 'current' => false,
             ],
             [
-                'label' => 'ID# ' . $inventoryCount->id,
+                'label' => $inventoryCount->name,
                 'url' => null,
                 'current' => true,
             ],
@@ -18,13 +18,13 @@
     <x-slot name="header">
         <x-resource-detail-header-breadcrumb
             :items="$breadcrumbItems"
-            :title="__('Inventory Count')"
+            :title="$inventoryCount->name"
             title-class="font-semibold text-xl text-gray-800 leading-tight"
         >
             <x-slot name="metadata">
                 <div class="space-y-2">
                     <p class="text-sm font-medium text-gray-500">
-                        {{ $inventoryCount->counted_at->format('F j, Y \a\t g:i A') }}
+                        {{ $inventoryCount->counted_at->format('F j, Y') }}
                     </p>
 
                     <span
@@ -77,15 +77,8 @@
         @inventory-count-submit.window="submitToWorkflow()"
         @inventory-count-advance.window="advanceWorkflow()"
     >
-        <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 space-y-6">
-            <div x-cloak x-show="toast.show" class="fixed top-5 right-5 z-50">
-                <div
-                    class="px-4 py-2 rounded-md text-sm text-white"
-                    :class="toast.type === 'success' ? 'bg-green-600' : 'bg-red-600'"
-                >
-                    <span x-text="toast.message"></span>
-                </div>
-            </div>
+        <div class="max-w-7xl mx-auto space-y-0 sm:space-y-6 sm:px-6 lg:px-8">
+            <x-ui.toast visible="toast.show" type="toast.type" message="toast.message" />
 
             <x-ui.workflow-progress
                 :steps="$payload['workflowProgressSteps'] ?? []"
@@ -97,7 +90,7 @@
                     title="Details"
                     :description="($payload['count']['can_edit_details'] ?? false)
                         ? __('Update count metadata separately from material lines and workflow tasks.')
-                        : __('Review count notes separately from material lines and workflow tasks.')"
+                        : __('Review count metadata separately from material lines and workflow tasks.')"
                     :default-open="false"
                 >
                     <div class="space-y-3">
@@ -107,7 +100,7 @@
                                     <div class="space-y-1">
                                         <p class="text-[10px] font-semibold uppercase tracking-wide text-gray-500 sm:text-xs">{{ __('Count Date') }}</p>
                                         <input
-                                            type="datetime-local"
+                                            type="date"
                                             class="block w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:cursor-not-allowed disabled:bg-gray-100"
                                             x-model="details.counted_at_iso"
                                             x-bind:disabled="!count.can_edit_counted_at || detailsCountedAtSaving"
@@ -132,18 +125,6 @@
                                 @endif
                             </div>
                         @endif
-
-                        <div class="space-y-1">
-                            <p class="text-[10px] font-semibold uppercase tracking-wide text-gray-500 sm:text-xs">{{ __('Notes') }}</p>
-                            <textarea
-                                rows="3"
-                                class="block w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:cursor-not-allowed disabled:bg-gray-100"
-                                x-model="details.notes"
-                                x-bind:disabled="!count.can_edit_notes || detailsNotesSaving"
-                                x-on:change="saveDetails('notes')"
-                                x-on:blur="saveDetails('notes')"
-                            ></textarea>
-                        </div>
                     </div>
                 </x-detail-section-card>
             @endif
@@ -158,7 +139,7 @@
                     $currentStageTasks = $payload['count']['current_stage_tasks'] ?? [];
                 @endphp
 
-                <section class="overflow-visible rounded-2xl border border-gray-200 bg-white shadow-sm" data-js-crud-section-card>
+                <section class="-mx-1 !-mt-px overflow-visible border border-gray-500 bg-white shadow-sm first:!mt-0 sm:mx-0 sm:!mt-6 sm:first:!mt-0 sm:rounded-2xl sm:border-gray-200" data-js-crud-section-card>
                     <div class="flex items-start justify-between gap-3 px-3 py-4 sm:px-6 sm:py-5">
                         <div class="min-w-0 flex-1">
                             <h3 class="text-lg font-semibold text-gray-900">{{ __('Tasks') }}</h3>

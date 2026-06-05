@@ -236,7 +236,7 @@ export function mount(rootEl, payload) {
 
             this.toast.timeoutId = setTimeout(() => {
                 this.toast.visible = false;
-            }, 2500);
+            }, 1500);
         },
         syncHeaderState() {
             window.dispatchEvent(new CustomEvent('make-order-header-sync', {
@@ -535,7 +535,7 @@ export function mount(rootEl, payload) {
                     if (this.ingredientSavedState[line.id] === 'saved') {
                         this.ingredientSavedState[line.id] = '';
                     }
-                }, 1500);
+                }, 1000);
             } catch (error) {
                 this.ingredientSavedState[line.id] = 'error';
                 this.showToast('error', 'Unable to save ingredient quantity.');

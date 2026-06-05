@@ -14,7 +14,7 @@ rules:
   - Products remain normal items; the sales-facing products view is filtered from items where is_sellable = true.
   - On-hand quantity is computed from stock_moves for stockable items.
   - Stockable Material detail pages may expose an inventory stats strip directly under the shared header.
-  - The Material detail inventory stats strip always includes On Hand and Net Qty for stockable items.
+  - The Material detail inventory stats strip always includes On hand and Net Qty for stockable items.
   - The Material detail inventory stats strip adds only the qualifying dynamic cards for open sales demand, open purchase supply, and open make-order impact.
   - Material detail inventory stats must remain tenant-scoped and must use BCMath-safe canonical scale-6 quantities.
   - Material detail inventory stats use make_orders.expected_output_qty for non-terminal non-cancelled make orders.
@@ -23,6 +23,8 @@ rules:
   - Starting quantity is valid only for stockable items; non-stockable items must reject starting quantity input instead of silently creating no inventory effect.
   - Purchase receipt inventory impact is derived from posted receipt stock moves recorded in item base units for stockable items only.
   - Inventory is derived and not stored on the items table.
+  - On-hand inventory is read from per-UoM inventory balances and converted to the item's current base UoM before display.
+  - Changing an item's base UoM is allowed only when the current base UoM and existing non-zero inventory balances can convert to the requested base UoM.
   - Planning price is stored as integer cents in default_price_cents with an uppercase 3-letter default_price_currency_code.
   - Temporary external product identities may be stored on items through external_source and external_id.
   - Product import duplicate identity is tenant-scoped and based on normalized external_source plus exact trimmed external_id when both are present.
@@ -31,6 +33,7 @@ rules:
   - Existing-item ecommerce imports must preserve the import summary contract used by fulfillment-recipe creation flows and must not create duplicate items or duplicate fulfillment recipes.
 public_interface:
   - stockMoves()
+  - inventoryBalances()
   - onHandQuantity()
   - itemUomConversions()
   - default_price_cents (attribute)

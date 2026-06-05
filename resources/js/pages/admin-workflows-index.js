@@ -89,7 +89,7 @@ export function mount(rootEl, payload) {
 
             this.toast.timeoutId = setTimeout(() => {
                 this.toast.visible = false;
-            }, 2500);
+            }, 1500);
         },
         openStageCreate() {
             this.stageFormMode = 'create';

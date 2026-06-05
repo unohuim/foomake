@@ -49,6 +49,7 @@ export function mount(rootEl, payload) {
     const emptyForm = () => ({
         name: '',
         base_uom_id: '',
+        is_active: true,
         is_stockable: false,
         is_purchasable: false,
         is_sellable: false,
@@ -89,6 +90,7 @@ export function mount(rootEl, payload) {
         errors: emptyErrors(),
         generalError: '',
         form: emptyForm(),
+        activeToggleSavingIds: [],
         isEditOpen: false,
         isEditSubmitting: false,
         editErrors: emptyErrors(),
@@ -131,6 +133,16 @@ export function mount(rootEl, payload) {
 
             return name || symbol || '—';
         },
+        materialMobileUomLabel(record) {
+            const name = record?.base_uom_name || '';
+            const symbol = record?.base_uom_symbol || '';
+
+            if (name && symbol) {
+                return `${name} (${symbol})`;
+            }
+
+            return name || symbol || '—';
+        },
         materialFlagsLabel(record) {
             const flags = [];
 
@@ -151,6 +163,51 @@ export function mount(rootEl, payload) {
             }
 
             return flags.length > 0 ? flags.join(', ') : '—';
+        },
+        materialFlagBadges(record) {
+            const badges = [];
+
+            if (record?.is_stockable) {
+                badges.push('Stockable');
+            }
+
+            if (record?.is_purchasable) {
+                badges.push('Purchasable');
+            }
+
+            if (record?.is_sellable) {
+                badges.push('Sellable');
+            }
+
+            if (record?.is_manufacturable) {
+                badges.push('Manufacturable');
+            }
+
+            return badges;
+        },
+        materialFlagIconBadges(record) {
+            const badges = [];
+
+            if (record?.is_stockable) {
+                badges.push({ icon: 'rectangle-group', label: 'Stockable' });
+            }
+
+            if (record?.is_purchasable) {
+                badges.push({ icon: 'credit-card', label: 'Purchasable' });
+            }
+
+            if (record?.is_sellable) {
+                badges.push({ icon: 'shopping-cart', label: 'Sellable' });
+            }
+
+            if (record?.is_manufacturable) {
+                badges.push({ icon: 'cog', label: 'Manufacturable' });
+            }
+
+            return badges;
+        },
+        canManageMaterials() {
+            return Boolean(this.crud.permissions?.showCreate);
         },
         materialCellText(record, column) {
             if (column === 'base_uom') {
@@ -174,7 +231,7 @@ export function mount(rootEl, payload) {
 
             this.toast.timeoutId = setTimeout(() => {
                 this.toast.visible = false;
-            }, 2500);
+            }, 1500);
         },
         async fetchMaterials() {
             await this.crud.fetchList({
@@ -258,6 +315,7 @@ export function mount(rootEl, payload) {
             this.editForm = {
                 name: record.name || '',
                 base_uom_id: record.base_uom_id ? String(record.base_uom_id) : '',
+                is_active: Boolean(record.is_active),
                 is_stockable: Boolean(record.is_stockable),
                 is_purchasable: Boolean(record.is_purchasable),
                 is_sellable: Boolean(record.is_sellable),
@@ -268,6 +326,65 @@ export function mount(rootEl, payload) {
             this.editErrors = emptyErrors();
             this.editGeneralError = '';
             this.isEditOpen = true;
+        },
+        async toggleMaterialActive(toggleDetail) {
+            if (!this.canManageMaterials()) {
+                return;
+            }
+
+            const record = toggleDetail?.record || toggleDetail?.row;
+
+            if (!record?.id || this.activeToggleSavingIds.includes(record.id)) {
+                return;
+            }
+
+            const endpoint = buildItemEndpoint(this.endpoints.update, record.id);
+
+            if (!endpoint) {
+                this.showToast('error', 'Something went wrong. Please try again.');
+                return;
+            }
+
+            const previousValue = Boolean(record.is_active);
+            const nextValue = Boolean(toggleDetail.checked);
+            record.is_active = nextValue;
+            this.activeToggleSavingIds = [...this.activeToggleSavingIds, record.id];
+
+            const response = await fetch(endpoint, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Accept: 'application/json',
+                    'X-CSRF-TOKEN': this.csrfToken,
+                },
+                body: JSON.stringify({
+                    name: record.name || '',
+                    base_uom_id: record.base_uom_id,
+                    is_active: nextValue,
+                    is_stockable: Boolean(record.is_stockable),
+                    is_purchasable: Boolean(record.is_purchasable),
+                    is_sellable: Boolean(record.is_sellable),
+                    is_manufacturable: Boolean(record.is_manufacturable),
+                    default_price_amount: record.default_price_amount || '',
+                    default_price_currency_code: record.default_price_currency_code || '',
+                }),
+            });
+
+            if (!response.ok) {
+                record.is_active = previousValue;
+                this.activeToggleSavingIds = this.activeToggleSavingIds.filter((id) => id !== record.id);
+                this.showToast('error', 'Something went wrong. Please try again.');
+                return;
+            }
+
+            const data = await response.json();
+            const updated = data?.data || {};
+            record.is_active = Boolean(updated.is_active);
+
+            await this.fetchMaterials();
+            await refreshNavigationState(this.navigationStateUrl);
+            this.activeToggleSavingIds = this.activeToggleSavingIds.filter((id) => id !== record.id);
+            this.showToast('success', `${record.name || 'Material'} ${record.is_active ? 'Active' : 'Inactive'}`);
         },
         closeEdit() {
             this.isEditOpen = false;

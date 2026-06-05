@@ -292,6 +292,7 @@ beforeEach(function (): void {
     $this->makeInventoryCount = function (Tenant $tenant, User $assignedUser, array $attributes = []): InventoryCount {
         return InventoryCount::query()->create(array_merge([
             'tenant_id' => $tenant->id,
+            'name' => 'Material section count',
             'created_by_user_id' => $assignedUser->id,
             'tasked_by_user_id' => $assignedUser->id,
             'assigned_to_user_id' => $assignedUser->id,
@@ -311,6 +312,7 @@ beforeEach(function (): void {
             'tenant_id' => $tenant->id,
             'inventory_count_id' => $count->id,
             'item_id' => $item->id,
+            'uom_id' => $item->base_uom_id,
             'counted_quantity' => $countedQuantity,
             'notes' => null,
         ], $attributes));
@@ -617,6 +619,97 @@ it('16. no new bespoke accordion or section abstraction is introduced', function
         ->and($sectionSource)->toContain('data-js-crud-section-card')
         ->and($pageSource)->not->toContain('mountRecipesAccordion')
         ->and($pageSource)->not->toContain('mountMakeOrdersAccordion');
+});
+
+it('16a. material detail header renders all material type toggle buttons', function (): void {
+    $viewSource = file_get_contents(resource_path('views/materials/show.blade.php'));
+
+    expect($viewSource)->toContain('data-material-type-toggles')
+        ->and($viewSource)->toContain('<x-slot name="titleSuffix">')
+        ->and($viewSource)->toContain('data-material-name-editor')
+        ->and($viewSource)->toContain('x-data="materialTypeToggles"')
+        ->and($viewSource)->toContain('data-material-base-uom-dropdown')
+        ->and($viewSource)->toContain('sm:justify-start')
+        ->and($viewSource)->toContain('sm:ml-8')
+        ->and($viewSource)->toContain('materialTypeToggles')
+        ->and($viewSource)->toContain("typeToggle.icon === 'shopping-cart'")
+        ->and($viewSource)->toContain("typeToggle.icon === 'credit-card'")
+        ->and($viewSource)->toContain("typeToggle.icon === 'cog'")
+        ->and($viewSource)->toContain("typeToggle.icon === 'rectangle-group'")
+        ->and($viewSource)->toContain('rounded-full border-2 bg-white')
+        ->and($viewSource)->toContain("'border-blue-600 text-blue-600 hover:border-blue-500 hover:text-blue-500'")
+        ->and($viewSource)->toContain("'border-gray-300 text-gray-300 hover:border-blue-600 hover:text-blue-600'")
+        ->and($viewSource)->toContain('h-[1.125rem] w-[1.125rem]')
+        ->and($viewSource)->toContain('stroke-width="2"')
+        ->and($viewSource)->toContain('<x-ui.toast visible="toast.visible" type="toast.type" message="toast.message" />')
+        ->and($viewSource)->not->toContain('materialTypeToast.message');
+});
+
+it('16b. material detail payload exposes type toggle state and update authorization', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $uom = ($this->makeUom)($tenant);
+    $item = ($this->makeItem)($tenant, $uom, [
+        'is_stockable' => true,
+        'is_sellable' => true,
+        'is_purchasable' => false,
+        'is_manufacturable' => true,
+    ]);
+
+    ($this->grantPermissions)($user, ['inventory-materials-view', 'inventory-materials-manage']);
+
+    $payload = ($this->extractPayload)(($this->getShow)($user, $item), 'materials-show-payload');
+
+    expect(data_get($payload, 'item.base_uom_id'))->toBe($uom->id)
+        ->and(data_get($payload, 'item.is_stockable'))->toBeTrue()
+        ->and(data_get($payload, 'item.is_sellable'))->toBeTrue()
+        ->and(data_get($payload, 'item.is_purchasable'))->toBeFalse()
+        ->and(data_get($payload, 'item.is_manufacturable'))->toBeTrue()
+        ->and(data_get($payload, 'item.can_manage'))->toBeTrue()
+        ->and(data_get($payload, 'item.update_url'))->toBe(route('materials.update', $item))
+        ->and(data_get($payload, 'item.csrf_token'))->not->toBeEmpty()
+        ->and(data_get($payload, 'sections.supplierPackages'))->toBeNull()
+        ->and(data_get($payload, 'sections.recipes'))->not->toBeNull()
+        ->and(data_get($payload, 'sections.inventoryCounts'))->not->toBeNull();
+});
+
+it('16c. material detail page module toggles material type flags through ajax', function (): void {
+    $pageSource = file_get_contents(resource_path('js/pages/materials-show.js'));
+
+    expect($pageSource)->toContain('materialTypeToggles')
+        ->and($pageSource)->toContain('const materialTypeState = () => ({')
+        ->and($pageSource)->toContain("Alpine.data('materialTypeToggles', materialTypeState)")
+        ->and($pageSource)->toContain("{ field: 'is_sellable', label: 'Sellable', icon: 'shopping-cart' }")
+        ->and($pageSource)->toContain("{ field: 'is_purchasable', label: 'Purchasable', icon: 'credit-card' }")
+        ->and($pageSource)->toContain("{ field: 'is_manufacturable', label: 'Makeable', icon: 'cog' }")
+        ->and($pageSource)->toContain("{ field: 'is_stockable', label: 'Stockable', icon: 'rectangle-group' }")
+        ->and($pageSource)->toContain('async toggleMaterialType(field)')
+        ->and($pageSource)->toContain("pageState?.showToast('success'")
+        ->and($pageSource)->not->toContain('showMaterialTypeToast(message)')
+        ->and($pageSource)->not->toContain('this.showMaterialTypeToast')
+        ->and($pageSource)->toContain("method: 'PATCH'")
+        ->and($pageSource)->toContain('[field]: nextValue')
+        ->and($pageSource)->toContain('syncMaterialDetailPayload(materialDetail)')
+        ->and($pageSource)->toContain("document.querySelector('[data-resource-detail-header-title]')")
+        ->and($pageSource)->toContain("document.querySelector('[data-resource-detail-breadcrumb] [aria-current=\"page\"]')")
+        ->and($pageSource)->toContain("pageState?.showToast('success', 'Material name updated.')")
+        ->and($pageSource)->toContain('mountMaterialSection(sectionKey, sectionConfig, true)')
+        ->and($pageSource)->toContain('Alpine.initTree(sectionRootEl)')
+        ->and($pageSource)->toContain("sectionRootEl.innerHTML = '';")
+        ->and($pageSource)->toContain('inventoryStatsEl.hidden = !nextPayload.inventoryStats')
+        ->and($pageSource)->toContain('this.materialTypes[field] = previousValue;');
+});
+
+it('16d. material detail always renders dependent section mount roots for live toggle updates', function (): void {
+    $viewSource = file_get_contents(resource_path('views/materials/show.blade.php'));
+
+    expect($viewSource)->toContain('data-section-key="supplierPackages"')
+        ->and($viewSource)->toContain('data-section-key="recipes"')
+        ->and($viewSource)->toContain('data-section-key="inventoryCounts"')
+        ->and($viewSource)->toContain('data-section-key="purchaseOrders"')
+        ->and($viewSource)->toContain('data-section-key="makeOrders"')
+        ->and($viewSource)->not->toContain('@if (($payload[\'sections\'][\'supplierPackages\'] ?? null))')
+        ->and($viewSource)->not->toContain('@if (($payload[\'sections\'][\'recipes\'] ?? null))');
 });
 
 it('17. existing material detail sections still render when applicable', function (): void {
@@ -1217,8 +1310,67 @@ it('35ac. stockable material inventory stats always show on hand and net qty car
 
     $cards = collect(($this->extractInventoryStats)(($this->getShow)($user, $item))['cards'] ?? []);
 
-    expect($cards->pluck('label')->all())->toContain('On Hand')
+    expect($cards->pluck('label')->all())->toContain('On hand')
         ->and($cards->pluck('label')->all())->toContain('Net Qty');
+});
+
+it('35aca. material inventory stats use compact mobile labels, grouped quantities, and even desktop columns', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $uom = ($this->makeUom)($tenant, ['display_precision' => 2, 'symbol' => 'kg']);
+    $item = ($this->makeItem)($tenant, $uom, [
+        'is_stockable' => true,
+        'is_sellable' => true,
+        'is_purchasable' => true,
+        'is_manufacturable' => true,
+    ]);
+    ($this->makeStockMove)($tenant, $item, '1234.500000');
+    $customer = ($this->makeCustomer)($tenant);
+    $salesOrder = ($this->makeSalesOrder)($tenant, $customer);
+    ($this->makeSalesOrderLine)($tenant, $salesOrder, $item, '1000.000000');
+    $supplier = ($this->makeSupplier)($tenant);
+    $purchaseOption = ($this->makePurchaseOption)($tenant, $item, $uom, $supplier, ['pack_quantity' => '1000.000000']);
+    $purchaseOrder = ($this->makePurchaseOrder)($tenant, $supplier);
+    ($this->makePurchaseOrderLine)($tenant, $purchaseOrder, $item, $purchaseOption, 1);
+    $recipe = ($this->makeRecipe)($tenant, $item, ['output_quantity' => '1000.000000']);
+    $version = ($this->makeRecipeVersion)($tenant, $recipe, [
+        'status' => RecipeVersion::STATUS_PUBLISHED,
+        'output_quantity' => '1000.000000',
+    ]);
+    ($this->publishRecipeVersion)($recipe, $version);
+    ($this->makeMakeOrder)($tenant, $recipe, ['status' => MakeOrder::STATUS_DRAFT, 'runs' => '1.000000']);
+
+    ($this->grantPermissions)($user, ['inventory-materials-view']);
+
+    $response = ($this->getShow)($user, $item)->assertOk();
+    $cards = collect(($this->extractInventoryStats)($response)['cards'] ?? []);
+    $content = $response->getContent();
+
+    expect($cards->firstWhere('key', 'on_hand')['quantity_display_grouped'] ?? null)->toBe('1,234.5')
+        ->and($cards->firstWhere('key', 'on_hand')['compact_label'] ?? null)->toBe('Hand')
+        ->and($cards->firstWhere('key', 'open_sales')['compact_label'] ?? null)->toBe('SO')
+        ->and($cards->firstWhere('key', 'open_purchase')['compact_label'] ?? null)->toBe('PO')
+        ->and($cards->firstWhere('key', 'open_make')['compact_label'] ?? null)->toBe('MO')
+        ->and($cards->firstWhere('key', 'net')['compact_label'] ?? null)->toBe('Net')
+        ->and($cards->firstWhere('key', 'open_sales')['mobile_label'] ?? null)->toBe('SO Qty')
+        ->and($cards->firstWhere('key', 'open_purchase')['mobile_label'] ?? null)->toBe('PO Qty')
+        ->and($cards->firstWhere('key', 'open_make')['mobile_label'] ?? null)->toBe('MO Qty')
+        ->and($content)->toContain('space-y-0 px-1 pb-8 sm:space-y-6 sm:px-6 sm:py-12')
+        ->and($content)->toContain('-mx-1 overflow-hidden border-y border-slate-200 bg-white shadow-sm sm:mx-0 sm:rounded-2xl sm:border')
+        ->and($content)->toContain('role="tablist"')
+        ->and($content)->toContain('aria-label="Inventory stats"')
+        ->and($content)->toContain('x-data="{ activeStat:')
+        ->and($content)->toContain('activeStat ===')
+        ->and($content)->toContain('-rotate-90 whitespace-nowrap')
+        ->and($content)->toContain('flex h-full items-center justify-between')
+        ->and($content)->toContain('px-2 py-2 sm:px-6 sm:py-5')
+        ->and($content)->toContain('text-xl font-semibold tracking-tight text-slate-900 sm:text-2xl')
+        ->and($content)->toContain('sm:grid-cols-5')
+        ->and($content)->toContain('hidden truncate whitespace-nowrap sm:block')
+        ->and($content)->not->toContain('lg:grid-cols-5')
+        ->and($content)->toContain('SO Qty')
+        ->and($content)->toContain('PO Qty')
+        ->and($content)->toContain('MO Qty');
 });
 
 it('35ad. sellable stockable material shows an open sales orders qty card', function (): void {
@@ -1234,7 +1386,7 @@ it('35ad. sellable stockable material shows an open sales orders qty card', func
 
     $cards = collect(($this->extractInventoryStats)(($this->getShow)($user, $item))['cards'] ?? []);
 
-    expect($cards->pluck('label')->all())->toContain('Open Sales Orders Qty')
+    expect($cards->pluck('label')->all())->toContain('Open SO')
         ->and($cards->firstWhere('key', 'open_sales')['quantity'])->toBe('2.500000');
 });
 
@@ -1247,7 +1399,7 @@ it('35ae. non sellable stockable material does not show a sales orders card', fu
     ($this->grantPermissions)($user, ['inventory-materials-view']);
 
     expect(collect(($this->extractInventoryStats)(($this->getShow)($user, $item))['cards'] ?? [])->pluck('label')->all())
-        ->not->toContain('Open Sales Orders Qty');
+        ->not->toContain('Open SO');
 });
 
 it('35af. purchasable stockable material shows an open purchase orders qty card', function (): void {
@@ -1264,7 +1416,7 @@ it('35af. purchasable stockable material shows an open purchase orders qty card'
 
     $cards = collect(($this->extractInventoryStats)(($this->getShow)($user, $item))['cards'] ?? []);
 
-    expect($cards->pluck('label')->all())->toContain('Open Purchase Orders Qty')
+    expect($cards->pluck('label')->all())->toContain('Open PO')
         ->and($cards->firstWhere('key', 'open_purchase')['quantity'])->toBe('6.000000');
 });
 
@@ -1277,7 +1429,7 @@ it('35ag. non purchasable stockable material does not show a purchase orders car
     ($this->grantPermissions)($user, ['inventory-materials-view']);
 
     expect(collect(($this->extractInventoryStats)(($this->getShow)($user, $item))['cards'] ?? [])->pluck('label')->all())
-        ->not->toContain('Open Purchase Orders Qty');
+        ->not->toContain('Open PO');
 });
 
 it('35ah. manufacturable stockable material shows an open make orders impact card', function (): void {
@@ -1294,7 +1446,7 @@ it('35ah. manufacturable stockable material shows an open make orders impact car
 
     $cards = collect(($this->extractInventoryStats)(($this->getShow)($user, $item))['cards'] ?? []);
 
-    expect($cards->pluck('label')->all())->toContain('Open Make Orders Impact')
+    expect($cards->pluck('label')->all())->toContain('Open MO')
         ->and($cards->firstWhere('key', 'open_make')['quantity'])->toBe('6.000000');
 });
 
@@ -1307,7 +1459,7 @@ it('35ai. non manufacturable item with no open make-order relevance does not sho
     ($this->grantPermissions)($user, ['inventory-materials-view']);
 
     expect(collect(($this->extractInventoryStats)(($this->getShow)($user, $item))['cards'] ?? [])->pluck('label')->all())
-        ->not->toContain('Open Make Orders Impact');
+        ->not->toContain('Open MO');
 });
 
 it('35aj. multi flag stockable material shows all qualifying inventory stats cards', function (): void {
@@ -1335,11 +1487,11 @@ it('35aj. multi flag stockable material shows all qualifying inventory stats car
     ($this->grantPermissions)($user, ['inventory-materials-view']);
 
     expect(collect(($this->extractInventoryStats)(($this->getShow)($user, $item))['cards'] ?? [])->pluck('label')->all())
-        ->toContain('On Hand')
+        ->toContain('On hand')
         ->toContain('Net Qty')
-        ->toContain('Open Sales Orders Qty')
-        ->toContain('Open Purchase Orders Qty')
-        ->toContain('Open Make Orders Impact');
+        ->toContain('Open SO')
+        ->toContain('Open PO')
+        ->toContain('Open MO');
 });
 
 it('35ak. inventory stats net qty equals on hand minus open sales plus open purchase', function (): void {
@@ -1640,16 +1792,54 @@ it('35b. stockable material detail shows an inventory counts section using the s
         ->and($section['permissions']['canCreate'] ?? null)->toBeTrue()
         ->and($section['createAction']['submitLabel'] ?? null)->toBe('Create Count')
         ->and($section['createAction']['handlerKey'] ?? null)->toBe('openInventoryCountCreate')
+        ->and($section['showRowActionsMenu'] ?? null)->toBeFalse()
+        ->and($section['inlineActionsOnMobile'] ?? null)->toBeTrue()
+        ->and($section['recordClass'] ?? null)->toBe('rounded-lg border border-gray-200 bg-gray-50 px-3 py-1 sm:px-4 sm:py-1')
+        ->and($section['rowClass'] ?? null)->toBe('flex flex-row items-start justify-between gap-4')
+        ->and($section['rightMetaClass'] ?? null)
+        ->toBe('flex min-h-[3.25rem] min-w-[5rem] flex-col items-end justify-between gap-4 self-stretch text-right')
+        ->and($section['mobileRowUrlField'] ?? null)->toBe('display.showUrl')
+        ->and($section['secondaryFieldsClass'] ?? null)
+        ->toBe('mt-px flex flex-wrap items-center gap-x-3 gap-y-1')
+        ->and(data_get($section, 'rowLayout.primaryText.field'))->toBe('display.nameText')
+        ->and(data_get($section, 'rowLayout.primaryText.urlField'))->toBe('display.showUrl')
+        ->and(data_get($section, 'rowLayout.primaryText.linkClass'))
+        ->toBe('truncate text-sm font-semibold text-gray-900 transition hover:text-gray-700')
+        ->and(data_get($section, 'rowLayout.secondaryFields.0.label'))->toBe('')
+        ->and(data_get($section, 'rowLayout.secondaryFields.0.field'))->toBe('display.assignedToText')
+        ->and(data_get($section, 'rowLayout.secondaryFields.0.textClass'))->toBe('text-xs leading-none text-gray-600')
+        ->and(data_get($section, 'rowLayout.secondaryFields.0.textValueClass'))->toBe('text-xs leading-none text-gray-600')
+        ->and(data_get($section, 'rowLayout.badges.0.field'))->toBe('display.statusText')
+        ->and(data_get($section, 'rowLayout.badges.0.toneField'))->toBe('display.statusTone')
+        ->and(data_get($section, 'rowLayout.badges.0.textClass'))->toBe('text-[0.55rem] uppercase tracking-wide')
+        ->and(data_get($section, 'rowLayout.rightMeta.0.field'))->toBe('display.countedAtText')
+        ->and(data_get($section, 'rowLayout.rightMeta.0.textClass'))->toBe('text-xs font-medium text-gray-500')
+        ->and(data_get($section, 'rowLayout.rightMeta.1.field'))->toBe('display.countedQuantityText')
+        ->and(data_get($section, 'rowLayout.rightMeta.1.suffixField'))->toBe('display.uomSymbolText')
+        ->and(data_get($section, 'rowLayout.rightMeta.1.strong'))->toBeTrue()
+        ->and(data_get($section, 'rowLayout.rightMeta.1.textClass'))->toBe('text-xs')
+        ->and(data_get($section, 'rowLayout.rightMeta.1.suffixClass'))->toBe('text-[0.65rem]')
+        ->and($section['actions'] ?? null)->toBe([])
         ->and($viewSource)->toContain('data-section-key="inventoryCounts"');
 });
 
-it('35c. stockable material inventory counts rows show count date assignee uom and counted quantity', function (): void {
+it('35ba. shared crud badge renderer supports section configured badge font classes', function (): void {
+    $source = file_get_contents(resource_path('js/lib/js-crud-section.js'));
+
+    expect($source)->toContain("badge.textClass || 'text-xs'")
+        ->and($source)->toContain('textClass: entry.textClass');
+});
+
+it('35c. stockable material inventory counts rows show date assignee and counted quantity with uom name', function (): void {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant, ['name' => 'Counter User']);
-    $uom = ($this->makeUom)($tenant, ['name' => 'Kilogram', 'symbol' => 'kg', 'display_precision' => 2]);
+    $uom = ($this->makeUom)($tenant, ['name' => 'Gram', 'symbol' => 'g', 'display_precision' => 0]);
+    $uom->forceFill(['tenant_id' => null])->save();
+    $newBaseUom = ($this->makeUom)($tenant, ['name' => 'Ounce', 'symbol' => 'oz', 'display_precision' => 2]);
     $item = ($this->makeItem)($tenant, $uom, ['is_stockable' => true]);
     $count = ($this->makeInventoryCount)($tenant, $user, ['counted_at' => now()->setDate(2026, 5, 10)->setTime(9, 30)]);
-    ($this->makeInventoryCountLine)($tenant, $count, $item, '4.500000');
+    ($this->makeInventoryCountLine)($tenant, $count, $item, '1234.500000');
+    $item->forceFill(['base_uom_id' => $newBaseUom->id])->save();
 
     ($this->grantPermissions)($user, ['inventory-materials-view', 'inventory-adjustments-view']);
 
@@ -1658,10 +1848,30 @@ it('35c. stockable material inventory counts rows show count date assignee uom a
         ($this->extractSection)(($this->getShow)($user, $item), 'inventoryCounts')
     )->assertOk();
 
-    expect($response->json('data.0.counted_at'))->toContain('2026-05-10')
+    expect($response->json('data.0.counted_at'))->toBe('May 10, 2026')
+        ->and($response->json('data.0.name'))->toBe('Material section count')
         ->and($response->json('data.0.assigned_to_user_name'))->toBe('Counter User')
-        ->and($response->json('data.0.uom_symbol'))->toBe('kg')
-        ->and($response->json('data.0.counted_quantity_display'))->toBe('4.5');
+        ->and($response->json('data.0.uom_name'))->toBe('Gram')
+        ->and($response->json('data.0.uom_symbol'))->toBe('g')
+        ->and($response->json('data.0.status_label'))->toBe('Draft')
+        ->and($response->json('data.0.status_tone'))->toBe('muted')
+        ->and($response->json('data.0.counted_quantity_display'))->toBe('1,235')
+        ->and($response->json('data.0.available_actions'))->toBe([]);
+});
+
+it('35ca. material inventory count row adapter does not render labels or a separate uom value', function (): void {
+    $pageSource = file_get_contents(resource_path('js/pages/materials-show.js'));
+
+    expect($pageSource)->toContain("nameText: asString(record.name, '—'),")
+        ->and($pageSource)->toContain('assignedToText: asString(record.assigned_to_user_name),')
+        ->and($pageSource)->toContain('countedQuantityText: asString(record.counted_quantity_display),')
+        ->and($pageSource)->toContain('uomNameText: asString(record.uom_name),')
+        ->and($pageSource)->toContain('uomSymbolText: asString(record.uom_symbol),')
+        ->and($pageSource)->toContain('statusText: asString(record.status_label),')
+        ->and($pageSource)->toContain("statusTone: asString(record.status_tone, 'muted'),")
+        ->and($pageSource)->not->toContain('uomText')
+        ->and($pageSource)->not->toContain("assignedToText: asString(record.assigned_to_user_name, 'Unassigned')")
+        ->and($pageSource)->not->toContain("countedQuantityText: asString(record.counted_quantity_display, '—')");
 });
 
 it('35d. material detail inventory counts create endpoint scopes the created count to the current material and returns the detail redirect url', function (): void {
@@ -1673,6 +1883,7 @@ it('35d. material detail inventory counts create endpoint scopes the created cou
     ($this->grantPermissions)($user, ['inventory-materials-view', 'inventory-adjustments-execute']);
 
     $response = ($this->postMaterialInventoryCount)($user, $item, [
+        'name' => 'Material shelf count',
         'counted_at' => '2026-05-20T10:15',
         'assigned_to_user_id' => $user->id,
     ])->assertCreated();
@@ -1682,6 +1893,8 @@ it('35d. material detail inventory counts create endpoint scopes the created cou
 
     expect($line)->not->toBeNull()
         ->and($line?->item_id)->toBe($item->id)
+        ->and($line?->uom_id)->toBe($item->base_uom_id)
+        ->and($line?->inventoryCount?->name)->toBe('Material shelf count')
         ->and($line?->counted_quantity)->toBeNull()
         ->and($response->json('count.show_url'))->toBe(route('inventory.counts.show', $countId));
 });
@@ -1796,6 +2009,7 @@ it('35i. material detail inventory counts section enforces permissions and tenan
 
     $this->actingAs($otherUser)
         ->postJson(route('materials.inventory-counts.store', $item), [
+            'name' => 'Cross tenant count',
             'counted_at' => '2026-05-20T10:15',
             'counted_quantity' => '1.000000',
         ])

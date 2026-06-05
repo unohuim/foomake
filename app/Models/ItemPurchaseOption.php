@@ -71,4 +71,13 @@ class ItemPurchaseOption extends Model
         return $this->hasOne(ItemPurchaseOptionPrice::class, 'item_purchase_option_id')
             ->whereNull('ended_at');
     }
+
+    /**
+     * Get the most recent purchase order line that used this option.
+     */
+    public function latestPurchaseOrderLine(): HasOne
+    {
+        return $this->hasOne(PurchaseOrderLine::class, 'item_purchase_option_id')
+            ->latestOfMany();
+    }
 }

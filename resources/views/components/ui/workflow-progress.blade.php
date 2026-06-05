@@ -22,7 +22,11 @@
         ]))
         ->values();
 
-    if ($normalizedSteps->isNotEmpty() && $normalizedSteps->where('current', true)->isEmpty()) {
+    if (
+        $normalizedSteps->isNotEmpty()
+        && $normalizedSteps->where('current', true)->isEmpty()
+        && $normalizedSteps->where('status', 'completed')->isEmpty()
+    ) {
         $normalizedSteps = $normalizedSteps
             ->map(fn ($step, $index) => array_merge($step, [
                 'status' => $index === 0 ? 'current' : $step['status'],

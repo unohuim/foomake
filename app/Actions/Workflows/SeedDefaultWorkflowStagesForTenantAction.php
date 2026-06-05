@@ -349,7 +349,7 @@ class SeedDefaultWorkflowStagesForTenantAction
                     'name' => 'Cancelling',
                     'action_verb' => 'CANCEL',
                     'status_complete_label' => 'CANCELLED',
-                    'completion_mode' => 'manual',
+                    'completion_mode' => 'automatic',
                     'sort_order' => 30,
                     'is_active' => false,
                     'is_inventory_effect_stage' => false,

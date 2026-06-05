@@ -641,7 +641,73 @@ it('18aa. inventory item rows expose the material detail link inside the stacked
         ->and($row['show_url'] ?? null)->toBe(route('materials.show', $item));
 });
 
-it('18ab. inventory page renderer keeps the stacked item link and uom subtext without a dedicated uom column', function (): void {
+it('18ab. inventory mobile rows expose material badges and active toggle config', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    ($this->grantPermission)($user, 'inventory-adjustments-view');
+    ($this->grantPermission)($user, 'inventory-materials-manage');
+
+    $config = ($this->extractCrudConfig)(($this->inventoryIndex)($user));
+
+    expect($config['mobileCard']['titleAsideExpression'] ?? null)
+        ->toBe("record.item_uom_name || record.item_uom_symbol || '—'")
+        ->and($config['mobileCard']['badgesExpression'] ?? null)->toBe('inventoryMaterialFlagBadges(record)')
+        ->and($config['mobileCard']['urlExpression'] ?? null)->toBe('record.show_url')
+        ->and($config['mobileCard']['showActions'] ?? null)->toBeFalse()
+        ->and($config['mobileCard']['toggle']['name'] ?? null)->toBe('is_active')
+        ->and($config['mobileCard']['toggle']['checkedExpression'] ?? null)->toBe('Boolean(record.is_active)')
+        ->and($config['mobileCard']['toggle']['disabledExpression'] ?? null)->toBe('!canManageMaterials()')
+        ->and($config['mobileCard']['toggle']['handler'] ?? null)->toBe('toggleInventoryMaterialActive(toggleDetail)')
+        ->and($config['permissions']['canManageMaterials'] ?? null)->toBeTrue();
+});
+
+it('18ac. inventory list rows expose material state for the mobile toggle row', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $uom = ($this->makeUom)($tenant, 'Gram', 'g');
+    $item = ($this->makeItem)($tenant, $uom, [
+        'name' => 'Toggle Inventory Item',
+        'is_active' => false,
+        'is_stockable' => true,
+        'is_purchasable' => true,
+        'is_sellable' => true,
+        'is_manufacturable' => false,
+        'default_price_cents' => 1234,
+        'default_price_currency_code' => 'USD',
+    ]);
+    ($this->grantPermission)($user, 'inventory-adjustments-view');
+
+    $rows = ($this->inventoryList)($user)->assertOk()->json('data');
+    $row = ($this->inventoryRow)($rows, $item->id);
+
+    expect($row['base_uom_id'] ?? null)->toBe($uom->id)
+        ->and($row['item_uom_symbol'] ?? null)->toBe($uom->symbol)
+        ->and($row['is_active'] ?? null)->toBeFalse()
+        ->and($row['is_stockable'] ?? null)->toBeTrue()
+        ->and($row['is_purchasable'] ?? null)->toBeTrue()
+        ->and($row['is_sellable'] ?? null)->toBeTrue()
+        ->and($row['is_manufacturable'] ?? null)->toBeFalse()
+        ->and($row['default_price_amount'] ?? null)->toBe('12.34')
+        ->and($row['default_price_currency_code'] ?? null)->toBe('USD')
+        ->and($row['update_url'] ?? null)->toBe(route('materials.update', $item));
+});
+
+it('18ad. inventory page module wires the shared mobile active toggle handler', function (): void {
+    $pageSource = file_get_contents(resource_path('js/pages/inventory-index.js'));
+    $rendererSource = file_get_contents(resource_path('js/lib/crud-page.js'));
+    $viewSource = file_get_contents(resource_path('views/inventory/index.blade.php'));
+
+    expect($rendererSource)->toContain("import { renderToggle } from '../components/toggle';")
+        ->and($pageSource)->toContain('inventoryMaterialFlagBadges(record)')
+        ->and($pageSource)->toContain('canManageMaterials()')
+        ->and($pageSource)->toContain('async toggleInventoryMaterialActive(toggleDetail)')
+        ->and($pageSource)->toContain("is_active: nextValue")
+        ->and($pageSource)->toContain('default_price_amount: record.default_price_amount ||')
+        ->and($pageSource)->toContain("this.showToast('success', 'Material updated.')")
+        ->and($viewSource)->toContain('<x-ui.toast visible="toast.visible" type="toast.type" message="toast.message" />');
+});
+
+it('18ae. inventory page renderer keeps the stacked item link and uom subtext without a dedicated uom column', function (): void {
     $source = file_get_contents(resource_path('js/lib/crud-page.js'));
 
     expect($source)->toContain("if (kind === 'stacked-text')")

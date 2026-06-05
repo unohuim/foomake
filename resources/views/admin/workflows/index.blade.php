@@ -13,16 +13,10 @@
         data-payload="admin-workflows-index-payload"
         x-data="adminWorkflowsIndex"
     >
-        <div class="fixed right-6 top-6 z-50" x-show="toast.visible">
-            <div
-                class="rounded-xl px-4 py-3 text-sm shadow-lg"
-                :class="toast.type === 'success' ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'"
-                x-text="toast.message"
-            ></div>
-        </div>
+        <x-ui.toast visible="toast.visible" type="toast.type" message="toast.message" />
 
         <div class="mx-auto max-w-7xl space-y-6 sm:px-6 lg:px-8">
-            <div class="rounded-3xl border border-slate-200 bg-white shadow-sm">
+            <div class="border border-slate-200 bg-white shadow-sm">
                 <div class="flex flex-col gap-4 p-6 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                         <h3 class="text-lg font-semibold text-slate-900">Workflow configuration</h3>
@@ -40,7 +34,7 @@
                 </div>
             </div>
 
-            <section class="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+            <section class="overflow-hidden border border-slate-200 bg-white shadow-sm">
                 <button
                     type="button"
                     class="flex w-full items-center justify-between px-6 py-5 text-left"
@@ -211,7 +205,7 @@
                 </div>
             </section>
 
-            <section class="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+            <section class="overflow-hidden border border-slate-200 bg-white shadow-sm">
                 <button
                     type="button"
                     class="flex w-full items-center justify-between px-6 py-5 text-left"

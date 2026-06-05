@@ -7,7 +7,7 @@
 ])
 
 <section
-    class="overflow-visible rounded-2xl border border-gray-200 bg-white shadow-sm"
+    class="-mx-1 !-mt-px w-auto min-w-0 overflow-visible border border-gray-500 bg-white shadow-sm first:!mt-0 sm:mx-0 sm:!mt-6 sm:first:!mt-0 sm:w-full sm:rounded-2xl sm:border-gray-200"
     data-detail-section-card
     x-data="{ open: @js((bool) $defaultOpen) }"
 >
@@ -34,7 +34,7 @@
         </button>
     </div>
 
-    <div class="border-t border-gray-100 px-3 py-4 sm:px-6 sm:py-5" x-show="open" x-cloak>
+    <div class="min-w-0 border-t border-gray-100 px-3 py-4 sm:px-6 sm:py-5" x-show="open" x-cloak>
         @if (isset($toolbar) || isset($actions) || $showCreateButton)
             <div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div class="min-w-0 flex-1">

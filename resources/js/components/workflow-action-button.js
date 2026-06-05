@@ -65,21 +65,23 @@ export function registerWorkflowActionButton(Alpine) {
                 const canReceive = Object.prototype.hasOwnProperty.call(purchaseOrder, 'can_receive')
                     ? purchaseOrder.can_receive
                     : data.data?.can_receive;
+                const workflowProgressSteps = data.data?.workflowProgressSteps;
+                const workflowUpdatedDetail = {
+                    workflow: this.workflow,
+                    purchaseOrder,
+                    canReceive,
+                };
+
+                if (Array.isArray(workflowProgressSteps)) {
+                    workflowUpdatedDetail.workflowProgressSteps = workflowProgressSteps;
+                }
 
                 this.$root.dispatchEvent(new CustomEvent('workflow-updated', {
                     bubbles: true,
-                    detail: {
-                        workflow: this.workflow,
-                        purchaseOrder,
-                        canReceive,
-                    },
+                    detail: workflowUpdatedDetail,
                 }));
                 document.dispatchEvent(new CustomEvent('workflow-updated', {
-                    detail: {
-                        workflow: this.workflow,
-                        purchaseOrder,
-                        canReceive,
-                    },
+                    detail: workflowUpdatedDetail,
                 }));
             } catch (error) {
                 this.error = 'Unable to update workflow.';

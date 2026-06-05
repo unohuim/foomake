@@ -25,7 +25,7 @@
         <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div class="min-w-0 flex-1">
                 <div class="flex flex-wrap items-center gap-3" data-resource-detail-header-title-row>
-                    <h1 @class([$titleClass])>{{ $title }}</h1>
+                    <h1 @class([$titleClass]) data-resource-detail-header-title>{{ $title }}</h1>
 
                     @isset($titleSuffix)
                         {{ $titleSuffix }}

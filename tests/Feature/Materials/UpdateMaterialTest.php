@@ -9,6 +9,7 @@ use App\Models\StockMove;
 use App\Models\Tenant;
 use App\Models\Uom;
 use App\Models\UomCategory;
+use App\Models\UomConversion;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
@@ -51,6 +52,24 @@ beforeEach(function (): void {
         ]);
     };
 
+    $this->makeConvertibleUom = function (Uom $fromUom, string $multiplier = '1.00000000'): Uom {
+        $toUom = Uom::query()->create([
+            'tenant_id' => $this->tenant->id,
+            'uom_category_id' => $fromUom->uom_category_id,
+            'name' => Str::uuid()->toString(),
+            'symbol' => Str::upper(Str::random(6)),
+        ]);
+
+        UomConversion::query()->create([
+            'tenant_id' => $this->tenant->id,
+            'from_uom_id' => $fromUom->id,
+            'to_uom_id' => $toUom->id,
+            'multiplier' => $multiplier,
+        ]);
+
+        return $toUom;
+    };
+
     $this->makeItem = function (Uom $uom, array $overrides = []): Item {
         return Item::query()->create(array_merge([
             'tenant_id' => $this->tenant->id,
@@ -84,7 +103,7 @@ test('updates a material for users with inventory-materials-manage permission', 
     ($this->grantPermission)($this->user, 'inventory-materials-manage');
 
     $uom = ($this->makeUom)();
-    $newUom = ($this->makeUom)();
+    $newUom = ($this->makeConvertibleUom)($uom);
     $item = ($this->makeItem)($uom);
 
     $response = ($this->patchUpdate)($this->user, $item, [
@@ -133,6 +152,29 @@ test('updates can toggle is_stockable on and off', function (): void {
     expect(Item::withoutGlobalScopes()->findOrFail($item->id)->is_stockable)->toBeFalse();
 });
 
+test('updates can toggle is_active on and off', function (): void {
+    ($this->grantPermission)($this->user, 'inventory-materials-manage');
+
+    $uom = ($this->makeUom)();
+    $item = ($this->makeItem)($uom, ['is_active' => true]);
+
+    ($this->patchUpdate)($this->user, $item, [
+        'name' => 'Inactive Flour',
+        'base_uom_id' => $uom->id,
+        'is_active' => false,
+    ])->assertOk()->assertJsonPath('data.is_active', false);
+
+    expect(Item::withoutGlobalScopes()->findOrFail($item->id)->is_active)->toBeFalse();
+
+    ($this->patchUpdate)($this->user, $item->fresh(), [
+        'name' => 'Active Flour',
+        'base_uom_id' => $uom->id,
+        'is_active' => true,
+    ])->assertOk()->assertJsonPath('data.is_active', true);
+
+    expect(Item::withoutGlobalScopes()->findOrFail($item->id)->is_active)->toBeTrue();
+});
+
 test('edit material slide over keeps the stockable checkbox bound to the shared edit form', function (): void {
     $source = file_get_contents(resource_path('views/materials/partials/edit-material-slide-over.blade.php'));
     $pageSource = file_get_contents(resource_path('js/pages/materials-index.js'));
@@ -177,11 +219,16 @@ test('returns validation errors for missing required fields', function (): void 
         ->assertJsonValidationErrors(['name', 'base_uom_id']);
 });
 
-test('locks base_uom_id when stock moves exist and does not partially update', function (): void {
+test('rejects base_uom_id changes when inventory balances cannot convert to the new uom', function (): void {
     ($this->grantPermission)($this->user, 'inventory-materials-manage');
 
     $uom = ($this->makeUom)();
-    $newUom = ($this->makeUom)();
+    $newUom = Uom::query()->create([
+        'tenant_id' => $this->tenant->id,
+        'uom_category_id' => $uom->uom_category_id,
+        'name' => Str::uuid()->toString(),
+        'symbol' => Str::upper(Str::random(6)),
+    ]);
     $item = ($this->makeItem)($uom, [
         'name' => 'Original Flour',
     ]);
@@ -206,6 +253,37 @@ test('locks base_uom_id when stock moves exist and does not partially update', f
 
     expect($reloaded->base_uom_id)->toBe($uom->id)
         ->and($reloaded->name)->toBe('Original Flour');
+});
+
+test('allows base_uom_id changes when inventory balances can convert to the new uom', function (): void {
+    ($this->grantPermission)($this->user, 'inventory-materials-manage');
+
+    $uom = ($this->makeUom)();
+    $newUom = ($this->makeConvertibleUom)($uom, '0.00100000');
+    $item = ($this->makeItem)($uom, [
+        'name' => 'Original Flour',
+    ]);
+
+    StockMove::query()->create([
+        'tenant_id' => $this->tenant->id,
+        'item_id' => $item->id,
+        'uom_id' => $item->base_uom_id,
+        'quantity' => '1000.000000',
+        'type' => 'receipt',
+    ]);
+
+    $response = ($this->patchUpdate)($this->user, $item, [
+        'name' => 'Updated Flour',
+        'base_uom_id' => $newUom->id,
+    ]);
+
+    $response->assertOk()
+        ->assertJsonPath('data.base_uom_id', $newUom->id);
+
+    $reloaded = Item::withoutGlobalScopes()->findOrFail($item->id);
+
+    expect($reloaded->base_uom_id)->toBe($newUom->id)
+        ->and($reloaded->onHandQuantity())->toBe('1.000000');
 });
 
 test('allows updates when stock moves exist but base_uom_id is unchanged', function (): void {
@@ -241,11 +319,11 @@ test('allows updates when stock moves exist but base_uom_id is unchanged', funct
         ->and($reloaded->is_purchasable)->toBeTrue();
 });
 
-test('allows base_uom_id updates when no stock moves exist', function (): void {
+test('allows base_uom_id updates when no stock moves exist and a conversion exists', function (): void {
     ($this->grantPermission)($this->user, 'inventory-materials-manage');
 
     $uom = ($this->makeUom)();
-    $newUom = ($this->makeUom)();
+    $newUom = ($this->makeConvertibleUom)($uom);
     $item = ($this->makeItem)($uom);
 
     $response = ($this->patchUpdate)($this->user, $item, [
@@ -259,6 +337,24 @@ test('allows base_uom_id updates when no stock moves exist', function (): void {
     $reloaded = Item::withoutGlobalScopes()->findOrFail($item->id);
 
     expect($reloaded->base_uom_id)->toBe($newUom->id);
+});
+
+test('rejects base_uom_id updates when no stock moves exist and no conversion exists', function (): void {
+    ($this->grantPermission)($this->user, 'inventory-materials-manage');
+
+    $uom = ($this->makeUom)();
+    $newUom = ($this->makeUom)();
+    $item = ($this->makeItem)($uom);
+
+    $response = ($this->patchUpdate)($this->user, $item, [
+        'name' => 'Still Locked Flour',
+        'base_uom_id' => $newUom->id,
+    ]);
+
+    $response->assertUnprocessable()
+        ->assertJsonValidationErrors(['base_uom_id']);
+
+    expect(Item::withoutGlobalScopes()->findOrFail($item->id)->base_uom_id)->toBe($uom->id);
 });
 
 test('defaults currency to tenant when updating amount without currency', function (): void {

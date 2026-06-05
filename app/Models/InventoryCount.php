@@ -16,6 +16,7 @@ use Illuminate\Support\Carbon;
  * @property int|null $created_by_user_id
  * @property int|null $tasked_by_user_id
  * @property int|null $assigned_to_user_id
+ * @property string $name
  * @property Carbon $counted_at
  * @property int|null $workflow_stage_id
  * @property Carbon|null $posted_at
@@ -32,6 +33,7 @@ class InventoryCount extends Model
         'created_by_user_id',
         'tasked_by_user_id',
         'assigned_to_user_id',
+        'name',
         'counted_at',
         'workflow_stage_id',
         'posted_at',

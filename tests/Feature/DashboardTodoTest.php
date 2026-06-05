@@ -150,6 +150,7 @@ beforeEach(function (): void {
     $this->makeInventoryCount = function (Tenant $tenant, ?User $assignee, array $overrides = []): InventoryCount {
         return InventoryCount::query()->forceCreate(array_merge([
             'tenant_id' => $tenant->id,
+            'name' => 'Dashboard Inventory Count',
             'created_by_user_id' => $assignee?->id,
             'tasked_by_user_id' => $assignee?->id,
             'assigned_to_user_id' => $assignee?->id,

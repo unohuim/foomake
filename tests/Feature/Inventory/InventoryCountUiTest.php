@@ -86,6 +86,7 @@ test('guests cannot access inventory count routes', function () {
         ->assertRedirect(route('login'));
 
     $this->post(route('inventory.counts.store'), [
+        'name' => 'Guest blocked count',
         'counted_at' => now()->format('Y-m-d H:i'),
     ])->assertRedirect(route('login'));
 
@@ -130,6 +131,7 @@ test('users with execute permission can create a draft and manage lines', functi
 
     $response = $this->actingAs($this->user)
         ->postJson(route('inventory.counts.store'), [
+            'name' => 'Initial count',
             'counted_at' => now()->format('Y-m-d H:i'),
             'notes' => 'Initial count.',
         ]);

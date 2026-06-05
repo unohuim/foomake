@@ -29,15 +29,17 @@ class MaterialSupplierPackageController extends Controller
         Gate::authorize('inventory-materials-view');
         Gate::authorize('purchasing-suppliers-view');
 
+        $perPage = $this->perPageFromRequest($request);
+
         $paginator = ItemPurchaseOption::query()
             ->where('tenant_id', $request->user()->tenant_id)
             ->where('item_id', $item->id)
             ->whereNotNull('supplier_id')
-            ->with(['supplier', 'item', 'packUom', 'currentPrice'])
+            ->where('is_active', true)
+            ->with(['supplier', 'item', 'packUom', 'currentPrice', 'latestPurchaseOrderLine'])
             ->whereHas('supplier')
-            ->orderByDesc('is_active')
             ->orderBy('id')
-            ->paginate(10);
+            ->paginate($perPage);
 
         $data = $paginator->getCollection()
             ->map(fn (ItemPurchaseOption $option): array => $this->rowPayload($request, $option))
@@ -53,6 +55,18 @@ class MaterialSupplierPackageController extends Controller
                 'total' => $paginator->total(),
             ],
         ]);
+    }
+
+    /**
+     * Resolve the page size for reusable detail-section list endpoints.
+     */
+    private function perPageFromRequest(Request $request): int
+    {
+        $validated = $request->validate([
+            'per_page' => ['nullable', 'integer', 'min:1', 'max:50'],
+        ]);
+
+        return (int) ($validated['per_page'] ?? 5);
     }
 
     public function store(Request $request, Item $item): JsonResponse
@@ -84,7 +98,7 @@ class MaterialSupplierPackageController extends Controller
             $this->storeCurrentPrice($request, $option, $priceCents, $tenantCurrency);
         });
 
-        $option->load(['supplier', 'item', 'packUom', 'currentPrice']);
+        $option->load(['supplier', 'item', 'packUom', 'currentPrice', 'latestPurchaseOrderLine']);
 
         return response()->json([
             'data' => $this->rowPayload($request, $option),
@@ -218,22 +232,24 @@ class MaterialSupplierPackageController extends Controller
     private function rowPayload(Request $request, ItemPurchaseOption $option): array
     {
         $currentPrice = $option->currentPrice;
+        $latestPurchaseOrderLine = $option->latestPurchaseOrderLine;
+        $displayPriceCents = $currentPrice?->converted_price_cents
+            ?? $latestPurchaseOrderLine?->converted_unit_price_amount;
+        $displayPriceCurrency = $currentPrice?->price_currency_code
+            ?? $latestPurchaseOrderLine?->unit_price_currency_code;
         $packQuantity = bcadd((string) $option->pack_quantity, '0', 6);
         $packPrecision = (int) ($option->packUom?->display_precision ?? 1);
-        $hasHistory = $this->hasHistory($request, $option);
         $canManage = Gate::allows('purchasing-suppliers-manage');
         $canCreatePurchaseOrders = Gate::allows('purchasing-purchase-orders-create');
-        $availableActions = ['view'];
+        $availableActions = [];
 
         if ($canCreatePurchaseOrders && (bool) $option->is_active) {
             $availableActions[] = 'purchase';
         }
 
         if ($canManage) {
-            $availableActions[] = 'edit';
-
             if ((bool) $option->is_active) {
-                $availableActions[] = $hasHistory ? 'archive' : 'remove';
+                $availableActions[] = 'archive';
             }
         }
 
@@ -245,6 +261,7 @@ class MaterialSupplierPackageController extends Controller
             'item_id' => $option->item_id,
             'item_name' => $option->item?->name,
             'show_url' => $option->supplier_id ? route('purchasing.suppliers.show', $option->supplier_id) : null,
+            'purchase_url' => route('materials.purchase-orders.store', $option->item_id),
             'pack_quantity' => $packQuantity,
             'pack_quantity_display' => QuantityFormatter::format($packQuantity, $packPrecision),
             'pack_uom_id' => $option->pack_uom_id,
@@ -257,12 +274,12 @@ class MaterialSupplierPackageController extends Controller
                 (string) ($option->packUom?->symbol ?: $option->packUom?->name)
             )),
             'supplier_sku' => $option->supplier_sku,
-            'current_price_display' => $currentPrice
-                ? $this->formatMoney($currentPrice->price_currency_code, $currentPrice->converted_price_cents)
+            'current_price_display' => $displayPriceCents !== null && $displayPriceCurrency
+                ? $this->formatMoney($displayPriceCurrency, (int) $displayPriceCents)
                 : null,
-            'current_price_cents' => $currentPrice?->converted_price_cents,
-            'current_price_currency_code' => $currentPrice?->price_currency_code,
-            'price_amount' => $this->formatCentsToAmount($currentPrice?->converted_price_cents),
+            'current_price_cents' => $displayPriceCents,
+            'current_price_currency_code' => $displayPriceCurrency,
+            'price_amount' => $this->formatCentsToAmount($displayPriceCents),
             'is_active' => (bool) $option->is_active,
             'state' => $option->is_active ? 'active' : 'archived',
             'available_actions' => $availableActions,

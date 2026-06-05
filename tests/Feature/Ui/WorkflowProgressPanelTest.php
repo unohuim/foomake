@@ -47,10 +47,11 @@ BLADE,
     ): WorkflowStage {
         $domain = ($this->makeDomain)($domainKey);
 
-        return WorkflowStage::withoutGlobalScopes()->create(array_merge([
+        return WorkflowStage::withoutGlobalScopes()->updateOrCreate([
             'tenant_id' => $tenant->id,
             'workflow_domain_id' => $domain->id,
             'key' => $key,
+        ], array_merge([
             'name' => $name,
             'action_verb' => strtoupper($name),
             'status_complete_label' => strtoupper($name),
@@ -93,6 +94,10 @@ BLADE,
     $this->inventoryCountShowSource = fn (): string => File::get(resource_path('views/inventory/counts/show.blade.php'));
     $this->makeOrderShowSource = fn (): string => File::get(resource_path('views/manufacturing/make-orders/show.blade.php'));
     $this->purchaseOrderShowSource = fn (): string => File::get(resource_path('views/purchasing/orders/show.blade.php'));
+    $this->purchaseOrderShowPageSource = fn (): string => File::get(resource_path('js/pages/purchasing-orders-show.js'));
+    $this->purchaseOrderStatusControllerSource = fn (): string => File::get(app_path('Http/Controllers/PurchaseOrderStatusController.php'));
+    $this->purchaseOrderWorkflowControllerSource = fn (): string => File::get(app_path('Http/Controllers/PurchaseOrderWorkflowController.php'));
+    $this->workflowActionButtonSource = fn (): string => File::get(resource_path('js/components/workflow-action-button.js'));
     $this->salesOrderShowSource = fn (): string => File::get(resource_path('views/sales/orders/show.blade.php'));
     $this->inventoryCountControllerSource = fn (): string => File::get(app_path('Http/Controllers/InventoryCountController.php'));
     $this->makeOrderControllerSource = fn (): string => File::get(app_path('Http/Controllers/MakeOrderController.php'));
@@ -107,6 +112,24 @@ it('1. workflow progress component renders a progress nav', function (): void {
 
     expect($html)->toContain('<nav')
         ->and($html)->toContain('aria-label="Progress"');
+});
+
+it('1a. simple dropdown component renders a menu with alpine transitions', function (): void {
+    $html = Blade::render(
+        <<<'BLADE'
+<x-ui.dropdown align="left" width="w-56">
+    <x-slot name="trigger">Current UoM</x-slot>
+    <button type="button" role="menuitem">Grams</button>
+</x-ui.dropdown>
+BLADE
+    );
+
+    expect($html)->toContain('Current UoM')
+        ->and($html)->toContain('role="menu"')
+        ->and($html)->toContain('role="menuitem"')
+        ->and($html)->toContain('x-transition:enter')
+        ->and($html)->toContain('x-on:click.outside')
+        ->and($html)->not->toContain('@tailwindplus/elements');
 });
 
 it('2. workflow progress component renders DRAFT as the first step', function (): void {
@@ -337,9 +360,23 @@ it('18. Make Order detail renders workflow progress at the top of content', func
 it('19. Purchase Order detail renders workflow progress at the top of content', function (): void {
     $source = ($this->purchaseOrderShowSource)();
 
-    expect($source)->toContain('<x-ui.workflow-progress')
-        ->and($source)->toContain('$payload[\'workflowProgressSteps\']')
+    expect($source)->toContain('x-html="workflowProgressHtml()"')
         ->and($source)->toContain('data-workflow-progress-panel');
+});
+
+it('19a. Purchase Order detail refreshes workflow progress from ajax status responses', function (): void {
+    expect(($this->purchaseOrderShowPageSource)())->toContain('workflowProgressSteps: Array.isArray(safePayload.workflowProgressSteps)')
+        ->and(($this->purchaseOrderShowPageSource)())->toContain('workflowProgressHtml()')
+        ->and(($this->purchaseOrderShowPageSource)())->toContain('workflowProgressStepHtml(step, isLast)')
+        ->and(($this->purchaseOrderShowPageSource)())->toContain('workflowUpdatedDetail(workflow, purchaseOrder, workflowProgressSteps = null)')
+        ->and(($this->purchaseOrderShowPageSource)())->toContain('this.workflowProgressSteps = workflowProgressSteps')
+        ->and(($this->purchaseOrderShowPageSource)())->not->toContain('workflowProgressSteps: workflowProgressSteps || []')
+        ->and(($this->purchaseOrderShowPageSource)())->not->toContain('workflowProgressSteps: responseData.workflowProgressSteps || []')
+        ->and(($this->purchaseOrderStatusControllerSource)())->toContain('workflowProgressSteps')
+        ->and(($this->purchaseOrderStatusControllerSource)())->toContain('BuildWorkflowProgressStepsAction')
+        ->and(($this->purchaseOrderWorkflowControllerSource)())->toContain('workflowProgressSteps')
+        ->and(($this->purchaseOrderWorkflowControllerSource)())->toContain('BuildWorkflowProgressStepsAction')
+        ->and(($this->workflowActionButtonSource)())->toContain('workflowUpdatedDetail.workflowProgressSteps = workflowProgressSteps');
 });
 
 it('20. Sales Order detail renders workflow progress at the top of content', function (): void {

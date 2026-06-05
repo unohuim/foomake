@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Actions\Inventory\AdvanceInventoryCountWorkflowStageAction;
 use App\Actions\Inventory\BuildMaterialInventoryStatsAction;
+use App\Actions\Inventory\CanConvertInventoryBalancesToUomAction;
 use App\Actions\Workflows\ResolveInventoryWorkflowStageAction;
 use App\Actions\Workflows\SeedDefaultWorkflowStagesForTenantAction;
 use App\Models\InventoryCount;
@@ -53,58 +54,7 @@ class ItemController extends Controller
             ]);
         }
 
-        $canViewPurchasing = Gate::allows('purchasing-suppliers-view');
-        $canManagePurchasing = Gate::allows('purchasing-suppliers-manage');
-        $canViewPurchaseOrders = Gate::allows('purchasing-purchase-orders-create');
-        $canViewRecipes = Gate::allows('inventory-recipes-view');
-        $canViewMakeOrders = Gate::allows('inventory-make-orders-view');
-        $canManageRecipes = Gate::allows('inventory-make-orders-manage');
-        $canExecuteMakeOrders = Gate::allows('inventory-make-orders-execute');
-        $canViewInventoryCounts = Gate::allows('inventory-adjustments-view');
-        $canCreateInventoryCounts = Gate::allows('inventory-adjustments-execute');
-        $canCreatePurchaseOrdersFromPackages = $canViewPurchasing
-            && Gate::allows('purchasing-purchase-orders-create');
-        $payload = [
-            'item' => [
-                'id' => $item->id,
-                'name' => $item->name,
-            ],
-            'inventoryStats' => $item->is_stockable
-                ? app(BuildMaterialInventoryStatsAction::class)->execute($item)
-                : null,
-            'tenantCurrency' => strtoupper($this->resolveTenantCurrency($request)),
-            'navigationStateUrl' => route('navigation.state'),
-            'canViewPurchasing' => $canViewPurchasing,
-            'purchaseOrderCreate' => $canCreatePurchaseOrdersFromPackages && $item->is_purchasable
-                ? $this->purchaseOrderCreateConfig($request, $item)
-                : null,
-            'recipeCreate' => $canViewRecipes && $item->is_manufacturable
-                ? $this->recipeCreateConfig($request, $item, $canManageRecipes)
-                : null,
-            'inventoryCountCreate' => $item->is_stockable && $canViewInventoryCounts && $canCreateInventoryCounts
-                ? $this->inventoryCountCreateConfig($request, $item)
-                : null,
-            'makeOrderCreate' => $canViewMakeOrders && $item->is_manufacturable
-                ? $this->makeOrderCreateConfig($request, $item, $canExecuteMakeOrders)
-                : null,
-            'sections' => [
-                'supplierPackages' => $canViewPurchasing && $item->is_purchasable
-                    ? $this->supplierPackagesSectionConfig($request, $item, $canManagePurchasing)
-                    : null,
-                'recipes' => $canViewRecipes && $item->is_manufacturable
-                    ? $this->recipesSectionConfig($item, $canManageRecipes, $canExecuteMakeOrders)
-                    : null,
-                'inventoryCounts' => $item->is_stockable && $canViewInventoryCounts
-                    ? $this->inventoryCountsSectionConfig($request, $item)
-                    : null,
-                'purchaseOrders' => $canViewPurchaseOrders && $item->is_purchasable
-                    ? $this->purchaseOrdersSectionConfig($item)
-                    : null,
-                'makeOrders' => $canViewMakeOrders && $item->is_manufacturable
-                    ? $this->makeOrdersSectionConfig($item)
-                    : null,
-            ],
-        ];
+        $payload = $this->materialDetailPayload($request, $item);
 
         return view('materials.show', [
             'item' => $item,
@@ -139,7 +89,10 @@ class ItemController extends Controller
             'base_uom_id' => [
                 'required',
                 'integer',
-                Rule::exists('uoms', 'id')->where('tenant_id', $request->user()->tenant_id),
+                Rule::exists('uoms', 'id')->where(function ($query) use ($request): void {
+                    $query->where('tenant_id', $request->user()->tenant_id)
+                        ->orWhereNull('tenant_id');
+                }),
             ],
             'is_purchasable' => ['nullable', 'boolean'],
             'is_sellable' => ['nullable', 'boolean'],
@@ -189,6 +142,7 @@ class ItemController extends Controller
                 'id' => $item->id,
                 'name' => $item->name,
                 'base_uom_id' => $item->base_uom_id,
+                'is_active' => $item->is_active,
                 'is_stockable' => $item->is_stockable,
                 'is_purchasable' => $item->is_purchasable,
                 'is_sellable' => $item->is_sellable,
@@ -218,24 +172,27 @@ class ItemController extends Controller
             'base_uom_id' => [
                 'required',
                 'integer',
-                Rule::exists('uoms', 'id')->where('tenant_id', $request->user()->tenant_id),
+                Rule::exists('uoms', 'id')->where(function ($query) use ($request): void {
+                    $query->where('tenant_id', $request->user()->tenant_id)
+                        ->orWhereNull('tenant_id');
+                }),
             ],
             'is_purchasable' => ['nullable', 'boolean'],
             'is_sellable' => ['nullable', 'boolean'],
             'is_manufacturable' => ['nullable', 'boolean'],
             'is_stockable' => ['nullable', 'boolean'],
+            'is_active' => ['nullable', 'boolean'],
             'default_price_amount' => ['nullable', 'regex:/^\\d+(\\.\\d{1,2})?$/'],
             'default_price_currency_code' => ['nullable', 'regex:/^[A-Za-z]{3}$/'],
         ]);
 
-        $hasStockMoves = $item->stockMoves()->exists();
         $baseUomId = (int) $validated['base_uom_id'];
 
-        if ($hasStockMoves && $baseUomId !== $item->base_uom_id) {
+        if ($baseUomId !== (int) $item->base_uom_id && ! $this->canChangeBaseUom($item, $baseUomId)) {
             return response()->json([
-                'message' => 'Base unit of measure is locked.',
+                'message' => 'Base unit of measure cannot be changed.',
                 'errors' => [
-                    'base_uom_id' => ['Base unit of measure cannot be changed once stock moves exist.'],
+                    'base_uom_id' => ['Existing inventory cannot be converted to the selected base unit of measure.'],
                 ],
             ], 422);
         }
@@ -245,7 +202,7 @@ class ItemController extends Controller
             'base_uom_id' => $baseUomId,
         ];
 
-        $flagFields = ['is_stockable', 'is_purchasable', 'is_sellable', 'is_manufacturable'];
+        $flagFields = ['is_active', 'is_stockable', 'is_purchasable', 'is_sellable', 'is_manufacturable'];
 
         foreach ($flagFields as $field) {
             if ($request->has($field)) {
@@ -263,13 +220,15 @@ class ItemController extends Controller
                 'id' => $item->id,
                 'name' => $item->name,
                 'base_uom_id' => $item->base_uom_id,
+                'is_active' => $item->is_active,
                 'is_stockable' => $item->is_stockable,
                 'is_purchasable' => $item->is_purchasable,
                 'is_sellable' => $item->is_sellable,
                 'is_manufacturable' => $item->is_manufacturable,
-                'has_stock_moves' => $hasStockMoves,
+                'has_stock_moves' => $item->stockMoves()->exists(),
                 'default_price_amount' => $this->formatCentsToAmount($item->default_price_cents),
                 'default_price_currency_code' => $item->default_price_currency_code,
+                'material_detail' => $this->materialDetailPayload($request, $item->fresh('baseUom')),
             ],
         ]);
     }
@@ -298,6 +257,113 @@ class ItemController extends Controller
     }
 
     /**
+     * Determine whether existing inventory can be represented in a new base UoM.
+     */
+    private function canChangeBaseUom(Item $item, int $baseUomId): bool
+    {
+        $targetUom = Uom::query()->whereKey($baseUomId)->first();
+
+        if ($targetUom === null) {
+            return false;
+        }
+
+        return app(CanConvertInventoryBalancesToUomAction::class)->execute($item, $targetUom);
+    }
+
+    /**
+     * Build the Material detail payload used by the initial page and live updates.
+     *
+     * @return array<string, mixed>
+     */
+    private function materialDetailPayload(Request $request, Item $item): array
+    {
+        $canViewPurchasing = Gate::allows('purchasing-suppliers-view');
+        $canManagePurchasing = Gate::allows('purchasing-suppliers-manage');
+        $canViewPurchaseOrders = Gate::allows('purchasing-purchase-orders-create');
+        $canViewRecipes = Gate::allows('inventory-recipes-view');
+        $canViewMakeOrders = Gate::allows('inventory-make-orders-view');
+        $canManageRecipes = Gate::allows('inventory-make-orders-manage');
+        $canExecuteMakeOrders = Gate::allows('inventory-make-orders-execute');
+        $canViewInventoryCounts = Gate::allows('inventory-adjustments-view');
+        $canCreateInventoryCounts = Gate::allows('inventory-adjustments-execute');
+        $canCreatePurchaseOrdersFromPackages = $canViewPurchasing
+            && Gate::allows('purchasing-purchase-orders-create');
+
+        return [
+            'item' => [
+                'id' => $item->id,
+                'name' => $item->name,
+                'base_uom_id' => $item->base_uom_id,
+                'base_uom_name' => $item->baseUom?->name,
+                'base_uom_symbol' => $item->baseUom?->symbol,
+                'uom_options' => $this->materialUomOptions($request, $item),
+                'is_stockable' => (bool) $item->is_stockable,
+                'is_purchasable' => (bool) $item->is_purchasable,
+                'is_sellable' => (bool) $item->is_sellable,
+                'is_manufacturable' => (bool) $item->is_manufacturable,
+                'can_manage' => Gate::allows('inventory-materials-manage'),
+                'can_toggle_types' => Gate::allows('inventory-materials-manage'),
+                'update_url' => route('materials.update', $item),
+                'csrf_token' => $request->session()->token(),
+            ],
+            'inventoryStats' => $item->is_stockable
+                ? app(BuildMaterialInventoryStatsAction::class)->execute($item)
+                : null,
+            'tenantCurrency' => strtoupper($this->resolveTenantCurrency($request)),
+            'navigationStateUrl' => route('navigation.state'),
+            'canViewPurchasing' => $canViewPurchasing,
+            'purchaseOrderCreate' => $canCreatePurchaseOrdersFromPackages && $item->is_purchasable
+                ? $this->purchaseOrderCreateConfig($request, $item)
+                : null,
+            'recipeCreate' => $canViewRecipes && $item->is_manufacturable
+                ? $this->recipeCreateConfig($request, $item, $canManageRecipes)
+                : null,
+            'inventoryCountCreate' => $item->is_stockable && $canViewInventoryCounts && $canCreateInventoryCounts
+                ? $this->inventoryCountCreateConfig($request, $item)
+                : null,
+            'makeOrderCreate' => $canViewMakeOrders && $item->is_manufacturable
+                ? $this->makeOrderCreateConfig($request, $item, $canExecuteMakeOrders)
+                : null,
+            'sections' => [
+                'supplierPackages' => $canViewPurchasing && $item->is_purchasable
+                    ? $this->supplierPackagesSectionConfig($request, $item, $canManagePurchasing)
+                    : null,
+                'recipes' => $canViewRecipes && $item->is_manufacturable
+                    ? $this->recipesSectionConfig($item, $canManageRecipes, $canExecuteMakeOrders)
+                    : null,
+                'inventoryCounts' => $item->is_stockable && $canViewInventoryCounts
+                    ? $this->inventoryCountsSectionConfig($request, $item)
+                    : null,
+                'purchaseOrders' => $canViewPurchaseOrders && $item->is_purchasable
+                    ? $this->purchaseOrdersSectionConfig($item)
+                    : null,
+                'makeOrders' => $canViewMakeOrders && $item->is_manufacturable
+                    ? $this->makeOrdersSectionConfig($item)
+                    : null,
+            ],
+        ];
+    }
+
+    /**
+     * Build tenant UoM options for the material base UoM dropdown.
+     *
+     * @return array<int, array{id: int, name: string, symbol: string}>
+     */
+    private function materialUomOptions(Request $request, Item $item): array
+    {
+        return Uom::query()
+            ->where('tenant_id', $request->user()->tenant_id)
+            ->orderBy('name')
+            ->get(['id', 'name', 'symbol'])
+            ->map(fn (Uom $uom): array => [
+                'id' => (int) $uom->id,
+                'name' => (string) $uom->name,
+                'symbol' => (string) $uom->symbol,
+            ])
+            ->all();
+    }
+
+    /**
      * List inventory count rows scoped to one stockable material.
      */
     public function listInventoryCounts(Request $request, Item $item): JsonResponse
@@ -307,15 +373,17 @@ class ItemController extends Controller
 
         abort_unless($item->is_stockable, 404);
 
+        $perPage = $this->perPageFromRequest($request);
+
         $paginator = InventoryCountLine::query()
             ->where('inventory_count_lines.tenant_id', $request->user()->tenant_id)
             ->where('inventory_count_lines.item_id', $item->id)
-            ->with(['inventoryCount.assignedToUser', 'item.baseUom'])
+            ->with(['inventoryCount.assignedToUser', 'inventoryCount.workflowStage', 'item.baseUom', 'uom'])
             ->join('inventory_counts', 'inventory_counts.id', '=', 'inventory_count_lines.inventory_count_id')
             ->orderByDesc('inventory_counts.counted_at')
             ->orderByDesc('inventory_count_lines.id')
             ->select('inventory_count_lines.*')
-            ->paginate(10);
+            ->paginate($perPage);
 
         return response()->json([
             'data' => collect($paginator->items())
@@ -336,6 +404,7 @@ class ItemController extends Controller
         abort_unless($item->is_stockable, 404);
 
         $validated = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
             'counted_at' => ['required', 'date'],
             'notes' => ['nullable', 'string'],
             'assigned_to_user_id' => [
@@ -354,6 +423,7 @@ class ItemController extends Controller
                 'assigned_to_user_id' => isset($validated['assigned_to_user_id'])
                     ? (int) $validated['assigned_to_user_id']
                     : null,
+                'name' => $validated['name'],
                 'counted_at' => Carbon::parse((string) $validated['counted_at']),
                 'workflow_stage_id' => null,
                 'notes' => $validated['notes'] ?? null,
@@ -363,6 +433,7 @@ class ItemController extends Controller
                 'tenant_id' => $request->user()->tenant_id,
                 'inventory_count_id' => $count->id,
                 'item_id' => $item->id,
+                'uom_id' => $item->base_uom_id,
                 'counted_quantity' => $validated['counted_quantity'] ?? null,
                 'notes' => null,
             ]);
@@ -373,6 +444,7 @@ class ItemController extends Controller
         return response()->json([
             'count' => [
                 'id' => $count->id,
+                'name' => $count->name,
                 'show_url' => route('inventory.counts.show', $count),
             ],
         ], 201);
@@ -440,6 +512,9 @@ class ItemController extends Controller
             'permissions' => [
                 'canCreate' => $canManagePurchasing,
             ],
+            'showRowActionsMenu' => false,
+            'inlineActionsOnMobile' => true,
+            'recordClass' => 'rounded-lg border border-gray-200 bg-gray-50 px-3 py-1 sm:px-4 sm:py-1',
             'createAction' => $formConfig->createAction(),
             'endpoints' => [
                 'list' => route('materials.supplier-packages.index', $item),
@@ -458,12 +533,25 @@ class ItemController extends Controller
                     [
                         'label' => 'Package',
                         'field' => 'display.packageText',
+                        'hideLabelOnMobile' => true,
+                        'compactOnMobile' => true,
                         'fallback' => '—',
                     ],
                     [
                         'label' => 'SKU',
                         'field' => 'display.skuText',
-                        'fallback' => '—',
+                        'hideLabelOnMobile' => true,
+                        'compactOnMobile' => true,
+                        'fallback' => '',
+                    ],
+                    [
+                        'label' => 'Price',
+                        'field' => 'price_amount',
+                        'suffixField' => 'current_price_currency_code',
+                        'hideLabelOnMobile' => true,
+                        'compactOnMobile' => true,
+                        'mobilePlacement' => 'primary-end',
+                        'fallback' => 'No price',
                     ],
                 ],
                 'badges' => [
@@ -478,49 +566,28 @@ class ItemController extends Controller
                         'fallback' => '',
                     ],
                 ],
-                'rightMeta' => [
-                    [
-                        'label' => 'Price',
-                        'field' => 'display.priceText',
-                        'fallback' => 'No price',
-                        'strong' => true,
-                    ],
-                ],
+                'rightMeta' => [],
             ],
             'actions' => [
                 [
-                    'id' => 'view',
-                    'label' => 'View',
-                    'type' => 'view',
-                    'tone' => 'default',
-                    'urlField' => 'display.showUrl',
-                ],
-                [
                     'id' => 'purchase',
                     'label' => 'Purchase',
+                    'ariaLabel' => 'Purchase supplier package',
+                    'tooltip' => 'Purchase Order',
                     'type' => 'custom',
                     'tone' => 'default',
+                    'icon' => 'credit-card',
                     'handlerKey' => 'purchase',
-                ],
-                [
-                    'id' => 'edit',
-                    'label' => 'Edit',
-                    'type' => 'edit',
-                    'tone' => 'default',
-                ],
-                [
-                    'id' => 'remove',
-                    'label' => 'Remove',
-                    'type' => 'remove',
-                    'tone' => 'warning',
-                    'endpointKey' => 'remove',
-                    'method' => 'DELETE',
                 ],
                 [
                     'id' => 'archive',
                     'label' => 'Archive',
+                    'ariaLabel' => 'Archive supplier package',
+                    'tooltip' => 'Archive',
+                    'confirmMessage' => 'Are you sure you want to archive this supplier package?',
                     'type' => 'archive',
                     'tone' => 'warning',
+                    'icon' => 'x-mark',
                     'endpointKey' => 'remove',
                     'method' => 'DELETE',
                 ],
@@ -543,6 +610,12 @@ class ItemController extends Controller
             'permissions' => [
                 'canCreate' => false,
             ],
+            'showRowActionsMenu' => false,
+            'recordClass' => 'rounded-lg border border-gray-200 bg-gray-50 px-3 py-1 sm:px-4 sm:py-1',
+            'rowClass' => 'flex flex-row items-start justify-between gap-4',
+            'rightMetaClass' => 'flex min-h-[3.25rem] min-w-[5rem] flex-col items-end justify-between gap-4 self-stretch text-right',
+            'mobileRowUrlField' => 'display.showUrl',
+            'secondaryFieldsClass' => 'mt-px flex flex-wrap items-center gap-x-3 gap-y-1 sm:mt-1.5',
             'endpoints' => [
                 'list' => route('materials.purchase-orders.index', $item),
             ],
@@ -550,45 +623,52 @@ class ItemController extends Controller
             'rowLayout' => [
                 'primaryText' => [
                     'field' => 'display.poNumberText',
+                    'urlField' => 'display.showUrl',
+                    'linkClass' => 'truncate text-sm font-semibold text-gray-900 transition hover:text-gray-700',
                     'fallback' => 'Draft PO',
                 ],
                 'secondaryFields' => [
                     [
-                        'label' => 'Order date',
-                        'field' => 'display.orderDateText',
-                        'fallback' => 'No order date',
-                    ],
-                    [
-                        'label' => 'Supplier',
+                        'label' => '',
                         'field' => 'display.supplierText',
                         'fallback' => 'Supplier not set',
+                        'textClass' => 'text-xs leading-none text-gray-600',
+                    ],
+                    [
+                        'label' => '',
+                        'field' => 'display.materialQuantityCostText',
+                        'fallback' => '',
+                        'textClass' => 'mt-0.5 text-xs leading-none text-gray-600 sm:whitespace-nowrap',
+                        'fullWidth' => true,
                     ],
                 ],
                 'badges' => [
                     [
                         'field' => 'display.statusText',
                         'toneField' => 'display.statusTone',
+                        'textClass' => 'text-[0.55rem] uppercase tracking-wide',
                         'fallback' => '',
                     ],
                 ],
                 'rightMeta' => [
                     [
-                        'label' => 'Total',
-                        'field' => 'display.totalText',
+                        'label' => '',
+                        'field' => 'display.orderDateText',
+                        'fallback' => '',
+                        'textClass' => 'text-xs font-medium text-gray-500',
+                    ],
+                    [
+                        'label' => '',
+                        'field' => 'display.materialLineTotalAmountText',
+                        'suffixField' => 'display.materialLineTotalCurrencyText',
                         'fallback' => '—',
                         'strong' => true,
+                        'textClass' => 'text-sm font-semibold text-gray-900',
+                        'suffixClass' => 'ml-1 text-[0.65rem] font-medium text-gray-500',
                     ],
                 ],
             ],
-            'actions' => [
-                [
-                    'id' => 'view',
-                    'label' => 'View',
-                    'type' => 'view',
-                    'tone' => 'default',
-                    'urlField' => 'display.showUrl',
-                ],
-            ],
+            'actions' => [],
         ];
     }
 
@@ -753,6 +833,13 @@ class ItemController extends Controller
             'permissions' => [
                 'canCreate' => $canCreate,
             ],
+            'showRowActionsMenu' => false,
+            'inlineActionsOnMobile' => true,
+            'recordClass' => 'rounded-lg border border-gray-200 bg-gray-50 px-3 py-1 sm:px-4 sm:py-1',
+            'rowClass' => 'flex flex-row items-start justify-between gap-4',
+            'rightMetaClass' => 'flex min-h-[3.25rem] min-w-[5rem] flex-col items-end justify-between gap-4 self-stretch text-right',
+            'mobileRowUrlField' => 'display.showUrl',
+            'secondaryFieldsClass' => 'mt-px flex flex-wrap items-center gap-x-3 gap-y-1',
             'createAction' => [
                 'type' => 'custom',
                 'handlerKey' => 'openInventoryCountCreate',
@@ -769,40 +856,47 @@ class ItemController extends Controller
             'fields' => [],
             'rowLayout' => [
                 'primaryText' => [
-                    'field' => 'display.countedAtText',
+                    'field' => 'display.nameText',
+                    'urlField' => 'display.showUrl',
+                    'linkClass' => 'truncate text-sm font-semibold text-gray-900 transition hover:text-gray-700',
                     'fallback' => '—',
                 ],
                 'secondaryFields' => [
                     [
-                        'label' => 'Assigned',
+                        'label' => '',
                         'field' => 'display.assignedToText',
-                        'fallback' => 'Unassigned',
-                    ],
-                    [
-                        'label' => 'UOM',
-                        'field' => 'display.uomText',
-                        'fallback' => '—',
+                        'fallback' => '',
+                        'textClass' => 'text-xs leading-none text-gray-600',
+                        'textValueClass' => 'text-xs leading-none text-gray-600',
                     ],
                 ],
-                'badges' => [],
+                'badges' => [
+                    [
+                        'field' => 'display.statusText',
+                        'toneField' => 'display.statusTone',
+                        'textClass' => 'text-[0.55rem] uppercase tracking-wide',
+                        'fallback' => '',
+                    ],
+                ],
                 'rightMeta' => [
                     [
-                        'label' => 'Counted Qty',
+                        'label' => '',
+                        'field' => 'display.countedAtText',
+                        'fallback' => '',
+                        'textClass' => 'text-xs font-medium text-gray-500',
+                    ],
+                    [
+                        'label' => '',
                         'field' => 'display.countedQuantityText',
-                        'fallback' => '—',
+                        'suffixField' => 'display.uomSymbolText',
+                        'fallback' => '',
                         'strong' => true,
+                        'textClass' => 'text-xs',
+                        'suffixClass' => 'text-[0.65rem]',
                     ],
                 ],
             ],
-            'actions' => [
-                [
-                    'id' => 'view',
-                    'label' => 'View',
-                    'type' => 'view',
-                    'tone' => 'default',
-                    'urlField' => 'display.showUrl',
-                ],
-            ],
+            'actions' => [],
         ];
     }
 
@@ -905,18 +999,25 @@ class ItemController extends Controller
     private function materialInventoryCountRowPayload(InventoryCountLine $line): array
     {
         $count = $line->inventoryCount;
+        $lineUom = $line->snapshotUom() ?? $line->uom ?? $line->item?->baseUom;
 
         return [
             'id' => $line->id,
-            'counted_at' => $count?->counted_at?->format('Y-m-d H:i') ?? '—',
+            'name' => $count?->name ?? '—',
+            'counted_at' => $count?->counted_at?->format('F j, Y') ?? '—',
             'assigned_to_user_name' => $count?->assignedToUser?->name,
-            'uom_symbol' => $line->item?->baseUom?->symbol,
+            'uom_name' => $lineUom?->name,
+            'uom_symbol' => $lineUom?->symbol,
+            'status_label' => $this->materialInventoryCountStatusLabel($count),
+            'status_tone' => $this->materialInventoryCountStatusTone($count),
             'counted_quantity' => $line->counted_quantity,
             'counted_quantity_display' => $line->counted_quantity === null
-                ? '—'
-                : QuantityFormatter::formatForUom($line->counted_quantity, $line->item?->baseUom, 2),
+                ? null
+                : $this->formatGroupedQuantity(
+                    QuantityFormatter::formatForUom($line->counted_quantity, $lineUom, 2)
+                ),
             'show_url' => $count ? route('inventory.counts.show', $count) : '',
-            'available_actions' => ['view'],
+            'available_actions' => [],
         ];
     }
 
@@ -931,6 +1032,82 @@ class ItemController extends Controller
             'per_page' => $paginator->perPage(),
             'total' => $paginator->total(),
         ];
+    }
+
+    /**
+     * Resolve the page size for reusable detail-section list endpoints.
+     */
+    private function perPageFromRequest(Request $request): int
+    {
+        $validated = $request->validate([
+            'per_page' => ['nullable', 'integer', 'min:1', 'max:50'],
+        ]);
+
+        return (int) ($validated['per_page'] ?? 5);
+    }
+
+    /**
+     * Add thousands separators to an already formatted decimal quantity string.
+     */
+    private function formatGroupedQuantity(string $quantity): string
+    {
+        $trimmed = trim($quantity);
+
+        if ($trimmed === '' || ! preg_match('/^-?\d+(?:\.\d+)?$/', $trimmed)) {
+            return $quantity;
+        }
+
+        $isNegative = str_starts_with($trimmed, '-');
+        $absolute = $isNegative ? substr($trimmed, 1) : $trimmed;
+        [$wholePart, $fractionPart] = array_pad(explode('.', $absolute, 2), 2, '');
+        $groupedWhole = preg_replace('/\B(?=(\d{3})+(?!\d))/', ',', $wholePart) ?? $wholePart;
+        $formatted = $fractionPart === '' ? $groupedWhole : $groupedWhole . '.' . $fractionPart;
+
+        return $isNegative ? '-' . $formatted : $formatted;
+    }
+
+    /**
+     * Return the workflow-facing status label for a material-scoped inventory count row.
+     */
+    private function materialInventoryCountStatusLabel(?InventoryCount $inventoryCount): string
+    {
+        if ($inventoryCount === null) {
+            return '';
+        }
+
+        if ($inventoryCount->workflow_stage_id === null) {
+            return $inventoryCount->posted_at !== null ? 'COMPLETED' : 'Draft';
+        }
+
+        if ($inventoryCount->posted_at !== null) {
+            return $inventoryCount->workflowStage?->status_complete_label
+                ?: $inventoryCount->workflowStage?->name
+                ?: 'Unknown';
+        }
+
+        $previousStage = app(ResolveInventoryWorkflowStageAction::class)->previousActiveStage($inventoryCount);
+
+        return $previousStage?->status_complete_label
+            ?: $previousStage?->name
+            ?: 'Draft';
+    }
+
+    /**
+     * Return the display tone for a material-scoped inventory count status badge.
+     */
+    private function materialInventoryCountStatusTone(?InventoryCount $inventoryCount): string
+    {
+        $statusLabel = $this->materialInventoryCountStatusLabel($inventoryCount);
+
+        if (strtoupper($statusLabel) === 'SCHEDULED') {
+            return 'info';
+        }
+
+        if ($inventoryCount === null || $inventoryCount->posted_at === null) {
+            return 'muted';
+        }
+
+        return 'success';
     }
 
     /**
@@ -1125,6 +1302,7 @@ class ItemController extends Controller
             'created_by_user_id' => $request->user()->id,
             'tasked_by_user_id' => $request->user()->id,
             'assigned_to_user_id' => $request->user()->id,
+            'name' => 'Initial count for ' . $item->name,
             'counted_at' => now(),
             'workflow_stage_id' => null,
             'notes' => 'Initial Stock',
@@ -1134,6 +1312,7 @@ class ItemController extends Controller
             'tenant_id' => $item->tenant_id,
             'inventory_count_id' => $inventoryCount->id,
             'item_id' => $item->id,
+            'uom_id' => $item->base_uom_id,
             'counted_quantity' => $startingQuantity,
             'notes' => 'Initial Stock',
         ]);

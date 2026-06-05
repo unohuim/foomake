@@ -119,6 +119,7 @@ class MaterialController extends Controller
             'base_uom_id' => $item->base_uom_id,
             'base_uom_name' => $item->baseUom?->name,
             'base_uom_symbol' => $item->baseUom?->symbol,
+            'is_active' => $item->is_active,
             'is_stockable' => $item->is_stockable,
             'is_purchasable' => $item->is_purchasable,
             'is_sellable' => $item->is_sellable,
@@ -177,23 +178,35 @@ class MaterialController extends Controller
                     'flags' => ['kind' => 'text'],
                 ],
             ],
+            'rowToggle' => [
+                'label' => 'Active',
+                'name' => 'is_active',
+                'checkedExpression' => 'Boolean(record.is_active)',
+                'disabledExpression' => '!canManageMaterials()',
+                'eventName' => 'material-active-toggle',
+                'handler' => 'toggleMaterialActive(toggleDetail)',
+                'ariaLabelExpression' => '`Toggle ${record.name || "material"} active state`',
+            ],
             'mobileCard' => [
                 'titleExpression' => "record.name || '—'",
-                'subtitleExpression' => 'materialBaseUomLabel(record)',
-                'bodyExpression' => 'materialFlagsLabel(record)',
+                'titleAsideExpression' => 'materialMobileUomLabel(record)',
+                'subtitleExpression' => '',
+                'bodyExpression' => '',
+                'layout' => 'flush-stacked',
+                'badgesExpression' => '',
+                'iconBadgesExpression' => 'materialFlagIconBadges(record)',
+                'urlExpression' => 'record.show_url',
+                'showActions' => false,
+                'toggle' => [
+                    'name' => 'is_active',
+                    'checkedExpression' => 'Boolean(record.is_active)',
+                    'disabledExpression' => '!canManageMaterials()',
+                    'eventName' => 'material-active-toggle',
+                    'handler' => 'toggleMaterialActive(toggleDetail)',
+                    'ariaLabelExpression' => '`Toggle ${record.name || "material"} active state`',
+                ],
             ],
-            'actions' => $canManageMaterials ? [
-                [
-                    'id' => 'edit',
-                    'label' => 'Edit',
-                    'tone' => 'default',
-                ],
-                [
-                    'id' => 'delete',
-                    'label' => 'Delete',
-                    'tone' => 'warning',
-                ],
-            ] : [],
+            'actions' => [],
         ];
     }
 

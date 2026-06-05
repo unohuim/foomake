@@ -24,14 +24,10 @@
         x-data="manufacturingUomsIndex"
         x-init="init()"
     >
-        <div class="fixed top-6 right-6 z-50" x-show="toastVisible" x-cloak>
-            <div class="rounded-md bg-green-50 border border-green-200 px-4 py-3 shadow-sm">
-                <p class="text-sm text-green-700" x-text="toastMessage"></p>
-            </div>
-        </div>
+        <x-ui.toast visible="toastVisible" type="'success'" message="toastMessage" />
 
         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
-            <div class="bg-white shadow-sm sm:rounded-lg">
+            <div class="bg-white shadow-sm">
                 <div class="p-6 text-gray-900 space-y-6">
                     <div class="flex items-center justify-between">
                         <div>

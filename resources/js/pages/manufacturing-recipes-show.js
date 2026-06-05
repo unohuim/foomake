@@ -159,7 +159,7 @@ export function mount(rootEl, payload) {
 
             this.toast.timeoutId = setTimeout(() => {
                 this.toast.visible = false;
-            }, 2500);
+            }, 1500);
         },
         hydrateRecipeResponse(data) {
             if (data.recipe && typeof data.recipe === 'object') {
@@ -495,7 +495,7 @@ export function mount(rootEl, payload) {
                 if (this.ingredientSavedState[line.id] === 'saved') {
                     this.ingredientSavedState[line.id] = '';
                 }
-            }, 1500);
+            }, 1000);
         },
         async createMakeOrder(makeUrl) {
             if (!makeUrl) {

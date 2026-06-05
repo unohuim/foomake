@@ -3,6 +3,7 @@
     'errorsVar' => 'errors',
     'errorsPrefix' => '',
     'users' => collect(),
+    'usersExpression' => '',
     'scopedItem' => null,
     'showCountedQuantity' => false,
 ])
@@ -17,7 +18,7 @@
     close="closeCountForm()"
     submit="submitCountForm()"
     title="{{ __('Inventory Count') }}"
-    description="{{ __('Set the counted date and optional notes.') }}"
+    description="{{ __('Create a named inventory count for stock verification.') }}"
     title-id="inventory-count-form-slide-over-title"
 >
     <div class="space-y-6">
@@ -32,6 +33,20 @@
                 </p>
             </div>
         @endif
+
+        <div class="space-y-2">
+            <label class="text-sm font-medium text-gray-700" for="inventory_count_name">
+                {{ __('Name') }}
+            </label>
+            <input
+                id="inventory_count_name"
+                type="text"
+                class="w-full rounded-md border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+                x-model="{{ $formVar }}.name"
+                autocomplete="off"
+            />
+            <p class="text-sm text-red-600" x-show="{{ $errorsPath }}?.name" x-text="{{ $errorsPath }}?.name?.[0]"></p>
+        </div>
 
         <div class="space-y-2">
             <label class="text-sm font-medium text-gray-700" for="counted_at">
@@ -72,11 +87,20 @@
                 x-model="{{ $formVar }}.assigned_to_user_id"
             >
                 <option value="">{{ __('Select a user') }}</option>
-                @foreach ($users as $user)
-                    <option value="{{ data_get($user, 'id') }}">
-                        {{ data_get($user, 'name') }} ({{ data_get($user, 'email') }})
-                    </option>
-                @endforeach
+                @if ($usersExpression !== '')
+                    <template x-for="user in {{ $usersExpression }}" :key="user.id">
+                        <option
+                            :value="user.id"
+                            x-text="`${user.name} (${user.email})`"
+                        ></option>
+                    </template>
+                @else
+                    @foreach ($users as $user)
+                        <option value="{{ data_get($user, 'id') }}">
+                            {{ data_get($user, 'name') }} ({{ data_get($user, 'email') }})
+                        </option>
+                    @endforeach
+                @endif
             </select>
             <p class="text-sm text-red-600" x-show="{{ $errorsPath }}?.assigned_to_user_id" x-text="{{ $errorsPath }}?.assigned_to_user_id?.[0]"></p>
         </div>

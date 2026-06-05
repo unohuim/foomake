@@ -357,7 +357,7 @@ export function mount(rootEl, payload) {
             window.clearTimeout(this._toastTimeoutId);
             this._toastTimeoutId = window.setTimeout(() => {
                 this.toast.show = false;
-            }, 2500);
+            }, 1500);
         },
 
         async completeInventoryCountTask(event) {

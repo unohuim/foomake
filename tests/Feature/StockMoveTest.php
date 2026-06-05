@@ -1,10 +1,12 @@
 <?php
 
 use App\Models\Item;
+use App\Models\InventoryBalance;
 use App\Models\StockMove;
 use App\Models\Tenant;
 use App\Models\Uom;
 use App\Models\UomCategory;
+use App\Models\UomConversion;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
@@ -125,6 +127,131 @@ it('on-hand quantity equals sum of stock moves', function () {
     ]);
 
     expect(asSixDecimals($item->onHandQuantity()))->toBe('4.250000');
+});
+
+it('creates an inventory balance row for a posted stock move', function () {
+    [$tenant, $user, $grams, $item] = makeTenantItemWithGrams();
+
+    $this->actingAs($user);
+
+    StockMove::create([
+        'tenant_id' => $tenant->id,
+        'item_id' => $item->id,
+        'uom_id' => $grams->id,
+        'quantity' => '10.000000',
+        'type' => 'receipt',
+    ]);
+
+    $balance = InventoryBalance::query()
+        ->where('tenant_id', $tenant->id)
+        ->where('item_id', $item->id)
+        ->where('uom_id', $grams->id)
+        ->first();
+
+    expect($balance)->not->toBeNull()
+        ->and(asSixDecimals((string) $balance->quantity))->toBe('10.000000');
+});
+
+it('updates the existing inventory balance row for repeated posted stock moves', function () {
+    [$tenant, $user, $grams, $item] = makeTenantItemWithGrams();
+
+    $this->actingAs($user);
+
+    StockMove::create([
+        'tenant_id' => $tenant->id,
+        'item_id' => $item->id,
+        'uom_id' => $grams->id,
+        'quantity' => '10.000000',
+        'type' => 'receipt',
+    ]);
+
+    StockMove::create([
+        'tenant_id' => $tenant->id,
+        'item_id' => $item->id,
+        'uom_id' => $grams->id,
+        'quantity' => '-2.500000',
+        'type' => 'issue',
+    ]);
+
+    expect(InventoryBalance::query()
+        ->where('tenant_id', $tenant->id)
+        ->where('item_id', $item->id)
+        ->where('uom_id', $grams->id)
+        ->count())->toBe(1);
+
+    $balance = InventoryBalance::query()
+        ->where('tenant_id', $tenant->id)
+        ->where('item_id', $item->id)
+        ->where('uom_id', $grams->id)
+        ->firstOrFail();
+
+    expect(asSixDecimals((string) $balance->quantity))->toBe('7.500000');
+});
+
+it('converts inventory balance rows into the current item base uom for on hand quantity', function () {
+    [$tenant, $user, $grams, $item] = makeTenantItemWithGrams();
+
+    $this->actingAs($user);
+
+    $kg = Uom::firstOrCreate(
+        [
+            'tenant_id' => $tenant->id,
+            'symbol' => 'kg',
+        ],
+        [
+            'uom_category_id' => $grams->uom_category_id,
+            'name' => 'Kilogram',
+        ]
+    );
+
+    UomConversion::query()->create([
+        'tenant_id' => $tenant->id,
+        'from_uom_id' => $grams->id,
+        'to_uom_id' => $kg->id,
+        'multiplier' => '0.00100000',
+    ]);
+
+    StockMove::create([
+        'tenant_id' => $tenant->id,
+        'item_id' => $item->id,
+        'uom_id' => $grams->id,
+        'quantity' => '1000.000000',
+        'type' => 'receipt',
+    ]);
+
+    $item->forceFill(['base_uom_id' => $kg->id])->save();
+
+    expect(asSixDecimals($item->fresh('baseUom')->onHandQuantity()))->toBe('1.000000');
+});
+
+it('fails on hand quantity when an inventory balance uom cannot convert to current base uom', function () {
+    [$tenant, $user, $grams, $item] = makeTenantItemWithGrams();
+
+    $this->actingAs($user);
+
+    $kg = Uom::firstOrCreate(
+        [
+            'tenant_id' => $tenant->id,
+            'symbol' => 'kg',
+        ],
+        [
+            'uom_category_id' => $grams->uom_category_id,
+            'name' => 'Kilogram',
+        ]
+    );
+
+    StockMove::create([
+        'tenant_id' => $tenant->id,
+        'item_id' => $item->id,
+        'uom_id' => $grams->id,
+        'quantity' => '1000.000000',
+        'type' => 'receipt',
+    ]);
+
+    $item->forceFill(['base_uom_id' => $kg->id])->save();
+
+    expect(fn () => $item->fresh('baseUom')->onHandQuantity())
+        ->toThrow(\DomainException::class);
 });
 
 it('rejects stock moves when uom_id does not match item base_uom_id', function () {

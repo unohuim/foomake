@@ -1842,7 +1842,7 @@ class MakeOrderController extends Controller
     /**
      * Resolve the page size for list endpoints that support limited mobile payloads.
      */
-    private function perPageFromRequest(Request $request, int $default = 10): int
+    private function perPageFromRequest(Request $request, int $default = 5): int
     {
         $validated = $request->validate([
             'per_page' => ['nullable', 'integer', 'min:1', 'max:50'],

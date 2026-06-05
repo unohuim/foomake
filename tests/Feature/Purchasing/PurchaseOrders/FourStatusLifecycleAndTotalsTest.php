@@ -646,42 +646,93 @@ it('20. supplier package creation with different uom requires an existing conver
         ->assertJsonPath('meta.conversion_create_url', route('manufacturing.uom-conversions.items.store'));
 });
 
-it('21. purchase order details source removes draft delete save and shipping fields from details', function (): void {
+it('21. purchase order details source conditionally opens when required header values are missing', function (): void {
     $source = File::get(resource_path('views/purchasing/orders/show.blade.php'));
     $detailsSource = substr($source, strpos($source, '<x-detail-section-card title="Details"'));
     $detailsSource = substr($detailsSource, 0, strpos($detailsSource, '<x-detail-section-card title="Items"'));
 
-    expect($detailsSource)->toContain(':default-open="false"')
+    expect($source)->toContain('$detailsDefaultOpen')
+        ->and($source)->toContain('data-purchase-order-detail-grid')
+        ->and($source)->toContain('mx-auto w-full min-w-0 max-w-7xl')
+        ->and($source)->toContain('grid w-full min-w-0 gap-4')
+        ->and($source)->toContain('max-w-7xl')
+        ->and($source)->toContain('lg:grid-cols-4')
+        ->and($source)->toContain('data-purchase-order-main-column')
+        ->and($source)->toContain('min-w-0 space-y-4 sm:space-y-6 lg:col-span-3')
+        ->and($source)->toContain('lg:col-span-3')
+        ->and($source)->toContain('data-purchase-order-side-column')
+        ->and($source)->toContain('min-w-0 space-y-4 sm:space-y-6 lg:col-span-1')
+        ->and($source)->toContain('data-purchase-order-main-lower-column')
+        ->and($detailsSource)->toContain(':default-open="$detailsDefaultOpen"')
         ->and($detailsSource)->not->toContain('Delete draft')
         ->and($detailsSource)->not->toContain('Save details')
         ->and($detailsSource)->not->toContain('Shipping');
 });
 
-it('22. purchase order details source wires individual autosave fields with success icons', function (): void {
+it('21a. purchase order responsive layout stacks totals under items before notes and tasks', function (): void {
     $source = File::get(resource_path('views/purchasing/orders/show.blade.php'));
 
-    expect($source)->toContain("autosaveField('supplier_id')")
-        ->and($source)->toContain("autosaveField('order_date')")
-        ->and($source)->toContain("autosaveField('po_number')")
-        ->and($source)->toContain("autosaveField('notes')")
-        ->and($source)->toContain('data-autosave-success-icon')
-        ->and($source)->toContain('text-lime-400');
+    $mainColumnPosition = strpos($source, 'data-purchase-order-main-column');
+    $itemsPosition = strpos($source, '<x-detail-section-card title="Items"');
+    $sideColumnPosition = strpos($source, 'data-purchase-order-side-column');
+    $totalsPosition = strpos($source, '<x-detail-section-card title="Totals"');
+    $lowerColumnPosition = strpos($source, 'data-purchase-order-main-lower-column');
+    $notesPosition = strpos($source, '<x-notes-feed');
+    $tasksPosition = strpos($source, 'title="Tasks"');
+    $receiptHistoryPosition = strpos($source, 'title="Receipt History"');
+    $shortCloseHistoryPosition = strpos($source, 'title="Short-Close History"');
+
+    expect($mainColumnPosition)->not->toBeFalse()
+        ->and($itemsPosition)->not->toBeFalse()
+        ->and($notesPosition)->not->toBeFalse()
+        ->and($tasksPosition)->not->toBeFalse()
+        ->and($receiptHistoryPosition)->not->toBeFalse()
+        ->and($shortCloseHistoryPosition)->not->toBeFalse()
+        ->and($sideColumnPosition)->not->toBeFalse()
+        ->and($totalsPosition)->not->toBeFalse()
+        ->and($lowerColumnPosition)->not->toBeFalse()
+        ->and($mainColumnPosition)->toBeLessThan($itemsPosition)
+        ->and($itemsPosition)->toBeLessThan($sideColumnPosition)
+        ->and($sideColumnPosition)->toBeLessThan($totalsPosition)
+        ->and($totalsPosition)->toBeLessThan($lowerColumnPosition)
+        ->and($lowerColumnPosition)->toBeLessThan($notesPosition)
+        ->and($notesPosition)->toBeLessThan($tasksPosition)
+        ->and($tasksPosition)->toBeLessThan($receiptHistoryPosition)
+        ->and($receiptHistoryPosition)->toBeLessThan($shortCloseHistoryPosition)
+        ->and($source)->not->toContain("</div>\n            </div>\n\n            <x-detail-section-card title=\"Receipt History\"");
+});
+
+it('22. purchase order details source wires individual autosave fields with success icons', function (): void {
+    $source = File::get(resource_path('views/purchasing/orders/show.blade.php'));
+    $detailsSource = substr($source, strpos($source, '<x-detail-section-card title="Details"'));
+    $detailsSource = substr($detailsSource, 0, strpos($detailsSource, '<x-detail-section-card title="Items"'));
+
+    expect($detailsSource)->toContain("autosaveField('supplier_id')")
+        ->and($detailsSource)->toContain("autosaveField('order_date')")
+        ->and($detailsSource)->toContain("autosaveField('po_number')")
+        ->and($detailsSource)->not->toContain("autosaveField('notes')")
+        ->and($detailsSource)->not->toContain('x-model="form.notes"')
+        ->and($detailsSource)->toContain('data-autosave-success-icon')
+        ->and($detailsSource)->toContain('text-lime-400');
 });
 
 it('23. purchase order totals source renders editable shipping autosave in totals', function (): void {
     $source = File::get(resource_path('views/purchasing/orders/show.blade.php'));
     $totalsSource = substr($source, strpos($source, '<x-detail-section-card title="Totals"'));
-    $totalsSource = substr($totalsSource, 0, strpos($totalsSource, '<x-detail-section-card title="Receipt History"'));
+    $totalsSource = substr($totalsSource, 0, strpos($totalsSource, 'data-purchase-order-main-lower-column'));
 
     expect($totalsSource)->toContain('Shipping')
         ->and($totalsSource)->toContain('inputmode="decimal"')
+        ->and($totalsSource)->not->toContain(':emit-on-input="false"')
+        ->and($totalsSource)->toContain("x-bind:class=\"savedFields.shipping_amount ? 'opacity-100' : 'opacity-0'\"")
+        ->and($totalsSource)->toContain("x-on:smart-number-input:changed=\"autosaveField('shipping_amount', \$event.detail)\"")
         ->and($totalsSource)->toContain("autosaveField('shipping_amount')");
 });
 
 it('24. purchase order items source uses supplier package combobox add pattern', function (): void {
     $source = File::get(resource_path('views/purchasing/orders/show.blade.php'));
     $itemsSource = substr($source, strpos($source, '<x-detail-section-card title="Items"'));
-    $itemsSource = substr($itemsSource, 0, strpos($itemsSource, '<x-detail-section-card title="Totals"'));
+    $itemsSource = substr($itemsSource, 0, strpos($itemsSource, 'data-purchase-order-side-column'));
 
     expect($itemsSource)->toContain('<x-combobox')
         ->and($itemsSource)->toContain('supplierPackageComboboxOptions')
@@ -1118,7 +1169,7 @@ it('32b. purchase order detail supplier select normalizes option ids as strings 
 it('33. purchase order items add row source is clean combobox plus button without label or dashed wrapper', function (): void {
     $source = File::get(resource_path('views/purchasing/orders/show.blade.php'));
     $itemsSource = substr($source, strpos($source, '<x-detail-section-card title="Items"'));
-    $itemsSource = substr($itemsSource, 0, strpos($itemsSource, '<x-detail-section-card title="Totals"'));
+    $itemsSource = substr($itemsSource, 0, strpos($itemsSource, 'data-purchase-order-side-column'));
 
     expect($itemsSource)->toContain('<x-combobox')
         ->and($itemsSource)->toContain('supplierPackageComboboxOptions')
@@ -1133,15 +1184,35 @@ it('34. purchase order lines source renders inline quantity tax inputs and icon 
     $source = File::get(resource_path('views/purchasing/orders/show.blade.php'));
     $pageModule = File::get(resource_path('js/pages/purchasing-orders-show.js'));
 
-    $itemsSection = Str::between($source, '<x-detail-section-card title="Items" :default-open="true">', '<x-detail-section-card title="Receipt History"');
+    $itemsSection = Str::between(
+        $source,
+        '<x-detail-section-card title="Items" :default-open="true">',
+        'data-purchase-order-side-column'
+    );
 
-    expect($itemsSection)->toContain('autosaveLineField(line, \'pack_count\')')
+    expect($itemsSection)->toContain("autosaveLineField(line, 'pack_count', \$event.detail)")
+        ->and($itemsSection)->toContain('x-on:smart-number-input:changed="autosaveLineField(line, \'pack_count\', $event.detail)"')
+        ->and($itemsSection)->toContain('x-on:smart-number-input:changed="autosaveLineField(line, \'tax_percent\', $event.detail)"')
         ->and($source)->toContain('inputmode="numeric"')
-        ->and($itemsSection)->toContain('x-on:focus="$el.setSelectionRange($el.value.length, $el.value.length)"')
+        ->and($itemsSection)->toContain('after-focus="$el.setSelectionRange($el.value.length, $el.value.length)"')
         ->and($itemsSection)->not->toContain('step="1"')
         ->and($itemsSection)->not->toContain(':step="quantityStep(line)"')
         ->and($pageModule)->not->toContain('quantityStep(line)')
         ->and($pageModule)->toContain('pack_count: this.normalizeNullableInt(line.pack_count)')
+        ->and($pageModule)->toContain('async autosaveLineField(line, field, detail = null)')
+        ->and($pageModule)->toContain("Object.prototype.hasOwnProperty.call(detail, 'rawValue')")
+        ->and($pageModule)->toContain('payloadData.pack_count = this.normalizeNullableInt(fieldValue)')
+        ->and($pageModule)->toContain('payloadData.tax_percent = this.normalizeNullable(fieldValue)')
+        ->and($pageModule)->toContain('line.pack_count = payloadData.pack_count')
+        ->and($pageModule)->toContain('line.tax_percent = payloadData.tax_percent')
+        ->and($pageModule)->toContain('savedLineFieldValues: {}')
+        ->and($pageModule)->toContain('savingLineFields: {}')
+        ->and($pageModule)->toContain('pendingLineFieldValues: {}')
+        ->and($pageModule)->toContain('this.pendingLineFieldValues')
+        ->and($pageModule)->toContain('const hasPendingValue = Object.prototype.hasOwnProperty.call(this.pendingLineFieldValues, key)')
+        ->and($pageModule)->toContain('const previousValue = line[field]')
+        ->and($pageModule)->toContain('this.applyLineFieldValue(line, field, previousValue)')
+        ->and($pageModule)->toContain('if (!hasPendingValue) {')
         ->and(File::get(app_path('Http/Controllers/PurchaseOrderController.php')))->toContain("'pack_count' => (int) \$line->pack_count")
         ->and(File::get(app_path('Http/Controllers/PurchaseOrderLineController.php')))->toContain("'pack_count' => (int) \$line->pack_count")
         ->and($pageModule)->not->toContain('Math.trunc(Number(line.pack_count')
@@ -1155,7 +1226,7 @@ it('34. purchase order lines source renders inline quantity tax inputs and icon 
         ->and($pageModule)->toContain('savedLineFieldTimeouts: {}')
         ->and($pageModule)->toContain('showLineFieldSaved(updatedLine || line, field)')
         ->and($pageModule)->toContain('}, 1500)')
-        ->and($source)->toContain('autosaveLineField(line, \'tax_percent\')')
+        ->and($source)->toContain("autosaveLineField(line, 'tax_percent', \$event.detail)")
         ->and($source)->toContain('inputmode="decimal"')
         ->and($source)->not->toContain('step="0.1"')
         ->and($source)->toContain('aria-label="Remove purchase order line"')

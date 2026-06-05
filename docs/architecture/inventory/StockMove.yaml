@@ -10,15 +10,16 @@ when_not_to_use:
 rules:
   - Stock moves are append-only and must not be updated or deleted.
   - Stock moves are created only for items where items.is_stockable = true.
-  - Quantity is signed and recorded in the item base UoM.
+  - Quantity is signed and recorded in the item's base UoM at creation time.
   - Stockability must suppress move creation without blocking the surrounding business workflow.
   - Purchase receipt stock moves are created one-to-one from purchase_order_receipt_lines for stockable receipt lines and linked back to the receipt line.
   - Starting inventory created during material setup must post through stock_moves only when the material is stockable, even when a visible `Initial Stock` inventory count record is also created.
-  - Material detail On Hand stats are read from the stock move ledger and must not come from a denormalized items-table quantity column.
+  - Material detail On Hand stats are calculated from inventory_balances derived from the stock move ledger and must not come from a denormalized items-table quantity column.
   - Enum-like values must use values defined in docs/ENUMS.md.
 public_interface:
   - Item::stockMoves()
   - Item::onHandQuantity()
+  - InventoryBalance
 example_usage: |
   StockMove::create([
       'tenant_id' => $tenant->id,

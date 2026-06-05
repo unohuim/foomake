@@ -24,8 +24,8 @@
         ? 'relative left-1/2 right-1/2 flex w-screen -translate-x-1/2 border-y border-gray-200 bg-white'
         : 'flex w-full border-y border-gray-200 bg-white';
     $listClasses = $fullBleed
-        ? 'mx-auto flex w-full max-w-7xl items-center space-x-4 px-4 sm:px-6 lg:px-8'
-        : 'flex w-full items-center space-x-4 px-4 sm:px-6 lg:px-8';
+        ? 'mx-auto flex w-full max-w-7xl items-stretch space-x-4 px-4 sm:px-6 lg:px-8'
+        : 'flex w-full items-stretch space-x-4 px-4 sm:px-6 lg:px-8';
 @endphp
 
 <nav
@@ -33,16 +33,16 @@
     aria-label="Breadcrumb"
 >
     <ol role="list" class="{{ $listClasses }}">
-        <li class="flex">
+        <li class="flex self-stretch">
             <div class="flex items-center">
-                <a href="{{ $homeUrl }}" class="py-1.5 text-gray-400 transition hover:text-gray-500">
+                <a href="{{ $homeUrl }}" class="py-2 text-gray-500 transition hover:text-gray-700">
                     <span class="sr-only">Home</span>
                     <svg
-                        class="size-4 shrink-0"
+                        class="size-5 shrink-0"
                         xmlns="http://www.w3.org/2000/svg"
                         fill="none"
                         viewBox="0 0 24 24"
-                        stroke-width="1.5"
+                        stroke-width="2"
                         stroke="currentColor"
                         aria-hidden="true"
                     >
@@ -58,10 +58,10 @@
                 $url = $item['url'];
             @endphp
 
-            <li class="flex">
+            <li class="flex self-stretch">
                 <div class="flex items-center">
                     <svg
-                        class="h-6 w-4 shrink-0 text-gray-300"
+                        class="h-full w-4 shrink-0 text-gray-300"
                         viewBox="0 0 24 44"
                         preserveAspectRatio="none"
                         fill="currentColor"
@@ -71,17 +71,17 @@
                     </svg>
 
                     @if ($url && ! $isCurrent)
-                        <a href="{{ $url }}" class="ml-4 py-1.5 text-xs font-medium text-gray-500 transition hover:text-gray-700">
+                        <a href="{{ $url }}" class="ml-4 py-2 text-xs font-medium text-gray-500 transition hover:text-gray-700">
                             {{ $item['label'] }}
                         </a>
                     @elseif ($url && $isCurrent)
-                        <a href="{{ $url }}" aria-current="page" class="ml-4 py-1.5 text-xs font-medium text-gray-700 transition hover:text-gray-900">
+                        <a href="{{ $url }}" aria-current="page" class="ml-4 py-2 text-xs font-medium text-gray-700 transition hover:text-gray-900">
                             {{ $item['label'] }}
                         </a>
                     @else
                         <span
                             @if ($isCurrent) aria-current="page" @endif
-                            class="ml-4 py-1.5 text-xs font-medium {{ $isCurrent ? 'text-gray-700' : 'text-gray-500' }}"
+                            class="ml-4 py-2 text-xs font-medium {{ $isCurrent ? 'text-gray-700' : 'text-gray-500' }}"
                         >
                             {{ $item['label'] }}
                         </span>

@@ -1,0 +1,39 @@
+name: Toggle
+type: UI Component Pattern
+location:
+  - resources/views/components/ui/toggle.blade.php
+  - resources/js/components/toggle.js
+  - resources/js/lib/crud-page.js
+purpose: Provide a reusable Tailwind and Alpine on/off switch that emits row-aware change events without owning persistence.
+when_to_use:
+  - Rendering boolean settings or row state that should be changed through a page-owned AJAX handler
+  - Blade-rendered forms or panels that need a reusable switch control
+  - JavaScript-rendered CRUD mobile rows that need a direct inline boolean action
+when_not_to_use:
+  - Values that are not boolean
+  - Server-side authorization or validation
+  - Save-success indicators, which must remain owned by the page after a successful persistence response
+rules:
+  - Toggle controls must use local Alpine state or page-scoped handlers only.
+  - Toggle controls must not introduce global JavaScript state.
+  - Toggle controls must emit a bubbling event with the toggle name, next checked value, and relevant row or record details when row context exists.
+  - Toggle controls must not directly persist data.
+  - Page modules remain responsible for authorization-aware persistence, error handling, reconciliation, and toast feedback.
+  - Active toggle styling uses lime-500 for the on state and a neutral gray for the off state.
+  - Blade-rendered boolean controls should use the Blade component.
+  - JavaScript-rendered CRUD rows should use the shared JavaScript toggle renderer.
+public_interface:
+  - <x-ui.toggle name="is_active" event="material-active-toggle" />
+  - renderToggle({ name, checkedExpression, disabledExpression, eventName, handler, ariaLabelExpression })
+  - Toggle event detail with name, checked, value, row, record, and id
+example_usage: |
+  <x-ui.toggle name="is_active" :checked="$item->is_active" event="material-active-toggle" />
+
+  renderToggle({
+      name: 'is_active',
+      checkedExpression: 'Boolean(record.is_active)',
+      disabledExpression: '!canManageMaterials()',
+      eventName: 'material-active-toggle',
+      handler: 'toggleMaterialActive(toggleDetail)',
+      ariaLabelExpression: '`Toggle ${record.name || "material"} active state`',
+  })

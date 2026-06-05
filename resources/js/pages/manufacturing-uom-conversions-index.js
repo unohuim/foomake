@@ -70,7 +70,7 @@ export function mount(rootEl, payload) {
 
             setTimeout(() => {
                 this.toastVisible = false;
-            }, 2000);
+            }, 1500);
         },
 
         openGeneralCreate() {

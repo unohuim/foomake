@@ -1,7 +1,6 @@
 import Alpine from 'alpinejs';
 import { refreshNavigationState } from '../navigation/refresh-navigation-state';
 import { mountCrudSection } from '../lib/js-crud-section';
-import { mountPurchaseOrderCreate } from '../lib/js-purchase-order-create';
 
 const asString = (value, fallback = '') => {
     if (typeof value === 'string' && value.trim() !== '') {
@@ -52,11 +51,31 @@ const buildSupplierPackagePayload = (form) => ({
     price_amount: asString(form.price_amount),
 });
 
-const formatMoney = (currencyCode, cents) => {
-    const safeCurrencyCode = asString(currencyCode, 'USD');
+const formatMoneyAmount = (cents) => {
     const safeCents = Number(cents || 0);
 
-    return `${safeCurrencyCode} ${(safeCents / 100).toFixed(2)}`;
+    return (safeCents / 100).toFixed(2);
+};
+
+const materialPurchaseOrderQuantityCostText = (record) => {
+    const quantity = asString(record.material_quantity_display);
+    const uom = asString(record.material_uom_symbol);
+    const unitCost = asString(record.material_unit_cost_amount_display);
+    const currency = asString(record.material_unit_cost_currency_code);
+    const quantityText = [quantity, uom].filter((value) => value !== '').join(' ');
+
+    if (quantityText === '') {
+        return '';
+    }
+
+    if (unitCost === '') {
+        return quantityText;
+    }
+
+    const unitCostCurrency = currency === '' ? '' : ` ${currency}`;
+    const unitCostSuffix = uom === '' ? '' : `/${uom}`;
+
+    return `${quantityText} · ${unitCost}${unitCostCurrency}${unitCostSuffix}`;
 };
 
 const purchaseOrderStatusDisplay = (record) => {
@@ -162,9 +181,11 @@ const emptyRecipeErrors = () => ({
 const emptyMakeOrderErrors = () => ({
     recipe_id: [],
     runs: [],
+    due_date: [],
 });
 
 const emptyInventoryCountErrors = () => ({
+    name: [],
     counted_at: [],
     notes: [],
     assigned_to_user_id: [],
@@ -176,14 +197,24 @@ export function mount(rootEl, payload) {
     const tenantCurrency = asString(safePayload.tenantCurrency, 'USD');
     const navigationStateUrl = asString(safePayload.navigationStateUrl);
     const materialId = safePayload.item?.id || null;
+    const materialUpdateUrl = asString(safePayload.item?.update_url);
+    const materialCsrfToken = asString(safePayload.item?.csrf_token);
+    let materialBaseUomId = safePayload.item?.base_uom_id || '';
+    const materialTypeFields = [
+        'is_sellable',
+        'is_purchasable',
+        'is_manufacturable',
+        'is_stockable',
+    ];
     const sectionRootsByKey = new Map();
-    const purchaseOrderCreateRootEl = rootEl.querySelector('[data-purchase-order-create-root]');
-    const purchaseOrderCreate = mountPurchaseOrderCreate(purchaseOrderCreateRootEl, safePayload.purchaseOrderCreate || {});
-    const recipeCreate = safePayload.recipeCreate || {};
-    const makeOrderCreate = safePayload.makeOrderCreate || {};
-    const inventoryCountCreate = safePayload.inventoryCountCreate || {};
+    let recipeCreate = safePayload.recipeCreate || {};
+    let makeOrderCreate = safePayload.makeOrderCreate || {};
+    let inventoryCountCreate = safePayload.inventoryCountCreate || {};
     let pageState = null;
     let inventoryCountCreateState = null;
+    let baseUomDropdownState = null;
+    let inventoryStatsState = null;
+    let materialNameEditorState = null;
     const openInventoryCountCreate = () => {
         if (!inventoryCountCreateState || typeof inventoryCountCreateState.openCreate !== 'function') {
             return;
@@ -206,6 +237,7 @@ export function mount(rootEl, payload) {
         inventoryCountSubmitting: false,
         form: {
             id: null,
+            name: '',
             counted_at: '',
             notes: '',
             assigned_to_user_id: '',
@@ -216,9 +248,22 @@ export function mount(rootEl, payload) {
         init() {
             inventoryCountCreateState = this;
         },
+        updateConfig(nextConfig) {
+            const config = nextConfig || {};
+
+            this.inventoryCountStoreUrl = asString(config.storeUrl);
+            this.inventoryCountCsrfToken = asString(config.csrfToken);
+            this.canCreateInventoryCounts = Boolean(config.canCreate);
+            this.inventoryCountUsers = Array.isArray(config.users) ? config.users : [];
+
+            if (!this.showCountForm) {
+                this.form = this.defaultInventoryCountForm();
+            }
+        },
         defaultInventoryCountForm() {
             return {
                 id: null,
+                name: '',
                 counted_at: '',
                 notes: '',
                 assigned_to_user_id: '',
@@ -257,6 +302,7 @@ export function mount(rootEl, payload) {
             return {
                 ...emptyInventoryCountErrors(),
                 ...errors,
+                name: Array.isArray(errors.name) ? errors.name : [],
                 counted_at: Array.isArray(errors.counted_at) ? errors.counted_at : [],
                 notes: Array.isArray(errors.notes) ? errors.notes : [],
                 assigned_to_user_id: Array.isArray(errors.assigned_to_user_id) ? errors.assigned_to_user_id : [],
@@ -296,6 +342,7 @@ export function mount(rootEl, payload) {
                         'X-CSRF-TOKEN': this.inventoryCountCsrfToken,
                     },
                     body: JSON.stringify({
+                        name: this.form.name,
                         counted_at: this.form.counted_at,
                         notes: this.form.notes,
                         assigned_to_user_id: this.form.assigned_to_user_id,
@@ -343,11 +390,434 @@ export function mount(rootEl, payload) {
         await sectionRootEl._jsCrudSectionApi.refresh(1);
     };
 
+    const mountMaterialSection = (sectionKey, sectionConfig, initializeTree = false) => {
+        const sectionRootEl = sectionRootsByKey.get(sectionKey);
+
+        if (!sectionRootEl) {
+            return;
+        }
+
+        if (!sectionConfig?.resource) {
+            sectionRootEl.innerHTML = '';
+            sectionRootEl.hidden = true;
+            sectionRootEl._jsCrudSectionConfig = null;
+            sectionRootEl._jsCrudSectionAdapters = null;
+            sectionRootEl._jsCrudSectionApi = null;
+            return;
+        }
+
+        sectionRootEl.hidden = false;
+        mountCrudSection(sectionRootEl, {
+            section: sectionConfig,
+            adapters: adaptersBySectionKey[sectionKey] || {},
+        });
+
+        if (initializeTree && typeof Alpine.initTree === 'function') {
+            Alpine.initTree(sectionRootEl);
+        }
+    };
+
+    const syncMaterialDetailPayload = (nextPayload) => {
+        if (!nextPayload || typeof nextPayload !== 'object') {
+            return;
+        }
+
+        safePayload.item = nextPayload.item || safePayload.item;
+        materialBaseUomId = safePayload.item?.base_uom_id || materialBaseUomId;
+        safePayload.inventoryStats = nextPayload.inventoryStats || null;
+        safePayload.sections = nextPayload.sections || {};
+        safePayload.purchaseOrderCreate = nextPayload.purchaseOrderCreate || null;
+        safePayload.recipeCreate = nextPayload.recipeCreate || null;
+        safePayload.inventoryCountCreate = nextPayload.inventoryCountCreate || null;
+        safePayload.makeOrderCreate = nextPayload.makeOrderCreate || null;
+        recipeCreate = safePayload.recipeCreate || {};
+        makeOrderCreate = safePayload.makeOrderCreate || {};
+        inventoryCountCreate = safePayload.inventoryCountCreate || {};
+
+        if (pageState && typeof pageState.syncMaterialCreateConfigs === 'function') {
+            pageState.syncMaterialCreateConfigs();
+        }
+
+        if (inventoryCountCreateState && typeof inventoryCountCreateState.updateConfig === 'function') {
+            inventoryCountCreateState.updateConfig(inventoryCountCreate);
+        }
+
+        if (baseUomDropdownState && typeof baseUomDropdownState.syncFromPayload === 'function') {
+            baseUomDropdownState.syncFromPayload();
+        }
+
+        if (materialNameEditorState && typeof materialNameEditorState.syncFromPayload === 'function') {
+            materialNameEditorState.syncFromPayload();
+        }
+
+        const titleEl = rootEl.querySelector('[data-resource-detail-header-title]')
+            || document.querySelector('[data-resource-detail-header-title]');
+
+        if (titleEl) {
+            titleEl.textContent = asString(safePayload.item?.name, titleEl.textContent || '');
+        }
+
+        const breadcrumbCurrentEl = rootEl.querySelector('[data-resource-detail-breadcrumb] [aria-current="page"]')
+            || document.querySelector('[data-resource-detail-breadcrumb] [aria-current="page"]');
+
+        if (breadcrumbCurrentEl) {
+            breadcrumbCurrentEl.textContent = asString(safePayload.item?.name, breadcrumbCurrentEl.textContent || '');
+        }
+
+        if (inventoryStatsState && typeof inventoryStatsState.syncFromPayload === 'function') {
+            inventoryStatsState.syncFromPayload();
+        }
+
+        const inventoryStatsEl = rootEl.querySelector('[data-material-inventory-stats]');
+
+        if (inventoryStatsEl) {
+            inventoryStatsEl.hidden = !nextPayload.inventoryStats;
+        }
+
+        Object.entries(safePayload.sections).forEach(([sectionKey, sectionConfig]) => {
+            mountMaterialSection(sectionKey, sectionConfig, true);
+        });
+    };
+
+    const createPurchaseOrderFromSupplierPackage = async (record) => {
+        const purchaseUrl = asString(record.purchase_url, asString(safePayload.purchaseOrderCreate?.storeUrl));
+
+        if (purchaseUrl === '') {
+            return;
+        }
+
+        const response = await fetch(purchaseUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                Accept: 'application/json',
+                'X-CSRF-TOKEN': asString(safePayload.purchaseOrderCreate?.csrfToken),
+            },
+            body: JSON.stringify({
+                item_purchase_option_id: record.item_purchase_option_id ?? record.id,
+            }),
+        });
+
+        if (!response.ok) {
+            return;
+        }
+
+        const data = await response.json();
+
+        if (data?.data?.show_url) {
+            window.location.assign(data.data.show_url);
+        }
+    };
+
+    const materialTypeState = () => ({
+        canManageMaterialTypes: Boolean(safePayload.item?.can_manage),
+        canToggleMaterialTypes: Boolean(safePayload.item?.can_toggle_types),
+        materialTypeToggles: [
+            { field: 'is_sellable', label: 'Sellable', icon: 'shopping-cart' },
+            { field: 'is_purchasable', label: 'Purchasable', icon: 'credit-card' },
+            { field: 'is_manufacturable', label: 'Makeable', icon: 'cog' },
+            { field: 'is_stockable', label: 'Stockable', icon: 'rectangle-group' },
+        ],
+        materialTypes: {
+            is_sellable: Boolean(safePayload.item?.is_sellable),
+            is_purchasable: Boolean(safePayload.item?.is_purchasable),
+            is_manufacturable: Boolean(safePayload.item?.is_manufacturable),
+            is_stockable: Boolean(safePayload.item?.is_stockable),
+        },
+        materialTypeSaving: {
+            is_sellable: false,
+            is_purchasable: false,
+            is_manufacturable: false,
+            is_stockable: false,
+        },
+        materialTypeActive(field) {
+            return Boolean(this.materialTypes[field]);
+        },
+        materialTypeTitle(typeToggle) {
+            if (this.canToggleMaterialTypes) {
+                return typeToggle.label;
+            }
+
+            return `${typeToggle.label} requires material management permission.`;
+        },
+        async toggleMaterialType(field) {
+            if (
+                !this.canToggleMaterialTypes
+                || !materialTypeFields.includes(field)
+                || this.materialTypeSaving[field]
+                || materialUpdateUrl === ''
+            ) {
+                return;
+            }
+
+            const nextValue = !this.materialTypeActive(field);
+            const previousValue = this.materialTypeActive(field);
+            this.materialTypeSaving[field] = true;
+            this.materialTypes[field] = nextValue;
+
+            try {
+                const response = await fetch(materialUpdateUrl, {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        Accept: 'application/json',
+                        'X-CSRF-TOKEN': materialCsrfToken,
+                    },
+                    body: JSON.stringify({
+                        name: asString(safePayload.item?.name),
+                        base_uom_id: materialBaseUomId,
+                        [field]: nextValue,
+                    }),
+                });
+
+                if (!response.ok) {
+                    this.materialTypes[field] = previousValue;
+                    return;
+                }
+
+                const data = await response.json();
+                const item = data?.data || {};
+                const materialDetail = item.material_detail || null;
+
+                if (materialDetail) {
+                    syncMaterialDetailPayload(materialDetail);
+                    this.canManageMaterialTypes = Boolean(materialDetail.item?.can_manage);
+                    this.canToggleMaterialTypes = Boolean(materialDetail.item?.can_toggle_types);
+                }
+
+                materialTypeFields.forEach((typeField) => {
+                    const source = materialDetail?.item || item;
+
+                    if (Object.prototype.hasOwnProperty.call(source, typeField)) {
+                        this.materialTypes[typeField] = Boolean(source[typeField]);
+                    }
+                });
+
+                const label = this.materialTypeToggles.find((toggle) => toggle.field === field)?.label || 'Type';
+                pageState?.showToast('success', `${label} ${this.materialTypeActive(field) ? 'enabled' : 'disabled'}.`);
+            } catch (error) {
+                this.materialTypes[field] = previousValue;
+            } finally {
+                this.materialTypeSaving[field] = false;
+            }
+        },
+    });
+
+    Alpine.data('materialTypeToggles', materialTypeState);
+
+    const materialNameEditorStateFactory = () => ({
+        isOpen: false,
+        isSaving: false,
+        draftName: asString(safePayload.item?.name),
+        errorMessage: '',
+        init() {
+            materialNameEditorState = this;
+        },
+        syncFromPayload() {
+            this.draftName = asString(safePayload.item?.name, this.draftName);
+        },
+        openEditor() {
+            this.draftName = asString(safePayload.item?.name, this.draftName);
+            this.errorMessage = '';
+            this.isOpen = true;
+
+            this.$nextTick(() => {
+                this.$refs.nameInput?.focus();
+                this.$refs.nameInput?.select();
+            });
+        },
+        closeEditor() {
+            if (this.isSaving) {
+                return;
+            }
+
+            this.isOpen = false;
+            this.errorMessage = '';
+            this.draftName = asString(safePayload.item?.name, this.draftName);
+        },
+        async saveName() {
+            const nextName = asString(this.draftName).trim();
+
+            if (this.isSaving || nextName === '') {
+                this.errorMessage = 'Material name is required.';
+                return;
+            }
+
+            if (materialUpdateUrl === '') {
+                this.errorMessage = 'Unable to update material name.';
+                return;
+            }
+
+            this.isSaving = true;
+            this.errorMessage = '';
+
+            try {
+                const response = await fetch(materialUpdateUrl, {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        Accept: 'application/json',
+                        'X-CSRF-TOKEN': materialCsrfToken,
+                    },
+                    body: JSON.stringify({
+                        name: nextName,
+                        base_uom_id: materialBaseUomId,
+                    }),
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    this.errorMessage = data?.errors?.name?.[0] || data?.message || 'Unable to update material name.';
+                    return;
+                }
+
+                if (data?.data?.material_detail) {
+                    syncMaterialDetailPayload(data.data.material_detail);
+                } else {
+                    safePayload.item.name = nextName;
+                    syncMaterialDetailPayload({ ...safePayload });
+                }
+
+                this.isOpen = false;
+                pageState?.showToast('success', 'Material name updated.');
+            } catch (error) {
+                this.errorMessage = 'Unable to update material name.';
+            } finally {
+                this.isSaving = false;
+            }
+        },
+    });
+
+    Alpine.data('materialNameEditor', materialNameEditorStateFactory);
+
+    const materialBaseUomState = () => ({
+        currentUomId: materialBaseUomId,
+        currentUomName: asString(safePayload.item?.base_uom_name, asString(safePayload.item?.base_uom_symbol, '—')),
+        canChangeBaseUom: Boolean(safePayload.item?.can_manage),
+        isChangingBaseUom: false,
+        uomOptions: Array.isArray(safePayload.item?.uom_options) ? safePayload.item.uom_options : [],
+        init() {
+            baseUomDropdownState = this;
+        },
+        syncFromPayload() {
+            this.currentUomId = safePayload.item?.base_uom_id || this.currentUomId;
+            this.currentUomName = asString(
+                safePayload.item?.base_uom_name,
+                asString(safePayload.item?.base_uom_symbol, '—')
+            );
+            this.canChangeBaseUom = Boolean(safePayload.item?.can_manage);
+            this.uomOptions = Array.isArray(safePayload.item?.uom_options) ? safePayload.item.uom_options : [];
+        },
+        availableUomOptions() {
+            return this.uomOptions.filter((option) => String(option.id) !== String(this.currentUomId));
+        },
+        optionLabel(option) {
+            const name = asString(option?.name, 'Unnamed UoM');
+            const symbol = asString(option?.symbol);
+
+            return symbol === '' ? name : `${name} (${symbol})`;
+        },
+        async selectBaseUom(option) {
+            if (
+                !this.canChangeBaseUom
+                || this.isChangingBaseUom
+                || !option?.id
+                || String(option.id) === String(this.currentUomId)
+                || materialUpdateUrl === ''
+            ) {
+                return;
+            }
+
+            const confirmed = window.confirm(`Change base unit of measure to ${this.optionLabel(option)}?`);
+
+            if (!confirmed) {
+                return;
+            }
+
+            this.isChangingBaseUom = true;
+
+            try {
+                const response = await fetch(materialUpdateUrl, {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        Accept: 'application/json',
+                        'X-CSRF-TOKEN': materialCsrfToken,
+                    },
+                    body: JSON.stringify({
+                        name: asString(safePayload.item?.name),
+                        base_uom_id: option.id,
+                    }),
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    const error = data?.errors?.base_uom_id?.[0] || data?.message || 'Unable to change base unit of measure.';
+                    window.alert(error);
+                    return;
+                }
+
+                const materialDetail = data?.data?.material_detail || null;
+
+                if (materialDetail) {
+                    syncMaterialDetailPayload(materialDetail);
+                }
+            } finally {
+                this.isChangingBaseUom = false;
+            }
+        },
+    });
+
+    Alpine.data('materialBaseUomDropdown', materialBaseUomState);
+
+    const materialInventoryStatsState = () => ({
+        cards: Array.isArray(safePayload.inventoryStats?.cards) ? safePayload.inventoryStats.cards : [],
+        activeStat: safePayload.inventoryStats?.cards?.[0]?.key || null,
+        init() {
+            inventoryStatsState = this;
+        },
+        syncFromPayload() {
+            this.cards = Array.isArray(safePayload.inventoryStats?.cards) ? safePayload.inventoryStats.cards : [];
+
+            if (!this.cards.some((card) => card.key === this.activeStat)) {
+                this.activeStat = this.cards[0]?.key || null;
+            }
+        },
+        compactLabel(card) {
+            return asString(card?.compact_label, asString(card?.mobile_label, asString(card?.label, '—')));
+        },
+        quantityDisplay(card) {
+            return asString(card?.quantity_display_grouped, asString(card?.quantity_display, '0'));
+        },
+        uomSymbol(card) {
+            return asString(card?.uom_symbol);
+        },
+        desktopGridClass() {
+            switch (this.cards.length) {
+            case 1:
+                return 'sm:grid-cols-1';
+            case 2:
+                return 'sm:grid-cols-2';
+            case 3:
+                return 'sm:grid-cols-3';
+            case 4:
+                return 'sm:grid-cols-4';
+            default:
+                return 'sm:grid-cols-5';
+            }
+        },
+    });
+
+    Alpine.data('materialInventoryStats', materialInventoryStatsState);
+
     Alpine.data('materialsShowPage', () => ({
         manufacturableItems: Array.isArray(recipeCreate.manufacturableItems) ? recipeCreate.manufacturableItems : [],
         recipeStoreUrl: asString(recipeCreate.storeUrl),
         recipeCsrfToken: asString(recipeCreate.csrfToken),
         canManageRecipes: Boolean(recipeCreate.canManage),
+        recipePrefillItemId: recipeCreate.prefillItemId || '',
         isCreateOpen: false,
         isCreateSubmitting: false,
         createOnlyWithoutRecipe: true,
@@ -361,20 +831,29 @@ export function mount(rootEl, payload) {
         createManufacturingOutputQuantity: '',
         createErrors: emptyRecipeErrors(),
         createGeneralError: '',
-        makeOrderCreateRecipes: Array.isArray(makeOrderCreate.recipes) ? makeOrderCreate.recipes : [],
+        makeOrderRecipes: Array.isArray(makeOrderCreate.recipes) ? makeOrderCreate.recipes : [],
         makeOrderStoreUrl: asString(makeOrderCreate.storeUrl),
         makeOrderCsrfToken: asString(makeOrderCreate.csrfToken),
         canExecute: Boolean(makeOrderCreate.canExecute),
-        isMakeOrderCreateOpen: false,
-        isMakeOrderCreateSubmitting: false,
-        makeOrderCreateForm: {
+        isMakeOrderFormOpen: false,
+        isMakeOrderEditMode: false,
+        isMakeOrderFormSubmitting: false,
+        makeOrderForm: {
             recipe_id: '',
             runs: '',
+            due_date: '',
         },
-        makeOrderCreateErrors: emptyMakeOrderErrors(),
-        makeOrderCreateGeneralError: '',
+        makeOrderFormErrors: emptyMakeOrderErrors(),
+        makeOrderFormGeneralError: '',
+        toast: {
+            visible: false,
+            type: 'success',
+            message: '',
+            timeoutId: null,
+        },
         init() {
             pageState = this;
+            this.syncMaterialCreateConfigs();
             this.createForm = this.defaultCreateForm();
             this.createManufacturingOutputQuantity = this.createForm.output_quantity;
 
@@ -386,6 +865,20 @@ export function mount(rootEl, payload) {
             this.$watch('createForm.recipe_type', () => {
                 this.syncCreateOutputQuantity();
             });
+        },
+        showToast(type, message) {
+            this.toast.type = type;
+            this.toast.message = message;
+            this.toast.visible = true;
+
+            if (this.toast.timeoutId) {
+                window.clearTimeout(this.toast.timeoutId);
+            }
+
+            this.toast.timeoutId = window.setTimeout(() => {
+                this.toast.visible = false;
+                this.toast.timeoutId = null;
+            }, 1500);
         },
         normalizeRecipeErrors(errors) {
             if (!errors || typeof errors !== 'object') {
@@ -412,7 +905,19 @@ export function mount(rootEl, payload) {
                 ...errors,
                 recipe_id: Array.isArray(errors.recipe_id) ? errors.recipe_id : [],
                 runs: Array.isArray(errors.runs) ? errors.runs : [],
+                due_date: Array.isArray(errors.due_date) ? errors.due_date : [],
             };
+        },
+        syncMaterialCreateConfigs() {
+            this.manufacturableItems = Array.isArray(recipeCreate.manufacturableItems) ? recipeCreate.manufacturableItems : [];
+            this.recipeStoreUrl = asString(recipeCreate.storeUrl);
+            this.recipeCsrfToken = asString(recipeCreate.csrfToken);
+            this.canManageRecipes = Boolean(recipeCreate.canManage);
+            this.recipePrefillItemId = recipeCreate.prefillItemId || '';
+            this.makeOrderRecipes = Array.isArray(makeOrderCreate.recipes) ? makeOrderCreate.recipes : [];
+            this.makeOrderStoreUrl = asString(makeOrderCreate.storeUrl);
+            this.makeOrderCsrfToken = asString(makeOrderCreate.csrfToken);
+            this.canExecute = Boolean(makeOrderCreate.canExecute);
         },
         defaultCreateForm() {
             return {
@@ -429,7 +934,7 @@ export function mount(rootEl, payload) {
                 return;
             }
 
-            const prefillItemId = prefill.itemId || recipeCreate.prefillItemId || '';
+            const prefillItemId = prefill.itemId || this.recipePrefillItemId || '';
 
             this.createErrors = emptyRecipeErrors();
             this.createGeneralError = '';
@@ -642,25 +1147,31 @@ export function mount(rootEl, payload) {
             this.closeCreate();
         },
         openMakeOrderCreate(prefill = {}) {
-            this.makeOrderCreateErrors = emptyMakeOrderErrors();
-            this.makeOrderCreateGeneralError = '';
-            this.makeOrderCreateForm = {
+            this.makeOrderFormErrors = emptyMakeOrderErrors();
+            this.makeOrderFormGeneralError = '';
+            this.isMakeOrderEditMode = false;
+            this.makeOrderForm = {
                 recipe_id: prefill.recipe_id ? String(prefill.recipe_id) : '',
                 runs: '',
+                due_date: '',
             };
-            this.isMakeOrderCreateOpen = true;
+            this.isMakeOrderFormOpen = true;
             this.$nextTick(() => {
                 this.$refs.makeOrderRecipeSelect?.focus();
             });
         },
         closeMakeOrderCreate() {
-            this.isMakeOrderCreateOpen = false;
-            this.isMakeOrderCreateSubmitting = false;
-            this.makeOrderCreateErrors = emptyMakeOrderErrors();
-            this.makeOrderCreateGeneralError = '';
-            this.makeOrderCreateForm = {
+            this.closeMakeOrderForm();
+        },
+        closeMakeOrderForm() {
+            this.isMakeOrderFormOpen = false;
+            this.isMakeOrderFormSubmitting = false;
+            this.makeOrderFormErrors = emptyMakeOrderErrors();
+            this.makeOrderFormGeneralError = '';
+            this.makeOrderForm = {
                 recipe_id: '',
                 runs: '',
+                due_date: '',
             };
         },
         upsertMakeOrderCreateRecipe(recipe) {
@@ -670,27 +1181,30 @@ export function mount(rootEl, payload) {
                 item_id: recipe.item_id,
                 item_name: recipe.item_name || safePayload.item?.name || '—',
             };
-            const index = this.makeOrderCreateRecipes.findIndex((existingRecipe) => existingRecipe.id === normalizedRecipe.id);
+            const index = this.makeOrderRecipes.findIndex((existingRecipe) => existingRecipe.id === normalizedRecipe.id);
 
             if (index === -1) {
-                this.makeOrderCreateRecipes.unshift(normalizedRecipe);
+                this.makeOrderRecipes.unshift(normalizedRecipe);
                 return;
             }
 
-            this.makeOrderCreateRecipes.splice(index, 1, {
-                ...this.makeOrderCreateRecipes[index],
+            this.makeOrderRecipes.splice(index, 1, {
+                ...this.makeOrderRecipes[index],
                 ...normalizedRecipe,
             });
         },
         async submitMakeOrderCreate() {
+            await this.submitMakeOrderForm();
+        },
+        async submitMakeOrderForm() {
             if (!this.canExecute) {
-                this.makeOrderCreateGeneralError = 'You do not have permission to create make orders.';
+                this.makeOrderFormGeneralError = 'You do not have permission to create make orders.';
                 return;
             }
 
-            this.isMakeOrderCreateSubmitting = true;
-            this.makeOrderCreateGeneralError = '';
-            this.makeOrderCreateErrors = emptyMakeOrderErrors();
+            this.isMakeOrderFormSubmitting = true;
+            this.makeOrderFormGeneralError = '';
+            this.makeOrderFormErrors = emptyMakeOrderErrors();
 
             const response = await fetch(this.makeOrderStoreUrl, {
                 method: 'POST',
@@ -700,24 +1214,24 @@ export function mount(rootEl, payload) {
                     'X-CSRF-TOKEN': this.makeOrderCsrfToken,
                 },
                 body: JSON.stringify({
-                    recipe_id: this.makeOrderCreateForm.recipe_id
-                        ? Number(this.makeOrderCreateForm.recipe_id)
-                        : this.makeOrderCreateForm.recipe_id,
-                    runs: this.makeOrderCreateForm.runs,
+                    recipe_id: this.makeOrderForm.recipe_id
+                        ? Number(this.makeOrderForm.recipe_id)
+                        : this.makeOrderForm.recipe_id,
+                    runs: this.makeOrderForm.runs,
                 }),
             });
 
             if (response.status === 422) {
                 const data = await response.json();
-                this.makeOrderCreateErrors = this.normalizeMakeOrderErrors(data.errors);
-                this.makeOrderCreateGeneralError = data.message || 'Validation failed.';
-                this.isMakeOrderCreateSubmitting = false;
+                this.makeOrderFormErrors = this.normalizeMakeOrderErrors(data.errors);
+                this.makeOrderFormGeneralError = data.message || 'Validation failed.';
+                this.isMakeOrderFormSubmitting = false;
                 return;
             }
 
             if (!response.ok) {
-                this.makeOrderCreateGeneralError = 'Something went wrong. Please try again.';
-                this.isMakeOrderCreateSubmitting = false;
+                this.makeOrderFormGeneralError = 'Something went wrong. Please try again.';
+                this.isMakeOrderFormSubmitting = false;
                 return;
             }
 
@@ -732,7 +1246,7 @@ export function mount(rootEl, payload) {
             if (navigationStateUrl !== '') {
                 await refreshNavigationState(navigationStateUrl);
             }
-            this.closeMakeOrderCreate();
+            this.closeMakeOrderForm();
         },
         async createMakeOrderFromUrl(makeUrl) {
             if (!this.canExecute || !makeUrl) {
@@ -774,7 +1288,15 @@ export function mount(rootEl, payload) {
                         poNumberText: record.po_number ? `PO #${record.po_number}` : 'Draft PO',
                         orderDateText: asString(record.order_date, 'No order date'),
                         supplierText: asString(record.supplier_name, 'Supplier not set'),
-                        totalText: formatMoney(tenantCurrency, record.po_grand_total_cents),
+                        materialQuantityCostText: materialPurchaseOrderQuantityCostText(record),
+                        materialLineTotalAmountText: asString(
+                            record.material_line_total_amount_display,
+                            formatMoneyAmount(record.po_grand_total_cents)
+                        ),
+                        materialLineTotalCurrencyText: asString(
+                            record.material_line_total_currency_code,
+                            tenantCurrency
+                        ),
                         statusText: status.text,
                         statusTone: status.tone,
                         showUrl: asString(record.show_url),
@@ -822,10 +1344,14 @@ export function mount(rootEl, payload) {
             normalizeRow: (record) => ({
                 ...record,
                 display: {
+                    nameText: asString(record.name, '—'),
                     countedAtText: asString(record.counted_at, '—'),
-                    assignedToText: asString(record.assigned_to_user_name, 'Unassigned'),
-                    uomText: asString(record.uom_symbol, '—'),
-                    countedQuantityText: asString(record.counted_quantity_display, '—'),
+                    assignedToText: asString(record.assigned_to_user_name),
+                    countedQuantityText: asString(record.counted_quantity_display),
+                    uomNameText: asString(record.uom_name),
+                    uomSymbolText: asString(record.uom_symbol),
+                    statusText: asString(record.status_label),
+                    statusTone: asString(record.status_tone, 'muted'),
                     showUrl: asString(record.show_url),
                 },
             }),
@@ -873,7 +1399,7 @@ export function mount(rootEl, payload) {
                     display: {
                         primaryText: asString(record.supplier_name, 'Unknown supplier'),
                         packageText: packageDisplayText(record),
-                        skuText: asString(record.supplier_sku, '—'),
+                        skuText: asString(record.supplier_sku),
                         stateText: state.text,
                         stateTone: state.tone,
                         priceText: asString(record.current_price_display, 'No price'),
@@ -883,28 +1409,15 @@ export function mount(rootEl, payload) {
             },
             buildCreatePayload: (form) => buildSupplierPackagePayload(form),
             buildUpdatePayload: (form) => buildSupplierPackagePayload(form),
-            handleCreateSuccess: async ({ data, component }) => {
-                const record = data?.data || {};
-
-                if (purchaseOrderCreate && typeof purchaseOrderCreate.refreshFromSupplierPackage === 'function') {
-                    purchaseOrderCreate.refreshFromSupplierPackage(record);
-                }
-
+            handleCreateSuccess: async ({ component }) => {
                 component.isFormOpen = false;
                 await component.fetchPage(component.meta.current_page || 1);
 
                 return true;
             },
             handleAction: async ({ action, record }) => {
-                if (action.handlerKey === 'purchase' && purchaseOrderCreate) {
-                    if (typeof purchaseOrderCreate.refreshFromSupplierPackage === 'function') {
-                        purchaseOrderCreate.refreshFromSupplierPackage(record);
-                    }
-
-                    purchaseOrderCreate.openFromSupplierPackage({
-                        supplier_id: record.supplier_id,
-                        item_purchase_option_id: record.item_purchase_option_id ?? record.id,
-                    });
+                if (action.handlerKey === 'purchase') {
+                    await createPurchaseOrderFromSupplierPackage(record);
                 }
             },
         },
@@ -914,9 +1427,6 @@ export function mount(rootEl, payload) {
         const sectionKey = sectionRootEl.dataset.sectionKey || '';
         const sectionConfig = safePayload.sections?.[sectionKey] || null;
 
-        mountCrudSection(sectionRootEl, {
-            section: sectionConfig,
-            adapters: adaptersBySectionKey[sectionKey] || {},
-        });
+        mountMaterialSection(sectionKey, sectionConfig);
     });
 }

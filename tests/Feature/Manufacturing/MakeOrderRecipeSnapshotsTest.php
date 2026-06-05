@@ -787,7 +787,9 @@ it('30b. shared ingredient section preserves non clipping overflow for comboboxe
     $cardSource = File::get(resource_path('views/components/detail-section-card.blade.php'));
     $ingredientSource = File::get(resource_path('views/components/ingredients-detail-section.blade.php'));
 
-    expect($cardSource)->toContain('overflow-visible')
+    expect($cardSource)->toContain('-mx-1 !-mt-px w-auto min-w-0 overflow-visible border border-gray-500')
+        ->and($cardSource)->toContain('first:!mt-0 sm:mx-0 sm:!mt-6 sm:first:!mt-0 sm:w-full sm:rounded-2xl sm:border-gray-200')
+        ->and($cardSource)->toContain('min-w-0 border-t border-gray-100')
         ->and($ingredientSource)->toContain('overflow-x-auto overflow-y-visible')
         ->and($ingredientSource)->toContain('x-dropdown')
         ->and($ingredientSource)->not->toContain('data-make-order-ingredient-add-bar');
@@ -1402,7 +1404,7 @@ it('35e. make order detail details section keeps runs expected output actual out
         ->and($source)->toContain("{{ __('Expected Output') }}")
         ->and($source)->toContain("{{ __('Actual Output') }}")
         ->and($source)->toContain("x-model=\"makeOrder.runs_text\"")
-        ->and($source)->toContain("x-on:input=\"recalculateExpectedOutputQtyFromRuns()\"")
+        ->and($source)->toContain("after-input=\"recalculateExpectedOutputQtyFromRuns()\"")
         ->and($source)->toContain("x-model=\"makeOrder.expected_output_qty_text\"")
         ->and($source)->toContain('readonly')
         ->and($source)->not->toContain("saveMakeOrderDetailQuantity('expected_output_qty')")

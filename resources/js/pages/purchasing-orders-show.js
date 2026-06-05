@@ -54,6 +54,13 @@ export function mount(rootEl, payload) {
 
     const normalizeId = (value) => (value === null || value === undefined ? '' : String(value));
 
+    const escapeHtml = (value) => String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+
     const initialSupplierId = normalizeId(safePayload.purchaseOrder?.supplier_id);
 
     const normalizedSuppliers = (safePayload.suppliers || []).map((supplier) => ({
@@ -75,6 +82,9 @@ export function mount(rootEl, payload) {
     Alpine.data('purchasingOrdersShow', () => ({
         purchaseOrder: safePayload.purchaseOrder || {},
         workflow: safePayload.workflow || {},
+        workflowProgressSteps: Array.isArray(safePayload.workflowProgressSteps)
+            ? safePayload.workflowProgressSteps
+            : [],
         lines: safePayload.lines || [],
         suppliers: normalizedSuppliers,
         purchaseOptions: safePayload.purchaseOptions || [],
@@ -118,6 +128,9 @@ export function mount(rootEl, payload) {
         isEditSubmitting: false,
         savedLineFields: {},
         savedLineFieldTimeouts: {},
+        savedLineFieldValues: {},
+        savingLineFields: {},
+        pendingLineFieldValues: {},
         isDeleteLineOpen: false,
         isDeleteLineSubmitting: false,
         deleteLineId: null,
@@ -206,7 +219,7 @@ export function mount(rootEl, payload) {
 
             this.toast.timeoutId = setTimeout(() => {
                 this.toast.visible = false;
-            }, 2500);
+            }, 1500);
         },
         normalizeNullable(value) {
             if (value === '' || value === null || value === undefined) {
@@ -268,7 +281,30 @@ export function mount(rootEl, payload) {
                     [key]: false,
                 };
                 delete this.savedLineFieldTimeouts[key];
-            }, 1500);
+            }, 1000);
+        },
+        lineFieldValue(field, value) {
+            if (field === 'pack_count') {
+                return this.normalizeNullableInt(value);
+            }
+
+            if (field === 'tax_percent') {
+                return this.normalizeNullable(value);
+            }
+
+            return value;
+        },
+        lineFieldComparableValue(field, value) {
+            const normalized = this.lineFieldValue(field, value);
+
+            return normalized === null || normalized === undefined ? '' : String(normalized);
+        },
+        applyLineFieldValue(line, field, value) {
+            if (!line || !Object.prototype.hasOwnProperty.call(line, field)) {
+                return;
+            }
+
+            line[field] = this.lineFieldValue(field, value);
         },
         get supplierOptions() {
             const supplierId = Number(this.form.supplier_id);
@@ -343,6 +379,119 @@ export function mount(rootEl, payload) {
         statusMenuOptions() {
             return Array.isArray(this.workflow.actions) ? this.workflow.actions : [];
         },
+        workflowUpdatedDetail(workflow, purchaseOrder, workflowProgressSteps = null) {
+            const detail = {
+                workflow,
+                purchaseOrder,
+            };
+
+            if (Array.isArray(workflowProgressSteps)) {
+                detail.workflowProgressSteps = workflowProgressSteps;
+            }
+
+            return detail;
+        },
+        workflowProgressHtml() {
+            let steps = Array.isArray(this.workflowProgressSteps)
+                ? this.workflowProgressSteps
+                : [];
+
+            steps = steps
+                .map((step, index) => ({
+                    label: String(step?.label || ''),
+                    status: ['completed', 'current', 'upcoming'].includes(step?.status)
+                        ? step.status
+                        : 'upcoming',
+                    url: step?.url || null,
+                    current: Boolean(step?.current || step?.status === 'current'),
+                    number: String(index + 1).padStart(2, '0'),
+                }))
+                .filter((step) => step.label !== '' && step.label !== 'DRAFT')
+                .map((step, index) => ({
+                    ...step,
+                    number: String(index + 1).padStart(2, '0'),
+                }));
+
+            if (
+                steps.length > 0
+                && !steps.some((step) => step.current)
+                && !steps.some((step) => step.status === 'completed')
+            ) {
+                steps = steps.map((step, index) => ({
+                    ...step,
+                    status: index === 0 ? 'current' : step.status,
+                    current: index === 0,
+                }));
+            }
+
+            if (steps.length === 0) {
+                return '';
+            }
+
+            return `
+                <nav class="w-full" aria-label="Progress">
+                    <ol role="list" class="divide-y divide-gray-300 rounded-md border border-gray-300 bg-white md:flex md:divide-y-0">
+                        ${steps.map((step, index) => this.workflowProgressStepHtml(step, index === steps.length - 1)).join('')}
+                    </ol>
+                </nav>
+            `;
+        },
+        workflowProgressStepHtml(step, isLast) {
+            const label = escapeHtml(step.label);
+            const separator = isLast ? '' : `
+                <div aria-hidden="true" class="absolute right-0 top-0 hidden h-full w-5 md:block">
+                    <svg viewBox="0 0 22 80" fill="none" preserveAspectRatio="none" class="size-full text-gray-300">
+                        <path d="M0 -2L20 40L0 82" stroke="currentcolor" vector-effect="non-scaling-stroke" stroke-linejoin="round"></path>
+                    </svg>
+                </div>
+            `;
+
+            if (step.status === 'completed') {
+                return `
+                    <li class="relative md:flex md:flex-1">
+                        <span class="group flex w-full items-center">
+                            <span class="flex items-center px-4 py-3 text-sm font-medium sm:px-6">
+                                <span class="flex size-9 shrink-0 items-center justify-center rounded-full bg-indigo-600 group-hover:bg-indigo-700">
+                                    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" class="size-5 text-white">
+                                        <path fill-rule="evenodd" clip-rule="evenodd" d="M19.916 4.626a.75.75 0 0 1 .208 1.04l-9 13.5a.75.75 0 0 1-1.154.114l-6-6a.75.75 0 0 1 1.06-1.06l5.353 5.353 8.493-12.74a.75.75 0 0 1 1.04-.207Z"></path>
+                                    </svg>
+                                </span>
+                                <span class="ml-4 text-sm font-medium text-gray-900">${label}</span>
+                            </span>
+                        </span>
+                        ${separator}
+                    </li>
+                `;
+            }
+
+            if (step.status === 'current' || step.current) {
+                return `
+                    <li class="relative md:flex md:flex-1">
+                        <span aria-current="step" class="flex w-full items-center px-4 py-3 text-sm font-medium sm:px-6">
+                            <span class="flex size-9 shrink-0 items-center justify-center rounded-full border-2 border-indigo-600">
+                                <span class="text-sm font-semibold text-indigo-600">${escapeHtml(step.number)}</span>
+                            </span>
+                            <span class="ml-4 text-sm font-medium text-indigo-600">${label}</span>
+                        </span>
+                        ${separator}
+                    </li>
+                `;
+            }
+
+            return `
+                <li class="relative md:flex md:flex-1">
+                    <span class="group flex w-full items-center">
+                        <span class="flex items-center px-4 py-3 text-sm font-medium sm:px-6">
+                            <span class="flex size-9 shrink-0 items-center justify-center rounded-full border-2 border-gray-300 group-hover:border-gray-400">
+                                <span class="text-sm font-semibold text-gray-500 group-hover:text-gray-900">${escapeHtml(step.number)}</span>
+                            </span>
+                            <span class="ml-4 text-sm font-medium text-gray-500 group-hover:text-gray-900">${label}</span>
+                        </span>
+                    </span>
+                    ${separator}
+                </li>
+            `;
+        },
         workflowActionHandlers() {
             return {
                 receive: () => this.openReceive(),
@@ -391,6 +540,9 @@ export function mount(rootEl, payload) {
                 || workflow.status;
 
             this.workflow = workflow;
+            if (Array.isArray(detail?.workflowProgressSteps)) {
+                this.workflowProgressSteps = detail.workflowProgressSteps;
+            }
             this.purchaseOrder = {
                 ...this.purchaseOrder,
                 ...purchaseOrder,
@@ -659,10 +811,13 @@ export function mount(rootEl, payload) {
 
             this.savedFieldTimeouts[field] = setTimeout(() => {
                 this.savedFields[field] = false;
-            }, 1500);
+            }, 1000);
         },
-        fieldPayload(field) {
+        fieldPayload(field, detail = null) {
             const payloadData = {};
+            const fieldValue = detail && Object.prototype.hasOwnProperty.call(detail, 'rawValue')
+                ? detail.rawValue
+                : this.form[field];
 
             if (field === 'supplier_id') {
                 payloadData.supplier_id = this.normalizeNullableInt(this.form.supplier_id);
@@ -673,7 +828,8 @@ export function mount(rootEl, payload) {
             }
 
             if (field === 'shipping_amount') {
-                payloadData.shipping_amount = this.normalizeNullable(this.form.shipping_amount);
+                payloadData.shipping_amount = this.normalizeNullable(fieldValue);
+                this.form.shipping_amount = payloadData.shipping_amount ?? '';
             }
 
             if (field === 'po_number') {
@@ -686,13 +842,13 @@ export function mount(rootEl, payload) {
 
             return payloadData;
         },
-        applyPurchaseOrderUpdate(updated, lines = null) {
+        applyPurchaseOrderUpdate(updated, lines = null, preserveFormFields = []) {
             this.purchaseOrder = {
                 ...this.purchaseOrder,
                 ...updated,
             };
 
-            this.form = {
+            const nextForm = {
                 supplier_id: updated.supplier_id === null || updated.supplier_id === undefined
                     ? ''
                     : String(updated.supplier_id),
@@ -702,18 +858,26 @@ export function mount(rootEl, payload) {
                 notes: updated.notes ?? '',
             };
 
+            preserveFormFields.forEach((field) => {
+                if (Object.prototype.hasOwnProperty.call(this.form, field)) {
+                    nextForm[field] = this.form[field];
+                }
+            });
+
+            this.form = nextForm;
+
             if (Array.isArray(lines)) {
                 this.lines = lines;
             }
 
             this.isEditable = Boolean(updated.is_editable);
         },
-        async autosaveField(field) {
+        async autosaveField(field, detail = null) {
             if (!this.isEditable || !this.updateUrl || this.isHeaderSubmitting) {
                 return;
             }
 
-            const payloadData = this.fieldPayload(field);
+            const payloadData = this.fieldPayload(field, detail);
 
             if (Object.keys(payloadData).length === 0) {
                 return;
@@ -748,8 +912,11 @@ export function mount(rootEl, payload) {
 
                 const data = await response.json();
                 const updated = data.data?.purchase_order || data.data || {};
+                const preserveFormFields = field === 'shipping_amount' && detail?.source === 'input'
+                    ? ['shipping_amount']
+                    : [];
 
-                this.applyPurchaseOrderUpdate(updated, data.data?.lines);
+                this.applyPurchaseOrderUpdate(updated, data.data?.lines, preserveFormFields);
 
                 if (field === 'supplier_id') {
                     this.handleSupplierChange();
@@ -967,18 +1134,53 @@ export function mount(rootEl, payload) {
                 this.isEditSubmitting = false;
             }
         },
-        async autosaveLineField(line, field) {
+        async autosaveLineField(line, field, detail = null) {
             if (!this.isEditable || !line || !this.lineUpdateUrlBase || this.isEditSubmitting) {
                 return;
             }
 
-            this.isEditSubmitting = true;
+            const fieldValue = detail && Object.prototype.hasOwnProperty.call(detail, 'rawValue')
+                ? detail.rawValue
+                : line[field];
+            const key = this.lineFieldKey(line, field);
+            const comparableValue = this.lineFieldComparableValue(field, fieldValue);
+            const previousValue = line[field];
+
+            this.applyLineFieldValue(line, field, fieldValue);
+
+            if (this.savingLineFields[key]) {
+                this.pendingLineFieldValues = {
+                    ...this.pendingLineFieldValues,
+                    [key]: fieldValue,
+                };
+
+                return;
+            }
+
+            if (this.savedLineFieldValues[key] === comparableValue) {
+                return;
+            }
+
+            this.savingLineFields = {
+                ...this.savingLineFields,
+                [key]: true,
+            };
 
             const payloadData = {
                 pack_count: this.normalizeNullableInt(line.pack_count),
                 unit_price_cents: this.normalizeNullableInt(line.unit_price_cents),
                 tax_percent: this.normalizeNullable(line.tax_percent),
             };
+
+            if (field === 'pack_count') {
+                payloadData.pack_count = this.normalizeNullableInt(fieldValue);
+                line.pack_count = payloadData.pack_count;
+            }
+
+            if (field === 'tax_percent') {
+                payloadData.tax_percent = this.normalizeNullable(fieldValue);
+                line.tax_percent = payloadData.tax_percent;
+            }
 
             try {
                 const response = await fetch(`${this.lineUpdateUrlBase}/${line.id}`, {
@@ -993,11 +1195,17 @@ export function mount(rootEl, payload) {
 
                 if (response.status === 422) {
                     const data = await response.json();
+                    if (!Object.prototype.hasOwnProperty.call(this.pendingLineFieldValues, key)) {
+                        this.applyLineFieldValue(line, field, previousValue);
+                    }
                     this.showToast('error', data.message || `Unable to update ${field}.`);
                     return;
                 }
 
                 if (!response.ok) {
+                    if (!Object.prototype.hasOwnProperty.call(this.pendingLineFieldValues, key)) {
+                        this.applyLineFieldValue(line, field, previousValue);
+                    }
                     this.showToast('error', `Unable to update ${field}.`);
                     return;
                 }
@@ -1005,25 +1213,56 @@ export function mount(rootEl, payload) {
                 const data = await response.json();
                 const updatedLine = data.data?.line;
                 const totals = data.data?.purchase_order;
+                const hasPendingValue = Object.prototype.hasOwnProperty.call(this.pendingLineFieldValues, key);
 
                 if (updatedLine) {
-                    this.lines = this.lines.map((entry) => (entry.id === updatedLine.id ? updatedLine : entry));
+                    const nextLine = {
+                        ...updatedLine,
+                        [field]: hasPendingValue
+                            ? this.lineFieldValue(field, this.pendingLineFieldValues[key])
+                            : payloadData[field],
+                    };
+
+                    this.lines = this.lines.map((entry) => (entry.id === updatedLine.id ? nextLine : entry));
                 }
 
-                if (totals) {
+                if (totals && !hasPendingValue) {
                     this.purchaseOrder.po_subtotal_cents = totals.po_subtotal_cents;
                     this.purchaseOrder.po_grand_total_cents = totals.po_grand_total_cents;
                     this.purchaseOrder.shipping_cents = totals.shipping_cents;
                     this.purchaseOrder.tax_cents = totals.tax_cents;
                 }
 
-                this.showLineFieldSaved(updatedLine || line, field);
+                this.savedLineFieldValues = {
+                    ...this.savedLineFieldValues,
+                    [key]: comparableValue,
+                };
+
+                if (!hasPendingValue) {
+                    this.showLineFieldSaved(updatedLine || line, field);
+                }
             } catch (error) {
                 // eslint-disable-next-line no-console
                 console.error(error);
+                if (!Object.prototype.hasOwnProperty.call(this.pendingLineFieldValues, key)) {
+                    this.applyLineFieldValue(line, field, previousValue);
+                }
                 this.showToast('error', `Unable to update ${field}.`);
             } finally {
-                this.isEditSubmitting = false;
+                this.savingLineFields = {
+                    ...this.savingLineFields,
+                    [key]: false,
+                };
+
+                if (Object.prototype.hasOwnProperty.call(this.pendingLineFieldValues, key)) {
+                    const pendingValue = this.pendingLineFieldValues[key];
+                    const pendingValues = { ...this.pendingLineFieldValues };
+                    delete pendingValues[key];
+                    this.pendingLineFieldValues = pendingValues;
+
+                    const latestLine = this.lines.find((entry) => entry.id === line.id) || line;
+                    this.autosaveLineField(latestLine, field, { rawValue: pendingValue });
+                }
             }
         },
         openDeleteLine(line) {
@@ -1257,18 +1496,21 @@ export function mount(rootEl, payload) {
 
                 if (responseData.workflow) {
                     this.workflow = responseData.workflow;
+                    if (Array.isArray(responseData.workflowProgressSteps)) {
+                        this.workflowProgressSteps = responseData.workflowProgressSteps;
+                    }
+                    const workflowUpdatedDetail = this.workflowUpdatedDetail(
+                        this.workflow,
+                        responseData.purchase_order || {},
+                        responseData.workflowProgressSteps
+                    );
+
                     document.dispatchEvent(new CustomEvent('workflow-updated', {
-                        detail: {
-                            workflow: this.workflow,
-                            purchaseOrder: responseData.purchase_order || {},
-                        },
+                        detail: workflowUpdatedDetail,
                     }));
                     this.$root.dispatchEvent(new CustomEvent('workflow-updated', {
                         bubbles: true,
-                        detail: {
-                            workflow: this.workflow,
-                            purchaseOrder: responseData.purchase_order || {},
-                        },
+                        detail: workflowUpdatedDetail,
                     }));
                 }
 
@@ -1377,7 +1619,7 @@ export function mount(rootEl, payload) {
 
                 const data = await response.json();
                 const responseData = data.data || {};
-                const { workflow, ...purchaseOrderData } = responseData;
+                const { workflow, workflowProgressSteps, ...purchaseOrderData } = responseData;
 
                 this.purchaseOrder = {
                     ...this.purchaseOrder,
@@ -1390,18 +1632,21 @@ export function mount(rootEl, payload) {
                 this.isEditable = Boolean(this.purchaseOrder.is_editable);
                 if (workflow) {
                     this.workflow = workflow;
+                    if (Array.isArray(workflowProgressSteps)) {
+                        this.workflowProgressSteps = workflowProgressSteps;
+                    }
+                    const workflowUpdatedDetail = this.workflowUpdatedDetail(
+                        workflow,
+                        purchaseOrderData,
+                        workflowProgressSteps
+                    );
+
                     document.dispatchEvent(new CustomEvent('workflow-updated', {
-                        detail: {
-                            workflow,
-                            purchaseOrder: purchaseOrderData,
-                        },
+                        detail: workflowUpdatedDetail,
                     }));
                     this.$root.dispatchEvent(new CustomEvent('workflow-updated', {
                         bubbles: true,
-                        detail: {
-                            workflow,
-                            purchaseOrder: purchaseOrderData,
-                        },
+                        detail: workflowUpdatedDetail,
                     }));
                 }
                 this.showToast('success', 'Status updated.');
@@ -1445,7 +1690,7 @@ export function mount(rootEl, payload) {
 
                 const data = await response.json();
                 const responseData = data.data || {};
-                const { workflow, ...purchaseOrderData } = responseData;
+                const { workflow, workflowProgressSteps, ...purchaseOrderData } = responseData;
 
                 this.purchaseOrder = {
                     ...this.purchaseOrder,
@@ -1458,18 +1703,21 @@ export function mount(rootEl, payload) {
                 this.isEditable = Boolean(this.purchaseOrder.is_editable);
                 if (workflow) {
                     this.workflow = workflow;
+                    if (Array.isArray(workflowProgressSteps)) {
+                        this.workflowProgressSteps = workflowProgressSteps;
+                    }
+                    const workflowUpdatedDetail = this.workflowUpdatedDetail(
+                        workflow,
+                        purchaseOrderData,
+                        workflowProgressSteps
+                    );
+
                     document.dispatchEvent(new CustomEvent('workflow-updated', {
-                        detail: {
-                            workflow,
-                            purchaseOrder: purchaseOrderData,
-                        },
+                        detail: workflowUpdatedDetail,
                     }));
                     this.$root.dispatchEvent(new CustomEvent('workflow-updated', {
                         bubbles: true,
-                        detail: {
-                            workflow,
-                            purchaseOrder: purchaseOrderData,
-                        },
+                        detail: workflowUpdatedDetail,
                     }));
                 }
                 this.showToast('success', 'Action applied.');

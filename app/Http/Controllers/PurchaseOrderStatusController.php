@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\Workflows\BuildWorkflowProgressStepsAction;
 use App\Models\PurchaseOrder;
 use App\Models\WorkflowDomain;
 use App\Models\WorkflowStage;
@@ -214,10 +215,15 @@ class PurchaseOrderStatusController extends Controller
     /**
      * Build the status response payload used by the PO detail header.
      *
-     * @return array<string, bool|int|string|null>
+     * @return array<string, bool|int|string|array<int|string, mixed>|null>
      */
     private function statusPayload(PurchaseOrder $purchaseOrder, Request $request): array
     {
+        $workflowPayload = app(WorkflowTransitionService::class)->purchaseOrderWorkflowPayload(
+            $purchaseOrder,
+            $request->user()
+        );
+
         $payload = [
             'status' => $purchaseOrder->workflowStatus(),
             'persisted_status' => $purchaseOrder->status,
@@ -226,9 +232,18 @@ class PurchaseOrderStatusController extends Controller
             'is_back_ordered' => $purchaseOrder->back_ordered_at !== null,
             'has_receipts' => $this->hasReceipts($purchaseOrder),
             'can_receive' => $this->canReceive($purchaseOrder),
-            'workflow' => app(WorkflowTransitionService::class)->purchaseOrderWorkflowPayload(
-                $purchaseOrder,
-                $request->user()
+            'workflow' => $workflowPayload,
+            'workflowProgressSteps' => app(BuildWorkflowProgressStepsAction::class)->execute(
+                (int) $request->user()->tenant_id,
+                'purchasing',
+                isset($workflowPayload['currentStage']['id']) ? (int) $workflowPayload['currentStage']['id'] : null,
+                null,
+                $purchaseOrder->last_completed_workflow_stage_id === null
+                    ? null
+                    : (int) $purchaseOrder->last_completed_workflow_stage_id,
+                ! isset($workflowPayload['currentStage']['id'])
+                    && $purchaseOrder->last_completed_workflow_stage_id !== null
+                    && $purchaseOrder->workflowStatus() === PurchaseOrder::STATUS_COMPLETED
             ),
         ];
 

@@ -111,7 +111,7 @@ class RecipeController extends Controller
             ->values();
 
         $page = max(1, (int) $request->integer('page', 1));
-        $perPage = 10;
+        $perPage = $this->perPageFromRequest($request);
         $slice = $versions->slice(($page - 1) * $perPage, $perPage)->values();
         $paginator = new LengthAwarePaginator($slice, $versions->count(), $perPage, $page);
 
@@ -177,13 +177,15 @@ class RecipeController extends Controller
         $canManage = Gate::allows('inventory-make-orders-manage');
         $canExecute = Gate::allows('inventory-make-orders-execute');
 
+        $perPage = $this->perPageFromRequest($request);
+
         $paginator = Recipe::query()
             ->where('tenant_id', $request->user()->tenant_id)
             ->with(['item.baseUom', 'currentVersion'])
             ->where('item_id', $item->id)
             ->orderByDesc('updated_at')
             ->orderByDesc('id')
-            ->paginate(10);
+            ->paginate($perPage);
 
         return response()->json([
             'data' => $paginator->getCollection()
@@ -1191,6 +1193,18 @@ class RecipeController extends Controller
             'ingredients' => $this->ingredientsSectionConfig(),
             'versions' => $this->versionsSectionConfig($recipe, $canManage),
         ];
+    }
+
+    /**
+     * Resolve the page size for reusable detail-section list endpoints.
+     */
+    private function perPageFromRequest(Request $request): int
+    {
+        $validated = $request->validate([
+            'per_page' => ['nullable', 'integer', 'min:1', 'max:50'],
+        ]);
+
+        return (int) ($validated['per_page'] ?? 5);
     }
 
     /**

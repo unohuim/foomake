@@ -280,7 +280,7 @@ export function mount(rootEl, payload) {
                     display: {
                         primaryText: asString(record.item_name, 'Unknown material'),
                         packageText: packageDisplayText(record),
-                        skuText: asString(record.supplier_sku, '—'),
+                        skuText: asString(record.supplier_sku),
                         statusText: stateDisplay.text,
                         statusTone: stateDisplay.tone,
                         priceText: asString(record.current_price_display, 'No price'),

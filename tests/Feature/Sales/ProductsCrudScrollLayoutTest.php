@@ -83,11 +83,12 @@ it('5. data crud root fills the available height', function () {
 
 it('6. the shared crud renderer fills the bounded page area', function () {
     expect($this->rendererSource)
-        ->toContain('class="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-gray-100 bg-white shadow-sm" data-crud-renderer');
+        ->toContain('class="flex h-full min-h-0 flex-col overflow-hidden border border-gray-100 bg-white shadow-sm" data-crud-renderer')
+        ->not->toContain('rounded-lg border border-gray-100 bg-white shadow-sm" data-crud-renderer');
 });
 
 it('7. the shared crud renderer no longer hardcodes a fixed 36rem shell height', function () {
-    expect($this->rendererSource)->not->toContain('class="h-[36rem] overflow-hidden rounded-lg border border-gray-100 bg-white shadow-sm" data-crud-renderer');
+    expect($this->rendererSource)->not->toContain('class="h-[36rem] overflow-hidden border border-gray-100 bg-white shadow-sm" data-crud-renderer');
 });
 
 it('8. desktop products use a full height wrapper before the records scroller', function () {

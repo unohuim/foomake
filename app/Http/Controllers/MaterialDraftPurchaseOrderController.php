@@ -37,7 +37,7 @@ class MaterialDraftPurchaseOrderController extends Controller
                     ->where('tenant_id', $request->user()->tenant_id)
                     ->where('is_active', true),
             ],
-            'pack_count' => ['required', 'integer', 'min:1'],
+            'pack_count' => ['sometimes', 'integer', 'min:1'],
         ]);
 
         if (! $item->is_purchasable) {
@@ -95,7 +95,7 @@ class MaterialDraftPurchaseOrderController extends Controller
             ], 422);
         }
 
-        $packCount = (int) $validated['pack_count'];
+        $packCount = (int) ($validated['pack_count'] ?? 1);
         $unitPriceCents = (int) $option->currentPrice->converted_price_cents;
         $lineSubtotal = $unitPriceCents * $packCount;
         $tenantCurrency = strtoupper(

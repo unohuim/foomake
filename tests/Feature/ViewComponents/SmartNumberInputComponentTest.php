@@ -71,8 +71,10 @@ it('4. supports integer type configuration', function (): void {
 BLADE
     );
 
-    expect($html)->toContain('"type":"integer"')
-        ->and($html)->toContain('"value":"1234"');
+    expect($html)->toContain('type:')
+        ->and($html)->toContain('integer')
+        ->and($html)->toContain('value:')
+        ->and($html)->toContain('1234');
 });
 
 it('5. integer formatting uses thousands separators and no decimals', function (): void {
@@ -90,8 +92,9 @@ it('6. supports decimal type configuration', function (): void {
 BLADE
     );
 
-    expect($html)->toContain('"type":"decimal"')
-        ->and($html)->toContain('"precision":6');
+    expect($html)->toContain('type:')
+        ->and($html)->toContain('decimal')
+        ->and($html)->toContain('precision: 6');
 });
 
 it('7. decimal formatting respects configured precision without float casts', function (): void {
@@ -110,8 +113,10 @@ it('8. supports money type configuration', function (): void {
 BLADE
     );
 
-    expect($html)->toContain('"type":"money"')
-        ->and($html)->toContain('"currency":"USD"');
+    expect($html)->toContain('type:')
+        ->and($html)->toContain('money')
+        ->and($html)->toContain('currency:')
+        ->and($html)->toContain('USD');
 });
 
 it('9. money type renders a currency prefix or suffix zone', function (): void {
@@ -133,8 +138,10 @@ it('10. money type supports cents backed canonical values', function (): void {
 BLADE
     );
 
-    expect($html)->toContain('"rawMode":"cents"')
-        ->and($html)->toContain('"value":"123456"');
+    expect($html)->toContain('rawMode:')
+        ->and($html)->toContain('cents')
+        ->and($html)->toContain('value:')
+        ->and($html)->toContain('123456');
 });
 
 it('11. supports percent type configuration', function (): void {
@@ -144,7 +151,8 @@ it('11. supports percent type configuration', function (): void {
 BLADE
     );
 
-    expect($html)->toContain('"type":"percent"')
+    expect($html)->toContain('type:')
+        ->and($html)->toContain('percent')
         ->and($html)->toContain('%');
 });
 
@@ -198,6 +206,16 @@ it('16. dispatches configured events on input change and blur', function (): voi
     expect($source)->toContain('handleInput($event)')
         ->and($source)->toContain('handleChange($event)')
         ->and($source)->toContain('handleBlur($event)');
+});
+
+it('16a. supports a configured focus hook for caller owned input behavior', function (): void {
+    $html = ($this->renderSmartNumberInput)(
+        <<<'BLADE'
+<x-ui.smart-number-input name="quantity" after-focus="$el.setSelectionRange($el.value.length, $el.value.length)" />
+BLADE
+    );
+
+    expect($html)->toContain('x-on:focus="$el.setSelectionRange($el.value.length, $el.value.length)"');
 });
 
 it('17. event payload includes required fields', function (): void {

@@ -1,16 +1,18 @@
 name: Page Scoped Toast Pattern
 type: UI Pattern
 location:
-  - resources/js/app.js
+  - resources/views/components/ui/toast.blade.php
 purpose: Provide non-blocking toast feedback scoped to the current page.
 when_to_use:
   - Non-blocking success or error feedback after AJAX actions
 when_not_to_use:
   - Blocking alerts or full-page loaders
 rules:
-  - No shared toast helper is implemented yet.
-  - Any toast implementation must remain page-scoped.
+  - Shared toast markup is rendered through the Blade component.
+  - Toast state and timing remain owned by the page Alpine component.
+  - No global toast store or global event bus is introduced.
+  - Success toasts auto-dismiss after 1500 milliseconds.
 public_interface:
-  - None defined yet
+  - <x-ui.toast visible="toast.visible" type="toast.type" message="toast.message" />
 example_usage: |
-  window.dispatchEvent(new CustomEvent('toast', { detail: 'Saved.' }));
+  <x-ui.toast visible="toast.visible" type="toast.type" message="toast.message" />

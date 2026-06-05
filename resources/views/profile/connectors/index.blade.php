@@ -14,7 +14,7 @@
         x-data="profileConnectorsIndex"
     >
         <div class="max-w-4xl mx-auto space-y-6 px-4 sm:px-6 lg:px-8">
-            <div class="rounded-lg border border-gray-100 bg-white shadow-sm">
+            <div class="border border-gray-100 bg-white shadow-sm">
                 <div class="border-b border-gray-100 px-6 py-5">
                     <h3 class="text-lg font-medium text-gray-900">WooCommerce</h3>
                     <p class="mt-1 text-sm text-gray-600">Manage the tenant WooCommerce store used for product preview imports.</p>

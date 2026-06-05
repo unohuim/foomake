@@ -1,0 +1,26 @@
+name: Simple Dropdown
+type: UI Component
+location:
+  - resources/views/components/ui/dropdown.blade.php
+purpose: Provide a reusable Blade and Alpine dropdown shell based on the Tailwind Plus simple dropdown visual pattern.
+when_to_use:
+  - Rendering compact header or toolbar dropdown controls
+  - Rendering simple command or selection menus that need Alpine transitions
+when_not_to_use:
+  - Row action menus that already use the shared row-action dropdown contract
+  - Complex searchable selects or comboboxes
+rules:
+  - The component must use Blade, Alpine, and Tailwind utilities only.
+  - The component must not include Tailwind Plus scripts or external UI packages.
+  - Dropdowns must close on outside click and Escape.
+  - Dropdown menus must use Alpine transitions.
+  - Business behavior belongs in the page-local Alpine component using the dropdown, not in global JavaScript state.
+public_interface:
+  - resources/views/components/ui/dropdown.blade.php
+  - trigger slot
+  - default slot
+example_usage: |
+  <x-ui.dropdown align="left" width="w-56">
+      <x-slot name="trigger">Current value</x-slot>
+      <button type="button" role="menuitem">Option</button>
+  </x-ui.dropdown>

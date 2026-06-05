@@ -97,6 +97,36 @@ class StockMove extends Model
 }
 ```
 
+### Inventory Balance Read Model
+
+**Name:** Inventory Balance Read Model
+**Type:** Derived Read Model
+**Location:**
+- `app/Models/InventoryBalance.php`
+- `app/Actions/Inventory/ApplyStockMoveToInventoryBalanceAction.php`
+- `app/Actions/Inventory/CalculateItemOnHandQuantityAction.php`
+- `app/Actions/Inventory/CanConvertInventoryBalancesToUomAction.php`
+
+**Purpose:**
+Maintain per-item per-UoM inventory balances derived from posted stock moves so inventory reads can convert and sum compact balance rows instead of scanning the full ledger.
+
+**When to Use:**
+Calculating on-hand inventory, validating conversion-covered base UoM changes, or applying newly posted stock moves to derived balances.
+
+**When Not to Use:**
+Replacing the immutable stock-move ledger or storing planned supply/demand.
+
+**Public Interface:**
+- `InventoryBalance`
+- `ApplyStockMoveToInventoryBalanceAction::execute()`
+- `CalculateItemOnHandQuantityAction::execute()`
+- `CanConvertInventoryBalancesToUomAction::execute()`
+
+**Example Usage:**
+```php
+$onHand = app(CalculateItemOnHandQuantityAction::class)->execute($item);
+```
+
 ### Configured CRUD Page Module Pattern
 
 **Name:** Configured CRUD Page Module Pattern  
@@ -164,6 +194,34 @@ Notes:
 - `detailUrlTemplate` is optional. When present, create flows may redirect to the created record detail page after success.
 - When `detailUrlTemplate` is absent, the existing inline success behavior such as list refresh remains the fallback.
 
+### Toggle
+
+**Name:** Toggle
+**Type:** UI Component Pattern
+**Location:**
+- `resources/views/components/ui/toggle.blade.php`
+- `resources/js/components/toggle.js`
+- `resources/js/lib/crud-page.js`
+
+**Purpose:**
+Provide a reusable Tailwind and Alpine on/off switch that emits row-aware change events without owning persistence.
+
+**When to Use:**
+Boolean settings or row state that should be changed through a page-owned AJAX handler.
+
+**When Not to Use:**
+Non-boolean values, authorization decisions, validation, or save-success indicators.
+
+**Public Interface:**
+- `<x-ui.toggle name="is_active" event="material-active-toggle" />`
+- `renderToggle({ name, checkedExpression, disabledExpression, eventName, handler, ariaLabelExpression })`
+- Toggle event detail with `name`, `checked`, `value`, `row`, `record`, and `id`
+
+**Example Usage:**
+```php
+<x-ui.toggle name="is_active" :checked="$item->is_active" event="material-active-toggle" />
+```
+
 ### Reusable CRUD Detail Section Pattern
 
 **Name:** Reusable CRUD Detail Section Pattern  
@@ -203,12 +261,14 @@ Notes:
 - Reusable CRUD detail sections must keep their outer shell `overflow-visible` so row-action dropdowns are not clipped.
 - Shared CRUD add/search rows use a dedicated layout contract rather than the generic actions slot: the search/select control belongs on the left and the add button belongs on the right.
 - Shared compact add/search rows do not render a visible field label unless a future screen explicitly opts into one.
+- Shared CRUD detail sections default to 5 rows per page through the section pagination contract; endpoints should honor `per_page` when list data is loaded remotely, while future per-page selectors can opt in through the same config.
 - Inventory Count detail uses this pattern with a `Materials` section and a read-only `Tasks` section that reuses the existing task completion route/payload contract.
 - Material detail uses this pattern for `Supplier Packages`, `Recipes`, `Purchase Orders`, and `Make Orders`; `Supplier Packages` and `Recipes` render near the top and default open, while `Purchase Orders` and `Make Orders` render near the bottom and default collapsed.
 - Supplier detail uses this pattern for `Supplier Packages`, scoped to the current supplier. The create slide-over selects the Material while the supplier is fixed by the page context, and row actions use the shared vertical dots menu for `Edit`, `Purchase`, and `Delete`.
 - Supplier detail uses this pattern for `Purchase Orders`, scoped to purchase orders whose `supplier_id` matches the current supplier. Its `+` action posts to the existing Purchase Order create endpoint with the supplier fixed by page context and redirects to the created draft PO detail page.
 - Material detail reuses the existing section abstraction for manufacturable-only `Recipes` and `Make Orders` sections rather than introducing a bespoke accordion/detail implementation.
-- Material detail section rows expose record detail links where an existing detail surface is available, using the shared row-action `View` contract rather than bespoke row-click behavior; this applies to Supplier Package rows, Purchase Order rows, Recipe rows, and Make Order rows.
+- Material detail section rows expose record detail links where an existing detail surface is available, using the shared row-action `View` contract rather than bespoke row-click behavior; this applies to Purchase Order rows, Recipe rows, and Make Order rows.
+- Material detail `Supplier Packages` rows do not expose `View` or `Edit`; their `Purchase` action posts directly to the material-scoped draft purchase-order endpoint, creates a one-pack PO line from the selected supplier package, and redirects to the new Purchase Order detail page.
 - Material detail `Recipes` plus opens the existing recipe create slide-over in place, prefilled with the current material as the output item, and successful recipe create redirects to the created recipe detail page.
 - Material detail recipe-row `Make` creates a draft Make Order directly from the selected recipe current version and redirects to the created make-order detail page when `show_url` is returned.
 - Material detail `Inventory Counts` `+` reuses the standard Inventory Count create slide-over contract and mounts that shared form under a dedicated live Alpine create component in the resource-detail overlay area inside the Material page scope.
@@ -414,7 +474,7 @@ Render compact Runs, Expected Output, Actual Output, Due Date, and Assigned To d
 **Purpose:**  
 Provide a shared resource-detail shell where top navigation and the page header remain sticky while only the detail content pane scrolls.
 
-**Rules:**  
+**Rules:**
 - Resource detail pages that need sticky shell behavior must use `x-resource-detail-layout` rather than duplicating page-local sticky wrappers.  
 - The top navigation remains sticky above the page header.  
 - The page header remains sticky beneath the navigation bar.  
@@ -1495,7 +1555,7 @@ Posting stock moves or mutating operational records.
 - `InventoryAvailabilityIndexReadModel::rowForItem()`  
 - `InventoryAvailabilityCalculator::forItem(Item $item)`
 
-**Rules:**  
+**Rules:**
 - Availability math remains canonical BCMath at scale 6.  
 - UI-facing inventory quantities must render using the item base UoM `display_precision`.  
 - The read model may expose both canonical quantity fields and backend-formatted display fields for the same row.  
@@ -1602,7 +1662,7 @@ Notes:
 - Stockable Materials detail pages may mount an `Inventory Counts` reusable CRUD section that lists count lines for the current material, shows count date / assigned user / UOM / counted quantity, and uses the shared section plus-button to open the same shared Inventory Count create slide-over contract and open-create event path used by the Inventory Counts index page.
 - Successful empty `Inventory Counts` section loads must render only the configured empty state; `Unable to load records.` is reserved for actual fetch failures.
 - Material-scoped Inventory Count creation may prefill the current material server-side and redirect to the created Inventory Count detail page when `show_url` is returned.
-- Stockable Material detail pages may also render a compact inventory stats strip directly under the header. That strip always shows `On Hand` and `Net Qty`, then conditionally adds `Open Sales Orders Qty`, `Open Purchase Orders Qty`, and `Open Make Orders Impact` only when the item qualifies.
+- Stockable Material detail pages may also render a compact inventory stats strip directly under the header. That strip always shows `On hand` and `Net Qty`, then conditionally adds `Open SO`, `Open PO`, and `Open MO` only when the item qualifies.
 - Material detail net quantity uses the formula `on hand - open sales + open purchase + open make outputs - open make ingredients`, with all quantity math kept at canonical scale 6 and displayed through the shared quantity formatter.
 - Open make-order output in that stats strip and in the inventory availability read model uses `expected_output_qty`, while completed make-order output reaches `On Hand` and `Net Qty` through ledger stock moves that use `actual_output_qty` when present.
 - Shared section metadata rendering filters explicit empty metadata values so mutually exclusive task-row labels do not render placeholder rows.
@@ -1628,15 +1688,24 @@ Recording counted quantities for items.
 **When Not to Use:**  
 Recording inventory adjustments outside a count.
 
-**Public Interface:**  
-- `inventoryCount()`  
+**Public Interface:**
+- `inventoryCount()`
 - `item()`
+- `uom()`
+- `snapshotUom()`
+
+**Rules:**
+- Count lines snapshot the counted UoM in `uom_id` when the material is added.
+- Historical count rows display the line `uom_id`, not the material's current base UoM.
+- Snapshot UoM resolution allows tenant UoMs and global system UoMs, but never another tenant's UoM.
+- Posting converts line quantities into the material's current base UoM before writing variance stock moves.
 
 **Example Usage:**  
 ```php
 $line = $count->lines()->create([
     'tenant_id' => $tenant->id,
     'item_id' => $item->id,
+    'uom_id' => $item->base_uom_id,
     'counted_quantity' => '5.000000',
 ]);
 ```
@@ -2865,7 +2934,7 @@ Notes:
 
 **Name:** Row Actions Dropdown Pattern  
 **Type:** UI Pattern  
-**Location:** `resources/views/materials/index.blade.php`
+**Location:** `resources/views/components/dropdown.blade.php`
 
 **Purpose:**  
 Provide contextual row-level actions such as edit and delete.
@@ -2890,7 +2959,7 @@ Primary or global actions.
 
 **Name:** Page-Scoped Toast Pattern  
 **Type:** UI Pattern  
-**Location:** `resources/views/materials/index.blade.php`
+**Location:** `resources/views/components/ui/toast.blade.php`
 
 **Purpose:**  
 Provide non-blocking toast feedback scoped to the current page.
@@ -2902,11 +2971,12 @@ Non-blocking success or error feedback after AJAX actions.
 Blocking alerts or full-page loaders.
 
 **Public Interface:**  
-- Page-level `showToast(type, message)` handler
+- `<x-ui.toast visible="toast.visible" type="toast.type" message="toast.message" />`
+- Page-level `showToast(type, message)` handler owns state and timing
 
 **Example Usage:**  
-```js
-showToast('success', 'Material deleted.');
+```blade
+<x-ui.toast visible="toast.visible" type="toast.type" message="toast.message" />
 ```
 
 ---
@@ -2963,6 +3033,38 @@ Standalone buttons outside dropdown menus.
 **Example Usage:**  
 ```blade
 <x-dropdown-link href="/materials">Materials</x-dropdown-link>
+```
+
+---
+
+### Simple UI Dropdown
+
+**Name:** Simple UI Dropdown
+**Type:** Blade / Alpine Component
+**Location:**
+- `resources/views/components/ui/dropdown.blade.php`
+- `docs/architecture/ui/SimpleDropdown.yaml`
+
+**Purpose:**
+Render a Tailwind Plus-inspired simple dropdown shell for compact header and toolbar selection menus.
+
+**When to Use:**
+Simple selection or command menus that need click-away behavior and Alpine transitions.
+
+**When Not to Use:**
+Shared row-action menus or searchable combobox/select inputs.
+
+**Public Interface:**
+- `trigger` slot
+- default slot
+- `align`, `width`, `buttonClass`, `menuClass`
+
+**Example Usage:**
+```blade
+<x-ui.dropdown align="left" width="w-56">
+    <x-slot name="trigger">Current value</x-slot>
+    <button type="button" role="menuitem">Option</button>
+</x-ui.dropdown>
 ```
 
 ---
