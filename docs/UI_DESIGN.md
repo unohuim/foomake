@@ -246,7 +246,7 @@ Expected shared components include:
 
 This UI is **not**:
 
-- A marketing site
+- A marketing site, except for approved public repo-managed marketing pages under `/learn/{slug}`
 - A data visualization playground
 - A design experiment
 - A SPA

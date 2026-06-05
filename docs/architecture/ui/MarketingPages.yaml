@@ -1,0 +1,43 @@
+name: Markdown Marketing Pages
+type: Public Page Pattern
+location:
+  - resources/content/marketing/
+  - app/Http/Controllers/MarketingPageController.php
+  - app/Support/Marketing/MarketingPageRepository.php
+  - resources/views/marketing/show.blade.php
+purpose: Provide repo-managed public marketing pages with markdown body content and SEO metadata from front matter.
+when_to_use:
+  - Public FooMake marketing pages
+  - SEO pages managed in the Laravel repository
+  - Static content that does not require an admin editor or database content model
+when_not_to_use:
+  - Authenticated application pages
+  - User-editable CMS content
+  - Database-backed tenant content
+rules:
+  - Marketing pages are repo-managed markdown files, not a CMS.
+  - Marketing page routes must remain public and must not require auth or verified middleware.
+  - Marketing pages must use safe slug resolution and must not allow directory traversal.
+  - Front matter must provide SEO metadata used by the rendered page.
+  - Markdown rendering must strip unsafe raw HTML.
+  - Marketing pages must not introduce global JavaScript state.
+  - Marketing page styling must use Tailwind utilities only.
+  - Public marketing pages use the /learn/{slug} namespace instead of a root catch-all so they do not shadow app, auth, admin, or domain routes.
+  - The public sitemap must expose only intended public marketing pages loaded from resources/content/marketing/.
+public_interface:
+  - resources/content/marketing/{slug}.md
+  - GET /learn/{slug}
+  - GET /sitemap.xml
+  - MarketingPageRepository::find()
+  - MarketingPageRepository::all()
+example_usage: |
+  ---
+  title: "MRP Software for Small Food Manufacturers"
+  description: "FooMake helps small food manufacturers manage recipes, inventory, purchasing, production, and sales orders without spreadsheets."
+  slug: "food-manufacturing-mrp"
+  headline: "MRP software built for small food manufacturers"
+  cta_label: "Start beta access"
+  cta_url: "/register"
+  ---
+
+  Markdown body content lives below front matter.

@@ -7,6 +7,7 @@ use App\Http\Controllers\InventoryCountController;
 use App\Http\Controllers\ItemController;
 use App\Http\Controllers\ItemPurchaseOptionPriceController;
 use App\Http\Controllers\MakeOrderController;
+use App\Http\Controllers\MarketingPageController;
 use App\Http\Controllers\MaterialController;
 use App\Http\Controllers\MaterialDraftPurchaseOrderController;
 use App\Http\Controllers\MaterialPurchaseOrderController;
@@ -43,6 +44,13 @@ use Illuminate\Support\Facades\Route;
 Route::get('/', function () {
     return view('welcome');
 });
+
+Route::get('/learn/{slug}', [MarketingPageController::class, 'show'])
+    ->where('slug', '[a-z0-9]+(?:-[a-z0-9]+)*')
+    ->name('marketing.pages.show');
+
+Route::get('/sitemap.xml', [MarketingPageController::class, 'sitemap'])
+    ->name('marketing.sitemap');
 
 Route::get('/dashboard', DashboardController::class)
     ->middleware(['auth', 'verified'])
@@ -163,6 +171,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('manufacturing.uom-conversions.update');
     Route::delete('/manufacturing/uom-conversions/{conversion}', [UomConversionController::class, 'destroy'])
         ->name('manufacturing.uom-conversions.destroy');
+    Route::post('/manufacturing/uom-conversions/resolve', [UomConversionController::class, 'resolve'])
+        ->name('manufacturing.uom-conversions.resolve');
+    Route::post('/manufacturing/uom-conversions/items', [UomConversionController::class, 'storeItem'])
+        ->name('manufacturing.uom-conversions.items.store');
+    Route::patch('/manufacturing/uom-conversions/items/{itemConversion}', [UomConversionController::class, 'updateItem'])
+        ->name('manufacturing.uom-conversions.items.update');
+    Route::delete('/manufacturing/uom-conversions/items/{itemConversion}', [UomConversionController::class, 'destroyItem'])
+        ->name('manufacturing.uom-conversions.items.destroy');
     Route::get('/manufacturing/recipes', [RecipeController::class, 'index'])
         ->name('manufacturing.recipes.index');
     Route::get('/manufacturing/recipes/list', [RecipeController::class, 'list'])
@@ -422,14 +438,5 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 });
-
-Route::post('/manufacturing/uom-conversions/resolve', [UomConversionController::class, 'resolve'])
-    ->name('manufacturing.uom-conversions.resolve');
-Route::post('/manufacturing/uom-conversions/items', [UomConversionController::class, 'storeItem'])
-    ->name('manufacturing.uom-conversions.items.store');
-Route::patch('/manufacturing/uom-conversions/items/{itemConversion}', [UomConversionController::class, 'updateItem'])
-    ->name('manufacturing.uom-conversions.items.update');
-Route::delete('/manufacturing/uom-conversions/items/{itemConversion}', [UomConversionController::class, 'destroyItem'])
-    ->name('manufacturing.uom-conversions.items.destroy');
 
 require __DIR__ . '/auth.php';

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 use App\Models\Item;
 use App\Models\ItemUomConversion;
+use App\Models\Permission;
+use App\Models\Role;
 use App\Models\Tenant;
 use App\Models\Uom;
 use App\Models\UomCategory;
@@ -16,6 +18,7 @@ uses(RefreshDatabase::class);
 beforeEach(function (): void {
     $this->tenantCounter = 1;
     $this->userCounter = 1;
+    $this->roleCounter = 1;
     $this->categoryCounter = 1;
     $this->uomCounter = 1;
     $this->itemCounter = 1;
@@ -43,6 +46,21 @@ beforeEach(function (): void {
         $this->userCounter++;
 
         return $user;
+    };
+
+    $this->grantManagePermission = function (User $user): void {
+        $permission = Permission::query()->firstOrCreate([
+            'slug' => 'inventory-materials-manage',
+        ]);
+
+        $role = Role::query()->create([
+            'name' => 'uom-resolution-role-' . $this->roleCounter,
+        ]);
+
+        $this->roleCounter++;
+
+        $role->permissions()->syncWithoutDetaching([$permission->id]);
+        $user->roles()->syncWithoutDetaching([$role->id]);
     };
 
     $this->makeCategory = function (Tenant $tenant, string $name): UomCategory {
@@ -93,23 +111,31 @@ beforeEach(function (): void {
 
 it('25. item-specific conversion can be created', function (): void {
     $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    ($this->grantManagePermission)($user);
+
     $mass = ($this->makeCategory)($tenant, 'Mass');
     $count = ($this->makeCategory)($tenant, 'Count');
     $grams = ($this->makeUom)($tenant, $mass, 'g');
     $each = ($this->makeUom)($tenant, $count, 'ea');
     $item = ($this->makeItem)($tenant, $grams);
 
-    $this->postJson($this->itemStoreUrl, [
-        'tenant_id' => $tenant->id,
-        'item_id' => $item->id,
-        'from_uom_id' => $each->id,
-        'to_uom_id' => $grams->id,
-        'conversion_factor' => '180.000000',
-    ])->assertCreated();
+    $this->actingAs($user)
+        ->postJson($this->itemStoreUrl, [
+            'tenant_id' => $tenant->id,
+            'item_id' => $item->id,
+            'from_uom_id' => $each->id,
+            'to_uom_id' => $grams->id,
+            'conversion_factor' => '180.000000',
+        ])
+        ->assertCreated();
 });
 
 it('26. item-specific conversion can be edited', function (): void {
     $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    ($this->grantManagePermission)($user);
+
     $mass = ($this->makeCategory)($tenant, 'Mass');
     $count = ($this->makeCategory)($tenant, 'Count');
     $grams = ($this->makeUom)($tenant, $mass, 'g');
@@ -124,16 +150,21 @@ it('26. item-specific conversion can be edited', function (): void {
         'conversion_factor' => '180.000000',
     ]);
 
-    $this->patchJson(($this->itemUpdateUrl)($conversion->id), [
-        'item_id' => $item->id,
-        'from_uom_id' => $each->id,
-        'to_uom_id' => $grams->id,
-        'conversion_factor' => '200.000000',
-    ])->assertOk();
+    $this->actingAs($user)
+        ->patchJson(($this->itemUpdateUrl)($conversion->id), [
+            'item_id' => $item->id,
+            'from_uom_id' => $each->id,
+            'to_uom_id' => $grams->id,
+            'conversion_factor' => '200.000000',
+        ])
+        ->assertOk();
 });
 
 it('27. item-specific conversion can be deleted', function (): void {
     $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    ($this->grantManagePermission)($user);
+
     $mass = ($this->makeCategory)($tenant, 'Mass');
     $count = ($this->makeCategory)($tenant, 'Count');
     $grams = ($this->makeUom)($tenant, $mass, 'g');
@@ -148,7 +179,8 @@ it('27. item-specific conversion can be deleted', function (): void {
         'conversion_factor' => '180.000000',
     ]);
 
-    $this->deleteJson(($this->itemDestroyUrl)($conversion->id))
+    $this->actingAs($user)
+        ->deleteJson(($this->itemDestroyUrl)($conversion->id))
         ->assertNoContent();
 });
 
@@ -174,24 +206,32 @@ it('28. item-specific conversion allows cross-category', function (): void {
 it('29. item-specific conversion requires item ownership', function (): void {
     $tenantA = ($this->makeTenant)('Tenant A');
     $tenantB = ($this->makeTenant)('Tenant B');
+    $user = ($this->makeUser)($tenantA);
+    ($this->grantManagePermission)($user);
+
     $massA = ($this->makeCategory)($tenantA, 'Mass');
     $countA = ($this->makeCategory)($tenantA, 'Count');
     $gramsA = ($this->makeUom)($tenantA, $massA, 'g');
     $eachA = ($this->makeUom)($tenantA, $countA, 'ea');
     $itemB = ($this->makeItem)($tenantB, $gramsA);
 
-    $this->postJson($this->itemStoreUrl, [
-        'tenant_id' => $tenantA->id,
-        'item_id' => $itemB->id,
-        'from_uom_id' => $eachA->id,
-        'to_uom_id' => $gramsA->id,
-        'conversion_factor' => '180.000000',
-    ])->assertStatus(422)
+    $this->actingAs($user)
+        ->postJson($this->itemStoreUrl, [
+            'tenant_id' => $tenantA->id,
+            'item_id' => $itemB->id,
+            'from_uom_id' => $eachA->id,
+            'to_uom_id' => $gramsA->id,
+            'conversion_factor' => '180.000000',
+        ])
+        ->assertStatus(422)
         ->assertJsonValidationErrors(['item_id']);
 });
 
 it('30. item-specific duplicate conversion is rejected', function (): void {
     $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    ($this->grantManagePermission)($user);
+
     $mass = ($this->makeCategory)($tenant, 'Mass');
     $count = ($this->makeCategory)($tenant, 'Count');
     $grams = ($this->makeUom)($tenant, $mass, 'g');
@@ -206,13 +246,15 @@ it('30. item-specific duplicate conversion is rejected', function (): void {
         'conversion_factor' => '180.000000',
     ]);
 
-    $this->postJson($this->itemStoreUrl, [
-        'tenant_id' => $tenant->id,
-        'item_id' => $item->id,
-        'from_uom_id' => $each->id,
-        'to_uom_id' => $grams->id,
-        'conversion_factor' => '180.000000',
-    ])->assertStatus(422)
+    $this->actingAs($user)
+        ->postJson($this->itemStoreUrl, [
+            'tenant_id' => $tenant->id,
+            'item_id' => $item->id,
+            'from_uom_id' => $each->id,
+            'to_uom_id' => $grams->id,
+            'conversion_factor' => '180.000000',
+        ])
+        ->assertStatus(422)
         ->assertJsonValidationErrors(['from_uom_id']);
 });
 
@@ -252,6 +294,8 @@ it('31. item-specific conversions are tenant-isolated', function (): void {
 
 it('32. resolution prefers item-specific over tenant', function (): void {
     $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+
     $mass = ($this->makeCategory)($tenant, 'Mass');
     $count = ($this->makeCategory)($tenant, 'Count');
     $grams = ($this->makeUom)($tenant, $mass, 'g');
@@ -275,18 +319,22 @@ it('32. resolution prefers item-specific over tenant', function (): void {
         'conversion_factor' => '180.000000',
     ]);
 
-    $this->postJson($this->resolveUrl, [
-        'item_id' => $item->id,
-        'from_uom_id' => $each->id,
-        'to_uom_id' => $grams->id,
-        'quantity' => '1.000000',
-    ])->assertOk()
+    $this->actingAs($user)
+        ->postJson($this->resolveUrl, [
+            'item_id' => $item->id,
+            'from_uom_id' => $each->id,
+            'to_uom_id' => $grams->id,
+            'quantity' => '1.000000',
+        ])
+        ->assertOk()
         ->assertJsonPath('data.source', 'item-specific')
         ->assertJsonPath('data.multiplier', '180.000000');
 });
 
 it('33. resolution prefers tenant over global', function (): void {
     $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+
     $mass = ($this->makeCategory)($tenant, 'Mass');
     $from = ($this->makeUom)($tenant, $mass, 'kg');
     $to = ($this->makeUom)($tenant, $mass, 'g');
@@ -310,17 +358,21 @@ it('33. resolution prefers tenant over global', function (): void {
         ],
     ]);
 
-    $this->postJson($this->resolveUrl, [
-        'from_uom_id' => $from->id,
-        'to_uom_id' => $to->id,
-        'quantity' => '1.000000',
-    ])->assertOk()
+    $this->actingAs($user)
+        ->postJson($this->resolveUrl, [
+            'from_uom_id' => $from->id,
+            'to_uom_id' => $to->id,
+            'quantity' => '1.000000',
+        ])
+        ->assertOk()
         ->assertJsonPath('data.source', 'tenant')
         ->assertJsonPath('data.multiplier', '999.00000000');
 });
 
 it('34. resolution falls back to global', function (): void {
     $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+
     $mass = ($this->makeCategory)($tenant, 'Mass');
     $from = ($this->makeUom)($tenant, $mass, 'kg');
     $to = ($this->makeUom)($tenant, $mass, 'g');
@@ -334,11 +386,45 @@ it('34. resolution falls back to global', function (): void {
         'updated_at' => now(),
     ]);
 
-    $this->postJson($this->resolveUrl, [
-        'from_uom_id' => $from->id,
-        'to_uom_id' => $to->id,
-        'quantity' => '1.000000',
-    ])->assertOk()
+    $this->actingAs($user)
+        ->postJson($this->resolveUrl, [
+            'from_uom_id' => $from->id,
+            'to_uom_id' => $to->id,
+            'quantity' => '1.000000',
+        ])
+        ->assertOk()
         ->assertJsonPath('data.source', 'global')
         ->assertJsonPath('data.multiplier', '1000.00000000');
+});
+
+it('35. guest cannot resolve uom conversions', function (): void {
+    $this->postJson($this->resolveUrl, [
+        'from_uom_id' => 1,
+        'to_uom_id' => 2,
+        'quantity' => '1.000000',
+    ])->assertUnauthorized();
+});
+
+it('36. guest cannot create item-specific uom conversions', function (): void {
+    $this->postJson($this->itemStoreUrl, [
+        'tenant_id' => 1,
+        'item_id' => 1,
+        'from_uom_id' => 1,
+        'to_uom_id' => 2,
+        'conversion_factor' => '1.000000',
+    ])->assertUnauthorized();
+});
+
+it('37. guest cannot update item-specific uom conversions', function (): void {
+    $this->patchJson(($this->itemUpdateUrl)(1), [
+        'item_id' => 1,
+        'from_uom_id' => 1,
+        'to_uom_id' => 2,
+        'conversion_factor' => '1.000000',
+    ])->assertUnauthorized();
+});
+
+it('38. guest cannot delete item-specific uom conversions', function (): void {
+    $this->deleteJson(($this->itemDestroyUrl)(1))
+        ->assertUnauthorized();
 });

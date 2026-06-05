@@ -272,6 +272,32 @@
                             <p class="mt-2 text-sm leading-6 text-stone-600">No giant ERP ceremony. Just the day’s ingredients, batches, orders, and responsibilities.</p>
                         </div>
                     </div>
+
+                    <div class="mx-auto max-w-7xl px-4 pb-10 sm:px-6 lg:px-8">
+                        <div class="border-t border-stone-200 pt-6">
+                            <p class="text-xs font-semibold uppercase text-stone-500">Learn more</p>
+                            <div class="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-sm font-medium text-blue-950">
+                                <a href="{{ route('marketing.pages.show', ['slug' => 'food-manufacturing-mrp']) }}" class="hover:text-blue-800">
+                                    Food manufacturing MRP
+                                </a>
+                                <a href="{{ route('marketing.pages.show', ['slug' => 'inventory-management-for-food-manufacturers']) }}" class="hover:text-blue-800">
+                                    Inventory management
+                                </a>
+                                <a href="{{ route('marketing.pages.show', ['slug' => 'recipe-management-software']) }}" class="hover:text-blue-800">
+                                    Recipe management
+                                </a>
+                                <a href="{{ route('marketing.pages.show', ['slug' => 'purchase-order-software-for-food-manufacturers']) }}" class="hover:text-blue-800">
+                                    Purchase orders
+                                </a>
+                                <a href="{{ route('marketing.pages.show', ['slug' => 'production-planning-for-small-food-manufacturers']) }}" class="hover:text-blue-800">
+                                    Production planning
+                                </a>
+                                <a href="{{ route('marketing.pages.show', ['slug' => 'mrp-for-small-manufacturers']) }}" class="hover:text-blue-800">
+                                    MRP for small manufacturers
+                                </a>
+                            </div>
+                        </div>
+                    </div>
                 </section>
             </main>
 

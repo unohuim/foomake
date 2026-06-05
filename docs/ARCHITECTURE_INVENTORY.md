@@ -222,6 +222,47 @@ Non-boolean values, authorization decisions, validation, or save-success indicat
 <x-ui.toggle name="is_active" :checked="$item->is_active" event="material-active-toggle" />
 ```
 
+### Markdown Marketing Pages
+
+**Name:** Markdown Marketing Pages
+**Type:** Public Page Pattern
+**Location:**
+- `resources/content/marketing/`
+- `app/Support/Marketing/MarketingPageRepository.php`
+- `app/Http/Controllers/MarketingPageController.php`
+- `resources/views/marketing/show.blade.php`
+- `docs/architecture/ui/MarketingPages.yaml`
+
+**Purpose:**
+Render repo-managed public FooMake marketing pages from markdown files with SEO metadata from YAML front matter.
+
+Marketing pages intentionally use `/learn/{slug}` instead of a root-level catch-all so public SEO pages cannot shadow app, auth, admin, or domain routes. The sitemap route exposes only public pages loaded from `resources/content/marketing/`.
+
+**When to Use:**
+Public marketing and SEO pages that should live in the Laravel repository without WordPress, a database-backed CMS, or an admin editor.
+
+**When Not to Use:**
+Authenticated application pages, tenant-owned content, or user-editable content management.
+
+**Public Interface:**
+- `resources/content/marketing/{slug}.md`
+- `GET /learn/{slug}`
+- `GET /sitemap.xml`
+- `MarketingPageRepository::find()`
+- `MarketingPageRepository::all()`
+
+**Example Usage:**
+```markdown
+---
+title: "MRP Software for Small Food Manufacturers"
+description: "FooMake helps small food manufacturers manage recipes, inventory, purchasing, production, and sales orders without spreadsheets."
+slug: "food-manufacturing-mrp"
+headline: "MRP software built for small food manufacturers"
+cta_label: "Start beta access"
+cta_url: "/register"
+---
+```
+
 ### Reusable CRUD Detail Section Pattern
 
 **Name:** Reusable CRUD Detail Section Pattern  

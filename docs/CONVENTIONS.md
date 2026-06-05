@@ -90,6 +90,14 @@ These rules are mandatory for all new tests.
 - No global JavaScript state unless explicitly approved
 - Prefer progressive enhancement over JavaScript-first solutions
 
+## Marketing Content Conventions
+
+- Public marketing pages live in `resources/content/marketing/`.
+- Marketing pages are repo-managed markdown files with YAML front matter.
+- Marketing page slugs must be lowercase kebab-case and must match the front matter `slug`.
+- Marketing pages are public content and must not require authentication.
+- Marketing pages are not a CMS and must not introduce database-backed content editing.
+
 ---
 
 ## Naming & Readability
