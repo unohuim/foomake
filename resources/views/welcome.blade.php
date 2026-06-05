@@ -79,11 +79,11 @@
                             @else
                                 <button
                                     type="button"
-                                    class="group relative inline-flex h-12 w-12 items-center justify-center rounded-full border border-blue-950/25 bg-transparent text-blue-950 transition duration-300 hover:border-blue-950 hover:shadow-[0_0_22px_rgba(23,37,84,0.35)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-950"
+                                    class="relative inline-flex h-12 w-12 items-center justify-center rounded-full border border-blue-950/25 bg-transparent text-blue-950 hover:border-2 hover:border-blue-300 hover:text-blue-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-950"
                                     x-on:click="openLogin()"
                                     aria-label="Open sign in drawer"
                                 >
-                                    <svg class="relative h-6 w-6 transition duration-300 group-hover:translate-x-0.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.6" stroke="currentColor" aria-hidden="true">
+                                    <svg class="relative h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.6" stroke="currentColor" aria-hidden="true">
                                         <path stroke-linecap="round" stroke-linejoin="round" d="M17.25 8.25 21 12m0 0-3.75 3.75M21 12H3" />
                                     </svg>
                                 </button>
@@ -124,12 +124,12 @@
                                 @else
                                     <button
                                         type="button"
-                                        class="group inline-flex items-center gap-4 rounded-full border border-blue-950/25 bg-transparent px-5 py-3 text-sm font-semibold text-blue-950 transition duration-300 hover:border-blue-950 hover:shadow-[0_0_26px_rgba(23,37,84,0.30)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-950"
+                                        class="group inline-flex items-center gap-4 rounded-full border border-blue-950/25 bg-transparent px-5 py-3 text-sm font-semibold text-blue-950 hover:border-2 hover:border-blue-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-950"
                                         x-on:click="openLogin()"
                                     >
                                         Enter the kitchen board
-                                        <span class="relative inline-flex h-10 w-10 items-center justify-center rounded-full border border-blue-950/30 transition duration-300 group-hover:border-blue-950 group-hover:shadow-[0_0_18px_rgba(23,37,84,0.32)]">
-                                            <svg class="relative h-5 w-5 transition duration-300 group-hover:translate-x-0.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.6" stroke="currentColor" aria-hidden="true">
+                                        <span class="relative inline-flex h-10 w-10 items-center justify-center rounded-full border border-blue-950/30 group-hover:border-2 group-hover:border-blue-300">
+                                            <svg class="relative h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.6" stroke="currentColor" aria-hidden="true">
                                                 <path stroke-linecap="round" stroke-linejoin="round" d="M17.25 8.25 21 12m0 0-3.75 3.75M21 12H3" />
                                             </svg>
                                         </span>
@@ -338,6 +338,7 @@
                             x-transition:leave="transform transition ease-in-out duration-300 sm:duration-500"
                             x-transition:leave-start="translate-x-0"
                             x-transition:leave-end="translate-x-full"
+                            x-on:click.outside="closeLogin()"
                         >
                             <div class="relative flex h-full overflow-hidden bg-white">
                                 <button
