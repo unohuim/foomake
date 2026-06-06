@@ -803,5 +803,38 @@ it('30. the shared crud config exposes a Counter column and the mobile card summ
         ->and($config['columns'] ?? [])->toContain('name')
         ->and($config['headers']['name'] ?? null)->toBe('Name')
         ->and($config['headers']['counter'] ?? null)->toBe('Assigned')
-        ->and($config['mobileCard']['bodyExpression'] ?? null)->toContain('inventoryCountSummary(record)');
+        ->and($config['mobileCard']['bodyExpression'] ?? null)->toContain('inventoryCountSummary(record)')
+        ->and($config['mobileCard']['urlExpression'] ?? null)->toBe('record.show_url')
+        ->and($config['mobileCard']['titleAsideExpression'] ?? null)->toBe('record.counted_at || "—"')
+        ->and($config['mobileCard']['titleAsidePlacement'] ?? null)->toBe('top-right')
+        ->and($config['mobileCard']['subtitleExpression'] ?? null)->toBe('record.counter_name || record.counter_email || "—"')
+        ->and($config['mobileCard']['titleBadgesExpression'] ?? null)->toBe('inventoryCountStatusBadges(record)')
+        ->and($config['actions'] ?? null)->toBe([]);
+});
+
+it('31. shared crud mobile renderer supports title badges beside the mobile title', function (): void {
+    $configSource = file_get_contents(resource_path('js/lib/crud-config.js'));
+    $rendererSource = file_get_contents(resource_path('js/lib/crud-page.js'));
+    $pageSource = file_get_contents(resource_path('js/pages/inventory-counts-index.js'));
+
+    expect($configSource)->toContain('titleBadgesExpression: sanitizeLabel(rawMobileCard.titleBadgesExpression)')
+        ->and($configSource)->toContain('titleAsidePlacement: sanitizeLabel(rawMobileCard.titleAsidePlacement)')
+        ->and($rendererSource)->toContain('const titleBadgesExpression = config.mobileCard.titleBadgesExpression')
+        ->and($rendererSource)->toContain('mobile-title-badge')
+        ->and($rendererSource)->toContain("config.mobileCard.titleAsidePlacement === 'top-right'")
+        ->and($rendererSource)->toContain('absolute right-4 top-2 max-w-24')
+        ->and($rendererSource)->toContain('relative border-b border-gray-300')
+        ->and($rendererSource)->toContain('text-[0.6rem] font-semibold uppercase')
+        ->and($rendererSource)->toContain('ml-auto shrink-0 text-right text-xs')
+        ->and($pageSource)->toContain('inventoryCountStatusBadges(record)');
+});
+
+it('32. inventory count mobile summary omits labels for compact row display', function (): void {
+    $pageSource = file_get_contents(resource_path('js/pages/inventory-counts-index.js'));
+
+    expect($pageSource)->toContain("parts.push(record.posted_at);")
+        ->and($pageSource)->not->toContain('parts.push(String(record.lines_count));')
+        ->and($pageSource)->not->toContain('Counter:')
+        ->and($pageSource)->not->toContain('Items:')
+        ->and($pageSource)->not->toContain('Posted At:');
 });

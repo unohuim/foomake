@@ -1031,6 +1031,7 @@ class InventoryCountController extends Controller
             'status_label' => $this->workflowStatusLabel($inventoryCount),
             'lifecycle_status' => $inventoryCount->status,
             'assigned_to_user_id' => $inventoryCount->assigned_to_user_id,
+            'counter_name' => $inventoryCount->assignedToUser?->name,
             'counter_email' => $inventoryCount->assignedToUser?->email,
             'posted_at' => $inventoryCount->posted_at?->format('F j, Y') ?? '—',
             'posted_at_iso' => $inventoryCount->posted_at?->format('Y-m-d'),
@@ -1102,34 +1103,14 @@ class InventoryCountController extends Controller
             ],
             'mobileCard' => [
                 'titleExpression' => "record.name || '—'",
-                'subtitleExpression' => 'record.status_label || "—"',
+                'titleAsideExpression' => 'record.counted_at || "—"',
+                'titleAsidePlacement' => 'top-right',
+                'titleBadgesExpression' => 'inventoryCountStatusBadges(record)',
+                'subtitleExpression' => 'record.counter_name || record.counter_email || "—"',
                 'bodyExpression' => 'inventoryCountSummary(record)',
+                'urlExpression' => 'record.show_url',
             ],
-            'actions' => $canManageCounts
-                ? [
-                    [
-                        'id' => 'view',
-                        'label' => 'View',
-                        'tone' => 'default',
-                    ],
-                    [
-                        'id' => 'edit',
-                        'label' => 'Edit',
-                        'tone' => 'default',
-                    ],
-                    [
-                        'id' => 'delete',
-                        'label' => 'Delete',
-                        'tone' => 'warning',
-                    ],
-                ]
-                : [
-                    [
-                        'id' => 'view',
-                        'label' => 'View',
-                        'tone' => 'default',
-                    ],
-                ],
+            'actions' => [],
         ];
     }
 

@@ -108,15 +108,16 @@ export function mount(rootEl, payload) {
         inventoryCountSummary(record) {
             const parts = [];
 
-            parts.push(`Counter: ${this.truncateCounterEmail(record)}`);
-
-            if (record?.lines_count !== undefined && record?.lines_count !== null) {
-                parts.push(`Items: ${record.lines_count}`);
+            if (record?.posted_at && record.posted_at !== '—') {
+                parts.push(record.posted_at);
             }
 
-            parts.push(`Posted At: ${record?.posted_at || '—'}`);
-
             return parts.join(' • ');
+        },
+        inventoryCountStatusBadges(record) {
+            const status = String(record?.status_label || '').trim();
+
+            return status === '' ? [] : [status];
         },
         inventoryCountCellText(record, column) {
             if (column === 'status') {

@@ -134,7 +134,8 @@ it('13. mobile products use a full height wrapper before the records scroller', 
 
 it('14. mobile records container owns overflow y auto', function () {
     expect($this->rendererSource)
-        ->toContain('class="min-h-0 flex-1 overflow-y-auto ${scrollPaddingClass}" data-crud-records-scroll');
+        ->toContain('class="min-h-0 flex-1 overflow-y-auto ${scrollPaddingClass}" data-crud-records-scroll')
+        ->and($this->rendererSource)->toContain("const scrollPaddingClass = 'p-0'");
 });
 
 it('15. mobile toolbar remains above the records scroller', function () {
@@ -144,6 +145,7 @@ it('15. mobile toolbar remains above the records scroller', function () {
         ->and($this->rendererSource)->toContain('data-crud-records-scroll')
         ->and($this->rendererSource)->toContain('class="flex h-full min-h-0 flex-col"')
         ->and($this->rendererSource)->toContain('class="min-h-0 flex-1 overflow-y-auto ${scrollPaddingClass}" data-crud-records-scroll')
+        ->and($this->rendererSource)->toContain("const listSpacingClass = 'border-t border-gray-300 space-y-0'")
         ->and($this->rendererSource)->not->toContain('data-crud-toolbar-mobile overflow-y-auto');
 });
 

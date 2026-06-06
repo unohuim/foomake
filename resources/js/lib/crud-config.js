@@ -102,6 +102,8 @@ export function normalizeCrudConfig(config) {
             mediaExpression: sanitizeLabel(rawMobileCard.mediaExpression),
             titleExpression: sanitizeLabel(rawMobileCard.titleExpression, "record.name || '—'"),
             titleAsideExpression: sanitizeLabel(rawMobileCard.titleAsideExpression),
+            titleAsidePlacement: sanitizeLabel(rawMobileCard.titleAsidePlacement),
+            titleBadgesExpression: sanitizeLabel(rawMobileCard.titleBadgesExpression),
             subtitleExpression: sanitizeLabel(rawMobileCard.subtitleExpression),
             bodyExpression: sanitizeLabel(rawMobileCard.bodyExpression),
             layout: sanitizeLabel(rawMobileCard.layout),

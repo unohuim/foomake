@@ -81,6 +81,8 @@ const normalizeRendererConfig = (config) => {
             mediaExpression: sanitizeExpression(mobileCard.mediaExpression),
             titleExpression: sanitizeExpression(mobileCard.titleExpression, "record.name || '—'"),
             titleAsideExpression: sanitizeExpression(mobileCard.titleAsideExpression),
+            titleAsidePlacement: sanitizeExpression(mobileCard.titleAsidePlacement),
+            titleBadgesExpression: sanitizeExpression(mobileCard.titleBadgesExpression),
             subtitleExpression: sanitizeExpression(mobileCard.subtitleExpression),
             bodyExpression: sanitizeExpression(mobileCard.bodyExpression),
             layout: sanitizeExpression(mobileCard.layout, 'card'),
@@ -444,12 +446,13 @@ function renderActionCell(config, wrapperClass = '') {
 const renderMobileCards = (config) => {
     const mediaExpression = config.mobileCard.mediaExpression;
     const titleAsideExpression = config.mobileCard.titleAsideExpression;
+    const titleAsideIsTopRight = config.mobileCard.titleAsidePlacement === 'top-right';
+    const titleBadgesExpression = config.mobileCard.titleBadgesExpression;
     const subtitleExpression = config.mobileCard.subtitleExpression;
     const bodyExpression = config.mobileCard.bodyExpression;
     const badgesExpression = config.mobileCard.badgesExpression;
     const iconBadgesExpression = config.mobileCard.iconBadgesExpression;
     const urlExpression = config.mobileCard.urlExpression;
-    const isFlushStacked = config.mobileCard.layout === 'flush-stacked';
     const hasActions = config.mobileCard.showActions && config.actions.length > 0;
     const hasToggle = config.mobileCard.toggle.name !== ''
         && config.mobileCard.toggle.checkedExpression !== '';
@@ -457,12 +460,15 @@ const renderMobileCards = (config) => {
     const rowClickAttributes = urlExpression !== ''
         ? `role="link" tabindex="0" x-on:click="if (${urlExpression}) { window.location.assign(${urlExpression}); }" x-on:keydown.enter.prevent="if (${urlExpression}) { window.location.assign(${urlExpression}); }" x-on:keydown.space.prevent="if (${urlExpression}) { window.location.assign(${urlExpression}); }"`
         : '';
-    const rowClickableClass = urlExpression !== '' ? ' cursor-pointer transition hover:border-gray-200 hover:bg-gray-50' : '';
-    const scrollPaddingClass = isFlushStacked ? 'p-0' : 'p-4';
-    const listSpacingClass = isFlushStacked ? 'border-t border-gray-300 space-y-0' : 'space-y-3';
-    const rowClass = isFlushStacked
-        ? `border-b border-gray-300 bg-white px-4 py-2 shadow-sm${rowClickableClass}`
-        : `rounded-lg border border-gray-100 bg-white p-4 shadow-sm${rowClickableClass}`;
+    const rowClickableClass = urlExpression !== '' ? ' cursor-pointer transition hover:bg-gray-50' : '';
+    const scrollPaddingClass = 'p-0';
+    const listSpacingClass = 'border-t border-gray-300 space-y-0';
+    const rowClass = `relative border-b border-gray-300 bg-white px-4 py-2${rowClickableClass}`;
+    const titleAsideMarkup = titleAsideExpression !== ''
+        ? titleAsideIsTopRight
+            ? `<p class="absolute right-4 top-2 max-w-24 truncate text-right text-xs font-medium text-gray-500" x-text="${titleAsideExpression}"></p>`
+            : ''
+        : '';
     const iconBadgeMarkup = `
         <template x-if="badge.icon === 'rectangle-group'">
             <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.75" stroke="currentColor" aria-hidden="true">
@@ -503,6 +509,7 @@ const renderMobileCards = (config) => {
 
                     <template x-for="record in ${config.state.records}" :key="\`mobile-\${record.id}\`">
                         <div class="${rowClass}" data-crud-mobile-row ${rowClickAttributes}>
+                            ${titleAsideMarkup}
                             <div class="flex items-stretch gap-3">
                                 ${mediaExpression !== '' ? `
                                     <template x-if="${mediaExpression}">
@@ -520,9 +527,16 @@ const renderMobileCards = (config) => {
                                 <div class="min-w-0 flex flex-1 flex-col">
                                     <div class="flex min-w-0 items-start gap-3">
                                         <div class="min-w-0 flex-1 overflow-hidden">
-                                            <div class="flex min-w-0 items-baseline gap-6">
-                                                <p class="block truncate text-sm font-medium text-gray-900" x-text="${config.mobileCard.titleExpression}"></p>
-                                                ${titleAsideExpression !== '' ? `<p class="shrink-0 text-xs font-medium text-gray-500" x-text="${titleAsideExpression}"></p>` : ''}
+                                            <div class="${titleAsideIsTopRight ? 'flex min-w-0 items-start gap-3 pr-24' : 'flex min-w-0 items-start justify-between gap-3'}">
+                                                <div class="flex min-w-0 flex-1 items-center gap-2">
+                                                    <p class="block truncate text-sm font-medium text-gray-900" x-text="${config.mobileCard.titleExpression}"></p>
+                                                    ${titleBadgesExpression !== '' ? `
+                                                        <template x-for="badge in ${titleBadgesExpression}" :key="\`mobile-\${record.id}-title-badge-\${badge}\`">
+                                                            <span class="inline-flex shrink-0 items-center rounded-full bg-gray-100 px-1.5 py-0.5 text-[0.6rem] font-semibold uppercase tracking-wide text-gray-700" data-crud-mobile-title-badge x-text="badge"></span>
+                                                        </template>
+                                                    ` : ''}
+                                                </div>
+                                                ${titleAsideExpression !== '' && !titleAsideIsTopRight ? `<p class="ml-auto shrink-0 text-right text-xs font-medium text-gray-500" x-text="${titleAsideExpression}"></p>` : ''}
                                             </div>
                                             ${subtitleExpression !== '' ? `<p class="mt-1 text-sm text-gray-600" x-text="${subtitleExpression}"></p>` : ''}
                                         </div>
