@@ -21,6 +21,38 @@ Do not introduce new enum values without updating this document.
 
 ## Notes
 
+### Tenant Billing Subscription Status
+
+**Name:** Tenant billing subscription status  
+**Storage location(s):** `tenants.billing_subscription_status` (nullable string column)  
+**Allowed values:**
+
+- `active`
+- `trialing`
+- `incomplete`
+- `incomplete_expired`
+- `past_due`
+- `canceled`
+- `unpaid`
+- `paused`
+
+**Semantic meaning:**
+
+- `active`: Provider-confirmed paid subscription access is active.
+- `trialing`: Provider-confirmed subscription exists and is inside the provider trial period.
+- `incomplete`: Provider subscription exists but payment setup is incomplete.
+- `incomplete_expired`: Provider incomplete subscription expired before activation.
+- `past_due`: Provider reports failed or overdue payment collection.
+- `canceled`: Provider subscription has been canceled.
+- `unpaid`: Provider reports unpaid subscription access.
+- `paused`: Provider subscription is paused.
+
+**Notes:**
+
+- Trial access is app-owned and stored separately in `tenants.trial_ends_at`.
+- Billing subscription status controls only platform access and must not replace user permission gates.
+- Provider return redirects are not payment authority; server-confirmed provider state owns this field.
+
 ### Note Visibility
 
 **Name:** Note visibility

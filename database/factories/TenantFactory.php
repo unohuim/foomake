@@ -19,6 +19,7 @@ class TenantFactory extends Factory
     {
         return [
             'tenant_name' => fake()->company(),
+            'trial_ends_at' => now()->addDays(7),
         ];
     }
 }

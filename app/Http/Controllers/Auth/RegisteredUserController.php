@@ -41,6 +41,7 @@ class RegisteredUserController extends Controller
 
         $tenant = Tenant::create([
             'tenant_name' => $request->name . "'s Organization",
+            'trial_ends_at' => now()->addDays(7),
         ]);
 
         $user = User::create([

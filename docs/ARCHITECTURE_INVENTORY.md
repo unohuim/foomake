@@ -97,6 +97,42 @@ class StockMove extends Model
 }
 ```
 
+### Tenant Billing Entitlement
+
+**Name:** Tenant Billing Entitlement  
+**Type:** Platform Access Boundary  
+**Location:**  
+- `docs/architecture/billing/TenantBillingEntitlement.yaml`
+- `app/Support/Billing/TenantBillingEntitlement.php`
+- `app/Support/Billing/StripeCheckoutSessionFactory.php`
+- `app/Support/Billing/StripeWebhookHandler.php`
+- `app/Http/Middleware/EnsureTenantBillingAccess.php`
+- `app/Models/Tenant.php`
+
+**Purpose:**  
+Gate authenticated application access by tenant platform billing state independently from user roles and domain permissions.
+
+**When to Use:**  
+Checking whether a tenant may access protected application routes, rendering tenant billing status, or applying provider-confirmed subscription state.
+
+**When Not to Use:**  
+Domain authorization, tenant data scoping, tenant sales invoices, or customer payments.
+
+**Public Interface:**  
+- `TenantBillingEntitlement::hasAccess()`
+- `TenantBillingEntitlement::isTrialActive()`
+- `TenantBillingEntitlement::hasActiveSubscription()`
+- `StripeCheckoutSessionFactory::createForTenant()`
+- `StripeWebhookHandler::handle()`
+- `billing-subscription-manage`
+
+**Example Usage:**  
+```php
+if (! app(TenantBillingEntitlement::class)->hasAccess($tenant)) {
+    return redirect()->route('billing.index');
+}
+```
+
 ### Inventory Balance Read Model
 
 **Name:** Inventory Balance Read Model

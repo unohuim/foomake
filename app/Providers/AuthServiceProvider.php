@@ -19,6 +19,7 @@ class AuthServiceProvider extends ServiceProvider
             'system-roles-manage',
             'admin-users-view',
             'admin-users-manage',
+            'billing-subscription-manage',
             'workflow-manage',
             'purchasing-suppliers-view',
             'purchasing-suppliers-manage',

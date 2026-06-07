@@ -20,6 +20,7 @@ This document is the source-of-truth for **authorization intent** in this reposi
 - `system-roles-manage`
 - `admin-users-view`
 - `admin-users-manage`
+- `billing-subscription-manage`
 - `workflow-manage`
 
 ### Purchasing
@@ -85,6 +86,7 @@ Tenant administrator role.
 - `system-roles-manage`
 - `admin-users-view`
 - `admin-users-manage`
+- `billing-subscription-manage`
 - `workflow-manage`
 - Purchasing: all purchasing permissions
 - Sales: all sales permissions
@@ -174,6 +176,8 @@ Cross-domain workflow execution role.
 - `admin-users-view` gates tenant admin user-management visibility.
 - `admin-users-manage` gates tenant user invitation creation, resend, revocation, and role changes.
 - Admins receive both user-management permissions by default.
+- `billing-subscription-manage` gates tenant platform billing management.
+- Admins receive `billing-subscription-manage` by default.
 - Assigned users may complete their own generated workflow tasks without requiring `workflow-manage`.
 - `inventory-stock-view` grants read-only Stock -> Inventory availability visibility and does not grant Inventory Counts index/detail visibility.
 - Inventory Counts index shows all tenant counts to `inventory-adjustments-view` users and only assigned counts/task-related counts to `inventory-adjustments-execute` users without broad view.

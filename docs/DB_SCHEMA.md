@@ -1501,17 +1501,33 @@ Migrations remain the **sole source of truth**.
 
 ### Columns
 
-| Name        | Type      | Nullable | Notes       |
-| ----------- | --------- | -------- | ----------- |
-| id          | bigint    | No       | Primary key |
-| tenant_name | string    | Yes      | —           |
-| currency_code | string  | Yes      | Default config('app.currency_code', 'USD') |
-| created_at  | timestamp | Yes      | —           |
-| updated_at  | timestamp | Yes      | —           |
+| Name                             | Type      | Nullable | Notes                                      |
+| -------------------------------- | --------- | -------- | ------------------------------------------ |
+| id                               | bigint    | No       | Primary key                                |
+| tenant_name                      | string    | Yes      | —                                          |
+| currency_code                    | string    | Yes      | Default config('app.currency_code', 'USD') |
+| trial_ends_at                    | timestamp | Yes      | App-owned seven-day trial access window    |
+| billing_exempt_until             | timestamp | Yes      | Temporary platform-owner access exemption  |
+| billing_provider                 | string    | Yes      | External billing provider key              |
+| billing_provider_customer_id     | string    | Yes      | External provider customer identifier      |
+| billing_provider_subscription_id | string    | Yes      | External provider subscription identifier  |
+| billing_subscription_status      | string    | Yes      | See `docs/ENUMS.md`                        |
+| billing_subscription_ends_at     | timestamp | Yes      | Provider-confirmed subscription end date   |
+| created_at                       | timestamp | Yes      | —                                          |
+| updated_at                       | timestamp | Yes      | —                                          |
 
 ### Keys & Indexes
 
 - PK: `id`
+- Index: `trial_ends_at`
+- Index: `billing_subscription_status`
+- Index: `billing_provider_customer_id`
+
+### Notes
+
+- Tenant billing entitlement controls platform application access only.
+- Trial access is tenant-wide and applies to invited users subject to their normal permission gates.
+- Billing access does not replace tenant scoping or domain authorization.
 
 ---
 

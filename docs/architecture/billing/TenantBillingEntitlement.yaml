@@ -1,0 +1,38 @@
+name: Tenant Billing Entitlement
+type: Platform Access Boundary
+location:
+  - app/Support/Billing/TenantBillingEntitlement.php
+  - app/Support/Billing/StripeCheckoutSessionFactory.php
+  - app/Support/Billing/StripeWebhookHandler.php
+  - app/Http/Middleware/EnsureTenantBillingAccess.php
+  - app/Models/Tenant.php
+purpose: Gate authenticated application access by tenant platform billing state independently from user roles and domain permissions.
+when_to_use:
+  - Deciding whether a tenant may access protected application routes
+  - Showing tenant billing status
+  - Integrating provider-confirmed subscription status
+when_not_to_use:
+  - Authorizing domain actions
+  - Tenant data scoping
+  - Tenant sales invoices or customer payments
+rules:
+  - Tenant billing entitlement is tenant-wide and applies to all invited users in the tenant.
+  - Normal tenant registration starts a seven-day app-owned trial without payment details.
+  - Trial access grants full application access subject to existing user roles and permission gates.
+  - Only users with billing-subscription-manage may manage platform billing.
+  - Billing admins may add payment details during the app-owned trial through hosted Stripe Checkout.
+  - Hosted Stripe Checkout must preserve the tenant trial end when payment details are added before trial expiry.
+  - Expired tenants must retain access to billing, basic profile, verification, and logout routes.
+  - Provider return redirects must not be treated as payment authority; provider-confirmed server updates must own paid subscription access.
+  - Billing entitlement must not replace HasTenantScope or Laravel Gate checks.
+public_interface:
+  - TenantBillingEntitlement::hasAccess()
+  - TenantBillingEntitlement::isTrialActive()
+  - TenantBillingEntitlement::hasActiveSubscription()
+  - StripeCheckoutSessionFactory::createForTenant()
+  - StripeWebhookHandler::handle()
+  - billing-subscription-manage
+example_usage: |
+  if (! app(TenantBillingEntitlement::class)->hasAccess($tenant)) {
+      return redirect()->route('billing.index');
+  }

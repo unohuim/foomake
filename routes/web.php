@@ -1,6 +1,9 @@
 <?php
 
 use App\Http\Controllers\Admin\UserManagementController;
+use App\Http\Controllers\BillingCheckoutController;
+use App\Http\Controllers\BillingController;
+use App\Http\Controllers\BillingWebhookController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\InventoryCountController;
 use App\Http\Controllers\ItemController;
@@ -38,6 +41,8 @@ use App\Http\Controllers\UomController;
 use App\Http\Controllers\WorkflowController;
 use App\Http\Controllers\WorkflowStageController;
 use App\Http\Controllers\WorkflowTaskTemplateController;
+use App\Http\Middleware\EnsureTenantBillingAccess;
+use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -54,11 +59,22 @@ Route::get('/sitemap.xml', [MarketingPageController::class, 'sitemap'])
 Route::view('/privacy', 'privacy')
     ->name('privacy');
 
+Route::post('/billing/stripe/webhook', [BillingWebhookController::class, 'store'])
+    ->withoutMiddleware([VerifyCsrfToken::class])
+    ->name('billing.stripe.webhook');
+
 Route::get('/dashboard', DashboardController::class)
-    ->middleware(['auth', 'verified'])
+    ->middleware(['auth', 'verified', EnsureTenantBillingAccess::class])
     ->name('dashboard');
 
 Route::middleware(['auth', 'verified'])->group(function () {
+    Route::get('/billing', [BillingController::class, 'index'])
+        ->name('billing.index');
+    Route::post('/billing/checkout', [BillingCheckoutController::class, 'store'])
+        ->name('billing.checkout.store');
+});
+
+Route::middleware(['auth', 'verified', EnsureTenantBillingAccess::class])->group(function () {
     Route::get('/navigation/state', NavigationStateController::class)
         ->name('navigation.state');
 

@@ -11,7 +11,7 @@
         || request()->routeIs('materials.uom-categories.*');
     $purchasingActive = request()->routeIs('purchasing.*');
     $salesActive = request()->routeIs('sales.*');
-    $profileActive = request()->routeIs('profile.*') || request()->routeIs('admin.workflows.*') || request()->routeIs('admin.users.*');
+    $profileActive = request()->routeIs('profile.*') || request()->routeIs('billing.*') || request()->routeIs('admin.workflows.*') || request()->routeIs('admin.users.*');
 
     $canViewPurchaseOrders = $user?->can('purchasing-purchase-orders-create') ?? false;
     $canViewSuppliers = $user?->can('purchasing-suppliers-view') ?? false;
@@ -22,6 +22,7 @@
     $canOpenSalesOrders = $navigationEligibility['salesOrdersEnabled'] ?? false;
     $canManageSystemUsers = $user?->can('system-users-manage') ?? false;
     $canViewAdminUsers = $user?->can('admin-users-view') ?? false;
+    $canManageBilling = $user?->can('billing-subscription-manage') ?? false;
     $canManageWorkflows = $user?->can('workflow-manage') ?? false;
     $canOpenPurchaseOrders = $navigationEligibility['purchaseOrdersEnabled'] ?? false;
     $canViewStockInventory = ($user?->can('inventory-stock-view') ?? false)
@@ -261,6 +262,12 @@
                     <x-nav-dropdown-link :href="route('profile.edit')" :active="request()->routeIs('profile.edit')">
                         {{ __('Profile') }}
                     </x-nav-dropdown-link>
+
+                    @if ($canManageBilling)
+                        <x-nav-dropdown-link :href="route('billing.index')" :active="request()->routeIs('billing.*')">
+                            {{ __('Billing') }}
+                        </x-nav-dropdown-link>
+                    @endif
 
                     @if ($canManageSystemUsers)
                         <x-nav-dropdown-link :href="route('profile.connectors.index')" :active="request()->routeIs('profile.connectors.*')">
@@ -526,6 +533,12 @@
             <x-nav-link :href="route('profile.edit')" :active="request()->routeIs('profile.edit')" mobile>
                 {{ __('Profile') }}
             </x-nav-link>
+
+            @if ($canManageBilling)
+                <x-nav-link :href="route('billing.index')" :active="request()->routeIs('billing.*')" mobile>
+                    {{ __('Billing') }}
+                </x-nav-link>
+            @endif
 
             @if ($canManageSystemUsers)
                 <x-nav-link :href="route('profile.connectors.index')" :active="request()->routeIs('profile.connectors.*')" mobile>
