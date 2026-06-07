@@ -18,7 +18,7 @@ location:
   - resources/js/lib/import-config.js
   - resources/js/lib/import-module.js
   - resources/js/lib/generic-crud.js
-  - resources/js/lib/crud-page.js
+  - resources/js/lib/crud-card-page.js
   - resources/js/pages/sales-products-index.js
   - resources/js/pages/sales-customers-index.js
   - resources/js/pages/purchasing-orders-index.js
@@ -29,7 +29,7 @@ purpose: Define a reusable, server-configured CRUD page-module pattern where Bla
 when_to_use:
   - Building any new interactive CRUD index page after the Products, Customers, and Materials migrations
   - Migrating an interactive CRUD page to a shared mount-only page-module pattern without introducing client-owned routing or global state
-  - Reusing the same toolbar, list rendering, action menu, create/import/export triggers, and sort mechanics across multiple Blade pages with different resource contracts
+  - Reusing the same toolbar, card-grid rendering, action menu, create/import/export triggers, and sort mechanics across multiple Blade pages with different resource contracts
   - Keeping page-specific create slideouts and non-import/non-export validation UX outside the shared CRUD renderer while centralizing the common config-driven shell
   - Attaching a reusable import workflow to a CRUD page while moving import UX ownership into the shared import component and leaving import endpoints and import authority on the server
   - Attaching a reusable export workflow to a CRUD page while moving export markup and lifecycle ownership into a shared export component
@@ -50,13 +50,12 @@ rules:
   - CRUD configs that need one direct inline row action may additionally provide a `rowActions` contract to choose the direct icon-button presentation instead of the default vertical-dots menu.
   - CRUD pages that use shared import must additionally provide endpoints.importPreview and endpoints.importStore.
   - CRUD pages that use shared edit or delete flows may provide endpoint templates such as endpoints.update and endpoints.delete.
-  - CRUD pages may optionally provide detailUrlTemplate for post-create redirect behavior.
-  - When detailUrlTemplate is present and a create request succeeds with a created-record payload that includes id, the page module may redirect to that detail URL after create.
-  - When detailUrlTemplate is absent, create behavior must preserve the existing inline success flow such as list refresh, toast feedback, or panel close behavior.
+  - CRUD pages may optionally provide detailUrlTemplate for row or card detail links.
+  - Create behavior must preserve the inline success flow: refresh the current list, close the create panel, and provide toast feedback without redirecting to the created record.
   - Resources that expose export through the shared toolbar must also provide endpoints.export plus labels and permissions for the export action.
   - sortable values must reference only configured column keys.
   - Shared CRUD helpers must remain stateless and must not introduce global JavaScript state.
-  - The shared CRUD renderer owns toolbar layout, search input, create/import/export buttons, sticky desktop headers, record table/cards, empty states, and row-level action rendering.
+  - The shared CRUD card renderer owns toolbar layout, search input, create/import/export buttons, desktop card grid, mobile row cards, empty states, and row-level action rendering.
   - The shared CRUD renderer may render either the default vertical-dots menu or a single direct inline icon button when the server-generated CRUD config opts into that row-action mode.
   - The shared CRUD renderer shell must use h-full and min-h-0-compatible layout rules so the records pane inherits usable height from the bounded Blade shell.
   - Toolbar actions must be config-driven; resource pages must not hardcode product-only or customer-only toolbar buttons in Blade.
@@ -75,7 +74,7 @@ rules:
   - Page-specific behavior such as create/edit form markup, row-to-form mapping, toasts, non-import/non-export validation UX, success callbacks outside import, and non-import/non-export domain-specific rendering remains in the page module.
   - Products, Customers, Purchase Orders, Materials, Make Orders, Recipes, and Admin Users are current reference implementations for this pattern.
   - Products and Customers both use the shared export module as the render-owning export component and do not keep export slide-over markup in Blade.
-  - Materials uses the same shared CRUD renderer and mount-only Blade shell pattern without shared import or export.
+  - Materials uses the same shared CRUD card renderer and mount-only Blade shell pattern without shared import or export.
   - Missing or invalid CRUD config must fail safely without breaking initial page load.
   - Missing or invalid import config must fail safely without breaking initial page load.
   - Backend routes remain authoritative and must not be hardcoded in shared JavaScript.
@@ -89,7 +88,7 @@ public_interface:
   - resources/js/lib/import-config.js
   - resources/js/lib/import-module.js
   - resources/js/lib/generic-crud.js
-  - resources/js/lib/crud-page.js
+  - resources/js/lib/crud-card-page.js
 example_usage: |
   Controller:
     $crudConfig = [
@@ -215,7 +214,7 @@ example_usage: |
         },
         callbacks: { onImportSuccess: () => this.fetchProducts() },
     });
-    mountCrudRenderer(rootEl.querySelector('[data-crud-root]'), {
+    mountCrudCardRenderer(rootEl.querySelector('[data-crud-root]'), {
         ...crud,
         state: { records: 'products', loading: 'isLoadingList', error: 'listError', search: 'search', sort: 'sort' },
         handlers: { searchInput: 'handleSearchInput()', toggleSort: 'toggleSort(column)', create: 'openCreatePanel()', import: 'openImportPanel()', export: 'openExportPanel()' },
@@ -227,12 +226,7 @@ example_usage: |
         ...exportModule,
     }));
 
-  Shared create redirect:
-    const redirectUrl = crud.buildDetailUrl(response.data);
-    if (redirectUrl) {
-      window.location.assign(redirectUrl);
-      return;
-    }
+  Shared create success:
     await this.fetchRecords();
 
   Customers page module:
@@ -249,7 +243,7 @@ example_usage: |
         callbacks: { onImportSuccess: () => this.fetchCustomers() },
     });
     const exportModule = createExportModule({ config: crud });
-    mountCrudRenderer(rootEl.querySelector('[data-crud-root]'), {
+    mountCrudCardRenderer(rootEl.querySelector('[data-crud-root]'), {
         ...crud,
         handlers: { searchInput: 'handleSearchInput()', toggleSort: 'toggleSort(column)', create: 'openCreatePanel()', import: 'openImportPanel()', export: 'openExportPanel()' },
     });

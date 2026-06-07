@@ -1,6 +1,6 @@
 import { parseCrudConfig } from '../lib/crud-config';
 import { parseImportConfig } from '../lib/import-config';
-import { mountCrudRenderer } from '../lib/crud-page';
+import { mountCrudCardRenderer } from '../lib/crud-card-page';
 import { createExportModule } from '../lib/export-module';
 import { createGenericCrud } from '../lib/generic-crud';
 import { createImportModule } from '../lib/import-module';
@@ -52,7 +52,7 @@ export function mount(rootEl, payload) {
         actions: actionDefinitions,
     };
 
-    mountCrudRenderer(crudRootEl, rendererConfig);
+    mountCrudCardRenderer(crudRootEl, rendererConfig);
 
     const emptyCreateErrors = () => ({
         name: [],
@@ -347,14 +347,7 @@ export function mount(rootEl, payload) {
                 onError: () => {
                     this.createGeneralError = 'Something went wrong. Please try again.';
                 },
-                onSuccess: async (data) => {
-                    const redirectUrl = this.crud.buildDetailUrl(data?.data);
-
-                    if (redirectUrl) {
-                        window.location.assign(redirectUrl);
-                        return;
-                    }
-
+                onSuccess: async () => {
                     await this.fetchProducts();
                     await refreshNavigationState(this.navigationStateUrl);
                     this.showToast('success', 'Product created.');

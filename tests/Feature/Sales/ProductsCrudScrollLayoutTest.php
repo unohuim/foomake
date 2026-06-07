@@ -44,7 +44,7 @@ beforeEach(function () {
     };
 
     $this->bladeSource = file_get_contents(base_path('resources/views/sales/products/index.blade.php'));
-    $this->rendererSource = file_get_contents(base_path('resources/js/lib/crud-page.js'));
+    $this->rendererSource = file_get_contents(base_path('resources/js/lib/crud-card-page.js'));
     $this->pageModuleSource = file_get_contents(base_path('resources/js/pages/sales-products-index.js'));
 });
 
@@ -188,8 +188,8 @@ it('19. the gray gap wrapper between header and toolbar does not return', functi
         ->and($this->rendererSource)->not->toContain('space-y-6');
 });
 
-it('20. the products page module still mounts the shared crud renderer', function () {
+it('20. the products page module still mounts the shared crud card renderer', function () {
     expect($this->pageModuleSource)
-        ->toContain("import { mountCrudRenderer } from '../lib/crud-page';")
-        ->and($this->pageModuleSource)->toContain('mountCrudRenderer(crudRootEl, rendererConfig);');
+        ->toContain("import { mountCrudCardRenderer } from '../lib/crud-card-page';")
+        ->and($this->pageModuleSource)->toContain('mountCrudCardRenderer(crudRootEl, rendererConfig);');
 });

@@ -253,7 +253,7 @@ beforeEach(function () {
 
     $this->inventoryOnHandForItem = function (User $user, Item $item): ?string {
         $response = $this->actingAs($user)
-            ->getJson(route('inventory.list'))
+            ->getJson(route('materials.list'))
             ->assertOk();
 
         $row = collect($response->json('data'))->firstWhere('id', $item->id);

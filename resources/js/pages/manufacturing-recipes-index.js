@@ -1,6 +1,6 @@
 import Alpine from 'alpinejs';
 import { parseCrudConfig } from '../lib/crud-config';
-import { mountCrudRenderer } from '../lib/crud-page';
+import { mountCrudCardRenderer } from '../lib/crud-card-page';
 import { createGenericCrud } from '../lib/generic-crud';
 import { refreshNavigationState } from '../navigation/refresh-navigation-state';
 
@@ -20,7 +20,7 @@ export function mount(rootEl, payload) {
                     : '',
     }));
 
-    mountCrudRenderer(crudRootEl, {
+    mountCrudCardRenderer(crudRootEl, {
         ...crud,
         state: {
             records: 'recipes',
@@ -409,14 +409,7 @@ export function mount(rootEl, payload) {
                     this.createGeneralError = 'Something went wrong. Please try again.';
                     this.showToast('error', this.createGeneralError);
                 },
-                onSuccess: async (data) => {
-                    const showUrl = data?.data?.show_url;
-
-                    if (showUrl) {
-                        window.location.assign(showUrl);
-                        return;
-                    }
-
+                onSuccess: async () => {
                     await this.fetchRecipes();
                     await refreshNavigationState(this.navigationStateUrl);
                     this.closeCreate();
@@ -589,11 +582,9 @@ export function mount(rootEl, payload) {
                     return;
                 }
 
-                const data = await response.json();
-
-                if (data?.data?.show_url) {
-                    window.location.assign(data.data.show_url);
-                }
+                await this.fetchRecipes();
+                await refreshNavigationState(this.navigationStateUrl);
+                this.showToast('success', 'Make order created.');
             } catch (error) {
                 this.showToast('error', 'Unable to create make order.');
             }

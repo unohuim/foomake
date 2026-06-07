@@ -1,5 +1,5 @@
 import { parseCrudConfig } from '../lib/crud-config';
-import { mountCrudRenderer } from '../lib/crud-page';
+import { mountCrudCardRenderer } from '../lib/crud-card-page';
 import { createGenericCrud } from '../lib/generic-crud';
 
 export function mount(rootEl, payload) {
@@ -60,7 +60,7 @@ export function mount(rootEl, payload) {
         actions: actionDefinitions,
     };
 
-    mountCrudRenderer(crudRootEl, rendererConfig);
+    mountCrudCardRenderer(crudRootEl, rendererConfig);
 
     const emptyInviteForm = () => ({
         email: '',

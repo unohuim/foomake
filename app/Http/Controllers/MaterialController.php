@@ -2,8 +2,8 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Item;
 use App\Models\Uom;
+use App\Support\Inventory\InventoryAvailabilityIndexReadModel;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
 
 /**
- * Handle the materials index and shared CRUD list contract.
+ * Handle the materials availability index and shared CRUD list contract.
  */
 class MaterialController extends Controller
 {
@@ -20,7 +20,7 @@ class MaterialController extends Controller
      */
     public function index(): View
     {
-        Gate::authorize('inventory-materials-view');
+        $this->authorizeMaterialAvailabilityView();
 
         /** @var \App\Models\User $user */
         $user = auth()->user();
@@ -48,11 +48,11 @@ class MaterialController extends Controller
     }
 
     /**
-     * Return the materials list read model for the shared CRUD page module.
+     * Return the materials availability list read model for the shared CRUD page module.
      */
-    public function list(Request $request): JsonResponse
+    public function list(Request $request, InventoryAvailabilityIndexReadModel $readModel): JsonResponse
     {
-        Gate::authorize('inventory-materials-view');
+        $this->authorizeMaterialAvailabilityView();
 
         $crudConfig = $this->materialsCrudConfig();
         $validated = $request->validate([
@@ -62,73 +62,24 @@ class MaterialController extends Controller
         ]);
 
         $search = trim((string) ($validated['search'] ?? ''));
-        $sortColumn = (string) ($validated['sort'] ?? 'name');
+        $allowedSortColumns = $crudConfig['sortable'];
+        $requestedSortColumn = (string) ($validated['sort'] ?? 'item');
+        $sortColumn = in_array($requestedSortColumn, $allowedSortColumns, true) ? $requestedSortColumn : 'item';
         $direction = (string) ($validated['direction'] ?? 'asc');
-        $materials = $this->materialsQuery($search, $sortColumn, $direction)->get();
+        $rows = $readModel->rows((int) $request->user()->tenant_id, $search, $sortColumn, $direction);
 
         return response()->json([
-            'data' => $materials
-                ->map(fn (Item $item): array => $this->materialListData($item))
-                ->values()
-                ->all(),
+            'data' => $rows->values()->all(),
             'meta' => [
                 'search' => $search,
                 'sort' => [
                     'column' => $sortColumn,
                     'direction' => $direction,
                 ],
-                'allowed_sort_columns' => $crudConfig['sortable'],
-                'total' => $materials->count(),
+                'allowed_sort_columns' => $allowedSortColumns,
+                'total' => $rows->count(),
             ],
         ]);
-    }
-
-    /**
-     * Build the filtered and sorted materials query shared by the list page.
-     */
-    private function materialsQuery(string $search, string $sortColumn, string $direction)
-    {
-        $query = Item::query()->with('baseUom');
-
-        if ($search !== '') {
-            $query->where('name', 'like', '%' . $search . '%');
-        }
-
-        if ($sortColumn === 'base_uom') {
-            $query->leftJoin('uoms', 'uoms.id', '=', 'items.base_uom_id')
-                ->select('items.*')
-                ->orderBy('uoms.name', $direction)
-                ->orderBy('items.name');
-
-            return $query;
-        }
-
-        return $query->orderBy('items.name', $direction);
-    }
-
-    /**
-     * Build the JSON list row for the shared materials CRUD renderer.
-     *
-     * @return array<string, mixed>
-     */
-    private function materialListData(Item $item): array
-    {
-        return [
-            'id' => $item->id,
-            'name' => $item->name,
-            'base_uom_id' => $item->base_uom_id,
-            'base_uom_name' => $item->baseUom?->name,
-            'base_uom_symbol' => $item->baseUom?->symbol,
-            'is_active' => $item->is_active,
-            'is_stockable' => $item->is_stockable,
-            'is_purchasable' => $item->is_purchasable,
-            'is_sellable' => $item->is_sellable,
-            'is_manufacturable' => $item->is_manufacturable,
-            'default_price_amount' => $this->formatCentsToAmount($item->default_price_cents),
-            'default_price_currency_code' => $item->default_price_currency_code,
-            'has_stock_moves' => $item->stockMoves()->exists(),
-            'show_url' => route('materials.show', $item),
-        ];
     }
 
     /**
@@ -146,16 +97,19 @@ class MaterialController extends Controller
                 'list' => route('materials.list'),
                 'create' => route('materials.store'),
                 'update' => url('/materials/{id}'),
-                'delete' => url('/materials/{id}'),
+                'delete' => '',
             ],
             'detailUrlTemplate' => url('/materials/{id}'),
-            'columns' => ['name', 'base_uom', 'flags'],
+            'columns' => ['item', 'on_hand', 'sell', 'buy', 'make', 'net'],
             'headers' => [
-                'name' => 'Name',
-                'base_uom' => 'Base UoM',
-                'flags' => 'Flags',
+                'item' => 'Item',
+                'on_hand' => 'On-Hand',
+                'sell' => 'Sell',
+                'buy' => 'Buy',
+                'make' => 'Make',
+                'net' => 'Net',
             ],
-            'sortable' => ['name', 'base_uom'],
+            'sortable' => ['item'],
             'labels' => [
                 'searchPlaceholder' => 'Search materials',
                 'createTitle' => 'Create Material',
@@ -167,61 +121,65 @@ class MaterialController extends Controller
                 'showExport' => false,
                 'showImport' => false,
                 'showCreate' => $canManageMaterials,
+                'canManageMaterials' => $canManageMaterials,
             ],
             'rowDisplay' => [
                 'columns' => [
-                    'name' => [
-                        'kind' => 'linked-text',
-                        'urlExpression' => 'record.show_url',
+                    'item' => [
+                        'kind' => 'stacked-text',
+                        'urlExpression' => "record.show_url || ''",
+                        'subtitleExpression' => "record.item_uom_name || '—'",
                     ],
-                    'base_uom' => ['kind' => 'text'],
-                    'flags' => ['kind' => 'text'],
+                    'on_hand' => ['kind' => 'text'],
+                    'sell' => ['kind' => 'text'],
+                    'buy' => ['kind' => 'text'],
+                    'make' => ['kind' => 'text'],
+                    'net' => ['kind' => 'text'],
                 ],
             ],
-            'rowToggle' => [
-                'label' => 'Active',
-                'name' => 'is_active',
-                'checkedExpression' => 'Boolean(record.is_active)',
-                'disabledExpression' => '!canManageMaterials()',
-                'eventName' => 'material-active-toggle',
-                'handler' => 'toggleMaterialActive(toggleDetail)',
-                'ariaLabelExpression' => '`Toggle ${record.name || "material"} active state`',
-            ],
             'mobileCard' => [
-                'titleExpression' => "record.name || '—'",
-                'titleAsideExpression' => 'materialMobileUomLabel(record)',
+                'titleExpression' => "record.item || '—'",
+                'titleAsideExpression' => 'materialCardUomLabel(record)',
                 'subtitleExpression' => '',
                 'bodyExpression' => '',
                 'layout' => 'flush-stacked',
                 'badgesExpression' => '',
-                'iconBadgesExpression' => 'materialFlagIconBadges(record)',
+                'iconBadgesExpression' => 'materialFlagIcons(record)',
                 'urlExpression' => 'record.show_url',
                 'showActions' => false,
                 'toggle' => [
                     'name' => 'is_active',
                     'checkedExpression' => 'Boolean(record.is_active)',
                     'disabledExpression' => '!canManageMaterials()',
-                    'eventName' => 'material-active-toggle',
+                    'eventName' => 'inventory-material-active-toggle',
                     'handler' => 'toggleMaterialActive(toggleDetail)',
-                    'ariaLabelExpression' => '`Toggle ${record.name || "material"} active state`',
+                    'ariaLabelExpression' => '`Toggle ${record.item || "material"} active state`',
                 ],
+            ],
+            'desktopCard' => [
+                'titleExpression' => "record.item || '—'",
+                'titleAsideExpression' => 'materialCardUomLabel(record)',
+                'subtitleExpression' => '',
+                'bodyExpression' => '',
+                'badgesExpression' => '[]',
+                'iconBadgesExpression' => 'materialFlagIcons(record)',
+                'statsExpression' => 'materialAvailabilityStats(record)',
+                'urlExpression' => 'record.show_url',
             ],
             'actions' => [],
         ];
     }
 
     /**
-     * Format cents into a decimal amount string.
+     * Authorize read-only materials availability access.
      */
-    private function formatCentsToAmount(?int $cents): ?string
+    private function authorizeMaterialAvailabilityView(): void
     {
-        if ($cents === null) {
-            return null;
-        }
-
-        $whole = intdiv($cents, 100);
-        $decimal = abs($cents % 100);
-
-        return sprintf('%d.%02d', $whole, $decimal);
+        abort_unless(
+            Gate::allows('inventory-materials-view')
+                || Gate::allows('inventory-stock-view')
+                || Gate::allows('inventory-adjustments-view'),
+            403
+        );
     }
 }

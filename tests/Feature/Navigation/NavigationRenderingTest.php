@@ -164,7 +164,7 @@ it('shows the materials link when the user has inventory materials view permissi
         ->assertSee(route('materials.index'), false);
 });
 
-it('shows stock inventory link when the user has inventory stock view permission', function () {
+it('shows materials link when the user has inventory stock view permission', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
 
@@ -173,8 +173,8 @@ it('shows stock inventory link when the user has inventory stock view permission
     ($this->render)($user)
         ->assertOk()
         ->assertSee('Stock')
-        ->assertSee('Inventory')
-        ->assertSee(route('inventory.index'), false)
+        ->assertSee('Materials')
+        ->assertSee(route('materials.index'), false)
         ->assertDontSee('Inventory Counts')
         ->assertDontSee(route('inventory.counts.index'), false);
 });
@@ -201,9 +201,9 @@ it('shows stock and inventory count links when the user has inventory adjustment
     ($this->render)($user)
         ->assertOk()
         ->assertSee('Stock')
-        ->assertSee('Inventory')
+        ->assertSee('Materials')
         ->assertSee('Inventory Counts')
-        ->assertSee(route('inventory.index'), false)
+        ->assertSee(route('materials.index'), false)
         ->assertSee(route('inventory.counts.index'), false);
 });
 
@@ -560,7 +560,6 @@ it('renders grouped dropdown links with the correct hrefs', function () {
         ->assertOk()
         ->assertSee('href="' . route('purchasing.orders.index') . '"', false)
         ->assertSee('href="' . route('purchasing.suppliers.index') . '"', false)
-        ->assertSee('href="' . route('inventory.index') . '"', false)
         ->assertSee('href="' . route('inventory.counts.index') . '"', false)
         ->assertSee('href="' . route('materials.index') . '"', false)
         ->assertSee('href="' . route('manufacturing.recipes.index') . '"', false)
@@ -604,7 +603,7 @@ it('renders stock immediately after manufacturing in the desktop navigation sour
         ->and($stockPos)->toBeGreaterThan($manufacturingPos);
 });
 
-it('renders the stock dropdown with inventory and inventory counts links', function () {
+it('renders the stock dropdown with materials and inventory counts links', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
 
@@ -612,9 +611,9 @@ it('renders the stock dropdown with inventory and inventory counts links', funct
 
     ($this->render)($user)
         ->assertOk()
-        ->assertSee(route('inventory.index'), false)
+        ->assertSee(route('materials.index'), false)
         ->assertSee(route('inventory.counts.index'), false)
-        ->assertSee('Inventory')
+        ->assertSee('Materials')
         ->assertSee('Inventory Counts');
 });
 
@@ -892,24 +891,24 @@ it('keeps moved stock links out of manufacturing when rendering manufacturing sp
         ->assertDontSee('UoM Categories');
 });
 
-it('keeps backend route gates unchanged for moved stock routes', function () {
+it('keeps backend route gates unchanged for stock routes', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
 
-    ($this->render)($user, 'inventory.index')
+    ($this->render)($user, 'materials.index')
         ->assertForbidden();
 
     ($this->render)($user, 'inventory.counts.index')
         ->assertForbidden();
 });
 
-it('marks stock as active on inventory pages and does not activate manufacturing there', function () {
+it('marks stock as active on materials pages and does not activate manufacturing there', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
 
     ($this->grantPermission)($user, 'inventory-adjustments-view');
 
-    $content = ($this->render)($user, 'inventory.index')
+    $content = ($this->render)($user, 'materials.index')
         ->assertOk()
         ->getContent();
 
@@ -974,7 +973,7 @@ it('keeps route names unchanged for dashboard and navigation destinations', func
     expect(route('dashboard'))->toBe(url('/dashboard'));
     expect(route('purchasing.orders.index'))->toBe(url('/purchasing/orders'));
     expect(route('purchasing.suppliers.index'))->toBe(url('/purchasing/suppliers'));
-    expect(route('inventory.index'))->toBe(url('/inventory'));
+    expect(Route::getRoutes()->getByName('inventory.index'))->toBeNull();
     expect(route('inventory.counts.index'))->toBe(url('/inventory/counts'));
     expect(route('materials.index'))->toBe(url('/materials'));
     expect(route('manufacturing.recipes.index'))->toBe(url('/manufacturing/recipes'));

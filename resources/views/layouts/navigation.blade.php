@@ -4,8 +4,7 @@
 
     $manufacturingActive = request()->routeIs('manufacturing.make-orders.*')
         || request()->routeIs('manufacturing.recipes.*');
-    $stockActive = request()->routeIs('inventory.*')
-        || request()->routeIs('inventory.counts.*')
+    $stockActive = request()->routeIs('inventory.counts.*')
         || request()->routeIs('materials.*')
         || request()->routeIs('manufacturing.uoms.*')
         || request()->routeIs('manufacturing.uom-conversions.*')
@@ -49,11 +48,11 @@
 <nav x-data="{ open: false }" class="border-b border-slate-800 bg-slate-950 shadow-lg shadow-slate-950/20">
     <div class="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
         <div class="flex items-center gap-3">
-            <a href="{{ route('dashboard') }}" class="flex items-center rounded-full border border-transparent p-2 transition duration-200 ease-out hover:border-slate-700 hover:bg-slate-900/80">
+            <a href="{{ route('dashboard') }}" class="flex h-12 w-12 items-center justify-center rounded-full border border-transparent transition duration-200 ease-out hover:border-slate-700 hover:bg-slate-900/80 sm:h-14 sm:w-14">
                 @if ($logoAsset)
-                    <img src="{{ $logoAsset }}" alt="{{ config('app.name', 'Factory Manager') }}" class="h-20 w-auto object-contain sm:h-24">
+                    <img src="{{ $logoAsset }}" alt="{{ config('app.name', 'Factory Manager') }}" class="h-10 w-auto object-contain sm:h-12">
                 @else
-                    <span class="flex h-20 w-20 items-center justify-center rounded-md bg-blue-950 text-base font-semibold text-white shadow-sm sm:h-24 sm:w-24">
+                    <span class="flex h-10 w-10 items-center justify-center rounded-md bg-blue-950 text-base font-semibold text-white shadow-sm sm:h-12 sm:w-12">
                         FM
                     </span>
                 @endif
@@ -201,19 +200,13 @@
                         </x-slot>
 
                         <x-slot name="content">
-                            @if ($canViewStockInventory)
-                                <x-nav-dropdown-link :href="route('inventory.index')" :active="request()->routeIs('inventory.index')">
-                                    {{ __('Inventory') }}
-                                </x-nav-dropdown-link>
-                            @endif
-
                             @if ($canViewInventoryCounts)
                                 <x-nav-dropdown-link :href="route('inventory.counts.index')" :active="request()->routeIs('inventory.counts.*')">
                                     {{ __('Inventory Counts') }}
                                 </x-nav-dropdown-link>
                             @endif
 
-                            @if ($canViewMaterials || $canManageMaterials)
+                            @if ($canViewStockInventory || $canViewMaterials || $canManageMaterials)
                                 <x-nav-dropdown-link :href="route('materials.index')" :active="request()->routeIs('materials.*') && !request()->routeIs('materials.uom-categories.*')">
                                     {{ __('Materials') }}
                                 </x-nav-dropdown-link>
@@ -474,19 +467,13 @@
                     </x-slot>
 
                     <x-slot name="content">
-                        @if ($canViewStockInventory)
-                            <x-nav-dropdown-link :href="route('inventory.index')" :active="request()->routeIs('inventory.index')" mobile>
-                                {{ __('Inventory') }}
-                            </x-nav-dropdown-link>
-                        @endif
-
                         @if ($canViewInventoryCounts)
                             <x-nav-dropdown-link :href="route('inventory.counts.index')" :active="request()->routeIs('inventory.counts.*')" mobile>
                                 {{ __('Inventory Counts') }}
                             </x-nav-dropdown-link>
                         @endif
 
-                        @if ($canViewMaterials || $canManageMaterials)
+                        @if ($canViewStockInventory || $canViewMaterials || $canManageMaterials)
                             <x-nav-dropdown-link :href="route('materials.index')" :active="request()->routeIs('materials.*') && !request()->routeIs('materials.uom-categories.*')" mobile>
                                 {{ __('Materials') }}
                             </x-nav-dropdown-link>

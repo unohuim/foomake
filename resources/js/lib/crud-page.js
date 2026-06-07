@@ -463,12 +463,15 @@ const renderMobileCards = (config) => {
     const rowClickableClass = urlExpression !== '' ? ' cursor-pointer transition hover:bg-gray-50' : '';
     const scrollPaddingClass = 'p-0';
     const listSpacingClass = 'border-t border-gray-300 space-y-0';
-    const rowClass = `relative border-b border-gray-300 bg-white px-4 py-2${rowClickableClass}`;
-    const titleAsideMarkup = titleAsideExpression !== ''
-        ? titleAsideIsTopRight
-            ? `<p class="absolute right-4 top-2 max-w-24 truncate text-right text-xs font-medium text-gray-500" x-text="${titleAsideExpression}"></p>`
-            : ''
+    const rowClass = `border-b border-gray-300 bg-white px-4 py-2${rowClickableClass}`;
+    const titleAsideMarkup = titleAsideExpression !== '' && titleAsideIsTopRight
+        ? `<p class="ml-3 max-w-28 shrink-0 truncate text-right text-[0.7rem] font-medium leading-5 text-gray-500" data-crud-mobile-title-aside x-text="${titleAsideExpression}"></p>`
         : '';
+    const titleBadgesMarkup = titleBadgesExpression !== '' ? `
+        <template x-for="badge in ${titleBadgesExpression}" :key="\`mobile-\${record.id}-title-badge-\${badge}\`">
+            <span class="inline-flex shrink-0 items-center rounded-full bg-gray-100 px-1.5 py-0.5 text-[0.6rem] font-semibold uppercase tracking-wide text-gray-700" data-crud-mobile-title-badge x-text="badge"></span>
+        </template>
+    ` : '';
     const iconBadgeMarkup = `
         <template x-if="badge.icon === 'rectangle-group'">
             <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.75" stroke="currentColor" aria-hidden="true">
@@ -509,7 +512,6 @@ const renderMobileCards = (config) => {
 
                     <template x-for="record in ${config.state.records}" :key="\`mobile-\${record.id}\`">
                         <div class="${rowClass}" data-crud-mobile-row ${rowClickAttributes}>
-                            ${titleAsideMarkup}
                             <div class="flex items-stretch gap-3">
                                 ${mediaExpression !== '' ? `
                                     <template x-if="${mediaExpression}">
@@ -527,17 +529,23 @@ const renderMobileCards = (config) => {
                                 <div class="min-w-0 flex flex-1 flex-col">
                                     <div class="flex min-w-0 items-start gap-3">
                                         <div class="min-w-0 flex-1 overflow-hidden">
-                                            <div class="${titleAsideIsTopRight ? 'flex min-w-0 items-start gap-3 pr-24' : 'flex min-w-0 items-start justify-between gap-3'}">
-                                                <div class="flex min-w-0 flex-1 items-center gap-2">
-                                                    <p class="block truncate text-sm font-medium text-gray-900" x-text="${config.mobileCard.titleExpression}"></p>
-                                                    ${titleBadgesExpression !== '' ? `
-                                                        <template x-for="badge in ${titleBadgesExpression}" :key="\`mobile-\${record.id}-title-badge-\${badge}\`">
-                                                            <span class="inline-flex shrink-0 items-center rounded-full bg-gray-100 px-1.5 py-0.5 text-[0.6rem] font-semibold uppercase tracking-wide text-gray-700" data-crud-mobile-title-badge x-text="badge"></span>
-                                                        </template>
-                                                    ` : ''}
+                                            ${titleAsideIsTopRight ? `
+                                                <div class="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-start gap-3">
+                                                    <div class="flex min-w-0 items-center gap-2">
+                                                        <p class="block truncate text-sm font-medium text-gray-900" x-text="${config.mobileCard.titleExpression}"></p>
+                                                        ${titleBadgesMarkup}
+                                                    </div>
+                                                    ${titleAsideMarkup}
                                                 </div>
-                                                ${titleAsideExpression !== '' && !titleAsideIsTopRight ? `<p class="ml-auto shrink-0 text-right text-xs font-medium text-gray-500" x-text="${titleAsideExpression}"></p>` : ''}
-                                            </div>
+                                            ` : `
+                                                <div class="flex min-w-0 items-start justify-between gap-3">
+                                                    <div class="flex min-w-0 flex-1 items-center gap-2">
+                                                        <p class="block truncate text-sm font-medium text-gray-900" x-text="${config.mobileCard.titleExpression}"></p>
+                                                        ${titleBadgesMarkup}
+                                                    </div>
+                                                    ${titleAsideExpression !== '' ? `<p class="ml-auto shrink-0 text-right text-xs font-medium text-gray-500" x-text="${titleAsideExpression}"></p>` : ''}
+                                                </div>
+                                            `}
                                             ${subtitleExpression !== '' ? `<p class="mt-1 text-sm text-gray-600" x-text="${subtitleExpression}"></p>` : ''}
                                         </div>
 

@@ -238,10 +238,10 @@ it('10. recipes index blade still includes the create recipe slide over partial'
     expect($source)->toContain('create-recipe-slide-over');
 });
 
-it('11. recipes index page module mounts the shared crud renderer', function (): void {
+it('11. recipes index page module mounts the shared crud card renderer', function (): void {
     $source = File::get(resource_path('js/pages/manufacturing-recipes-index.js'));
 
-    expect($source)->toContain('mountCrudRenderer')
+    expect($source)->toContain('mountCrudCardRenderer')
         ->and($source)->toContain('createGenericCrud')
         ->and($source)->toContain('parseCrudConfig');
 });
@@ -333,6 +333,16 @@ it('17. recipes list payload includes make only when recipe has a current publis
         ->and($publishedRow['version_status'] ?? null)->toBe('PUBLISHED')
         ->and($publishedRow['available_actions'] ?? [])->toBe(['make', 'edit', 'archive'])
         ->and($publishedRow['make_url'] ?? null)->toBe(route('manufacturing.recipes.make-orders.store', $recipe));
+});
+
+it('17a. recipes index make action refreshes the list without redirecting to the make order detail', function (): void {
+    $pageSource = file_get_contents(resource_path('js/pages/manufacturing-recipes-index.js'));
+
+    expect($pageSource)->toContain('async make(record)')
+        ->and($pageSource)->toContain('await this.fetchRecipes();')
+        ->and($pageSource)->toContain('await refreshNavigationState(this.navigationStateUrl);')
+        ->and($pageSource)->toContain("this.showToast('success', 'Make order created.');")
+        ->and($pageSource)->not->toContain('window.location.assign(data.data.show_url);');
 });
 
 it('18. recipes list payload is tenant scoped', function (): void {

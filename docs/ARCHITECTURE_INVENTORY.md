@@ -149,7 +149,7 @@ $onHand = app(CalculateItemOnHandQuantityAction::class)->execute($item);
 - `resources/views/admin/users/index.blade.php`
 - `resources/js/lib/crud-config.js`  
 - `resources/js/lib/generic-crud.js`  
-- `resources/js/lib/crud-page.js`  
+- `resources/js/lib/crud-card-page.js`
 - `resources/js/pages/sales-products-index.js`  
 - `resources/js/pages/sales-customers-index.js`  
 - `resources/js/pages/purchasing-orders-index.js`
@@ -160,7 +160,7 @@ $onHand = app(CalculateItemOnHandQuantityAction::class)->execute($item);
 - `resources/js/pages/admin-users-index.js`
 
 **Purpose:**  
-Provide a mount-only Blade shell plus server-configured shared CRUD renderer so index pages reuse one toolbar, list, empty-state, and row-action pattern without global JavaScript state.
+Provide a mount-only Blade shell plus server-configured shared CRUD card renderer so index pages reuse one toolbar, card grid, empty-state, and row-action pattern without global JavaScript state.
 
 **When to Use:**  
 Any interactive CRUD index page that can express its list, row display, actions, and optional import/export behavior from a server-generated contract.
@@ -172,7 +172,7 @@ Static pages, multi-step workflows, or pages that cannot express their behavior 
 - `data-crud-config`  
 - `data-crud-root`  
 - `createGenericCrud(parseCrudConfig(rootEl))`  
-- `mountCrudRenderer(rootEl, config)`  
+- `mountCrudCardRenderer(rootEl, config)`
 - optional `detailUrlTemplate`
 
 **Example Usage:**  
@@ -191,8 +191,44 @@ $crudConfig = [
 
 Notes:
 - Products, Customers, Purchase Orders, Suppliers, Materials, Inventory Counts, Make Orders, and Admin Users are current reference implementations.
-- `detailUrlTemplate` is optional. When present, create flows may redirect to the created record detail page after success.
-- When `detailUrlTemplate` is absent, the existing inline success behavior such as list refresh remains the fallback.
+- `detailUrlTemplate` is optional and is used for row/card links.
+- Create flows stay on the index, refresh the list, close any create panel, and show toast feedback after success.
+
+### Configured CRUD Card Page Renderer
+
+**Name:** Configured CRUD Card Page Renderer
+**Type:** UI Architectural Pattern
+**Location:**
+- `docs/architecture/ui/ConfiguredCrudCardPageRenderer.yaml`
+- `resources/js/lib/crud-card-page.js`
+- `resources/js/pages/materials-index.js`
+
+**Purpose:**
+Provide a sibling renderer for configured CRUD index pages that preserves the shared CRUD config, toolbar, search, action, and toggle contracts while rendering desktop records as responsive Tailwind cards instead of a table.
+
+**When to Use:**
+Configured CRUD index pages where desktop users benefit from compact visual summaries rather than dense table comparison.
+
+**When Not to Use:**
+Dense operational lists that need table-style scanning, static pages, or reusable detail-section subsections.
+
+**Public Interface:**
+- `mountCrudCardRenderer(targetEl, config)`
+- `data-crud-config`
+- `data-crud-root`
+- optional `desktopCard`
+
+**Example Usage:**
+```js
+mountCrudCardRenderer(crudRootEl, {
+    ...crud,
+    desktopCard: {
+        titleExpression: "record.item || '—'",
+        statsExpression: 'inventoryAvailabilityStats(record)',
+        urlExpression: 'record.show_url',
+    },
+});
+```
 
 ### Toggle
 
@@ -201,7 +237,7 @@ Notes:
 **Location:**
 - `resources/views/components/ui/toggle.blade.php`
 - `resources/js/components/toggle.js`
-- `resources/js/lib/crud-page.js`
+- `resources/js/lib/crud-card-page.js`
 
 **Purpose:**
 Provide a reusable Tailwind and Alpine on/off switch that emits row-aware change events without owning persistence.
@@ -928,16 +964,16 @@ Notes:
 **Location:**  
 - `docs/architecture/ui/ConfiguredCrudPageModulePattern.yaml`  
 - `resources/js/lib/crud-config.js`  
-- `resources/js/lib/crud-page.js`  
+- `resources/js/lib/crud-card-page.js`
 - `resources/js/pages/sales-products-index.js`  
 - `resources/js/pages/sales-customers-index.js`
 - `resources/js/pages/purchasing-suppliers-index.js`
 
 **Purpose:**  
-Provide a shared config-driven CRUD page shell where toolbar actions, list rendering, and common AJAX behavior are owned by a reusable renderer rather than resource-specific Blade markup.
+Provide a shared config-driven CRUD page shell where toolbar actions, card-grid rendering, and common AJAX behavior are owned by a reusable renderer rather than resource-specific Blade markup.
 
 **When to Use:**  
-Interactive CRUD index pages that can express their list, toolbar actions, and row rendering contract through server-generated config.
+Interactive CRUD index pages that can express their card list, toolbar actions, and row rendering contract through server-generated config.
 
 **When Not to Use:**  
 Static pages or workflows that cannot fit the shared CRUD action and rendering contract.
@@ -974,6 +1010,42 @@ $crudConfig = [
 
 Notes:
 - Shared toolbar actions such as `Export`, `Import`, and `Add` must be driven by CRUD config and rendered by the shared CRUD page module, not hardcoded per resource in Blade.
+
+### Configured CRUD Card Page Renderer
+
+**Name:** Configured CRUD Card Page Renderer
+**Type:** UI Architectural Pattern
+**Location:**
+- `docs/architecture/ui/ConfiguredCrudCardPageRenderer.yaml`
+- `resources/js/lib/crud-card-page.js`
+- `resources/js/pages/materials-index.js`
+
+**Purpose:**
+Render configured CRUD index records as responsive desktop Tailwind cards while preserving the shared CRUD toolbar, search, action, toggle, and mount-shell contracts.
+
+**When to Use:**
+Configured CRUD index pages where card summaries communicate the resource better than dense table columns.
+
+**When Not to Use:**
+Dense list pages that need table comparison or reusable detail-section subsections.
+
+**Public Interface:**
+- `mountCrudCardRenderer(targetEl, config)`
+- `desktopCard`
+- `data-crud-config`
+- `data-crud-root`
+
+**Example Usage:**
+```js
+mountCrudCardRenderer(crudRootEl, {
+    ...crud,
+    desktopCard: {
+        titleExpression: "record.item || '—'",
+        statsExpression: 'inventoryAvailabilityStats(record)',
+        urlExpression: 'record.show_url',
+    },
+});
+```
 
 ### Reusable Combobox Pattern
 
@@ -1614,13 +1686,13 @@ $total = bcadd($a, $b, 6);
 - `docs/architecture/inventory/InventoryAvailabilityReadModel.yaml`  
 - `app/Support/Inventory/InventoryAvailabilityIndexReadModel.php`  
 - `app/Support/Inventory/InventoryAvailabilityCalculator.php`  
-- `app/Http/Controllers/InventoryController.php`
+- `app/Http/Controllers/MaterialController.php`
 
 **Purpose:**  
-Provide one tenant-scoped availability contract for the inventory index and single-item availability reads.
+Provide one tenant-scoped availability contract for the materials index and single-item availability reads.
 
 **When to Use:**  
-Rendering inventory availability columns or resolving availability for one item.
+Rendering materials availability cards or resolving availability for one item.
 
 **When Not to Use:**  
 Posting stock moves or mutating operational records.
@@ -3424,7 +3496,7 @@ Vendor or generated views excluded from repository checks, plus Breeze/shared la
 - `resources/js/lib/import-config.js`  
 - `resources/js/lib/import-module.js`  
 - `resources/js/lib/generic-crud.js`  
-- `resources/js/lib/crud-page.js`  
+- `resources/js/lib/crud-card-page.js`
 - `resources/js/pages/sales-products-index.js`  
 - `resources/js/pages/sales-customers-index.js`  
 - `resources/js/pages/purchasing-suppliers-index.js`
@@ -3435,10 +3507,10 @@ Vendor or generated views excluded from repository checks, plus Breeze/shared la
 - `resources/views/admin/users/index.blade.php`
 
 **Purpose:**  
-Centralize a shared config-driven CRUD renderer behind server-generated page contracts while keeping Blade index pages mount-only, moving import UX and lifecycle into a shared import component, and leaving page-specific create/export behavior plus approved data adapters in each page module.
+Centralize a shared config-driven CRUD card renderer behind server-generated page contracts while keeping Blade index pages mount-only, moving import UX and lifecycle into a shared import component, and leaving page-specific create/export behavior plus approved data adapters in each page module.
 
 **When to Use:**  
-Interactive Blade CRUD pages that share toolbar, list rendering, sticky layout, action menus, and list/create/import/sort mechanics but need different routes, columns, row display rules, or page-specific callbacks. All future CRUD index pages should use this abstraction unless a separately approved architecture entry says otherwise.
+Interactive Blade CRUD pages that share toolbar, desktop card rendering, mobile row cards, action menus, and list/create/import/sort mechanics but need different routes, columns, row display rules, or page-specific callbacks. All future CRUD index pages should use this abstraction unless a separately approved architecture entry says otherwise.
 
 **When Not to Use:**  
 Static pages, or domain workflows that exceed generic CRUD concerns.
@@ -3452,7 +3524,7 @@ Static pages, or domain workflows that exceed generic CRUD concerns.
 - `resources/js/lib/import-config.js`  
 - `resources/js/lib/import-module.js`
 - `resources/js/lib/generic-crud.js`
-- `resources/js/lib/crud-page.js`
+- `resources/js/lib/crud-card-page.js`
 
 **Current Reference Implementations:**  
 - Sales Products  
@@ -3465,8 +3537,8 @@ Static pages, or domain workflows that exceed generic CRUD concerns.
 - Blade index shells remain mount-only for CRUD concerns and must provide a bounded viewport-height container for the shared CRUD module.  
 - CRUD pages that use the shared import abstraction emit a separate `data-import-config` contract instead of embedding import internals into the CRUD config.  
 - `data-crud-root` must fill the available bounded height with `h-full` / `min-h-0`-compatible layout so the shared renderer can size its records pane correctly.  
-- The shared CRUD renderer owns toolbar layout, search input, create/import/export buttons, sticky desktop headers, record table/cards, empty states, and row-level action rendering.  
-- The shared CRUD renderer may render either the default vertical-dots row menu or one direct inline icon button when the CRUD config opts into that row-action mode.  
+- The shared CRUD card renderer owns toolbar layout, search input, create/import/export buttons, desktop cards, mobile row cards, empty states, and row-level action rendering.
+- The shared CRUD card renderer may render the default vertical-dots row menu or configured row toggles when the CRUD config opts into them.
 - Toolbar and page chrome remain outside the records scroller; the records/results area is the only scrollable region for CRUD list rendering.  
 - Desktop and mobile variants follow the same scroll-containment contract: header/toolbar stays fixed in the component shell while only records scroll.  
 - Shared export helpers own export panel markup, open/close/reset lifecycle, scope selection, validation/error display, config-driven URL building, and export submission wiring without introducing global state.  

@@ -270,12 +270,14 @@ it('8. config includes the optional detail redirect template because customers h
     expect($config['detailUrlTemplate'] ?? null)->toBe(url('/sales/customers/{id}'));
 });
 
-it('9. customers page module redirects after create using the shared crud detail helper', function () {
+it('9. customers page module refreshes after create without redirecting to detail', function () {
     $pageSource = file_get_contents(resource_path('js/pages/sales-customers-index.js'));
 
-    expect($pageSource)->toContain('const redirectUrl = this.crud.buildDetailUrl(data?.data);')
-        ->and($pageSource)->toContain('window.location.assign(redirectUrl);')
-        ->and($pageSource)->toContain('await this.fetchCustomers();');
+    expect($pageSource)->toContain('await this.fetchCustomers();')
+        ->and($pageSource)->toContain('this.closeForm();')
+        ->and($pageSource)->toContain("this.showToast('success', 'Customer created.');")
+        ->and($pageSource)->not->toContain('this.crud.buildDetailUrl(data?.data)')
+        ->and($pageSource)->not->toContain('window.location.assign(redirectUrl);');
 });
 
 it('8. config includes customer sortable fields', function () {
@@ -1077,18 +1079,18 @@ it('29. customers crud config includes the shared renderer contract', function (
         ->and($config['permissions'] ?? null)->toBeArray();
 });
 
-it('30. products and customers render identical toolbar and action contracts through the shared renderer', function () {
-    $rendererSource = file_get_contents(base_path('resources/js/lib/crud-page.js'));
+it('30. products and customers render identical toolbar and action contracts through the shared card renderer', function () {
+    $rendererSource = file_get_contents(base_path('resources/js/lib/crud-card-page.js'));
     $productsScript = file_get_contents(base_path('resources/js/pages/sales-products-index.js'));
     $customersScript = file_get_contents(base_path('resources/js/pages/sales-customers-index.js'));
 
     expect($rendererSource)->toContain('data-crud-toolbar-import-button')
         ->and($rendererSource)->toContain('data-crud-toolbar-create-button')
         ->and($rendererSource)->toContain('data-crud-records-scroll')
-        ->and($rendererSource)->toContain('data-crud-action-trigger')
-        ->and($rendererSource)->toContain('data-crud-action-menu')
-        ->and($productsScript)->toContain('mountCrudRenderer(')
-        ->and($customersScript)->toContain('mountCrudRenderer(');
+        ->and($rendererSource)->toContain('role="menu"')
+        ->and($rendererSource)->toContain('role="menuitem"')
+        ->and($productsScript)->toContain('mountCrudCardRenderer(')
+        ->and($customersScript)->toContain('mountCrudCardRenderer(');
 });
 
 it('31. customer action menu still exposes edit and archive behavior through configured actions', function () {
@@ -1153,12 +1155,13 @@ it('34. import and create buttons still open page specific panels through config
 
 it('35. customers action dropdown still works through configured actions', function () {
     $customersScript = file_get_contents(base_path('resources/js/pages/sales-customers-index.js'));
-    $rendererSource = file_get_contents(base_path('resources/js/lib/crud-page.js'));
+    $rendererSource = file_get_contents(base_path('resources/js/lib/crud-card-page.js'));
 
     expect($customersScript)->toContain("action.id === 'edit' ? 'openEdit(record)'")
         ->and($customersScript)->toContain("action.id === 'archive' ? 'archive(record)'")
-        ->and($rendererSource)->toContain('data-crud-action-menu')
-        ->and($rendererSource)->toContain('data-crud-action-item-${escapeHtml(action.id)}');
+        ->and($rendererSource)->toContain('renderActionCell')
+        ->and($rendererSource)->toContain('role="menu"')
+        ->and($rendererSource)->toContain('role="menuitem"');
 });
 
 it('36. customers crud config can enable export through shared labels and permissions only', function () {
@@ -1186,8 +1189,8 @@ it('37. customers page module wires export through the shared crud renderer cont
         ->and($customersScript)->toContain('...exportModule,');
 });
 
-it('38. shared crud renderer owns the customers export toolbar button markup', function () {
-    $rendererSource = file_get_contents(base_path('resources/js/lib/crud-page.js'));
+it('38. shared crud card renderer owns the customers export toolbar button markup', function () {
+    $rendererSource = file_get_contents(base_path('resources/js/lib/crud-card-page.js'));
     $customersBlade = file_get_contents(base_path('resources/views/sales/customers/index.blade.php'));
     $exportModuleSource = file_get_contents(base_path('resources/js/lib/export-module.js'));
 

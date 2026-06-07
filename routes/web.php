@@ -2,7 +2,6 @@
 
 use App\Http\Controllers\Admin\UserManagementController;
 use App\Http\Controllers\DashboardController;
-use App\Http\Controllers\InventoryController;
 use App\Http\Controllers\InventoryCountController;
 use App\Http\Controllers\ItemController;
 use App\Http\Controllers\ItemPurchaseOptionPriceController;
@@ -62,10 +61,6 @@ Route::get('/dashboard', DashboardController::class)
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/navigation/state', NavigationStateController::class)
         ->name('navigation.state');
-
-    Route::get('/inventory', [InventoryController::class, 'index'])->name('inventory.index');
-    Route::get('/inventory/list', [InventoryController::class, 'list'])->name('inventory.list');
-    Route::get('/manufacturing/inventory', [InventoryController::class, 'index']);
 
     Route::get('/inventory/counts', [InventoryCountController::class, 'index'])
         ->name('inventory.counts.index');

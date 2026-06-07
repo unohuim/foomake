@@ -1,0 +1,47 @@
+name: Configured CRUD Card Page Renderer
+type: UI Architectural Pattern
+location:
+  - resources/js/lib/crud-card-page.js
+  - resources/js/pages/materials-index.js
+purpose: Provide the default renderer for configured CRUD index pages that preserves the shared CRUD config, toolbar, search, action, and toggle contracts while rendering desktop records as responsive Tailwind cards instead of a table.
+when_to_use:
+  - Rendering configured CRUD index pages.
+  - Replacing desktop table presentation with responsive Tailwind card summaries.
+  - Reusing existing CRUD list, search, action, and toggle behavior while changing only the record presentation.
+when_not_to_use:
+  - Static pages or detail subsections that already belong to the reusable detail-section pattern.
+  - Pages that cannot express their card content through server-generated CRUD config plus page-module expressions.
+rules:
+  - The card renderer must use the same data-crud-config and data-crud-root mount shell as the configured CRUD page module.
+  - The card renderer must not introduce global JavaScript state.
+  - The card renderer must keep toolbar actions, search, loading, empty-state, row actions, and toggle behavior config-driven.
+  - Desktop record presentation must be a responsive Tailwind card grid, not a table.
+  - Mobile rendering must remain compact and row-oriented unless a future approved config explicitly opts into a different mobile layout.
+  - Page modules may provide a desktopCard contract for title, subtitle, body, badges, stats, aside text, and detail URL expressions.
+  - When desktopCard is absent, the renderer may fall back to the existing mobileCard expressions.
+  - Backend routes and authorization remain authoritative; card links and actions only render configured URLs and handlers.
+  - Configured CRUD index page modules must mount the card renderer for non-mobile views; the legacy table renderer is no longer the default index renderer.
+public_interface:
+  - docs/architecture/ui/ConfiguredCrudCardPageRenderer.yaml
+  - resources/js/lib/crud-card-page.js
+  - mountCrudCardRenderer(targetEl, config)
+  - data-crud-config
+  - data-crud-root
+  - desktopCard
+example_usage: |
+  import { mountCrudCardRenderer } from '../lib/crud-card-page';
+
+  mountCrudCardRenderer(rootEl.querySelector('[data-crud-root]'), {
+      ...crud,
+      state: { records: 'materials', loading: 'isLoadingList', error: 'listError', search: 'search' },
+      handlers: { searchInput: 'handleSearchInput()', create: '' },
+      desktopCard: {
+          titleExpression: "record.item || '—'",
+          titleAsideExpression: "record.item_uom_name || record.item_uom_symbol || '—'",
+          subtitleExpression: '',
+          badgesExpression: '[]',
+          statsExpression: 'materialAvailabilityStats(record)',
+          urlExpression: 'record.show_url',
+      },
+      actions: [],
+  });

@@ -901,7 +901,9 @@ it('24a. recipe create success redirects to the created recipe detail view after
     $recipeId = $response->json('data.id');
 
     expect($response->json('data.show_url'))->toBe(route('manufacturing.recipes.show', $recipeId))
-        ->and($pageSource)->toContain("window.location.assign(data.data.show_url);");
+        ->and($pageSource)->toContain("await refreshSection('recipes');")
+        ->and($pageSource)->toContain('this.closeCreate();')
+        ->and($pageSource)->not->toContain("window.location.assign(data.data.show_url);\n                return;\n            }\n\n            if (data.data && Number(data.data.item_id) === Number(materialId)");
 });
 
 it('25. material detail recipe row menu includes make when the recipe has a current published version', function (): void {
@@ -1976,11 +1978,13 @@ it('35g. material detail inventory counts section reuses the inventory counts sh
         ->and($pageSource)->not->toContain('counted_quantity:');
 });
 
-it('35h. material detail inventory counts create contract redirects to the created inventory count detail page after success', function (): void {
+it('35h. material detail inventory counts create contract refreshes the section after success', function (): void {
     $pageSource = file_get_contents(resource_path('js/pages/materials-show.js'));
 
-    expect($pageSource)->toContain("const showUrl = asString(data?.count?.show_url);")
-        ->and($pageSource)->toContain('window.location.assign(showUrl);');
+    expect($pageSource)->toContain("await refreshSection('inventoryCounts');")
+        ->and($pageSource)->toContain('this.closeCountForm();')
+        ->and($pageSource)->not->toContain("const showUrl = asString(data?.count?.show_url);")
+        ->and($pageSource)->not->toContain('window.location.assign(showUrl);');
 });
 
 it('35ha. material detail inventory counts does not introduce a material only simplified create field into the shared slide over', function (): void {

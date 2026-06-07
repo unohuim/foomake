@@ -3,14 +3,14 @@ type: Read Model / Domain Rule
 location:
   - app/Support/Inventory/InventoryAvailabilityIndexReadModel.php
   - app/Support/Inventory/InventoryAvailabilityCalculator.php
-  - app/Http/Controllers/InventoryController.php
-  - resources/views/inventory/index.blade.php
-  - resources/js/pages/inventory-index.js
-purpose: Define the tenant-scoped availability contract for the inventory index and single-item availability lookups without storing denormalized inventory totals on items.
+  - app/Http/Controllers/MaterialController.php
+  - resources/views/materials/index.blade.php
+  - resources/js/pages/materials-index.js
+purpose: Define the tenant-scoped availability contract for the materials index and single-item availability lookups without storing denormalized inventory totals on items.
 when_to_use:
-  - Rendering the inventory index availability columns
+  - Rendering the materials index availability cards
   - Looking up on-hand sell buy make and net values for one tenant-scoped item
-  - Reusing the same availability semantics for inventory list reads
+  - Reusing the same availability semantics for materials list reads
 when_not_to_use:
   - Posting stock moves
   - Mutating purchase orders sales orders recipes or make orders

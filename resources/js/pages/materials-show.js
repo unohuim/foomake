@@ -365,14 +365,7 @@ export function mount(rootEl, payload) {
                     return;
                 }
 
-                const data = await response.json();
-                const showUrl = asString(data?.count?.show_url);
-
-                if (showUrl !== '') {
-                    window.location.assign(showUrl);
-                    return;
-                }
-
+                await refreshSection('inventoryCounts');
                 this.closeCountForm();
             } finally {
                 this.inventoryCountSubmitting = false;
@@ -1131,11 +1124,6 @@ export function mount(rootEl, payload) {
 
             const data = await response.json();
 
-            if (data?.data?.show_url) {
-                window.location.assign(data.data.show_url);
-                return;
-            }
-
             if (data.data && Number(data.data.item_id) === Number(materialId) && data.data.recipe_type === 'manufacturing' && data.data.is_active) {
                 this.upsertMakeOrderCreateRecipe(data.data);
             }
@@ -1232,13 +1220,6 @@ export function mount(rootEl, payload) {
             if (!response.ok) {
                 this.makeOrderFormGeneralError = 'Something went wrong. Please try again.';
                 this.isMakeOrderFormSubmitting = false;
-                return;
-            }
-
-            const data = await response.json();
-
-            if (data?.data?.show_url) {
-                window.location.assign(data.data.show_url);
                 return;
             }
 

@@ -276,12 +276,14 @@ it('4a. config does not include a detail redirect template because products do n
     expect(array_key_exists('detailUrlTemplate', $config))->toBeFalse();
 });
 
-it('4b. products page module keeps inline list refresh behavior available when no detail redirect template is configured', function () {
+it('4b. products page module refreshes after create without redirecting to detail', function () {
     $pageSource = file_get_contents(resource_path('js/pages/sales-products-index.js'));
 
-    expect($pageSource)->toContain('const redirectUrl = this.crud.buildDetailUrl(data?.data);')
-        ->and($pageSource)->toContain('if (redirectUrl) {')
-        ->and($pageSource)->toContain('await this.fetchProducts();');
+    expect($pageSource)->toContain('await this.fetchProducts();')
+        ->and($pageSource)->toContain('this.closeCreatePanel();')
+        ->and($pageSource)->toContain("this.showToast('success', 'Product created.');")
+        ->and($pageSource)->not->toContain('this.crud.buildDetailUrl(data?.data)')
+        ->and($pageSource)->not->toContain('window.location.assign(redirectUrl);');
 });
 
 it('5. crud config includes the import store endpoint', function () {
@@ -631,7 +633,7 @@ it('25a. products page shell is height bounded and removes the large gray gap wr
         ->and($productsBlade)->not->toContain('class="py-12"');
 });
 
-it('26. both sales pages mount the shared crud js renderer', function () {
+it('26. both sales pages mount the shared crud card js renderer', function () {
     $productsBlade = file_get_contents(base_path('resources/views/sales/products/index.blade.php'));
     $customersBlade = file_get_contents(base_path('resources/views/sales/customers/index.blade.php'));
     $productsScript = file_get_contents(base_path('resources/js/pages/sales-products-index.js'));
@@ -639,10 +641,10 @@ it('26. both sales pages mount the shared crud js renderer', function () {
 
     expect($productsBlade)->toContain('data-crud-root')
         ->and($customersBlade)->toContain('data-crud-root')
-        ->and($productsScript)->toContain("import { mountCrudRenderer } from '../lib/crud-page';")
-        ->and($customersScript)->toContain("import { mountCrudRenderer } from '../lib/crud-page';")
-        ->and($productsScript)->toContain('mountCrudRenderer(')
-        ->and($customersScript)->toContain('mountCrudRenderer(');
+        ->and($productsScript)->toContain("import { mountCrudCardRenderer } from '../lib/crud-card-page';")
+        ->and($customersScript)->toContain("import { mountCrudCardRenderer } from '../lib/crud-card-page';")
+        ->and($productsScript)->toContain('mountCrudCardRenderer(')
+        ->and($customersScript)->toContain('mountCrudCardRenderer(');
 });
 
 it('27. products crud config includes the shared renderer contract', function () {
@@ -663,60 +665,56 @@ it('27. products crud config includes the shared renderer contract', function ()
         ->and($config['permissions'] ?? null)->toBeArray();
 });
 
-it('28. shared crud renderer owns the toolbar list cards empty state and action menu contracts', function () {
-    $rendererSource = file_get_contents(base_path('resources/js/lib/crud-page.js'));
+it('28. shared crud card renderer owns the toolbar card grid empty state and action menu contracts', function () {
+    $rendererSource = file_get_contents(base_path('resources/js/lib/crud-card-page.js'));
 
-    expect($rendererSource)->toContain('data-crud-toolbar-mobile')
-        ->and($rendererSource)->toContain('data-crud-toolbar-desktop')
-        ->and($rendererSource)->toContain('data-crud-table')
+    expect($rendererSource)->toContain('data-crud-toolbar')
+        ->and($rendererSource)->toContain('data-crud-card-grid')
+        ->and($rendererSource)->toContain('data-crud-card')
         ->and($rendererSource)->toContain('data-crud-mobile-cards')
         ->and($rendererSource)->toContain('data-crud-records-scroll')
         ->and($rendererSource)->toContain('data-crud-empty-state')
-        ->and($rendererSource)->toContain('data-crud-action-cell')
-        ->and($rendererSource)->toContain('data-crud-action-trigger')
-        ->and($rendererSource)->toContain('data-crud-action-menu')
-        ->and($rendererSource)->toContain('class="flex h-full min-h-0 flex-col overflow-hidden border border-gray-100 bg-white shadow-sm" data-crud-renderer')
-        ->and($rendererSource)->not->toContain('rounded-lg border border-gray-100 bg-white shadow-sm" data-crud-renderer');
+        ->and($rendererSource)->toContain('role="menuitem"')
+        ->and($rendererSource)->toContain('data-crud-card-renderer')
+        ->and($rendererSource)->not->toContain('data-crud-table');
 });
 
 it('28a. shared crud mobile renderer keeps the primary label visible on mobile', function () {
-    $rendererSource = file_get_contents(base_path('resources/js/lib/crud-page.js'));
+    $rendererSource = file_get_contents(base_path('resources/js/lib/crud-card-page.js'));
 
     expect($rendererSource)->toContain('<div class="h-full min-h-0 md:hidden" data-crud-mobile-cards>')
         ->and($rendererSource)->toContain('class="flex h-full min-h-0 flex-col"')
-        ->and($rendererSource)->toContain('class="min-h-0 flex-1 overflow-y-auto ${scrollPaddingClass}" data-crud-records-scroll')
-        ->and($rendererSource)->toContain("const scrollPaddingClass = 'p-0'")
-        ->and($rendererSource)->toContain("const listSpacingClass = 'border-t border-gray-300 space-y-0'")
-        ->and($rendererSource)->toContain('const rowClass = `border-b border-gray-300 bg-white px-4 py-2${rowClickableClass}`')
+        ->and($rendererSource)->toContain('class="min-h-0 flex-1 overflow-y-auto p-0" data-crud-records-scroll')
+        ->and($rendererSource)->toContain('class="border-t border-gray-300"')
+        ->and($rendererSource)->toContain('class="flex items-center gap-3 border-b border-gray-300 bg-white px-4 py-2" data-crud-card')
         ->and($rendererSource)->not->toContain('rounded-lg border border-gray-100 bg-white p-4')
-        ->and($rendererSource)->toContain('${renderToolbar(config, \'mobile\')}')
+        ->and($rendererSource)->toContain('${renderToolbar(normalized)}')
         ->and($rendererSource)->toContain('class="min-w-0 flex flex-1 flex-col"')
-        ->and($rendererSource)->toContain('class="flex min-w-0 items-start gap-3"')
-        ->and($rendererSource)->toContain('class="min-w-0 flex-1 overflow-hidden"')
-        ->and($rendererSource)->toContain('class="block truncate text-sm font-medium text-gray-900"')
-        ->and($rendererSource)->toContain("renderActionCell(config, 'ml-auto shrink-0')");
+        ->and($rendererSource)->toContain('class="flex min-w-0 items-center gap-3"')
+        ->and($rendererSource)->toContain('class="truncate text-sm font-semibold text-gray-900"')
+        ->and($rendererSource)->toContain('${hasActions ? renderActionCell(config) : \'\'}');
 });
 
-it('29. toolbar remains outside and above the scrolling list container', function () {
-    $rendererSource = file_get_contents(base_path('resources/js/lib/crud-page.js'));
+it('29. toolbar remains outside and above the scrolling card container', function () {
+    $rendererSource = file_get_contents(base_path('resources/js/lib/crud-card-page.js'));
 
-    expect($rendererSource)->toContain('data-crud-toolbar-desktop')
+    expect($rendererSource)->toContain('data-crud-toolbar')
         ->and($rendererSource)->toContain('data-crud-records-scroll')
         ->and($rendererSource)->toContain('class="hidden h-full min-h-0 md:block"')
         ->and($rendererSource)->toContain('border-b border-gray-100 bg-white')
-        ->and($rendererSource)->toContain('px-6 py-4')
+        ->and($rendererSource)->toContain('px-4 py-3 sm:px-6')
         ->and($rendererSource)->toContain('class="flex h-full min-h-0 flex-col"')
-        ->and($rendererSource)->toContain('class="min-h-0 flex-1 overflow-y-auto" data-crud-records-scroll');
+        ->and($rendererSource)->toContain('class="min-h-0 flex-1 overflow-y-auto p-6" data-crud-records-scroll');
 });
 
-it('30. desktop headers remain sticky beneath the toolbar', function () {
-    $rendererSource = file_get_contents(base_path('resources/js/lib/crud-page.js'));
+it('30. desktop renderer uses a responsive card grid instead of sticky table headers', function () {
+    $rendererSource = file_get_contents(base_path('resources/js/lib/crud-card-page.js'));
 
-    expect($rendererSource)->toContain('<thead class="bg-white">')
-        ->and($rendererSource)->toContain("        ? 'border-b border-gray-100 bg-white p-4'")
-        ->and($rendererSource)->toContain("        : 'border-b border-gray-100 bg-white px-6 py-4';")
-        ->and($rendererSource)->toContain('class="sticky top-0 z-10 bg-white px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500"')
-        ->and($rendererSource)->toContain('class="sticky top-0 z-10 bg-white px-6 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500"');
+    expect($rendererSource)->toContain('data-crud-card-grid')
+        ->and($rendererSource)->toContain('grid gap-4 md:grid-cols-2 xl:grid-cols-3')
+        ->and($rendererSource)->toContain('rounded-lg border border-gray-200 bg-white p-4 shadow-sm')
+        ->and($rendererSource)->not->toContain('<thead')
+        ->and($rendererSource)->not->toContain('sticky top-0');
 });
 
 it('31. products config exposes the edit row action', function () {
@@ -734,12 +732,12 @@ it('31. products config exposes the edit row action', function () {
     ]);
 });
 
-it('32. products vertical dots render the shared dropdown menu contract', function () {
-    $rendererSource = file_get_contents(base_path('resources/js/lib/crud-page.js'));
+it('32. products vertical dots render the shared card dropdown menu contract', function () {
+    $rendererSource = file_get_contents(base_path('resources/js/lib/crud-card-page.js'));
 
-    expect($rendererSource)->toContain('data-crud-action-trigger')
-        ->and($rendererSource)->toContain('data-crud-action-menu')
-        ->and($rendererSource)->toContain("x-bind:aria-expanded=\"open ? 'true' : 'false'\"")
+    expect($rendererSource)->toContain('renderActionCell')
+        ->and($rendererSource)->toContain('role="menu"')
+        ->and($rendererSource)->toContain('role="menuitem"')
         ->and($rendererSource)->toContain('x-on:click="open = !open"');
 });
 
@@ -853,7 +851,7 @@ it('39. crud config includes export labels for the shared toolbar', function () 
 });
 
 it('40. toolbar order is search export import add in the shared renderer', function () {
-    $rendererSource = file_get_contents(base_path('resources/js/lib/crud-page.js'));
+    $rendererSource = file_get_contents(base_path('resources/js/lib/crud-card-page.js'));
 
     $searchPosition = strpos($rendererSource, 'data-crud-toolbar-search');
     $exportPosition = strpos($rendererSource, 'data-crud-toolbar-export-button');
@@ -870,7 +868,7 @@ it('40. toolbar order is search export import add in the shared renderer', funct
 });
 
 it('41. import button uses the arrow up tray heroicon path', function () {
-    $rendererSource = file_get_contents(base_path('resources/js/lib/crud-page.js'));
+    $rendererSource = file_get_contents(base_path('resources/js/lib/crud-card-page.js'));
 
     expect($rendererSource)->toContain('data-crud-toolbar-import-button')
         ->and($rendererSource)->toContain('M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5')
@@ -878,7 +876,7 @@ it('41. import button uses the arrow up tray heroicon path', function () {
 });
 
 it('42. export button uses the arrow down on square heroicon path', function () {
-    $rendererSource = file_get_contents(base_path('resources/js/lib/crud-page.js'));
+    $rendererSource = file_get_contents(base_path('resources/js/lib/crud-card-page.js'));
 
     expect($rendererSource)->toContain('data-crud-toolbar-export-button')
         ->and($rendererSource)->toContain('M9 8.25H7.5A2.25 2.25 0 0 0 5.25 10.5v9')

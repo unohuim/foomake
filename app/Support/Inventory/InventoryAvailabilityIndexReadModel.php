@@ -15,7 +15,7 @@ use App\Support\QuantityFormatter;
 use Illuminate\Support\Collection;
 
 /**
- * Build inventory availability rows for the inventory index.
+ * Build inventory availability rows for the materials index.
  */
 class InventoryAvailabilityIndexReadModel
 {
@@ -28,7 +28,7 @@ class InventoryAvailabilityIndexReadModel
     }
 
     /**
-     * Build all tenant-scoped rows for the inventory index.
+     * Build all tenant-scoped rows for the materials index.
      */
     public function rows(int $tenantId, string $search = '', string $sortColumn = 'item', string $direction = 'asc'): Collection
     {

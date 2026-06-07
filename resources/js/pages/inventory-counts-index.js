@@ -1,5 +1,5 @@
 import { parseCrudConfig } from '../lib/crud-config';
-import { mountCrudRenderer } from '../lib/crud-page';
+import { mountCrudCardRenderer } from '../lib/crud-card-page';
 import { createGenericCrud } from '../lib/generic-crud';
 
 export function mount(rootEl, payload) {
@@ -38,10 +38,13 @@ export function mount(rootEl, payload) {
         mobileCard: {
             ...crud.mobileCard,
         },
+        desktopCard: {
+            ...crud.desktopCard,
+        },
         actions: actionDefinitions,
     };
 
-    mountCrudRenderer(crudRootEl, rendererConfig);
+    mountCrudCardRenderer(crudRootEl, rendererConfig);
 
     const emptyErrors = () => ({
         name: [],
@@ -118,6 +121,13 @@ export function mount(rootEl, payload) {
             const status = String(record?.status_label || '').trim();
 
             return status === '' ? [] : [status];
+        },
+        inventoryCountCardStats(record) {
+            return [
+                { label: 'Assigned', value: record?.counter_name || record?.counter_email || '—', span: 3 },
+                { label: 'Items', value: String(record?.lines_count ?? 0), span: 3 },
+                { label: 'Posted', value: record?.posted_at || '—', span: 6 },
+            ];
         },
         inventoryCountCellText(record, column) {
             if (column === 'status') {
@@ -305,14 +315,7 @@ export function mount(rootEl, payload) {
                     csrfToken: this.csrf,
                     onValidationError,
                     onError,
-                    onSuccess: async (data) => {
-                        const detailUrl = this.crud.buildDetailUrl(data?.count);
-
-                        if (detailUrl) {
-                            window.location.assign(detailUrl);
-                            return;
-                        }
-
+                    onSuccess: async () => {
                         await this.fetchCounts();
                         this.showToast('success', 'Inventory count saved.');
                         this.closeCountForm();

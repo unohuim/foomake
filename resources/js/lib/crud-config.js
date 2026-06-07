@@ -39,6 +39,7 @@ export function normalizeCrudConfig(config) {
     const rawPermissions = sanitizeRecord(config.permissions);
     const rawRowDisplay = sanitizeRecord(config.rowDisplay);
     const rawMobileCard = sanitizeRecord(config.mobileCard);
+    const rawDesktopCard = sanitizeRecord(config.desktopCard);
     const rawMobileToggle = sanitizeRecord(rawMobileCard.toggle);
     const rawRowToggle = sanitizeRecord(config.rowToggle);
     const rawRowActions = sanitizeRecord(config.rowActions);
@@ -120,6 +121,16 @@ export function normalizeCrudConfig(config) {
                 handler: sanitizeLabel(rawMobileToggle.handler),
                 ariaLabelExpression: sanitizeLabel(rawMobileToggle.ariaLabelExpression),
             },
+        },
+        desktopCard: {
+            titleExpression: sanitizeLabel(rawDesktopCard.titleExpression),
+            titleAsideExpression: sanitizeLabel(rawDesktopCard.titleAsideExpression),
+            subtitleExpression: sanitizeLabel(rawDesktopCard.subtitleExpression),
+            bodyExpression: sanitizeLabel(rawDesktopCard.bodyExpression),
+            badgesExpression: sanitizeLabel(rawDesktopCard.badgesExpression),
+            iconBadgesExpression: sanitizeLabel(rawDesktopCard.iconBadgesExpression),
+            statsExpression: sanitizeLabel(rawDesktopCard.statsExpression),
+            urlExpression: sanitizeLabel(rawDesktopCard.urlExpression),
         },
         rowActions: {
             mode: sanitizeLabel(rawRowActions.mode, 'menu'),

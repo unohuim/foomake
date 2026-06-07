@@ -1,5 +1,5 @@
 import { parseCrudConfig } from '../lib/crud-config';
-import { mountCrudRenderer } from '../lib/crud-page';
+import { mountCrudCardRenderer } from '../lib/crud-card-page';
 import { createGenericCrud } from '../lib/generic-crud';
 
 export function mount(rootEl, payload) {
@@ -8,7 +8,7 @@ export function mount(rootEl, payload) {
     const crud = createGenericCrud(parseCrudConfig(rootEl));
     const crudRootEl = rootEl.querySelector('[data-crud-root]');
 
-    mountCrudRenderer(crudRootEl, {
+    mountCrudCardRenderer(crudRootEl, {
         ...crud,
         state: {
             records: 'orders',
@@ -161,22 +161,9 @@ export function mount(rootEl, payload) {
             await this.crud.submitCreate({
                 body: {},
                 csrfToken: this.csrfToken,
-                onSuccess: (data) => {
-                    const showUrl = data?.data?.show_url;
-
-                    if (showUrl) {
-                        window.location.href = showUrl;
-                        return;
-                    }
-
-                    const redirectUrl = this.crud.buildDetailUrl(data?.data);
-
-                    if (redirectUrl) {
-                        window.location.href = redirectUrl;
-                        return;
-                    }
-
-                    this.showToast('error', 'Purchase order created, but redirect failed.');
+                onSuccess: async () => {
+                    await this.fetchOrders();
+                    this.showToast('success', 'Purchase order created.');
                 },
                 onValidationError: (data) => {
                     this.showToast('error', data?.message || 'Unable to create purchase order.');

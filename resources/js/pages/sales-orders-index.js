@@ -1,6 +1,6 @@
 import { parseCrudConfig } from '../lib/crud-config';
 import { parseImportConfig } from '../lib/import-config';
-import { mountCrudRenderer } from '../lib/crud-page';
+import { mountCrudCardRenderer } from '../lib/crud-card-page';
 import { createExportModule } from '../lib/export-module';
 import { createGenericCrud } from '../lib/generic-crud';
 import { createImportModule } from '../lib/import-module';
@@ -49,7 +49,7 @@ export function mount(rootEl, payload) {
         actions: actionDefinitions,
     };
 
-    mountCrudRenderer(crudRootEl, rendererConfig);
+    mountCrudCardRenderer(crudRootEl, rendererConfig);
 
     const emptyErrors = () => ({
         customer_id: [],

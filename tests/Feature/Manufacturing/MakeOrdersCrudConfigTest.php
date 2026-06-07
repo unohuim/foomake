@@ -392,13 +392,13 @@ it('18. page blade does not render bespoke toolbar or table markup anymore', fun
         ->and($source)->not->toContain('Create a draft make order from an active recipe.');
 });
 
-it('19. page module mounts the shared crud renderer', function (): void {
+it('19. page module mounts the shared crud card renderer', function (): void {
     $source = file_get_contents(resource_path('js/pages/manufacturing-make-orders.js'));
 
     expect($source)->toContain("import { parseCrudConfig } from '../lib/crud-config';")
-        ->and($source)->toContain("import { mountCrudRenderer } from '../lib/crud-page';")
+        ->and($source)->toContain("import { mountCrudCardRenderer } from '../lib/crud-card-page';")
         ->and($source)->toContain("import { createGenericCrud } from '../lib/generic-crud';")
-        ->and($source)->toContain('mountCrudRenderer(');
+        ->and($source)->toContain('mountCrudCardRenderer(');
 });
 
 it('20. page module maps the direct row action to the archive handler', function (): void {
@@ -410,13 +410,14 @@ it('20. page module maps the direct row action to the archive handler', function
         ->and($source)->not->toContain("action.id === 'edit'");
 });
 
-it('21. shared renderer remains the owner of search create and direct row action markup', function (): void {
-    $rendererSource = file_get_contents(resource_path('js/lib/crud-page.js'));
+it('21. shared card renderer remains the owner of search create and row action markup', function (): void {
+    $rendererSource = file_get_contents(resource_path('js/lib/crud-card-page.js'));
 
     expect($rendererSource)->toContain('data-crud-toolbar-create-button')
-        ->and($rendererSource)->toContain('data-crud-direct-action-trigger')
-        ->and($rendererSource)->toContain('data-crud-action-item-${escapeHtml(action.id)}')
-        ->and($rendererSource)->toContain("d=\"M6 18 18 6M6 6l12 12\"");
+        ->and($rendererSource)->toContain('renderActionCell')
+        ->and($rendererSource)->toContain('role="menu"')
+        ->and($rendererSource)->toContain('role="menuitem"')
+        ->and($rendererSource)->toContain('x-on:click="open = !open"');
 });
 
 it('21b. archive handler removes the local row without reloading the page and only shows errors on failure', function (): void {

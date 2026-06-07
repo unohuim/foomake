@@ -387,16 +387,20 @@ it('13. the blue create count button text and markup are removed from the index 
         ->and($response->getContent())->not->toContain('setCreateHash()');
 });
 
-it('14. the inventory counts page module mounts the shared crud renderer', function (): void {
+it('14. the inventory counts page module mounts the shared crud card renderer', function (): void {
     $source = file_get_contents(resource_path('js/pages/inventory-counts-index.js'));
 
-    expect($source)->toContain("import { mountCrudRenderer } from '../lib/crud-page';")
+    expect($source)->toContain("import { mountCrudCardRenderer } from '../lib/crud-card-page';")
         ->and($source)->toContain("import { createGenericCrud } from '../lib/generic-crud';")
         ->and($source)->toContain('const crud = createGenericCrud(parseCrudConfig(rootEl));')
-        ->and($source)->toContain('mountCrudRenderer(crudRootEl, rendererConfig);')
+        ->and($source)->toContain('mountCrudCardRenderer(crudRootEl, rendererConfig);')
+        ->and($source)->toContain('desktopCard: {')
+        ->and($source)->toContain('inventoryCountCardStats(record)')
         ->and($source)->toContain('assigned_to_user_id')
-        ->and($source)->toContain('this.crud.buildDetailUrl(data?.count)')
-        ->and($source)->toContain('window.location.assign(detailUrl)')
+        ->and($source)->toContain('await this.fetchCounts();')
+        ->and($source)->toContain('this.closeCountForm();')
+        ->and($source)->not->toContain('this.crud.buildDetailUrl(data?.count)')
+        ->and($source)->not->toContain('window.location.assign(detailUrl)')
         ->and($source)->toContain("if (column === 'counter')")
         ->and($source)->toContain('truncateCounterEmail(record)')
         ->and($source)->toContain('slice(0, 20)');
@@ -803,36 +807,49 @@ it('30. the shared crud config exposes a Counter column and the mobile card summ
         ->and($config['columns'] ?? [])->toContain('name')
         ->and($config['headers']['name'] ?? null)->toBe('Name')
         ->and($config['headers']['counter'] ?? null)->toBe('Assigned')
-        ->and($config['mobileCard']['bodyExpression'] ?? null)->toContain('inventoryCountSummary(record)')
+        ->and($config['mobileCard']['bodyExpression'] ?? null)->toBe('')
         ->and($config['mobileCard']['urlExpression'] ?? null)->toBe('record.show_url')
-        ->and($config['mobileCard']['titleAsideExpression'] ?? null)->toBe('record.counted_at || "—"')
+        ->and($config['mobileCard']['titleAsideExpression'] ?? null)->toBe("record.counted_at || '—'")
         ->and($config['mobileCard']['titleAsidePlacement'] ?? null)->toBe('top-right')
-        ->and($config['mobileCard']['subtitleExpression'] ?? null)->toBe('record.counter_name || record.counter_email || "—"')
+        ->and($config['mobileCard']['subtitleExpression'] ?? null)->toBe("record.counter_name || record.counter_email || '—'")
         ->and($config['mobileCard']['titleBadgesExpression'] ?? null)->toBe('inventoryCountStatusBadges(record)')
+        ->and($config['desktopCard']['titleExpression'] ?? null)->toBe("record.name || '—'")
+        ->and($config['desktopCard']['titleAsideExpression'] ?? null)->toBe("record.counted_at || '—'")
+        ->and($config['desktopCard']['subtitleExpression'] ?? null)->toBe("record.counter_name || record.counter_email || '—'")
+        ->and($config['desktopCard']['badgesExpression'] ?? null)->toBe('inventoryCountStatusBadges(record)')
+        ->and($config['desktopCard']['statsExpression'] ?? null)->toBe('inventoryCountCardStats(record)')
+        ->and($config['desktopCard']['urlExpression'] ?? null)->toBe('record.show_url')
         ->and($config['actions'] ?? null)->toBe([]);
 });
 
 it('31. shared crud mobile renderer supports title badges beside the mobile title', function (): void {
     $configSource = file_get_contents(resource_path('js/lib/crud-config.js'));
-    $rendererSource = file_get_contents(resource_path('js/lib/crud-page.js'));
+    $rendererSource = file_get_contents(resource_path('js/lib/crud-card-page.js'));
     $pageSource = file_get_contents(resource_path('js/pages/inventory-counts-index.js'));
 
     expect($configSource)->toContain('titleBadgesExpression: sanitizeLabel(rawMobileCard.titleBadgesExpression)')
         ->and($configSource)->toContain('titleAsidePlacement: sanitizeLabel(rawMobileCard.titleAsidePlacement)')
-        ->and($rendererSource)->toContain('const titleBadgesExpression = config.mobileCard.titleBadgesExpression')
+        ->and($rendererSource)->toContain('titleBadgesExpression: sanitizeExpression(mobileCard.titleBadgesExpression)')
+        ->and($rendererSource)->toContain('titleAsidePlacement: sanitizeExpression(mobileCard.titleAsidePlacement)')
+        ->and($rendererSource)->toContain('const titleBadgesMarkup = card.titleBadgesExpression')
         ->and($rendererSource)->toContain('mobile-title-badge')
-        ->and($rendererSource)->toContain("config.mobileCard.titleAsidePlacement === 'top-right'")
-        ->and($rendererSource)->toContain('absolute right-4 top-2 max-w-24')
-        ->and($rendererSource)->toContain('relative border-b border-gray-300')
+        ->and($rendererSource)->toContain('data-crud-mobile-title-aside')
+        ->and($rendererSource)->toContain("card.titleAsidePlacement === 'top-right'")
+        ->and($rendererSource)->toContain('max-w-28 shrink-0 truncate text-right text-[0.7rem]')
+        ->and($rendererSource)->toContain('grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-start gap-3')
+        ->and($rendererSource)->toContain('border-b border-gray-300')
+        ->and($rendererSource)->toContain("stat.span === 6 ? 'col-span-6'")
         ->and($rendererSource)->toContain('text-[0.6rem] font-semibold uppercase')
-        ->and($rendererSource)->toContain('ml-auto shrink-0 text-right text-xs')
+        ->and($rendererSource)->toContain('mt-0.5 truncate text-xs text-gray-600')
         ->and($pageSource)->toContain('inventoryCountStatusBadges(record)');
 });
 
 it('32. inventory count mobile summary omits labels for compact row display', function (): void {
     $pageSource = file_get_contents(resource_path('js/pages/inventory-counts-index.js'));
+    $controllerSource = file_get_contents(app_path('Http/Controllers/InventoryCountController.php'));
 
-    expect($pageSource)->toContain("parts.push(record.posted_at);")
+    expect($controllerSource)->toContain("'bodyExpression' => '',")
+        ->and($pageSource)->toContain("parts.push(record.posted_at);")
         ->and($pageSource)->not->toContain('parts.push(String(record.lines_count));')
         ->and($pageSource)->not->toContain('Counter:')
         ->and($pageSource)->not->toContain('Items:')

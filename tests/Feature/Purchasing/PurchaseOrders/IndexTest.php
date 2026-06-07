@@ -715,7 +715,7 @@ it('index reflects short-closed status after short-close event', function () {
     expect($orderData['status'] ?? null)->toBe('RECEIVED');
 });
 
-it('purchase orders page module mounts the shared crud renderer without row actions', function () {
+it('purchase orders page module mounts the shared crud card renderer without row actions', function () {
     $source = file_get_contents(resource_path('views/purchasing/orders/index.blade.php'));
     $pageModule = file_get_contents(resource_path('js/pages/purchasing-orders-index.js'));
 
@@ -724,10 +724,10 @@ it('purchase orders page module mounts the shared crud renderer without row acti
         ->and($source)->not->toContain('Receive Purchase Order')
         ->and($source)->not->toContain('toggleActionMenu')
         ->and($pageModule)->toContain("import { parseCrudConfig } from '../lib/crud-config';")
-        ->and($pageModule)->toContain("import { mountCrudRenderer } from '../lib/crud-page';")
+        ->and($pageModule)->toContain("import { mountCrudCardRenderer } from '../lib/crud-card-page';")
         ->and($pageModule)->toContain("import { createGenericCrud } from '../lib/generic-crud';")
         ->and($pageModule)->toContain('const crud = createGenericCrud(parseCrudConfig(rootEl));')
-        ->and($pageModule)->toContain('mountCrudRenderer(crudRootEl, {')
+        ->and($pageModule)->toContain('mountCrudCardRenderer(crudRootEl, {')
         ->and($pageModule)->toContain('actions: [],')
         ->and($pageModule)->not->toContain('toggleActionMenu')
         ->and($pageModule)->not->toContain('openReceive')

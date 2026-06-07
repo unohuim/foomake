@@ -1,5 +1,5 @@
 import { parseCrudConfig } from '../lib/crud-config';
-import { mountCrudRenderer } from '../lib/crud-page';
+import { mountCrudCardRenderer } from '../lib/crud-card-page';
 import { createGenericCrud } from '../lib/generic-crud';
 import { refreshNavigationState } from '../navigation/refresh-navigation-state';
 
@@ -35,7 +35,7 @@ export function mount(rootEl, payload) {
         handler: action.id === 'edit' ? 'openEdit(record)' : action.id === 'archive' ? 'openArchive(record)' : '',
     }));
 
-    mountCrudRenderer(crudRootEl, {
+    mountCrudCardRenderer(crudRootEl, {
         ...crud,
         state: {
             records: 'suppliers',
@@ -265,14 +265,7 @@ export function mount(rootEl, payload) {
                     this.generalError = 'Something went wrong. Please try again.';
                     this.showToast('error', this.generalError);
                 },
-                onSuccess: async (data) => {
-                    const redirectUrl = this.crud.buildDetailUrl(data.data);
-
-                    if (redirectUrl) {
-                        window.location.assign(redirectUrl);
-                        return;
-                    }
-
+                onSuccess: async () => {
                     await this.fetchSuppliers();
                     await refreshNavigationState(this.navigationStateUrl);
                     this.showToast('success', 'Supplier added.');

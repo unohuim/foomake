@@ -182,6 +182,17 @@ it('3. allows users with inventory-materials-view to access the materials index'
         ->assertSee('Materials');
 });
 
+it('3a. allows users with inventory-stock-view to access the materials availability index', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermission)($user, 'inventory-stock-view');
+
+    ($this->getIndex)($user)
+        ->assertOk()
+        ->assertSee('Materials');
+});
+
 it('4. renders the materials page mount contracts for the shared crud module', function (): void {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
@@ -260,7 +271,7 @@ it('9. crud config includes the materials delete endpoint template', function ()
 
     $config = ($this->extractCrudConfig)(($this->getIndex)($user));
 
-    expect($config['endpoints']['delete'] ?? null)->toBe(url('/materials/{id}'));
+    expect($config['endpoints']['delete'] ?? null)->toBe('');
 });
 
 it('10. crud config includes the materials detail redirect template', function (): void {
@@ -335,6 +346,16 @@ it('16. list endpoint allows users with materials view permission', function ():
         ->assertOk();
 });
 
+it('16a. list endpoint allows users with stock view permission', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermission)($user, 'inventory-stock-view');
+
+    ($this->getList)($user)
+        ->assertOk();
+});
+
 it('17. list endpoint returns the materials row data required by the shared crud renderer', function (): void {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
@@ -362,19 +383,22 @@ it('17. list endpoint returns the materials row data required by the shared crud
 
     expect($row)->toMatchArray([
         'id' => $item->id,
-        'name' => 'Flour',
-        'base_uom_name' => 'Kilogram',
-        'base_uom_symbol' => $symbol,
+        'item' => 'Flour',
+        'item_uom_name' => 'Kilogram',
+        'item_uom_symbol' => $symbol,
         'is_active' => true,
         'is_stockable' => false,
         'is_purchasable' => true,
         'is_sellable' => false,
         'is_manufacturable' => true,
-        'has_stock_moves' => true,
         'default_price_amount' => '4.25',
         'default_price_currency_code' => 'USD',
         'show_url' => route('materials.show', $item),
+        'update_url' => route('materials.update', $item),
     ]);
+
+    expect($row['on_hand_display'] ?? null)->not->toBeNull()
+        ->and($row['net_display'] ?? null)->not->toBeNull();
 });
 
 it('18. list endpoint excludes cross tenant records from materials index data', function (): void {
@@ -390,7 +414,7 @@ it('18. list endpoint excludes cross tenant records from materials index data', 
     ($this->grantPermission)($user, 'inventory-materials-view');
 
     $names = collect(($this->getList)($user)->json('data'))
-        ->pluck('name')
+        ->pluck('item')
         ->all();
 
     expect($names)->toContain('Visible Material')
@@ -523,7 +547,7 @@ it('19. list endpoint search filters materials by name', function (): void {
     $response = ($this->getList)($user, ['search' => 'flour'])
         ->assertOk();
 
-    $names = collect($response->json('data'))->pluck('name')->all();
+    $names = collect($response->json('data'))->pluck('item')->all();
 
     expect($names)->toBe(['Alpha Flour']);
 });
@@ -537,7 +561,7 @@ it('20. list endpoint returns allowed sortable columns metadata', function (): v
     $response = ($this->getList)($user)
         ->assertOk();
 
-    expect($response->json('meta.allowed_sort_columns'))->toBe(['name', 'base_uom']);
+    expect($response->json('meta.allowed_sort_columns'))->toBe(['item']);
 });
 
 it('21. materials blade shell no longer contains page local list table or row action markup', function (): void {
@@ -554,7 +578,7 @@ it('22. materials page module uses the shared crud renderer and configured crud 
     $createSource = file_get_contents(resource_path('views/materials/partials/create-material-slide-over.blade.php'));
 
     expect($pageSource)->toContain('createGenericCrud(parseCrudConfig(rootEl))')
-        ->and($pageSource)->toContain('mountCrudRenderer(crudRootEl, rendererConfig);')
+        ->and($pageSource)->toContain('mountCrudCardRenderer(crudRootEl, rendererConfig);')
         ->and($pageSource)->toContain('this.crud.fetchList({')
         ->and($pageSource)->toContain('is_stockable')
         ->and($createSource)->toContain('x-model="form.is_stockable"');
@@ -569,25 +593,21 @@ it('22a. materials mobile crud config renders clickable rows with badges and an 
     $config = ($this->extractCrudConfig)(($this->getIndex)($user));
 
     expect($config['mobileCard']['urlExpression'] ?? null)->toBe('record.show_url')
-        ->and($config['rowToggle']['label'] ?? null)->toBe('Active')
-        ->and($config['rowToggle']['name'] ?? null)->toBe('is_active')
-        ->and($config['rowToggle']['checkedExpression'] ?? null)->toBe('Boolean(record.is_active)')
-        ->and($config['rowToggle']['handler'] ?? null)->toBe('toggleMaterialActive(toggleDetail)')
         ->and($config['actions'] ?? null)->toBe([])
-        ->and($config['mobileCard']['titleAsideExpression'] ?? null)->toBe('materialMobileUomLabel(record)')
+        ->and($config['mobileCard']['titleAsideExpression'] ?? null)->toBe('materialCardUomLabel(record)')
         ->and($config['mobileCard']['layout'] ?? null)->toBe('flush-stacked')
         ->and($config['mobileCard']['badgesExpression'] ?? null)->toBe('')
-        ->and($config['mobileCard']['iconBadgesExpression'] ?? null)->toBe('materialFlagIconBadges(record)')
+        ->and($config['mobileCard']['iconBadgesExpression'] ?? null)->toBe('materialFlagIcons(record)')
         ->and($config['mobileCard']['showActions'] ?? null)->toBeFalse()
         ->and($config['mobileCard']['toggle']['name'] ?? null)->toBe('is_active')
         ->and($config['mobileCard']['toggle']['checkedExpression'] ?? null)->toBe('Boolean(record.is_active)')
-        ->and($config['mobileCard']['toggle']['eventName'] ?? null)->toBe('material-active-toggle')
+        ->and($config['mobileCard']['toggle']['eventName'] ?? null)->toBe('inventory-material-active-toggle')
         ->and($config['mobileCard']['toggle']['handler'] ?? null)->toBe('toggleMaterialActive(toggleDetail)')
         ->and($config['mobileCard']['toggle']['disabledExpression'] ?? null)->toBe('!canManageMaterials()');
 });
 
-it('22b. shared crud mobile renderer emits row toggle events and uses lime active styling', function (): void {
-    $rendererSource = file_get_contents(resource_path('js/lib/crud-page.js'));
+it('22b. shared crud card mobile renderer emits row toggle events and uses lime active styling', function (): void {
+    $rendererSource = file_get_contents(resource_path('js/lib/crud-card-page.js'));
     $configSource = file_get_contents(resource_path('js/lib/crud-config.js'));
     $toggleSource = file_get_contents(resource_path('js/components/toggle.js'));
     $componentSource = file_get_contents(resource_path('views/components/ui/toggle.blade.php'));
@@ -595,19 +615,17 @@ it('22b. shared crud mobile renderer emits row toggle events and uses lime activ
     expect($rendererSource)->toContain("from '../components/toggle'")
         ->and($rendererSource)->toContain('renderToggle')
         ->and($rendererSource)->toContain('rowToggle')
-        ->and($rendererSource)->toContain('hasRowToggle')
-        ->and($rendererSource)->toContain("config.rowToggle.label || 'Active'")
-        ->and($rendererSource)->toContain('data-crud-mobile-row')
-        ->and($rendererSource)->toContain('x-on:click="')
-        ->and($rendererSource)->toContain('window.location.assign')
+        ->and($rendererSource)->toContain('const toggleConfig = config.rowToggle.name')
+        ->and($rendererSource)->toContain('data-crud-mobile-cards')
+        ->and($rendererSource)->toContain('data-crud-card')
+        ->and($rendererSource)->toContain(':href="${card.urlExpression}"')
         ->and($rendererSource)->toContain('iconBadgesExpression')
         ->and($rendererSource)->toContain("badge.icon === 'rectangle-group'")
         ->and($rendererSource)->toContain("badge.icon === 'credit-card'")
         ->and($rendererSource)->toContain("badge.icon === 'shopping-cart'")
         ->and($rendererSource)->toContain("badge.icon === 'cog'")
-        ->and($rendererSource)->toContain("const scrollPaddingClass = 'p-0'")
-        ->and($rendererSource)->toContain("const listSpacingClass = 'border-t border-gray-300 space-y-0'")
-        ->and($rendererSource)->toContain('border-t border-gray-300 space-y-0')
+        ->and($rendererSource)->toContain('overflow-y-auto p-0')
+        ->and($rendererSource)->toContain('border-t border-gray-300')
         ->and($rendererSource)->toContain('border-b border-gray-300')
         ->and($rendererSource)->toContain('px-4 py-2')
         ->and($rendererSource)->not->toContain('rounded-lg border border-gray-100 bg-white p-4')
@@ -621,6 +639,10 @@ it('22b. shared crud mobile renderer emits row toggle events and uses lime activ
         ->and($configSource)->toContain('urlExpression: sanitizeLabel(rawMobileCard.urlExpression)')
         ->and($configSource)->toContain('showActions: rawMobileCard.showActions !== false')
         ->and($configSource)->toContain('toggle: {')
+        ->and($configSource)->toContain('const rawDesktopCard = sanitizeRecord(config.desktopCard)')
+        ->and($configSource)->toContain('desktopCard: {')
+        ->and($configSource)->toContain('statsExpression: sanitizeLabel(rawDesktopCard.statsExpression)')
+        ->and($configSource)->toContain('iconBadgesExpression: sanitizeLabel(rawDesktopCard.iconBadgesExpression)')
         ->and($toggleSource)->toContain("role=\"switch\"")
         ->and($toggleSource)->toContain('bg-lime-500')
         ->and($toggleSource)->toContain("\$dispatch")
@@ -635,14 +657,23 @@ it('22b. shared crud mobile renderer emits row toggle events and uses lime activ
 it('22c. materials page module persists mobile active toggle changes through the existing update endpoint', function (): void {
     $pageSource = file_get_contents(resource_path('js/pages/materials-index.js'));
 
-    expect($pageSource)->toContain('materialMobileUomLabel(record)')
-        ->and($pageSource)->toContain('materialFlagIconBadges(record)')
-        ->and($pageSource)->toContain('materialFlagBadges(record)')
+    expect($pageSource)->toContain('materialCardUomLabel(record)')
+        ->and($pageSource)->toContain('materialFlagIcons(record)')
         ->and($pageSource)->toContain('canManageMaterials()')
         ->and($pageSource)->toContain('async toggleMaterialActive(toggleDetail)')
         ->and($pageSource)->toContain('is_active: nextValue')
-        ->and($pageSource)->toContain('${record.name || \'Material\'} ${record.is_active ? \'Active\' : \'Inactive\'}')
-        ->and($pageSource)->toContain('buildItemEndpoint(this.endpoints.update, record.id)');
+        ->and($pageSource)->toContain('${record.item || \'Material\'} ${record.is_active ? \'Active\' : \'Inactive\'}')
+        ->and($pageSource)->toContain('record.update_url || buildItemEndpoint(this.endpoints.update, record.id)');
+});
+
+it('22d. materials desktop card icons render as standalone icons without circle rings', function (): void {
+    $rendererSource = file_get_contents(resource_path('js/lib/crud-card-page.js'));
+
+    expect($rendererSource)->toContain('data-crud-card-icon-badges')
+        ->and($rendererSource)->toContain('class="h-7 w-7"')
+        ->and($rendererSource)->toContain("badge.active ? 'text-blue-600' : 'text-gray-300'")
+        ->and($rendererSource)->not->toContain('rounded-full border-2 bg-white')
+        ->and($rendererSource)->not->toContain("badge.active ? 'border-blue-600 text-blue-600' : 'border-gray-300 text-gray-300'");
 });
 
 it('23. materials page module removes duplicate page local action menu state and methods', function (): void {
@@ -663,17 +694,20 @@ it('24. shared crud helper source supports optional detail redirects using an id
         ->and($crudSource)->toContain("this.detailUrlTemplate.replace('{id}'");
 });
 
-it('25. materials page module redirects after create when the shared crud detail url template is present', function (): void {
+it('25. materials page module refreshes the list after create without redirecting to detail', function (): void {
     $pageSource = file_get_contents(resource_path('js/pages/materials-index.js'));
 
-    expect($pageSource)->toContain('const redirectUrl = this.crud.buildDetailUrl(data?.data);')
-        ->and($pageSource)->toContain('window.location.assign(redirectUrl);');
+    expect($pageSource)->toContain('await this.fetchMaterials();')
+        ->and($pageSource)->toContain('this.closeCreate();')
+        ->and($pageSource)->toContain("this.showToast('success', 'Material created.');")
+        ->and($pageSource)->not->toContain('this.crud.buildDetailUrl(data?.data)')
+        ->and($pageSource)->not->toContain('window.location.assign(redirectUrl);');
 });
 
 it('26. materials create validation handling does not redirect before success', function (): void {
     $pageSource = file_get_contents(resource_path('js/pages/materials-index.js'));
     $validationBlockStart = strpos($pageSource, 'onValidationError:');
-    $successBlockStart = strpos($pageSource, 'onSuccess: async (data) => {');
+    $successBlockStart = strpos($pageSource, 'onSuccess: async () => {');
 
     expect($validationBlockStart)->not->toBeFalse()
         ->and($successBlockStart)->not->toBeFalse();
@@ -686,7 +720,7 @@ it('26. materials create validation handling does not redirect before success', 
 it('27. materials create generic error handling does not redirect before success', function (): void {
     $pageSource = file_get_contents(resource_path('js/pages/materials-index.js'));
     $errorBlockStart = strpos($pageSource, 'onError: () => {');
-    $successBlockStart = strpos($pageSource, 'onSuccess: async (data) => {');
+    $successBlockStart = strpos($pageSource, 'onSuccess: async () => {');
 
     expect($errorBlockStart)->not->toBeFalse()
         ->and($successBlockStart)->not->toBeFalse();
