@@ -62,17 +62,17 @@ beforeEach(function (): void {
     };
 
     $this->grantReceivePermission = function (User $user): void {
-        $permission = Permission::query()->firstOrCreate([
-            'slug' => 'purchasing-purchase-orders-receive',
-        ]);
-
         $role = Role::query()->create([
             'name' => 'role-' . $this->roleCounter,
         ]);
 
         $this->roleCounter++;
 
-        $role->permissions()->syncWithoutDetaching([$permission->id]);
+        foreach (['purchasing-purchase-orders-create', 'purchasing-purchase-orders-receive'] as $slug) {
+            $permission = Permission::query()->firstOrCreate(['slug' => $slug]);
+            $role->permissions()->syncWithoutDetaching([$permission->id]);
+        }
+
         $user->roles()->syncWithoutDetaching([$role->id]);
     };
 

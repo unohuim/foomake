@@ -6,6 +6,7 @@ use App\Actions\Notes\BuildNotesFeedPayloadAction;
 use App\Actions\Workflows\BuildWorkflowProgressStepsAction;
 use App\Actions\Workflows\CanViewAssignedWorkflowResourceAction;
 use App\Models\ItemPurchaseOption;
+use App\Models\Note;
 use App\Models\PurchaseOrder;
 use App\Models\PurchaseOrderLine;
 use App\Models\Supplier;
@@ -130,6 +131,7 @@ class PurchaseOrderController extends Controller
             'po_grand_total_cents' => 0,
         ]);
         $purchaseOrder = $workflowTransitionService->initializePurchaseOrder($purchaseOrder);
+        $this->createInitialNoteFromPurchaseOrderNotes($purchaseOrder, $request);
 
         return response()->json([
             'data' => [
@@ -137,6 +139,28 @@ class PurchaseOrderController extends Controller
                 'show_url' => route('purchasing.orders.show', $purchaseOrder),
             ],
         ], 201);
+    }
+
+    /**
+     * Create the initial Notes feed entry from non-blank create-form notes.
+     */
+    private function createInitialNoteFromPurchaseOrderNotes(PurchaseOrder $purchaseOrder, Request $request): void
+    {
+        $body = trim((string) ($purchaseOrder->notes ?? ''));
+
+        if ($body === '') {
+            return;
+        }
+
+        Note::query()->forceCreate([
+            'tenant_id' => (int) $purchaseOrder->tenant_id,
+            'noteable_type' => PurchaseOrder::class,
+            'noteable_id' => (int) $purchaseOrder->id,
+            'author_user_id' => (int) $request->user()->id,
+            'body' => $body,
+            'visibility' => 'internal',
+            'is_pinned' => false,
+        ]);
     }
 
     /**
@@ -193,12 +217,13 @@ class PurchaseOrderController extends Controller
             ->get();
 
         $lineTotals = $lifecycleService->computeLineTotals($purchaseOrder);
-        $canReceive = Gate::allows('purchasing-purchase-orders-receive');
+        $canReceive = app(WorkflowAssignmentPermissions::class)
+            ->userCanOperateWorkflowDomain($request->user(), 'purchasing');
 
         $workflowPayload = $workflowTransitionService->purchaseOrderWorkflowPayload($purchaseOrder, $request->user());
 
         $payload = [
-            'purchaseOrder' => $this->purchaseOrderPayload($purchaseOrder),
+            'purchaseOrder' => $this->purchaseOrderPayload($purchaseOrder, $request->user()),
             'workflow' => $workflowPayload,
             'workflowProgressSteps' => app(BuildWorkflowProgressStepsAction::class)->execute(
                 (int) $request->user()->tenant_id,
@@ -279,8 +304,8 @@ class PurchaseOrderController extends Controller
      */
     private function manualTaskAssigneeOptions(int $tenantId): array
     {
-        return User::query()
-            ->where('tenant_id', $tenantId)
+        return app(WorkflowAssignmentPermissions::class)
+            ->eligibleUsersQuery($tenantId, 'purchasing')
             ->orderBy('name')
             ->orderBy('id')
             ->get()
@@ -300,7 +325,7 @@ class PurchaseOrderController extends Controller
     private function tenantAssigneeOptionsPayload(int $tenantId, ?User $selectedUser = null): array
     {
         $eligibleUsers = app(WorkflowAssignmentPermissions::class)
-            ->eligibleUsersQuery($tenantId, 'purchasing')
+            ->ownerEligibleUsersQuery($tenantId, 'purchasing')
             ->orderBy('name')
             ->orderBy('id')
             ->get();
@@ -340,7 +365,7 @@ class PurchaseOrderController extends Controller
         $user = User::query()->find($userId);
 
         return $user !== null
-            && app(WorkflowAssignmentPermissions::class)->userCanBeAssignedToDomain($user, 'purchasing');
+            && app(WorkflowAssignmentPermissions::class)->userCanOwnWorkflowDomain($user, 'purchasing');
     }
 
     /**
@@ -504,18 +529,22 @@ class PurchaseOrderController extends Controller
     /**
      * Build purchase order payloads for the UI.
      */
-    private function purchaseOrderPayload(PurchaseOrder $purchaseOrder): array
+    private function purchaseOrderPayload(PurchaseOrder $purchaseOrder, ?User $viewer = null): array
     {
+        $canManage = $viewer === null
+            ? Gate::allows('purchasing-purchase-orders-create')
+            : Gate::forUser($viewer)->allows('purchasing-purchase-orders-create');
+
         $payload = [
             'id' => $purchaseOrder->id,
             'supplier_id' => $purchaseOrder->supplier_id,
             'supplier_name' => $purchaseOrder->supplier?->company_name,
             'assigned_to_user_id' => $purchaseOrder->assigned_to_user_id,
             'assigned_to_user_name' => $purchaseOrder->assignedToUser?->name,
-            'assignee_options' => $this->tenantAssigneeOptionsPayload(
+            'assignee_options' => $canManage ? $this->tenantAssigneeOptionsPayload(
                 (int) $purchaseOrder->tenant_id,
                 $purchaseOrder->assignedToUser
-            ),
+            ) : [],
             'order_date' => $purchaseOrder->order_date?->format('Y-m-d'),
             'shipping_cents' => $purchaseOrder->shipping_cents,
             'shipping_amount' => $this->formatCentsToAmount($purchaseOrder->shipping_cents),
@@ -525,7 +554,7 @@ class PurchaseOrderController extends Controller
             'status' => $purchaseOrder->workflowStatus(),
             'persisted_status' => $purchaseOrder->status,
             'is_cancelled' => $purchaseOrder->workflow_cancelled_at !== null,
-            'is_editable' => $purchaseOrder->isWorkflowEditable(),
+            'is_editable' => $canManage && $purchaseOrder->isWorkflowEditable(),
             'is_back_ordered' => $purchaseOrder->back_ordered_at !== null,
             'has_receipts' => $purchaseOrder->receipts()->exists(),
             'po_subtotal_cents' => $purchaseOrder->po_subtotal_cents,

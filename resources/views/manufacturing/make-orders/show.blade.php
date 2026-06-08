@@ -10,26 +10,7 @@
     @endphp
 
     <x-slot name="header">
-        <div
-            x-data="{
-                workflowState: @js($makeOrderPayload['workflow_state'] ?? 'DRAFT'),
-                nextStageAction: @js($payload['workflow']['next_stage_action'] ?? null),
-                syncHeader(detail) {
-                    if (!detail || typeof detail !== 'object') {
-                        return;
-                    }
-
-                    if (Object.prototype.hasOwnProperty.call(detail, 'workflowState')) {
-                        this.workflowState = detail.workflowState || 'DRAFT';
-                    }
-
-                    if (Object.prototype.hasOwnProperty.call(detail, 'nextStageAction')) {
-                        this.nextStageAction = detail.nextStageAction || null;
-                    }
-                },
-            }"
-            x-on:make-order-header-sync.window="syncHeader($event.detail)"
-        >
+        <div>
             <x-resource-detail-header-breadcrumb
                 :items="$payload['breadcrumbs'] ?? []"
                 :title="$makeOrderPayload['title'] ?? ('Make Order ' . $makeOrder->id)"
@@ -37,7 +18,7 @@
                 <x-slot name="titleSuffix">
                     <span
                         class="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700"
-                        x-text="workflowState || 'DRAFT'"
+                        x-text="makeOrder.workflow_state || 'DRAFT'"
                     >
                         {{ data_get($makeOrderPayload, 'workflow_state', 'DRAFT') }}
                     </span>
@@ -78,13 +59,13 @@
                 <x-slot name="actions">
                     <div
                         class="flex items-center justify-end"
-                        x-show="nextStageAction && nextStageAction.label"
+                        x-show="workflow.next_stage_action && workflow.next_stage_action.label"
                     >
                         <button
                             type="button"
                             class="inline-flex items-center justify-center rounded-md border border-transparent bg-slate-900 px-4 py-2 text-xs font-semibold uppercase tracking-widest text-white transition hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-500 focus:ring-offset-2"
-                            x-on:click.prevent="window.dispatchEvent(new CustomEvent('make-order-next-stage', { detail: { workflowStageId: nextStageAction.id } }))"
-                            x-text="nextStageAction?.label || ''"
+                            x-on:click.prevent="window.dispatchEvent(new CustomEvent('make-order-next-stage', { detail: { workflowStageId: workflow.next_stage_action.id } }))"
+                            x-text="workflow.next_stage_action?.label || ''"
                         >
                             {{ $payload['workflow']['next_stage_action']['label'] ?? '' }}
                         </button>
@@ -259,7 +240,7 @@
             :description="__('Make Order ingredient lines are editable snapshot rows and do not mutate the source recipe version.')"
             :default-open="true"
             item-header="Ingredient"
-            :context-text-expression="''"
+            context-text-expression="''"
             :show-on-hand="true"
             :show-actions="true"
             :show-row-actions-menu="false"

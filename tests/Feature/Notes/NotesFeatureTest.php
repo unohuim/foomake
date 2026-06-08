@@ -8,6 +8,7 @@ use App\Models\Note;
 use App\Models\Permission;
 use App\Models\PurchaseOrder;
 use App\Models\Recipe;
+use App\Models\RecipeVersion;
 use App\Models\Role;
 use App\Models\SalesOrder;
 use App\Models\Supplier;
@@ -242,6 +243,184 @@ it('created note stores tenant author and polymorphic parent columns', function 
         ->and($note->author_user_id)->toBe($user->id)
         ->and($note->noteable_type)->toBe(InventoryCount::class)
         ->and($note->noteable_id)->toBe($count->id);
+});
+
+it('inventory count create form notes create a domain note', function () {
+    $tenant = Tenant::factory()->create();
+    $user = ($this->makeUser)($tenant);
+    ($this->grantPermission)($user, 'inventory-adjustments-execute');
+
+    $response = $this->actingAs($user)
+        ->postJson(route('inventory.counts.store'), [
+            'name' => 'Cycle Count',
+            'counted_at' => '2026-06-01',
+            'notes' => 'Count the walk-in first.',
+        ])
+        ->assertCreated();
+
+    $this->assertDatabaseHas('notes', [
+        'tenant_id' => $tenant->id,
+        'noteable_type' => InventoryCount::class,
+        'noteable_id' => $response->json('count.id'),
+        'author_user_id' => $user->id,
+        'body' => 'Count the walk-in first.',
+        'visibility' => 'internal',
+        'is_pinned' => false,
+    ]);
+});
+
+it('material detail inventory count create form notes create a domain note', function () {
+    $tenant = Tenant::factory()->create();
+    $user = ($this->makeUser)($tenant);
+    ($this->grantPermission)($user, 'inventory-adjustments-execute');
+
+    $category = UomCategory::query()->forceCreate([
+        'tenant_id' => $tenant->id,
+        'name' => 'Each',
+    ]);
+    $uom = Uom::query()->forceCreate([
+        'tenant_id' => $tenant->id,
+        'uom_category_id' => $category->id,
+        'name' => 'Each',
+        'symbol' => 'ea',
+    ]);
+    $item = Item::query()->forceCreate([
+        'tenant_id' => $tenant->id,
+        'name' => 'Eggs',
+        'base_uom_id' => $uom->id,
+        'is_stockable' => true,
+    ]);
+
+    $response = $this->actingAs($user)
+        ->postJson(route('materials.inventory-counts.store', $item), [
+            'name' => 'Egg Count',
+            'counted_at' => '2026-06-01',
+            'counted_quantity' => '12.000000',
+            'notes' => 'Check the prep fridge.',
+        ])
+        ->assertCreated();
+
+    $this->assertDatabaseHas('notes', [
+        'tenant_id' => $tenant->id,
+        'noteable_type' => InventoryCount::class,
+        'noteable_id' => $response->json('count.id'),
+        'author_user_id' => $user->id,
+        'body' => 'Check the prep fridge.',
+        'visibility' => 'internal',
+        'is_pinned' => false,
+    ]);
+});
+
+it('purchase order create form notes create a domain note', function () {
+    $tenant = Tenant::factory()->create();
+    $user = ($this->makeUser)($tenant);
+    ($this->grantPermission)($user, 'purchasing-purchase-orders-create');
+
+    $response = $this->actingAs($user)
+        ->postJson(route('purchasing.orders.store'), [
+            'notes' => 'Confirm delivery window.',
+        ])
+        ->assertCreated();
+
+    $this->assertDatabaseHas('notes', [
+        'tenant_id' => $tenant->id,
+        'noteable_type' => PurchaseOrder::class,
+        'noteable_id' => $response->json('data.id'),
+        'author_user_id' => $user->id,
+        'body' => 'Confirm delivery window.',
+        'visibility' => 'internal',
+        'is_pinned' => false,
+    ]);
+});
+
+it('make order create form notes create a domain note', function () {
+    $tenant = Tenant::factory()->create();
+    $user = ($this->makeUser)($tenant);
+    ($this->grantPermission)($user, 'inventory-make-orders-execute');
+
+    $category = UomCategory::query()->forceCreate([
+        'tenant_id' => $tenant->id,
+        'name' => 'Mass',
+    ]);
+    $uom = Uom::query()->forceCreate([
+        'tenant_id' => $tenant->id,
+        'uom_category_id' => $category->id,
+        'name' => 'Kilogram',
+        'symbol' => 'kg',
+    ]);
+    $item = Item::query()->forceCreate([
+        'tenant_id' => $tenant->id,
+        'name' => 'Dough',
+        'base_uom_id' => $uom->id,
+        'is_manufacturable' => true,
+        'is_stockable' => true,
+    ]);
+    $recipe = Recipe::query()->forceCreate([
+        'tenant_id' => $tenant->id,
+        'item_id' => $item->id,
+        'name' => 'Dough Recipe',
+        'recipe_type' => Recipe::TYPE_MANUFACTURING,
+        'is_active' => true,
+        'output_quantity' => '1.000000',
+    ]);
+    $version = RecipeVersion::query()->forceCreate([
+        'tenant_id' => $tenant->id,
+        'recipe_id' => $recipe->id,
+        'version_number' => 100,
+        'output_quantity' => '1.000000',
+        'recipe_type' => Recipe::TYPE_MANUFACTURING,
+        'status' => RecipeVersion::STATUS_PUBLISHED,
+        'effective_from' => now(),
+        'approved_at' => now(),
+        'notes' => null,
+    ]);
+    $recipe->forceFill(['current_version_id' => $version->id])->save();
+
+    $response = $this->actingAs($user)
+        ->postJson(route('manufacturing.make-orders.store'), [
+            'recipe_id' => $recipe->id,
+            'runs' => '2.000000',
+            'notes' => 'Use the spiral mixer.',
+        ])
+        ->assertCreated();
+
+    $this->assertDatabaseHas('notes', [
+        'tenant_id' => $tenant->id,
+        'noteable_type' => MakeOrder::class,
+        'noteable_id' => $response->json('data.id'),
+        'author_user_id' => $user->id,
+        'body' => 'Use the spiral mixer.',
+        'visibility' => 'internal',
+        'is_pinned' => false,
+    ]);
+});
+
+it('sales order create form notes create a domain note', function () {
+    $tenant = Tenant::factory()->create();
+    $user = ($this->makeUser)($tenant);
+    $customer = Customer::query()->forceCreate([
+        'tenant_id' => $tenant->id,
+        'name' => 'Retail Customer',
+    ]);
+    ($this->grantPermission)($user, 'sales-sales-orders-manage');
+
+    $response = $this->actingAs($user)
+        ->postJson(route('sales.orders.store'), [
+            'customer_id' => $customer->id,
+            'order_date' => '2026-06-01',
+            'notes' => 'Customer asked for morning delivery.',
+        ])
+        ->assertCreated();
+
+    $this->assertDatabaseHas('notes', [
+        'tenant_id' => $tenant->id,
+        'noteable_type' => SalesOrder::class,
+        'noteable_id' => $response->json('data.id'),
+        'author_user_id' => $user->id,
+        'body' => 'Customer asked for morning delivery.',
+        'visibility' => 'internal',
+        'is_pinned' => false,
+    ]);
 });
 
 it('note list is scoped to the parent resource', function () {

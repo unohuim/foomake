@@ -186,7 +186,19 @@ test('9. positive starting quantity creates one initial stock inventory count re
         'starting_quantity' => '5.000000',
     ])->assertCreated();
 
+    $count = InventoryCount::query()->where('tenant_id', $this->tenant->id)->firstOrFail();
+
     expect(InventoryCount::query()->where('tenant_id', $this->tenant->id)->count())->toBe(1);
+
+    $this->assertDatabaseHas('notes', [
+        'tenant_id' => $this->tenant->id,
+        'noteable_type' => InventoryCount::class,
+        'noteable_id' => $count->id,
+        'author_user_id' => $this->user->id,
+        'body' => 'Initial Stock',
+        'visibility' => 'internal',
+        'is_pinned' => false,
+    ]);
 });
 
 test('10. initial stock inventory count is posted immediately', function (): void {

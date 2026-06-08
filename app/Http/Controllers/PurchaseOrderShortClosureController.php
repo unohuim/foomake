@@ -4,10 +4,10 @@ namespace App\Http\Controllers;
 
 use App\Models\PurchaseOrder;
 use App\Services\Purchasing\PurchaseOrderLifecycleService;
+use App\Support\Workflows\WorkflowAssignmentPermissions;
 use DomainException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Validator;
 
 class PurchaseOrderShortClosureController extends Controller
@@ -22,7 +22,10 @@ class PurchaseOrderShortClosureController extends Controller
         int $purchaseOrder,
         PurchaseOrderLifecycleService $lifecycleService
     ): JsonResponse {
-        Gate::authorize('purchasing-purchase-orders-receive');
+        abort_unless(
+            app(WorkflowAssignmentPermissions::class)->userCanOperateWorkflowDomain($request->user(), 'purchasing'),
+            403
+        );
 
         $purchaseOrder = PurchaseOrder::query()->findOrFail($purchaseOrder);
 

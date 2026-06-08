@@ -7,8 +7,10 @@ use App\Models\InventoryCount;
 use App\Models\MakeOrder;
 use App\Models\PurchaseOrder;
 use App\Models\SalesOrder;
+use App\Models\User;
 use App\Models\WorkflowDomain;
 use App\Models\WorkflowStage;
+use App\Support\Workflows\WorkflowAssignmentPermissions;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -59,12 +61,21 @@ class TaskController extends Controller
                 'domain_record_id' => ['required', 'integer', 'min:1'],
             ]);
 
-            $this->assertWorkflowContextBelongsTogether(
+            $workflowDomain = $this->assertWorkflowContextBelongsTogether(
                 $tenantId,
                 (int) $workflowDomainId,
                 $workflowStageId === null ? null : (int) $workflowStageId,
                 (int) $domainRecordId
             );
+
+            if (! $this->userCanBeAssignedToWorkflowTask((int) $validated['assigned_to_user_id'], $workflowDomain)) {
+                return response()->json([
+                    'message' => 'The given data was invalid.',
+                    'errors' => [
+                        'assigned_to_user_id' => ['The selected user cannot be assigned to this workflow task.'],
+                    ],
+                ], 422);
+            }
         }
 
         $sortOrder = Task::query()
@@ -94,14 +105,14 @@ class TaskController extends Controller
             'status' => Task::STATUS_OPEN,
             'completed_at' => null,
             'completed_by_user_id' => null,
-        ])->fresh(['assignedTo', 'completedBy']);
+        ])->fresh(['assignedTo', 'completedBy', 'workflowDomain']);
 
         if (! $request->expectsJson()) {
             return redirect()->back();
         }
 
         return response()->json([
-            'data' => $this->taskData($task, $request->user()?->id),
+            'data' => $this->taskData($task, $request->user()),
         ], 201);
     }
 
@@ -113,7 +124,7 @@ class TaskController extends Controller
         int $workflowDomainId,
         ?int $workflowStageId,
         int $domainRecordId
-    ): void {
+    ): WorkflowDomain {
         $workflowDomain = WorkflowDomain::query()->findOrFail($workflowDomainId);
 
         if ($workflowStageId !== null) {
@@ -125,6 +136,22 @@ class TaskController extends Controller
         }
 
         $this->assertWorkflowDomainRecordExists($tenantId, (string) $workflowDomain->key, $domainRecordId);
+
+        return $workflowDomain;
+    }
+
+    /**
+     * Determine whether the selected user can receive workflow-context tasks.
+     */
+    private function userCanBeAssignedToWorkflowTask(int $userId, WorkflowDomain $workflowDomain): bool
+    {
+        $user = User::query()->find($userId);
+
+        return $user !== null
+            && app(WorkflowAssignmentPermissions::class)->userCanBeAssignedToDomain(
+                $user,
+                (string) $workflowDomain->key
+            );
     }
 
     /**
@@ -162,8 +189,19 @@ class TaskController extends Controller
      *
      * @return array<string, int|string|bool|null>
      */
-    private function taskData(Task $task, ?int $viewerUserId): array
+    private function taskData(Task $task, ?User $viewer): array
     {
+        $canComplete = ! $task->isCompleted()
+            && $viewer !== null
+            && (int) $task->assigned_to_user_id === (int) $viewer->id
+            && (
+                $task->workflowDomain?->key === null
+                || app(WorkflowAssignmentPermissions::class)->userCanBeAssignedToDomain(
+                    $viewer,
+                    (string) $task->workflowDomain->key
+                )
+            );
+
         return [
             'id' => $task->id,
             'source' => $task->source,
@@ -177,9 +215,7 @@ class TaskController extends Controller
             'sort_order' => $task->sort_order,
             'status' => $task->status,
             'is_completed' => $task->isCompleted(),
-            'can_complete' => ! $task->isCompleted()
-                && $viewerUserId !== null
-                && (int) $task->assigned_to_user_id === (int) $viewerUserId,
+            'can_complete' => $canComplete,
             'completed_at' => $task->completed_at?->toISOString(),
             'completed_by_user_id' => $task->completed_by_user_id,
             'completed_by_user_name' => $task->completedBy?->name,

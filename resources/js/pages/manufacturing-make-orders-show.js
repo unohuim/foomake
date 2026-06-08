@@ -238,14 +238,6 @@ export function mount(rootEl, payload) {
                 this.toast.visible = false;
             }, 1500);
         },
-        syncHeaderState() {
-            window.dispatchEvent(new CustomEvent('make-order-header-sync', {
-                detail: {
-                    workflowState: this.makeOrder.workflow_state || 'DRAFT',
-                    nextStageAction: this.workflow.next_stage_action || null,
-                },
-            }));
-        },
         goTo(url) {
             if (!url) {
                 return;
@@ -281,7 +273,6 @@ export function mount(rootEl, payload) {
                 const data = await response.json();
                 this.hydrateMakeOrderResponse(data.data);
                 this.hydrateWorkflowResponse(data.workflow);
-                this.syncHeaderState();
                 this.selectedWorkflowStageId = '';
                 this.showToast('success', 'Workflow stage updated.');
             } catch (error) {
@@ -374,7 +365,6 @@ export function mount(rootEl, payload) {
                 const data = await response.json();
                 this.hydrateMakeOrderResponse(data.data);
                 this.hydrateWorkflowResponse(data.workflow);
-                this.syncHeaderState();
                 this.showToast('success', 'Make order details updated.');
             } catch (error) {
                 this.showToast('error', 'Unable to save make order details.');

@@ -17,12 +17,14 @@ use App\Models\CustomerContact;
 use App\Models\ExternalCustomerMapping;
 use App\Models\ExternalProductSourceConnection;
 use App\Models\Item;
+use App\Models\Note;
 use App\Models\SalesOrder;
 use App\Models\SalesOrderLine;
 use App\Models\Task;
 use App\Models\Uom;
 use App\Models\UomCategory;
 use App\Models\User;
+use App\Support\Workflows\WorkflowAssignmentPermissions;
 use App\Services\WooCommerceOrderPreviewService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
@@ -346,12 +348,35 @@ class SalesOrderController extends Controller
             'order_date' => $this->normalizedOrderDate($request->validated('order_date')),
             'status' => SalesOrder::STATUS_DRAFT,
         ]);
+        $this->createInitialNoteFromText($order, $request, $request->validated('notes'));
 
         $order->load(['customer', 'contact', 'lines.item']);
 
         return response()->json([
             'data' => $this->orderData($order),
         ], 201);
+    }
+
+    /**
+     * Create the initial Notes feed entry from non-blank create-form notes.
+     */
+    private function createInitialNoteFromText(SalesOrder $salesOrder, StoreSalesOrderRequest $request, ?string $body): void
+    {
+        $body = trim((string) $body);
+
+        if ($body === '') {
+            return;
+        }
+
+        Note::query()->forceCreate([
+            'tenant_id' => (int) $salesOrder->tenant_id,
+            'noteable_type' => SalesOrder::class,
+            'noteable_id' => (int) $salesOrder->id,
+            'author_user_id' => (int) $request->user()->id,
+            'body' => $body,
+            'visibility' => 'internal',
+            'is_pinned' => false,
+        ]);
     }
 
     /**
@@ -453,8 +478,8 @@ class SalesOrderController extends Controller
      */
     private function manualTaskAssigneeOptions(int $tenantId): array
     {
-        return User::query()
-            ->where('tenant_id', $tenantId)
+        return app(WorkflowAssignmentPermissions::class)
+            ->eligibleUsersQuery($tenantId, 'sales')
             ->orderBy('name')
             ->orderBy('id')
             ->get()

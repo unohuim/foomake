@@ -758,7 +758,7 @@ const renderCrudSection = () => `
                             <a
                                 class="absolute inset-0 z-10 sm:hidden"
                                 x-bind:href="mobileRowUrl(record)"
-                                x-bind:aria-label="\`View \${primaryText(record)}\`"
+                                x-bind:aria-label="'View ' + primaryText(record)"
                             ></a>
                         </template>
                         <div :class="recordRowClass(record)">

@@ -5,6 +5,7 @@ namespace App\Actions\Tasks;
 use App\Models\InventoryCount;
 use App\Models\Task;
 use App\Models\User;
+use App\Support\Workflows\WorkflowAssignmentPermissions;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -50,11 +51,19 @@ class CompleteTaskAction
      */
     private function userCanCompleteTask(Task $task, User $user): bool
     {
-        if ((int) $task->assigned_to_user_id === (int) $user->id) {
+        if ((int) $task->tenant_id !== (int) $user->tenant_id) {
+            return false;
+        }
+
+        $domainKey = $task->workflowDomain?->key;
+        $isEligibleForDomainTask = $domainKey === null
+            || app(WorkflowAssignmentPermissions::class)->userCanBeAssignedToDomain($user, (string) $domainKey);
+
+        if ((int) $task->assigned_to_user_id === (int) $user->id && $isEligibleForDomainTask) {
             return true;
         }
 
-        if ($task->workflowDomain?->key !== 'inventory') {
+        if ($domainKey !== 'inventory' || ! $isEligibleForDomainTask) {
             return false;
         }
 

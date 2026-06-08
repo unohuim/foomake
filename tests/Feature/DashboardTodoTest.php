@@ -284,7 +284,7 @@ it('4. empty assigned work shows a calm empty state', function (): void {
 it('5. assigned make order workflow responsibility appears', function (): void {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
-    ($this->grantPermission)($user, 'inventory-make-orders-view');
+    ($this->grantPermissions)($user, ['inventory-make-orders-view', 'inventory-make-orders-execute']);
     $makeOrder = ($this->makeMakeOrder)($tenant, $user);
 
     $this->actingAs($user)
@@ -296,7 +296,7 @@ it('5. assigned make order workflow responsibility appears', function (): void {
 it('5a. workflow responsibility badges show the stage name', function (): void {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
-    ($this->grantPermission)($user, 'inventory-make-orders-view');
+    ($this->grantPermissions)($user, ['inventory-make-orders-view', 'inventory-make-orders-execute']);
     $stage = ($this->makeWorkflowStage)($tenant, 'manufacturing', 'Production');
     ($this->makeMakeOrder)($tenant, $user, ['workflow_stage_id' => $stage->id]);
 
@@ -310,7 +310,7 @@ it('5a. workflow responsibility badges show the stage name', function (): void {
 it('5aa. workflow responsibilities without a stage show a draft badge', function (): void {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
-    ($this->grantPermission)($user, 'inventory-make-orders-view');
+    ($this->grantPermissions)($user, ['inventory-make-orders-view', 'inventory-make-orders-execute']);
     ($this->makeMakeOrder)($tenant, $user, ['workflow_stage_id' => null]);
 
     $this->actingAs($user)
@@ -322,7 +322,7 @@ it('5aa. workflow responsibilities without a stage show a draft badge', function
 it('5b. completed make order workflow responsibilities do not appear', function (): void {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
-    ($this->grantPermission)($user, 'inventory-make-orders-view');
+    ($this->grantPermissions)($user, ['inventory-make-orders-view', 'inventory-make-orders-execute']);
     $makeOrder = ($this->makeMakeOrder)($tenant, $user, ['status' => MakeOrder::STATUS_MADE]);
 
     $this->actingAs($user)
@@ -345,7 +345,7 @@ it('5c. posted inventory count workflow responsibilities do not appear', functio
 it('6. unassigned make order workflow responsibility does not appear', function (): void {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
-    ($this->grantPermission)($user, 'inventory-make-orders-view');
+    ($this->grantPermissions)($user, ['inventory-make-orders-view', 'inventory-make-orders-execute']);
     $makeOrder = ($this->makeMakeOrder)($tenant, $user, ['made_by_user_id' => null]);
 
     $this->actingAs($user)
@@ -358,7 +358,7 @@ it('7. another users make order workflow responsibility does not appear', functi
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
     $otherUser = ($this->makeUser)($tenant);
-    ($this->grantPermission)($user, 'inventory-make-orders-view');
+    ($this->grantPermissions)($user, ['inventory-make-orders-view', 'inventory-make-orders-execute']);
     $makeOrder = ($this->makeMakeOrder)($tenant, $otherUser);
 
     $this->actingAs($user)
@@ -372,7 +372,7 @@ it('8. cross-tenant make order workflow responsibility does not appear', functio
     $otherTenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
     $otherUser = ($this->makeUser)($otherTenant);
-    ($this->grantPermission)($user, 'inventory-make-orders-view');
+    ($this->grantPermissions)($user, ['inventory-make-orders-view', 'inventory-make-orders-execute']);
     $makeOrder = ($this->makeMakeOrder)($otherTenant, $otherUser, ['made_by_user_id' => $user->id]);
 
     $this->actingAs($user)
@@ -384,7 +384,7 @@ it('8. cross-tenant make order workflow responsibility does not appear', functio
 it('9. assigned make order workflow responsibility links to its resource', function (): void {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
-    ($this->grantPermission)($user, 'inventory-make-orders-view');
+    ($this->grantPermissions)($user, ['inventory-make-orders-view', 'inventory-make-orders-execute']);
     $makeOrder = ($this->makeMakeOrder)($tenant, $user);
 
     $this->actingAs($user)
@@ -396,7 +396,7 @@ it('9. assigned make order workflow responsibility links to its resource', funct
 it('9a. Todo rows use full-row mobile links without x borders', function (): void {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
-    ($this->grantPermission)($user, 'inventory-make-orders-view');
+    ($this->grantPermissions)($user, ['inventory-make-orders-view', 'inventory-make-orders-execute']);
     ($this->makeMakeOrder)($tenant, $user);
 
     $this->actingAs($user)
@@ -410,6 +410,7 @@ it('9a. Todo rows use full-row mobile links without x borders', function (): voi
 it('10. assigned inventory count workflow responsibility appears', function (): void {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
+    ($this->grantPermission)($user, 'inventory-adjustments-execute');
     ($this->makeInventoryCount)($tenant, $user, ['name' => 'Weekly freezer count']);
 
     $this->actingAs($user)
@@ -421,6 +422,7 @@ it('10. assigned inventory count workflow responsibility appears', function (): 
 it('10a. unnamed inventory count workflow responsibility falls back to domain and id', function (): void {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
+    ($this->grantPermission)($user, 'inventory-adjustments-execute');
     $count = ($this->makeInventoryCount)($tenant, $user, ['name' => '']);
 
     $this->actingAs($user)
@@ -432,6 +434,7 @@ it('10a. unnamed inventory count workflow responsibility falls back to domain an
 it('11. assigned inventory count workflow responsibility links to its resource', function (): void {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
+    ($this->grantPermission)($user, 'inventory-adjustments-execute');
     $count = ($this->makeInventoryCount)($tenant, $user);
 
     $this->actingAs($user)
@@ -443,6 +446,7 @@ it('11. assigned inventory count workflow responsibility links to its resource',
 it('11a. assigned purchase order workflow responsibility appears', function (): void {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
+    ($this->grantPermission)($user, 'purchasing-purchase-orders-create');
     $purchaseOrder = ($this->makePurchaseOrder)($tenant, [
         'assigned_to_user_id' => $user->id,
         'po_number' => '44',
@@ -458,6 +462,7 @@ it('11a. assigned purchase order workflow responsibility appears', function (): 
 it('11aa. purchase order workflow responsibility title falls back to po id', function (): void {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
+    ($this->grantPermission)($user, 'purchasing-purchase-orders-create');
     $purchaseOrder = ($this->makePurchaseOrder)($tenant, [
         'assigned_to_user_id' => $user->id,
         'po_number' => '',
@@ -753,7 +758,7 @@ it('27. seeded tasker role includes workflow execution credentials without broad
     }
 });
 
-it('28. seeded tasker user sees assigned make order Todo work', function (): void {
+it('28. seeded tasker user does not see make order workflow-owner Todo work', function (): void {
     $this->seed(TenancyRolesPermissionsSeeder::class);
 
     $tenant = Tenant::query()->where('tenant_name', 'FooMake')->firstOrFail();
@@ -765,8 +770,8 @@ it('28. seeded tasker user sees assigned make order Todo work', function (): voi
     $this->actingAs($user)
         ->get(route('dashboard'))
         ->assertOk()
-        ->assertSee('Make Order #' . $makeOrder->id)
-        ->assertSee(route('manufacturing.make-orders.show', $makeOrder), false);
+        ->assertDontSee('Make Order #' . $makeOrder->id)
+        ->assertDontSee(route('manufacturing.make-orders.show', $makeOrder), false);
 });
 
 it('29. seeded tasker user sees assigned inventory count stage Todo task', function (): void {
@@ -834,6 +839,44 @@ it('30. seeded tasker user sees assigned purchase order stage Todo task', functi
         ->assertSee(route('purchasing.orders.show', $purchaseOrder), false);
 });
 
+it('30b. purchase order tasker can view and complete assigned tasks without moving the workflow', function (): void {
+    $this->seed(TenancyRolesPermissionsSeeder::class);
+
+    $tenant = Tenant::query()->where('tenant_name', 'FooMake')->firstOrFail();
+    $user = ($this->makeUser)($tenant, ['email' => 'po-readonly-tasker@example.test']);
+    $tasker = Role::query()->where('name', 'tasker')->firstOrFail();
+    $user->roles()->syncWithoutDetaching([$tasker->id]);
+    $stage = ($this->makeWorkflowStage)($tenant, 'purchasing', 'Receiving');
+    $purchaseOrder = ($this->makePurchaseOrder)($tenant, ['current_workflow_stage_id' => $stage->id]);
+    $task = ($this->makeTask)($tenant, $user, $stage, $purchaseOrder->id, ['title' => 'Confirm delivery']);
+
+    $response = $this->actingAs($user)
+        ->get(route('purchasing.orders.show', $purchaseOrder))
+        ->assertOk()
+        ->assertSee('Confirm delivery');
+    $payload = ($this->extractPayload)($response, 'purchasing-orders-show-payload');
+
+    expect(data_get($payload, 'purchaseOrder.is_editable'))->toBeFalse()
+        ->and(data_get($payload, 'canReceive'))->toBeFalse()
+        ->and(data_get($payload, 'workflow.actions'))->toBe([])
+        ->and(data_get($payload, 'workflow.currentStageTasks.0.can_complete'))->toBeTrue();
+
+    $this->actingAs($user)
+        ->postJson(route('purchasing.orders.workflow.complete', $purchaseOrder))
+        ->assertForbidden();
+    $this->actingAs($user)
+        ->postJson(route('purchasing.orders.receipts.store', $purchaseOrder), [])
+        ->assertForbidden();
+
+    $this->actingAs($user)
+        ->patchJson(route('tasks.complete', $task))
+        ->assertOk()
+        ->assertJsonPath('data.status', Task::STATUS_COMPLETED);
+
+    expect($task->fresh()->status)->toBe(Task::STATUS_COMPLETED)
+        ->and($purchaseOrder->fresh()->current_workflow_stage_id)->toBe($stage->id);
+});
+
 it('31. seeded tasker user sees assigned sales order stage Todo task', function (): void {
     $this->seed(TenancyRolesPermissionsSeeder::class);
 
@@ -857,8 +900,10 @@ it('32. Make Order assignment options exclude users without manufacturing workfl
     $viewer = ($this->makeUser)($tenant, ['name' => 'Viewer']);
     $eligible = ($this->makeUser)($tenant, ['name' => 'Eligible Maker']);
     $ineligible = ($this->makeUser)($tenant, ['name' => 'No Maker Access']);
+    $tasker = ($this->makeUser)($tenant, ['name' => 'Tasker Maker']);
     ($this->grantPermissions)($viewer, ['inventory-make-orders-view', 'inventory-make-orders-execute']);
     ($this->grantPermissions)($eligible, ['inventory-make-orders-view', 'inventory-make-orders-execute']);
+    ($this->grantPermission)($tasker, 'inventory-make-orders-execute');
     $makeOrder = ($this->makeMakeOrder)($tenant, $viewer);
 
     $response = $this->actingAs($viewer)->get(route('manufacturing.make-orders.show', $makeOrder));
@@ -866,7 +911,8 @@ it('32. Make Order assignment options exclude users without manufacturing workfl
     $labels = collect(data_get($payload, 'workflow.assignee_options', []))->pluck('label')->all();
 
     expect($labels)->toContain('Eligible Maker')
-        ->and($labels)->not->toContain('No Maker Access');
+        ->and($labels)->not->toContain('No Maker Access')
+        ->and($labels)->not->toContain('Tasker Maker');
 });
 
 it('33. Make Order assignment update rejects users without manufacturing workflow credentials', function (): void {
@@ -874,6 +920,7 @@ it('33. Make Order assignment update rejects users without manufacturing workflo
     $viewer = ($this->makeUser)($tenant);
     $ineligible = ($this->makeUser)($tenant);
     ($this->grantPermissions)($viewer, ['inventory-make-orders-view', 'inventory-make-orders-execute']);
+    ($this->grantPermission)($ineligible, 'inventory-make-orders-execute');
     $makeOrder = ($this->makeMakeOrder)($tenant, $viewer);
 
     $this->actingAs($viewer)
@@ -882,6 +929,31 @@ it('33. Make Order assignment update rejects users without manufacturing workflo
         ])
         ->assertUnprocessable()
         ->assertJsonValidationErrors(['made_by_user_id']);
+});
+
+it('33b. Purchase Order assignment options exclude task-level purchasing users from workflow ownership', function (): void {
+    $tenant = ($this->makeTenant)();
+    $viewer = ($this->makeUser)($tenant, ['name' => 'PO Viewer']);
+    $owner = ($this->makeUser)($tenant, ['name' => 'PO Owner']);
+    $tasker = ($this->makeUser)($tenant, ['name' => 'PO Tasker']);
+    ($this->grantPermissions)($viewer, ['purchasing-purchase-orders-create', 'purchasing-purchase-orders-receive']);
+    ($this->grantPermission)($owner, 'purchasing-purchase-orders-create');
+    ($this->grantPermission)($tasker, 'purchasing-purchase-orders-receive');
+    $purchaseOrder = ($this->makePurchaseOrder)($tenant);
+
+    $response = $this->actingAs($viewer)->get(route('purchasing.orders.show', $purchaseOrder));
+    $payload = ($this->extractPayload)($response, 'purchasing-orders-show-payload');
+    $labels = collect(data_get($payload, 'purchaseOrder.assignee_options', []))->pluck('label')->all();
+
+    expect($labels)->toContain('PO Owner')
+        ->and($labels)->not->toContain('PO Tasker');
+
+    $this->actingAs($viewer)
+        ->patchJson(route('purchasing.orders.update', $purchaseOrder), [
+            'assigned_to_user_id' => $tasker->id,
+        ])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['assigned_to_user_id']);
 });
 
 it('34. Inventory Count assignment options exclude users without inventory workflow credentials', function (): void {

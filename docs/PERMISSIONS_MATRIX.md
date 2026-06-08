@@ -185,6 +185,11 @@ Cross-domain workflow execution role.
 - Assignment-scoped resource visibility is granted by the resource Gate/policy for direct resource assignees and users assigned to generated workflow-stage tasks on that resource.
 - Assignment option lists must filter out users who lack the current workflow domain's required assignment credential.
 - Assigned users do not require `workflow-manage` solely to complete an assigned workflow task.
+- Workflow task assignment credentials are not the same as workflow ownership or workflow movement credentials.
+- Tasker users may be assigned workflow tasks and may complete their own assigned tasks, but they must not move Purchase Order, Sales Order, or Make Order workflows.
+- Tasker users may be assigned Inventory Count workflow responsibility and may submit an assigned draft count into workflow, but final Inventory Count workflow completion/posting requires Inventory Count view plus execute authority.
+- Purchase Order workflow ownership assignment requires `purchasing-purchase-orders-create`; PO workflow movement, receiving, short close, and cancellation require both `purchasing-purchase-orders-create` and `purchasing-purchase-orders-receive`.
+- Make Order workflow ownership and movement require both `inventory-make-orders-view` and `inventory-make-orders-execute`.
 - Sales-order lifecycle transitions continue requiring existing Sales Order permissions even after workflow tasks are introduced.
 - Navigation clickability for Sales Orders, Purchase Orders, and Make Orders is not permission-only:
   - permissions and `@can` checks still govern whether the user may see the relevant nav branch

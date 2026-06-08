@@ -60,12 +60,18 @@ beforeEach(function (): void {
     };
 
     $this->grantPermission = function (User $user, string $slug): void {
-        $permission = Permission::query()->firstOrCreate(['slug' => $slug]);
+        $slugs = $slug === 'purchasing-purchase-orders-receive'
+            ? ['purchasing-purchase-orders-create', $slug]
+            : [$slug];
         $role = Role::query()->create(['name' => 'po-role-' . $this->roleCounter]);
 
         $this->roleCounter++;
 
-        $role->permissions()->syncWithoutDetaching([$permission->id]);
+        foreach ($slugs as $permissionSlug) {
+            $permission = Permission::query()->firstOrCreate(['slug' => $permissionSlug]);
+            $role->permissions()->syncWithoutDetaching([$permission->id]);
+        }
+
         $user->roles()->syncWithoutDetaching([$role->id]);
     };
 

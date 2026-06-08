@@ -22,7 +22,7 @@ permissions:
       - GET /purchasing/orders
       - GET /purchasing/orders/{purchaseOrder}
   purchase_orders_receive:
-    slug: purchasing-purchase-orders-receive
+    slug: purchasing-purchase-orders-create + purchasing-purchase-orders-receive
     applies_to:
       - POST /purchasing/orders/{purchaseOrder}/receipts
       - POST /purchasing/orders/{purchaseOrder}/short-closures

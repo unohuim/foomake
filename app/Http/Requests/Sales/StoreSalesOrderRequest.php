@@ -43,6 +43,10 @@ class StoreSalesOrderRequest extends FormRequest
                 'nullable',
                 'date',
             ],
+            'notes' => [
+                'nullable',
+                'string',
+            ],
         ];
     }
 
@@ -80,6 +84,7 @@ class StoreSalesOrderRequest extends FormRequest
                 'customer_id' => $errors['customer_id'] ?? [],
                 'contact_id' => $errors['contact_id'] ?? [],
                 'order_date' => $errors['order_date'] ?? [],
+                'notes' => $errors['notes'] ?? [],
             ],
         ], 422));
     }

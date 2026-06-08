@@ -11,6 +11,7 @@ use App\Actions\Workflows\SeedDefaultWorkflowStagesForTenantAction;
 use App\Models\Item;
 use App\Models\MakeOrder;
 use App\Models\MakeOrderLine;
+use App\Models\Note;
 use App\Models\Recipe;
 use App\Models\RecipeVersion;
 use App\Models\RecipeVersionLine;
@@ -52,7 +53,7 @@ class MakeOrderController extends Controller
             ->filter(fn (Recipe $recipe): bool => $this->isEligibleManufacturingRecipe($recipe))
             ->values();
 
-        $canExecute = Gate::allows('inventory-make-orders-execute');
+        $canExecute = $this->userCanOperateMakeOrderWorkflow($request->user());
         $crudConfig = $this->crudConfig($canExecute);
         $payload = [
             'recipes' => $recipes->map(fn (Recipe $recipe): array => $this->recipePayload($recipe))->all(),
@@ -75,7 +76,7 @@ class MakeOrderController extends Controller
     {
         Gate::authorize('inventory-make-orders-view');
 
-        $crudConfig = $this->crudConfig(Gate::allows('inventory-make-orders-execute'));
+        $crudConfig = $this->crudConfig($this->userCanOperateMakeOrderWorkflow($request->user()));
         $validated = $request->validate([
             'search' => ['nullable', 'string'],
             'sort' => ['nullable', 'string'],
@@ -243,7 +244,7 @@ class MakeOrderController extends Controller
      */
     public function store(Request $request): JsonResponse
     {
-        Gate::authorize('inventory-make-orders-execute');
+        abort_unless($this->userCanOperateMakeOrderWorkflow($request->user()), 403);
 
         $validated = $request->validate([
             'recipe_id' => [
@@ -257,6 +258,7 @@ class MakeOrderController extends Controller
                 Rule::exists('recipe_versions', 'id')->where('tenant_id', $request->user()->tenant_id),
             ],
             'runs' => ['required', 'string', 'regex:/^\d+(?:\.\d{1,6})?$/'],
+            'notes' => ['nullable', 'string'],
         ]);
 
         if (bccomp($validated['runs'], '0.000000', self::SCALE) !== 1) {
@@ -293,6 +295,7 @@ class MakeOrderController extends Controller
             ]);
 
             $this->snapshotVersionLines($makeOrder, $version, $runs);
+            $this->createInitialNoteFromText($makeOrder, $request, $validated['notes'] ?? null);
 
             return $makeOrder->fresh(['recipe', 'recipeVersion', 'outputItem.baseUom', 'lines.inputItem.baseUom', 'workflowStage']);
         });
@@ -307,11 +310,12 @@ class MakeOrderController extends Controller
      */
     public function storeForRecipe(Request $request, Recipe $recipe): JsonResponse
     {
-        Gate::authorize('inventory-make-orders-execute');
+        abort_unless($this->userCanOperateMakeOrderWorkflow($request->user()), 403);
         abort_unless((int) $recipe->tenant_id === (int) $request->user()->tenant_id, 404);
 
         $validated = $request->validate([
             'runs' => ['nullable', 'string', 'regex:/^\d+(?:\.\d{1,6})?$/'],
+            'notes' => ['nullable', 'string'],
         ]);
 
         $runs = (string) ($validated['runs'] ?? '1.000000');
@@ -330,7 +334,7 @@ class MakeOrderController extends Controller
             return $version;
         }
 
-        $makeOrder = DB::transaction(function () use ($request, $recipe, $version, $runs): MakeOrder {
+        $makeOrder = DB::transaction(function () use ($request, $recipe, $version, $runs, $validated): MakeOrder {
             $canonicalRuns = $this->canonicalQuantity($runs);
 
             $makeOrder = MakeOrder::query()->create([
@@ -347,6 +351,7 @@ class MakeOrderController extends Controller
             ]);
 
             $this->snapshotVersionLines($makeOrder, $version, $canonicalRuns);
+            $this->createInitialNoteFromText($makeOrder, $request, $validated['notes'] ?? null);
 
             return $makeOrder->fresh(['recipe', 'recipeVersion', 'outputItem.baseUom', 'lines.inputItem.baseUom', 'workflowStage']);
         });
@@ -357,11 +362,33 @@ class MakeOrderController extends Controller
     }
 
     /**
+     * Create the initial Notes feed entry from non-blank create-form notes.
+     */
+    private function createInitialNoteFromText(MakeOrder $makeOrder, Request $request, ?string $body): void
+    {
+        $body = trim((string) $body);
+
+        if ($body === '') {
+            return;
+        }
+
+        Note::query()->forceCreate([
+            'tenant_id' => (int) $makeOrder->tenant_id,
+            'noteable_type' => MakeOrder::class,
+            'noteable_id' => (int) $makeOrder->id,
+            'author_user_id' => (int) $request->user()->id,
+            'body' => $body,
+            'visibility' => 'internal',
+            'is_pinned' => false,
+        ]);
+    }
+
+    /**
      * Update an editable make order and refresh its snapshot lines when needed.
      */
     public function update(Request $request, int $makeOrder): JsonResponse
     {
-        Gate::authorize('inventory-make-orders-execute');
+        abort_unless($this->userCanOperateMakeOrderWorkflow($request->user()), 403);
 
         $validated = $request->validate([
             'recipe_id' => [
@@ -441,7 +468,7 @@ class MakeOrderController extends Controller
      */
     public function schedule(Request $request, int $makeOrder): JsonResponse
     {
-        Gate::authorize('inventory-make-orders-execute');
+        abort_unless($this->userCanOperateMakeOrderWorkflow($request->user()), 403);
 
         $validated = $request->validate([
             'due_date' => ['required', 'date'],
@@ -518,7 +545,7 @@ class MakeOrderController extends Controller
         int $makeOrder,
         MoveMakeOrderWorkflowStageAction $moveWorkflowStageAction
     ): JsonResponse {
-        Gate::authorize('inventory-make-orders-execute');
+        abort_unless($this->userCanOperateMakeOrderWorkflow($request->user()), 403);
 
         $validated = $request->validate([
             'workflow_stage_id' => [
@@ -576,7 +603,7 @@ class MakeOrderController extends Controller
      */
     public function updateAssignment(Request $request, int $makeOrder): JsonResponse
     {
-        Gate::authorize('inventory-make-orders-execute');
+        abort_unless($this->userCanOperateMakeOrderWorkflow($request->user()), 403);
 
         $makeOrderModel = MakeOrder::query()
             ->where('tenant_id', $request->user()->tenant_id)
@@ -637,7 +664,7 @@ class MakeOrderController extends Controller
      */
     public function updateDueDate(Request $request, int $makeOrder): JsonResponse
     {
-        Gate::authorize('inventory-make-orders-execute');
+        abort_unless($this->userCanOperateMakeOrderWorkflow($request->user()), 403);
 
         $makeOrderModel = MakeOrder::query()
             ->where('tenant_id', $request->user()->tenant_id)
@@ -688,7 +715,7 @@ class MakeOrderController extends Controller
      */
     public function make(Request $request, int $makeOrder): JsonResponse
     {
-        Gate::authorize('inventory-make-orders-execute');
+        abort_unless($this->userCanOperateMakeOrderWorkflow($request->user()), 403);
 
         $validated = $request->validate([
             'actual_output_qty' => ['nullable', 'string', 'regex:/^\d+(?:\.\d{1,6})?$/'],
@@ -817,7 +844,7 @@ class MakeOrderController extends Controller
      */
     public function updateDetailsQuantities(Request $request, int $makeOrder): JsonResponse
     {
-        Gate::authorize('inventory-make-orders-execute');
+        abort_unless($this->userCanOperateMakeOrderWorkflow($request->user()), 403);
 
         $makeOrderModel = MakeOrder::query()
             ->where('tenant_id', $request->user()->tenant_id)
@@ -920,7 +947,7 @@ class MakeOrderController extends Controller
      */
     public function destroy(Request $request, int $makeOrder): JsonResponse
     {
-        Gate::authorize('inventory-make-orders-execute');
+        abort_unless($this->userCanOperateMakeOrderWorkflow($request->user()), 403);
 
         $makeOrderModel = MakeOrder::query()
             ->where('tenant_id', $request->user()->tenant_id)
@@ -954,7 +981,7 @@ class MakeOrderController extends Controller
      */
     public function storeLine(Request $request, int $makeOrder): JsonResponse
     {
-        Gate::authorize('inventory-make-orders-execute');
+        abort_unless($this->userCanOperateMakeOrderWorkflow($request->user()), 403);
 
         $makeOrderModel = $this->editableMakeOrder($request, $makeOrder);
 
@@ -1026,7 +1053,7 @@ class MakeOrderController extends Controller
      */
     public function updateLine(Request $request, int $makeOrder, int $line): JsonResponse
     {
-        Gate::authorize('inventory-make-orders-execute');
+        abort_unless($this->userCanOperateMakeOrderWorkflow($request->user()), 403);
 
         $makeOrderModel = $this->editableMakeOrder($request, $makeOrder);
 
@@ -1071,7 +1098,7 @@ class MakeOrderController extends Controller
      */
     public function destroyLine(Request $request, int $makeOrder, int $line): JsonResponse
     {
-        Gate::authorize('inventory-make-orders-execute');
+        abort_unless($this->userCanOperateMakeOrderWorkflow($request->user()), 403);
 
         $makeOrderModel = $this->editableMakeOrder($request, $makeOrder);
 
@@ -1191,7 +1218,7 @@ class MakeOrderController extends Controller
         return array_merge($this->makeOrderPayload($makeOrder), [
             'title' => 'Make Order ' . $makeOrder->id,
             'details_update_url' => route('manufacturing.make-orders.details.update', $makeOrder),
-            'can_edit_quantities' => Gate::allows('inventory-make-orders-execute'),
+            'can_edit_quantities' => $this->userCanOperateMakeOrderWorkflow(request()->user()),
             'runs_text' => $this->compactQuantityDisplay($this->makeOrderRuns($makeOrder)),
             'expected_output_qty_text' => $expectedOutputQtyText,
             'actual_output_qty_text' => $actualOutputQtyText,
@@ -1276,7 +1303,7 @@ class MakeOrderController extends Controller
      */
     private function makeOrderIngredientsPayload(MakeOrder $makeOrder): array
     {
-        $canEdit = Gate::allows('inventory-make-orders-execute')
+        $canEdit = $this->userCanOperateMakeOrderWorkflow(request()->user())
             && ! in_array($makeOrder->status, [MakeOrder::STATUS_MADE, MakeOrder::STATUS_CANCELLED], true);
 
         return [
@@ -1310,7 +1337,9 @@ class MakeOrderController extends Controller
 
         $nextStageAction = null;
 
-        if (Gate::allows('inventory-make-orders-execute')) {
+        $canOperateWorkflow = $this->userCanOperateMakeOrderWorkflow($viewer);
+
+        if ($canOperateWorkflow) {
             $nextStage = $currentStage
                 ? $resolver->nextActiveStage($makeOrder)
                 : $resolver->firstActiveStage($makeOrder);
@@ -1326,7 +1355,7 @@ class MakeOrderController extends Controller
         return [
             'default_open' => false,
             'transition_url' => route('manufacturing.make-orders.workflow-stage.update', $makeOrder),
-            'can_move_stage' => Gate::allows('inventory-make-orders-execute')
+            'can_move_stage' => $canOperateWorkflow
                 && ! in_array($makeOrder->status, [MakeOrder::STATUS_MADE, MakeOrder::STATUS_CANCELLED], true),
             'current_stage' => $currentStage ? [
                 'id' => $currentStage->id,
@@ -1348,13 +1377,13 @@ class MakeOrderController extends Controller
             'next_stage_action' => $nextStageAction,
             'due_date' => $makeOrder->due_date?->format('Y-m-d'),
             'due_date_update_url' => route('manufacturing.make-orders.due-date.update', $makeOrder),
-            'can_edit_due_date' => Gate::allows('inventory-make-orders-execute')
+            'can_edit_due_date' => $canOperateWorkflow
                 && ! in_array($makeOrder->status, [MakeOrder::STATUS_MADE, MakeOrder::STATUS_CANCELLED], true),
             'made_by_user_id' => $makeOrder->made_by_user_id,
             'owner_user_name' => $makeOrder->madeByUser?->name,
             'assignee_options' => $this->tenantAssigneeOptionsPayload($makeOrder->tenant_id),
             'assignment_update_url' => route('manufacturing.make-orders.assignment.update', $makeOrder),
-            'can_edit_assignment' => Gate::allows('inventory-make-orders-execute'),
+            'can_edit_assignment' => $canOperateWorkflow,
             'tasked_by_user_id' => $makeOrder->tasked_by_user_id,
             'tasked_by_user_name' => $makeOrder->taskedByUser?->name,
             'current_stage_tasks' => $this->makeOrderWorkflowTasksPayload($makeOrder, $currentStage, $viewer),
@@ -1368,8 +1397,8 @@ class MakeOrderController extends Controller
      */
     private function manualTaskAssigneeOptions(int $tenantId): array
     {
-        return User::query()
-            ->where('tenant_id', $tenantId)
+        return app(WorkflowAssignmentPermissions::class)
+            ->eligibleUsersQuery($tenantId, 'manufacturing')
             ->orderBy('name')
             ->orderBy('id')
             ->get()
@@ -1748,7 +1777,7 @@ class MakeOrderController extends Controller
     private function tenantAssigneeOptionsPayload(int $tenantId): array
     {
         $assignedUsers = app(WorkflowAssignmentPermissions::class)
-            ->eligibleUsersQuery($tenantId, 'manufacturing')
+            ->ownerEligibleUsersQuery($tenantId, 'manufacturing')
             ->orderBy('name')
             ->orderBy('id')
             ->get(['id', 'name'])
@@ -1775,7 +1804,16 @@ class MakeOrderController extends Controller
         $user = User::query()->find($userId);
 
         return $user !== null
-            && app(WorkflowAssignmentPermissions::class)->userCanBeAssignedToDomain($user, $domainKey);
+            && app(WorkflowAssignmentPermissions::class)->userCanOwnWorkflowDomain($user, $domainKey);
+    }
+
+    /**
+     * Determine whether the user can move Make Order workflow and edit operational sections.
+     */
+    private function userCanOperateMakeOrderWorkflow(?User $user): bool
+    {
+        return $user !== null
+            && app(WorkflowAssignmentPermissions::class)->userCanOperateWorkflowDomain($user, 'manufacturing');
     }
 
     /**
@@ -1847,26 +1885,31 @@ class MakeOrderController extends Controller
             ->orderBy('sort_order')
             ->orderBy('id')
             ->get()
-            ->map(fn (Task $task): array => [
-                'id' => $task->id,
-                'source' => $task->source,
-                'workflow_stage_id' => $task->workflow_stage_id,
-                'workflow_task_template_id' => $task->workflow_task_template_id,
-                'assigned_to_user_id' => $task->assigned_to_user_id,
-                'assigned_to_user_name' => $task->assignedTo?->name,
-                'title' => $task->title,
-                'description' => $task->description,
-                'due_date' => $task->due_date?->format('Y-m-d'),
-                'sort_order' => $task->sort_order,
-                'status' => $task->status,
-                'is_completed' => $task->isCompleted(),
-                'can_complete' => ! $task->isCompleted()
-                    && (int) $task->assigned_to_user_id === (int) $viewer->id,
-                'completed_at' => $task->completed_at?->toISOString(),
-                'completed_by_user_id' => $task->completed_by_user_id,
-                'completed_by_user_name' => $task->completedBy?->name,
-                'complete_url' => route('tasks.complete', $task),
-            ])
+            ->map(function (Task $task) use ($viewer): array {
+                $canComplete = ! $task->isCompleted()
+                    && (int) $task->assigned_to_user_id === (int) $viewer->id
+                    && app(WorkflowAssignmentPermissions::class)->userCanBeAssignedToDomain($viewer, 'manufacturing');
+
+                return [
+                    'id' => $task->id,
+                    'source' => $task->source,
+                    'workflow_stage_id' => $task->workflow_stage_id,
+                    'workflow_task_template_id' => $task->workflow_task_template_id,
+                    'assigned_to_user_id' => $task->assigned_to_user_id,
+                    'assigned_to_user_name' => $task->assignedTo?->name,
+                    'title' => $task->title,
+                    'description' => $task->description,
+                    'due_date' => $task->due_date?->format('Y-m-d'),
+                    'sort_order' => $task->sort_order,
+                    'status' => $task->status,
+                    'is_completed' => $task->isCompleted(),
+                    'can_complete' => $canComplete,
+                    'completed_at' => $task->completed_at?->toISOString(),
+                    'completed_by_user_id' => $task->completed_by_user_id,
+                    'completed_by_user_name' => $task->completedBy?->name,
+                    'complete_url' => route('tasks.complete', $task),
+                ];
+            })
             ->values()
             ->all();
     }

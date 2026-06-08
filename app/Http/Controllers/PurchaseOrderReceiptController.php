@@ -7,10 +7,10 @@ use App\Models\PurchaseOrderLine;
 use App\Services\Purchasing\PurchaseOrderLifecycleService;
 use App\Services\Workflows\WorkflowTransitionService;
 use App\Support\QuantityFormatter;
+use App\Support\Workflows\WorkflowAssignmentPermissions;
 use DomainException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Validator;
 
 class PurchaseOrderReceiptController extends Controller
@@ -26,7 +26,10 @@ class PurchaseOrderReceiptController extends Controller
         PurchaseOrderLifecycleService $lifecycleService,
         WorkflowTransitionService $workflowTransitionService
     ): JsonResponse {
-        Gate::authorize('purchasing-purchase-orders-receive');
+        abort_unless(
+            app(WorkflowAssignmentPermissions::class)->userCanOperateWorkflowDomain($request->user(), 'purchasing'),
+            403
+        );
 
         $purchaseOrder = PurchaseOrder::query()->findOrFail($purchaseOrder);
 

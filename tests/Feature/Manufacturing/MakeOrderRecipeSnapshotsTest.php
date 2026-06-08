@@ -608,6 +608,9 @@ it('24. make order detail renders ingredients section with reusable detail secti
     expect($source)->toContain('x-ingredients-detail-section')
         ->and($componentSource)->toContain('x-detail-section-card')
         ->and($source)->toContain('item-header="Ingredient"')
+        ->and($source)->toContain('context-text-expression="\'\'"')
+        ->and($source)->not->toContain(':context-text-expression="\'\'"')
+        ->and($componentSource)->toContain("trim((string) \$contextTextExpression) !== ''")
         ->and($componentSource)->toContain('UOM')
         ->and($componentSource)->toContain('On Hand');
 });
@@ -855,9 +858,9 @@ it('31c. make order detail header renders the next valid workflow stage action f
 
     expect($source)->toContain('<x-slot name="actions">')
         ->and($source)->toContain('<x-slot name="titleSuffix">')
-        ->and($source)->toContain("x-show=\"nextStageAction && nextStageAction.label\"")
+        ->and($source)->toContain("x-show=\"workflow.next_stage_action && workflow.next_stage_action.label\"")
         ->and($source)->toContain("window.dispatchEvent(new CustomEvent('make-order-next-stage'")
-        ->and($source)->toContain("x-text=\"nextStageAction?.label || ''\"")
+        ->and($source)->toContain("x-text=\"workflow.next_stage_action?.label || ''\"")
         ->and($source)->not->toContain('data-make-order-header-workflow-button')
         ->and($source)->not->toContain("\$makeOrderPayload['workflow_stage_name'] ?? \$makeOrderPayload['status'] ?? '—'");
 });
@@ -1274,7 +1277,7 @@ it('35b. make order detail header source and controller payload do not hardcode 
     expect($viewSource)->not->toContain("\$makeOrderPayload['workflow_stage_name'] ?? \$makeOrderPayload['status'] ?? '—'")
         ->and($viewSource)->not->toContain("{{ \$makeOrderPayload['status'] }}")
         ->and($viewSource)->toContain('<x-dropdown-select')
-        ->and($viewSource)->toContain("x-text=\"workflowState || 'DRAFT'\"")
+        ->and($viewSource)->toContain("x-text=\"makeOrder.workflow_state || 'DRAFT'\"")
         ->and($viewSource)->toContain('x-model="workflow.made_by_user_id"')
         ->and($viewSource)->toContain('type="date"')
         ->and($viewSource)->toContain('x-model="workflow.due_date"')
@@ -1302,8 +1305,8 @@ it('35b. make order detail header source and controller payload do not hardcode 
         ->and($pageModuleSource)->toContain('saveWorkflowDueDate')
         ->and($pageModuleSource)->toContain('workflowDueDateSaving')
         ->and($pageModuleSource)->toContain('workflow.due_date_update_url')
-        ->and($pageModuleSource)->toContain('syncHeaderState')
-        ->and($pageModuleSource)->toContain("new CustomEvent('make-order-header-sync'")
+        ->and($pageModuleSource)->not->toContain('syncHeaderState')
+        ->and($pageModuleSource)->not->toContain("new CustomEvent('make-order-header-sync'")
         ->and($pageModuleSource)->toContain('next_stage_action: asRecord(workflowPayload.next_stage_action)')
         ->and($pageModuleSource)->toContain('next_stage_action: asRecord(data.next_stage_action)')
         ->and($pageModuleSource)->toContain('saveWorkflowAssignment')
@@ -1387,9 +1390,9 @@ it('35d. make order detail header renders visible workflow state beside the titl
 
     expect($headerSource)->toContain('@isset($titleSuffix)')
         ->and($headerSource)->toContain('data-resource-detail-header-title-row')
-        ->and($showSource)->toContain("x-on:make-order-header-sync.window=\"syncHeader(\$event.detail)\"")
+        ->and($showSource)->not->toContain("x-on:make-order-header-sync.window=\"syncHeader(\$event.detail)\"")
         ->and($showSource)->toContain('<x-slot name="titleSuffix">')
-        ->and($showSource)->toContain("x-text=\"workflowState || 'DRAFT'\"");
+        ->and($showSource)->toContain("x-text=\"makeOrder.workflow_state || 'DRAFT'\"");
 });
 
 it('35e. make order detail details section keeps runs expected output actual output due date and assignee in one compact shared grid', function (): void {

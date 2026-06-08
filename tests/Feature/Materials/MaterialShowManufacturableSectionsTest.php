@@ -617,6 +617,8 @@ it('16. no new bespoke accordion or section abstraction is introduced', function
     expect($viewSource)->toContain('data-js-crud-section-root')
         ->and($pageSource)->toContain('mountCrudSection')
         ->and($sectionSource)->toContain('data-js-crud-section-card')
+        ->and($sectionSource)->toContain('x-bind:aria-label="\'View \' + primaryText(record)"')
+        ->and($sectionSource)->not->toContain('x-bind:aria-label="\`View \${primaryText(record)}\`"')
         ->and($pageSource)->not->toContain('mountRecipesAccordion')
         ->and($pageSource)->not->toContain('mountMakeOrdersAccordion');
 });

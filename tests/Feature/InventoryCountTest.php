@@ -363,6 +363,7 @@ it('allows execute-only users to view assigned counts and update notes only', fu
 it('allows a tasker assigned to an inventory count to view that count without broad view permission', function () {
     $tenant = Tenant::factory()->create();
     $tasker = ($this->makeUser)($tenant);
+    ($this->grantPermission)($tasker, 'inventory-adjustments-execute');
     $count = InventoryCount::query()->forceCreate([
         'tenant_id' => $tenant->id,
         'assigned_to_user_id' => $tasker->id,
@@ -388,7 +389,7 @@ it('allows a tasker assigned to an inventory count to view that count without br
     $payload = json_decode($matches[1] ?? '[]', true);
     $countPayload = $payload['count'] ?? [];
 
-    expect($countPayload['can_edit_notes'] ?? null)->toBeFalse()
+    expect($countPayload['can_edit_notes'] ?? null)->toBeTrue()
         ->and($countPayload['can_edit_details'] ?? null)->toBeFalse()
         ->and($countPayload['can_edit_counted_at'] ?? null)->toBeFalse()
         ->and($countPayload['can_edit_assignment'] ?? null)->toBeFalse()
@@ -1087,6 +1088,35 @@ it('submits a draft count into the first active inventory workflow stage', funct
         ->and($response->json('count.workflow_stage_key'))->toBe('counting')
         ->and($response->json('count.workflow_status_label'))->toBe('SCHEDULED')
         ->and($response->json('count.is_draft_setup'))->toBeFalse();
+});
+
+it('allows an assigned tasker to submit an inventory count but blocks final workflow completion', function () {
+    $tenant = Tenant::factory()->create();
+    $manager = ($this->makeUser)($tenant);
+    $tasker = ($this->makeUser)($tenant);
+
+    ($this->grantPermission)($manager, 'inventory-adjustments-view');
+    ($this->grantPermission)($manager, 'inventory-adjustments-execute');
+    ($this->grantPermission)($tasker, 'inventory-adjustments-execute');
+    ($this->seedInventoryWorkflow)($tenant);
+
+    $count = ($this->createDraftCountViaApi)($manager, [
+        'assigned_to_user_id' => $tasker->id,
+        'notes' => 'Assigned counting work',
+    ]);
+    ($this->ensureCountHasMaterial)($manager, $tenant, $count);
+
+    ($this->submitCount)($tasker, $count)
+        ->assertOk()
+        ->assertJsonPath('count.workflow_stage_key', 'counting');
+
+    $count->refresh();
+
+    expect($count->workflowStage?->key)->toBe('counting')
+        ->and($count->posted_at)->toBeNull();
+
+    ($this->advanceCount)($tasker, $count)->assertForbidden();
+    ($this->postCount)($tasker, $count)->assertForbidden();
 });
 
 it('blocks scheduling from moving past scheduling when no material item is attached', function () {

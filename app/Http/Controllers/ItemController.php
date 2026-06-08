@@ -10,11 +10,13 @@ use App\Actions\Workflows\SeedDefaultWorkflowStagesForTenantAction;
 use App\Models\InventoryCount;
 use App\Models\InventoryCountLine;
 use App\Models\Item;
+use App\Models\Note;
 use App\Models\Recipe;
 use App\Models\Uom;
 use App\Models\User;
 use App\Support\QuantityFormatter;
 use App\Support\Purchasing\SupplierPackageFormConfig;
+use App\Support\Workflows\WorkflowAssignmentPermissions;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -283,7 +285,8 @@ class ItemController extends Controller
         $canViewRecipes = Gate::allows('inventory-recipes-view');
         $canViewMakeOrders = Gate::allows('inventory-make-orders-view');
         $canManageRecipes = Gate::allows('inventory-make-orders-manage');
-        $canExecuteMakeOrders = Gate::allows('inventory-make-orders-execute');
+        $canExecuteMakeOrders = app(WorkflowAssignmentPermissions::class)
+            ->userCanOperateWorkflowDomain($request->user(), 'manufacturing');
         $canViewInventoryCounts = Gate::allows('inventory-adjustments-view');
         $canCreateInventoryCounts = Gate::allows('inventory-adjustments-execute');
         $canCreatePurchaseOrdersFromPackages = $canViewPurchasing
@@ -460,6 +463,8 @@ class ItemController extends Controller
                 'counted_quantity' => $validated['counted_quantity'] ?? null,
                 'notes' => null,
             ]);
+
+            $this->createInitialInventoryCountNote($count, $request);
 
             return $count->fresh(['assignedToUser']);
         });
@@ -1340,11 +1345,35 @@ class ItemController extends Controller
             'notes' => 'Initial Stock',
         ]);
 
+        $this->createInitialInventoryCountNote($inventoryCount, $request);
+
         $this->ensureInventoryWorkflowStagesExist($request);
         app(AdvanceInventoryCountWorkflowStageAction::class)->postCompatible(
             $inventoryCount,
             (int) $request->user()->id
         );
+    }
+
+    /**
+     * Create the initial Notes feed entry from non-blank inventory count notes.
+     */
+    private function createInitialInventoryCountNote(InventoryCount $inventoryCount, Request $request): void
+    {
+        $body = trim((string) ($inventoryCount->notes ?? ''));
+
+        if ($body === '') {
+            return;
+        }
+
+        Note::query()->forceCreate([
+            'tenant_id' => (int) $inventoryCount->tenant_id,
+            'noteable_type' => InventoryCount::class,
+            'noteable_id' => (int) $inventoryCount->id,
+            'author_user_id' => (int) $request->user()->id,
+            'body' => $body,
+            'visibility' => 'internal',
+            'is_pinned' => false,
+        ]);
     }
 
     /**

@@ -15,7 +15,7 @@
     :description="$description"
     :default-open="$defaultOpen"
 >
-    @if (trim($contextTextExpression) !== "''")
+    @if (trim((string) $contextTextExpression) !== '' && trim((string) $contextTextExpression) !== "''")
         <x-slot name="toolbar">
             <div class="min-w-0">
                 <p class="text-sm text-gray-500">

@@ -8,11 +8,11 @@ use App\Models\WorkflowDomain;
 use App\Models\WorkflowStage;
 use App\Services\Purchasing\PurchaseOrderLifecycleService;
 use App\Services\Workflows\WorkflowTransitionService;
+use App\Support\Workflows\WorkflowAssignmentPermissions;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
@@ -24,7 +24,10 @@ class PurchaseOrderStatusController extends Controller
      */
     public function update(Request $request, int $purchaseOrder): JsonResponse
     {
-        Gate::authorize('purchasing-purchase-orders-receive');
+        abort_unless(
+            app(WorkflowAssignmentPermissions::class)->userCanOperateWorkflowDomain($request->user(), 'purchasing'),
+            403
+        );
 
         $purchaseOrder = PurchaseOrder::query()->findOrFail($purchaseOrder);
 

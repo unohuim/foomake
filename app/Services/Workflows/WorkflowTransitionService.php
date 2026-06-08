@@ -11,11 +11,11 @@ use App\Models\User;
 use App\Models\WorkflowDomain;
 use App\Models\WorkflowStage;
 use App\Services\Purchasing\PurchaseOrderLifecycleService;
+use App\Support\Workflows\WorkflowAssignmentPermissions;
 use DomainException;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Gate;
 
 /**
  * Complete and cancel configurable workflow stages for domain records.
@@ -73,7 +73,10 @@ class WorkflowTransitionService
      */
     public function completePurchaseOrderStage(PurchaseOrder $purchaseOrder, User $user): array
     {
-        Gate::forUser($user)->authorize('purchasing-purchase-orders-receive');
+        abort_unless(
+            app(WorkflowAssignmentPermissions::class)->userCanOperateWorkflowDomain($user, self::PURCHASING_DOMAIN),
+            403
+        );
 
         $purchaseOrder = DB::transaction(function () use ($purchaseOrder, $user): PurchaseOrder {
             $lockedOrder = PurchaseOrder::query()
@@ -110,7 +113,10 @@ class WorkflowTransitionService
      */
     public function cancelPurchaseOrder(PurchaseOrder $purchaseOrder, User $user): array
     {
-        Gate::forUser($user)->authorize('purchasing-purchase-orders-receive');
+        abort_unless(
+            app(WorkflowAssignmentPermissions::class)->userCanOperateWorkflowDomain($user, self::PURCHASING_DOMAIN),
+            403
+        );
 
         $purchaseOrder = DB::transaction(function () use ($purchaseOrder, $user): PurchaseOrder {
             $lockedOrder = PurchaseOrder::query()
@@ -167,7 +173,7 @@ class WorkflowTransitionService
 
         if (
             $user
-            && Gate::forUser($user)->allows('purchasing-purchase-orders-receive')
+            && app(WorkflowAssignmentPermissions::class)->userCanOperateWorkflowDomain($user, self::PURCHASING_DOMAIN)
             && ! $purchaseOrder->isTerminal()
             && $purchaseOrder->workflow_cancelled_at === null
         ) {
@@ -260,7 +266,7 @@ class WorkflowTransitionService
             ->orderBy('sort_order')
             ->orderBy('id')
             ->get()
-            ->map(fn (Task $task): array => $this->taskData($task, $viewer?->id))
+            ->map(fn (Task $task): array => $this->taskData($task, $viewer))
             ->values()
             ->all();
     }
@@ -270,8 +276,16 @@ class WorkflowTransitionService
      *
      * @return array<string, int|string|bool|null>
      */
-    private function taskData(Task $task, ?int $viewerUserId): array
+    private function taskData(Task $task, ?User $viewer): array
     {
+        $canComplete = ! $task->isCompleted()
+            && $viewer !== null
+            && (int) $task->assigned_to_user_id === (int) $viewer->id
+            && app(WorkflowAssignmentPermissions::class)->userCanBeAssignedToDomain(
+                $viewer,
+                self::PURCHASING_DOMAIN
+            );
+
         return [
             'id' => $task->id,
             'source' => $task->source,
@@ -285,9 +299,7 @@ class WorkflowTransitionService
             'sort_order' => $task->sort_order,
             'status' => $task->status,
             'is_completed' => $task->isCompleted(),
-            'can_complete' => ! $task->isCompleted()
-                && $viewerUserId !== null
-                && (int) $task->assigned_to_user_id === (int) $viewerUserId,
+            'can_complete' => $canComplete,
             'completed_at' => $task->completed_at?->toISOString(),
             'completed_by_user_id' => $task->completed_by_user_id,
             'completed_by_user_name' => $task->completedBy?->name,

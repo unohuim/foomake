@@ -5,6 +5,7 @@ namespace App\Actions\Workflows;
 use App\Models\Task;
 use App\Models\User;
 use App\Models\WorkflowDomain;
+use App\Support\Workflows\WorkflowAssignmentPermissions;
 use Illuminate\Database\Eloquent\Model;
 
 /**
@@ -27,7 +28,11 @@ class CanViewAssignedWorkflowResourceAction
             return false;
         }
 
-        if ($responsibleUserId !== null && (int) $responsibleUserId === (int) $user->id) {
+        if (
+            $responsibleUserId !== null
+            && (int) $responsibleUserId === (int) $user->id
+            && app(WorkflowAssignmentPermissions::class)->userCanOwnWorkflowDomain($user, $workflowDomainKey)
+        ) {
             return true;
         }
 

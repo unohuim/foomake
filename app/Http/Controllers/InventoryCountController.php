@@ -109,7 +109,7 @@ class InventoryCountController extends Controller
         $count->load(['workflowStage', 'lines.item.baseUom', 'lines.uom']);
         $count->loadCount('lines');
 
-        $items = Gate::allows('inventory-adjustments-execute')
+        $items = $this->userCanMutateInventoryCountLines($request->user(), $count)
             ? $this->countLineSelectableItems($request, $count)
             : collect();
 
@@ -121,6 +121,8 @@ class InventoryCountController extends Controller
         );
         $previousStage = $this->previousWorkflowActionStage($count, $resolver);
         $nextStage = $this->nextWorkflowActionStage($count, $resolver);
+        $canSubmitWorkflow = $this->userCanSubmitInventoryCountWorkflow($request->user(), $count);
+        $canOperateWorkflow = $this->userCanOperateInventoryWorkflow($request->user());
 
         return view('inventory.counts.show', [
             'inventoryCount' => $count,
@@ -130,10 +132,14 @@ class InventoryCountController extends Controller
                 route('inventory.counts.notes.index', $count),
                 route('inventory.counts.notes.store', $count)
             ),
-            'previousWorkflowActionLabel' => $this->workflowActionButtonText($previousStage),
-            'previousWorkflowActionEvent' => $this->previousWorkflowActionEvent($count, $previousStage),
-            'nextWorkflowActionLabel' => $this->workflowActionButtonText($nextStage, $count),
-            'nextWorkflowActionEvent' => $this->nextWorkflowActionEvent($count, $nextStage),
+            'previousWorkflowActionLabel' => $canOperateWorkflow ? $this->workflowActionButtonText($previousStage) : null,
+            'previousWorkflowActionEvent' => $canOperateWorkflow ? $this->previousWorkflowActionEvent($count, $previousStage) : null,
+            'nextWorkflowActionLabel' => $this->canShowNextWorkflowAction($count, $canSubmitWorkflow, $canOperateWorkflow)
+                ? $this->workflowActionButtonText($nextStage, $count)
+                : null,
+            'nextWorkflowActionEvent' => $this->canShowNextWorkflowAction($count, $canSubmitWorkflow, $canOperateWorkflow)
+                ? $this->nextWorkflowActionEvent($count, $nextStage)
+                : null,
             'payload' => [
                 'count' => $this->countPayload($count, Gate::allows('inventory-adjustments-execute')),
                 'workflowProgressSteps' => app(BuildWorkflowProgressStepsAction::class)->execute(
@@ -165,8 +171,8 @@ class InventoryCountController extends Controller
      */
     private function manualTaskAssigneeOptions(int $tenantId): array
     {
-        return User::query()
-            ->where('tenant_id', $tenantId)
+        return app(WorkflowAssignmentPermissions::class)
+            ->eligibleUsersQuery($tenantId, 'inventory')
             ->orderBy('name')
             ->orderBy('id')
             ->get()
@@ -251,6 +257,8 @@ class InventoryCountController extends Controller
             'noteable_id' => (int) $count->id,
             'author_user_id' => (int) $request->user()->id,
             'body' => $body,
+            'visibility' => 'internal',
+            'is_pinned' => false,
         ]);
     }
 
@@ -363,9 +371,8 @@ class InventoryCountController extends Controller
         ResolveInventoryWorkflowStageAction $resolver,
         SeedDefaultWorkflowStagesForTenantAction $seedDefaultStagesAction
     ): JsonResponse {
-        Gate::authorize('inventory-adjustments-execute');
-
         $count = $this->findInventoryCount($request, $inventoryCount);
+        abort_unless($this->userCanSubmitInventoryCountWorkflow($request->user(), $count), 403);
         $this->ensureInventoryWorkflowStagesExist($request, $resolver, $seedDefaultStagesAction);
 
         try {
@@ -391,7 +398,7 @@ class InventoryCountController extends Controller
         ResolveInventoryWorkflowStageAction $resolver,
         SeedDefaultWorkflowStagesForTenantAction $seedDefaultStagesAction
     ): JsonResponse {
-        Gate::authorize('inventory-adjustments-execute');
+        abort_unless($this->userCanOperateInventoryWorkflow($request->user()), 403);
 
         $count = $this->findInventoryCount($request, $inventoryCount);
         $this->ensureInventoryWorkflowStagesExist($request, $resolver, $seedDefaultStagesAction);
@@ -419,7 +426,7 @@ class InventoryCountController extends Controller
         ResolveInventoryWorkflowStageAction $resolver,
         SeedDefaultWorkflowStagesForTenantAction $seedDefaultStagesAction
     ): JsonResponse {
-        Gate::authorize('inventory-adjustments-execute');
+        abort_unless($this->userCanOperateInventoryWorkflow($request->user()), 403);
 
         $count = $this->findInventoryCount($request, $inventoryCount);
         $this->ensureInventoryWorkflowStagesExist($request, $resolver, $seedDefaultStagesAction);
@@ -447,7 +454,7 @@ class InventoryCountController extends Controller
         ResolveInventoryWorkflowStageAction $resolver,
         SeedDefaultWorkflowStagesForTenantAction $seedDefaultStagesAction
     ): JsonResponse {
-        Gate::authorize('inventory-adjustments-execute');
+        abort_unless($this->userCanOperateInventoryWorkflow($request->user()), 403);
 
         $count = $this->findInventoryCount($request, $inventoryCount);
         $this->ensureInventoryWorkflowStagesExist($request, $resolver, $seedDefaultStagesAction);
@@ -472,7 +479,7 @@ class InventoryCountController extends Controller
     {
         $count = $this->findInventoryCount($request, $inventoryCount);
         $this->authorizeInventoryCountView($request, $count);
-        $canEditCountedQuantity = Gate::allows('inventory-adjustments-execute')
+        $canEditCountedQuantity = $this->userCanMutateInventoryCountLines($request->user(), $count)
             && $this->ensureWorkflowStageCountedQuantityEditable($count) === null;
         $showsCountedQuantity = $count->workflow_stage_id !== null;
         $perPage = $this->perPageFromRequest($request);
@@ -537,7 +544,7 @@ class InventoryCountController extends Controller
 
         return response()->json([
             'data' => collect($paginator->items())
-                ->map(fn (Task $task): array => $this->taskPayload($task, $request->user()->id))
+                ->map(fn (Task $task): array => $this->taskPayload($task, $request->user()))
                 ->values()
                 ->all(),
             'meta' => $this->sectionMeta($paginator),
@@ -549,9 +556,8 @@ class InventoryCountController extends Controller
      */
     public function storeLine(Request $request, int $inventoryCount): JsonResponse
     {
-        Gate::authorize('inventory-adjustments-execute');
-
         $count = $this->findInventoryCount($request, $inventoryCount);
+        abort_unless($this->userCanMutateInventoryCountLines($request->user(), $count), 403);
 
         if ($response = $this->ensureEditableDraft($count)) {
             return $response;
@@ -605,9 +611,8 @@ class InventoryCountController extends Controller
      */
     public function updateLine(Request $request, int $inventoryCount, int $line): JsonResponse
     {
-        Gate::authorize('inventory-adjustments-execute');
-
         $count = $this->findInventoryCount($request, $inventoryCount);
+        abort_unless($this->userCanMutateInventoryCountLines($request->user(), $count), 403);
         $lineModel = $count->lines()
             ->where('tenant_id', $request->user()->tenant_id)
             ->whereKey($line)
@@ -683,9 +688,8 @@ class InventoryCountController extends Controller
      */
     public function destroyLine(Request $request, int $inventoryCount, int $line): JsonResponse
     {
-        Gate::authorize('inventory-adjustments-execute');
-
         $count = $this->findInventoryCount($request, $inventoryCount);
+        abort_unless($this->userCanMutateInventoryCountLines($request->user(), $count), 403);
 
         if ($response = $this->ensureRemovableLines($count)) {
             return $response;
@@ -759,6 +763,58 @@ class InventoryCountController extends Controller
             Gate::allows('inventory-adjustments-view') || Gate::allows('inventory-adjustments-execute'),
             403
         );
+    }
+
+    /**
+     * Determine whether the user may submit a draft Inventory Count into workflow.
+     */
+    private function userCanSubmitInventoryCountWorkflow(User $user, InventoryCount $inventoryCount): bool
+    {
+        return Gate::forUser($user)->allows('inventory-adjustments-execute')
+            && (
+                $this->userCanOperateInventoryWorkflow($user)
+                || app(CanViewAssignedWorkflowResourceAction::class)->execute(
+                    $user,
+                    $inventoryCount,
+                    'inventory',
+                    $inventoryCount->assigned_to_user_id
+                )
+            );
+    }
+
+    /**
+     * Determine whether the user may complete, reverse, or post Inventory Count workflow stages.
+     */
+    private function userCanOperateInventoryWorkflow(User $user): bool
+    {
+        return app(WorkflowAssignmentPermissions::class)->userCanOperateWorkflowDomain($user, 'inventory');
+    }
+
+    /**
+     * Determine whether the visible next action should be rendered.
+     */
+    private function canShowNextWorkflowAction(
+        InventoryCount $inventoryCount,
+        bool $canSubmitWorkflow,
+        bool $canOperateWorkflow
+    ): bool {
+        if ($inventoryCount->posted_at !== null) {
+            return false;
+        }
+
+        if ($inventoryCount->workflow_stage_id === null) {
+            return $canSubmitWorkflow;
+        }
+
+        return $canOperateWorkflow;
+    }
+
+    /**
+     * Determine whether the user may mutate Inventory Count material lines.
+     */
+    private function userCanMutateInventoryCountLines(User $user, InventoryCount $inventoryCount): bool
+    {
+        return $this->userCanSubmitInventoryCountWorkflow($user, $inventoryCount);
     }
 
     /**
@@ -1212,7 +1268,7 @@ class InventoryCountController extends Controller
      */
     private function countLinesSectionConfig(Request $request, InventoryCount $inventoryCount, $items): array
     {
-        $canManage = Gate::allows('inventory-adjustments-execute');
+        $canManage = $this->userCanMutateInventoryCountLines($request->user(), $inventoryCount);
         $canRemoveLines = $canManage
             && $inventoryCount->posted_at === null
             && $inventoryCount->workflow_stage_id === null;
@@ -1604,7 +1660,7 @@ class InventoryCountController extends Controller
             ->orderBy('sort_order')
             ->orderBy('id')
             ->get()
-            ->map(fn (Task $task): array => $this->taskPayload($task, auth()->id()))
+            ->map(fn (Task $task): array => $this->taskPayload($task, auth()->user()))
             ->values()
             ->all();
     }
@@ -1626,15 +1682,19 @@ class InventoryCountController extends Controller
      *
      * @return array<string, int|string|bool|null|array<int, string>>
      */
-    private function taskPayload(Task $task, ?int $viewerUserId): array
+    private function taskPayload(Task $task, ?User $viewer): array
     {
         $isCompleted = $task->isCompleted() || $task->completed_at !== null;
         $inventoryCount = InventoryCount::query()
             ->withoutGlobalScopes()
             ->where('tenant_id', $task->tenant_id)
             ->find($task->domain_record_id);
+        $viewerUserId = $viewer?->id;
+        $canCompleteWorkflowTask = $viewer !== null
+            && app(WorkflowAssignmentPermissions::class)->userCanBeAssignedToDomain($viewer, 'inventory');
         $canComplete = ! $isCompleted
             && $viewerUserId !== null
+            && $canCompleteWorkflowTask
             && (
                 (int) $task->assigned_to_user_id === (int) $viewerUserId
                 || (int) $inventoryCount?->assigned_to_user_id === (int) $viewerUserId

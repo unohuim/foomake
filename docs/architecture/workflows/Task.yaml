@@ -33,6 +33,10 @@ rules:
   - Re-entering a stage or retrying a transition must not create duplicate generated tasks for the same template and stage-entry slice.
   - Manual tasks must not block workflow-stage transitions.
   - Workflow task assignment options must exclude users lacking the workflow domain's assignment credential.
+  - Workflow task assignment credentials allow assigned task completion and assignment-scoped visibility only; they do not grant workflow ownership, workflow movement, or operational section editing.
+  - Workflow ownership assignment must use domain owner credentials, which may be stricter than task assignment credentials.
+  - Tasker users may complete their assigned PO, SO, MO, and Inventory workflow tasks but must not move PO, SO, or MO workflows.
+  - Tasker users assigned directly to an Inventory Count may submit that count into workflow, but final Inventory Count completion/posting requires Inventory operator authority.
   - Assignment-scoped resource detail visibility is granted to direct workflow resource assignees and users assigned to generated workflow-stage tasks on that resource.
   - Generated workflow task fallback assignment must choose the first eligible tenant user for the workflow domain, not the first tenant user.
   - Dashboard Todo is a view-only read model and must not expose task completion controls.
