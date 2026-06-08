@@ -98,7 +98,7 @@
 
     <x-ui.toast visible="toast.visible" type="toast.type" message="toast.message" />
 
-    <div class="mx-auto max-w-5xl space-y-0 px-1 pt-4 pb-8 sm:space-y-6 sm:px-6 sm:pt-6 sm:pb-12 lg:px-8">
+    <div class="mx-auto max-w-5xl space-y-6 px-1 pt-0 pb-8 sm:px-6 sm:pt-6 sm:pb-12 lg:px-8">
         <x-ui.workflow-progress
             :steps="$payload['workflowProgressSteps'] ?? []"
             data-workflow-progress-panel
@@ -177,12 +177,29 @@
             </div>
         </x-detail-section-card>
 
-        <x-detail-section-card
-            title="Tasks"
-            :description="__('Complete current stage tasks separately from workflow metadata editing.')"
-            :default-open="false"
+        <div
+            x-data="{ showTaskCreate: false }"
+            x-on:task-created.window="workflow.current_stage_tasks = [...workflow.current_stage_tasks, $event.detail.task]"
         >
-            <div class="rounded-xl border border-gray-200 bg-white">
+            <x-detail-section-card
+                title="Tasks"
+                :description="__('Complete current stage tasks separately from workflow metadata editing.')"
+                :default-open="false"
+            >
+                <x-slot name="actions">
+                    <button
+                        type="button"
+                        class="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-gray-300 text-gray-600 transition hover:bg-gray-50 hover:text-gray-900"
+                        x-on:click="showTaskCreate = true"
+                        aria-label="{{ __('Create task') }}"
+                    >
+                        <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                        </svg>
+                    </button>
+                </x-slot>
+
+                <div class="rounded-xl border border-gray-200 bg-white">
                 <div class="border-b border-gray-100 px-4 py-3">
                     <h4 class="text-sm font-semibold text-gray-900">{{ __('Current Stage Tasks') }}</h4>
                 </div>
@@ -199,6 +216,10 @@
                                 <p class="mt-1 text-xs text-gray-500" x-show="task.assigned_to_user_name">
                                     <span>{{ __('Assigned To') }}:</span>
                                     <span x-text="task.assigned_to_user_name"></span>
+                                </p>
+                                <p class="mt-1 text-xs text-gray-500" x-show="task.due_date">
+                                    <span>{{ __('Due') }}:</span>
+                                    <span x-text="task.due_date"></span>
                                 </p>
                             </div>
 
@@ -222,8 +243,16 @@
                         </div>
                     </template>
                 </div>
-            </div>
-        </x-detail-section-card>
+                </div>
+            </x-detail-section-card>
+
+            @include('tasks.partials.create-task-slide-over', [
+                'users' => collect(data_get($payload, 'taskCreate.users', [])),
+                'workflowDomainId' => data_get($payload, 'workflow.current_stage.workflow_domain_id'),
+                'domainRecordId' => $makeOrder->id,
+                'workflowStageId' => data_get($payload, 'workflow.current_stage.id'),
+            ])
+        </div>
 
         <x-ingredients-detail-section
             title="Ingredients"

@@ -279,7 +279,7 @@ const renderCardGrid = (config) => {
                     </div>
 
                     <div
-                        class="grid gap-4 md:grid-cols-2 xl:grid-cols-3"
+                        class="grid gap-4 md:grid-cols-3"
                         data-crud-card-grid
                         :class="${config.state.loading} ? 'opacity-80' : 'opacity-100'"
                     >

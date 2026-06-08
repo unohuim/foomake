@@ -21,6 +21,7 @@ rules:
   - Task generation is idempotent for the same domain record, stage, and template.
   - If no active templates exist for the entered stage, no tasks are generated and the transition remains allowed.
   - Leaving the current workflow stage must fail while any generated tasks for that current stage remain open.
+  - Manually created workflow-context tasks may appear on the workflow resource task list across stage changes, but they must not block workflow-stage transitions.
   - Make Orders adopt workflow-stage task gating through `workflow_stage_id`; lifecycle `status` remains separate and must not be used as the operational stage field.
   - Make Orders enter workflow from `DRAFT` by assigning the first active configured manufacturing workflow stage.
   - After Make Order workflow entry, all further transitions must follow configured `workflow_stages` ordering and labels.

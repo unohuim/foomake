@@ -534,22 +534,22 @@ it('18e. non stockable material creation rejects a starting quantity', function 
     ])->assertStatus(422)->assertJsonValidationErrors('starting_quantity');
 });
 
-it('19. list endpoint search filters materials by name', function (): void {
+it('19. list endpoint search filters materials by name without matching case', function (): void {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
     $uom = ($this->makeUom)($tenant);
 
-    ($this->makeItem)($tenant, $uom, ['name' => 'Alpha Flour']);
+    ($this->makeItem)($tenant, $uom, ['name' => 'Eggs']);
     ($this->makeItem)($tenant, $uom, ['name' => 'Beta Sugar']);
 
     ($this->grantPermission)($user, 'inventory-materials-view');
 
-    $response = ($this->getList)($user, ['search' => 'flour'])
+    $response = ($this->getList)($user, ['search' => 'eggs'])
         ->assertOk();
 
     $names = collect($response->json('data'))->pluck('item')->all();
 
-    expect($names)->toBe(['Alpha Flour']);
+    expect($names)->toBe(['Eggs']);
 });
 
 it('20. list endpoint returns allowed sortable columns metadata', function (): void {
@@ -636,7 +636,7 @@ it('22b. shared crud card mobile renderer emits row toggle events and uses lime 
         ->and($configSource)->toContain('label: sanitizeLabel(rawRowToggle.label)')
         ->and($configSource)->toContain('titleAsideExpression: sanitizeLabel(rawMobileCard.titleAsideExpression)')
         ->and($configSource)->toContain('badgesExpression: sanitizeLabel(rawMobileCard.badgesExpression)')
-        ->and($configSource)->toContain('urlExpression: sanitizeLabel(rawMobileCard.urlExpression)')
+        ->and($configSource)->toContain('urlExpression: sanitizeLabel(rawMobileCard.urlExpression,')
         ->and($configSource)->toContain('showActions: rawMobileCard.showActions !== false')
         ->and($configSource)->toContain('toggle: {')
         ->and($configSource)->toContain('const rawDesktopCard = sanitizeRecord(config.desktopCard)')

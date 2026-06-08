@@ -717,10 +717,12 @@ it('7. js crud section source renders a responsive accordion card shell', functi
 
     expect($source)->toContain('-mx-1 !-mt-px overflow-visible border border-gray-500 bg-white shadow-sm first:!mt-0')
         ->and($source)->toContain('sm:mx-0 sm:!mt-6 sm:first:!mt-0 sm:rounded-2xl sm:border-gray-200')
-        ->and($source)->toContain('class="flex items-start justify-between gap-3 px-3 py-2 sm:px-6 sm:py-2"')
-        ->and($source)->toContain('class="border-t border-gray-100 px-3 py-2 sm:px-6 sm:py-5"')
+        ->and($source)->toContain('class="flex items-start justify-between gap-2 bg-blue-50 px-3 py-4 sm:gap-3 sm:px-6 sm:py-5"')
+        ->and($source)->toContain('class="border-t border-gray-100 bg-white px-3 py-2 opacity-0 transition-opacity duration-[400ms] ease-in-out sm:px-6 sm:py-5"')
         ->and($source)->toContain('class="mb-2 flex flex-col gap-2 sm:mb-4 sm:gap-3"')
-        ->and($source)->toContain("targetEl.classList.add('!-mt-px', 'first:!mt-0', 'sm:!mt-6', 'sm:first:!mt-0')")
+        ->and($source)->toContain('targetEl.classList.add(')
+        ->and($source)->toContain('"!-mt-px"')
+        ->and($source)->toContain('"sm:first:!mt-0"')
         ->and($source)->toContain('aria-expanded')
         ->and($source)->toContain('data-js-crud-section-card');
 });
@@ -728,11 +730,11 @@ it('7. js crud section source renders a responsive accordion card shell', functi
 it('7a. js crud section source closes sibling accordions only on mobile', function (): void {
     $source = file_get_contents(resource_path('js/lib/js-crud-section.js'));
 
-    expect($source)->toContain("globalThis.matchMedia('(max-width: 639px)').matches")
+    expect($source)->toContain('globalThis.matchMedia("(max-width: 639px)").matches')
         ->and($source)->toContain('if (nextOpen && this.isMobileViewport())')
         ->and($source)->toContain('this.closeSiblingSections();')
         ->and($source)->toContain('closeSection()')
-        ->and($source)->toContain("querySelectorAll(':scope > [data-js-crud-section-root]')");
+        ->and($source)->toContain('querySelectorAll(":scope > [data-js-crud-section-root]")');
 });
 
 it('8. js crud section source defaults the accordion closed', function (): void {
@@ -760,16 +762,17 @@ it('10. js crud section source caches the first fetch and does not refetch on re
 it('11. js crud section source fetches pagination pages explicitly', function (): void {
     $source = file_get_contents(resource_path('js/lib/js-crud-section.js'));
 
-    expect($source)->toContain("params.set('page', String(page))");
+    expect($source)->toContain('params.set("page", String(page))');
 });
 
 it('11a. js crud section source defaults accordion rows to five records per page', function (): void {
     $source = file_get_contents(resource_path('js/lib/js-crud-section.js'));
 
     expect($source)->toContain('perPage: normalizePositiveInteger(pagination.perPage, 5)')
-        ->and($source)->toContain('perPageOptions: normalizePaginationOptions(pagination.perPageOptions)')
+        ->and($source)->toContain('perPageOptions: normalizePaginationOptions(')
+        ->and($source)->toContain('pagination.perPageOptions,')
         ->and($source)->toContain('allowPerPageChange: Boolean(pagination.allowPerPageChange)')
-        ->and($source)->toContain("params.set('per_page', String(this.paginationPerPage()))");
+        ->and($source)->toContain('params.set("per_page", String(this.paginationPerPage()))');
 });
 
 it('11b. js crud section source renders shared pagination controls for accordion rows', function (): void {
@@ -809,12 +812,16 @@ it('11bb. js crud section source renders mobile rows square flush and without ve
     $source = file_get_contents(resource_path('js/lib/js-crud-section.js'));
 
     expect($source)->toContain('class="-mx-3 space-y-0 border-t border-gray-300 sm:mx-0 sm:space-y-3 sm:border-t-0"')
-        ->and($source)->toContain('const mobileRecordClass = (className) => asString(className)')
-        ->and($source)->toContain('return `sm:${token}`;')
+        ->and($source)->toContain('const mobileRecordClass = (className) =>')
+        ->and($source)->toContain('return "sm:rounded-xl";')
+        ->and($source)->toContain('return "sm:rounded-lg";')
         ->and($source)->toContain('return `px-3 py-2 sm:${token}`;')
-        ->and($source)->toContain("return 'py-2 sm:py-1';")
-        ->and($source)->toContain('return `border-gray-300 sm:${token}`;')
-        ->and($source)->toContain("return ['relative', 'max-sm:border-t-0 sm:mt-0', mobileClass, mobileRecordClass(adapterClass), mobileRecordClass(recordLevelClass)]");
+        ->and($source)->toContain('return "py-2 sm:py-1";')
+        ->and($source)->toContain('return "border-gray-300 sm:border-gray-200";')
+        ->and($source)->toContain('return "border-gray-300 sm:border-gray-100";')
+        ->and($source)->toContain('"relative",')
+        ->and($source)->toContain('"max-sm:border-t-0 sm:mt-0",')
+        ->and($source)->toContain('mobileRecordClass(adapterClass),');
 });
 
 it('11c. js crud section source resets and clamps pagination as rows change', function (): void {
@@ -1001,14 +1008,15 @@ it('15a. material supplier packages use inline icon actions instead of the dots 
         ->and($actions->get('archive')['tooltip'] ?? null)->toBe('Archive')
         ->and($actions->get('archive')['confirmMessage'] ?? null)->toBe('Are you sure you want to archive this supplier package?')
         ->and($crudSource)->toContain("action.icon === 'credit-card'")
-        ->and($crudSource)->toContain("action.confirmMessage !== '' && !globalThis.confirm(action.confirmMessage)")
+        ->and($crudSource)->toContain('action.confirmMessage !== ""')
+        ->and($crudSource)->toContain('!globalThis.confirm(action.confirmMessage)')
         ->and($crudSource)->toContain('x-bind:title="actionTooltip(record, action)"')
         ->and($crudSource)->toContain('inlineActionButtonClass(action)')
         ->and($crudSource)->toContain("this.section.inlineActionsOnMobile")
-        ->and($crudSource)->toContain("'flex flex-row items-center justify-between gap-4'")
+        ->and($crudSource)->toContain('"flex flex-row items-center justify-between gap-4"')
         ->and($crudSource)->toContain("line.hideLabelOnMobile ? 'hidden sm:inline' : ''")
         ->and($crudSource)->toContain('mobilePrimaryFieldItems(record)')
-        ->and($crudSource)->toContain("line.mobilePlacement === 'primary-end'")
+        ->and($crudSource)->toContain('line.mobilePlacement === "primary-end"')
         ->and($crudSource)->toContain('gap-4 sm:gap-3')
         ->and($crudSource)->toContain('hidden shrink-0 text-xs text-gray-700 max-sm:block')
         ->and($crudSource)->not->toContain('ml-auto hidden shrink-0 text-xs text-gray-700 max-sm:block')
@@ -1098,7 +1106,7 @@ it('17. js crud section source uses config driven row actions without global sta
         ->and($source)->toContain('showRowActionsMenu')
         ->and($source)->toContain('section.actions')
         ->and($source)->toContain('action.type')
-        ->and($source)->toContain("case 'custom'")
+        ->and($source)->toContain('case "custom"')
         ->and($source)->toContain('this.adapters.handleAction')
         ->and($source)->not->toContain('window.');
 });
@@ -1139,11 +1147,10 @@ it('18a. js crud section source uses a square rounded lg create button and mobil
     $source = file_get_contents(resource_path('js/lib/js-crud-section.js'));
 
     expect($source)->toContain('rounded-lg border border-gray-300')
-        ->and($source)->toContain('h-7 w-7')
-        ->and($source)->toContain('sm:h-8 sm:w-8')
-        ->and($source)->toContain('h-3.5 w-3.5 sm:h-4 sm:w-4')
+        ->and($source)->toContain('h-8 w-8')
+        ->and($source)->toContain('h-4 w-4')
         ->and($source)->not->toContain('rounded-full border border-gray-200')
-        ->and($source)->toContain('px-3 py-2 sm:px-6 sm:py-2')
+        ->and($source)->toContain('px-3 py-2 opacity-0 transition-opacity duration-[400ms] ease-in-out sm:px-6 sm:py-5')
         ->and($source)->toContain('p-3 sm:p-4')
         ->and($source)->toContain('flex-col gap-4 sm:flex-row');
 });
@@ -1151,15 +1158,15 @@ it('18a. js crud section source uses a square rounded lg create button and mobil
 it('18aa. js crud section source keeps the accordion trigger right aligned on mobile with a generic header layout', function (): void {
     $source = file_get_contents(resource_path('js/lib/js-crud-section.js'));
 
-    expect($source)->toContain('flex items-start justify-between gap-3')
+    expect($source)->toContain('flex items-start justify-between gap-2 bg-blue-50 px-3 py-4 sm:gap-3 sm:px-6 sm:py-5')
         ->and($source)->toContain('min-w-0 flex-1')
-        ->and($source)->toContain('px-3 py-2 sm:px-6 sm:py-2')
-        ->and($source)->toContain('text-sm font-semibold leading-tight text-gray-900 sm:text-base')
-        ->and($source)->toContain('mt-0 text-[0.7rem] leading-tight text-gray-500 sm:mt-px sm:text-xs')
-        ->and($source)->toContain('h-7 w-7 shrink-0')
-        ->and($source)->toContain('sm:h-8 sm:w-8')
-        ->and($source)->toContain('h-3.5 w-3.5 text-gray-400')
-        ->and($source)->toContain('sm:h-4 sm:w-4')
+        ->and($source)->toContain('text-lg font-semibold text-gray-900')
+        ->and($source)->toContain('mt-1 text-sm text-gray-500 sm:overflow-visible sm:whitespace-normal sm:text-clip')
+        ->and($source)->toContain("descriptionExpanded ? 'whitespace-normal' : 'truncate'")
+        ->and($source)->toContain('descriptionExpanded: asBoolean(section.defaultOpen)')
+        ->and($source)->toContain('syncDescriptionExpandedAfterTransition()')
+        ->and($source)->toContain('h-8 w-8 shrink-0')
+        ->and($source)->toContain('h-4 w-4 text-gray-400')
         ->and($source)->toContain('shrink-0')
         ->and($source)->not->toContain('rounded-full border border-gray-200');
 });
@@ -1176,7 +1183,27 @@ it('18b. js crud section source keeps the create button right aligned in the acc
 
     expect($source)->toContain('data-js-crud-section-toggle')
         ->and($source)->toContain('aria-label="Toggle section"')
+        ->and($source)->toContain('transition duration-[400ms] ease-in-out')
+        ->and($source)->toContain('transition-[grid-template-rows] duration-[400ms] ease-in-out')
+        ->and($source)->toContain("isOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'")
+        ->and($source)->toContain('border-t border-gray-100 bg-white px-3 py-2')
+        ->and($source)->toContain('transition-opacity duration-[400ms] ease-in-out')
         ->and($source)->not->toContain('data-js-crud-section-header-actions');
+});
+
+it('18bb. reusable detail section descriptions truncate on mobile only', function (): void {
+    $source = file_get_contents(resource_path('views/components/detail-section-card.blade.php'));
+
+    expect($source)->toContain('mt-1 text-sm text-gray-500 sm:overflow-visible sm:whitespace-normal sm:text-clip')
+        ->and($source)->toContain('bg-blue-50 px-3 py-4 sm:gap-3 sm:px-6 sm:py-5')
+        ->and($source)->toContain('border-t border-gray-100 bg-white px-3 py-2')
+        ->and($source)->toContain("descriptionExpanded ? 'whitespace-normal' : 'truncate'")
+        ->and($source)->toContain('descriptionExpanded: @js((bool) $defaultOpen)')
+        ->and($source)->toContain('this.descriptionExpanded = this.open')
+        ->and($source)->toContain('transition duration-[400ms] ease-in-out')
+        ->and($source)->toContain('transition-[grid-template-rows] duration-[400ms] ease-in-out')
+        ->and($source)->toContain("open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'")
+        ->and($source)->toContain('transition-opacity duration-[400ms] ease-in-out');
 });
 
 it('18c. js crud section source renders the create button only inside expanded content and keeps it permission gated', function (): void {
@@ -1190,15 +1217,15 @@ it('18c. js crud section source renders the create button only inside expanded c
         ->and($source)->toContain('x-on:click="toggleOpen()"')
         ->and($source)->toContain('aria-label="Create"')
         ->and($source)->toContain('aria-label="Toggle section"')
-        ->and($source)->toContain('x-show="isOpen"')
+        ->and($source)->toContain("isOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'")
         ->and($source)->toContain('x-show="section.permissions.canCreate"');
 });
 
 it('18d. js crud section supports a read only view action without core changes', function (): void {
     $source = file_get_contents(resource_path('js/lib/js-crud-section.js'));
 
-    expect($source)->toContain("case 'view'")
-        ->and($source)->toContain("case 'custom'")
+    expect($source)->toContain('case "view"')
+        ->and($source)->toContain('case "custom"')
         ->and($source)->toContain('urlField');
 });
 
@@ -1224,7 +1251,8 @@ it('18g. js crud section keeps row action menus enabled by default unless a sect
     expect($source)->toContain('showRowActionsMenu: safeConfig.showRowActionsMenu !== false')
         ->and($source)->toContain('rowClass: asString(safeConfig.rowClass)')
         ->and($source)->toContain('rightMetaClass: asString(safeConfig.rightMetaClass)')
-        ->and($source)->toContain('showRowActionsMenuOnMobile: safeConfig.showRowActionsMenuOnMobile !== false')
+        ->and($source)->toContain('showRowActionsMenuOnMobile:')
+        ->and($source)->toContain('safeConfig.showRowActionsMenuOnMobile !== false')
         ->and($source)->toContain('mobileRowUrlField: asString(safeConfig.mobileRowUrlField)')
         ->and($source)->toContain('secondaryFieldsClass: asString(safeConfig.secondaryFieldsClass)')
         ->and($source)->toContain('rowActionsMenuVisible(record)')
@@ -2428,7 +2456,7 @@ it('58b. package created purchase orders open details by default when date or po
         '<h3 class="text-lg font-semibold text-gray-900">Items</h3>'
     );
 
-    expect($detailsSection)->toContain('x-data="{ open: true }"');
+    expect($detailsSection)->toContain('open: true');
 });
 
 it('58a. keeps the copied purchase order line price historical after the supplier package price changes later', function (): void {

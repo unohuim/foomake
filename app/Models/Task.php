@@ -12,13 +12,15 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  *
  * @property int $id
  * @property int $tenant_id
- * @property int $workflow_domain_id
- * @property int $domain_record_id
- * @property int $workflow_stage_id
+ * @property string $source
+ * @property int|null $workflow_domain_id
+ * @property int|null $domain_record_id
+ * @property int|null $workflow_stage_id
  * @property int|null $workflow_task_template_id
  * @property int $assigned_to_user_id
  * @property string $title
  * @property string|null $description
+ * @property \Illuminate\Support\Carbon|null $due_date
  * @property int $sort_order
  * @property string $status
  * @property \Illuminate\Support\Carbon|null $completed_at
@@ -31,12 +33,15 @@ class Task extends Model
 
     public const STATUS_OPEN = 'open';
     public const STATUS_COMPLETED = 'completed';
+    public const SOURCE_GENERATED = 'generated';
+    public const SOURCE_MANUAL = 'manual';
 
     /**
      * @var list<string>
      */
     protected $fillable = [
         'tenant_id',
+        'source',
         'workflow_domain_id',
         'domain_record_id',
         'workflow_stage_id',
@@ -44,6 +49,7 @@ class Task extends Model
         'assigned_to_user_id',
         'title',
         'description',
+        'due_date',
         'sort_order',
         'status',
         'completed_at',
@@ -54,6 +60,7 @@ class Task extends Model
      * @var array<string, string>
      */
     protected $casts = [
+        'due_date' => 'date',
         'completed_at' => 'datetime',
     ];
 
@@ -113,4 +120,3 @@ class Task extends Model
         return $this->status === self::STATUS_COMPLETED;
     }
 }
-

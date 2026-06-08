@@ -22,7 +22,7 @@
     </div>
 
     <div class="max-w-5xl px-4 sm:px-6 lg:px-8" data-resource-detail-header-body>
-        <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div class="flex items-center justify-between gap-3 sm:items-start">
             <div class="min-w-0 flex-1">
                 <div class="flex flex-wrap items-center gap-3" data-resource-detail-header-title-row>
                     <h1 @class([$titleClass]) data-resource-detail-header-title>{{ $title }}</h1>
@@ -44,7 +44,7 @@
             </div>
 
             @isset($actions)
-                <div class="flex shrink-0 items-start justify-end" data-resource-detail-header-actions>
+                <div class="flex shrink-0 items-center justify-end sm:items-start" data-resource-detail-header-actions>
                     {{ $actions }}
                 </div>
             @endisset

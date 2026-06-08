@@ -13,6 +13,7 @@ use Illuminate\Support\Carbon;
  * @property int $id
  * @property int $tenant_id
  * @property int|null $created_by_user_id
+ * @property int|null $assigned_to_user_id
  * @property int|null $supplier_id
  * @property Carbon|null $order_date
  * @property int|null $shipping_cents
@@ -185,6 +186,14 @@ class PurchaseOrder extends Model
     public function createdByUser(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by_user_id');
+    }
+
+    /**
+     * Get the user assigned to execute the purchase order workflow.
+     */
+    public function assignedToUser(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'assigned_to_user_id');
     }
 
     /**

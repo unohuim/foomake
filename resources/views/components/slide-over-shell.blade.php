@@ -8,6 +8,8 @@
     'descriptionExpression' => null,
     'titleId' => 'slide-over-title',
     'maxWidth' => 'max-w-md',
+    'action' => null,
+    'method' => 'POST',
 ])
 
 <div
@@ -39,6 +41,7 @@
             <div class="pointer-events-none fixed inset-y-0 right-0 flex max-w-full pl-10">
                 <div class="pointer-events-auto w-screen {{ $maxWidth }}" x-on:click.stop>
                     <form
+                        @if ($action) method="{{ $method }}" action="{{ $action }}" @endif
                         class="relative flex h-full flex-col divide-y divide-gray-200 bg-white shadow-xl"
                         x-show="{{ $open }}"
                         x-transition:enter="transform transition ease-in-out duration-300 sm:duration-500"

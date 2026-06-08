@@ -392,8 +392,8 @@ it('32c. shared js crud section supports configured asymmetric field rows', func
 
     expect($source)->toContain('width: asString(safeField.width)')
         ->and($source)->toContain('fieldWrapperClass(field)')
-        ->and($source)->toContain("field.width === 'short'")
-        ->and($source)->toContain("field.width === 'right'")
+        ->and($source)->toContain('field.width === "short"')
+        ->and($source)->toContain('field.width === "right"')
         ->and($source)->toContain('sm:grid-cols-[minmax(0,10rem)_minmax(0,1fr)]');
 });
 

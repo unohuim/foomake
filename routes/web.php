@@ -35,6 +35,7 @@ use App\Http\Controllers\SalesProductController;
 use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\SupplierPurchaseOrderController;
 use App\Http\Controllers\SupplierPurchaseOptionController;
+use App\Http\Controllers\TaskController;
 use App\Http\Controllers\TaskCompletionController;
 use App\Http\Controllers\UomCategoryController;
 use App\Http\Controllers\UomConversionController;
@@ -430,6 +431,8 @@ Route::middleware(['auth', EnsureEmailVerifiedOrInGracePeriod::class, EnsureTena
         ->name('admin.workflows.task-templates.reorder');
     Route::patch('/tasks/{task}/complete', [TaskCompletionController::class, 'update'])
         ->name('tasks.complete');
+    Route::post('/tasks', [TaskController::class, 'store'])
+        ->name('tasks.store');
 
     Route::get('/admin/users', [UserManagementController::class, 'index'])
         ->name('admin.users.index');

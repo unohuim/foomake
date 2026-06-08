@@ -150,8 +150,32 @@ class InventoryCountController extends Controller
                     'countLines' => $this->countLinesSectionConfig($request, $count, $items),
                     'tasks' => $this->tasksSectionConfig($count),
                 ],
+                'taskCreate' => [
+                    'users' => $this->manualTaskAssigneeOptions((int) $request->user()->tenant_id),
+                    'workflowDomainId' => $this->workflowDomainId('inventory'),
+                ],
             ],
         ]);
+    }
+
+    /**
+     * Build tenant user options for manual task assignment.
+     *
+     * @return array<int, array{id: int, name: string}>
+     */
+    private function manualTaskAssigneeOptions(int $tenantId): array
+    {
+        return User::query()
+            ->where('tenant_id', $tenantId)
+            ->orderBy('name')
+            ->orderBy('id')
+            ->get()
+            ->map(fn (User $user): array => [
+                'id' => (int) $user->id,
+                'name' => $user->name,
+            ])
+            ->values()
+            ->all();
     }
 
     /**
@@ -477,16 +501,35 @@ class InventoryCountController extends Controller
         $count->load('workflowStage');
 
         $perPage = $this->perPageFromRequest($request);
+        $workflowDomainId = $count->workflowStage?->workflow_domain_id
+            ?? $this->workflowDomainId('inventory');
+
+        if ($workflowDomainId === null) {
+            return response()->json([
+                'data' => [],
+                'meta' => [
+                    'current_page' => 1,
+                    'last_page' => 1,
+                    'per_page' => $perPage,
+                    'total' => 0,
+                ],
+            ]);
+        }
 
         $paginator = Task::withoutGlobalScopes()
             ->where('tenant_id', $request->user()->tenant_id)
-            ->where('workflow_domain_id', $count->workflowStage?->workflow_domain_id)
+            ->where('workflow_domain_id', $workflowDomainId)
             ->where('domain_record_id', $count->id)
-            ->when(
-                $count->workflow_stage_id !== null,
-                fn ($query) => $query->where('workflow_stage_id', $count->workflow_stage_id),
-                fn ($query) => $query->whereRaw('1 = 0')
-            )
+            ->where(function ($query) use ($count): void {
+                $query->where('source', Task::SOURCE_MANUAL);
+
+                if ($count->workflow_stage_id !== null) {
+                    $query->orWhere(function ($query) use ($count): void {
+                        $query->where('source', Task::SOURCE_GENERATED)
+                            ->where('workflow_stage_id', $count->workflow_stage_id);
+                    });
+                }
+            })
             ->with(['assignedTo', 'completedBy'])
             ->orderBy('sort_order')
             ->orderBy('id')
@@ -1183,7 +1226,9 @@ class InventoryCountController extends Controller
             'title' => 'Materials',
             'description' => 'Manage counted materials for this inventory count.',
             'emptyState' => 'No count lines added yet.',
-            'recordClass' => 'rounded-xl border border-gray-100 bg-gray-50 px-3 py-3 sm:px-4 sm:py-3.5',
+            'recordClass' => 'rounded-xl sm:rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 sm:px-4 sm:py-3.5',
+            'rowClass' => 'flex flex-row items-center justify-between gap-3',
+            'rightMetaClass' => 'flex shrink-0 items-end justify-center text-right',
             'csrfToken' => csrf_token(),
             'defaultOpen' => true,
             'showRowActionsMenu' => false,
@@ -1258,6 +1303,7 @@ class InventoryCountController extends Controller
                         'label' => 'QTY',
                         'field' => 'counted_quantity_input',
                         'strong' => true,
+                        'compactOnMobile' => true,
                     ],
                 ] : [],
             ],
@@ -1533,16 +1579,27 @@ class InventoryCountController extends Controller
     private function currentStageTasksData(InventoryCount $inventoryCount): array
     {
         $inventoryCount->loadMissing('workflowStage');
+        $workflowDomainId = $inventoryCount->workflowStage?->workflow_domain_id
+            ?? $this->workflowDomainId('inventory');
 
-        if ($inventoryCount->workflow_stage_id === null || ! $inventoryCount->workflowStage) {
+        if ($workflowDomainId === null) {
             return [];
         }
 
         return Task::withoutGlobalScopes()
             ->where('tenant_id', $inventoryCount->tenant_id)
-            ->where('workflow_domain_id', $inventoryCount->workflowStage->workflow_domain_id)
+            ->where('workflow_domain_id', $workflowDomainId)
             ->where('domain_record_id', $inventoryCount->id)
-            ->where('workflow_stage_id', $inventoryCount->workflow_stage_id)
+            ->where(function ($query) use ($inventoryCount): void {
+                $query->where('source', Task::SOURCE_MANUAL);
+
+                if ($inventoryCount->workflow_stage_id !== null) {
+                    $query->orWhere(function ($query) use ($inventoryCount): void {
+                        $query->where('source', Task::SOURCE_GENERATED)
+                            ->where('workflow_stage_id', $inventoryCount->workflow_stage_id);
+                    });
+                }
+            })
             ->with(['assignedTo', 'completedBy'])
             ->orderBy('sort_order')
             ->orderBy('id')
@@ -1550,6 +1607,18 @@ class InventoryCountController extends Controller
             ->map(fn (Task $task): array => $this->taskPayload($task, auth()->id()))
             ->values()
             ->all();
+    }
+
+    /**
+     * Resolve a workflow domain id by key.
+     */
+    private function workflowDomainId(string $key): ?int
+    {
+        $id = WorkflowDomain::query()
+            ->where('key', $key)
+            ->value('id');
+
+        return $id === null ? null : (int) $id;
     }
 
     /**
@@ -1573,6 +1642,7 @@ class InventoryCountController extends Controller
 
         return [
             'id' => $task->id,
+            'source' => $task->source,
             'workflow_stage_id' => $task->workflow_stage_id,
             'workflow_task_template_id' => $task->workflow_task_template_id,
             'assigned_to_user_id' => $task->assigned_to_user_id,
@@ -1582,6 +1652,7 @@ class InventoryCountController extends Controller
             'assigned_to_display' => $isCompleted ? '' : ($task->assignedTo?->name ?? '—'),
             'title' => $task->title,
             'description' => $task->description,
+            'due_date' => $task->due_date?->format('Y-m-d'),
             'sort_order' => $task->sort_order,
             'status' => $task->status,
             'status_tone' => $isCompleted ? 'success' : 'muted',

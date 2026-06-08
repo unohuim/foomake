@@ -377,7 +377,7 @@ it('allows a tasker assigned to an inventory count to view that count without br
         ->assertDontSee('Details')
         ->assertSee('Notes')
         ->assertDontSee('Count Date')
-        ->assertDontSee('>Assigned To<', false);
+        ->assertSee('>Assigned To<', false);
 
     preg_match(
         '/<script type="application\\/json" id="inventory-count-show-payload">\\s*(.*?)\\s*<\\/script>/s',
@@ -1237,6 +1237,9 @@ it('detail page mounts reusable sections for count lines and tasks', function ()
     expect($response->getContent())->toContain('data-js-crud-section-root')
         ->and($response->getContent())->toContain('data-section-key="countLines"')
         ->and($response->getContent())->toContain('data-inventory-count-tasks-section')
+        ->and($response->getContent())->toContain('!-mt-px sm:!mt-6')
+        ->and($response->getContent())->toContain('data-detail-section-card')
+        ->and($response->getContent())->toContain('data-detail-section-toggle')
         ->and($response->getContent())->not->toContain('<table class="min-w-full text-sm">');
 });
 
@@ -1603,6 +1606,57 @@ it('detail payload shows current stage tasks with name status assigned user and 
         ->and($task['complete_url'] ?? null)->toBeString();
 });
 
+it('detail payload shows manual inventory count tasks while the workflow is still draft', function () {
+    $tenant = Tenant::factory()->create();
+    $creator = ($this->makeUser)($tenant);
+    $assignee = ($this->makeUser)($tenant);
+
+    ($this->grantPermission)($creator, 'inventory-adjustments-view');
+    ($this->grantPermission)($creator, 'inventory-adjustments-execute');
+    ($this->grantPermission)($assignee, 'inventory-adjustments-view');
+    ($this->grantPermission)($assignee, 'inventory-adjustments-execute');
+    ($this->seedInventoryWorkflow)($tenant);
+
+    $count = ($this->createDraftCountViaApi)($creator, [
+        'assigned_to_user_id' => $assignee->id,
+    ]);
+
+    $this->actingAs($creator)->postJson(route('tasks.store'), [
+        'title' => 'Check freezer shelf',
+        'assigned_to_user_id' => $assignee->id,
+        'workflow_domain_id' => ($this->inventoryDomain)()->id,
+        'domain_record_id' => $count->id,
+        'workflow_stage_id' => null,
+    ])->assertCreated();
+
+    $response = $this->actingAs($assignee)->get('/inventory/counts/' . $count->id)->assertOk();
+
+    preg_match(
+        '/<script type="application\\/json" id="inventory-count-show-payload">\\s*(.*?)\\s*<\\/script>/s',
+        $response->getContent(),
+        $matches
+    );
+
+    $payload = json_decode($matches[1] ?? '[]', true);
+    $taskPayload = collect($payload['count']['current_stage_tasks'] ?? [])->firstWhere('title', 'Check freezer shelf');
+    $sectionTaskPayload = collect($payload['sections']['tasks']['initialRecords'] ?? [])->firstWhere('title', 'Check freezer shelf');
+
+    expect($taskPayload)->not->toBeNull()
+        ->and(array_key_exists('workflow_stage_id', $taskPayload))->toBeTrue()
+        ->and($taskPayload['workflow_stage_id'])->toBeNull()
+        ->and($sectionTaskPayload)->not->toBeNull();
+
+    expect($response->getContent())->toContain('name="workflow_domain_id" value="' . ($this->inventoryDomain)()->id . '"')
+        ->and($response->getContent())->toContain('name="domain_record_id" value="' . $count->id . '"')
+        ->and($response->getContent())->not->toContain('name="workflow_stage_id" value=""');
+
+    $this->actingAs($assignee)
+        ->getJson(route('inventory.counts.tasks.index', $count))
+        ->assertOk()
+        ->assertJsonPath('data.0.title', 'Check freezer shelf')
+        ->assertJsonPath('data.0.workflow_stage_id', null);
+});
+
 it('detail page renders a Tasks section with generated task name status and open-task assignment metadata', function () {
     $tenant = Tenant::factory()->create();
     $creator = ($this->makeUser)($tenant);
@@ -1633,11 +1687,10 @@ it('detail page renders a Tasks section with generated task name status and open
         ->assertSee('Tasks')
         ->assertSee('Task section item')
         ->assertSee('open')
-        ->assertSee('Assigned By:')
-        ->assertSee('Assigned To:')
+        ->assertDontSee('Assigned By:')
+        ->assertDontSee('Assigned To:')
         ->assertDontSee('Completed By:')
-        ->assertSee($assignee->name)
-        ->assertSee($creator->name);
+        ->assertSee($assignee->name);
 });
 
 it('tasks section rows expose a visible Complete button and disable the row actions menu through config', function () {
@@ -1682,9 +1735,15 @@ it('tasks section rows expose a visible Complete button and disable the row acti
         ->and($tasksSection['rowLayout']['secondaryFields'][2]['label'] ?? null)->toBe('Completed By')
         ->and($tasksSection['rowLayout']['rightMeta'] ?? [])->toBe([])
         ->and($response->getContent())->toContain('Inline task completion')
-        ->and($response->getContent())->toContain('Assigned By:')
-        ->and($response->getContent())->toContain('Assigned To:')
+        ->and($response->getContent())->toContain('-mx-3 rounded-none border-y border-gray-200 bg-gray-50 px-3 py-2')
+        ->and($response->getContent())->toContain('inline-flex h-8 w-8')
+        ->and($response->getContent())->not->toContain('Assigned By:')
+        ->and($response->getContent())->not->toContain('Assigned To:')
         ->and($response->getContent())->not->toContain('Completed By:')
+        ->and($response->getContent())->toContain('space-y-0 sm:space-y-3')
+        ->and($response->getContent())->toContain('flex min-w-0 items-center gap-3')
+        ->and($response->getContent())->toContain('shrink-0 self-center')
+        ->and($response->getContent())->toContain('text-[0.65rem] font-semibold uppercase tracking-wide')
         ->and($response->getContent())->toContain('Complete');
 });
 
@@ -1694,7 +1753,7 @@ it('shared detail section source supports inline task actions when the row actio
     expect($source)->toContain('showRowActionsMenu: safeConfig.showRowActionsMenu !== false')
         ->and($source)->toContain('icon: asString(safeAction.icon)')
         ->and($source)->toContain('ariaLabel: asString(safeAction.ariaLabel)')
-        ->and($source)->toContain("Object.prototype.hasOwnProperty.call(safeEntry, 'fallback')")
+        ->and($source)->toContain('Object.prototype.hasOwnProperty.call(safeEntry, "fallback")')
         ->and($source)->toContain('x-show="!section.showRowActionsMenu && visibleActions(record).length > 0"')
         ->and($source)->toContain('x-show="rowActionsMenuVisible(record)"')
         ->and($source)->toContain('flex flex-wrap items-center gap-4')
@@ -1732,7 +1791,9 @@ it('draft inventory count materials render the inline x-mark remove contract ins
         ->and($countLinesSection['addRow']['enabled'] ?? null)->toBeTrue()
         ->and($countLinesSection['addRow']['placeholder'] ?? null)->toBe('Search materials')
         ->and($countLinesSection['addRow']['action']['handlerKey'] ?? null)->toBe('addSelectedCountLine')
-        ->and($countLinesSection['recordClass'] ?? null)->toBe('rounded-xl border border-gray-100 bg-gray-50 px-3 py-3 sm:px-4 sm:py-3.5')
+        ->and($countLinesSection['recordClass'] ?? null)->toBe('rounded-xl sm:rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 sm:px-4 sm:py-3.5')
+        ->and($countLinesSection['rowClass'] ?? null)->toBe('flex flex-row items-center justify-between gap-3')
+        ->and($countLinesSection['rightMetaClass'] ?? null)->toBe('flex shrink-0 items-end justify-center text-right')
         ->and($countLinesSection['rowLayout']['secondaryFields'] ?? [])->toBe([])
         ->and($countLinesSection['rowLayout']['rightMeta'] ?? [])->toBe([])
         ->and($response->getContent())->not->toContain('d="M12 6.75a.75.75 0 1 0 0-1.5');
@@ -1779,7 +1840,8 @@ it('inventory counts in a workflow stage do not expose removable material row ac
         ->and($countLinesSection['addRow']['enabled'] ?? null)->toBeFalse()
         ->and($response->getContent())->not->toContain('Remove material line')
         ->and($countLinesSection['rowLayout']['rightMeta'][0]['label'] ?? null)->toBe('QTY')
-        ->and($countLinesSection['rowLayout']['rightMeta'][0]['field'] ?? null)->toBe('counted_quantity_input');
+        ->and($countLinesSection['rowLayout']['rightMeta'][0]['field'] ?? null)->toBe('counted_quantity_input')
+        ->and($countLinesSection['rowLayout']['rightMeta'][0]['compactOnMobile'] ?? null)->toBeTrue();
 
     $lines = $this->actingAs($user)
         ->getJson(route('inventory.counts.lines.index', $count))
@@ -1860,17 +1922,28 @@ it('inventory count show page source handles inline draft line removal without a
 it('shared detail section source supports workflow-stage qty inputs without showing remove and qty together', function () {
     $source = file_get_contents(resource_path('js/lib/js-crud-section.js'));
 
-    expect($source)->toContain("if (typeof this.adapters.rightMetaItems === 'function')")
+    expect($source)->toContain('if (typeof this.adapters.rightMetaItems === "function")')
         ->and($source)->toContain("meta.type === 'input'")
         ->and($source)->toContain('x-on:change="performInlineMetaAction(record, meta)"')
         ->and($source)->toContain('x-on:blur="performInlineMetaAction(record, meta)"')
-        ->and($source)->toContain("meta.showSuccessIcon")
+        ->and($source)->toContain('meta.showSuccessIcon')
         ->and($source)->toContain('x-if="meta.showSuccessIcon"')
         ->and($source)->toContain("text-emerald-500")
+        ->and($source)->toContain('rightMetaControlLabelClass(meta)')
+        ->and($source)->toContain('rightMetaLabelClass(meta)')
+        ->and($source)->toContain('smartNumberMetaRootClass(meta)')
+        ->and($source)->toContain('smartNumberMetaFrameClass(meta)')
+        ->and($source)->toContain('smartNumberMetaInputClass(meta)')
+        ->and($source)->toContain('text-[0.65rem] font-semibold uppercase tracking-wide text-gray-500')
+        ->and($source)->toContain('flex items-center gap-1.5 text-xs sm:gap-2.5 sm:text-sm')
+        ->and($source)->toContain('w-20 sm:w-24')
+        ->and($source)->toContain('px-2 py-1 text-xs sm:px-3 sm:py-1.5 sm:text-sm')
         ->and($source)->toContain('section.addRow.enabled')
         ->and($source)->toContain('data-detail-section-add-row')
         ->and($source)->toContain("recordClass: asString(safeConfig.recordClass)")
-        ->and($source)->toContain("const baseClass = asString(this.section.recordClass, 'rounded-xl border border-gray-100 bg-gray-50 p-3 sm:p-4');")
+        ->and($source)->toContain('const baseClass = asString(')
+        ->and($source)->toContain('this.section.recordClass,')
+        ->and($source)->toContain('"rounded-xl border border-gray-100 bg-gray-50 p-3 sm:p-4",')
         ->and($source)->toContain('visibleActions(record).length > 0')
         ->and($source)->toContain('handleInlineMetaAction');
 });
@@ -2337,8 +2410,8 @@ it('completed task rows do not render a Complete button in the tasks section pay
         ->and($taskPayload['completed_by_user_name'] ?? null)->toBe($assignee->name)
         ->and($taskPayload['completed_by_display'] ?? null)->toBe($assignee->name);
 
-    expect($response->getContent())->toContain('Assigned By:')
-        ->and($response->getContent())->toContain('Completed By:')
+    expect($response->getContent())->not->toContain('Assigned By:')
+        ->and($response->getContent())->not->toContain('Completed By:')
         ->and($response->getContent())->not->toContain('Assigned To:')
         ->and($response->getContent())->not->toContain('action="' . route('tasks.complete', $task) . '"');
 });

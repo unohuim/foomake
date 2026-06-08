@@ -393,7 +393,7 @@ Migrations remain the **sole source of truth**.
 ## tasks
 
 **Tenant-owned:** Yes
-**Purpose:** Tenant-scoped generated workflow tasks snapshotting task-template data against a domain record
+**Purpose:** Tenant-scoped generated workflow tasks and manually assigned operational tasks
 
 ### Columns
 
@@ -401,13 +401,15 @@ Migrations remain the **sole source of truth**.
 | ------------------------- | --------- | -------- | --------------------------------------- |
 | id                        | bigint    | No       | Primary key                             |
 | tenant_id                 | bigint    | No       | FK → tenants.id (CASCADE)               |
-| workflow_domain_id        | bigint    | No       | FK → workflow_domains.id (CASCADE)      |
-| domain_record_id          | unsignedBigInteger | No | Domain-specific record identifier      |
-| workflow_stage_id         | bigint    | No       | FK → workflow_stages.id (CASCADE)       |
+| source                    | string    | No       | `generated` or `manual`; defaults to `generated` |
+| workflow_domain_id        | bigint    | Yes      | FK → workflow_domains.id (CASCADE); nullable for non-workflow manual tasks |
+| domain_record_id          | unsignedBigInteger | Yes | Domain-specific record identifier for workflow-context tasks |
+| workflow_stage_id         | bigint    | Yes      | FK → workflow_stages.id (CASCADE); nullable for non-workflow manual tasks |
 | workflow_task_template_id | bigint    | Yes      | FK → workflow_task_templates.id (SET NULL) |
 | assigned_to_user_id       | bigint    | No       | FK → users.id (CASCADE)                 |
 | title                     | string    | No       | Snapshot of template title              |
 | description               | text      | Yes      | Snapshot of template description        |
+| due_date                  | date      | Yes      | Task-specific due date                  |
 | sort_order                | unsignedInteger | No | Snapshot of template sort order         |
 | status                    | string    | No       | Defaults to `open`                      |
 | completed_at              | timestamp | Yes      | —                                       |
@@ -422,6 +424,8 @@ Migrations remain the **sole source of truth**.
 - Index: `(tenant_id, workflow_domain_id, domain_record_id)` (`tasks_tenant_domain_record_idx`)
 - Index: `(tenant_id, workflow_stage_id, status)` (`tasks_tenant_stage_status_idx`)
 - Index: `(tenant_id, assigned_to_user_id, status)` (`tasks_tenant_assignee_status_idx`)
+- Index: `(tenant_id, source, status)` (`tasks_tenant_source_status_idx`)
+- Index: `(tenant_id, due_date)` (`tasks_tenant_due_date_idx`)
 - Implicit (FK index): `tenant_id`
 - Implicit (FK index): `workflow_domain_id`
 - Implicit (FK index): `workflow_stage_id`
@@ -918,6 +922,7 @@ Migrations remain the **sole source of truth**.
 | id                  | bigint      | No       | Primary key               |
 | tenant_id           | bigint      | No       | FK → tenants.id (CASCADE) |
 | created_by_user_id  | bigint      | Yes      | FK → users.id (SET NULL)  |
+| assigned_to_user_id | bigint      | Yes      | FK → users.id (SET NULL)  |
 | supplier_id         | bigint      | Yes      | FK → suppliers.id (SET NULL) |
 | order_date          | date        | Yes      | —                         |
 | shipping_cents      | integer     | Yes      | Unsigned                  |
@@ -944,10 +949,12 @@ Migrations remain the **sole source of truth**.
 - Index: `tenant_id`
 - Index: `(tenant_id, status)`
 - Index: `(tenant_id, supplier_id)`
+- Index: `(tenant_id, assigned_to_user_id)` (`po_tenant_assignee_idx`)
 - Index: `(tenant_id, current_workflow_stage_id)` (`po_tenant_current_workflow_stage_idx`)
 - Index: `(tenant_id, last_completed_workflow_stage_id)` (`po_tenant_last_workflow_stage_idx`)
 - Check: `status IN ('DRAFT', 'CREATED', 'PARTIALLY_RECEIVED', 'RECEIVED', 'COMPLETED', 'CANCELLED')`
 - Implicit (FK index): `created_by_user_id`
+- Implicit (FK index): `assigned_to_user_id`
 - Implicit (FK index): `supplier_id`
 - Implicit (FK index): `cancelled_by_user_id`
 - Implicit (FK index): `back_ordered_by_user_id`
@@ -958,6 +965,7 @@ Migrations remain the **sole source of truth**.
 
 - `shipping_cents` is stored as integer cents; PO forms accept `shipping_amount` in dollars/cents and normalize at the request boundary.
 - `tax_cents` is server-calculated from `purchase_order_lines.line_tax_rate_bps`; it is not user-entered on the PO header.
+- `assigned_to_user_id` is the purchase-order workflow assignee; assignment options are limited to users eligible for purchasing workflow work.
 - `PARTIALLY_RECEIVED` is persisted after at least one positive receipt line is recorded while a receivable balance remains.
 - Purchasing workflow-stage `status_complete_label` values are selected from the workflow status option provider; `purchase_orders.status` remains constrained to the persisted values above, while the workflow-stage dropdown may also expose `OPEN` for workflow-derived stage configuration. Default seeded stages do not duplicate Receiving outcomes with a separate `partially_received` stage.
 - `CANCELLED` is persisted in `status`; `cancelled_at` and `cancelled_by_user_id` are audit metadata, not display authority.

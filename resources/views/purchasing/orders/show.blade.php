@@ -48,10 +48,10 @@
 
     <script type="application/json" id="purchasing-orders-show-payload">@json($payload)</script>
 
-    <div class="pt-4 pb-8 sm:pt-6 sm:pb-12">
+    <div class="pt-0 pb-8 sm:pt-6 sm:pb-12">
         <x-ui.toast visible="toast.visible" type="toast.type" message="toast.message" />
 
-        <div class="mx-auto w-full min-w-0 max-w-7xl space-y-0 px-1 sm:space-y-6 sm:px-6 lg:px-8" data-purchase-order-detail-content>
+        <div class="mx-auto w-full min-w-0 max-w-7xl space-y-6 px-1 sm:px-6 lg:px-8" data-purchase-order-detail-content>
             <div data-workflow-progress-panel x-html="workflowProgressHtml()"></div>
 
             <div class="grid w-full min-w-0 gap-4 sm:gap-6 lg:grid-cols-4 lg:items-start" data-purchase-order-detail-grid>
@@ -75,6 +75,23 @@
                                     </span>
                                 </label>
                                 <p class="mt-1 text-xs text-red-600" x-text="headerErrors.supplier_id[0]"></p>
+                            </div>
+                            <div class="max-w-sm">
+                                <label class="block text-xs font-semibold uppercase text-gray-500">
+                                    Assigned To
+                                    <span class="mt-2 flex items-center gap-2">
+                                        <select class="w-full rounded border-gray-300 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500 disabled:bg-gray-50 disabled:text-gray-700" x-model="form.assigned_to_user_id" :disabled="!isEditable" x-init="$nextTick(() => { $el.value = form.assigned_to_user_id })" x-effect="$nextTick(() => { $el.value = form.assigned_to_user_id })" x-on:change="autosaveField('assigned_to_user_id')">
+                                            <template x-for="assignee in purchaseOrder.assignee_options || []" :key="assignee.value">
+                                                <option x-bind:value="assignee.value" x-text="assignee.label"></option>
+                                            </template>
+                                        </select>
+                                        <svg data-autosave-success-icon class="h-5 w-5 shrink-0 text-lime-400" x-show="savedFields.assigned_to_user_id" x-cloak xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75" />
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 1 1-18 0Z" />
+                                        </svg>
+                                    </span>
+                                </label>
+                                <p class="mt-1 text-xs text-red-600" x-text="headerErrors.assigned_to_user_id[0]"></p>
                             </div>
                             <div class="max-w-xs">
                                 <label class="block text-xs font-semibold uppercase text-gray-500">
@@ -325,12 +342,29 @@
                 <div class="min-w-0 space-y-0 sm:space-y-6 lg:col-span-3" data-purchase-order-main-lower-column>
                     <x-notes-feed :config="$payload['notesFeed']" />
 
-                    <x-detail-section-card
-                        title="Tasks"
-                        :description="__('Complete current stage tasks before moving the purchase order forward.')"
-                        :default-open="false"
+                    <div
+                        x-data="{ showTaskCreate: false }"
+                        x-on:task-created.window="workflow.currentStageTasks = [...(workflow.currentStageTasks || []), $event.detail.task]"
                     >
-                        <div class="divide-y divide-gray-100 rounded-xl border border-gray-200 bg-white">
+                        <x-detail-section-card
+                            title="Tasks"
+                            :description="__('Complete current stage tasks before moving the purchase order forward.')"
+                            :default-open="false"
+                        >
+                            <x-slot name="actions">
+                                <button
+                                    type="button"
+                                    class="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-gray-300 text-gray-600 transition hover:bg-gray-50 hover:text-gray-900"
+                                    x-on:click="showTaskCreate = true"
+                                    aria-label="{{ __('Create task') }}"
+                                >
+                                    <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                                    </svg>
+                                </button>
+                            </x-slot>
+
+                            <div class="divide-y divide-gray-100 rounded-xl border border-gray-200 bg-white">
                             <template x-if="(workflow.currentStageTasks || []).length === 0">
                                 <div class="px-4 py-4 text-sm text-gray-500">{{ __('No tasks for the current workflow stage.') }}</div>
                             </template>
@@ -343,6 +377,10 @@
                                         <p class="mt-1 text-xs text-gray-500" x-show="task.assigned_to_user_name">
                                             <span>{{ __('Assigned To') }}:</span>
                                             <span x-text="task.assigned_to_user_name"></span>
+                                        </p>
+                                        <p class="mt-1 text-xs text-gray-500" x-show="task.due_date">
+                                            <span>{{ __('Due') }}:</span>
+                                            <span x-text="task.due_date"></span>
                                         </p>
                                     </div>
 
@@ -365,8 +403,16 @@
                                     </div>
                                 </div>
                             </template>
-                        </div>
-                    </x-detail-section-card>
+                            </div>
+                        </x-detail-section-card>
+
+                        @include('tasks.partials.create-task-slide-over', [
+                            'users' => collect(data_get($payload, 'taskCreate.users', [])),
+                            'workflowDomainId' => data_get($payload, 'workflow.currentStage.workflow_domain_id'),
+                            'domainRecordId' => $purchaseOrder->id,
+                            'workflowStageId' => data_get($payload, 'workflow.currentStage.id'),
+                        ])
+                    </div>
 
                     <x-detail-section-card title="Receipt History" :default-open="false">
                         <div class="overflow-x-auto" x-show="receipts.length > 0">

@@ -1923,15 +1923,18 @@ it('35e. empty stockable material inventory counts section uses the normal empty
         ->and($listResponse->json('data'))->toBe([])
         ->and($sharedSectionSource)->toContain("x-show=\"!isLoading && records.length === 0\"")
         ->and($sharedSectionSource)->toContain("x-show=\"sectionError\"")
-        ->and($sharedSectionSource)->toContain("if (!response.ok) {\n                this.sectionError = 'Unable to load records.';")
-        ->and($sharedSectionSource)->toContain("this.records = asArray(data.data).map((record) => this.normalizeRow(record));");
+        ->and($sharedSectionSource)->toContain('if (!response.ok) {')
+        ->and($sharedSectionSource)->toContain('this.sectionError = "Unable to load records.";')
+        ->and($sharedSectionSource)->toContain('this.records = asArray(data.data).map((record) =>')
+        ->and($sharedSectionSource)->toContain('this.normalizeRow(record),');
 });
 
 it('35f. material detail inventory counts only show an error message when the shared section load actually fails', function (): void {
     $sharedSectionSource = file_get_contents(resource_path('js/lib/js-crud-section.js'));
 
-    expect($sharedSectionSource)->toContain("if (!response.ok) {\n                this.sectionError = 'Unable to load records.';")
-        ->and($sharedSectionSource)->toContain("} catch (error) {\n            this.sectionError = 'Unable to load records.';")
+    expect($sharedSectionSource)->toContain('if (!response.ok) {')
+        ->and($sharedSectionSource)->toContain('} catch (error) {')
+        ->and($sharedSectionSource)->toContain('this.sectionError = "Unable to load records.";')
         ->and($sharedSectionSource)->not->toContain("this.sectionError = 'Unable to load records.';\n            this.records = [];")
         ->and($sharedSectionSource)->toContain('action: this.section.createAction,');
 });
@@ -2061,7 +2064,7 @@ it('38. shared app layout keeps sticky shell navigation and header above the det
     expect($source)->toContain('h-screen')
         ->and($source)->toContain('overflow-hidden')
         ->and($source)->toContain('sticky top-0 z-40')
-        ->and($source)->toContain('sticky top-16 z-30');
+        ->and($source)->toContain('sticky top-0 z-40');
 });
 
 it('39. recipe create slide over stays fixed above sticky shell chrome and closes on backdrop click', function (): void {

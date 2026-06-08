@@ -55,6 +55,7 @@ class GenerateWorkflowStageTasksAction
 
             Task::withoutGlobalScopes()->create([
                 'tenant_id' => $tenantId,
+                'source' => Task::SOURCE_GENERATED,
                 'workflow_domain_id' => $stage->workflow_domain_id,
                 'domain_record_id' => $domainRecordId,
                 'workflow_stage_id' => $stage->id,

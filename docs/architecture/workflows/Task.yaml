@@ -1,30 +1,37 @@
 name: Task
-type: Tenant-Scoped Generated Record Rule
+type: Tenant-Scoped Task Record Rule
 location:
   - app/Actions/Workflows/CanViewAssignedWorkflowResourceAction.php
   - app/Actions/Tasks/CompleteTaskAction.php
   - app/Actions/Workflows/GenerateWorkflowStageTasksAction.php
   - app/Models/Task.php
   - database/migrations/2026_05_07_000004_create_tasks_table.php
+  - database/migrations/2026_06_08_000001_add_manual_task_support_to_tasks_table.php
   - docs/PR3_ROADMAP.md
-purpose: Define the domain-general generated task record used to snapshot workflow task-template data against an operational domain record.
+purpose: Define the tenant-owned task record used for generated workflow task snapshots and manually created assigned tasks from resource detail pages.
 when_to_use:
   - Generated task creation on workflow-stage entry
+  - Manually assigning one-off operational follow-up tasks from detail-page Tasks sections
   - Assigned-user task completion behavior
   - Snapshot persistence independent of later template edits
 when_not_to_use:
-  - Project-management features outside the operational workflow scope
+  - Project-management features outside the operational workflow and assigned follow-up scope
   - Reopening, branching, comments, attachments, or multi-assignee task systems
 rules:
   - Tasks are tenant-owned and tenant-scoped.
-  - Tasks belong to one workflow domain, one workflow stage, and one originating workflow task template.
-  - Tasks reference one domain record through a domain-specific record identifier.
-  - Tasks snapshot title, description, sort_order, and assigned user at creation time.
+  - `tasks.source` distinguishes `generated` workflow-template tasks from `manual` user-created tasks.
+  - Generated tasks belong to one workflow domain, one workflow stage, one domain record, and one originating workflow task template.
+  - Manual tasks created from workflow detail pages may carry workflow domain, nullable workflow stage, and domain record context for display only.
+  - Manual workflow-context tasks may be created before the resource enters a stage; these tasks keep a null workflow_stage_id and must still render on the resource detail page after refresh.
+  - Manual tasks with workflow context remain visible on their workflow resource across later stage changes, regardless of completion status.
+  - Manual tasks created from non-workflow detail pages must not create a resource relationship; they only assign work to the selected tenant user.
+  - Tasks snapshot title, description, due_date, sort_order, and assigned user at creation time.
   - Task status values are canonical in docs/ENUMS.md.
   - Task completion is final in this PR scope.
   - Completed tasks remain visible.
   - Already-generated tasks remain unchanged when templates are edited later.
   - Re-entering a stage or retrying a transition must not create duplicate generated tasks for the same template and stage-entry slice.
+  - Manual tasks must not block workflow-stage transitions.
   - Workflow task assignment options must exclude users lacking the workflow domain's assignment credential.
   - Assignment-scoped resource detail visibility is granted to direct workflow resource assignees and users assigned to generated workflow-stage tasks on that resource.
   - Generated workflow task fallback assignment must choose the first eligible tenant user for the workflow domain, not the first tenant user.
@@ -33,6 +40,7 @@ public_interface:
   - CanViewAssignedWorkflowResourceAction::execute()
   - CompleteTaskAction::execute()
   - GenerateWorkflowStageTasksAction::execute()
+  - TaskController::store()
   - Task::query()
   - WorkflowAssignmentPermissions::eligibleUsersQuery()
   - Dashboard Todo read model
@@ -44,5 +52,12 @@ example_usage: |
     domain_record_id = sales_order_id
     stage = packing
     template = Print packing slip
+    assigned_to_user_id = 17
+    status = open
+
+  Manual detail task:
+    source = manual
+    title = Call supplier
+    due_date = 2026-06-15
     assigned_to_user_id = 17
     status = open

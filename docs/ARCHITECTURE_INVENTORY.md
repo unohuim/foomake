@@ -534,6 +534,8 @@ Assignment controls for workflow-owned records or generated workflow tasks shoul
 
 Resource detail Gates/policies remain the source of truth. Assigned workflow resource visibility is granted through `CanViewAssignedWorkflowResourceAction` when the current user is directly assigned to the resource or assigned to a generated workflow-stage task on that resource.
 
+Dashboard Todo only surfaces open work. Workflow responsibilities include assigned make orders, inventory counts, and purchase orders while excluding completed, posted, made, and cancelled resources; stage task rows require an open task and a non-terminal related resource. Todo rows show the workflow domain name separately from the resource label. Workflow responsibility badges show the current stage name, or `Draft` when the workflow has not entered a stage; task badges show the task status.
+
 **When Not to Use:**
 Dashboard customization, draggable widgets, ad hoc task creation, task completion controls, or new task routes.
 
@@ -721,10 +723,11 @@ Apply one shared stage-entry task generation and stage-exit blocking rule across
 **When to Use:**  
 - Sales-order stage transitions  
 - Inventory-count stage transitions  
+- Workflow-context manual tasks that should display beside generated tasks but not block transitions
 
 **When Not to Use:**  
 - Draft setup outside workflow stages  
-- Purchase-order and make-order runtime integrations before approval  
+- Manual task transition blocking
 
 **Public Interface:**  
 - `AssertWorkflowStageTasksCompletedAction::execute()`  
@@ -1457,19 +1460,20 @@ packing stage template: Print packing slip
 ### Task
 
 **Name:** Task  
-**Type:** Tenant-Scoped Generated Record Rule  
+**Type:** Tenant-Scoped Task Record Rule
 **Location:**  
 - `docs/architecture/workflows/Task.yaml`  
 - `docs/PR3_ROADMAP.md`  
+- `app/Http/Controllers/TaskController.php`
 
 **Purpose:**  
-Define the generated task record that snapshots template data against a specific workflow domain record.
+Define the tenant-owned task record for generated workflow task snapshots and manually assigned operational follow-up tasks.
 
 **When to Use:**  
-Stage-entry task generation, assigned-user completion, and immutable snapshot behavior for workflow tasks.
+Stage-entry task generation, manual assigned detail-page tasks with due dates, assigned-user completion, and immutable snapshot behavior for workflow tasks.
 
 **When Not to Use:**  
-General project-management features, comments, due dates, multi-assignee tasks, or task reopening flows.
+General project-management features, comments, due dates, multi-assignee tasks, task reopening flows, or manual task workflow gating.
 
 **Public Interface:**  
 - `docs/architecture/workflows/Task.yaml`  
@@ -1477,6 +1481,9 @@ General project-management features, comments, due dates, multi-assignee tasks, 
 **Example Usage:**  
 ```text
 sales order 42 enters current stage -> generate tenant-scoped stage tasks
+make order 42 detail -> create manual assigned task with workflow context, but no transition gate
+inventory count draft detail -> create manual assigned task with workflow domain and record context, but no stage
+manual task -> due_date appears on task rows and dashboard todo when present
 ```
 
 ---
@@ -2155,6 +2162,7 @@ Notes:
 - When `do_draft` is true, the first visual step is `DRAFT`.
 - Active tenant-configured stage names render in stage order.
 - Completed workflows render with no current step and mark completed stages as checked, including `DRAFT` only when `do_draft` is true.
+- Mobile rendering uses a horizontal read-only stage selector: all stage numbers remain visible, completed stages use the same filled-indigo visual language as desktop, and selecting a stage number only reveals that stage label without submitting workflow changes.
 - The component is read-only and must not expose transition controls.
 - Existing resource authorization remains the source of truth.
 
@@ -2815,6 +2823,7 @@ Track Purchase Order lifecycle through the shared workflow foundation while mirr
 - Completing the configured inventory-impacting PO stage applies receipt inventory impact.
 - Cancel transitions eligible purchase orders to persisted terminal status `CANCELLED`.
 - Back Order and Short Close are action events or markers, not `purchase_orders.status` values.
+- Purchase orders may carry one nullable workflow assignee in `purchase_orders.assigned_to_user_id`; assignment options are tenant-scoped and limited to purchasing workflow-eligible users.
 - Line-level tax is entered with one decimal place, stored in basis points, and calculated per line for PO tax totals.
 - PO detail Details fields autosave individually and must not depend on a section-level Save button.
 - PO detail header, shipping, and line edits remain editable until the configured purchasing inventory-effect stage has completed; cancellation, completed workflow, or inventory-effect completion locks edits.

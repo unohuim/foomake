@@ -195,7 +195,13 @@ class SalesOrderStatusController extends Controller
             ->with(['assignedTo', 'completedBy'])
             ->where('workflow_domain_id', $stage->workflow_domain_id)
             ->where('domain_record_id', $order->id)
-            ->where('workflow_stage_id', $stage->id)
+            ->where(function ($query) use ($stage): void {
+                $query->where('source', Task::SOURCE_MANUAL)
+                    ->orWhere(function ($query) use ($stage): void {
+                        $query->where('source', Task::SOURCE_GENERATED)
+                            ->where('workflow_stage_id', $stage->id);
+                    });
+            })
             ->orderBy('sort_order')
             ->orderBy('id')
             ->get()
@@ -213,12 +219,14 @@ class SalesOrderStatusController extends Controller
     {
         return [
             'id' => $task->id,
+            'source' => $task->source,
             'workflow_stage_id' => $task->workflow_stage_id,
             'workflow_task_template_id' => $task->workflow_task_template_id,
             'assigned_to_user_id' => $task->assigned_to_user_id,
             'assigned_to_user_name' => $task->assignedTo?->name,
             'title' => $task->title,
             'description' => $task->description,
+            'due_date' => $task->due_date?->format('Y-m-d'),
             'sort_order' => $task->sort_order,
             'status' => $task->status,
             'is_completed' => $task->isCompleted(),

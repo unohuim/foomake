@@ -810,8 +810,9 @@ it('normal registration requires email verification', function () {
     Notification::assertSentTo($user, VerifyEmail::class);
 
     $this->actingAs($user)
-        ->get(route('admin.users.index'))
-        ->assertRedirect(route('verification.notice'));
+        ->get(route('dashboard'))
+        ->assertOk()
+        ->assertSee('Your email is not verified.');
 });
 
 it('normal login still works', function () {

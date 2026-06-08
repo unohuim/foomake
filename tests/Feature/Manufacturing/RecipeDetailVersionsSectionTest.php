@@ -1083,7 +1083,8 @@ test('25e. recipe detail make orders create action posts directly through the sh
         ->and($pageSource)->toContain("await pageState?.createMakeOrder(section?.endpoints?.create || '')")
         ->and($pageSource)->not->toContain('buildCreatePayload: (form) => ({')
         ->and($pageSource)->not->toContain('handleCreateSuccess: async ({ data }) =>')
-        ->and($crudSectionSource)->toContain("if (this.section.createAction.type === 'custom' && typeof this.adapters.handleCreateAction === 'function')");
+        ->and($crudSectionSource)->toContain('this.section.createAction.type === "custom"')
+        ->and($crudSectionSource)->toContain('typeof this.adapters.handleCreateAction === "function"');
 });
 
 test('25f. shared crud section keeps the create button outside the empty state box', function (): void {

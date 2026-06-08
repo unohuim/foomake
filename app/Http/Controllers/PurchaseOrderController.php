@@ -9,6 +9,8 @@ use App\Models\ItemPurchaseOption;
 use App\Models\PurchaseOrder;
 use App\Models\PurchaseOrderLine;
 use App\Models\Supplier;
+use App\Models\User;
+use App\Support\Workflows\WorkflowAssignmentPermissions;
 use App\Support\QuantityFormatter;
 use App\Services\Purchasing\PurchaseOrderLifecycleService;
 use App\Services\Workflows\WorkflowTransitionService;
@@ -153,7 +155,8 @@ class PurchaseOrderController extends Controller
                 || app(CanViewAssignedWorkflowResourceAction::class)->execute(
                     $request->user(),
                     $purchaseOrder,
-                    'purchasing'
+                    'purchasing',
+                    $purchaseOrder->assigned_to_user_id
                 ),
             403
         );
@@ -169,6 +172,7 @@ class PurchaseOrderController extends Controller
             'shortClosures',
             'shortClosures.lines',
             'shortClosures.shortClosedByUser',
+            'assignedToUser',
             'currentWorkflowStage',
             'lastCompletedWorkflowStage',
         ]);
@@ -247,6 +251,9 @@ class PurchaseOrderController extends Controller
             'lineDeleteUrlBase' => url("/purchasing/orders/{$purchaseOrder->id}/lines"),
             'receiptStoreUrl' => route('purchasing.orders.receipts.store', $purchaseOrder),
             'shortCloseStoreUrl' => route('purchasing.orders.short-closures.store', $purchaseOrder),
+            'taskCreate' => [
+                'users' => $this->manualTaskAssigneeOptions((int) $request->user()->tenant_id),
+            ],
             'notesFeed' => app(BuildNotesFeedPayloadAction::class)->execute(
                 $purchaseOrder,
                 route('purchasing.orders.notes.index', $purchaseOrder),
@@ -263,6 +270,77 @@ class PurchaseOrderController extends Controller
             'purchaseOrder' => $purchaseOrder,
             'payload' => $payload,
         ]);
+    }
+
+    /**
+     * Build tenant user options for manual task assignment.
+     *
+     * @return array<int, array{id: int, name: string}>
+     */
+    private function manualTaskAssigneeOptions(int $tenantId): array
+    {
+        return User::query()
+            ->where('tenant_id', $tenantId)
+            ->orderBy('name')
+            ->orderBy('id')
+            ->get()
+            ->map(fn (User $user): array => [
+                'id' => (int) $user->id,
+                'name' => $user->name,
+            ])
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Build tenant-scoped assignee options for purchase order assignment controls.
+     *
+     * @return array<int, array{value: string, label: string}>
+     */
+    private function tenantAssigneeOptionsPayload(int $tenantId, ?User $selectedUser = null): array
+    {
+        $eligibleUsers = app(WorkflowAssignmentPermissions::class)
+            ->eligibleUsersQuery($tenantId, 'purchasing')
+            ->orderBy('name')
+            ->orderBy('id')
+            ->get();
+
+        if (
+            $selectedUser !== null
+            && (int) $selectedUser->tenant_id === $tenantId
+            && ! $eligibleUsers->contains(fn (User $user): bool => (int) $user->id === (int) $selectedUser->id)
+        ) {
+            $eligibleUsers->push($selectedUser);
+        }
+
+        return [
+            [
+                'value' => '',
+                'label' => 'Unassigned',
+            ],
+            ...$eligibleUsers
+                ->sortBy([
+                    ['name', 'asc'],
+                    ['id', 'asc'],
+                ])
+                ->map(fn (User $user): array => [
+                    'value' => (string) $user->id,
+                    'label' => $user->name,
+                ])
+                ->values()
+                ->all(),
+        ];
+    }
+
+    /**
+     * Determine whether the selected user has minimum visibility for Purchase Order assignment.
+     */
+    private function userCanBeAssignedToPurchasingWorkflow(int $userId): bool
+    {
+        $user = User::query()->find($userId);
+
+        return $user !== null
+            && app(WorkflowAssignmentPermissions::class)->userCanBeAssignedToDomain($user, 'purchasing');
     }
 
     /**
@@ -286,10 +364,28 @@ class PurchaseOrderController extends Controller
             'shipping_amount' => ['nullable', 'regex:/^\d{1,10}(?:\.\d{1,2})?$/'],
             'po_number' => ['nullable', 'string', 'max:255'],
             'notes' => ['nullable', 'string'],
+            'assigned_to_user_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('users', 'id')->where('tenant_id', $request->user()->tenant_id),
+            ],
         ]);
         $this->rejectLegacyMoneyInputs($validator, $request);
 
         $validated = $validator->validate();
+
+        if (
+            array_key_exists('assigned_to_user_id', $validated)
+            && $validated['assigned_to_user_id'] !== null
+            && ! $this->userCanBeAssignedToPurchasingWorkflow((int) $validated['assigned_to_user_id'])
+        ) {
+            return response()->json([
+                'message' => 'The selected user cannot be assigned to Purchase Orders.',
+                'errors' => [
+                    'assigned_to_user_id' => ['The selected user cannot be assigned to Purchase Orders.'],
+                ],
+            ], 422);
+        }
 
         $payload = $request->all();
         $updateData = [];
@@ -318,6 +414,12 @@ class PurchaseOrderController extends Controller
 
         if (array_key_exists('notes', $payload)) {
             $updateData['notes'] = $validated['notes'] ?? null;
+        }
+
+        if (array_key_exists('assigned_to_user_id', $payload)) {
+            $updateData['assigned_to_user_id'] = isset($validated['assigned_to_user_id'])
+                ? (int) $validated['assigned_to_user_id']
+                : null;
         }
 
         $updatedOrder = null;
@@ -349,7 +451,7 @@ class PurchaseOrderController extends Controller
             }
 
             $this->recalculateTotals($lockedOrder);
-            $updatedOrder = $lockedOrder->fresh(['supplier', 'lines.item', 'lines.purchaseOption.packUom']);
+            $updatedOrder = $lockedOrder->fresh(['supplier', 'assignedToUser', 'lines.item', 'lines.purchaseOption.packUom']);
             $lineTotals = app(PurchaseOrderLifecycleService::class)->computeLineTotals($updatedOrder);
             $updatedLines = $updatedOrder->lines
                 ->map(fn (PurchaseOrderLine $line): array => $this->linePayload(
@@ -408,6 +510,12 @@ class PurchaseOrderController extends Controller
             'id' => $purchaseOrder->id,
             'supplier_id' => $purchaseOrder->supplier_id,
             'supplier_name' => $purchaseOrder->supplier?->company_name,
+            'assigned_to_user_id' => $purchaseOrder->assigned_to_user_id,
+            'assigned_to_user_name' => $purchaseOrder->assignedToUser?->name,
+            'assignee_options' => $this->tenantAssigneeOptionsPayload(
+                (int) $purchaseOrder->tenant_id,
+                $purchaseOrder->assignedToUser
+            ),
             'order_date' => $purchaseOrder->order_date?->format('Y-m-d'),
             'shipping_cents' => $purchaseOrder->shipping_cents,
             'shipping_amount' => $this->formatCentsToAmount($purchaseOrder->shipping_cents),

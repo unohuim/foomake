@@ -789,7 +789,7 @@ it('30b. shared ingredient section preserves non clipping overflow for comboboxe
 
     expect($cardSource)->toContain('-mx-1 !-mt-px w-auto min-w-0 overflow-visible border border-gray-500')
         ->and($cardSource)->toContain('first:!mt-0 sm:mx-0 sm:!mt-6 sm:first:!mt-0 sm:w-full sm:rounded-2xl sm:border-gray-200')
-        ->and($cardSource)->toContain('min-w-0 border-t border-gray-100')
+        ->and($cardSource)->toContain('border-t border-gray-100 bg-white')
         ->and($ingredientSource)->toContain('overflow-x-auto overflow-y-visible')
         ->and($ingredientSource)->toContain('x-dropdown')
         ->and($ingredientSource)->not->toContain('data-make-order-ingredient-add-bar');

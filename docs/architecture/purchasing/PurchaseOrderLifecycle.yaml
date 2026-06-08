@@ -31,6 +31,8 @@ rules:
   - cancelled_at and cancelled_by_user_id are audit metadata and are not display authority.
   - Back Order is a receiving-stage marker/event and must not persist as a status value.
   - Short Close is stored through short-close history and quantities, not as a status value.
+  - Purchase orders may carry one nullable workflow assignee in purchase_orders.assigned_to_user_id.
+  - Purchase order assignee options must be tenant-scoped and limited to users eligible for purchasing workflow work.
   - Line-level tax is entered with one decimal place, stored in basis points on purchase_order_lines, and PO tax totals are calculated per line.
   - Draft PO line pack_count stores whole package counts only.
   - Purchase order details, shipping, line add/remove, and line quantity/tax edits remain editable until cancellation, workflow completion, or completion of the configured purchasing inventory-effect stage.

@@ -13,6 +13,7 @@ use App\Models\SalesOrder;
 use App\Models\SalesOrderLine;
 use App\Support\QuantityFormatter;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Str;
 
 /**
  * Build inventory availability rows for the materials index.
@@ -36,7 +37,7 @@ class InventoryAvailabilityIndexReadModel
             ->where('tenant_id', $tenantId)
             ->with('baseUom')
             ->when($search !== '', function ($query) use ($search): void {
-                $query->where('name', 'like', '%' . $search . '%');
+                $query->whereRaw('LOWER(name) LIKE ?', ['%' . Str::lower($search) . '%']);
             })
             ->orderBy('name', $direction)
             ->get();
@@ -65,6 +66,7 @@ class InventoryAvailabilityIndexReadModel
 
             return [
                 'id' => $item->id,
+                'name' => $item->name,
                 'item' => $item->name,
                 'base_uom_id' => $item->base_uom_id,
                 'item_uom_name' => $item->baseUom?->name,
@@ -102,6 +104,7 @@ class InventoryAvailabilityIndexReadModel
         return $this->rows((int) $item->tenant_id)
             ->firstWhere('id', $item->id) ?? [
             'id' => $item->id,
+            'name' => $item->name,
             'item' => $item->name,
             'base_uom_id' => $item->base_uom_id,
             'item_uom_name' => $item->baseUom?->name,

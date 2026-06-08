@@ -202,6 +202,76 @@
                 </div>
             </section>
 
+            <div
+                x-data="taskCreateSection"
+                x-on:task-created.window="appendCreatedTask($event)"
+            >
+                <x-detail-section-card
+                    title="Tasks"
+                    :description="__('Create assigned tasks without linking them to this customer.')"
+                    :default-open="false"
+                >
+                    <x-slot name="actions">
+                        <button
+                            type="button"
+                            class="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-gray-300 text-gray-600 transition hover:bg-gray-50 hover:text-gray-900"
+                            x-on:click="showTaskCreate = true"
+                            aria-label="{{ __('Create task') }}"
+                        >
+                            <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                            </svg>
+                        </button>
+                    </x-slot>
+
+                    <div
+                        class="rounded-xl border border-dashed border-gray-300 px-4 py-8 text-center text-sm text-gray-500"
+                        x-show="createdTasks.length === 0"
+                    >
+                        {{ __('Manual tasks created here are assigned to the selected user only.') }}
+                    </div>
+
+                    <div class="divide-y divide-gray-100 rounded-xl border border-gray-200 bg-white" x-show="createdTasks.length > 0">
+                        <template x-for="task in createdTasks" :key="task.id">
+                            <div class="flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+                                <div class="min-w-0 flex-1">
+                                    <p class="text-sm font-medium text-gray-900" x-text="task.title"></p>
+                                    <p class="mt-1 text-sm text-gray-500" x-show="task.description" x-text="task.description"></p>
+                                    <p class="mt-1 text-xs text-gray-500" x-show="task.assigned_to_user_name">
+                                        <span>{{ __('Assigned To') }}:</span>
+                                        <span x-text="task.assigned_to_user_name"></span>
+                                    </p>
+                                    <p class="mt-1 text-xs text-gray-500" x-show="task.due_date">
+                                        <span>{{ __('Due') }}:</span>
+                                        <span x-text="task.due_date"></span>
+                                    </p>
+                                </div>
+                                <div class="flex flex-wrap items-center gap-3">
+                                    <span
+                                        class="inline-flex w-fit items-center rounded-full px-2.5 py-1 text-xs font-medium"
+                                        x-bind:class="taskStatusClasses(task)"
+                                        x-text="task.status || '{{ __('open') }}'"
+                                    ></span>
+                                    <button
+                                        type="button"
+                                        class="inline-flex items-center rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold uppercase tracking-widest text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                                        x-show="task.can_complete && !task.is_completed"
+                                        x-bind:disabled="isTaskCompleting(task)"
+                                        x-on:click="completeCreatedTask(task)"
+                                    >
+                                        {{ __('Complete') }}
+                                    </button>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </x-detail-section-card>
+
+                @include('tasks.partials.create-task-slide-over', [
+                    'users' => collect(data_get($payload, 'taskCreate.users', [])),
+                ])
+            </div>
+
             @if ($payload['canManageOrders'])
                 <section class="bg-white border border-gray-100 shadow-sm sm:rounded-lg" data-section="customer-orders">
                     <div class="p-6">
@@ -261,6 +331,7 @@
                                                                     </div>
                                                                     <p class="mt-1 text-xs text-gray-500" x-show="task.description" x-text="task.description"></p>
                                                                     <p class="mt-1 text-xs text-gray-500" x-text="task.assigned_to_user_name ? `Assigned to ${task.assigned_to_user_name}` : 'Assigned user unavailable'"></p>
+                                                                    <p class="mt-1 text-xs text-gray-500" x-show="task.due_date" x-text="`Due ${task.due_date}`"></p>
                                                                 </div>
 
                                                                 <button

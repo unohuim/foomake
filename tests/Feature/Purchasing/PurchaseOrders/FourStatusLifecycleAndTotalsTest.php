@@ -986,6 +986,74 @@ it('32c. purchase order editability remains true through creating and receiving 
         ->and($receivingPayload['purchaseOrder']['is_editable'] ?? null)->toBeTrue();
 });
 
+it('32c1. purchase order detail exposes assignment field and eligible assignee options', function (): void {
+    $tenant = ($this->makeTenant)();
+    $manager = ($this->makeUser)($tenant);
+    $eligible = ($this->makeUser)($tenant);
+    $ineligible = ($this->makeUser)($tenant);
+    $supplier = ($this->makeSupplier)($tenant);
+
+    ($this->grantPermission)($manager, 'purchasing-purchase-orders-create');
+    ($this->grantPermission)($eligible, 'purchasing-purchase-orders-receive');
+
+    $order = ($this->makeOrder)($tenant, $manager, $supplier, [
+        'assigned_to_user_id' => $eligible->id,
+    ]);
+
+    $response = $this->actingAs($manager)->get("/purchasing/orders/{$order->id}")->assertOk();
+    $payload = ($this->extractPayload)($response, 'purchasing-orders-show-payload');
+    $assigneeLabels = collect(data_get($payload, 'purchaseOrder.assignee_options', []))->pluck('label')->all();
+
+    expect($response->getContent())->toContain('Assigned To')
+        ->and($response->getContent())->toContain('x-model="form.assigned_to_user_id"')
+        ->and(data_get($payload, 'purchaseOrder.assigned_to_user_id'))->toBe($eligible->id)
+        ->and(data_get($payload, 'purchaseOrder.assigned_to_user_name'))->toBe($eligible->name)
+        ->and($assigneeLabels)->toContain($eligible->name)
+        ->and($assigneeLabels)->not->toContain($ineligible->name);
+});
+
+it('32c2. purchase order assignment can be updated by purchase order manager', function (): void {
+    $tenant = ($this->makeTenant)();
+    $manager = ($this->makeUser)($tenant);
+    $eligible = ($this->makeUser)($tenant);
+    $supplier = ($this->makeSupplier)($tenant);
+
+    ($this->grantPermission)($manager, 'purchasing-purchase-orders-create');
+    ($this->grantPermission)($eligible, 'purchasing-purchase-orders-receive');
+
+    $order = ($this->makeOrder)($tenant, $manager, $supplier);
+
+    $this->actingAs($manager)
+        ->patchJson("/purchasing/orders/{$order->id}", [
+            'assigned_to_user_id' => $eligible->id,
+        ])
+        ->assertOk()
+        ->assertJsonPath('data.purchase_order.assigned_to_user_id', $eligible->id)
+        ->assertJsonPath('data.purchase_order.assigned_to_user_name', $eligible->name);
+
+    expect($order->fresh()->assigned_to_user_id)->toBe($eligible->id);
+});
+
+it('32c3. purchase order assignment rejects users without purchasing workflow credentials', function (): void {
+    $tenant = ($this->makeTenant)();
+    $manager = ($this->makeUser)($tenant);
+    $ineligible = ($this->makeUser)($tenant);
+    $supplier = ($this->makeSupplier)($tenant);
+
+    ($this->grantPermission)($manager, 'purchasing-purchase-orders-create');
+
+    $order = ($this->makeOrder)($tenant, $manager, $supplier);
+
+    $this->actingAs($manager)
+        ->patchJson("/purchasing/orders/{$order->id}", [
+            'assigned_to_user_id' => $ineligible->id,
+        ])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['assigned_to_user_id']);
+
+    expect($order->fresh()->assigned_to_user_id)->toBeNull();
+});
+
 it('32d. purchase order editability locks after inventory impacting stage completion', function (): void {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);

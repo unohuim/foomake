@@ -25,7 +25,7 @@
     <script type="application/json" id="sales-orders-show-payload">@json($payload)</script>
 
     <div
-        class="pt-6 pb-12"
+        class="pt-0 pb-12 sm:pt-6"
         data-page="sales-orders-show"
         data-payload="sales-orders-show-payload"
         x-data="salesOrdersShow"
@@ -93,9 +93,29 @@
                         </template>
                     </div>
 
-                    <div class="mt-6 rounded-xl border border-gray-200 bg-gray-50 p-4" x-show="(order.current_stage_tasks || []).length > 0">
-                        <p class="text-[11px] font-semibold uppercase tracking-[0.2em] text-gray-500">Checklist</p>
+                    <div
+                        class="mt-6 rounded-xl border border-gray-200 bg-gray-50 p-4"
+                        x-data="{ showTaskCreate: false }"
+                        x-on:task-created.window="order.current_stage_tasks = [...(order.current_stage_tasks || []), $event.detail.task]"
+                    >
+                        <div class="flex items-center justify-between gap-3">
+                            <p class="text-[11px] font-semibold uppercase tracking-[0.2em] text-gray-500">Checklist</p>
+                            <button
+                                type="button"
+                                class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-600 transition hover:bg-gray-50 hover:text-gray-900"
+                                x-on:click="showTaskCreate = true"
+                                aria-label="{{ __('Create task') }}"
+                            >
+                                <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                                </svg>
+                            </button>
+                        </div>
                         <div class="mt-3 space-y-2">
+                            <template x-if="(order.current_stage_tasks || []).length === 0">
+                                <div class="rounded-lg border border-dashed border-gray-300 bg-white p-4 text-sm text-gray-500">No tasks for the current workflow stage.</div>
+                            </template>
+
                             <template x-for="task in order.current_stage_tasks" :key="task.id">
                                 <div class="rounded-lg border border-gray-200 bg-white p-3">
                                     <div class="flex items-start justify-between gap-3">
@@ -110,6 +130,7 @@
                                             </div>
                                             <p class="mt-1 text-xs text-gray-500" x-show="task.description" x-text="task.description"></p>
                                             <p class="mt-1 text-xs text-gray-500" x-text="task.assigned_to_user_name ? `Assigned to ${task.assigned_to_user_name}` : 'Assigned user unavailable'"></p>
+                                            <p class="mt-1 text-xs text-gray-500" x-show="task.due_date" x-text="`Due ${task.due_date}`"></p>
                                         </div>
 
                                         <button
@@ -124,6 +145,13 @@
                                 </div>
                             </template>
                         </div>
+
+                        @include('tasks.partials.create-task-slide-over', [
+                            'users' => collect(data_get($payload, 'taskCreate.users', [])),
+                            'workflowDomainId' => data_get($payload, 'order.current_stage.workflow_domain_id'),
+                            'domainRecordId' => $salesOrder->id,
+                            'workflowStageId' => data_get($payload, 'order.current_stage.id'),
+                        ])
                     </div>
                 </div>
             </div>

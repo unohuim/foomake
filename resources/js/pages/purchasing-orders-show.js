@@ -4,6 +4,7 @@ export function mount(rootEl, payload) {
 
     const emptyHeaderErrors = () => ({
         supplier_id: [],
+        assigned_to_user_id: [],
         order_date: [],
         shipping_amount: [],
         po_number: [],
@@ -107,6 +108,7 @@ export function mount(rootEl, payload) {
         isHeaderSubmitting: false,
         savedFields: {
             supplier_id: false,
+            assigned_to_user_id: false,
             order_date: false,
             shipping_amount: false,
             po_number: false,
@@ -172,6 +174,7 @@ export function mount(rootEl, payload) {
         },
         form: {
             supplier_id: initialSupplierId,
+            assigned_to_user_id: normalizeId(safePayload.purchaseOrder?.assigned_to_user_id),
             order_date: safePayload.purchaseOrder?.order_date ?? '',
             shipping_amount: safePayload.purchaseOrder?.shipping_amount ?? '',
             po_number: safePayload.purchaseOrder?.po_number ?? '',
@@ -186,9 +189,11 @@ export function mount(rootEl, payload) {
         },
         init() {
             this.form.supplier_id = normalizeId(this.purchaseOrder?.supplier_id);
+            this.form.assigned_to_user_id = normalizeId(this.purchaseOrder?.assigned_to_user_id);
 
             this.$nextTick(() => {
                 this.form.supplier_id = normalizeId(this.purchaseOrder?.supplier_id);
+                this.form.assigned_to_user_id = normalizeId(this.purchaseOrder?.assigned_to_user_id);
             });
 
             this.$watch('lineForm.item_purchase_option_id', () => {
@@ -428,12 +433,74 @@ export function mount(rootEl, payload) {
                 return '';
             }
 
+            let activeMobileStep = steps.findIndex((step) => step.current || step.status === 'current');
+
+            if (activeMobileStep < 0) {
+                activeMobileStep = steps.findIndex((step) => step.status === 'upcoming');
+            }
+
+            if (activeMobileStep < 0) {
+                activeMobileStep = Math.max(0, steps.length - 1);
+            }
+
             return `
-                <nav class="w-full" aria-label="Progress">
-                    <ol role="list" class="divide-y divide-gray-300 rounded-md border border-gray-300 bg-white md:flex md:divide-y-0">
+                <nav class="w-full" aria-label="Progress" x-data="{ activeWorkflowStep: ${activeMobileStep} }" x-cloak>
+                    <div class="flex overflow-hidden rounded-md border border-gray-300 bg-white md:hidden" role="tablist" aria-label="Workflow stages" data-workflow-progress-mobile-tabs>
+                        ${steps.map((step, index) => this.workflowProgressMobileStepHtml(step, index, index === steps.length - 1)).join('')}
+                    </div>
+                    <ol role="list" class="hidden divide-y divide-gray-300 rounded-md border border-gray-300 bg-white md:flex md:divide-y-0">
                         ${steps.map((step, index) => this.workflowProgressStepHtml(step, index === steps.length - 1)).join('')}
                     </ol>
                 </nav>
+            `;
+        },
+        workflowProgressMobileStepHtml(step, index, isLast) {
+            const label = escapeHtml(step.label);
+            const isCompleted = step.status === 'completed';
+            const isCurrent = step.status === 'current' || step.current;
+            let circleClass = 'border-gray-300 bg-white text-gray-500';
+
+            if (isCompleted) {
+                circleClass = 'border-indigo-600 bg-indigo-600 text-white';
+            } else if (isCurrent) {
+                circleClass = 'border-indigo-600 bg-white text-indigo-600';
+            }
+            const labelClass = isCurrent ? 'text-indigo-600' : 'text-gray-900';
+            const circleContent = isCompleted
+                ? `
+                    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" class="size-5 text-white">
+                        <path fill-rule="evenodd" clip-rule="evenodd" d="M19.916 4.626a.75.75 0 0 1 .208 1.04l-9 13.5a.75.75 0 0 1-1.154.114l-6-6a.75.75 0 0 1 1.06-1.06l5.353 5.353 8.493-12.74a.75.75 0 0 1 1.04-.207Z"></path>
+                    </svg>
+                `
+                : `<span class="text-sm font-semibold">${escapeHtml(step.number)}</span>`;
+            const separator = isLast ? '' : `
+                <span aria-hidden="true" class="pointer-events-none absolute right-0 top-0 h-full w-5 md:hidden">
+                    <svg viewBox="0 0 22 80" fill="none" preserveAspectRatio="none" class="size-full text-gray-300">
+                        <path d="M0 -2L20 40L0 82" stroke="currentcolor" vector-effect="non-scaling-stroke" stroke-linejoin="round"></path>
+                    </svg>
+                </span>
+            `;
+
+            return `
+                <button
+                    type="button"
+                    role="tab"
+                    class="relative min-h-16 overflow-hidden bg-white py-2 pl-3 pr-6 transition-[flex-basis,flex-grow] duration-300 ease-out will-change-[flex-basis]"
+                    :class="activeWorkflowStep === ${index} ? 'basis-0 grow' : 'basis-16 grow-0'"
+                    :aria-selected="activeWorkflowStep === ${index} ? 'true' : 'false'"
+                    x-on:click="activeWorkflowStep = ${index}"
+                >
+                    <span class="flex h-full items-center" :class="activeWorkflowStep === ${index} ? 'justify-start gap-3' : 'justify-center'">
+                        <span class="flex size-9 shrink-0 items-center justify-center rounded-full border-2 ${circleClass}">
+                            ${circleContent}
+                        </span>
+                        <span
+                            class="min-w-0 truncate text-left text-sm font-medium transition-[max-width,opacity,transform] duration-300 ease-out ${labelClass}"
+                            :class="activeWorkflowStep === ${index} ? 'max-w-48 translate-x-0 opacity-100' : 'max-w-0 -translate-x-1 opacity-0'"
+                        >${label}</span>
+                    </span>
+                    ${separator}
+                </button>
             `;
         },
         workflowProgressStepHtml(step, isLast) {
@@ -823,6 +890,10 @@ export function mount(rootEl, payload) {
                 payloadData.supplier_id = this.normalizeNullableInt(this.form.supplier_id);
             }
 
+            if (field === 'assigned_to_user_id') {
+                payloadData.assigned_to_user_id = this.normalizeNullableInt(this.form.assigned_to_user_id);
+            }
+
             if (field === 'order_date') {
                 payloadData.order_date = this.normalizeNullable(this.form.order_date);
             }
@@ -852,6 +923,9 @@ export function mount(rootEl, payload) {
                 supplier_id: updated.supplier_id === null || updated.supplier_id === undefined
                     ? ''
                     : String(updated.supplier_id),
+                assigned_to_user_id: updated.assigned_to_user_id === null || updated.assigned_to_user_id === undefined
+                    ? ''
+                    : String(updated.assigned_to_user_id),
                 order_date: updated.order_date ?? '',
                 shipping_amount: updated.shipping_amount ?? '',
                 po_number: updated.po_number ?? '',
@@ -942,6 +1016,7 @@ export function mount(rootEl, payload) {
 
             const payloadData = {
                 supplier_id: this.normalizeNullableInt(this.form.supplier_id),
+                assigned_to_user_id: this.normalizeNullableInt(this.form.assigned_to_user_id),
                 order_date: this.normalizeNullable(this.form.order_date),
                 shipping_amount: this.normalizeNullable(this.form.shipping_amount),
                 po_number: this.normalizeNullable(this.form.po_number),

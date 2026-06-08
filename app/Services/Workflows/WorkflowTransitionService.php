@@ -225,6 +225,7 @@ class WorkflowTransitionService
             'status' => $purchaseOrder->workflowStatus(),
             'currentStage' => $currentStage ? [
                 'id' => $currentStage->id,
+                'workflow_domain_id' => $currentStage->workflow_domain_id,
                 'name' => $currentStage->name,
                 'actionVerb' => $this->naturalCase((string) $currentStage->action_verb),
             ] : null,
@@ -249,7 +250,13 @@ class WorkflowTransitionService
             ->where('tenant_id', $purchaseOrder->tenant_id)
             ->where('workflow_domain_id', $currentStage->workflow_domain_id)
             ->where('domain_record_id', $purchaseOrder->id)
-            ->where('workflow_stage_id', $currentStage->id)
+            ->where(function ($query) use ($currentStage): void {
+                $query->where('source', Task::SOURCE_MANUAL)
+                    ->orWhere(function ($query) use ($currentStage): void {
+                        $query->where('source', Task::SOURCE_GENERATED)
+                            ->where('workflow_stage_id', $currentStage->id);
+                    });
+            })
             ->orderBy('sort_order')
             ->orderBy('id')
             ->get()
@@ -267,12 +274,14 @@ class WorkflowTransitionService
     {
         return [
             'id' => $task->id,
+            'source' => $task->source,
             'workflow_stage_id' => $task->workflow_stage_id,
             'workflow_task_template_id' => $task->workflow_task_template_id,
             'assigned_to_user_id' => $task->assigned_to_user_id,
             'assigned_to_user_name' => $task->assignedTo?->name,
             'title' => $task->title,
             'description' => $task->description,
+            'due_date' => $task->due_date?->format('Y-m-d'),
             'sort_order' => $task->sort_order,
             'status' => $task->status,
             'is_completed' => $task->isCompleted(),

@@ -110,7 +110,7 @@ export function normalizeCrudConfig(config) {
             layout: sanitizeLabel(rawMobileCard.layout),
             badgesExpression: sanitizeLabel(rawMobileCard.badgesExpression),
             iconBadgesExpression: sanitizeLabel(rawMobileCard.iconBadgesExpression),
-            urlExpression: sanitizeLabel(rawMobileCard.urlExpression),
+            urlExpression: sanitizeLabel(rawMobileCard.urlExpression, "record.show_url || '#'"),
             showActions: rawMobileCard.showActions !== false,
             toggle: {
                 name: sanitizeLabel(rawMobileToggle.name),
@@ -130,7 +130,7 @@ export function normalizeCrudConfig(config) {
             badgesExpression: sanitizeLabel(rawDesktopCard.badgesExpression),
             iconBadgesExpression: sanitizeLabel(rawDesktopCard.iconBadgesExpression),
             statsExpression: sanitizeLabel(rawDesktopCard.statsExpression),
-            urlExpression: sanitizeLabel(rawDesktopCard.urlExpression),
+            urlExpression: sanitizeLabel(rawDesktopCard.urlExpression, "record.show_url || '#'"),
         },
         rowActions: {
             mode: sanitizeLabel(rawRowActions.mode, 'menu'),

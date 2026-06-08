@@ -689,7 +689,7 @@ it('28a. shared crud mobile renderer keeps the primary label visible on mobile',
         ->and($rendererSource)->toContain('class="flex items-center gap-3 border-b border-gray-300 bg-white px-4 py-2" data-crud-card')
         ->and($rendererSource)->not->toContain('rounded-lg border border-gray-100 bg-white p-4')
         ->and($rendererSource)->toContain('${renderToolbar(normalized)}')
-        ->and($rendererSource)->toContain('class="min-w-0 flex flex-1 flex-col"')
+        ->and($rendererSource)->toContain('class="min-w-0 flex-1"')
         ->and($rendererSource)->toContain('class="flex min-w-0 items-center gap-3"')
         ->and($rendererSource)->toContain('class="truncate text-sm font-semibold text-gray-900"')
         ->and($rendererSource)->toContain('${hasActions ? renderActionCell(config) : \'\'}');
@@ -711,7 +711,7 @@ it('30. desktop renderer uses a responsive card grid instead of sticky table hea
     $rendererSource = file_get_contents(base_path('resources/js/lib/crud-card-page.js'));
 
     expect($rendererSource)->toContain('data-crud-card-grid')
-        ->and($rendererSource)->toContain('grid gap-4 md:grid-cols-2 xl:grid-cols-3')
+        ->and($rendererSource)->toContain('grid gap-4 md:grid-cols-3')
         ->and($rendererSource)->toContain('rounded-lg border border-gray-200 bg-white p-4 shadow-sm')
         ->and($rendererSource)->not->toContain('<thead')
         ->and($rendererSource)->not->toContain('sticky top-0');

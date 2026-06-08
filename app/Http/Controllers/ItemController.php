@@ -311,6 +311,9 @@ class ItemController extends Controller
                 : null,
             'tenantCurrency' => strtoupper($this->resolveTenantCurrency($request)),
             'navigationStateUrl' => route('navigation.state'),
+            'taskCreate' => [
+                'users' => $this->manualTaskAssigneeOptions((int) $request->user()->tenant_id),
+            ],
             'canViewPurchasing' => $canViewPurchasing,
             'purchaseOrderCreate' => $canCreatePurchaseOrdersFromPackages && $item->is_purchasable
                 ? $this->purchaseOrderCreateConfig($request, $item)
@@ -342,6 +345,26 @@ class ItemController extends Controller
                     : null,
             ],
         ];
+    }
+
+    /**
+     * Build tenant user options for manual task assignment.
+     *
+     * @return array<int, array{id: int, name: string}>
+     */
+    private function manualTaskAssigneeOptions(int $tenantId): array
+    {
+        return User::query()
+            ->where('tenant_id', $tenantId)
+            ->orderBy('name')
+            ->orderBy('id')
+            ->get()
+            ->map(fn (User $user): array => [
+                'id' => (int) $user->id,
+                'name' => $user->name,
+            ])
+            ->values()
+            ->all();
     }
 
     /**

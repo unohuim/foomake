@@ -293,6 +293,55 @@ it('5. assigned make order workflow responsibility appears', function (): void {
         ->assertSee('Make Order #' . $makeOrder->id);
 });
 
+it('5a. workflow responsibility badges show the stage name', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    ($this->grantPermission)($user, 'inventory-make-orders-view');
+    $stage = ($this->makeWorkflowStage)($tenant, 'manufacturing', 'Production');
+    ($this->makeMakeOrder)($tenant, $user, ['workflow_stage_id' => $stage->id]);
+
+    $this->actingAs($user)
+        ->get(route('dashboard'))
+        ->assertOk()
+        ->assertSee('Production')
+        ->assertDontSee('Stage: Production');
+});
+
+it('5aa. workflow responsibilities without a stage show a draft badge', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    ($this->grantPermission)($user, 'inventory-make-orders-view');
+    ($this->makeMakeOrder)($tenant, $user, ['workflow_stage_id' => null]);
+
+    $this->actingAs($user)
+        ->get(route('dashboard'))
+        ->assertOk()
+        ->assertSee('Draft');
+});
+
+it('5b. completed make order workflow responsibilities do not appear', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    ($this->grantPermission)($user, 'inventory-make-orders-view');
+    $makeOrder = ($this->makeMakeOrder)($tenant, $user, ['status' => MakeOrder::STATUS_MADE]);
+
+    $this->actingAs($user)
+        ->get(route('dashboard'))
+        ->assertOk()
+        ->assertDontSee('Make Order #' . $makeOrder->id);
+});
+
+it('5c. posted inventory count workflow responsibilities do not appear', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $count = ($this->makeInventoryCount)($tenant, $user, ['posted_at' => now()]);
+
+    $this->actingAs($user)
+        ->get(route('dashboard'))
+        ->assertOk()
+        ->assertDontSee('Inventory Count #' . $count->id);
+});
+
 it('6. unassigned make order workflow responsibility does not appear', function (): void {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
@@ -344,10 +393,35 @@ it('9. assigned make order workflow responsibility links to its resource', funct
         ->assertSee(route('manufacturing.make-orders.show', $makeOrder), false);
 });
 
+it('9a. Todo rows use full-row mobile links without x borders', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    ($this->grantPermission)($user, 'inventory-make-orders-view');
+    ($this->makeMakeOrder)($tenant, $user);
+
+    $this->actingAs($user)
+        ->get(route('dashboard'))
+        ->assertOk()
+        ->assertSee('data-dashboard-todo-mobile-row', false)
+        ->assertSee('-mx-3 mt-0 overflow-hidden border-y border-gray-200 sm:mx-0 sm:mt-3 sm:rounded-lg sm:border', false)
+        ->assertSee('block px-4 py-3 hover:bg-gray-50 sm:hidden', false);
+});
+
 it('10. assigned inventory count workflow responsibility appears', function (): void {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
-    $count = ($this->makeInventoryCount)($tenant, $user);
+    ($this->makeInventoryCount)($tenant, $user, ['name' => 'Weekly freezer count']);
+
+    $this->actingAs($user)
+        ->get(route('dashboard'))
+        ->assertOk()
+        ->assertSee('Weekly freezer count');
+});
+
+it('10a. unnamed inventory count workflow responsibility falls back to domain and id', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $count = ($this->makeInventoryCount)($tenant, $user, ['name' => '']);
 
     $this->actingAs($user)
         ->get(route('dashboard'))
@@ -364,6 +438,84 @@ it('11. assigned inventory count workflow responsibility links to its resource',
         ->get(route('dashboard'))
         ->assertOk()
         ->assertSee(route('inventory.counts.show', $count), false);
+});
+
+it('11a. assigned purchase order workflow responsibility appears', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $purchaseOrder = ($this->makePurchaseOrder)($tenant, [
+        'assigned_to_user_id' => $user->id,
+        'po_number' => '44',
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('dashboard'))
+        ->assertOk()
+        ->assertSee('PO 44')
+        ->assertSee(route('purchasing.orders.show', $purchaseOrder), false);
+});
+
+it('11aa. purchase order workflow responsibility title falls back to po id', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $purchaseOrder = ($this->makePurchaseOrder)($tenant, [
+        'assigned_to_user_id' => $user->id,
+        'po_number' => '',
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('dashboard'))
+        ->assertOk()
+        ->assertSee('PO ID: ' . $purchaseOrder->id);
+});
+
+it('11b. terminal purchase order workflow responsibilities do not appear', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    ($this->makePurchaseOrder)($tenant, [
+        'assigned_to_user_id' => $user->id,
+        'po_number' => 'PO44-DONE',
+        'status' => PurchaseOrder::STATUS_COMPLETED,
+    ]);
+    ($this->makePurchaseOrder)($tenant, [
+        'assigned_to_user_id' => $user->id,
+        'po_number' => 'PO44-CANCELLED',
+        'status' => PurchaseOrder::STATUS_CANCELLED,
+        'workflow_cancelled_at' => now(),
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('dashboard'))
+        ->assertOk()
+        ->assertDontSee('PO44-DONE')
+        ->assertDontSee('PO44-CANCELLED');
+});
+
+it('11c. dashboard Todo rows show workflow domain names', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    ($this->grantPermission)($user, 'inventory-make-orders-view');
+    $salesStage = ($this->makeWorkflowStage)($tenant, 'sales', 'Packing');
+    $salesOrder = ($this->makeSalesOrder)($tenant, ['status' => SalesOrder::STATUS_PACKING]);
+
+    ($this->makeMakeOrder)($tenant, $user);
+    ($this->makeInventoryCount)($tenant, $user);
+    ($this->makePurchaseOrder)($tenant, [
+        'assigned_to_user_id' => $user->id,
+        'po_number' => 'PO44',
+    ]);
+    ($this->makeTask)($tenant, $user, $salesStage, $salesOrder->id, ['title' => 'Pack customer order']);
+
+    $this->actingAs($user)
+        ->get(route('dashboard'))
+        ->assertOk()
+        ->assertSee('Make Order')
+        ->assertSee('Inventory Count')
+        ->assertSee('Purchase Order')
+        ->assertSee('Sales Order')
+        ->assertSee('Jan 15, 2026')
+        ->assertDontSee('Due: Jan 15, 2026')
+        ->assertDontSee('2026-01-15');
 });
 
 it('12. assigned stage task appears', function (): void {
@@ -496,7 +648,8 @@ it('20. task row shows due date when available', function (): void {
     $this->actingAs($user)
         ->get(route('dashboard'))
         ->assertOk()
-        ->assertSee('2026-02-03');
+        ->assertSee('Feb 3, 2026')
+        ->assertDontSee('2026-02-03');
 });
 
 it('21. task row shows status when available', function (): void {
@@ -880,6 +1033,23 @@ it('41. dashboard hides completed assigned tasks', function (): void {
         ->assertDontSee($task->title)
         ->assertDontSee('Completed')
         ->assertDontSee(route('tasks.complete', $task), false);
+});
+
+it('41a. dashboard hides open tasks when their related workflow resource is complete', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    ($this->grantPermission)($user, 'inventory-make-orders-view');
+    $stage = ($this->makeWorkflowStage)($tenant, 'manufacturing', 'Production');
+    $makeOrder = ($this->makeMakeOrder)($tenant, $user, [
+        'workflow_stage_id' => $stage->id,
+        'status' => MakeOrder::STATUS_MADE,
+    ]);
+    ($this->makeTask)($tenant, $user, $stage, $makeOrder->id, ['title' => 'Finished resource task']);
+
+    $this->actingAs($user)
+        ->get(route('dashboard'))
+        ->assertOk()
+        ->assertDontSee('Finished resource task');
 });
 
 it('42. dashboard task links do not expose another users completion route', function (): void {

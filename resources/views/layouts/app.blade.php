@@ -18,7 +18,7 @@
     </head>
     <body class="font-sans antialiased">
         <div class="{{ $stickyShell ? 'flex h-screen flex-col overflow-hidden bg-gray-100' : 'min-h-screen bg-gray-100' }}">
-            <div class="{{ $stickyShell ? 'sticky top-0 z-40 shrink-0' : '' }}">
+            <div class="sticky top-0 z-40 {{ $stickyShell ? 'shrink-0' : '' }}">
                 @php
                     $verificationGrace = app(\App\Support\Auth\EmailVerificationGracePeriod::class);
                     $verificationGraceUser = auth()->user();
@@ -50,16 +50,16 @@
                 @endif
 
                 @include('layouts.navigation')
-            </div>
 
-            <!-- Page Heading -->
-            @isset($header)
-                <header class="{{ $stickyShell ? 'sticky top-16 z-30 shrink-0 bg-white shadow' : 'bg-white shadow' }}">
-                    <div class="max-w-7xl mx-auto pb-6  px-4 sm:px-6 lg:px-8">
-                        {{ $header }}
-                    </div>
-                </header>
-            @endisset
+                <!-- Page Heading -->
+                @isset($header)
+                    <header class="bg-white shadow">
+                        <div class="max-w-7xl mx-auto pb-0 px-4 sm:pb-6 sm:px-6 lg:px-8">
+                            {{ $header }}
+                        </div>
+                    </header>
+                @endisset
+            </div>
 
             <!-- Page Content -->
             <main class="{{ $stickyShell ? 'min-h-0 flex-1 overflow-hidden' : '' }}">

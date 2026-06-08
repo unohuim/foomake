@@ -83,7 +83,7 @@ it('5. data crud root fills the available height', function () {
 
 it('6. the shared crud renderer fills the bounded page area', function () {
     expect($this->rendererSource)
-        ->toContain('class="flex h-full min-h-0 flex-col overflow-hidden border border-gray-100 bg-white shadow-sm" data-crud-renderer')
+        ->toContain('class="flex h-full min-h-0 flex-col overflow-hidden bg-white" data-crud-card-renderer')
         ->not->toContain('rounded-lg border border-gray-100 bg-white shadow-sm" data-crud-renderer');
 });
 
@@ -99,11 +99,11 @@ it('8. desktop products use a full height wrapper before the records scroller', 
 
 it('9. desktop records container owns overflow y auto', function () {
     expect($this->rendererSource)
-        ->toContain('class="min-h-0 flex-1 overflow-y-auto" data-crud-records-scroll');
+        ->toContain('class="min-h-0 flex-1 overflow-y-auto p-6" data-crud-records-scroll');
 });
 
 it('10. desktop toolbar remains above the records scroller', function () {
-    $toolbarPosition = strpos($this->rendererSource, 'data-crud-toolbar-desktop');
+    $toolbarPosition = strpos($this->rendererSource, 'data-crud-toolbar');
     $scrollPosition = strpos($this->rendererSource, 'data-crud-records-scroll');
 
     expect($toolbarPosition)->not->toBeFalse()
@@ -113,17 +113,17 @@ it('10. desktop toolbar remains above the records scroller', function () {
 
 it('11. desktop toolbar itself does not own overflow y auto', function () {
     expect($this->rendererSource)
-        ->toContain('data-crud-toolbar-desktop')
+        ->toContain('data-crud-toolbar')
         ->and($this->rendererSource)->toContain('border-b border-gray-100 bg-white')
-        ->and($this->rendererSource)->toContain('px-6 py-4')
-        ->and($this->rendererSource)->not->toContain('data-crud-toolbar-desktop overflow-y-auto');
+        ->and($this->rendererSource)->toContain('px-4 py-3 sm:px-6')
+        ->and($this->rendererSource)->not->toContain('data-crud-toolbar overflow-y-auto');
 });
 
-it('12. desktop table headers remain sticky inside the scrolling records region', function () {
+it('12. desktop card grid remains inside the scrolling records region', function () {
     expect($this->rendererSource)
-        ->toContain('<thead class="bg-white">')
-        ->and($this->rendererSource)->toContain('class="sticky top-0 z-10 bg-white px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500"')
-        ->and($this->rendererSource)->toContain('class="sticky top-0 z-10 bg-white px-6 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500"');
+        ->toContain('data-crud-card-grid')
+        ->and($this->rendererSource)->toContain('grid gap-4 md:grid-cols-3')
+        ->and($this->rendererSource)->not->toContain('<thead');
 });
 
 it('13. mobile products use a full height wrapper before the records scroller', function () {
@@ -134,36 +134,32 @@ it('13. mobile products use a full height wrapper before the records scroller', 
 
 it('14. mobile records container owns overflow y auto', function () {
     expect($this->rendererSource)
-        ->toContain('class="min-h-0 flex-1 overflow-y-auto ${scrollPaddingClass}" data-crud-records-scroll')
-        ->and($this->rendererSource)->toContain("const scrollPaddingClass = 'p-0'");
+        ->toContain('class="min-h-0 flex-1 overflow-y-auto p-0" data-crud-records-scroll');
 });
 
 it('15. mobile toolbar remains above the records scroller', function () {
     expect($this->rendererSource)
         ->toContain('data-crud-mobile-cards')
-        ->and($this->rendererSource)->toContain('data-crud-toolbar-mobile')
+        ->and($this->rendererSource)->toContain('data-crud-toolbar')
         ->and($this->rendererSource)->toContain('data-crud-records-scroll')
-        ->and($this->rendererSource)->toContain('class="flex h-full min-h-0 flex-col"')
-        ->and($this->rendererSource)->toContain('class="min-h-0 flex-1 overflow-y-auto ${scrollPaddingClass}" data-crud-records-scroll')
-        ->and($this->rendererSource)->toContain("const listSpacingClass = 'border-t border-gray-300 space-y-0'")
-        ->and($this->rendererSource)->not->toContain('data-crud-toolbar-mobile overflow-y-auto');
+        ->and($this->rendererSource)->toContain('class="min-h-0 flex-1 overflow-y-auto p-0" data-crud-records-scroll')
+        ->and($this->rendererSource)->not->toContain('data-crud-toolbar overflow-y-auto');
 });
 
 it('16. mobile toolbar itself does not own overflow y auto', function () {
     expect($this->rendererSource)
-        ->toContain('data-crud-toolbar-mobile')
+        ->toContain('data-crud-toolbar')
         ->and($this->rendererSource)->toContain('border-b border-gray-100 bg-white')
-        ->and($this->rendererSource)->toContain('p-4')
-        ->and($this->rendererSource)->not->toContain('data-crud-toolbar-mobile overflow-y-auto');
+        ->and($this->rendererSource)->toContain('px-4 py-3 sm:px-6')
+        ->and($this->rendererSource)->not->toContain('data-crud-toolbar overflow-y-auto');
 });
 
 it('17. desktop and mobile use the same scroll containment pattern', function () {
     expect($this->rendererSource)
-        ->toContain('data-crud-toolbar-desktop')
-        ->and($this->rendererSource)->toContain('data-crud-toolbar-mobile')
+        ->toContain('data-crud-toolbar')
         ->and($this->rendererSource)->toContain('class="flex h-full min-h-0 flex-col"')
-        ->and($this->rendererSource)->toContain('class="min-h-0 flex-1 overflow-y-auto" data-crud-records-scroll')
-        ->and($this->rendererSource)->toContain('class="min-h-0 flex-1 overflow-y-auto ${scrollPaddingClass}" data-crud-records-scroll');
+        ->and($this->rendererSource)->toContain('class="min-h-0 flex-1 overflow-y-auto p-6" data-crud-records-scroll')
+        ->and($this->rendererSource)->toContain('class="min-h-0 flex-1 overflow-y-auto p-0" data-crud-records-scroll');
 });
 
 it('18. toolbar order remains search export import add', function () {

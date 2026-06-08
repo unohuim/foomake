@@ -28,6 +28,7 @@ class AssertWorkflowStageTasksCompletedAction
 
         $hasOpenTasks = Task::withoutGlobalScopes()
             ->where('tenant_id', $tenantId)
+            ->where('source', Task::SOURCE_GENERATED)
             ->where('workflow_domain_id', $stage->workflow_domain_id)
             ->where('domain_record_id', $domainRecordId)
             ->where('workflow_stage_id', $stage->id)

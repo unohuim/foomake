@@ -319,6 +319,58 @@ it('13. panel chevron separators render on the desktop structure', function (): 
         ->and($html)->toContain('M0 -2L20 40L0 82');
 });
 
+it('13a. mobile workflow progress renders horizontal selectable stage numbers', function (): void {
+    $html = ($this->renderWorkflowProgress)([
+        ['label' => 'DRAFT', 'status' => 'completed'],
+        ['label' => 'Counting', 'status' => 'current'],
+        ['label' => 'Reviewing', 'status' => 'upcoming'],
+    ]);
+
+    expect($html)->toContain('data-workflow-progress-mobile-tabs')
+        ->and($html)->toContain('role="tablist"')
+        ->and($html)->toContain('role="tab"')
+        ->and($html)->toContain('x-data="{ activeWorkflowStep:')
+        ->and($html)->toContain('x-cloak')
+        ->and($html)->toContain('x-on:click="activeWorkflowStep =')
+        ->and($html)->toContain('md:hidden')
+        ->and($html)->toContain('transition-[flex-basis,flex-grow] duration-300 ease-out will-change-[flex-basis]')
+        ->and($html)->toContain("activeWorkflowStep === 1 ? 'basis-0 grow' : 'basis-16 grow-0'")
+        ->and($html)->toContain('transition-[max-width,opacity,transform] duration-300 ease-out')
+        ->and($html)->toContain("activeWorkflowStep === 1 ? 'max-w-48 translate-x-0 opacity-100' : 'max-w-0 -translate-x-1 opacity-0'")
+        ->and($html)->not->toContain('x-show="activeWorkflowStep ===')
+        ->and($html)->toContain('pointer-events-none absolute right-0 top-0 h-full w-5 md:hidden')
+        ->and($html)->toContain('M0 -2L20 40L0 82')
+        ->and($html)->not->toContain('border-r border-gray-200')
+        ->and($html)->toContain('hidden divide-y divide-gray-300 rounded-md border border-gray-300 bg-white md:flex')
+        ->and($html)->toContain('border-indigo-600 bg-indigo-600 text-white')
+        ->and($html)->toContain('class="size-5 text-white"')
+        ->and($html)->toContain('M19.916 4.626a.75.75 0 0 1 .208 1.04l-9 13.5')
+        ->and($html)->toContain('border-indigo-600 bg-white text-indigo-600')
+        ->and($html)->toContain('border-gray-300 bg-white text-gray-500');
+});
+
+it('13b. workflow detail pages remove mobile top gap while keeping progress bottom spacing', function (): void {
+    $html = ($this->renderWorkflowProgress)([
+        ['label' => 'DRAFT', 'status' => 'completed'],
+        ['label' => 'Counting', 'status' => 'current'],
+    ]);
+
+    expect($html)->toContain('<nav')
+        ->and($html)->toContain('class="w-full"')
+        ->and($html)->not->toContain('-mt-6')
+        ->and(($this->purchaseOrderShowPageSource)())->toContain('<nav class="w-full"')
+        ->and(($this->purchaseOrderShowPageSource)())->not->toContain('-mt-6')
+        ->and(($this->inventoryCountShowSource)())->toContain('class="pt-0 pb-12 sm:pt-6"')
+        ->and(($this->inventoryCountShowSource)())->toContain('class="max-w-7xl mx-auto space-y-6 sm:px-6 lg:px-8"')
+        ->and(($this->makeOrderShowSource)())->toContain('space-y-6 px-1 pt-0 pb-8 sm:px-6 sm:pt-6')
+        ->and(($this->salesOrderShowSource)())->toContain('class="pt-0 pb-12 sm:pt-6"')
+        ->and(($this->purchaseOrderShowSource)())->toContain('class="pt-0 pb-8 sm:pt-6 sm:pb-12"')
+        ->and(($this->purchaseOrderShowSource)())->toContain('max-w-7xl space-y-6 px-1 sm:px-6')
+        ->and(File::get(resource_path('views/layouts/app.blade.php')))->toContain('max-w-7xl mx-auto pb-0 px-4 sm:pb-6 sm:px-6 lg:px-8')
+        ->and(File::get(resource_path('views/components/resource-detail-header-breadcrumb.blade.php')))->toContain('flex items-center justify-between gap-3 sm:items-start')
+        ->and(File::get(resource_path('views/components/resource-detail-header-breadcrumb.blade.php')))->toContain('flex shrink-0 items-center justify-end sm:items-start');
+});
+
 it('14. component does not introduce Tailwind Plus scripts', function (): void {
     $source = ($this->workflowProgressSource)();
 
@@ -367,7 +419,16 @@ it('19. Purchase Order detail renders workflow progress at the top of content', 
 it('19a. Purchase Order detail refreshes workflow progress from ajax status responses', function (): void {
     expect(($this->purchaseOrderShowPageSource)())->toContain('workflowProgressSteps: Array.isArray(safePayload.workflowProgressSteps)')
         ->and(($this->purchaseOrderShowPageSource)())->toContain('workflowProgressHtml()')
+        ->and(($this->purchaseOrderShowPageSource)())->toContain('workflowProgressMobileStepHtml(step, index, index === steps.length - 1)')
+        ->and(($this->purchaseOrderShowPageSource)())->toContain("activeWorkflowStep === \${index} ? 'basis-0 grow' : 'basis-16 grow-0'")
+        ->and(($this->purchaseOrderShowPageSource)())->toContain('transition-[max-width,opacity,transform] duration-300 ease-out')
+        ->and(($this->purchaseOrderShowPageSource)())->toContain("activeWorkflowStep === \${index} ? 'max-w-48 translate-x-0 opacity-100' : 'max-w-0 -translate-x-1 opacity-0'")
+        ->and(($this->purchaseOrderShowPageSource)())->not->toContain('x-show="activeWorkflowStep ===')
+        ->and(($this->purchaseOrderShowPageSource)())->toContain('pointer-events-none absolute right-0 top-0 h-full w-5 md:hidden')
+        ->and(($this->purchaseOrderShowPageSource)())->toContain('const circleContent = isCompleted')
+        ->and(($this->purchaseOrderShowPageSource)())->toContain('class="size-5 text-white"')
         ->and(($this->purchaseOrderShowPageSource)())->toContain('workflowProgressStepHtml(step, isLast)')
+        ->and(($this->purchaseOrderShowPageSource)())->toContain('x-cloak')
         ->and(($this->purchaseOrderShowPageSource)())->toContain('workflowUpdatedDetail(workflow, purchaseOrder, workflowProgressSteps = null)')
         ->and(($this->purchaseOrderShowPageSource)())->toContain('this.workflowProgressSteps = workflowProgressSteps')
         ->and(($this->purchaseOrderShowPageSource)())->not->toContain('workflowProgressSteps: workflowProgressSteps || []')
@@ -391,9 +452,9 @@ it('21. workflow progress does not expose transition actions', function (): void
     $source = ($this->workflowProgressSource)();
 
     expect($source)->not->toContain('method="POST"')
-        ->and($source)->not->toContain('x-on:click')
         ->and($source)->not->toContain('wire:click')
-        ->and($source)->not->toContain('submit');
+        ->and($source)->not->toContain('submit')
+        ->and($source)->toContain('x-on:click="activeWorkflowStep =');
 });
 
 it('22. detail controllers build workflow progress after normal page authorization', function (): void {

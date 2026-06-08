@@ -44,6 +44,7 @@ export function mount(rootEl, payload) {
 
                         if (safeRecord.can_edit_counted_quantity) {
                             return [{
+                                key: 'counted_quantity',
                                 label: 'QTY',
                                 field: 'counted_quantity_input',
                                 strong: true,
@@ -52,6 +53,7 @@ export function mount(rootEl, payload) {
                                 precisionField: 'uom_display_precision',
                                 handlerKey: 'updateCountedQuantity',
                                 labelBare: true,
+                                compactOnMobile: true,
                                 icon: 'check-circle',
                                 showSuccessIcon: Boolean(safeRecord._countedQuantitySaved),
                             }];

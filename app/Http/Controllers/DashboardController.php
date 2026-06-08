@@ -46,7 +46,8 @@ class DashboardController extends Controller
     {
         return array_merge(
             $this->makeOrderResponsibilities($user, $tenantId, $userId),
-            $this->inventoryCountResponsibilities($user, $tenantId, $userId)
+            $this->inventoryCountResponsibilities($user, $tenantId, $userId),
+            $this->purchaseOrderResponsibilities($user, $tenantId, $userId)
         );
     }
 
@@ -60,6 +61,7 @@ class DashboardController extends Controller
         return MakeOrder::query()
             ->where('tenant_id', $tenantId)
             ->where('made_by_user_id', $userId)
+            ->whereNotIn('status', [MakeOrder::STATUS_MADE, MakeOrder::STATUS_CANCELLED])
             ->with(['outputItem', 'workflowStage'])
             ->orderByRaw('due_date IS NULL')
             ->orderBy('due_date')
@@ -74,11 +76,12 @@ class DashboardController extends Controller
                 'inventory-make-orders-view'
             ))
             ->map(fn (MakeOrder $makeOrder): array => [
+                'domainName' => 'Make Order',
                 'title' => 'Make Order #' . $makeOrder->id,
                 'resource' => $makeOrder->outputItem?->name ?? 'Make Order #' . $makeOrder->id,
-                'stage' => $makeOrder->workflowStage?->name,
-                'dueDate' => $makeOrder->due_date?->format('Y-m-d'),
-                'status' => $makeOrder->workflowStage?->name ?? $makeOrder->status,
+                'stage' => $makeOrder->workflowStage?->name ?? 'Draft',
+                'dueDate' => $makeOrder->due_date?->format('M j, Y'),
+                'status' => 'Open',
                 'url' => route('manufacturing.make-orders.show', $makeOrder),
             ])
             ->values()
@@ -95,6 +98,7 @@ class DashboardController extends Controller
         return InventoryCount::query()
             ->where('tenant_id', $tenantId)
             ->where('assigned_to_user_id', $userId)
+            ->whereNull('posted_at')
             ->with('workflowStage')
             ->orderByDesc('counted_at')
             ->orderByDesc('id')
@@ -107,15 +111,61 @@ class DashboardController extends Controller
                 $inventoryCount->assigned_to_user_id,
                 'inventory-adjustments-view'
             ))
-            ->map(fn (InventoryCount $inventoryCount): array => [
-                'title' => 'Inventory Count #' . $inventoryCount->id,
-                'resource' => 'Inventory Count #' . $inventoryCount->id,
-                'stage' => $inventoryCount->workflowStage?->name,
-                'dueDate' => $inventoryCount->counted_at->format('Y-m-d'),
-                'status' => $inventoryCount->workflowStage?->name
-                    ?? ($inventoryCount->posted_at === null ? 'Draft' : 'Posted'),
-                'url' => route('inventory.counts.show', $inventoryCount),
-            ])
+            ->map(function (InventoryCount $inventoryCount): array {
+                $label = $this->inventoryCountLabel($inventoryCount);
+
+                return [
+                    'domainName' => 'Inventory Count',
+                    'title' => $label,
+                    'resource' => $label,
+                    'stage' => $inventoryCount->workflowStage?->name ?? 'Draft',
+                    'dueDate' => $inventoryCount->counted_at->format('M j, Y'),
+                    'status' => 'Open',
+                    'url' => route('inventory.counts.show', $inventoryCount),
+                ];
+            })
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Build assigned Purchase Order responsibility rows.
+     *
+     * @return array<int, array<string, string|null>>
+     */
+    private function purchaseOrderResponsibilities(User $user, int $tenantId, int $userId): array
+    {
+        return PurchaseOrder::query()
+            ->where('tenant_id', $tenantId)
+            ->where('assigned_to_user_id', $userId)
+            ->whereNotIn('status', [PurchaseOrder::STATUS_COMPLETED, PurchaseOrder::STATUS_CANCELLED])
+            ->whereNull('workflow_cancelled_at')
+            ->with('currentWorkflowStage')
+            ->orderByRaw('order_date IS NULL')
+            ->orderBy('order_date')
+            ->orderByDesc('id')
+            ->limit(10)
+            ->get()
+            ->filter(fn (PurchaseOrder $purchaseOrder): bool => $this->canViewWorkflowResource(
+                $user,
+                $purchaseOrder,
+                'purchasing',
+                $purchaseOrder->assigned_to_user_id,
+                'purchasing-purchase-orders-create'
+            ))
+            ->map(function (PurchaseOrder $purchaseOrder): array {
+                $label = $this->purchaseOrderLabel($purchaseOrder);
+
+                return [
+                    'domainName' => 'Purchase Order',
+                    'title' => $label,
+                    'resource' => $label,
+                    'stage' => $purchaseOrder->currentWorkflowStage?->name ?? 'Draft',
+                    'dueDate' => $purchaseOrder->order_date?->format('M j, Y'),
+                    'status' => 'Open',
+                    'url' => route('purchasing.orders.show', $purchaseOrder),
+                ];
+            })
             ->values()
             ->all();
     }
@@ -149,9 +199,10 @@ class DashboardController extends Controller
 
                 return [
                     'title' => $task->title,
+                    'domainName' => $resource['domainName'],
                     'resource' => $resource['label'],
                     'stage' => $task->workflowStage?->name,
-                    'dueDate' => $resource['dueDate'],
+                    'dueDate' => $task->due_date?->format('M j, Y') ?? $resource['dueDate'],
                     'status' => $this->statusLabel($task->status),
                     'url' => $resource['url'],
                 ];
@@ -165,7 +216,7 @@ class DashboardController extends Controller
      * Resolve task domain records in batches so dashboard rows do not trigger N+1 lookups.
      *
      * @param Collection<int, Task> $tasks
-     * @return array<int, array{label: string, dueDate: string|null, url: string}>
+     * @return array<int, array{domainName: string, label: string, dueDate: string|null, url: string}>
      */
     private function taskResources(User $user, Collection $tasks, int $tenantId): array
     {
@@ -184,7 +235,7 @@ class DashboardController extends Controller
      * Resolve Make Order task resources.
      *
      * @param Collection<int, Task> $tasks
-     * @return array<int, array{label: string, dueDate: string|null, url: string}>
+     * @return array<int, array{domainName: string, label: string, dueDate: string|null, url: string}>
      */
     private function makeOrderTaskResources(User $user, Collection $tasks, int $tenantId): array
     {
@@ -195,6 +246,7 @@ class DashboardController extends Controller
         $makeOrders = MakeOrder::query()
             ->where('tenant_id', $tenantId)
             ->whereIn('id', $tasks->pluck('domain_record_id')->unique()->all())
+            ->whereNotIn('status', [MakeOrder::STATUS_MADE, MakeOrder::STATUS_CANCELLED])
             ->get()
             ->keyBy('id');
 
@@ -217,8 +269,9 @@ class DashboardController extends Controller
 
                 return [
                     $task->id => [
+                        'domainName' => 'Make Order',
                         'label' => 'Make Order #' . $makeOrder->id,
-                        'dueDate' => $makeOrder->due_date?->format('Y-m-d'),
+                        'dueDate' => $makeOrder->due_date?->format('M j, Y'),
                         'url' => route('manufacturing.make-orders.show', $makeOrder),
                     ],
                 ];
@@ -230,7 +283,7 @@ class DashboardController extends Controller
      * Resolve Inventory Count task resources.
      *
      * @param Collection<int, Task> $tasks
-     * @return array<int, array{label: string, dueDate: string|null, url: string}>
+     * @return array<int, array{domainName: string, label: string, dueDate: string|null, url: string}>
      */
     private function inventoryCountTaskResources(User $user, Collection $tasks, int $tenantId): array
     {
@@ -241,6 +294,7 @@ class DashboardController extends Controller
         $counts = InventoryCount::query()
             ->where('tenant_id', $tenantId)
             ->whereIn('id', $tasks->pluck('domain_record_id')->unique()->all())
+            ->whereNull('posted_at')
             ->get()
             ->keyBy('id');
 
@@ -263,8 +317,9 @@ class DashboardController extends Controller
 
                 return [
                     $task->id => [
-                        'label' => 'Inventory Count #' . $count->id,
-                        'dueDate' => $count->counted_at->format('Y-m-d'),
+                        'domainName' => 'Inventory Count',
+                        'label' => $this->inventoryCountLabel($count),
+                        'dueDate' => $count->counted_at->format('M j, Y'),
                         'url' => route('inventory.counts.show', $count),
                     ],
                 ];
@@ -276,7 +331,7 @@ class DashboardController extends Controller
      * Resolve Sales Order task resources.
      *
      * @param Collection<int, Task> $tasks
-     * @return array<int, array{label: string, dueDate: string|null, url: string}>
+     * @return array<int, array{domainName: string, label: string, dueDate: string|null, url: string}>
      */
     private function salesOrderTaskResources(User $user, Collection $tasks, int $tenantId): array
     {
@@ -287,6 +342,7 @@ class DashboardController extends Controller
         $orders = SalesOrder::query()
             ->where('tenant_id', $tenantId)
             ->whereIn('id', $tasks->pluck('domain_record_id')->unique()->all())
+            ->whereNotIn('status', SalesOrder::terminalStatuses())
             ->get()
             ->keyBy('id');
 
@@ -303,8 +359,9 @@ class DashboardController extends Controller
 
                 return [
                     $task->id => [
+                        'domainName' => 'Sales Order',
                         'label' => 'Sales Order #' . $order->id,
-                        'dueDate' => $order->order_date?->format('Y-m-d'),
+                        'dueDate' => $order->order_date?->format('M j, Y'),
                         'url' => route('sales.orders.show', $order),
                     ],
                 ];
@@ -316,7 +373,7 @@ class DashboardController extends Controller
      * Resolve Purchase Order task resources.
      *
      * @param Collection<int, Task> $tasks
-     * @return array<int, array{label: string, dueDate: string|null, url: string}>
+     * @return array<int, array{domainName: string, label: string, dueDate: string|null, url: string}>
      */
     private function purchaseOrderTaskResources(User $user, Collection $tasks, int $tenantId): array
     {
@@ -327,6 +384,8 @@ class DashboardController extends Controller
         $orders = PurchaseOrder::query()
             ->where('tenant_id', $tenantId)
             ->whereIn('id', $tasks->pluck('domain_record_id')->unique()->all())
+            ->whereNotIn('status', [PurchaseOrder::STATUS_COMPLETED, PurchaseOrder::STATUS_CANCELLED])
+            ->whereNull('workflow_cancelled_at')
             ->get()
             ->keyBy('id');
 
@@ -340,7 +399,7 @@ class DashboardController extends Controller
                         $user,
                         $order,
                         'purchasing',
-                        null,
+                        $order->assigned_to_user_id,
                         'purchasing-purchase-orders-create'
                     )
                 ) {
@@ -349,8 +408,9 @@ class DashboardController extends Controller
 
                 return [
                     $task->id => [
+                        'domainName' => 'Purchase Order',
                         'label' => $order->po_number ?: 'Purchase Order #' . $order->id,
-                        'dueDate' => $order->order_date?->format('Y-m-d'),
+                        'dueDate' => $order->order_date?->format('M j, Y'),
                         'url' => route('purchasing.orders.show', $order),
                     ],
                 ];
@@ -368,6 +428,26 @@ class DashboardController extends Controller
             Task::STATUS_COMPLETED => 'Completed',
             default => ucfirst($status),
         };
+    }
+
+    /**
+     * Return the display label for inventory count dashboard rows.
+     */
+    private function inventoryCountLabel(InventoryCount $inventoryCount): string
+    {
+        $name = trim((string) $inventoryCount->name);
+
+        return $name !== '' ? $name : 'Inventory Count #' . $inventoryCount->id;
+    }
+
+    /**
+     * Return the display label for purchase order dashboard rows.
+     */
+    private function purchaseOrderLabel(PurchaseOrder $purchaseOrder): string
+    {
+        $poNumber = trim((string) $purchaseOrder->po_number);
+
+        return $poNumber !== '' ? 'PO ' . $poNumber : 'PO ID: ' . $purchaseOrder->id;
     }
 
     /**

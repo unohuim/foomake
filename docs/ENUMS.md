@@ -323,13 +323,27 @@ Do not introduce new enum values without updating this document.
 
 **Semantic meaning:**
 
-- `open`: Generated task is outstanding and may still block a forward transition for its current workflow stage.
-- `completed`: Generated task has been completed and remains visible as history.
+- `open`: Task is outstanding. Generated tasks may still block a forward transition for their current workflow stage.
+- `completed`: Task has been completed and remains visible as history.
 
 **Notes:**
 
 - Task completion is final in this PR slice.
 - Completed tasks cannot be reopened or uncompleted.
+
+### Task Source
+
+**Name:** Task source
+**Storage location(s):** `tasks.source` (string column)
+**Allowed values:**
+
+- `generated`
+- `manual`
+
+**Semantic meaning:**
+
+- `generated`: Created from a workflow task template during workflow-stage entry. Open generated tasks block the matching workflow-stage transition.
+- `manual`: Created by a user from a detail-page Tasks section. Manual tasks may carry workflow context for display but never block workflow-stage transitions.
 
 ---
 

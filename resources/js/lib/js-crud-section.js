@@ -1,8 +1,10 @@
-const asRecord = (value) => (value && typeof value === 'object' && !Array.isArray(value) ? value : {});
+const asRecord = (value) =>
+    value && typeof value === "object" && !Array.isArray(value) ? value : {};
 
 const asArray = (value) => (Array.isArray(value) ? value : []);
 
-const asString = (value, fallback = '') => (typeof value === 'string' && value.trim() !== '' ? value : fallback);
+const asString = (value, fallback = "") =>
+    typeof value === "string" && value.trim() !== "" ? value : fallback;
 
 const asBoolean = (value) => Boolean(value);
 
@@ -20,50 +22,65 @@ const normalizePaginationOptions = (value) => {
     return options.length > 0 ? options : [5, 10, 25];
 };
 
-const mobileRecordClass = (className) => asString(className)
-    .split(/\s+/)
-    .filter((token) => token !== '')
-    .map((token) => {
-        if (token.includes(':')) {
+const mobileRecordClass = (className) =>
+    asString(className)
+        .split(/\s+/)
+        .filter((token) => token !== "")
+        .map((token) => {
+            if (token.includes(":")) {
+                return token;
+            }
+
+            if (token === "rounded-xl") {
+                return "sm:rounded-xl";
+            }
+
+            if (token === "rounded-lg") {
+                return "sm:rounded-lg";
+            }
+
+            if (token === "p-3" || token === "p-4") {
+                return `px-3 py-2 sm:${token}`;
+            }
+
+            if (token === "py-1") {
+                return "py-2 sm:py-1";
+            }
+
+            if (token === "px-4") {
+                return "px-3 sm:px-4";
+            }
+
+            if (token === "border-gray-200") {
+                return "border-gray-300 sm:border-gray-200";
+            }
+
+            if (token === "border-gray-100") {
+                return "border-gray-300 sm:border-gray-100";
+            }
+
+            if (token.startsWith("border-gray-")) {
+                return "border-gray-300";
+            }
+
             return token;
-        }
+        })
+        .join(" ");
 
-        if (token === 'rounded-xl' || token === 'rounded-lg') {
-            return `sm:${token}`;
-        }
-
-        if (token === 'p-3' || token === 'p-4') {
-            return `px-3 py-2 sm:${token}`;
-        }
-
-        if (token === 'py-1') {
-            return 'py-2 sm:py-1';
-        }
-
-        if (token === 'px-4') {
-            return 'px-3 sm:px-4';
-        }
-
-        if (token.startsWith('border-gray-')) {
-            return `border-gray-300 sm:${token}`;
-        }
-
-        return token;
-    })
-    .join(' ');
-
-const resolvePathValue = (source, path, fallback = '') => {
+const resolvePathValue = (source, path, fallback = "") => {
     if (!path) {
         return fallback;
     }
 
-    return path.split('.').reduce((carry, key) => {
-        if (carry && typeof carry === 'object' && key in carry) {
-            return carry[key];
-        }
+    return (
+        path.split(".").reduce((carry, key) => {
+            if (carry && typeof carry === "object" && key in carry) {
+                return carry[key];
+            }
 
-        return undefined;
-    }, source) ?? fallback;
+            return undefined;
+        }, source) ?? fallback
+    );
 };
 
 const normalizeField = (field) => {
@@ -73,13 +90,16 @@ const normalizeField = (field) => {
     return {
         name: asString(safeField.name),
         label: asString(safeField.label),
-        type: asString(safeField.type, 'text'),
-        numberType: asString(safeField.numberType, 'decimal'),
+        type: asString(safeField.type, "text"),
+        numberType: asString(safeField.numberType, "decimal"),
         precision: safeField.precision,
         currency: asString(safeField.currency),
         currencyFromField: asString(safeField.currencyFromField),
-        currencyOptionField: asString(safeField.currencyOptionField, 'currency_code'),
-        rawMode: asString(safeField.rawMode, 'value'),
+        currencyOptionField: asString(
+            safeField.currencyOptionField,
+            "currency_code",
+        ),
+        rawMode: asString(safeField.rawMode, "value"),
         debounceMs: safeField.debounceMs,
         required: Boolean(safeField.required),
         options: asArray(safeField.options).map((option) => ({
@@ -90,14 +110,16 @@ const normalizeField = (field) => {
         rowGroup: asString(safeField.rowGroup),
         width: asString(safeField.width),
         inlineCreate: {
-            label: asString(inlineCreate.label, 'Create'),
+            label: asString(inlineCreate.label, "Create"),
             storeUrl: asString(inlineCreate.storeUrl),
-            fields: asArray(inlineCreate.fields).map((createField) => ({
-                name: asString(createField?.name),
-                label: asString(createField?.label),
-                type: asString(createField?.type, 'text'),
-                required: Boolean(createField?.required),
-            })).filter((createField) => createField.name !== ''),
+            fields: asArray(inlineCreate.fields)
+                .map((createField) => ({
+                    name: asString(createField?.name),
+                    label: asString(createField?.label),
+                    type: asString(createField?.type, "text"),
+                    required: Boolean(createField?.required),
+                }))
+                .filter((createField) => createField.name !== ""),
         },
     };
 };
@@ -111,12 +133,12 @@ const normalizeAction = (action) => {
         ariaLabel: asString(safeAction.ariaLabel),
         confirmMessage: asString(safeAction.confirmMessage),
         type: asString(safeAction.type, asString(safeAction.id)),
-        tone: asString(safeAction.tone, 'default'),
+        tone: asString(safeAction.tone, "default"),
         icon: asString(safeAction.icon),
         tooltip: asString(safeAction.tooltip),
         urlField: asString(safeAction.urlField),
-        endpointKey: asString(safeAction.endpointKey, 'remove'),
-        method: asString(safeAction.method, 'DELETE').toUpperCase(),
+        endpointKey: asString(safeAction.endpointKey, "remove"),
+        method: asString(safeAction.method, "DELETE").toUpperCase(),
         handlerKey: asString(safeAction.handlerKey),
     };
 };
@@ -139,9 +161,9 @@ const normalizeLayoutEntry = (entry) => {
         linkClass: asString(safeEntry.linkClass),
         suffixClass: asString(safeEntry.suffixClass),
         fullWidth: Boolean(safeEntry.fullWidth),
-        fallback: Object.prototype.hasOwnProperty.call(safeEntry, 'fallback')
-            ? String(safeEntry.fallback ?? '')
-            : '—',
+        fallback: Object.prototype.hasOwnProperty.call(safeEntry, "fallback")
+            ? String(safeEntry.fallback ?? "")
+            : "—",
         toneField: asString(safeEntry.toneField),
         strong: asBoolean(safeEntry.strong),
     };
@@ -160,33 +182,42 @@ const normalizeSectionConfig = (config) => {
 
     return {
         resource: asString(safeConfig.resource),
-        title: asString(safeConfig.title, 'Section'),
+        title: asString(safeConfig.title, "Section"),
         description: asString(safeConfig.description),
-        emptyState: asString(safeConfig.emptyState, 'No records found.'),
+        emptyState: asString(safeConfig.emptyState, "No records found."),
         recordClass: asString(safeConfig.recordClass),
         rowClass: asString(safeConfig.rowClass),
         rightMetaClass: asString(safeConfig.rightMetaClass),
         rowActionsMenuClass: asString(safeConfig.rowActionsMenuClass),
-        showRowActionsMenuOnMobile: safeConfig.showRowActionsMenuOnMobile !== false,
+        showRowActionsMenuOnMobile:
+            safeConfig.showRowActionsMenuOnMobile !== false,
         mobileRowUrlField: asString(safeConfig.mobileRowUrlField),
         secondaryFieldsClass: asString(safeConfig.secondaryFieldsClass),
         inlineActionsOnMobile: Boolean(safeConfig.inlineActionsOnMobile),
         csrfToken: asString(safeConfig.csrfToken),
         defaultOpen: asBoolean(safeConfig.defaultOpen),
-        mobilePageSize: Number.isInteger(safeConfig.mobilePageSize) ? safeConfig.mobilePageSize : null,
-        initialRecords: asArray(safeConfig.initialRecords || safeConfig.initial_records),
+        mobilePageSize: Number.isInteger(safeConfig.mobilePageSize)
+            ? safeConfig.mobilePageSize
+            : null,
+        initialRecords: asArray(
+            safeConfig.initialRecords || safeConfig.initial_records,
+        ),
         pagination: {
             enabled: pagination.enabled !== false,
             perPage: normalizePositiveInteger(pagination.perPage, 5),
-            perPageOptions: normalizePaginationOptions(pagination.perPageOptions),
+            perPageOptions: normalizePaginationOptions(
+                pagination.perPageOptions,
+            ),
             allowPerPageChange: Boolean(pagination.allowPerPageChange),
         },
         showRowActionsMenu: safeConfig.showRowActionsMenu !== false,
-        toolbarToggles: asArray(safeConfig.toolbarToggles).map((toggle) => ({
-            key: asString(toggle?.key),
-            label: asString(toggle?.label),
-            checked: asBoolean(toggle?.checked),
-        })).filter((toggle) => toggle.key !== ''),
+        toolbarToggles: asArray(safeConfig.toolbarToggles)
+            .map((toggle) => ({
+                key: asString(toggle?.key),
+                label: asString(toggle?.label),
+                checked: asBoolean(toggle?.checked),
+            }))
+            .filter((toggle) => toggle.key !== ""),
         permissions: {
             canCreate: Boolean(permissions.canCreate),
         },
@@ -203,8 +234,8 @@ const normalizeSectionConfig = (config) => {
             enabled: asBoolean(addRow.enabled),
             type: asString(addRow.type),
             fieldName: asString(addRow.fieldName),
-            placeholder: asString(addRow.placeholder, 'Search'),
-            noResultsText: asString(addRow.noResultsText, 'No items found.'),
+            placeholder: asString(addRow.placeholder, "Search"),
+            noResultsText: asString(addRow.noResultsText, "No items found."),
             options: asArray(addRow.options).map((option) => ({
                 value: asString(option?.value),
                 label: asString(option?.label),
@@ -221,11 +252,17 @@ const normalizeSectionConfig = (config) => {
             update: asString(endpoints.update),
             remove: asString(endpoints.remove),
         },
-        fields: asArray(safeConfig.fields).map(normalizeField).filter((field) => field.name !== ''),
-        actions: asArray(safeConfig.actions).map(normalizeAction).filter((action) => action.id !== ''),
+        fields: asArray(safeConfig.fields)
+            .map(normalizeField)
+            .filter((field) => field.name !== ""),
+        actions: asArray(safeConfig.actions)
+            .map(normalizeAction)
+            .filter((action) => action.id !== ""),
         rowLayout: {
             primaryText: normalizeLayoutEntry(rowLayout.primaryText),
-            secondaryFields: asArray(rowLayout.secondaryFields).map(normalizeLayoutEntry),
+            secondaryFields: asArray(rowLayout.secondaryFields).map(
+                normalizeLayoutEntry,
+            ),
             badges: asArray(rowLayout.badges).map(normalizeLayoutEntry),
             rightMeta: asArray(rowLayout.rightMeta).map(normalizeLayoutEntry),
         },
@@ -525,30 +562,44 @@ const renderCrudSection = () => `
         data-js-crud-section-card
         x-data="jsCrudSection($el)"
     >
-        <div class="flex items-start justify-between gap-3 px-3 py-2 sm:px-6 sm:py-2">
+        <div class="flex items-start justify-between gap-2 bg-blue-50 px-3 py-4 sm:gap-3 sm:px-6 sm:py-5">
             <div class="min-w-0 flex-1">
-                <h3 class="text-sm font-semibold leading-tight text-gray-900 sm:text-base" x-text="section.title"></h3>
-                <p class="mt-0 text-[0.7rem] leading-tight text-gray-500 sm:mt-px sm:text-xs" x-text="section.description"></p>
+                <h3 class="text-lg font-semibold text-gray-900" x-text="section.title"></h3>
+                <p
+                    class="mt-1 text-sm text-gray-500 sm:overflow-visible sm:whitespace-normal sm:text-clip"
+                    :class="descriptionExpanded ? 'whitespace-normal' : 'truncate'"
+                    x-text="section.description"
+                ></p>
             </div>
             <button
                 type="button"
-                class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-gray-300 text-gray-600 transition hover:bg-gray-50 hover:text-gray-900 sm:h-8 sm:w-8"
+                class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-gray-300 text-gray-600 transition hover:bg-gray-50 hover:text-gray-900"
                 aria-expanded="false"
                 x-bind:aria-expanded="isOpen ? 'true' : 'false'"
                 x-on:click="toggleOpen()"
                 aria-label="Toggle section"
                 data-js-crud-section-toggle
             >
-                <svg class="h-3.5 w-3.5 text-gray-400 transition sm:h-4 sm:w-4" :class="isOpen ? 'rotate-180' : ''" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+                <svg class="h-4 w-4 text-gray-400 transition duration-[400ms] ease-in-out" :class="isOpen ? 'rotate-180' : ''" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
                     <path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
                 </svg>
             </button>
         </div>
 
-        <div class="border-t border-gray-100 px-3 py-2 sm:px-6 sm:py-5" x-show="isOpen" x-cloak>
-            <div class="mb-2 flex flex-col gap-2 sm:mb-4 sm:gap-3">
-                <p class="text-sm text-red-600" x-show="sectionError" x-text="sectionError"></p>
-                <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+        <div
+            class="grid transition-[grid-template-rows] duration-[400ms] ease-in-out"
+            :class="isOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'"
+            :aria-hidden="isOpen ? 'false' : 'true'"
+            x-cloak
+        >
+            <div class="min-h-0 overflow-hidden">
+                <div
+                    class="border-t border-gray-100 bg-white px-3 py-2 opacity-0 transition-opacity duration-[400ms] ease-in-out sm:px-6 sm:py-5"
+                    :class="isOpen ? 'opacity-100' : 'opacity-0'"
+                >
+                    <div class="mb-2 flex flex-col gap-2 sm:mb-4 sm:gap-3">
+                        <p class="text-sm text-red-600" x-show="sectionError" x-text="sectionError"></p>
+                        <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
                     <div class="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center" x-show="section.toolbarToggles.length > 0">
                         <template x-for="toggle in section.toolbarToggles" :key="toggle.key">
                             <button
@@ -589,7 +640,7 @@ const renderCrudSection = () => `
             </div>
 
             <div
-                class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"
+                class="mb-2 flex flex-col gap-2 sm:mb-4 sm:flex-row sm:items-end sm:justify-between sm:gap-3"
                 x-show="section.addRow.enabled"
                 data-detail-section-add-row
             >
@@ -763,7 +814,7 @@ const renderCrudSection = () => `
                                     <template x-for="meta in rightMetaItems(record)" :key="\`\${record.id}-\${meta.key}-meta\`">
                                         <div>
                                             <template x-if="meta.type === 'input'">
-                                                <label class="flex items-center gap-2.5 text-sm">
+                                                <label :class="rightMetaControlLabelClass(meta)">
                                                     <template x-if="meta.showSuccessIcon">
                                                         <svg class="h-5 w-5 shrink-0 text-emerald-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
                                                             <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75" />
@@ -771,7 +822,7 @@ const renderCrudSection = () => `
                                                         </svg>
                                                     </template>
                                                     <template x-if="meta.label">
-                                                        <span class="text-gray-500" x-text="meta.labelBare ? meta.label : \`\${meta.label}: \`"></span>
+                                                        <span :class="rightMetaLabelClass(meta)" x-text="meta.labelBare ? meta.label : \`\${meta.label}: \`"></span>
                                                     </template>
                                                     <input
                                                         type="text"
@@ -783,7 +834,7 @@ const renderCrudSection = () => `
                                                 </label>
                                             </template>
                                             <template x-if="meta.type === 'smart-number'">
-                                                <label class="flex items-center gap-2.5 text-sm">
+                                                <label :class="rightMetaControlLabelClass(meta)">
                                                     <template x-if="meta.showSuccessIcon">
                                                         <svg class="h-5 w-5 shrink-0 text-emerald-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
                                                             <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75" />
@@ -791,11 +842,11 @@ const renderCrudSection = () => `
                                                         </svg>
                                                     </template>
                                                     <template x-if="meta.label">
-                                                        <span class="text-gray-500" x-text="meta.labelBare ? meta.label : \`\${meta.label}: \`"></span>
+                                                        <span :class="rightMetaLabelClass(meta)" x-text="meta.labelBare ? meta.label : \`\${meta.label}: \`"></span>
                                                     </template>
                                                     <span
                                                         data-smart-number-input-root
-                                                        class="w-24"
+                                                        :class="smartNumberMetaRootClass(meta)"
                                                         x-data="smartNumberInput({
                                                             name: meta.field,
                                                             value: record[meta.field],
@@ -813,10 +864,10 @@ const renderCrudSection = () => `
                                                         x-modelable="rawValue"
                                                         x-on:smart-number-input:changed="handleSmartNumberMetaChanged(record, meta, $event.detail)"
                                                     >
-                                                        <span class="flex w-full items-center rounded-lg border border-gray-300 bg-white shadow-sm transition focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/20">
+                                                        <span :class="smartNumberMetaFrameClass(meta)">
                                                             <input
                                                                 type="text"
-                                                                class="block min-w-0 flex-1 border-0 bg-transparent px-3 py-1.5 text-right text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-0"
+                                                                :class="smartNumberMetaInputClass(meta)"
                                                                 inputmode="decimal"
                                                                 x-model="displayValue"
                                                                 x-bind:size="inputSize()"
@@ -838,7 +889,7 @@ const renderCrudSection = () => `
                                             <template x-if="meta.type !== 'input' && meta.type !== 'smart-number' && meta.type !== 'badge'">
                                                 <p :class="[meta.textClass || 'text-sm', meta.strong ? 'font-semibold text-gray-900' : 'text-gray-600']">
                                                     <template x-if="meta.label">
-                                                        <span class="text-gray-500" x-text="meta.labelBare ? meta.label : \`\${meta.label}: \`"></span>
+                                                        <span :class="rightMetaLabelClass(meta)" x-text="meta.labelBare ? meta.label : \`\${meta.label}: \`"></span>
                                                     </template>
                                                     <span x-text="meta.text"></span>
                                                     <template x-if="meta.suffix">
@@ -962,6 +1013,8 @@ const renderCrudSection = () => `
                 </div>
             </div>
         </div>
+        </div>
+        </div>
 
         <div
             class="fixed inset-0 z-50 overflow-hidden"
@@ -1084,39 +1137,44 @@ const renderCrudSection = () => `
     </section>
 `;
 
-const buildEmptyForm = (section) => section.fields.reduce((carry, field) => {
-    carry[field.name] = '';
+const buildEmptyForm = (section) =>
+    section.fields.reduce((carry, field) => {
+        carry[field.name] = "";
 
-    return carry;
-}, {});
+        return carry;
+    }, {});
 
-const resolveUrl = (template, id) => asString(template).replace('{id}', encodeURIComponent(String(id)));
+const resolveUrl = (template, id) =>
+    asString(template).replace("{id}", encodeURIComponent(String(id)));
 
-const defaultToneClass = (tone) => ({
-    success: 'bg-emerald-100 text-emerald-700',
-    info: 'bg-sky-100 text-sky-700',
-    warning: 'bg-yellow-100 text-yellow-700',
-    danger: 'bg-red-100 text-red-700',
-    muted: 'bg-gray-200 text-gray-700',
-    default: 'bg-blue-100 text-blue-700',
-}[tone] || 'bg-blue-100 text-blue-700');
+const defaultToneClass = (tone) =>
+    ({
+        success: "bg-emerald-100 text-emerald-700",
+        info: "bg-sky-100 text-sky-700",
+        warning: "bg-yellow-100 text-yellow-700",
+        danger: "bg-red-100 text-red-700",
+        muted: "bg-gray-200 text-gray-700",
+        default: "bg-blue-100 text-blue-700",
+    })[tone] || "bg-blue-100 text-blue-700";
 
 const buildLayoutText = (record, entry) => {
-    const base = resolvePathValue(record, entry.field, '');
-    const suffix = resolvePathValue(record, entry.suffixField, '');
-    const parts = [base, suffix].filter((part) => part !== null && part !== undefined && String(part) !== '');
+    const base = resolvePathValue(record, entry.field, "");
+    const suffix = resolvePathValue(record, entry.suffixField, "");
+    const parts = [base, suffix].filter(
+        (part) => part !== null && part !== undefined && String(part) !== "",
+    );
 
     if (parts.length === 0) {
         return entry.fallback;
     }
 
-    return parts.join(' ');
+    return parts.join(" ");
 };
 
 const buildLayoutBaseText = (record, entry) => {
-    const base = resolvePathValue(record, entry.field, '');
+    const base = resolvePathValue(record, entry.field, "");
 
-    if (base === null || base === undefined || String(base) === '') {
+    if (base === null || base === undefined || String(base) === "") {
         return entry.fallback;
     }
 
@@ -1124,15 +1182,15 @@ const buildLayoutBaseText = (record, entry) => {
 };
 
 const buildLayoutSuffixText = (record, entry) => {
-    const base = resolvePathValue(record, entry.field, '');
-    const suffix = resolvePathValue(record, entry.suffixField, '');
+    const base = resolvePathValue(record, entry.field, "");
+    const suffix = resolvePathValue(record, entry.suffixField, "");
 
-    if (base === null || base === undefined || String(base) === '') {
-        return '';
+    if (base === null || base === undefined || String(base) === "") {
+        return "";
     }
 
-    if (suffix === null || suffix === undefined || String(suffix) === '') {
-        return '';
+    if (suffix === null || suffix === undefined || String(suffix) === "") {
+        return "";
     }
 
     return String(suffix);
@@ -1142,48 +1200,56 @@ const createSectionState = (section, adapters, hostEl) => ({
     section,
     adapters,
     isOpen: asBoolean(section.defaultOpen),
+    descriptionExpanded: asBoolean(section.defaultOpen),
+    descriptionTimer: null,
     hasLoaded: false,
     isLoading: false,
     isFormOpen: false,
     isSubmitting: false,
-    formMode: 'create',
+    formMode: "create",
     editingId: null,
     records: asArray(section.initialRecords).map((record) => asRecord(record)),
     paginationPage: 1,
     meta: {
         current_page: 1,
-        last_page: Math.max(Math.ceil(asArray(section.initialRecords).length / section.pagination.perPage), 1),
+        last_page: Math.max(
+            Math.ceil(
+                asArray(section.initialRecords).length /
+                    section.pagination.perPage,
+            ),
+            1,
+        ),
         per_page: section.pagination.perPage,
         total: asArray(section.initialRecords).length,
     },
     form: buildEmptyForm(section),
     errors: {},
-    sectionError: '',
-    formError: '',
+    sectionError: "",
+    formError: "",
     missingConversionModal: {
         open: false,
-        itemName: '',
-        fromUomLabel: '',
-        toUomLabel: '',
-        endpoint: '',
+        itemName: "",
+        fromUomLabel: "",
+        toUomLabel: "",
+        endpoint: "",
         retryAfterSuccess: false,
         originalPayload: {},
         form: {
-            item_id: '',
-            from_uom_id: '',
-            to_uom_id: '',
-            conversion_factor: '',
+            item_id: "",
+            from_uom_id: "",
+            to_uom_id: "",
+            conversion_factor: "",
         },
         errors: {},
-        error: '',
+        error: "",
         submitting: false,
     },
-    inlineCreateFieldName: '',
+    inlineCreateFieldName: "",
     inlineCreateForm: {},
     inlineCreateErrors: {},
-    inlineCreateFormError: '',
+    inlineCreateFormError: "",
     inlineCreateSubmitting: false,
-    addRowValue: '',
+    addRowValue: "",
     addRowSubmitting: false,
     toggleValues: section.toolbarToggles.reduce((carry, toggle) => {
         carry[toggle.key] = Boolean(toggle.checked);
@@ -1191,7 +1257,7 @@ const createSectionState = (section, adapters, hostEl) => ({
         return carry;
     }, {}),
     init() {
-        const rootEl = hostEl?.closest('[data-js-crud-section-root]');
+        const rootEl = hostEl?.closest("[data-js-crud-section-root]");
 
         if (rootEl) {
             rootEl._jsCrudSectionApi = {
@@ -1216,16 +1282,18 @@ const createSectionState = (section, adapters, hostEl) => ({
         }
     },
     hasRemotePagination() {
-        return this.section.endpoints.list !== '';
+        return this.section.endpoints.list !== "";
     },
     paginationPerPage() {
-        const mobilePageSize = Number.isInteger(this.section.mobilePageSize) ? this.section.mobilePageSize : null;
+        const mobilePageSize = Number.isInteger(this.section.mobilePageSize)
+            ? this.section.mobilePageSize
+            : null;
 
         if (
-            mobilePageSize !== null
-            && mobilePageSize > 0
-            && typeof globalThis.matchMedia === 'function'
-            && globalThis.matchMedia('(max-width: 639px)').matches
+            mobilePageSize !== null &&
+            mobilePageSize > 0 &&
+            typeof globalThis.matchMedia === "function" &&
+            globalThis.matchMedia("(max-width: 639px)").matches
         ) {
             return mobilePageSize;
         }
@@ -1233,44 +1301,59 @@ const createSectionState = (section, adapters, hostEl) => ({
         return normalizePositiveInteger(this.section.pagination.perPage, 5);
     },
     paginationCurrentPage() {
-        return this.hasRemotePagination() ? this.meta.current_page : this.paginationPage;
+        return this.hasRemotePagination()
+            ? this.meta.current_page
+            : this.paginationPage;
     },
     paginationLastPage() {
         if (this.hasRemotePagination()) {
-            return Math.max(normalizePositiveInteger(this.meta.last_page, 1), 1);
+            return Math.max(
+                normalizePositiveInteger(this.meta.last_page, 1),
+                1,
+            );
         }
 
-        return Math.max(Math.ceil(this.records.length / this.paginationPerPage()), 1);
+        return Math.max(
+            Math.ceil(this.records.length / this.paginationPerPage()),
+            1,
+        );
     },
     paginationTotal() {
-        return this.hasRemotePagination() ? normalizePositiveInteger(this.meta.total, 0) : this.records.length;
+        return this.hasRemotePagination()
+            ? normalizePositiveInteger(this.meta.total, 0)
+            : this.records.length;
     },
     paginationShowingFrom() {
         if (this.paginationTotal() === 0) {
             return 0;
         }
 
-        return ((this.paginationCurrentPage() - 1) * this.paginationPerPage()) + 1;
+        return (
+            (this.paginationCurrentPage() - 1) * this.paginationPerPage() + 1
+        );
     },
     paginationShowingTo() {
-        return Math.min(this.paginationCurrentPage() * this.paginationPerPage(), this.paginationTotal());
+        return Math.min(
+            this.paginationCurrentPage() * this.paginationPerPage(),
+            this.paginationTotal(),
+        );
     },
     paginationPages() {
         const current = this.paginationCurrentPage();
         const last = this.paginationLastPage();
 
         if (last <= 7) {
-            return Array.from({ length: last }, (_, index) => this.paginationPageItem(index + 1, current));
+            return Array.from({ length: last }, (_, index) =>
+                this.paginationPageItem(index + 1, current),
+            );
         }
 
-        const pages = [
-            this.paginationPageItem(1, current),
-        ];
+        const pages = [this.paginationPageItem(1, current)];
         const windowStart = Math.max(2, current - 1);
         const windowEnd = Math.min(last - 1, current + 1);
 
         if (windowStart > 2) {
-            pages.push(this.paginationEllipsisItem('start'));
+            pages.push(this.paginationEllipsisItem("start"));
         }
 
         for (let page = windowStart; page <= windowEnd; page += 1) {
@@ -1278,7 +1361,7 @@ const createSectionState = (section, adapters, hostEl) => ({
         }
 
         if (windowEnd < last - 1) {
-            pages.push(this.paginationEllipsisItem('end'));
+            pages.push(this.paginationEllipsisItem("end"));
         }
 
         pages.push(this.paginationPageItem(last, current));
@@ -1287,7 +1370,7 @@ const createSectionState = (section, adapters, hostEl) => ({
     },
     paginationPageItem(page, current) {
         return {
-            type: 'page',
+            type: "page",
             key: `page-${page}`,
             value: page,
             label: String(page),
@@ -1296,7 +1379,7 @@ const createSectionState = (section, adapters, hostEl) => ({
     },
     paginationEllipsisItem(position) {
         return {
-            type: 'ellipsis',
+            type: "ellipsis",
             key: `ellipsis-${position}`,
         };
     },
@@ -1315,10 +1398,16 @@ const createSectionState = (section, adapters, hostEl) => ({
         this.paginationPage = 1;
     },
     clampPaginationPage() {
-        this.paginationPage = Math.min(Math.max(this.paginationPage, 1), this.paginationLastPage());
+        this.paginationPage = Math.min(
+            Math.max(this.paginationPage, 1),
+            this.paginationLastPage(),
+        );
     },
     async goToPaginationPage(page) {
-        const targetPage = Math.min(Math.max(Number(page) || 1, 1), this.paginationLastPage());
+        const targetPage = Math.min(
+            Math.max(Number(page) || 1, 1),
+            this.paginationLastPage(),
+        );
 
         if (this.hasRemotePagination()) {
             await this.fetchPage(targetPage);
@@ -1336,6 +1425,7 @@ const createSectionState = (section, adapters, hostEl) => ({
         }
 
         this.isOpen = nextOpen;
+        this.syncDescriptionExpandedAfterTransition();
 
         if (nextOpen && !this.hasLoaded) {
             await this.fetchPage(1);
@@ -1343,9 +1433,16 @@ const createSectionState = (section, adapters, hostEl) => ({
     },
     closeSection() {
         this.isOpen = false;
+        this.syncDescriptionExpandedAfterTransition();
+    },
+    syncDescriptionExpandedAfterTransition() {
+        clearTimeout(this.descriptionTimer);
+        this.descriptionTimer = setTimeout(() => {
+            this.descriptionExpanded = this.isOpen;
+        }, 400);
     },
     closeSiblingSections() {
-        const rootEl = hostEl?.closest('[data-js-crud-section-root]');
+        const rootEl = hostEl?.closest("[data-js-crud-section-root]");
         const parentEl = rootEl?.parentElement;
 
         if (!rootEl || !parentEl) {
@@ -1353,7 +1450,7 @@ const createSectionState = (section, adapters, hostEl) => ({
         }
 
         parentEl
-            .querySelectorAll(':scope > [data-js-crud-section-root]')
+            .querySelectorAll(":scope > [data-js-crud-section-root]")
             .forEach((sectionRoot) => {
                 if (sectionRoot === rootEl) {
                     return;
@@ -1365,7 +1462,7 @@ const createSectionState = (section, adapters, hostEl) => ({
     normalizeRow(record) {
         const adapter = this.adapters.normalizeRow;
 
-        if (typeof adapter === 'function') {
+        if (typeof adapter === "function") {
             return adapter(record) || record;
         }
 
@@ -1375,77 +1472,94 @@ const createSectionState = (section, adapters, hostEl) => ({
         return buildLayoutText(record, this.section.rowLayout.primaryText);
     },
     primaryTextUrl(record) {
-        return asString(resolvePathValue(record, this.section.rowLayout.primaryText.urlField));
+        return asString(
+            resolvePathValue(
+                record,
+                this.section.rowLayout.primaryText.urlField,
+            ),
+        );
     },
     primaryTextLinkClass() {
         return asString(
             this.section.rowLayout.primaryText.linkClass,
-            'truncate text-sm font-semibold text-blue-700 transition hover:text-blue-600 hover:underline'
+            "truncate text-sm font-semibold text-blue-700 transition hover:text-blue-600 hover:underline",
         );
     },
     mobileRowUrl(record) {
-        return asString(resolvePathValue(record, this.section.mobileRowUrlField));
+        return asString(
+            resolvePathValue(record, this.section.mobileRowUrlField),
+        );
     },
     secondaryFieldItems(record) {
-        return this.section.rowLayout.secondaryFields.map((entry, index) => ({
-            key: entry.key || entry.field || `secondary-${index}`,
-            label: entry.label,
-            text: buildLayoutBaseText(record, entry),
-            suffix: buildLayoutSuffixText(record, entry),
-            hideLabelOnMobile: entry.hideLabelOnMobile,
-            compactOnMobile: entry.compactOnMobile,
-            mobilePlacement: entry.mobilePlacement,
-            textClass: entry.textClass,
-            textValueClass: entry.textValueClass,
-            fullWidth: entry.fullWidth,
-        })).filter((entry) => entry.text !== '' || entry.suffix !== '');
+        return this.section.rowLayout.secondaryFields
+            .map((entry, index) => ({
+                key: entry.key || entry.field || `secondary-${index}`,
+                label: entry.label,
+                text: buildLayoutBaseText(record, entry),
+                suffix: buildLayoutSuffixText(record, entry),
+                hideLabelOnMobile: entry.hideLabelOnMobile,
+                compactOnMobile: entry.compactOnMobile,
+                mobilePlacement: entry.mobilePlacement,
+                textClass: entry.textClass,
+                textValueClass: entry.textValueClass,
+                fullWidth: entry.fullWidth,
+            }))
+            .filter((entry) => entry.text !== "" || entry.suffix !== "");
     },
     mobilePrimaryFieldItems(record) {
-        return this.secondaryFieldItems(record)
-            .filter((entry) => entry.mobilePlacement === 'primary-end');
+        return this.secondaryFieldItems(record).filter(
+            (entry) => entry.mobilePlacement === "primary-end",
+        );
     },
     secondaryLineClass(line) {
         const classes = [
-            line.textClass || (line.compactOnMobile ? 'text-xs sm:text-sm' : 'text-sm'),
+            line.textClass ||
+                (line.compactOnMobile ? "text-xs sm:text-sm" : "text-sm"),
         ];
 
-        if (line.mobilePlacement === 'primary-end') {
-            classes.push('hidden sm:block');
+        if (line.mobilePlacement === "primary-end") {
+            classes.push("hidden sm:block");
         }
 
         if (line.fullWidth) {
-            classes.push('basis-full');
+            classes.push("basis-full");
         }
 
-        return classes.join(' ');
+        return classes.join(" ");
     },
     secondaryFieldsClass(record) {
         const baseClass = asString(
             this.section.secondaryFieldsClass,
-            'mt-1 flex flex-wrap items-center gap-4'
+            "mt-1 flex flex-wrap items-center gap-4",
         );
         const recordLevelClass = asString(record.secondaryFieldsClass);
 
         return [baseClass, recordLevelClass]
-            .filter((value) => value !== '')
-            .join(' ');
+            .filter((value) => value !== "")
+            .join(" ");
     },
     badgeItems(record) {
         return this.section.rowLayout.badges
             .map((entry) => ({
                 text: buildLayoutText(record, entry),
-                toneClass: defaultToneClass(asString(resolvePathValue(record, entry.toneField, 'muted'))),
+                toneClass: defaultToneClass(
+                    asString(
+                        resolvePathValue(record, entry.toneField, "muted"),
+                    ),
+                ),
                 textClass: entry.textClass,
             }))
-            .filter((badge) => badge.text !== '—' && badge.text !== '');
+            .filter((badge) => badge.text !== "—" && badge.text !== "");
     },
     rightMetaItems(record) {
-        if (typeof this.adapters.rightMetaItems === 'function') {
-            return asArray(this.adapters.rightMetaItems({
-                record,
-                component: this,
-                section: this.section,
-            }));
+        if (typeof this.adapters.rightMetaItems === "function") {
+            return asArray(
+                this.adapters.rightMetaItems({
+                    record,
+                    component: this,
+                    section: this.section,
+                }),
+            );
         }
 
         return this.section.rowLayout.rightMeta.map((entry, index) => ({
@@ -1454,36 +1568,52 @@ const createSectionState = (section, adapters, hostEl) => ({
             label: entry.label,
             text: buildLayoutBaseText(record, entry),
             suffix: buildLayoutSuffixText(record, entry),
-            toneClass: defaultToneClass(asString(resolvePathValue(record, entry.toneField, 'muted'))),
+            toneClass: defaultToneClass(
+                asString(resolvePathValue(record, entry.toneField, "muted")),
+            ),
             textClass: entry.textClass,
             suffixClass: entry.suffixClass,
             strong: entry.strong,
         }));
     },
     isMobileViewport() {
-        return typeof globalThis.matchMedia === 'function'
-            && globalThis.matchMedia('(max-width: 639px)').matches;
+        return (
+            typeof globalThis.matchMedia === "function" &&
+            globalThis.matchMedia("(max-width: 639px)").matches
+        );
     },
     rowActionsMenuVisible(record) {
-        if (!this.section.showRowActionsMenu || this.visibleActions(record).length === 0) {
+        if (
+            !this.section.showRowActionsMenu ||
+            this.visibleActions(record).length === 0
+        ) {
             return false;
         }
 
-        return this.section.showRowActionsMenuOnMobile || !this.isMobileViewport();
+        return (
+            this.section.showRowActionsMenuOnMobile || !this.isMobileViewport()
+        );
     },
     visibleActions(record) {
-        const hasExplicitAvailableActions = Array.isArray(record.availableActions) || Array.isArray(record.available_actions);
-        const availableActions = asArray(record.availableActions || record.available_actions);
+        const hasExplicitAvailableActions =
+            Array.isArray(record.availableActions) ||
+            Array.isArray(record.available_actions);
+        const availableActions = asArray(
+            record.availableActions || record.available_actions,
+        );
         const canComplete = Boolean(record.canComplete || record.can_complete);
 
         if (!hasExplicitAvailableActions && availableActions.length === 0) {
-            return this.section.actions.filter((action) => action.id !== 'complete' || canComplete);
+            return this.section.actions.filter(
+                (action) => action.id !== "complete" || canComplete,
+            );
         }
 
-        return this.section.actions.filter((action) => (
-            availableActions.includes(action.id)
-            || (action.id === 'complete' && canComplete)
-        ));
+        return this.section.actions.filter(
+            (action) =>
+                availableActions.includes(action.id) ||
+                (action.id === "complete" && canComplete),
+        );
     },
     actionLabel(record, action) {
         const labels = asRecord(record.actionLabels || record.action_labels);
@@ -1491,24 +1621,28 @@ const createSectionState = (section, adapters, hostEl) => ({
         return labels[action.id] || action.label;
     },
     actionTooltip(record, action) {
-        return action.tooltip || action.ariaLabel || this.actionLabel(record, action);
+        return (
+            action.tooltip ||
+            action.ariaLabel ||
+            this.actionLabel(record, action)
+        );
     },
     inlineActionButtonClass(action) {
-        if (action.icon === 'credit-card' || action.icon === 'x-mark') {
-            return action.icon === 'x-mark'
-                ? 'h-8 w-8 justify-center rounded-full border border-slate-300 text-slate-500 hover:border-blue-600 hover:bg-blue-50 hover:text-blue-700'
-                : 'h-8 w-8 justify-center rounded-full border border-slate-300 text-slate-600 hover:border-blue-600 hover:bg-blue-50 hover:text-blue-700';
+        if (action.icon === "credit-card" || action.icon === "x-mark") {
+            return action.icon === "x-mark"
+                ? "h-8 w-8 justify-center rounded-full border border-slate-300 text-slate-500 hover:border-blue-600 hover:bg-blue-50 hover:text-blue-700"
+                : "h-8 w-8 justify-center rounded-full border border-slate-300 text-slate-600 hover:border-blue-600 hover:bg-blue-50 hover:text-blue-700";
         }
 
-        return action.tone === 'warning'
-            ? 'rounded-lg border border-yellow-300 px-3 py-1.5 text-xs font-semibold uppercase tracking-widest text-yellow-700 hover:bg-yellow-50'
-            : 'rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold uppercase tracking-widest text-slate-700 hover:bg-slate-50';
+        return action.tone === "warning"
+            ? "rounded-lg border border-yellow-300 px-3 py-1.5 text-xs font-semibold uppercase tracking-widest text-yellow-700 hover:bg-yellow-50"
+            : "rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold uppercase tracking-widest text-slate-700 hover:bg-slate-50";
     },
     firstError(fieldName) {
         const values = this.errors[fieldName];
 
         if (!Array.isArray(values) || values.length === 0) {
-            return '';
+            return "";
         }
 
         return values[0];
@@ -1517,7 +1651,7 @@ const createSectionState = (section, adapters, hostEl) => ({
         const values = this.missingConversionModal.errors[fieldName];
 
         if (!Array.isArray(values) || values.length === 0) {
-            return '';
+            return "";
         }
 
         return values[0];
@@ -1529,20 +1663,29 @@ const createSectionState = (section, adapters, hostEl) => ({
 
         this.missingConversionModal = {
             open: true,
-            itemName: asString(item.name, 'Selected material'),
+            itemName: asString(item.name, "Selected material"),
             fromUomLabel: asString(fromUom.symbol, asString(fromUom.name)),
             toUomLabel: asString(toUom.symbol, asString(toUom.name)),
             endpoint: asString(meta.conversion_create_url),
             retryAfterSuccess: true,
             originalPayload,
             form: {
-                item_id: item.id === null || item.id === undefined ? '' : String(item.id),
-                from_uom_id: fromUom.id === null || fromUom.id === undefined ? '' : String(fromUom.id),
-                to_uom_id: toUom.id === null || toUom.id === undefined ? '' : String(toUom.id),
-                conversion_factor: '',
+                item_id:
+                    item.id === null || item.id === undefined
+                        ? ""
+                        : String(item.id),
+                from_uom_id:
+                    fromUom.id === null || fromUom.id === undefined
+                        ? ""
+                        : String(fromUom.id),
+                to_uom_id:
+                    toUom.id === null || toUom.id === undefined
+                        ? ""
+                        : String(toUom.id),
+                conversion_factor: "",
             },
             errors: {},
-            error: '',
+            error: "",
             submitting: false,
         };
     },
@@ -1551,26 +1694,29 @@ const createSectionState = (section, adapters, hostEl) => ({
             ...this.missingConversionModal,
             open: false,
             errors: {},
-            error: '',
+            error: "",
             submitting: false,
         };
     },
     async submitMissingConversion() {
-        if (!this.missingConversionModal.endpoint || this.missingConversionModal.submitting) {
+        if (
+            !this.missingConversionModal.endpoint ||
+            this.missingConversionModal.submitting
+        ) {
             return;
         }
 
         this.missingConversionModal.submitting = true;
         this.missingConversionModal.errors = {};
-        this.missingConversionModal.error = '';
+        this.missingConversionModal.error = "";
 
         try {
             const response = await fetch(this.missingConversionModal.endpoint, {
-                method: 'POST',
+                method: "POST",
                 headers: {
-                    'Content-Type': 'application/json',
-                    Accept: 'application/json',
-                    'X-CSRF-TOKEN': this.section.csrfToken,
+                    "Content-Type": "application/json",
+                    Accept: "application/json",
+                    "X-CSRF-TOKEN": this.section.csrfToken,
                 },
                 body: JSON.stringify(this.missingConversionModal.form),
             });
@@ -1578,22 +1724,28 @@ const createSectionState = (section, adapters, hostEl) => ({
 
             if (response.status === 422) {
                 this.missingConversionModal.errors = asRecord(data.errors);
-                this.missingConversionModal.error = asString(data.message, 'Unable to create conversion.');
+                this.missingConversionModal.error = asString(
+                    data.message,
+                    "Unable to create conversion.",
+                );
                 return;
             }
 
             if (!response.ok) {
-                this.missingConversionModal.error = asString(data.message, 'Unable to create conversion.');
+                this.missingConversionModal.error = asString(
+                    data.message,
+                    "Unable to create conversion.",
+                );
                 return;
             }
 
             this.closeMissingConversionModal();
             this.errors = {};
-            this.formError = '';
+            this.formError = "";
 
             await this.submitForm();
         } catch (error) {
-            this.missingConversionModal.error = 'Unable to create conversion.';
+            this.missingConversionModal.error = "Unable to create conversion.";
         } finally {
             this.missingConversionModal.submitting = false;
         }
@@ -1602,43 +1754,50 @@ const createSectionState = (section, adapters, hostEl) => ({
         const values = this.inlineCreateErrors[fieldName];
 
         if (!Array.isArray(values) || values.length === 0) {
-            return '';
+            return "";
         }
 
         return values[0];
     },
     resetInlineCreateState() {
-        this.inlineCreateFieldName = '';
+        this.inlineCreateFieldName = "";
         this.inlineCreateForm = {};
         this.inlineCreateErrors = {};
-        this.inlineCreateFormError = '';
+        this.inlineCreateFormError = "";
         this.inlineCreateSubmitting = false;
     },
     openInlineCreate(field) {
         this.inlineCreateFieldName = field.name;
-        this.inlineCreateForm = field.inlineCreate.fields.reduce((carry, createField) => {
-            carry[createField.name] = '';
+        this.inlineCreateForm = field.inlineCreate.fields.reduce(
+            (carry, createField) => {
+                carry[createField.name] = "";
 
-            return carry;
-        }, {});
+                return carry;
+            },
+            {},
+        );
         this.inlineCreateErrors = {};
-        this.inlineCreateFormError = '';
+        this.inlineCreateFormError = "";
         this.inlineCreateSubmitting = false;
     },
     closeInlineCreate() {
         this.resetInlineCreateState();
     },
     async submitAddRow() {
-        if (!this.section.addRow.enabled || this.addRowSubmitting || this.addRowValue === '') {
+        if (
+            !this.section.addRow.enabled ||
+            this.addRowSubmitting ||
+            this.addRowValue === ""
+        ) {
             return;
         }
 
-        if (typeof this.adapters.handleAddRow !== 'function') {
+        if (typeof this.adapters.handleAddRow !== "function") {
             return;
         }
 
         this.addRowSubmitting = true;
-        this.sectionError = '';
+        this.sectionError = "";
 
         try {
             await this.adapters.handleAddRow({
@@ -1660,21 +1819,23 @@ const createSectionState = (section, adapters, hostEl) => ({
                 return;
             }
 
-            if (field.rowGroup !== '') {
+            if (field.rowGroup !== "") {
                 const row = [field];
 
-                this.section.fields.forEach((candidateField, candidateIndex) => {
-                    if (candidateIndex <= index) {
-                        return;
-                    }
+                this.section.fields.forEach(
+                    (candidateField, candidateIndex) => {
+                        if (candidateIndex <= index) {
+                            return;
+                        }
 
-                    if (candidateField.rowGroup !== field.rowGroup) {
-                        return;
-                    }
+                        if (candidateField.rowGroup !== field.rowGroup) {
+                            return;
+                        }
 
-                    row.push(candidateField);
-                    consumedIndexes.add(candidateIndex);
-                });
+                        row.push(candidateField);
+                        consumedIndexes.add(candidateIndex);
+                    },
+                );
 
                 rows.push(row);
                 return;
@@ -1687,72 +1848,119 @@ const createSectionState = (section, adapters, hostEl) => ({
     },
     rowClass(row) {
         if (row.length <= 1) {
-            return '';
+            return "";
         }
 
-        if (row.some((field) => field.width === 'short') && row.some((field) => field.width === 'right')) {
-            return 'grid grid-cols-1 gap-4 sm:grid-cols-[minmax(0,10rem)_minmax(0,1fr)]';
+        if (
+            row.some((field) => field.width === "short") &&
+            row.some((field) => field.width === "right")
+        ) {
+            return "grid grid-cols-1 gap-4 sm:grid-cols-[minmax(0,10rem)_minmax(0,1fr)]";
         }
 
-        if (row.some((field) => field.width === 'short')) {
-            return 'grid grid-cols-1 gap-4 sm:grid-cols-[minmax(0,10rem)_minmax(0,1fr)]';
+        if (row.some((field) => field.width === "short")) {
+            return "grid grid-cols-1 gap-4 sm:grid-cols-[minmax(0,10rem)_minmax(0,1fr)]";
         }
 
-        return 'grid grid-cols-1 gap-4 sm:grid-cols-2';
+        return "grid grid-cols-1 gap-4 sm:grid-cols-2";
     },
     fieldWrapperClass(field) {
-        if (field.width === 'short') {
-            return 'min-w-0';
+        if (field.width === "short") {
+            return "min-w-0";
         }
 
-        if (field.width === 'right') {
-            return 'min-w-0';
+        if (field.width === "right") {
+            return "min-w-0";
         }
 
-        return '';
+        return "";
     },
     recordClass(record) {
-        const baseClass = asString(this.section.recordClass, 'rounded-xl border border-gray-100 bg-gray-50 p-3 sm:p-4');
-        const adapterClass = typeof this.adapters.recordClass === 'function'
-            ? asString(this.adapters.recordClass({
-                record,
-                component: this,
-                section: this.section,
-            }))
-            : '';
+        const baseClass = asString(
+            this.section.recordClass,
+            "rounded-xl border border-gray-100 bg-gray-50 p-3 sm:p-4",
+        );
+        const adapterClass =
+            typeof this.adapters.recordClass === "function"
+                ? asString(
+                      this.adapters.recordClass({
+                          record,
+                          component: this,
+                          section: this.section,
+                      }),
+                  )
+                : "";
         const recordLevelClass = asString(record.rowClass);
         const mobileClass = mobileRecordClass(baseClass);
 
-        return ['relative', 'max-sm:border-t-0 sm:mt-0', mobileClass, mobileRecordClass(adapterClass), mobileRecordClass(recordLevelClass)]
-            .filter((value) => value !== '')
-            .join(' ');
+        return [
+            "relative",
+            "max-sm:border-t-0 sm:mt-0",
+            mobileClass,
+            mobileRecordClass(adapterClass),
+            mobileRecordClass(recordLevelClass),
+        ]
+            .filter((value) => value !== "")
+            .join(" ");
     },
     recordRowClass(record) {
         const baseClass = asString(
             this.section.rowClass,
             this.section.inlineActionsOnMobile
-                ? 'flex flex-row items-center justify-between gap-4'
-                : 'flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between'
+                ? "flex flex-row items-center justify-between gap-4"
+                : "flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between",
         );
         const recordLevelClass = asString(record.rowContainerClass);
 
         return [baseClass, recordLevelClass]
-            .filter((value) => value !== '')
-            .join(' ');
+            .filter((value) => value !== "")
+            .join(" ");
     },
     rightMetaColumnClass(record) {
         const baseClass = asString(
             this.section.rightMetaClass,
-            'flex min-w-[5rem] flex-col items-end justify-center gap-2 text-right'
+            "flex min-w-[5rem] flex-col items-end justify-center gap-2 text-right",
         );
         const recordLevelClass = asString(record.rightMetaClass);
 
         return [baseClass, recordLevelClass]
-            .filter((value) => value !== '')
-            .join(' ');
+            .filter((value) => value !== "")
+            .join(" ");
+    },
+    rightMetaLabelClass(meta) {
+        const baseClass = meta.compactOnMobile
+            ? "text-[0.65rem] font-semibold uppercase tracking-wide text-gray-500 sm:text-sm sm:font-normal sm:normal-case sm:tracking-normal"
+            : "text-gray-500";
+
+        return [baseClass, asString(meta.labelClass)]
+            .filter((value) => value !== "")
+            .join(" ");
+    },
+    rightMetaControlLabelClass(meta) {
+        return meta.compactOnMobile
+            ? "flex items-center gap-1.5 text-xs sm:gap-2.5 sm:text-sm"
+            : "flex items-center gap-2.5 text-sm";
+    },
+    smartNumberMetaRootClass(meta) {
+        return meta.compactOnMobile ? "w-20 sm:w-24" : "w-24";
+    },
+    smartNumberMetaFrameClass(meta) {
+        const baseClass =
+            "flex w-full items-center rounded-lg border border-gray-300 bg-white shadow-sm transition focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/20";
+
+        return meta.compactOnMobile ? `${baseClass} min-h-8` : baseClass;
+    },
+    smartNumberMetaInputClass(meta) {
+        const baseClass =
+            "block min-w-0 flex-1 border-0 bg-transparent text-right text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-0";
+        const sizingClass = meta.compactOnMobile
+            ? "px-2 py-1 text-xs sm:px-3 sm:py-1.5 sm:text-sm"
+            : "px-3 py-1.5 text-sm";
+
+        return `${baseClass} ${sizingClass}`;
     },
     updateSectionConfig(nextSection) {
-        if (!nextSection || typeof nextSection !== 'object') {
+        if (!nextSection || typeof nextSection !== "object") {
             return;
         }
 
@@ -1760,15 +1968,25 @@ const createSectionState = (section, adapters, hostEl) => ({
         const currentToggleValues = asRecord(this.toggleValues);
 
         this.section = normalizedSection;
-        this.toggleValues = normalizedSection.toolbarToggles.reduce((carry, toggle) => {
-            carry[toggle.key] = Object.prototype.hasOwnProperty.call(currentToggleValues, toggle.key)
-                ? Boolean(currentToggleValues[toggle.key])
-                : Boolean(toggle.checked);
+        this.toggleValues = normalizedSection.toolbarToggles.reduce(
+            (carry, toggle) => {
+                carry[toggle.key] = Object.prototype.hasOwnProperty.call(
+                    currentToggleValues,
+                    toggle.key,
+                )
+                    ? Boolean(currentToggleValues[toggle.key])
+                    : Boolean(toggle.checked);
 
-            return carry;
-        }, {});
+                return carry;
+            },
+            {},
+        );
 
-        if (!this.section.permissions.canCreate && this.isFormOpen && this.formMode === 'create') {
+        if (
+            !this.section.permissions.canCreate &&
+            this.isFormOpen &&
+            this.formMode === "create"
+        ) {
             this.closeForm();
         }
 
@@ -1776,7 +1994,10 @@ const createSectionState = (section, adapters, hostEl) => ({
         this.clampPaginationPage();
     },
     findField(fieldName) {
-        return this.section.fields.find((field) => field.name === fieldName) || null;
+        return (
+            this.section.fields.find((field) => field.name === fieldName) ||
+            null
+        );
     },
     async submitInlineCreate(field) {
         if (!field.inlineCreate.storeUrl || this.inlineCreateSubmitting) {
@@ -1785,15 +2006,15 @@ const createSectionState = (section, adapters, hostEl) => ({
 
         this.inlineCreateSubmitting = true;
         this.inlineCreateErrors = {};
-        this.inlineCreateFormError = '';
+        this.inlineCreateFormError = "";
 
         try {
             const response = await fetch(field.inlineCreate.storeUrl, {
-                method: 'POST',
+                method: "POST",
                 headers: {
-                    'Content-Type': 'application/json',
-                    Accept: 'application/json',
-                    'X-CSRF-TOKEN': this.section.csrfToken,
+                    "Content-Type": "application/json",
+                    Accept: "application/json",
+                    "X-CSRF-TOKEN": this.section.csrfToken,
                 },
                 body: JSON.stringify(this.inlineCreateForm),
             });
@@ -1801,12 +2022,15 @@ const createSectionState = (section, adapters, hostEl) => ({
             if (response.status === 422) {
                 const data = await response.json();
                 this.inlineCreateErrors = asRecord(data.errors);
-                this.inlineCreateFormError = asString(data.message, 'Unable to create record.');
+                this.inlineCreateFormError = asString(
+                    data.message,
+                    "Unable to create record.",
+                );
                 return;
             }
 
             if (!response.ok) {
-                this.inlineCreateFormError = 'Unable to create record.';
+                this.inlineCreateFormError = "Unable to create record.";
                 return;
             }
 
@@ -1814,20 +2038,26 @@ const createSectionState = (section, adapters, hostEl) => ({
             const createdId = data.data?.id;
             const createdName = asString(data.data?.company_name);
 
-            if ((createdId === null || createdId === undefined) || createdName === '') {
-                this.inlineCreateFormError = 'Unable to create record.';
+            if (
+                createdId === null ||
+                createdId === undefined ||
+                createdName === ""
+            ) {
+                this.inlineCreateFormError = "Unable to create record.";
                 return;
             }
 
             const targetField = this.findField(field.name);
 
             if (!targetField) {
-                this.inlineCreateFormError = 'Unable to create record.';
+                this.inlineCreateFormError = "Unable to create record.";
                 return;
             }
 
             const optionValue = String(createdId);
-            const existingOption = targetField.options.find((option) => option.value === optionValue);
+            const existingOption = targetField.options.find(
+                (option) => option.value === optionValue,
+            );
 
             if (!existingOption) {
                 targetField.options.push({
@@ -1839,7 +2069,7 @@ const createSectionState = (section, adapters, hostEl) => ({
             this.form[field.name] = optionValue;
             this.resetInlineCreateState();
         } catch (error) {
-            this.inlineCreateFormError = 'Unable to create record.';
+            this.inlineCreateFormError = "Unable to create record.";
         } finally {
             this.inlineCreateSubmitting = false;
         }
@@ -1850,14 +2080,17 @@ const createSectionState = (section, adapters, hostEl) => ({
         }
 
         const params = new URLSearchParams();
-        params.set('page', String(page));
-        params.set('per_page', String(this.paginationPerPage()));
+        params.set("page", String(page));
+        params.set("per_page", String(this.paginationPerPage()));
 
-        if (typeof this.adapters.buildListParams === 'function') {
-            const adapterParams = this.adapters.buildListParams(this.toggleValues, this.section);
+        if (typeof this.adapters.buildListParams === "function") {
+            const adapterParams = this.adapters.buildListParams(
+                this.toggleValues,
+                this.section,
+            );
 
             Object.entries(asRecord(adapterParams)).forEach(([key, value]) => {
-                if (value === null || value === undefined || value === '') {
+                if (value === null || value === undefined || value === "") {
                     return;
                 }
 
@@ -1865,22 +2098,27 @@ const createSectionState = (section, adapters, hostEl) => ({
             });
         }
         this.isLoading = true;
-        this.sectionError = '';
+        this.sectionError = "";
 
         try {
-            const response = await fetch(`${this.section.endpoints.list}?${params.toString()}`, {
-                headers: {
-                    Accept: 'application/json',
+            const response = await fetch(
+                `${this.section.endpoints.list}?${params.toString()}`,
+                {
+                    headers: {
+                        Accept: "application/json",
+                    },
                 },
-            });
+            );
 
             if (!response.ok) {
-                this.sectionError = 'Unable to load records.';
+                this.sectionError = "Unable to load records.";
                 return;
             }
 
             const data = await response.json();
-            this.records = asArray(data.data).map((record) => this.normalizeRow(record));
+            this.records = asArray(data.data).map((record) =>
+                this.normalizeRow(record),
+            );
             this.meta = {
                 current_page: data.meta?.current_page || 1,
                 last_page: data.meta?.last_page || 1,
@@ -1890,7 +2128,7 @@ const createSectionState = (section, adapters, hostEl) => ({
             this.hasLoaded = true;
             this.clampPaginationPage();
         } catch (error) {
-            this.sectionError = 'Unable to load records.';
+            this.sectionError = "Unable to load records.";
         } finally {
             this.isLoading = false;
         }
@@ -1900,12 +2138,18 @@ const createSectionState = (section, adapters, hostEl) => ({
             return;
         }
 
-        if (this.section.createAction.type === 'view' && this.section.createAction.url !== '') {
+        if (
+            this.section.createAction.type === "view" &&
+            this.section.createAction.url !== ""
+        ) {
             globalThis.location.assign(this.section.createAction.url);
             return;
         }
 
-        if (this.section.createAction.type === 'custom' && typeof this.adapters.handleCreateAction === 'function') {
+        if (
+            this.section.createAction.type === "custom" &&
+            typeof this.adapters.handleCreateAction === "function"
+        ) {
             this.adapters.handleCreateAction({
                 action: this.section.createAction,
                 section: this.section,
@@ -1914,33 +2158,35 @@ const createSectionState = (section, adapters, hostEl) => ({
             return;
         }
 
-        this.formMode = 'create';
+        this.formMode = "create";
         this.editingId = null;
         this.form = buildEmptyForm(this.section);
         this.errors = {};
-        this.formError = '';
+        this.formError = "";
         this.resetInlineCreateState();
         this.isFormOpen = true;
     },
     async toggleToolbar(key, checked = null) {
-        this.toggleValues[key] = checked === null
-            ? !this.toggleValues[key]
-            : Boolean(checked);
+        this.toggleValues[key] =
+            checked === null ? !this.toggleValues[key] : Boolean(checked);
         this.resetPagination();
         await this.fetchPage(1);
     },
     openEditForm(record) {
-        this.formMode = 'edit';
+        this.formMode = "edit";
         this.editingId = record.id;
-        const formValues = asRecord(record.formValues || record.form_values || record.raw || record);
+        const formValues = asRecord(
+            record.formValues || record.form_values || record.raw || record,
+        );
 
         this.form = buildEmptyForm(this.section);
         this.section.fields.forEach((field) => {
             const value = formValues[field.name];
-            this.form[field.name] = value === null || value === undefined ? '' : String(value);
+            this.form[field.name] =
+                value === null || value === undefined ? "" : String(value);
         });
         this.errors = {};
-        this.formError = '';
+        this.formError = "";
         this.resetInlineCreateState();
         this.isFormOpen = true;
     },
@@ -1948,53 +2194,63 @@ const createSectionState = (section, adapters, hostEl) => ({
         this.isFormOpen = false;
         this.isSubmitting = false;
         this.errors = {};
-        this.formError = '';
+        this.formError = "";
         this.resetInlineCreateState();
     },
     createFormTitle() {
-        if (this.formMode === 'create') {
-            return asString(this.section.createAction.title, 'Create record');
+        if (this.formMode === "create") {
+            return asString(this.section.createAction.title, "Create record");
         }
 
-        return 'Edit record';
+        return "Edit record";
     },
     createFormDescription() {
-        if (this.formMode === 'create') {
-            return asString(this.section.createAction.description, this.section.title);
+        if (this.formMode === "create") {
+            return asString(
+                this.section.createAction.description,
+                this.section.title,
+            );
         }
 
         return asString(this.section.title);
     },
     createFormSubmitLabel() {
-        if (this.formMode === 'create') {
-            return asString(this.section.createAction.submitLabel, 'Save');
+        if (this.formMode === "create") {
+            return asString(this.section.createAction.submitLabel, "Save");
         }
 
-        return 'Save';
+        return "Save";
     },
     buildCreatePayload() {
-        if (typeof this.adapters.buildCreatePayload === 'function') {
+        if (typeof this.adapters.buildCreatePayload === "function") {
             return this.adapters.buildCreatePayload(this.form, this.section);
         }
 
         return this.form;
     },
     buildUpdatePayload(record) {
-        if (typeof this.adapters.buildUpdatePayload === 'function') {
-            return this.adapters.buildUpdatePayload(this.form, record, this.section);
+        if (typeof this.adapters.buildUpdatePayload === "function") {
+            return this.adapters.buildUpdatePayload(
+                this.form,
+                record,
+                this.section,
+            );
         }
 
         return this.form;
     },
     async submitForm() {
-        const record = this.records.find((entry) => entry.id === this.editingId) || null;
-        const endpoint = this.formMode === 'create'
-            ? this.section.endpoints.create
-            : resolveUrl(this.section.endpoints.update, this.editingId);
-        const method = this.formMode === 'create' ? 'POST' : 'PATCH';
-        const body = this.formMode === 'create'
-            ? this.buildCreatePayload()
-            : this.buildUpdatePayload(record);
+        const record =
+            this.records.find((entry) => entry.id === this.editingId) || null;
+        const endpoint =
+            this.formMode === "create"
+                ? this.section.endpoints.create
+                : resolveUrl(this.section.endpoints.update, this.editingId);
+        const method = this.formMode === "create" ? "POST" : "PATCH";
+        const body =
+            this.formMode === "create"
+                ? this.buildCreatePayload()
+                : this.buildUpdatePayload(record);
 
         if (!endpoint) {
             return;
@@ -2002,15 +2258,15 @@ const createSectionState = (section, adapters, hostEl) => ({
 
         this.isSubmitting = true;
         this.errors = {};
-        this.formError = '';
+        this.formError = "";
 
         try {
             const response = await fetch(endpoint, {
                 method,
                 headers: {
-                    'Content-Type': 'application/json',
-                    Accept: 'application/json',
-                    'X-CSRF-TOKEN': this.section.csrfToken,
+                    "Content-Type": "application/json",
+                    Accept: "application/json",
+                    "X-CSRF-TOKEN": this.section.csrfToken,
                 },
                 body: JSON.stringify(body),
             });
@@ -2018,7 +2274,10 @@ const createSectionState = (section, adapters, hostEl) => ({
             if (response.status === 422) {
                 const data = await response.json();
                 this.errors = asRecord(data.errors);
-                this.formError = asString(data.message, 'Unable to save record.');
+                this.formError = asString(
+                    data.message,
+                    "Unable to save record.",
+                );
 
                 if (data.meta?.requires_conversion) {
                     this.openMissingConversionModal(data.meta, body);
@@ -2028,13 +2287,16 @@ const createSectionState = (section, adapters, hostEl) => ({
             }
 
             if (!response.ok) {
-                this.formError = 'Unable to save record.';
+                this.formError = "Unable to save record.";
                 return;
             }
 
             const data = await response.json();
 
-            if (this.formMode === 'create' && typeof this.adapters.handleCreateSuccess === 'function') {
+            if (
+                this.formMode === "create" &&
+                typeof this.adapters.handleCreateSuccess === "function"
+            ) {
                 const handled = await this.adapters.handleCreateSuccess({
                     data,
                     component: this,
@@ -2047,95 +2309,107 @@ const createSectionState = (section, adapters, hostEl) => ({
             }
 
             this.isFormOpen = false;
-            const nextPage = this.formMode === 'create' ? 1 : this.paginationCurrentPage();
+            const nextPage =
+                this.formMode === "create" ? 1 : this.paginationCurrentPage();
 
-            if (this.formMode === 'create') {
+            if (this.formMode === "create") {
                 this.resetPagination();
             }
 
             await this.fetchPage(nextPage);
         } catch (error) {
-            this.formError = 'Unable to save record.';
+            this.formError = "Unable to save record.";
         } finally {
             this.isSubmitting = false;
         }
     },
     async performAction(record, action) {
-        if (action.confirmMessage !== '' && !globalThis.confirm(action.confirmMessage)) {
+        if (
+            action.confirmMessage !== "" &&
+            !globalThis.confirm(action.confirmMessage)
+        ) {
             return;
         }
 
         switch (action.type) {
-        case 'view': {
-            const targetUrl = asString(resolvePathValue(record, action.urlField));
+            case "view": {
+                const targetUrl = asString(
+                    resolvePathValue(record, action.urlField),
+                );
 
-            if (targetUrl !== '') {
-                globalThis.location.assign(targetUrl);
+                if (targetUrl !== "") {
+                    globalThis.location.assign(targetUrl);
+                }
+
+                return;
             }
-
-            return;
+            case "edit":
+                this.openEditForm(record);
+                return;
+            case "custom":
+                if (typeof this.adapters.handleAction === "function") {
+                    await this.adapters.handleAction({
+                        action,
+                        record,
+                        component: this,
+                    });
+                }
+                return;
+            case "remove":
+            case "archive":
+            case "deactivate":
+                break;
+            default:
+                if (typeof this.adapters.handleAction === "function") {
+                    await this.adapters.handleAction({
+                        action,
+                        record,
+                        component: this,
+                    });
+                }
+                return;
         }
-        case 'edit':
-            this.openEditForm(record);
-            return;
-        case 'custom':
-            if (typeof this.adapters.handleAction === 'function') {
-                await this.adapters.handleAction({
-                    action,
-                    record,
-                    component: this,
-                });
-            }
-            return;
-        case 'remove':
-        case 'archive':
-        case 'deactivate':
-            break;
-        default:
-            if (typeof this.adapters.handleAction === 'function') {
-                await this.adapters.handleAction({
-                    action,
-                    record,
-                    component: this,
-                });
-            }
-            return;
-        }
 
-        const endpoint = resolveUrl(this.section.endpoints[action.endpointKey], record.id);
+        const endpoint = resolveUrl(
+            this.section.endpoints[action.endpointKey],
+            record.id,
+        );
 
         if (!endpoint) {
             return;
         }
 
-        this.sectionError = '';
+        this.sectionError = "";
 
         try {
             const response = await fetch(endpoint, {
                 method: action.method,
                 headers: {
-                    Accept: 'application/json',
-                    'X-CSRF-TOKEN': this.section.csrfToken,
+                    Accept: "application/json",
+                    "X-CSRF-TOKEN": this.section.csrfToken,
                 },
             });
 
             if (!response.ok) {
-                this.sectionError = 'Unable to update record.';
+                this.sectionError = "Unable to update record.";
                 return;
             }
 
             await this.fetchPage(this.meta.current_page || 1);
             this.clampPaginationPage();
         } catch (error) {
-            this.sectionError = 'Unable to update record.';
+            this.sectionError = "Unable to update record.";
         }
     },
     smartNumberPrecision(record, meta) {
         const precisionField = asString(meta.precisionField);
         const configuredPrecision = meta.precision;
 
-        if (precisionField !== '') {
-            const precision = parseInt(resolvePathValue(record, precisionField, configuredPrecision), 10);
+        if (precisionField !== "") {
+            const precision = parseInt(
+                resolvePathValue(record, precisionField, configuredPrecision),
+                10,
+            );
 
             if (Number.isInteger(precision)) {
                 return precision;
@@ -2154,25 +2428,32 @@ const createSectionState = (section, adapters, hostEl) => ({
     smartNumberFieldCurrency(field) {
         const configuredCurrency = asString(field.currency);
 
-        if (configuredCurrency !== '') {
+        if (configuredCurrency !== "") {
             return configuredCurrency.toUpperCase();
         }
 
         const currencyFromField = asString(field.currencyFromField);
 
-        if (currencyFromField === '') {
-            return '';
+        if (currencyFromField === "") {
+            return "";
         }
 
         const selectedValue = asString(this.form[currencyFromField]);
-        const sourceField = this.section.fields.find((candidate) => candidate.name === currencyFromField);
+        const sourceField = this.section.fields.find(
+            (candidate) => candidate.name === currencyFromField,
+        );
 
-        if (!sourceField || selectedValue === '') {
-            return '';
+        if (!sourceField || selectedValue === "") {
+            return "";
         }
 
-        const selectedOption = sourceField.options.find((option) => asString(option.value) === selectedValue);
-        const optionCurrencyField = asString(field.currencyOptionField, 'currency_code');
+        const selectedOption = sourceField.options.find(
+            (option) => asString(option.value) === selectedValue,
+        );
+        const optionCurrencyField = asString(
+            field.currencyOptionField,
+            "currency_code",
+        );
         const optionCurrency = asString(selectedOption?.[optionCurrencyField]);
 
         return optionCurrency.toUpperCase();
@@ -2189,7 +2470,7 @@ const createSectionState = (section, adapters, hostEl) => ({
         await this.performInlineMetaAction(record, meta);
     },
     async performInlineMetaAction(record, meta) {
-        if (typeof this.adapters.handleInlineMetaAction === 'function') {
+        if (typeof this.adapters.handleInlineMetaAction === "function") {
             await this.adapters.handleInlineMetaAction({
                 meta,
                 record,
@@ -2216,12 +2497,21 @@ export function mountCrudSection(targetEl, input) {
 
     targetEl._jsCrudSectionConfig = section;
     targetEl._jsCrudSectionAdapters = adapters;
-    targetEl.classList.add('!-mt-px', 'first:!mt-0', 'sm:!mt-6', 'sm:first:!mt-0');
+    targetEl.classList.add(
+        "!-mt-px",
+        "first:!mt-0",
+        "sm:!mt-6",
+        "sm:first:!mt-0",
+    );
     targetEl.innerHTML = renderCrudSection();
 
-    Alpine.data('jsCrudSection', (el) => createSectionState(
-        el.closest('[data-js-crud-section-root]')?._jsCrudSectionConfig || section,
-        el.closest('[data-js-crud-section-root]')?._jsCrudSectionAdapters || adapters,
-        el
-    ));
+    Alpine.data("jsCrudSection", (el) =>
+        createSectionState(
+            el.closest("[data-js-crud-section-root]")?._jsCrudSectionConfig ||
+                section,
+            el.closest("[data-js-crud-section-root]")?._jsCrudSectionAdapters ||
+                adapters,
+            el,
+        ),
+    );
 }
