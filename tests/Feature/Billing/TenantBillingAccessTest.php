@@ -363,6 +363,122 @@ it('does not allow non-admin tenant users to start checkout', function (): void 
         ->assertForbidden();
 });
 
+it('redirects soft unverified billing admins away from checkout', function (): void {
+    $user = ($this->makeAdmin)([
+        'trial_ends_at' => now()->addDay(),
+    ]);
+    $user->forceFill([
+        'email_verified_at' => null,
+        'created_at' => now()->subHour(),
+    ])->save();
+
+    Http::fake();
+
+    $this->actingAs($user)
+        ->post(route('billing.checkout.store'))
+        ->assertRedirect(route('verification.notice'));
+
+    Http::assertNothingSent();
+});
+
+it('allows soft unverified users to access the app for twenty four hours', function (): void {
+    $user = ($this->makeUser)([
+        'trial_ends_at' => now()->addDay(),
+    ]);
+    $user->forceFill([
+        'email_verified_at' => null,
+        'created_at' => now()->subHours(23),
+    ])->save();
+
+    $this->actingAs($user)
+        ->get(route('dashboard'))
+        ->assertOk()
+        ->assertSee('Your email is not verified.');
+});
+
+it('shows the soft verification banner on the billing page', function (): void {
+    $user = ($this->makeAdmin)([
+        'trial_ends_at' => now()->addDay(),
+    ]);
+    $user->forceFill([
+        'email_verified_at' => null,
+        'created_at' => now()->subHour(),
+    ])->save();
+
+    $this->actingAs($user)
+        ->get(route('billing.index'))
+        ->assertOk()
+        ->assertSee('Your email is not verified.')
+        ->assertSee('Add payment details');
+});
+
+it('hard locks unverified users after the twenty four hour grace period', function (): void {
+    $user = ($this->makeUser)([
+        'trial_ends_at' => now()->addDay(),
+    ]);
+    $user->forceFill([
+        'email_verified_at' => null,
+        'created_at' => now()->subHours(25),
+    ])->save();
+
+    $this->actingAs($user)
+        ->get(route('dashboard'))
+        ->assertRedirect(route('verification.notice'));
+});
+
+it('returns forbidden json for hard unverified users after the grace period', function (): void {
+    $user = ($this->makeUser)([
+        'trial_ends_at' => now()->addDay(),
+    ]);
+    $user->forceFill([
+        'email_verified_at' => null,
+        'created_at' => now()->subHours(25),
+    ])->save();
+
+    $this->actingAs($user)
+        ->getJson(route('navigation.state'))
+        ->assertForbidden();
+});
+
+it('dismisses the soft verification banner for the current session only', function (): void {
+    $user = ($this->makeUser)([
+        'trial_ends_at' => now()->addDay(),
+    ]);
+    $user->forceFill([
+        'email_verified_at' => null,
+        'created_at' => now()->subHour(),
+    ])->save();
+
+    $this->actingAs($user)
+        ->get(route('dashboard'))
+        ->assertSee('Your email is not verified.');
+
+    $this->actingAs($user)
+        ->delete(route('verification.grace-banner.destroy'))
+        ->assertRedirect();
+
+    $this->actingAs($user)
+        ->get(route('dashboard'))
+        ->assertDontSee('Your email is not verified.');
+
+    $this->flushSession();
+
+    $this->actingAs($user)
+        ->get(route('dashboard'))
+        ->assertSee('Your email is not verified.');
+});
+
+it('does not show the soft verification banner to verified users', function (): void {
+    $user = ($this->makeUser)([
+        'trial_ends_at' => now()->addDay(),
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('dashboard'))
+        ->assertOk()
+        ->assertDontSee('Your email is not verified.');
+});
+
 it('stores stripe identifiers from a completed checkout webhook', function (): void {
     config(['services.stripe.webhook_secret' => 'whsec_test']);
 

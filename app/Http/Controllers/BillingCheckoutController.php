@@ -19,6 +19,10 @@ class BillingCheckoutController extends Controller
     {
         Gate::authorize('billing-subscription-manage');
 
+        if (! $request->user()->hasVerifiedEmail()) {
+            return redirect()->route('verification.notice');
+        }
+
         $url = $checkout->createForTenant($request->user()->tenant);
 
         return redirect()->away($url);

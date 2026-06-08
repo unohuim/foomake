@@ -97,6 +97,42 @@ class StockMove extends Model
 }
 ```
 
+## Authentication
+
+### Email Verification Grace Period
+
+**Name:** Email Verification Grace Period  
+**Type:** Authentication Access Boundary  
+**Location:**  
+- `docs/architecture/auth/EmailVerificationGracePeriod.yaml`
+- `app/Support/Auth/EmailVerificationGracePeriod.php`
+- `app/Http/Middleware/EnsureEmailVerifiedOrInGracePeriod.php`
+- `resources/views/layouts/app.blade.php`
+
+**Purpose:**  
+Allow newly registered unverified users temporary app access before hard email-verification lockout.
+
+**When to Use:**  
+Checking app-route access for an unverified authenticated user, rendering the soft verification banner, or blocking billing checkout before full email verification.
+
+**When Not to Use:**  
+Tenant billing entitlement, domain authorization, or tenant scoping.
+
+**Public Interface:**  
+- `EmailVerificationGracePeriod::isActive()`
+- `EmailVerificationGracePeriod::endsAt()`
+- `EnsureEmailVerifiedOrInGracePeriod`
+- `verification.grace-banner.destroy`
+
+**Example Usage:**  
+```php
+if (app(EmailVerificationGracePeriod::class)->isActive($user)) {
+    return $next($request);
+}
+```
+
+## Billing
+
 ### Tenant Billing Entitlement
 
 **Name:** Tenant Billing Entitlement  
@@ -132,6 +168,8 @@ if (! app(TenantBillingEntitlement::class)->hasAccess($tenant)) {
     return redirect()->route('billing.index');
 }
 ```
+
+## Inventory
 
 ### Inventory Balance Read Model
 

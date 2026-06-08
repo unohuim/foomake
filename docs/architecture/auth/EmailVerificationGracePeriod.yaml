@@ -1,0 +1,32 @@
+name: Email Verification Grace Period
+type: Authentication Access Boundary
+location:
+  - app/Support/Auth/EmailVerificationGracePeriod.php
+  - app/Http/Middleware/EnsureEmailVerifiedOrInGracePeriod.php
+  - resources/views/layouts/app.blade.php
+purpose: Allow newly registered unverified users temporary app access before hard email-verification lockout.
+when_to_use:
+  - Deciding whether an unverified authenticated user may access application routes
+  - Rendering the soft verification warning banner
+  - Blocking purchase or billing checkout actions before full verification
+when_not_to_use:
+  - Tenant billing entitlement
+  - Domain authorization
+  - Tenant scoping
+rules:
+  - New unverified users may access authenticated app routes for 24 hours after user creation.
+  - After the 24-hour grace period, unverified users are redirected to the standard verification notice.
+  - Soft unverified users must see a black app-shell verification banner until dismissed for the current session.
+  - Banner dismissal is session-scoped and must not permanently hide the warning for the user or browser.
+  - Soft unverified users may not add payment details or start billing checkout.
+  - Verified users must not see the soft verification banner.
+  - Email verification grace must remain separate from tenant billing entitlement and permission gates.
+public_interface:
+  - EmailVerificationGracePeriod::isActive()
+  - EmailVerificationGracePeriod::endsAt()
+  - EnsureEmailVerifiedOrInGracePeriod
+  - verification.grace-banner.destroy
+example_usage: |
+  if (app(EmailVerificationGracePeriod::class)->isActive($user)) {
+      return $next($request);
+  }
