@@ -3,6 +3,7 @@
     data-page="manufacturing-make-orders-show"
     data-payload="manufacturing-make-orders-show-payload"
     x-data="manufacturingMakeOrdersShow"
+    x-on:make-order-header-action.window="performHeaderWorkflowAction()"
     x-on:make-order-next-stage.window="moveWorkflowStageTo($event.detail.workflowStageId)"
 >
     @php
@@ -14,6 +15,7 @@
             <x-resource-detail-header-breadcrumb
                 :items="$payload['breadcrumbs'] ?? []"
                 :title="$makeOrderPayload['title'] ?? ('Make Order ' . $makeOrder->id)"
+                x-data="{ makeOrder: @js($makeOrderPayload) }"
             >
                 <x-slot name="titleSuffix">
                     <span
@@ -59,13 +61,15 @@
                 <x-slot name="actions">
                     <div
                         class="flex items-center justify-end"
-                        x-show="workflow.next_stage_action && workflow.next_stage_action.label"
+                        x-data="{ action: @js($payload['workflow']['next_stage_action'] ?? null) }"
+                        x-on:make-order-header-action-updated.window="action = $event.detail.action"
+                        x-show="action && action.label"
                     >
                         <button
                             type="button"
                             class="inline-flex items-center justify-center rounded-md border border-transparent bg-slate-900 px-4 py-2 text-xs font-semibold uppercase tracking-widest text-white transition hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-500 focus:ring-offset-2"
-                            x-on:click.prevent="performHeaderWorkflowAction()"
-                            x-text="workflow.next_stage_action?.label || ''"
+                            x-on:click.prevent="window.dispatchEvent(new CustomEvent('make-order-header-action'))"
+                            x-text="action?.label || ''"
                         >
                             {{ $payload['workflow']['next_stage_action']['label'] ?? '' }}
                         </button>

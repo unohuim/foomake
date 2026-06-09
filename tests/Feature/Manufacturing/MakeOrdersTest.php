@@ -1429,7 +1429,9 @@ test('make can persist actual output quantity and use it for the receipt stock m
             'actual_output_qty' => '27.125',
         ])
         ->assertOk()
-        ->assertJsonPath('data.actual_output_qty', '27.125000');
+        ->assertJsonPath('data.actual_output_qty', '27.125000')
+        ->assertJsonPath('workflow.can_move_stage', false)
+        ->assertJsonPath('workflow.next_stage_action', null);
 
     $makeOrder->refresh();
 

@@ -417,7 +417,10 @@ it('21. shared card renderer remains the owner of search create and row action m
         ->and($rendererSource)->toContain('renderActionCell')
         ->and($rendererSource)->toContain('role="menu"')
         ->and($rendererSource)->toContain('role="menuitem"')
-        ->and($rendererSource)->toContain('x-on:click="open = !open"');
+        ->and($rendererSource)->toContain('x-on:click="toggle()"')
+        ->and($rendererSource)->toContain('absolute right-0 top-full')
+        ->and($rendererSource)->not->toContain('getBoundingClientRect')
+        ->and($rendererSource)->not->toContain('x-bind:style="{ top, right }"');
 });
 
 it('21b. archive handler removes the local row without reloading the page and only shows errors on failure', function (): void {

@@ -205,12 +205,7 @@ const renderActionCell = (config) => `
         class="relative shrink-0"
         x-data="{
             open: false,
-            top: '0px',
-            right: '0px',
-            toggle(button) {
-                const rect = button.getBoundingClientRect();
-                this.top = (rect.bottom + 8) + 'px';
-                this.right = (window.innerWidth - rect.right) + 'px';
+            toggle() {
                 this.open = !this.open;
             },
         }"
@@ -220,7 +215,7 @@ const renderActionCell = (config) => `
         <button
             type="button"
             class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-gray-200 text-gray-500 transition hover:border-blue-300 hover:text-gray-900"
-            x-on:click="toggle($el)"
+            x-on:click="toggle()"
             aria-label="${escapeHtml(config.labels.actionsAriaLabel)}"
         >
             <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
@@ -228,8 +223,7 @@ const renderActionCell = (config) => `
             </svg>
         </button>
         <div
-            class="fixed z-[80] w-40 rounded-md border border-gray-200 bg-white py-1 shadow-lg"
-            x-bind:style="{ top, right }"
+            class="absolute right-0 top-full z-[80] mt-2 w-40 rounded-md border border-gray-200 bg-white py-1 shadow-lg"
             x-show="open"
             x-on:click.outside="open = false"
             x-on:click.stop

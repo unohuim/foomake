@@ -197,6 +197,16 @@ export function mount(rootEl, payload) {
             };
             this.lastSavedWorkflowDueDate = this.workflow.due_date || '';
             this.lastSavedWorkflowOwnerId = this.normalizedWorkflowOwnerId(this.workflow.made_by_user_id);
+            this.syncHeaderWorkflowAction();
+        },
+        syncHeaderWorkflowAction() {
+            window.dispatchEvent(new CustomEvent('make-order-header-action-updated', {
+                detail: {
+                    action: this.workflow.next_stage_action && this.workflow.next_stage_action.label
+                        ? this.workflow.next_stage_action
+                        : null,
+                },
+            }));
         },
         init() {
             this.$watch('workflow.made_by_user_id', async (value) => {

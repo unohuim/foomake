@@ -864,9 +864,11 @@ it('31c. make order detail header renders the next valid workflow stage action f
 
     expect($source)->toContain('<x-slot name="actions">')
         ->and($source)->toContain('<x-slot name="titleSuffix">')
-        ->and($source)->toContain("x-show=\"workflow.next_stage_action && workflow.next_stage_action.label\"")
-        ->and($source)->toContain('x-on:click.prevent="performHeaderWorkflowAction()"')
-        ->and($source)->toContain("x-text=\"workflow.next_stage_action?.label || ''\"")
+        ->and($source)->toContain('x-data="{ action: @js($payload[\'workflow\'][\'next_stage_action\'] ?? null) }"')
+        ->and($source)->toContain('x-on:make-order-header-action-updated.window="action = $event.detail.action"')
+        ->and($source)->toContain("x-show=\"action && action.label\"")
+        ->and($source)->toContain("window.dispatchEvent(new CustomEvent('make-order-header-action'))")
+        ->and($source)->toContain("x-text=\"action?.label || ''\"")
         ->and($source)->toContain('x-on:click="if (!$el.disabled) { $el.showPicker?.() }"')
         ->and($source)->not->toContain('data-make-order-header-workflow-button')
         ->and($source)->not->toContain("\$makeOrderPayload['workflow_stage_name'] ?? \$makeOrderPayload['status'] ?? '—'");
@@ -1322,6 +1324,8 @@ it('35b. make order detail header source and controller payload do not hardcode 
         ->and($pageModuleSource)->toContain('next_stage_action: asRecord(data.next_stage_action)')
         ->and($pageModuleSource)->toContain('performHeaderWorkflowAction')
         ->and($pageModuleSource)->toContain('makeCurrentOrder')
+        ->and($pageModuleSource)->toContain('syncHeaderWorkflowAction')
+        ->and($pageModuleSource)->toContain("new CustomEvent('make-order-header-action-updated'")
         ->and($pageModuleSource)->toContain('saveWorkflowAssignment')
         ->and($pageModuleSource)->toContain('saveMakeOrderDetailQuantity')
         ->and($pageModuleSource)->toContain('$watch(\'workflow.made_by_user_id\'')

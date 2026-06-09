@@ -1346,7 +1346,10 @@ class MakeOrderController extends Controller
 
         $canOperateWorkflow = $this->userCanOperateMakeOrderWorkflow($viewer);
 
-        if ($canOperateWorkflow) {
+        if (
+            $canOperateWorkflow
+            && ! in_array($makeOrder->status, [MakeOrder::STATUS_MADE, MakeOrder::STATUS_CANCELLED], true)
+        ) {
             if ($currentStage?->is_inventory_effect_stage) {
                 $nextStageAction = [
                     'id' => $currentStage->id,
