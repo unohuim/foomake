@@ -21,6 +21,7 @@ use App\Models\User;
 use App\Models\WorkflowDomain;
 use App\Models\WorkflowStage;
 use App\Support\QuantityFormatter;
+use App\Support\Uom\UomConversionPathResolver;
 use App\Support\Workflows\WorkflowAssignmentPermissions;
 use DomainException;
 use Illuminate\Contracts\View\View;
@@ -595,6 +596,8 @@ class MakeOrderController extends Controller
         return response()->json([
             'data' => $this->makeOrderPayload($makeOrderModel),
             'workflow' => $this->makeOrderWorkflowPayload($makeOrderModel, $request->user()),
+            'workflowProgressSteps' => $this->makeOrderWorkflowProgressSteps($makeOrderModel, $request->user()),
+            'ingredients' => $this->makeOrderIngredientsPayload($makeOrderModel),
         ]);
     }
 
@@ -725,7 +728,7 @@ class MakeOrderController extends Controller
         $result = DB::transaction(function () use ($request, $makeOrder, $validated): array|JsonResponse {
             $makeOrderModel = MakeOrder::query()
                 ->where('tenant_id', $request->user()->tenant_id)
-                ->with(['recipe', 'recipeVersion', 'outputItem', 'lines.inputItem'])
+                ->with(['recipe', 'recipeVersion', 'outputItem', 'lines.inputItem.baseUom', 'lines.uom'])
                 ->lockForUpdate()
                 ->findOrFail($makeOrder);
 
@@ -788,11 +791,17 @@ class MakeOrderController extends Controller
                 }
 
                 if ($inputItem->is_stockable) {
+                    $issueQuantity = $this->issueQuantityInBaseUom($makeOrderModel->tenant_id, $line, $inputItem);
+
+                    if ($issueQuantity instanceof JsonResponse) {
+                        return $issueQuantity;
+                    }
+
                     StockMove::query()->create([
                         'tenant_id' => $makeOrderModel->tenant_id,
                         'item_id' => $inputItem->id,
-                        'uom_id' => $line->uom_id ?? $inputItem->base_uom_id,
-                        'quantity' => bcsub('0.000000', (string) $line->planned_quantity, self::SCALE),
+                        'uom_id' => $inputItem->base_uom_id,
+                        'quantity' => bcsub('0.000000', $issueQuantity, self::SCALE),
                         'type' => 'issue',
                         'source_id' => $makeOrderModel->id,
                         'source_type' => MakeOrder::class,
@@ -838,11 +847,12 @@ class MakeOrderController extends Controller
 
         $freshMakeOrder = MakeOrder::query()
             ->where('tenant_id', $request->user()->tenant_id)
-            ->with(['workflowStage', 'madeByUser', 'taskedByUser'])
+            ->with(['workflowStage', 'madeByUser', 'taskedByUser', 'lines.inputItem.baseUom'])
             ->findOrFail($makeOrder);
 
         $result['workflow'] = $this->makeOrderWorkflowPayload($freshMakeOrder, $request->user());
         $result['workflowProgressSteps'] = $this->makeOrderWorkflowProgressSteps($freshMakeOrder, $request->user());
+        $result['ingredients'] = $this->makeOrderIngredientsPayload($freshMakeOrder);
 
         return response()->json($result);
     }
@@ -1782,6 +1792,43 @@ class MakeOrderController extends Controller
             'message' => $message,
             'errors' => $errors,
         ], 422);
+    }
+
+    /**
+     * Convert a make order line quantity into the item's current base UoM.
+     */
+    private function issueQuantityInBaseUom(int $tenantId, MakeOrderLine $line, Item $inputItem): string|JsonResponse
+    {
+        $baseUom = $inputItem->baseUom;
+
+        if ($baseUom === null) {
+            return $this->validationError([
+                'recipe_version_id' => ['Make order line input item base UoM is required.'],
+            ], 'Make order line input item base UoM is required.');
+        }
+
+        $lineUom = $line->uom ?? $baseUom;
+
+        if ((int) $lineUom->id === (int) $baseUom->id) {
+            return (string) $line->planned_quantity;
+        }
+
+        $quantity = app(UomConversionPathResolver::class)->convertQuantity(
+            $tenantId,
+            (int) $inputItem->id,
+            $lineUom,
+            $baseUom,
+            (string) $line->planned_quantity,
+            UomConversionPathResolver::PRECEDENCE_ITEM_FIRST
+        );
+
+        if ($quantity === null) {
+            return $this->validationError([
+                'recipe_version_id' => ['Make order line quantity cannot be converted to the input item base UoM.'],
+            ], 'Make order line quantity cannot be converted to the input item base UoM.');
+        }
+
+        return $quantity;
     }
 
     /**

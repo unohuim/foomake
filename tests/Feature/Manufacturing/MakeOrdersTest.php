@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Models\Item;
+use App\Models\ItemUomConversion;
 use App\Models\MakeOrder;
 use App\Models\MakeOrderLine;
 use App\Models\Permission;
@@ -1408,6 +1409,58 @@ test('make treats make order quantity as runs and scales recipe inputs and outpu
     expect($moveByItem[$output->id]->uom_id)->toBe($output->base_uom_id);
 });
 
+test('make converts ingredient issue stock moves into the input item base uom before posting', function () {
+    $tenant = ($this->makeTenant)('Tenant A');
+    $user = ($this->makeUser)($tenant);
+    ($this->grantPermission)($user, 'inventory-make-orders-execute');
+
+    $baseUom = ($this->makeUom)($tenant);
+    $snapshotUom = ($this->makeUom)($tenant);
+    $output = ($this->makeItem)($tenant, $baseUom, 'Bread', true);
+    $input = ($this->makeItem)($tenant, $baseUom, 'Flour');
+
+    $recipe = ($this->makeRecipe)($tenant, $output, true, 'Converted Ingredient Recipe', '5.000000');
+    $versionLine = RecipeVersionLine::query()->forceCreate([
+        'tenant_id' => $tenant->id,
+        'recipe_version_id' => $recipe->current_version_id,
+        'input_item_id' => $input->id,
+        'uom_id' => $snapshotUom->id,
+        'quantity' => '4.000000',
+        'sort_order' => 1,
+    ]);
+
+    ItemUomConversion::query()->forceCreate([
+        'tenant_id' => $tenant->id,
+        'item_id' => $input->id,
+        'from_uom_id' => $snapshotUom->id,
+        'to_uom_id' => $baseUom->id,
+        'conversion_factor' => '2.500000',
+    ]);
+
+    $makeOrder = ($this->makeOrder)($tenant, $recipe, $user, [
+        'runs' => '3.000000',
+        'status' => MakeOrder::STATUS_SCHEDULED,
+        'due_date' => '2026-02-01',
+        'scheduled_at' => now(),
+    ]);
+
+    expect($makeOrder->lines()->firstOrFail()->uom_id)->toBe($snapshotUom->id)
+        ->and((string) $versionLine->uom_id)->toBe((string) $snapshotUom->id);
+
+    $this->actingAs($user)
+        ->postJson(route('manufacturing.make-orders.make', $makeOrder))
+        ->assertOk();
+
+    $issueMove = StockMove::query()
+        ->where('tenant_id', $tenant->id)
+        ->where('item_id', $input->id)
+        ->where('type', 'issue')
+        ->firstOrFail();
+
+    expect((string) $issueMove->quantity)->toBe('-30.000000')
+        ->and($issueMove->uom_id)->toBe($baseUom->id);
+});
+
 test('make can persist actual output quantity and use it for the receipt stock move', function () {
     $tenant = ($this->makeTenant)('Tenant A');
     $user = ($this->makeUser)($tenant);
@@ -1434,6 +1487,9 @@ test('make can persist actual output quantity and use it for the receipt stock m
         ->assertJsonPath('workflow.next_stage_action', null)
         ->assertJsonStructure([
             'workflowProgressSteps',
+            'ingredients' => [
+                'lines',
+            ],
         ]);
 
     $makeOrder->refresh();
@@ -1732,7 +1788,13 @@ test('moving a draft make order into workflow assigns the first configured stage
     ($this->moveMakeOrderWorkflowStage)($user, $makeOrder, $firstStage->id)
         ->assertOk()
         ->assertJsonPath('data.workflow_stage_id', $firstStage->id)
-        ->assertJsonPath('data.workflow_state', 'Scheduled');
+        ->assertJsonPath('data.workflow_state', 'Scheduled')
+        ->assertJsonStructure([
+            'workflowProgressSteps',
+            'ingredients' => [
+                'lines',
+            ],
+        ]);
 
     expect($makeOrder->fresh()->workflow_stage_id)->toBe($firstStage->id)
         ->and($makeOrder->fresh()->status)->toBe(MakeOrder::STATUS_SCHEDULED)

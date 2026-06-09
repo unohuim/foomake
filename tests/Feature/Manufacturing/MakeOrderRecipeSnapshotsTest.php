@@ -1326,6 +1326,7 @@ it('35b. make order detail header source and controller payload do not hardcode 
         ->and($pageModuleSource)->toContain('makeCurrentOrder')
         ->and($pageModuleSource)->toContain('workflowProgressHtml')
         ->and($pageModuleSource)->toContain('workflowProgressSteps')
+        ->and($pageModuleSource)->toContain('hydrateIngredientsResponse')
         ->and($pageModuleSource)->toContain('syncHeaderWorkflowAction')
         ->and($pageModuleSource)->toContain('syncHeaderMakeOrder')
         ->and($pageModuleSource)->toContain("Alpine.data('makeOrderHeaderState'")

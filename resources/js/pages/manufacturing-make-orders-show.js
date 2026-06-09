@@ -248,6 +248,22 @@ export function mount(rootEl, payload) {
             this.lastSavedWorkflowOwnerId = this.normalizedWorkflowOwnerId(this.workflow.made_by_user_id);
             this.syncHeaderWorkflowAction();
         },
+        hydrateIngredientsResponse(data) {
+            if (!data || typeof data !== 'object') {
+                return;
+            }
+
+            this.ingredients = {
+                ...this.ingredients,
+                ...asRecord(data),
+                item_options: asArray(data.item_options),
+                lines: asArray(data.lines),
+                store_url: data.store_url || '',
+                update_url_template: data.update_url_template || '',
+                remove_url_template: data.remove_url_template || '',
+                can_edit: Boolean(data.can_edit),
+            };
+        },
         syncHeaderWorkflowAction() {
             window.dispatchEvent(new CustomEvent('make-order-header-action-updated', {
                 detail: {
@@ -496,6 +512,7 @@ export function mount(rootEl, payload) {
                 const data = await response.json();
                 this.hydrateMakeOrderResponse(data.data);
                 this.hydrateWorkflowResponse(data.workflow);
+                this.hydrateIngredientsResponse(data.ingredients);
                 if (Array.isArray(data.workflowProgressSteps)) {
                     this.workflowProgressSteps = data.workflowProgressSteps;
                 }
@@ -561,6 +578,7 @@ export function mount(rootEl, payload) {
 
                 this.hydrateMakeOrderResponse(data.data);
                 this.hydrateWorkflowResponse(data.workflow);
+                this.hydrateIngredientsResponse(data.ingredients);
                 if (Array.isArray(data.workflowProgressSteps)) {
                     this.workflowProgressSteps = data.workflowProgressSteps;
                 }
