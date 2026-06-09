@@ -1345,6 +1345,20 @@ export function mount(rootEl, payload) {
             },
             handleAction: async () => {},
         },
+        stockMoves: {
+            normalizeRow: (record) => ({
+                ...record,
+                display: {
+                    sourceText: asString(record.source_text, 'Stock Move'),
+                    movedAtText: asString(record.moved_at_text, '—'),
+                    quantityDisplay: asString(record.quantity_display, '—'),
+                    uomSymbol: asString(record.uom_symbol),
+                    typeText: asString(record.type_text, '—'),
+                    typeTone: asString(record.type_tone, 'muted'),
+                },
+            }),
+            handleAction: async () => {},
+        },
         makeOrders: {
             normalizeRow: (record) => {
                 const status = makeOrderStatusDisplay(record);

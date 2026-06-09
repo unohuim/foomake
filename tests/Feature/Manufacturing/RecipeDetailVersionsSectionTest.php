@@ -95,6 +95,12 @@ beforeEach(function (): void {
         ], $overrides));
     };
 
+    $this->addRecipeIngredient = function (User $user, Recipe $recipe, int $versionId, Item $item): void {
+        actingAs($user)->postJson(route('manufacturing.recipes.ingredients.store', [$recipe, $versionId]), [
+            'item_id' => $item->id,
+        ])->assertCreated();
+    };
+
     $this->checkoutVersion = function (User $user, Recipe $recipe, RecipeVersion|int $version) {
         return actingAs($user)->postJson(route('manufacturing.recipes.versions.checkout', [
             'recipe' => $recipe,
@@ -260,9 +266,11 @@ test('11. recipe detail header resolves to the checked out display version when 
     $uom = ($this->makeUom)($tenant);
     $output = ($this->makeItem)($tenant, $uom, 'Soup Output', ['is_manufacturable' => true]);
     $recipe = ($this->createRecipe)($user, $output, ['output_quantity' => '8.000000']);
+    $ingredient = ($this->makeItem)($tenant, $uom, 'Ingredient ' . Str::uuid());
     $draftVersionId = (int) ($this->createDraftVersion)($user, $recipe, [
         'output_quantity' => '14.000000',
     ])->assertCreated()->json('data.id');
+    ($this->addRecipeIngredient)($user, $recipe, $draftVersionId, $ingredient);
     ($this->publishVersion)($user, $recipe, $draftVersionId)->assertOk();
     $checkedOutDraftId = (int) ($this->createDraftVersion)($user, $recipe, [
         'output_quantity' => '17.000000',
@@ -289,9 +297,11 @@ test('12. recipe detail header falls back to the published current version when 
     $uom = ($this->makeUom)($tenant);
     $output = ($this->makeItem)($tenant, $uom, 'Soup Output', ['is_manufacturable' => true]);
     $recipe = ($this->createRecipe)($user, $output);
+    $ingredient = ($this->makeItem)($tenant, $uom, 'Ingredient ' . Str::uuid());
     $publishedVersionId = (int) ($this->createDraftVersion)($user, $recipe, [
         'output_quantity' => '14.000000',
     ])->assertCreated()->json('data.id');
+    ($this->addRecipeIngredient)($user, $recipe, $publishedVersionId, $ingredient);
     ($this->publishVersion)($user, $recipe, $publishedVersionId)->assertOk();
 
     $payload = ($this->extractPayload)(
@@ -347,18 +357,32 @@ test('14. ingredients accordion renders on recipe detail', function (): void {
         ->assertSee('Ingredients');
 });
 
-test('14b. recipe detail renders make orders before ingredients and versions at the bottom', function (): void {
+test('14b. recipe detail renders ingredients before make orders and versions at the bottom', function (): void {
     $source = File::get(resource_path('views/manufacturing/recipes/show.blade.php'));
 
-    $makeOrdersPosition = strpos($source, 'data-section-key="makeOrders"');
     $ingredientsPosition = strpos($source, '<x-ingredients-detail-section');
+    $makeOrdersPosition = strpos($source, 'data-section-key="makeOrders"');
     $versionsPosition = strpos($source, 'data-section-key="versions"');
 
-    expect($makeOrdersPosition)->not->toBeFalse()
-        ->and($ingredientsPosition)->not->toBeFalse()
+    expect($ingredientsPosition)->not->toBeFalse()
+        ->and($makeOrdersPosition)->not->toBeFalse()
         ->and($versionsPosition)->not->toBeFalse()
-        ->and($makeOrdersPosition)->toBeLessThan($ingredientsPosition)
+        ->and($ingredientsPosition)->toBeLessThan($makeOrdersPosition)
         ->and($ingredientsPosition)->toBeLessThan($versionsPosition);
+});
+
+test('14c. recipe detail shows a version protected ingredients empty state when a draft has no ingredients', function (): void {
+    $source = File::get(resource_path('views/manufacturing/recipes/show.blade.php'));
+
+    expect($source)->toContain('Recipes are version protected. Check out this draft version to add or change ingredients.')
+        ->and($source)->toContain('Check out version')
+        ->and($source)->toContain('Add ingredients')
+        ->and($source)->toContain('Check in or publish')
+        ->and($source)->not->toContain(':description="__(\'Ingredients are shown for the current display version.\')"')
+        ->and($source)->toContain('Version protected')
+        ->and($source)->toContain('x-show="!ingredients.can_edit && ingredients.lines.length === 0"')
+        ->and($source)->toContain('x-show="ingredients.can_edit || ingredients.lines.length > 0"')
+        ->and($source)->not->toContain('$showIngredientsVersionProtectedState');
 });
 
 test('15. ingredients payload uses the current version by default when one exists', function (): void {
@@ -370,7 +394,9 @@ test('15. ingredients payload uses the current version by default when one exist
     $uom = ($this->makeUom)($tenant);
     $output = ($this->makeItem)($tenant, $uom, 'Soup Output', ['is_manufacturable' => true]);
     $recipe = ($this->createRecipe)($user, $output);
+    $ingredient = ($this->makeItem)($tenant, $uom, 'Ingredient ' . Str::uuid());
     $draftVersionId = (int) ($this->createDraftVersion)($user, $recipe)->assertCreated()->json('data.id');
+    ($this->addRecipeIngredient)($user, $recipe, $draftVersionId, $ingredient);
     ($this->publishVersion)($user, $recipe, $draftVersionId)->assertOk();
 
     $payload = ($this->extractPayload)(
@@ -409,7 +435,9 @@ test('17. ingredients are read only when no editable checkout exists', function 
     $uom = ($this->makeUom)($tenant);
     $output = ($this->makeItem)($tenant, $uom, 'Soup Output', ['is_manufacturable' => true]);
     $recipe = ($this->createRecipe)($user, $output);
+    $ingredient = ($this->makeItem)($tenant, $uom, 'Ingredient ' . Str::uuid());
     $draftVersionId = (int) ($this->createDraftVersion)($user, $recipe)->assertCreated()->json('data.id');
+    ($this->addRecipeIngredient)($user, $recipe, $draftVersionId, $ingredient);
     ($this->publishVersion)($user, $recipe, $draftVersionId)->assertOk();
 
     $payload = ($this->extractPayload)(
@@ -522,6 +550,37 @@ test('23. archived versions are hidden by default and revealed only with the vie
         ->and(collect($visibleRows)->pluck('status')->all())->toContain('ARCHIVED');
 });
 
+test('23a. draft versions without ingredients cannot publish and do not expose publish actions', function (): void {
+    $tenant = ($this->makeTenant)('Tenant A');
+    $user = ($this->makeUser)($tenant);
+    ($this->grantPermission)($user, 'inventory-recipes-view');
+    ($this->grantPermission)($user, 'inventory-make-orders-manage');
+
+    $uom = ($this->makeUom)($tenant);
+    $output = ($this->makeItem)($tenant, $uom, 'Soup Output', ['is_manufacturable' => true]);
+    $recipe = ($this->createRecipe)($user, $output);
+    $draftVersionId = (int) ($this->createDraftVersion)($user, $recipe)->assertCreated()->json('data.id');
+
+    $rows = actingAs($user)
+        ->getJson(route('manufacturing.recipes.versions.index', $recipe))
+        ->assertOk()
+        ->json('data');
+
+    $payload = ($this->extractPayload)(
+        actingAs($user)->get(route('manufacturing.recipes.show', $recipe))->assertOk(),
+        'manufacturing-recipes-show-payload'
+    );
+
+    $draftRow = collect($rows)->firstWhere('id', $draftVersionId);
+
+    actingAs($user)->patchJson(route('manufacturing.recipes.versions.publish', [$recipe, $draftVersionId]))
+        ->assertStatus(422)
+        ->assertJsonValidationErrors(['recipe_version_id']);
+
+    expect($draftRow['availableActions'] ?? [])->not->toContain('publish')
+        ->and(collect(data_get($payload, 'sections.versions.actions', []))->pluck('id')->all())->not->toContain('publish');
+});
+
 test('24. versions payload exposes state appropriate dropdown actions and view archived toggle config', function (): void {
     $tenant = ($this->makeTenant)('Tenant A');
     $user = ($this->makeUser)($tenant);
@@ -531,15 +590,19 @@ test('24. versions payload exposes state appropriate dropdown actions and view a
     $uom = ($this->makeUom)($tenant);
     $output = ($this->makeItem)($tenant, $uom, 'Soup Output', ['is_manufacturable' => true]);
     $recipe = ($this->createRecipe)($user, $output);
+    $ingredient = ($this->makeItem)($tenant, $uom, 'Ingredient ' . Str::uuid());
 
     $publishedDraftId = (int) ($this->createDraftVersion)($user, $recipe)->assertCreated()->json('data.id');
+    ($this->addRecipeIngredient)($user, $recipe, $publishedDraftId, $ingredient);
     ($this->publishVersion)($user, $recipe, $publishedDraftId)->assertOk();
     $checkedOutDraftId = (int) ($this->createDraftVersion)($user, $recipe, [
         'output_quantity' => '11.000000',
     ])->assertCreated()->json('data.id');
+    ($this->addRecipeIngredient)($user, $recipe, $checkedOutDraftId, $ingredient);
     $openDraftId = (int) ($this->createDraftVersion)($user, $recipe, [
         'output_quantity' => '12.000000',
     ])->assertCreated()->json('data.id');
+    ($this->addRecipeIngredient)($user, $recipe, $openDraftId, $ingredient);
     actingAs($user)->postJson(route('manufacturing.recipes.versions.check-in', [$recipe, $openDraftId]))->assertOk();
 
     $rows = actingAs($user)
@@ -570,8 +633,10 @@ test('24aa. recipe detail payload exposes one active version header menu while v
     $uom = ($this->makeUom)($tenant);
     $output = ($this->makeItem)($tenant, $uom, 'Status Menu Output', ['is_manufacturable' => true]);
     $recipe = ($this->createRecipe)($user, $output);
+    $ingredient = ($this->makeItem)($tenant, $uom, 'Ingredient ' . Str::uuid());
 
     $publishedDraftId = (int) ($this->createDraftVersion)($user, $recipe)->assertCreated()->json('data.id');
+    ($this->addRecipeIngredient)($user, $recipe, $publishedDraftId, $ingredient);
     ($this->publishVersion)($user, $recipe, $publishedDraftId)->assertOk();
     $draftVersionId = (int) ($this->createDraftVersion)($user, $recipe, [
         'output_quantity' => '11.000000',
@@ -618,7 +683,9 @@ test('24aaa. recipe detail returns 200 when the shared dropdown renders the head
     $uom = ($this->makeUom)($tenant);
     $output = ($this->makeItem)($tenant, $uom, 'Header Menu Output', ['is_manufacturable' => true]);
     $recipe = ($this->createRecipe)($user, $output);
+    $ingredient = ($this->makeItem)($tenant, $uom, 'Ingredient ' . Str::uuid());
     $draftVersionId = (int) ($this->createDraftVersion)($user, $recipe)->assertCreated()->json('data.id');
+    ($this->addRecipeIngredient)($user, $recipe, $draftVersionId, $ingredient);
     ($this->publishVersion)($user, $recipe, $draftVersionId)->assertOk();
 
     $response = actingAs($user)->get(route('manufacturing.recipes.show', $recipe))
@@ -661,7 +728,9 @@ test('24aaac. checked out active draft uses checked-out as the closed header cap
     $uom = ($this->makeUom)($tenant);
     $output = ($this->makeItem)($tenant, $uom, 'Checked Out Header Output', ['is_manufacturable' => true]);
     $recipe = ($this->createRecipe)($user, $output);
+    $ingredient = ($this->makeItem)($tenant, $uom, 'Ingredient ' . Str::uuid());
     $draftVersionId = (int) ($this->createDraftVersion)($user, $recipe)->assertCreated()->json('data.id');
+    ($this->addRecipeIngredient)($user, $recipe, $draftVersionId, $ingredient);
 
     $response = actingAs($user)->get(route('manufacturing.recipes.show', $recipe))
         ->assertOk()
@@ -730,7 +799,9 @@ test('24ab. draft active version header menu publishes through the existing publ
     $uom = ($this->makeUom)($tenant);
     $output = ($this->makeItem)($tenant, $uom, 'Status Publish Output', ['is_manufacturable' => true]);
     $recipe = ($this->createRecipe)($user, $output);
+    $ingredient = ($this->makeItem)($tenant, $uom, 'Ingredient ' . Str::uuid());
     $draftVersionId = (int) ($this->createDraftVersion)($user, $recipe)->assertCreated()->json('data.id');
+    ($this->addRecipeIngredient)($user, $recipe, $draftVersionId, $ingredient);
 
     $payload = ($this->extractPayload)(
         actingAs($user)->get(route('manufacturing.recipes.show', $recipe))->assertOk(),
@@ -853,7 +924,9 @@ test('25. recipe detail renders the reusable make orders accordion crud section'
     $uom = ($this->makeUom)($tenant);
     $output = ($this->makeItem)($tenant, $uom, 'Soup Output', ['is_manufacturable' => true]);
     $recipe = ($this->createRecipe)($user, $output);
+    $ingredient = ($this->makeItem)($tenant, $uom, 'Ingredient ' . Str::uuid());
     $publishedDraftId = (int) ($this->createDraftVersion)($user, $recipe)->assertCreated()->json('data.id');
+    ($this->addRecipeIngredient)($user, $recipe, $publishedDraftId, $ingredient);
     ($this->publishVersion)($user, $recipe, $publishedDraftId)->assertOk();
 
     $payload = ($this->extractPayload)(
@@ -864,7 +937,7 @@ test('25. recipe detail renders the reusable make orders accordion crud section'
     expect(data_get($payload, 'sections.makeOrders.resource'))->toBe('recipe-make-orders')
         ->and(data_get($payload, 'sections.makeOrders.title'))->toBe('Make Orders')
         ->and(data_get($payload, 'sections.makeOrders.permissions.canCreate'))->toBeTrue()
-        ->and(data_get($payload, 'sections.makeOrders.defaultOpen'))->toBeTrue()
+        ->and(data_get($payload, 'sections.makeOrders.defaultOpen'))->toBeFalse()
         ->and(data_get($payload, 'sections.makeOrders.mobilePageSize'))->toBe(3)
         ->and(data_get($payload, 'sections.makeOrders.rowLayout.primaryText.urlField'))->toBe('display.showUrl')
         ->and(data_get($payload, 'sections.makeOrders.createAction.type'))->toBe('custom')
@@ -875,6 +948,8 @@ test('25. recipe detail renders the reusable make orders accordion crud section'
         ->and(data_get($payload, 'sections.makeOrders.rowLayout.badges.0.field'))->toBe('display.statusText')
         ->and(data_get($payload, 'sections.makeOrders.rowLayout.badges.1.field'))->toBe('display.versionBadgeText')
         ->and(data_get($payload, 'sections.makeOrders.fields'))->toBe([]);
+
+    expect(data_get($payload, 'sections.ingredients.defaultOpen'))->toBeTrue();
 });
 
 test('25a. recipe detail make orders rows include a compact version badge beside the workflow status badge', function (): void {
@@ -888,7 +963,9 @@ test('25a. recipe detail make orders rows include a compact version badge beside
     $uom = ($this->makeUom)($tenant);
     $output = ($this->makeItem)($tenant, $uom, 'Soup Output', ['is_manufacturable' => true]);
     $recipe = ($this->createRecipe)($user, $output);
+    $ingredient = ($this->makeItem)($tenant, $uom, 'Ingredient ' . Str::uuid());
     $publishedDraftId = (int) ($this->createDraftVersion)($user, $recipe)->assertCreated()->json('data.id');
+    ($this->addRecipeIngredient)($user, $recipe, $publishedDraftId, $ingredient);
     ($this->publishVersion)($user, $recipe, $publishedDraftId)->assertOk();
     $currentVersion = RecipeVersion::query()->findOrFail((int) $recipe->fresh()->current_version_id);
 
@@ -922,9 +999,14 @@ test('25aa. recipe detail make orders section uses the shared mobile page size c
     $source = File::get(resource_path('views/manufacturing/recipes/show.blade.php'));
     $jsSource = File::get(resource_path('js/pages/manufacturing-recipes-show.js'));
     $crudSectionSource = File::get(resource_path('js/lib/js-crud-section.js'));
+    $ingredientsPosition = strpos($source, '<x-ingredients-detail-section');
+    $makeOrdersPosition = strpos($source, 'data-js-crud-section-root data-section-key="makeOrders"');
 
     expect($source)->toContain('data-js-crud-section-root')
         ->and($source)->not->toContain('data-recipe-mobile-make-orders')
+        ->and($ingredientsPosition)->not->toBeFalse()
+        ->and($makeOrdersPosition)->not->toBeFalse()
+        ->and($ingredientsPosition)->toBeLessThan($makeOrdersPosition)
         ->and($jsSource)->toContain('mobilePageSize')
         ->and($crudSectionSource)->toContain('mobilePageSize')
         ->and($crudSectionSource)->toContain('globalThis.matchMedia');
@@ -941,7 +1023,9 @@ test('25ab. recipe detail mobile make orders list returns the latest three rows 
     $uom = ($this->makeUom)($tenant);
     $output = ($this->makeItem)($tenant, $uom, 'Soup Output', ['is_manufacturable' => true]);
     $recipe = ($this->createRecipe)($user, $output);
+    $ingredient = ($this->makeItem)($tenant, $uom, 'Ingredient ' . Str::uuid());
     $draftVersionId = (int) ($this->createDraftVersion)($user, $recipe)->assertCreated()->json('data.id');
+    ($this->addRecipeIngredient)($user, $recipe, $draftVersionId, $ingredient);
     ($this->publishVersion)($user, $recipe, $draftVersionId)->assertOk();
     $currentVersionId = (int) $recipe->fresh()->current_version_id;
 
@@ -992,7 +1076,9 @@ test('25ac. recipe detail mobile make orders remaining rows are accessible throu
     $uom = ($this->makeUom)($tenant);
     $output = ($this->makeItem)($tenant, $uom, 'Soup Output', ['is_manufacturable' => true]);
     $recipe = ($this->createRecipe)($user, $output);
+    $ingredient = ($this->makeItem)($tenant, $uom, 'Ingredient ' . Str::uuid());
     $draftVersionId = (int) ($this->createDraftVersion)($user, $recipe)->assertCreated()->json('data.id');
+    ($this->addRecipeIngredient)($user, $recipe, $draftVersionId, $ingredient);
     ($this->publishVersion)($user, $recipe, $draftVersionId)->assertOk();
     $currentVersionId = (int) $recipe->fresh()->current_version_id;
 
@@ -1038,6 +1124,9 @@ test('25b. recipe detail ingredients and versions default collapsed', function (
     $uom = ($this->makeUom)($tenant);
     $output = ($this->makeItem)($tenant, $uom, 'Soup Output', ['is_manufacturable' => true]);
     $recipe = ($this->createRecipe)($user, $output);
+    $ingredient = ($this->makeItem)($tenant, $uom, 'Ingredient ' . Str::uuid());
+    $draftVersionId = (int) ($this->createDraftVersion)($user, $recipe)->assertCreated()->json('data.id');
+    ($this->addRecipeIngredient)($user, $recipe, $draftVersionId, $ingredient);
 
     $payload = ($this->extractPayload)(
         actingAs($user)->get(route('manufacturing.recipes.show', $recipe))->assertOk(),
@@ -1129,8 +1218,12 @@ test('26. recipe detail make orders section lists only make orders for that reci
     $outputB = ($this->makeItem)($tenant, $uom, 'Output B', ['is_manufacturable' => true]);
     $recipeA = ($this->createRecipe)($user, $outputA);
     $recipeB = ($this->createRecipe)($user, $outputB, ['name' => 'Recipe B']);
+    $ingredientA = ($this->makeItem)($tenant, $uom, 'Ingredient A ' . Str::uuid());
+    $ingredientB = ($this->makeItem)($tenant, $uom, 'Ingredient B ' . Str::uuid());
     $versionAId = (int) ($this->createDraftVersion)($user, $recipeA)->assertCreated()->json('data.id');
     $versionBId = (int) ($this->createDraftVersion)($user, $recipeB)->assertCreated()->json('data.id');
+    ($this->addRecipeIngredient)($user, $recipeA, $versionAId, $ingredientA);
+    ($this->addRecipeIngredient)($user, $recipeB, $versionBId, $ingredientB);
     ($this->publishVersion)($user, $recipeA, $versionAId)->assertOk();
     ($this->publishVersion)($user, $recipeB, $versionBId)->assertOk();
 
@@ -1231,13 +1324,16 @@ test('30. draft version row dropdown includes publish while published and archiv
     $uom = ($this->makeUom)($tenant);
     $output = ($this->makeItem)($tenant, $uom, 'Soup Output', ['is_manufacturable' => true]);
     $recipe = ($this->createRecipe)($user, $output);
+    $ingredient = ($this->makeItem)($tenant, $uom, 'Ingredient ' . Str::uuid());
 
     $publishedDraftId = (int) ($this->createDraftVersion)($user, $recipe)->assertCreated()->json('data.id');
+    ($this->addRecipeIngredient)($user, $recipe, $publishedDraftId, $ingredient);
     ($this->publishVersion)($user, $recipe, $publishedDraftId)->assertOk();
 
     $archivedDraftId = (int) ($this->createDraftVersion)($user, $recipe, [
         'output_quantity' => '11.000000',
     ])->assertCreated()->json('data.id');
+    ($this->addRecipeIngredient)($user, $recipe, $archivedDraftId, $ingredient);
 
     actingAs($user)->patchJson(route('manufacturing.recipes.versions.archive', [$recipe, $archivedDraftId]))
         ->assertOk();
@@ -1245,6 +1341,7 @@ test('30. draft version row dropdown includes publish while published and archiv
     $openDraftId = (int) ($this->createDraftVersion)($user, $recipe, [
         'output_quantity' => '12.000000',
     ])->assertCreated()->json('data.id');
+    ($this->addRecipeIngredient)($user, $recipe, $openDraftId, $ingredient);
     actingAs($user)->postJson(route('manufacturing.recipes.versions.check-in', [$recipe, $openDraftId]))->assertOk();
 
     $rows = actingAs($user)
@@ -1272,7 +1369,9 @@ test('31. publish response includes reactive make orders eligibility and recentl
     $uom = ($this->makeUom)($tenant);
     $output = ($this->makeItem)($tenant, $uom, 'Reactive Soup Output', ['is_manufacturable' => true]);
     $recipe = ($this->createRecipe)($user, $output, ['name' => 'Reactive Soup Recipe']);
+    $ingredient = ($this->makeItem)($tenant, $uom, 'Ingredient ' . Str::uuid());
     $draftVersionId = (int) ($this->createDraftVersion)($user, $recipe)->assertCreated()->json('data.id');
+    ($this->addRecipeIngredient)($user, $recipe, $draftVersionId, $ingredient);
 
     $response = ($this->publishVersion)($user, $recipe, $draftVersionId)->assertOk();
 
@@ -1295,7 +1394,9 @@ test('32. draft only recipe detail payload keeps make orders plus hidden until p
     $uom = ($this->makeUom)($tenant);
     $output = ($this->makeItem)($tenant, $uom, 'Hidden Plus Output', ['is_manufacturable' => true]);
     $recipe = ($this->createRecipe)($user, $output);
+    $ingredient = ($this->makeItem)($tenant, $uom, 'Ingredient ' . Str::uuid());
     $draftVersionId = (int) ($this->createDraftVersion)($user, $recipe)->assertCreated()->json('data.id');
+    ($this->addRecipeIngredient)($user, $recipe, $draftVersionId, $ingredient);
 
     $beforePayload = ($this->extractPayload)(
         actingAs($user)->get(route('manufacturing.recipes.show', $recipe))->assertOk(),
@@ -1321,7 +1422,9 @@ test('33. recipe scoped make order create action stays recipe scoped with no rec
     $uom = ($this->makeUom)($tenant);
     $output = ($this->makeItem)($tenant, $uom, 'Scoped Output', ['is_manufacturable' => true]);
     $recipe = ($this->createRecipe)($user, $output);
+    $ingredient = ($this->makeItem)($tenant, $uom, 'Ingredient ' . Str::uuid());
     $draftVersionId = (int) ($this->createDraftVersion)($user, $recipe)->assertCreated()->json('data.id');
+    ($this->addRecipeIngredient)($user, $recipe, $draftVersionId, $ingredient);
 
     ($this->publishVersion)($user, $recipe, $draftVersionId)->assertOk();
 

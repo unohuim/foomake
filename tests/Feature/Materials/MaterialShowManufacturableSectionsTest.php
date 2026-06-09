@@ -719,6 +719,7 @@ it('16d. material detail always renders dependent section mount roots for live t
     expect($viewSource)->toContain('data-section-key="supplierPackages"')
         ->and($viewSource)->toContain('data-section-key="recipes"')
         ->and($viewSource)->toContain('data-section-key="inventoryCounts"')
+        ->and($viewSource)->toContain('data-section-key="stockMoves"')
         ->and($viewSource)->toContain('data-section-key="purchaseOrders"')
         ->and($viewSource)->toContain('data-section-key="makeOrders"')
         ->and($viewSource)->not->toContain('@if (($payload[\'sections\'][\'supplierPackages\'] ?? null))')
@@ -1836,6 +1837,70 @@ it('35b. stockable material detail shows an inventory counts section using the s
         ->and(data_get($section, 'rowLayout.rightMeta.1.suffixClass'))->toBe('text-[0.65rem]')
         ->and($section['actions'] ?? null)->toBe([])
         ->and($viewSource)->toContain('data-section-key="inventoryCounts"');
+});
+
+it('35ba. stockable material detail shows a stock moves section using the shared reusable detail section pattern', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $uom = ($this->makeUom)($tenant, ['name' => 'Gram', 'symbol' => 'g', 'display_precision' => 2]);
+    $item = ($this->makeItem)($tenant, $uom, ['is_stockable' => true]);
+
+    ($this->grantPermissions)($user, ['inventory-materials-view']);
+
+    $response = ($this->getShow)($user, $item)->assertOk();
+    $section = ($this->extractSection)($response, 'stockMoves');
+    $viewSource = file_get_contents(resource_path('views/materials/show.blade.php'));
+
+    expect($section['resource'] ?? null)->toBe('material-stock-moves')
+        ->and($section['title'] ?? null)->toBe('Stock Moves')
+        ->and($section['permissions']['canCreate'] ?? null)->toBeFalse()
+        ->and($section['showRowActionsMenu'] ?? null)->toBeFalse()
+        ->and($section['recordClass'] ?? null)->toBe('rounded-lg border border-gray-200 bg-gray-50 px-3 py-1 sm:px-4 sm:py-1')
+        ->and($section['rowClass'] ?? null)->toBe('flex flex-row items-start justify-between gap-4')
+        ->and($section['rightMetaClass'] ?? null)
+        ->toBe('flex min-h-[3.25rem] min-w-[5rem] flex-col items-end justify-between gap-4 self-stretch text-right')
+        ->and($section['secondaryFieldsClass'] ?? null)
+        ->toBe('mt-px flex flex-wrap items-center gap-x-3 gap-y-1 sm:mt-1.5')
+        ->and(data_get($section, 'rowLayout.primaryText.field'))->toBe('display.sourceText')
+        ->and(data_get($section, 'rowLayout.primaryText.fallback'))->toBe('Stock Move')
+        ->and(data_get($section, 'rowLayout.secondaryFields.0.field'))->toBe('display.movedAtText')
+        ->and(data_get($section, 'rowLayout.badges.0.field'))->toBe('display.typeText')
+        ->and(data_get($section, 'rowLayout.badges.0.toneField'))->toBe('display.typeTone')
+        ->and(data_get($section, 'rowLayout.rightMeta.0.field'))->toBe('display.quantityDisplay')
+        ->and(data_get($section, 'rowLayout.rightMeta.0.suffixField'))->toBe('display.uomSymbol')
+        ->and($section['actions'] ?? null)->toBe([])
+        ->and($viewSource)->toContain('data-section-key="stockMoves"');
+});
+
+it('35bb. stock move rows show source date type and quantity using the material base uom', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $uom = ($this->makeUom)($tenant, ['name' => 'Gram', 'symbol' => 'g', 'display_precision' => 2]);
+    $item = ($this->makeItem)($tenant, $uom, ['is_stockable' => true]);
+    $move = StockMove::query()->create([
+        'tenant_id' => $tenant->id,
+        'item_id' => $item->id,
+        'uom_id' => $uom->id,
+        'quantity' => '-12.345600',
+        'type' => 'issue',
+        'source_type' => InventoryCount::class,
+        'source_id' => 42,
+    ]);
+
+    ($this->grantPermissions)($user, ['inventory-materials-view']);
+
+    $response = ($this->getSectionList)(
+        $user,
+        ($this->extractSection)(($this->getShow)($user, $item), 'stockMoves')
+    )->assertOk();
+
+    expect($response->json('data.0.source_text'))->toBe('Inventory Count #42')
+        ->and($response->json('data.0.moved_at_text'))->toBe($move->created_at?->format('F j, Y'))
+        ->and($response->json('data.0.quantity_display'))->toBe('-12.35')
+        ->and($response->json('data.0.uom_symbol'))->toBe('g')
+        ->and($response->json('data.0.type_text'))->toBe('Issue')
+        ->and($response->json('data.0.type_tone'))->toBe('warning')
+        ->and($response->json('data.0.available_actions'))->toBe([]);
 });
 
 it('35ba. shared crud badge renderer supports section configured badge font classes', function (): void {

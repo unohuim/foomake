@@ -104,6 +104,7 @@ class RecipeController extends Controller
             ->with(['recipe.item.baseUom', 'checkouts' => function ($query): void {
                 $query->whereNull('checked_in_at');
             }])
+            ->withCount('lines')
             ->get()
             ->filter(fn (RecipeVersion $version): bool => $includeArchived
                 || RecipeVersion::normalizeStatus($version->status) !== RecipeVersion::STATUS_ARCHIVED)
@@ -553,6 +554,12 @@ class RecipeController extends Controller
             return $this->validationError([
                 'recipe_version_id' => ['Only draft versions can be published.'],
             ], 'Only draft versions can be published.');
+        }
+
+        if (! $this->recipeVersionHasIngredients($versionModel)) {
+            return $this->validationError([
+                'recipe_version_id' => ['Add at least one ingredient before publishing this version.'],
+            ], 'Add at least one ingredient before publishing this version.');
         }
 
         DB::transaction(function () use ($recipe, $versionModel, $request): void {
@@ -1097,7 +1104,7 @@ class RecipeController extends Controller
             'resource' => 'recipe-ingredients',
             'title' => 'Ingredients',
             'description' => 'Ingredients are version-owned and follow the current display version context.',
-            'defaultOpen' => false,
+            'defaultOpen' => true,
         ];
     }
 
@@ -1116,7 +1123,7 @@ class RecipeController extends Controller
             'description' => 'Make orders created from this recipe always use recipes.current_version_id.',
             'emptyState' => 'No make orders exist for this recipe yet.',
             'csrfToken' => csrf_token(),
-            'defaultOpen' => true,
+            'defaultOpen' => false,
             'mobilePageSize' => 3,
             'permissions' => [
                 'canCreate' => $canExecute && $hasCurrentPublishedVersion,
@@ -1189,8 +1196,8 @@ class RecipeController extends Controller
         bool $canViewMakeOrders
     ): array {
         return [
-            'makeOrders' => $canViewMakeOrders ? $this->makeOrdersSectionConfig($recipe, $canExecute) : null,
             'ingredients' => $this->ingredientsSectionConfig(),
+            'makeOrders' => $canViewMakeOrders ? $this->makeOrdersSectionConfig($recipe, $canExecute) : null,
             'versions' => $this->versionsSectionConfig($recipe, $canManage),
         ];
     }
@@ -1343,7 +1350,9 @@ class RecipeController extends Controller
                     $availableActions[] = 'checkout';
                 }
 
-                $availableActions[] = 'publish';
+                if ($this->recipeVersionHasIngredients($version)) {
+                    $availableActions[] = 'publish';
+                }
                 $availableActions[] = 'duplicate';
                 $availableActions[] = 'delete';
             }
@@ -2122,6 +2131,22 @@ class RecipeController extends Controller
         }
 
         return $defaultDescription;
+    }
+
+    /**
+     * Determine whether a version has any ingredient lines.
+     */
+    private function recipeVersionHasIngredients(RecipeVersion $version): bool
+    {
+        if ($version->relationLoaded('lines')) {
+            return $version->lines->isNotEmpty();
+        }
+
+        if (array_key_exists('lines_count', $version->getAttributes())) {
+            return (int) $version->getAttribute('lines_count') > 0;
+        }
+
+        return $version->lines()->exists();
     }
 
     /**

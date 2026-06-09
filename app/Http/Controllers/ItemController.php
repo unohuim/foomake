@@ -12,6 +12,7 @@ use App\Models\InventoryCountLine;
 use App\Models\Item;
 use App\Models\Note;
 use App\Models\Recipe;
+use App\Models\StockMove;
 use App\Models\Uom;
 use App\Models\User;
 use App\Support\QuantityFormatter;
@@ -23,6 +24,7 @@ use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
@@ -339,6 +341,9 @@ class ItemController extends Controller
                     : null,
                 'inventoryCounts' => $item->is_stockable && $canViewInventoryCounts
                     ? $this->inventoryCountsSectionConfig($request, $item)
+                    : null,
+                'stockMoves' => $item->is_stockable
+                    ? $this->stockMovesSectionConfig($item)
                     : null,
                 'purchaseOrders' => $canViewPurchaseOrders && $item->is_purchasable
                     ? $this->purchaseOrdersSectionConfig($item)
@@ -960,6 +965,95 @@ class ItemController extends Controller
     /**
      * @return array<string, mixed>
      */
+    private function stockMovesSectionConfig(Item $item): array
+    {
+        return [
+            'resource' => 'material-stock-moves',
+            'title' => 'Stock Moves',
+            'description' => 'Stock move history for this material.',
+            'emptyState' => 'No stock moves exist for this material yet.',
+            'csrfToken' => csrf_token(),
+            'defaultOpen' => false,
+            'permissions' => [
+                'canCreate' => false,
+            ],
+            'showRowActionsMenu' => false,
+            'recordClass' => 'rounded-lg border border-gray-200 bg-gray-50 px-3 py-1 sm:px-4 sm:py-1',
+            'rowClass' => 'flex flex-row items-start justify-between gap-4',
+            'rightMetaClass' => 'flex min-h-[3.25rem] min-w-[5rem] flex-col items-end justify-between gap-4 self-stretch text-right',
+            'secondaryFieldsClass' => 'mt-px flex flex-wrap items-center gap-x-3 gap-y-1 sm:mt-1.5',
+            'endpoints' => [
+                'list' => route('materials.stock-moves.index', $item),
+            ],
+            'fields' => [],
+            'rowLayout' => [
+                'primaryText' => [
+                    'field' => 'display.sourceText',
+                    'fallback' => 'Stock Move',
+                ],
+                'secondaryFields' => [
+                    [
+                        'label' => '',
+                        'field' => 'display.movedAtText',
+                        'fallback' => '—',
+                        'textClass' => 'text-xs leading-none text-gray-600',
+                    ],
+                ],
+                'badges' => [
+                    [
+                        'field' => 'display.typeText',
+                        'toneField' => 'display.typeTone',
+                        'textClass' => 'text-[0.55rem] uppercase tracking-wide',
+                        'fallback' => '',
+                    ],
+                ],
+                'rightMeta' => [
+                    [
+                        'label' => '',
+                        'field' => 'display.quantityDisplay',
+                        'suffixField' => 'display.uomSymbol',
+                        'fallback' => '—',
+                        'strong' => true,
+                        'textClass' => 'text-sm font-semibold text-gray-900',
+                        'suffixClass' => 'ml-1 text-[0.65rem] font-medium text-gray-500',
+                    ],
+                ],
+            ],
+            'actions' => [],
+        ];
+    }
+
+    /**
+     * List stock moves scoped to one material.
+     */
+    public function listStockMoves(Request $request, Item $item): JsonResponse
+    {
+        Gate::authorize('inventory-materials-view');
+
+        abort_unless($item->is_stockable, 404);
+
+        $perPage = $this->perPageFromRequest($request);
+
+        $paginator = StockMove::query()
+            ->where('tenant_id', $request->user()->tenant_id)
+            ->where('item_id', $item->id)
+            ->with(['item.baseUom'])
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->paginate($perPage);
+
+        return response()->json([
+            'data' => collect($paginator->items())
+                ->map(fn (StockMove $move): array => $this->materialStockMoveRowPayload($move))
+                ->values()
+                ->all(),
+            'meta' => $this->sectionMeta($paginator),
+        ]);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
     private function makeOrdersSectionConfig(Item $item): array
     {
         return [
@@ -1047,6 +1141,82 @@ class ItemController extends Controller
             'show_url' => $count ? route('inventory.counts.show', $count) : '',
             'available_actions' => [],
         ];
+    }
+
+    /**
+     * Build one stock move row for the material detail section.
+     *
+     * @return array<string, mixed>
+     */
+    private function materialStockMoveRowPayload(StockMove $move): array
+    {
+        $displayPrecision = (int) ($move->item?->baseUom?->display_precision ?? 6);
+
+        return [
+            'id' => $move->id,
+            'source_text' => $this->stockMoveSourceText($move),
+            'moved_at_text' => $move->created_at?->format('F j, Y') ?? '—',
+            'quantity_display' => $move->item?->baseUom !== null
+                ? QuantityFormatter::formatForUom((string) $move->quantity, $move->item->baseUom, $displayPrecision)
+                : (string) $move->quantity,
+            'uom_symbol' => $move->item?->baseUom?->symbol ?? '—',
+            'type' => $move->type,
+            'type_text' => $this->stockMoveTypeText((string) $move->type),
+            'type_tone' => $this->stockMoveTypeTone((string) $move->type),
+        ];
+    }
+
+    /**
+     * Build a readable stock move source label.
+     */
+    private function stockMoveSourceText(StockMove $move): string
+    {
+        $sourceType = trim((string) $move->source_type);
+
+        if ($sourceType === '') {
+            return 'Stock Move';
+        }
+
+        $label = Str::of(class_basename($sourceType))
+            ->snake()
+            ->replace('_', ' ')
+            ->title()
+            ->toString();
+
+        if ($label === '') {
+            $label = 'Stock Move';
+        }
+
+        if ($move->source_id !== null) {
+            return $label . ' #' . $move->source_id;
+        }
+
+        return $label;
+    }
+
+    /**
+     * Convert a stock move type into a readable label.
+     */
+    private function stockMoveTypeText(string $type): string
+    {
+        return Str::of($type)
+            ->snake()
+            ->replace('_', ' ')
+            ->title()
+            ->toString();
+    }
+
+    /**
+     * Convert a stock move type into a badge tone.
+     */
+    private function stockMoveTypeTone(string $type): string
+    {
+        return match ($type) {
+            'receipt' => 'success',
+            'issue' => 'warning',
+            'adjustment', 'inventory_count_adjustment' => 'default',
+            default => 'muted',
+        };
     }
 
     /**

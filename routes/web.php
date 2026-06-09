@@ -147,6 +147,8 @@ Route::middleware(['auth', EnsureEmailVerifiedOrInGracePeriod::class, EnsureTena
         ->name('materials.recipes.index');
     Route::get('/materials/{item}/inventory-counts', [ItemController::class, 'listInventoryCounts'])
         ->name('materials.inventory-counts.index');
+    Route::get('/materials/{item}/stock-moves', [ItemController::class, 'listStockMoves'])
+        ->name('materials.stock-moves.index');
     Route::get('/materials/{item}/make-orders', [MakeOrderController::class, 'listForMaterial'])
         ->name('materials.make-orders.index');
     Route::post('/materials/{item}/purchase-orders', [MaterialDraftPurchaseOrderController::class, 'store'])

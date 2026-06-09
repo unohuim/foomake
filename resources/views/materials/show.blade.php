@@ -263,6 +263,7 @@
         <div data-js-crud-section-root data-section-key="supplierPackages"></div>
         <div data-js-crud-section-root data-section-key="recipes"></div>
         <div data-js-crud-section-root data-section-key="inventoryCounts"></div>
+        <div data-js-crud-section-root data-section-key="stockMoves"></div>
         <div data-js-crud-section-root data-section-key="purchaseOrders"></div>
         <div data-js-crud-section-root data-section-key="makeOrders"></div>
 

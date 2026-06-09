@@ -100,18 +100,89 @@
 
     <x-ui.toast visible="toast.visible" type="toast.type" message="toast.message" />
 
+    @php
+        $ingredientsLines = data_get($payload, 'ingredients.lines', []);
+        $ingredientsCanEdit = (bool) data_get($payload, 'ingredients.can_edit', false);
+        $recipeVersionStatus = strtoupper((string) data_get($payload, 'recipe.version_status', ''));
+        $checkoutAction = data_get($activeVersion, 'checkout_url');
+    @endphp
+
     <div class="mx-auto max-w-5xl space-y-0 px-1 py-8 sm:space-y-6 sm:px-6 sm:py-12 lg:px-8" data-recipe-detail-content>
+        <section
+            class="overflow-hidden border border-slate-200 bg-white shadow-sm sm:rounded-2xl"
+            x-cloak
+            x-show="!ingredients.can_edit && ingredients.lines.length === 0"
+        >
+                <div class="border-b border-slate-200 bg-slate-50/80 px-4 py-3 sm:px-6">
+                    <div class="flex items-center gap-3">
+                        <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-600 ring-1 ring-inset ring-blue-100">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 8.25A2.25 2.25 0 0 1 6.75 6h10.5A2.25 2.25 0 0 1 19.5 8.25v7.5A2.25 2.25 0 0 1 17.25 18H6.75a2.25 2.25 0 0 1-2.25-2.25v-7.5Z" />
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M7.5 9.75h9M7.5 12h9M7.5 14.25h5.25" />
+                            </svg>
+                        </div>
+                        <div class="min-w-0">
+                            <p class="text-sm font-semibold text-slate-900">{{ __('Ingredients') }}</p>
+                            <p class="text-xs font-medium uppercase tracking-wide text-slate-500">{{ __('Version protected') }}</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="px-4 py-6 sm:px-6 sm:py-7">
+                    <div class="max-w-2xl">
+                        <p class="text-sm leading-6 text-slate-600">
+                            {{ __('Recipes are version protected. Check out this draft version to add or change ingredients.') }}
+                        </p>
+
+                        <div class="mt-6 flex flex-wrap items-center gap-3">
+                            @if ($checkoutAction)
+                                <button
+                                    type="button"
+                                    class="inline-flex items-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                                    x-on:click="performHeaderVersionAction({ handlerKey: 'checkoutVersion' })"
+                                >
+                                    {{ __('Check out version') }}
+                                </button>
+                            @endif
+                            <span class="text-xs font-medium text-slate-500">
+                                {{ __('Then add ingredients, check in, and publish when ready.') }}
+                            </span>
+                        </div>
+
+                        <ol class="mt-7 grid gap-3 sm:grid-cols-3">
+                            <li class="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                                <span class="inline-flex h-7 w-7 items-center justify-center rounded-full bg-blue-600 text-xs font-semibold text-white">1</span>
+                                <p class="mt-3 text-sm font-semibold text-slate-900">{{ __('Check out version') }}</p>
+                                <p class="mt-1 text-sm leading-6 text-slate-600">{{ __('Open the draft for editing.') }}</p>
+                            </li>
+                            <li class="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                                <span class="inline-flex h-7 w-7 items-center justify-center rounded-full bg-blue-600 text-xs font-semibold text-white">2</span>
+                                <p class="mt-3 text-sm font-semibold text-slate-900">{{ __('Add ingredients') }}</p>
+                                <p class="mt-1 text-sm leading-6 text-slate-600">{{ __('Add items and quantities while the version is checked out.') }}</p>
+                            </li>
+                            <li class="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                                <span class="inline-flex h-7 w-7 items-center justify-center rounded-full bg-blue-600 text-xs font-semibold text-white">3</span>
+                                <p class="mt-3 text-sm font-semibold text-slate-900">{{ __('Check in or publish') }}</p>
+                                <p class="mt-1 text-sm leading-6 text-slate-600">{{ __('Finish the draft and make it available for use.') }}</p>
+                            </li>
+                        </ol>
+                    </div>
+                </div>
+            </section>
+
+        <div x-cloak x-show="ingredients.can_edit || ingredients.lines.length > 0">
+            <x-ingredients-detail-section
+                title="Ingredients"
+                :description="__('Ingredients are shown for the current display version.')"
+                :default-open="true"
+                item-header="Item Name"
+                :context-text-expression="'ingredients.can_edit ? \'Editing checked out version \' + ingredients.display_version_number : \'Showing version \' + ingredients.display_version_number'"
+            />
+        </div>
+
         @if (($payload['sections']['makeOrders'] ?? null))
             <div data-js-crud-section-root data-section-key="makeOrders"></div>
         @endif
-
-        <x-ingredients-detail-section
-            title="Ingredients"
-            :description="__('Ingredients are shown for the current display version.')"
-            :default-open="false"
-            item-header="Item Name"
-            :context-text-expression="'ingredients.can_edit ? \'Editing checked out version \' + ingredients.display_version_number : \'Showing version \' + ingredients.display_version_number'"
-        />
 
         @if (($payload['sections']['versions'] ?? null))
             <div data-js-crud-section-root data-section-key="versions"></div>
