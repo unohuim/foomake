@@ -842,6 +842,7 @@ class MakeOrderController extends Controller
             ->findOrFail($makeOrder);
 
         $result['workflow'] = $this->makeOrderWorkflowPayload($freshMakeOrder, $request->user());
+        $result['workflowProgressSteps'] = $this->makeOrderWorkflowProgressSteps($freshMakeOrder, $request->user());
 
         return response()->json($result);
     }
@@ -946,6 +947,7 @@ class MakeOrderController extends Controller
         return response()->json([
             'data' => $this->makeOrderDetailPayload($makeOrderModel),
             'workflow' => $this->makeOrderWorkflowPayload($makeOrderModel, $request->user()),
+            'workflowProgressSteps' => $this->makeOrderWorkflowProgressSteps($makeOrderModel, $request->user()),
         ]);
     }
 
@@ -1409,6 +1411,25 @@ class MakeOrderController extends Controller
             'tasked_by_user_name' => $makeOrder->taskedByUser?->name,
             'current_stage_tasks' => $this->makeOrderWorkflowTasksPayload($makeOrder, $currentStage, $viewer),
         ];
+    }
+
+    /**
+     * Build the Make Order workflow progress steps for runtime UI refreshes.
+     *
+     * @return array<int, array{label: string, status: string, url: null, current: bool}>
+     */
+    private function makeOrderWorkflowProgressSteps(MakeOrder $makeOrder, User $viewer): array
+    {
+        return app(BuildWorkflowProgressStepsAction::class)->execute(
+            (int) $viewer->tenant_id,
+            'manufacturing',
+            $makeOrder->status !== MakeOrder::STATUS_MADE && $makeOrder->workflow_stage_id !== null
+                ? (int) $makeOrder->workflow_stage_id
+                : null,
+            null,
+            $makeOrder->workflow_stage_id === null ? null : (int) $makeOrder->workflow_stage_id,
+            $makeOrder->status === MakeOrder::STATUS_MADE
+        );
     }
 
     /**

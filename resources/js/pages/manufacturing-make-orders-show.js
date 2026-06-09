@@ -5,6 +5,13 @@ const asArray = (value) => (Array.isArray(value) ? value : []);
 const SCALE = 6;
 const SCALE_FACTOR = 10n ** 6n;
 
+const escapeHtml = (value) => String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+
 const normalizePrecision = (value, fallback = SCALE) => {
     const precision = Number.parseInt(String(value ?? fallback), 10);
 
@@ -96,8 +103,42 @@ export function mount(rootEl, payload) {
     const workflowPayload = asRecord(safePayload.workflow);
     const ingredientsPayload = asRecord(safePayload.ingredients);
 
+    Alpine.data('makeOrderHeaderState', (payloadId) => ({
+        makeOrder: {},
+        action: null,
+        init() {
+            const payloadEl = document.getElementById(payloadId);
+            let headerPayload = {};
+
+            if (payloadEl) {
+                try {
+                    headerPayload = JSON.parse(payloadEl.textContent || '{}');
+                } catch (error) {
+                    headerPayload = {};
+                }
+            }
+
+            this.makeOrder = asRecord(headerPayload.makeOrder);
+            this.action = asRecord(headerPayload.workflow?.next_stage_action);
+
+            window.addEventListener('make-order-header-make-order-updated', (event) => {
+                this.makeOrder = {
+                    ...this.makeOrder,
+                    ...asRecord(event.detail?.makeOrder),
+                };
+            });
+
+            window.addEventListener('make-order-header-action-updated', (event) => {
+                this.action = asRecord(event.detail?.action);
+            });
+        },
+    }));
+
     Alpine.data('manufacturingMakeOrdersShow', () => ({
         makeOrder: asRecord(safePayload.makeOrder),
+        workflowProgressSteps: Array.isArray(safePayload.workflowProgressSteps)
+            ? safePayload.workflowProgressSteps
+            : [],
         workflow: {
             default_open: Boolean(workflowPayload.default_open),
             transition_url: workflowPayload.transition_url || '',
@@ -154,7 +195,15 @@ export function mount(rootEl, payload) {
                     ...this.makeOrder,
                     ...asRecord(data),
                 };
+                this.syncHeaderMakeOrder();
             }
+        },
+        syncHeaderMakeOrder() {
+            window.dispatchEvent(new CustomEvent('make-order-header-make-order-updated', {
+                detail: {
+                    makeOrder: this.makeOrder,
+                },
+            }));
         },
         outputUomDisplayPrecision() {
             return normalizePrecision(this.makeOrder.output_uom_display_precision, SCALE);
@@ -207,6 +256,170 @@ export function mount(rootEl, payload) {
                         : null,
                 },
             }));
+        },
+        workflowProgressHtml() {
+            let steps = Array.isArray(this.workflowProgressSteps)
+                ? this.workflowProgressSteps
+                : [];
+
+            steps = steps
+                .map((step, index) => ({
+                    label: String(step?.label || ''),
+                    status: ['completed', 'current', 'upcoming'].includes(step?.status)
+                        ? step.status
+                        : 'upcoming',
+                    url: step?.url || null,
+                    current: Boolean(step?.current || step?.status === 'current'),
+                    number: String(index + 1).padStart(2, '0'),
+                }))
+                .filter((step) => step.label !== '' && step.label !== 'DRAFT')
+                .map((step, index) => ({
+                    ...step,
+                    number: String(index + 1).padStart(2, '0'),
+                }));
+
+            if (
+                steps.length > 0
+                && !steps.some((step) => step.current)
+                && !steps.some((step) => step.status === 'completed')
+            ) {
+                steps = steps.map((step, index) => ({
+                    ...step,
+                    status: index === 0 ? 'current' : step.status,
+                    current: index === 0,
+                }));
+            }
+
+            if (steps.length === 0) {
+                return '';
+            }
+
+            let activeMobileStep = steps.findIndex((step) => step.current || step.status === 'current');
+
+            if (activeMobileStep < 0) {
+                activeMobileStep = steps.findIndex((step) => step.status === 'upcoming');
+            }
+
+            if (activeMobileStep < 0) {
+                activeMobileStep = Math.max(0, steps.length - 1);
+            }
+
+            return `
+                <nav class="w-full" aria-label="Progress" x-data="{ activeWorkflowStep: ${activeMobileStep} }" x-cloak>
+                    <div class="flex overflow-hidden rounded-md border border-gray-300 bg-white md:hidden" role="tablist" aria-label="Workflow stages" data-workflow-progress-mobile-tabs>
+                        ${steps.map((step, index) => this.workflowProgressMobileStepHtml(step, index, index === steps.length - 1)).join('')}
+                    </div>
+                    <ol role="list" class="hidden divide-y divide-gray-300 rounded-md border border-gray-300 bg-white md:flex md:divide-y-0">
+                        ${steps.map((step, index) => this.workflowProgressStepHtml(step, index === steps.length - 1)).join('')}
+                    </ol>
+                </nav>
+            `;
+        },
+        workflowProgressMobileStepHtml(step, index, isLast) {
+            const label = escapeHtml(step.label);
+            const isCompleted = step.status === 'completed';
+            const isCurrent = step.status === 'current' || step.current;
+            let circleClass = 'border-gray-300 bg-white text-gray-500';
+
+            if (isCompleted) {
+                circleClass = 'border-indigo-600 bg-indigo-600 text-white';
+            } else if (isCurrent) {
+                circleClass = 'border-indigo-600 bg-white text-indigo-600';
+            }
+
+            const labelClass = isCurrent ? 'text-indigo-600' : 'text-gray-900';
+            const circleContent = isCompleted
+                ? `
+                    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" class="size-5 text-white">
+                        <path fill-rule="evenodd" clip-rule="evenodd" d="M19.916 4.626a.75.75 0 0 1 .208 1.04l-9 13.5a.75.75 0 0 1-1.154.114l-6-6a.75.75 0 0 1 1.06-1.06l5.353 5.353 8.493-12.74a.75.75 0 0 1 1.04-.207Z"></path>
+                    </svg>
+                `
+                : `<span class="text-sm font-semibold">${escapeHtml(step.number)}</span>`;
+            const separator = isLast ? '' : `
+                <span aria-hidden="true" class="pointer-events-none absolute right-0 top-0 h-full w-5 md:hidden">
+                    <svg viewBox="0 0 22 80" fill="none" preserveAspectRatio="none" class="size-full text-gray-300">
+                        <path d="M0 -2L20 40L0 82" stroke="currentcolor" vector-effect="non-scaling-stroke" stroke-linejoin="round"></path>
+                    </svg>
+                </span>
+            `;
+
+            return `
+                <button
+                    type="button"
+                    role="tab"
+                    class="relative min-h-16 overflow-hidden bg-white py-2 pl-3 pr-6 transition-[flex-basis,flex-grow] duration-300 ease-out will-change-[flex-basis]"
+                    :class="activeWorkflowStep === ${index} ? 'basis-0 grow' : 'basis-16 grow-0'"
+                    :aria-selected="activeWorkflowStep === ${index} ? 'true' : 'false'"
+                    x-on:click="activeWorkflowStep = ${index}"
+                >
+                    <span class="flex h-full items-center" :class="activeWorkflowStep === ${index} ? 'justify-start gap-3' : 'justify-center'">
+                        <span class="flex size-9 shrink-0 items-center justify-center rounded-full border-2 ${circleClass}">
+                            ${circleContent}
+                        </span>
+                        <span
+                            class="min-w-0 truncate text-left text-sm font-medium transition-[max-width,opacity,transform] duration-300 ease-out ${labelClass}"
+                            :class="activeWorkflowStep === ${index} ? 'max-w-48 translate-x-0 opacity-100' : 'max-w-0 -translate-x-1 opacity-0'"
+                        >${label}</span>
+                    </span>
+                    ${separator}
+                </button>
+            `;
+        },
+        workflowProgressStepHtml(step, isLast) {
+            const label = escapeHtml(step.label);
+            const separator = isLast ? '' : `
+                <div aria-hidden="true" class="absolute right-0 top-0 hidden h-full w-5 md:block">
+                    <svg viewBox="0 0 22 80" fill="none" preserveAspectRatio="none" class="size-full text-gray-300">
+                        <path d="M0 -2L20 40L0 82" stroke="currentcolor" vector-effect="non-scaling-stroke" stroke-linejoin="round"></path>
+                    </svg>
+                </div>
+            `;
+
+            if (step.status === 'completed') {
+                return `
+                    <li class="relative md:flex md:flex-1">
+                        <span class="group flex w-full items-center">
+                            <span class="flex items-center px-4 py-3 text-sm font-medium sm:px-6">
+                                <span class="flex size-9 shrink-0 items-center justify-center rounded-full bg-indigo-600 group-hover:bg-indigo-700">
+                                    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" class="size-5 text-white">
+                                        <path fill-rule="evenodd" clip-rule="evenodd" d="M19.916 4.626a.75.75 0 0 1 .208 1.04l-9 13.5a.75.75 0 0 1-1.154.114l-6-6a.75.75 0 0 1 1.06-1.06l5.353 5.353 8.493-12.74a.75.75 0 0 1 1.04-.207Z"></path>
+                                    </svg>
+                                </span>
+                                <span class="ml-4 text-sm font-medium text-gray-900">${label}</span>
+                            </span>
+                        </span>
+                        ${separator}
+                    </li>
+                `;
+            }
+
+            if (step.status === 'current' || step.current) {
+                return `
+                    <li class="relative md:flex md:flex-1">
+                        <span aria-current="step" class="flex w-full items-center px-4 py-3 text-sm font-medium sm:px-6">
+                            <span class="flex size-9 shrink-0 items-center justify-center rounded-full border-2 border-indigo-600">
+                                <span class="text-sm font-semibold text-indigo-600">${escapeHtml(step.number)}</span>
+                            </span>
+                            <span class="ml-4 text-sm font-medium text-indigo-600">${label}</span>
+                        </span>
+                        ${separator}
+                    </li>
+                `;
+            }
+
+            return `
+                <li class="relative md:flex md:flex-1">
+                    <span class="group flex w-full items-center">
+                        <span class="flex items-center px-4 py-3 text-sm font-medium sm:px-6">
+                            <span class="flex size-9 shrink-0 items-center justify-center rounded-full border-2 border-gray-300 group-hover:border-gray-400">
+                                <span class="text-sm font-semibold text-gray-500 group-hover:text-gray-900">${escapeHtml(step.number)}</span>
+                            </span>
+                            <span class="ml-4 text-sm font-medium text-gray-500 group-hover:text-gray-900">${label}</span>
+                        </span>
+                    </span>
+                    ${separator}
+                </li>
+            `;
         },
         init() {
             this.$watch('workflow.made_by_user_id', async (value) => {
@@ -283,6 +496,9 @@ export function mount(rootEl, payload) {
                 const data = await response.json();
                 this.hydrateMakeOrderResponse(data.data);
                 this.hydrateWorkflowResponse(data.workflow);
+                if (Array.isArray(data.workflowProgressSteps)) {
+                    this.workflowProgressSteps = data.workflowProgressSteps;
+                }
                 this.selectedWorkflowStageId = '';
                 this.showToast('success', 'Workflow stage updated.');
             } catch (error) {
@@ -345,6 +561,9 @@ export function mount(rootEl, payload) {
 
                 this.hydrateMakeOrderResponse(data.data);
                 this.hydrateWorkflowResponse(data.workflow);
+                if (Array.isArray(data.workflowProgressSteps)) {
+                    this.workflowProgressSteps = data.workflowProgressSteps;
+                }
                 this.showToast('success', 'Make order completed.');
             } catch (error) {
                 this.showToast('error', 'Unable to make order.');

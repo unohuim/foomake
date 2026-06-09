@@ -15,7 +15,7 @@
             <x-resource-detail-header-breadcrumb
                 :items="$payload['breadcrumbs'] ?? []"
                 :title="$makeOrderPayload['title'] ?? ('Make Order ' . $makeOrder->id)"
-                x-data="{ makeOrder: @js($makeOrderPayload) }"
+                x-data="makeOrderHeaderState('manufacturing-make-orders-show-payload')"
             >
                 <x-slot name="titleSuffix">
                     <span
@@ -61,8 +61,6 @@
                 <x-slot name="actions">
                     <div
                         class="flex items-center justify-end"
-                        x-data="{ action: @js($payload['workflow']['next_stage_action'] ?? null) }"
-                        x-on:make-order-header-action-updated.window="action = $event.detail.action"
                         x-show="action && action.label"
                     >
                         <button
@@ -84,10 +82,7 @@
     <x-ui.toast visible="toast.visible" type="toast.type" message="toast.message" />
 
     <div class="mx-auto max-w-5xl space-y-6 px-1 pt-0 pb-8 sm:px-6 sm:pt-6 sm:pb-12 lg:px-8">
-        <x-ui.workflow-progress
-            :steps="$payload['workflowProgressSteps'] ?? []"
-            data-workflow-progress-panel
-        />
+        <div data-workflow-progress-panel x-html="workflowProgressHtml()"></div>
 
         <x-detail-section-card
             title="Details"
