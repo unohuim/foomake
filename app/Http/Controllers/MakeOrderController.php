@@ -964,6 +964,7 @@ class MakeOrderController extends Controller
             'data' => $this->makeOrderDetailPayload($makeOrderModel),
             'workflow' => $this->makeOrderWorkflowPayload($makeOrderModel, $request->user()),
             'workflowProgressSteps' => $this->makeOrderWorkflowProgressSteps($makeOrderModel, $request->user()),
+            'ingredients' => $this->makeOrderIngredientsPayload($makeOrderModel),
         ]);
     }
 
@@ -1313,6 +1314,10 @@ class MakeOrderController extends Controller
                 $line->inputItem?->baseUom,
                 $displayPrecision
             ),
+            'recipe_quantity' => $line->sourceRecipeVersionLine?->quantity !== null
+                ? (string) $line->sourceRecipeVersionLine->quantity
+                : null,
+            'quantity_display_precision' => $displayPrecision,
             'line_type' => $line->line_type,
             'view_url' => route('materials.show', $line->inputItem),
             'remove_url' => route('manufacturing.make-orders.lines.destroy', [$line->make_order_id, $line->id]),
@@ -1328,6 +1333,8 @@ class MakeOrderController extends Controller
      */
     private function makeOrderIngredientsPayload(MakeOrder $makeOrder): array
     {
+        $makeOrder->loadMissing('lines.sourceRecipeVersionLine');
+
         $canEdit = $this->userCanOperateMakeOrderWorkflow(request()->user())
             && ! in_array($makeOrder->status, [MakeOrder::STATUS_MADE, MakeOrder::STATUS_CANCELLED], true);
 

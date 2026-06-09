@@ -701,7 +701,9 @@ test('details quantity update recalculates expected_output_qty and canonicalizes
 
     $uom = ($this->makeUom)($tenant);
     $output = ($this->makeItem)($tenant, $uom, 'Bread', true);
+    $input = ($this->makeItem)($tenant, $uom, 'Flour');
     $recipe = ($this->makeRecipe)($tenant, $output, true, 'Expected Output Recipe', '4.000000');
+    ($this->addRecipeLine)($tenant, $recipe, $input, '2.000000');
     $makeOrder = ($this->makeOrder)($tenant, $recipe, $user, [
         'runs' => '2.000000',
         'status' => MakeOrder::STATUS_DRAFT,
@@ -714,7 +716,10 @@ test('details quantity update recalculates expected_output_qty and canonicalizes
         'actual_output_qty' => null,
     ])->assertOk()
         ->assertJsonPath('data.runs', '3.000000')
-        ->assertJsonPath('data.expected_output_qty', '12.000000');
+        ->assertJsonPath('data.expected_output_qty', '12.000000')
+        ->assertJsonPath('ingredients.lines.0.quantity', '6.000000')
+        ->assertJsonPath('ingredients.lines.0.quantity_input', '6.000000')
+        ->assertJsonPath('ingredients.lines.0.quantity_display', '6.000000');
 
     expect($makeOrder->fresh()->runs)->toBe('3.000000')
         ->and($makeOrder->fresh()->expected_output_qty)->toBe('12.000000');

@@ -228,6 +228,36 @@ export function mount(rootEl, payload) {
                 expectedOutputQty,
                 this.outputUomDisplayPrecision()
             );
+            this.recalculateIngredientQuantitiesFromRuns(canonicalRuns);
+        },
+        recalculateIngredientQuantitiesFromRuns(canonicalRuns) {
+            if (canonicalRuns === null) {
+                return;
+            }
+
+            this.ingredients.lines = this.ingredients.lines.map((line) => {
+                const recipeQuantity = canonicalizeScaleSix(line.recipe_quantity);
+
+                if (line.line_type !== 'recipe' || recipeQuantity === null) {
+                    return line;
+                }
+
+                const nextQuantity = multiplyCanonicalQuantities(recipeQuantity, canonicalRuns);
+
+                if (nextQuantity === null) {
+                    return line;
+                }
+
+                const displayPrecision = normalizePrecision(line.quantity_display_precision, SCALE);
+                const nextDisplayQuantity = formatQuantityForPrecision(nextQuantity, displayPrecision);
+
+                return {
+                    ...line,
+                    quantity: nextQuantity,
+                    quantity_input: nextDisplayQuantity,
+                    quantity_display: nextDisplayQuantity,
+                };
+            });
         },
         hydrateWorkflowResponse(data) {
             if (!data || typeof data !== 'object') {
@@ -665,6 +695,7 @@ export function mount(rootEl, payload) {
                 const data = await response.json();
                 this.hydrateMakeOrderResponse(data.data);
                 this.hydrateWorkflowResponse(data.workflow);
+                this.hydrateIngredientsResponse(data.ingredients);
                 this.showToast('success', 'Make order details updated.');
             } catch (error) {
                 this.showToast('error', 'Unable to save make order details.');
