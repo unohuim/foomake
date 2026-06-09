@@ -5,6 +5,7 @@ namespace App\Support\Inventory;
 use App\Actions\Inventory\CalculateItemOnHandQuantityAction;
 use App\Models\Item;
 use App\Models\MakeOrder;
+use App\Models\MakeOrderLine;
 use App\Models\PurchaseOrder;
 use App\Models\PurchaseOrderLine;
 use App\Models\Recipe;
@@ -310,7 +311,7 @@ class InventoryAvailabilityIndexReadModel
     }
 
     /**
-     * Aggregate non-terminal make-order output quantities per item.
+     * Aggregate non-terminal make-order output and ingredient quantities per item.
      *
      * @param array<int, int> $itemIds
      * @return array<int, string>
@@ -340,6 +341,31 @@ class InventoryAvailabilityIndexReadModel
             $quantities[$itemId] = isset($quantities[$itemId])
                 ? bcadd($quantities[$itemId], $producedQuantity, self::SCALE)
                 : bcadd($producedQuantity, '0', self::SCALE);
+        }
+
+        $makeOrderLines = MakeOrderLine::query()
+            ->select([
+                'make_order_lines.input_item_id',
+                'make_order_lines.planned_quantity',
+            ])
+            ->join('make_orders', 'make_orders.id', '=', 'make_order_lines.make_order_id')
+            ->where('make_order_lines.tenant_id', $tenantId)
+            ->where('make_orders.tenant_id', $tenantId)
+            ->whereIn('make_order_lines.input_item_id', $itemIds)
+            ->whereNotIn('make_orders.status', [
+                MakeOrder::STATUS_DRAFT,
+                MakeOrder::STATUS_MADE,
+                MakeOrder::STATUS_CANCELLED,
+            ])
+            ->get();
+
+        foreach ($makeOrderLines as $line) {
+            $itemId = (int) $line->input_item_id;
+            $consumedQuantity = bcadd((string) ($line->planned_quantity ?? '0.000000'), '0', self::SCALE);
+
+            $quantities[$itemId] = isset($quantities[$itemId])
+                ? bcsub($quantities[$itemId], $consumedQuantity, self::SCALE)
+                : bcsub($this->zero(), $consumedQuantity, self::SCALE);
         }
 
         return $quantities;

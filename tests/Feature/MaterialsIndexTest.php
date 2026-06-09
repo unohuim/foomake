@@ -2,10 +2,13 @@
 
 declare(strict_types=1);
 
-use App\Models\Item;
 use App\Models\InventoryCount;
 use App\Models\InventoryCountLine;
+use App\Models\Item;
+use App\Models\MakeOrder;
+use App\Models\MakeOrderLine;
 use App\Models\Permission;
+use App\Models\Recipe;
 use App\Models\Role;
 use App\Models\StockMove;
 use App\Models\Tenant;
@@ -419,6 +422,69 @@ it('18. list endpoint excludes cross tenant records from materials index data', 
 
     expect($names)->toContain('Visible Material')
         ->not->toContain('Hidden Material');
+});
+
+it('18aa. list endpoint subtracts active make order ingredient demand from material net quantity', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $uom = ($this->makeUom)($tenant, ['name' => 'Each', 'symbol' => 'ea']);
+    $apples = ($this->makeItem)($tenant, $uom, [
+        'name' => 'Apples',
+        'is_stockable' => true,
+    ]);
+    $choppedApples = ($this->makeItem)($tenant, $uom, [
+        'name' => 'Chopped Apples',
+        'is_stockable' => true,
+        'is_manufacturable' => true,
+    ]);
+    $recipe = Recipe::query()->create([
+        'tenant_id' => $tenant->id,
+        'item_id' => $choppedApples->id,
+        'recipe_type' => Recipe::TYPE_MANUFACTURING,
+        'name' => 'Chop Apples',
+        'output_quantity' => '1.000000',
+        'is_active' => true,
+        'is_default' => true,
+    ]);
+    $makeOrder = MakeOrder::query()->create([
+        'tenant_id' => $tenant->id,
+        'recipe_id' => $recipe->id,
+        'output_item_id' => $choppedApples->id,
+        'runs' => '3.000000',
+        'output_quantity' => '3.000000',
+        'expected_output_qty' => '3.000000',
+        'status' => MakeOrder::STATUS_SCHEDULED,
+        'scheduled_at' => now(),
+        'created_by_user_id' => $user->id,
+    ]);
+
+    MakeOrderLine::query()->create([
+        'tenant_id' => $tenant->id,
+        'make_order_id' => $makeOrder->id,
+        'input_item_id' => $apples->id,
+        'uom_id' => $uom->id,
+        'planned_quantity' => '339.000000',
+        'line_type' => MakeOrderLine::TYPE_RECIPE,
+    ]);
+    StockMove::query()->create([
+        'tenant_id' => $tenant->id,
+        'item_id' => $apples->id,
+        'uom_id' => $uom->id,
+        'quantity' => '339.000000',
+        'type' => 'receipt',
+    ]);
+
+    ($this->grantPermission)($user, 'inventory-materials-view');
+
+    $rows = collect(($this->getList)($user)->assertOk()->json('data'));
+    $applesRow = $rows->firstWhere('id', $apples->id);
+    $choppedApplesRow = $rows->firstWhere('id', $choppedApples->id);
+
+    expect($applesRow['on_hand'] ?? null)->toBe('339.000000')
+        ->and($applesRow['make'] ?? null)->toBe('-339.000000')
+        ->and($applesRow['net'] ?? null)->toBe('0.000000')
+        ->and($choppedApplesRow['make'] ?? null)->toBe('3.000000')
+        ->and($choppedApplesRow['net'] ?? null)->toBe('3.000000');
 });
 
 it('18a. materials create response returns the created record id needed for redirect behavior', function (): void {
