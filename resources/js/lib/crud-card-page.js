@@ -194,7 +194,7 @@ const renderActionItems = (config) => config.actions.map((action) => {
             type="button"
             class="${toneClasses}"
             x-show="${escapeAttributeExpression(action.showExpression)}"
-            x-on:click="${escapeAttributeExpression(action.handler)}"
+            x-on:click.stop="open = false; ${escapeAttributeExpression(action.handler)}"
             role="menuitem"
         >${escapeHtml(action.label)}</button>
     `;
@@ -232,6 +232,7 @@ const renderActionCell = (config) => `
             x-bind:style="{ top, right }"
             x-show="open"
             x-on:click.outside="open = false"
+            x-on:click.stop
             x-cloak
             role="menu"
         >

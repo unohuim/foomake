@@ -15,6 +15,7 @@
 <div
     {{ $attributes->merge(['class' => 'fixed inset-0 z-50 overflow-hidden']) }}
     x-show="{{ $open }}"
+    x-data="{ slideOverPointerStartedOutside: false }"
     x-cloak
     role="dialog"
     aria-modal="true"
@@ -30,16 +31,23 @@
             x-transition:leave="ease-in-out duration-300"
             x-transition:leave-start="opacity-100"
             x-transition:leave-end="opacity-0"
-            x-on:click="{{ $close }}"
+            x-on:pointerdown="slideOverPointerStartedOutside = true"
+            x-on:click="if (slideOverPointerStartedOutside) { {{ $close }} }"
         ></div>
 
         <div
             tabindex="0"
             class="absolute inset-0 pl-10 focus:outline-none sm:pl-16"
-            x-on:click="{{ $close }}"
+            x-on:pointerdown.self="slideOverPointerStartedOutside = true"
+            x-on:pointerdown="if ($event.target !== $el) { slideOverPointerStartedOutside = false }"
+            x-on:click.self="if (slideOverPointerStartedOutside) { {{ $close }} }"
         >
             <div class="pointer-events-none fixed inset-y-0 right-0 flex max-w-full pl-10">
-                <div class="pointer-events-auto w-screen {{ $maxWidth }}" x-on:click.stop>
+                <div
+                    class="pointer-events-auto w-screen {{ $maxWidth }}"
+                    x-on:pointerdown="slideOverPointerStartedOutside = false"
+                    x-on:click.stop
+                >
                     <form
                         @if ($action) method="{{ $method }}" action="{{ $action }}" @endif
                         class="relative flex h-full flex-col divide-y divide-gray-200 bg-white shadow-xl"

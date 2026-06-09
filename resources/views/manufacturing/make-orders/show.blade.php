@@ -64,7 +64,7 @@
                         <button
                             type="button"
                             class="inline-flex items-center justify-center rounded-md border border-transparent bg-slate-900 px-4 py-2 text-xs font-semibold uppercase tracking-widest text-white transition hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-500 focus:ring-offset-2"
-                            x-on:click.prevent="window.dispatchEvent(new CustomEvent('make-order-next-stage', { detail: { workflowStageId: workflow.next_stage_action.id } }))"
+                            x-on:click.prevent="performHeaderWorkflowAction()"
                             x-text="workflow.next_stage_action?.label || ''"
                         >
                             {{ $payload['workflow']['next_stage_action']['label'] ?? '' }}
@@ -138,6 +138,7 @@
                             class="block w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:cursor-not-allowed disabled:bg-gray-100"
                             x-model="workflow.due_date"
                             x-bind:disabled="!workflow.can_edit_due_date || workflowDueDateSaving"
+                            x-on:click="if (!$el.disabled) { $el.showPicker?.() }"
                             x-on:change="saveWorkflowDueDate()"
                         />
                     </div>

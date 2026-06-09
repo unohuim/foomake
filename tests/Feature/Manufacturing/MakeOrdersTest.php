@@ -1828,7 +1828,7 @@ test('make order workflow stage transitions require execute permission', functio
     $user = ($this->makeUser)($tenant);
     ($this->grantPermission)($user, 'inventory-make-orders-view');
 
-    [$productionStage, $completedStage] = ($this->createManufacturingWorkflowStages)($tenant);
+    [$productionStage] = ($this->createManufacturingWorkflowStages)($tenant);
 
     $uom = ($this->makeUom)($tenant);
     $output = ($this->makeItem)($tenant, $uom, 'Bread', true);
@@ -2082,7 +2082,7 @@ test('authorized user can update make order due date without mutating assignment
     $assignee = ($this->makeUser)($tenant);
     ($this->grantPermissions)($user, ['inventory-make-orders-view', 'inventory-make-orders-execute']);
 
-    [$productionStage, $completedStage] = ($this->createManufacturingWorkflowStages)($tenant);
+    [$productionStage] = ($this->createManufacturingWorkflowStages)($tenant);
 
     $uom = ($this->makeUom)($tenant);
     $output = ($this->makeItem)($tenant, $uom, 'Bread', true);
@@ -2119,7 +2119,9 @@ test('authorized user can update make order due date without mutating assignment
         ->assertJsonPath('workflow.due_date', '2026-06-15')
         ->assertJsonPath('workflow.made_by_user_id', $assignee->id)
         ->assertJsonPath('workflow.current_stage.id', $productionStage->id)
-        ->assertJsonPath('workflow.next_stage_action.id', $completedStage->id)
+        ->assertJsonPath('workflow.next_stage_action.id', $productionStage->id)
+        ->assertJsonPath('workflow.next_stage_action.type', 'make')
+        ->assertJsonPath('workflow.next_stage_action.endpoint', route('manufacturing.make-orders.make', $makeOrder))
         ->assertJsonPath('workflow.due_date_update_url', route('manufacturing.make-orders.due-date.update', $makeOrder))
         ->assertJsonPath('workflow.assignment_update_url', route('manufacturing.make-orders.assignment.update', $makeOrder));
 

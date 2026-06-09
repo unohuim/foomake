@@ -836,6 +836,13 @@ class MakeOrderController extends Controller
             return $result;
         }
 
+        $freshMakeOrder = MakeOrder::query()
+            ->where('tenant_id', $request->user()->tenant_id)
+            ->with(['workflowStage', 'madeByUser', 'taskedByUser'])
+            ->findOrFail($makeOrder);
+
+        $result['workflow'] = $this->makeOrderWorkflowPayload($freshMakeOrder, $request->user());
+
         return response()->json($result);
     }
 
@@ -1340,15 +1347,26 @@ class MakeOrderController extends Controller
         $canOperateWorkflow = $this->userCanOperateMakeOrderWorkflow($viewer);
 
         if ($canOperateWorkflow) {
-            $nextStage = $currentStage
-                ? $resolver->nextActiveStage($makeOrder)
-                : $resolver->firstActiveStage($makeOrder);
-
-            if ($nextStage) {
+            if ($currentStage?->is_inventory_effect_stage) {
                 $nextStageAction = [
-                    'id' => $nextStage->id,
-                    'label' => $nextStage->action_verb ?: $nextStage->name,
+                    'id' => $currentStage->id,
+                    'label' => $currentStage->action_verb ?: $currentStage->name,
+                    'type' => 'make',
+                    'endpoint' => route('manufacturing.make-orders.make', $makeOrder),
                 ];
+            } else {
+                $nextStage = $currentStage
+                    ? $resolver->nextActiveStage($makeOrder)
+                    : $resolver->firstActiveStage($makeOrder);
+
+                if ($nextStage) {
+                    $nextStageAction = [
+                        'id' => $nextStage->id,
+                        'label' => $nextStage->action_verb ?: $nextStage->name,
+                        'type' => 'stage',
+                        'endpoint' => route('manufacturing.make-orders.workflow-stage.update', $makeOrder),
+                    ];
+                }
             }
         }
 

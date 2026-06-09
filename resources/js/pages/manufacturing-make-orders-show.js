@@ -289,6 +289,59 @@ export function mount(rootEl, payload) {
             this.selectedWorkflowStageId = String(workflowStageId);
             await this.moveWorkflowStage();
         },
+        async performHeaderWorkflowAction() {
+            const action = asRecord(this.workflow.next_stage_action);
+
+            if (!action.id || this.workflowTransitionSaving) {
+                return;
+            }
+
+            if (action.type === 'make') {
+                await this.makeCurrentOrder(action);
+                return;
+            }
+
+            await this.moveWorkflowStageTo(action.id);
+        },
+        async makeCurrentOrder(action) {
+            const endpoint = action.endpoint || '';
+
+            if (!endpoint) {
+                this.showToast('error', 'Unable to make order.');
+                return;
+            }
+
+            this.workflowTransitionSaving = true;
+
+            try {
+                const response = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        Accept: 'application/json',
+                        'X-CSRF-TOKEN': this.csrfToken,
+                    },
+                    body: JSON.stringify({
+                        actual_output_qty: this.makeOrder.actual_output_qty_text || null,
+                    }),
+                });
+
+                const data = await response.json().catch(() => ({}));
+
+                if (!response.ok) {
+                    this.showToast('error', data.message || 'Unable to make order.');
+                    return;
+                }
+
+                this.hydrateMakeOrderResponse(data.data);
+                this.hydrateWorkflowResponse(data.workflow);
+                this.showToast('success', 'Make order completed.');
+            } catch (error) {
+                this.showToast('error', 'Unable to make order.');
+            } finally {
+                this.workflowTransitionSaving = false;
+            }
+        },
         async saveWorkflowAssignment() {
             if (!this.workflow.can_edit_assignment || !this.workflow.assignment_update_url) {
                 return;

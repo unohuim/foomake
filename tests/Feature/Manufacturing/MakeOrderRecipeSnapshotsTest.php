@@ -865,8 +865,9 @@ it('31c. make order detail header renders the next valid workflow stage action f
     expect($source)->toContain('<x-slot name="actions">')
         ->and($source)->toContain('<x-slot name="titleSuffix">')
         ->and($source)->toContain("x-show=\"workflow.next_stage_action && workflow.next_stage_action.label\"")
-        ->and($source)->toContain("window.dispatchEvent(new CustomEvent('make-order-next-stage'")
+        ->and($source)->toContain('x-on:click.prevent="performHeaderWorkflowAction()"')
         ->and($source)->toContain("x-text=\"workflow.next_stage_action?.label || ''\"")
+        ->and($source)->toContain('x-on:click="if (!$el.disabled) { $el.showPicker?.() }"')
         ->and($source)->not->toContain('data-make-order-header-workflow-button')
         ->and($source)->not->toContain("\$makeOrderPayload['workflow_stage_name'] ?? \$makeOrderPayload['status'] ?? '—'");
 });
@@ -993,8 +994,10 @@ it('34. make order detail workflow payload includes due date assignee and availa
         ->and(data_get($payload, 'workflow.due_date'))->toBe('2026-06-01')
         ->and(data_get($payload, 'workflow.available_stages'))->toHaveCount(1)
         ->and(data_get($payload, 'workflow.available_stages.0.id'))->toBe($stageB->id)
-        ->and(data_get($payload, 'workflow.next_stage_action.id'))->toBe($stageB->id)
-        ->and(data_get($payload, 'workflow.next_stage_action.label'))->toBe('COMPLETE')
+        ->and(data_get($payload, 'workflow.next_stage_action.id'))->toBe($stageA->id)
+        ->and(data_get($payload, 'workflow.next_stage_action.label'))->toBe('PRODUCE')
+        ->and(data_get($payload, 'workflow.next_stage_action.type'))->toBe('make')
+        ->and(data_get($payload, 'workflow.next_stage_action.endpoint'))->toBe(route('manufacturing.make-orders.make', $makeOrder))
         ->and(data_get($payload, 'makeOrder.due_date'))->toBe('2026-06-01')
         ->and(data_get($payload, 'makeOrder'))->not->toHaveKey('owner_user_name')
         ->and(data_get($payload, 'makeOrder'))->not->toHaveKey('workflow_tasks');
@@ -1077,7 +1080,8 @@ it('34a. make order workflow payload exposes editable tenant scoped assignee opt
         ->and(data_get($payload, 'workflow.made_by_user_id'))->toBeNull()
         ->and(data_get($payload, 'workflow.owner_user_name'))->toBeNull()
         ->and(data_get($payload, 'workflow.current_stage.name'))->toBe('Production')
-        ->and(data_get($payload, 'workflow.next_stage_action.id'))->toBe($stageB->id)
+        ->and(data_get($payload, 'workflow.next_stage_action.id'))->toBe($stageA->id)
+        ->and(data_get($payload, 'workflow.next_stage_action.type'))->toBe('make')
         ->and(data_get($payload, 'workflow.due_date'))->toBe('2026-06-01')
         ->and($optionLabels)->toContain('Unassigned')
         ->and($optionLabels)->toContain($tenantAssignee->name)
@@ -1232,7 +1236,7 @@ it('35a. make order detail header payload uses workflow stage names and not life
         ->and(data_get($payload, 'makeOrder.workflow_stage_name'))->toBe('Production')
         ->and(data_get($payload, 'makeOrder.workflow_state'))->toBe('Production')
         ->and(data_get($payload, 'makeOrder.status'))->toBe(MakeOrder::STATUS_SCHEDULED)
-        ->and(data_get($payload, 'workflow.next_stage_action.label'))->toBe('COMPLETE');
+        ->and(data_get($payload, 'workflow.next_stage_action.label'))->toBe('PRODUCE');
 
     $stageA->forceFill(['name' => 'Cook', 'action_verb' => 'COOK'])->save();
     $stageB->forceFill(['name' => 'Ready for QA', 'action_verb' => 'QA READY'])->save();
@@ -1244,7 +1248,7 @@ it('35a. make order detail header payload uses workflow stage names and not life
 
     expect(data_get($renamedPayload, 'makeOrder.workflow_stage_name'))->toBe('Cook')
         ->and(data_get($renamedPayload, 'makeOrder.workflow_state'))->toBe('Cook')
-        ->and(data_get($renamedPayload, 'workflow.next_stage_action.label'))->toBe('QA READY')
+        ->and(data_get($renamedPayload, 'workflow.next_stage_action.label'))->toBe('COOK')
         ->and(data_get($renamedPayload, 'makeOrder.status'))->toBe(MakeOrder::STATUS_SCHEDULED);
 
     $withoutStage = MakeOrder::query()->forceCreate([
@@ -1316,6 +1320,8 @@ it('35b. make order detail header source and controller payload do not hardcode 
         ->and($pageModuleSource)->not->toContain("new CustomEvent('make-order-header-sync'")
         ->and($pageModuleSource)->toContain('next_stage_action: asRecord(workflowPayload.next_stage_action)')
         ->and($pageModuleSource)->toContain('next_stage_action: asRecord(data.next_stage_action)')
+        ->and($pageModuleSource)->toContain('performHeaderWorkflowAction')
+        ->and($pageModuleSource)->toContain('makeCurrentOrder')
         ->and($pageModuleSource)->toContain('saveWorkflowAssignment')
         ->and($pageModuleSource)->toContain('saveMakeOrderDetailQuantity')
         ->and($pageModuleSource)->toContain('$watch(\'workflow.made_by_user_id\'')
