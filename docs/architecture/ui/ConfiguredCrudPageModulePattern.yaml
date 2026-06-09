@@ -29,7 +29,7 @@ purpose: Define a reusable, server-configured CRUD page-module pattern where Bla
 when_to_use:
   - Building any new interactive CRUD index page after the Products, Customers, and Materials migrations
   - Migrating an interactive CRUD page to a shared mount-only page-module pattern without introducing client-owned routing or global state
-  - Reusing the same toolbar, card-grid rendering, action menu, create/import/export triggers, and sort mechanics across multiple Blade pages with different resource contracts
+  - Reusing the same toolbar, card-grid or stacked-list rendering, action menu, create/import/export triggers, and sort mechanics across multiple Blade pages with different resource contracts
   - Keeping page-specific create slideouts and non-import/non-export validation UX outside the shared CRUD renderer while centralizing the common config-driven shell
   - Attaching a reusable import workflow to a CRUD page while moving import UX ownership into the shared import component and leaving import endpoints and import authority on the server
   - Attaching a reusable export workflow to a CRUD page while moving export markup and lifecycle ownership into a shared export component
@@ -55,7 +55,7 @@ rules:
   - Resources that expose export through the shared toolbar must also provide endpoints.export plus labels and permissions for the export action.
   - sortable values must reference only configured column keys.
   - Shared CRUD helpers must remain stateless and must not introduce global JavaScript state.
-  - The shared CRUD card renderer owns toolbar layout, search input, create/import/export buttons, desktop card grid, mobile row cards, empty states, and row-level action rendering.
+  - The shared CRUD card renderer owns toolbar layout, search input, create/import/export buttons, desktop card grid or opt-in stacked list, mobile row cards, empty states, and row-level action rendering.
   - The shared CRUD renderer may render either the default vertical-dots menu or a single direct inline icon button when the server-generated CRUD config opts into that row-action mode.
   - The shared CRUD renderer shell must use h-full and min-h-0-compatible layout rules so the records pane inherits usable height from the bounded Blade shell.
   - Toolbar actions must be config-driven; resource pages must not hardcode product-only or customer-only toolbar buttons in Blade.

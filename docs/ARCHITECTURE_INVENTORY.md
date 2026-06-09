@@ -234,7 +234,7 @@ $onHand = app(CalculateItemOnHandQuantityAction::class)->execute($item);
 - `resources/js/pages/admin-users-index.js`
 
 **Purpose:**  
-Provide a mount-only Blade shell plus server-configured shared CRUD card renderer so index pages reuse one toolbar, card grid, empty-state, and row-action pattern without global JavaScript state.
+Provide a mount-only Blade shell plus server-configured shared CRUD card renderer so index pages reuse one toolbar, card grid or opt-in stacked list, empty-state, and row-action pattern without global JavaScript state.
 
 **When to Use:**  
 Any interactive CRUD index page that can express its list, row display, actions, and optional import/export behavior from a server-generated contract.
@@ -278,10 +278,10 @@ Notes:
 - `resources/js/pages/materials-index.js`
 
 **Purpose:**
-Provide a sibling renderer for configured CRUD index pages that preserves the shared CRUD config, toolbar, search, action, and toggle contracts while rendering desktop records as responsive Tailwind cards instead of a table.
+Provide a sibling renderer for configured CRUD index pages that preserves the shared CRUD config, toolbar, search, action, and toggle contracts while rendering desktop records as responsive Tailwind cards or an opt-in stacked list instead of a table.
 
 **When to Use:**
-Configured CRUD index pages where desktop users benefit from compact visual summaries rather than dense table comparison.
+Configured CRUD index pages where desktop users benefit from compact visual summaries or stacked list rows rather than dense table comparison.
 
 **When Not to Use:**
 Dense operational lists that need table-style scanning, static pages, or reusable detail-section subsections.
@@ -291,6 +291,7 @@ Dense operational lists that need table-style scanning, static pages, or reusabl
 - `data-crud-config`
 - `data-crud-root`
 - optional `desktopCard`
+- optional `desktopList`
 
 **Example Usage:**
 ```js
@@ -1098,10 +1099,10 @@ Notes:
 - `resources/js/pages/materials-index.js`
 
 **Purpose:**
-Render configured CRUD index records as responsive desktop Tailwind cards while preserving the shared CRUD toolbar, search, action, toggle, and mount-shell contracts.
+Render configured CRUD index records as responsive desktop Tailwind cards or an opt-in stacked list while preserving the shared CRUD toolbar, search, action, toggle, and mount-shell contracts.
 
 **When to Use:**
-Configured CRUD index pages where card summaries communicate the resource better than dense table columns.
+Configured CRUD index pages where card summaries or compact stacked rows communicate the resource better than dense table columns.
 
 **When Not to Use:**
 Dense list pages that need table comparison or reusable detail-section subsections.
@@ -1109,6 +1110,7 @@ Dense list pages that need table comparison or reusable detail-section subsectio
 **Public Interface:**
 - `mountCrudCardRenderer(targetEl, config)`
 - `desktopCard`
+- `desktopList`
 - `data-crud-config`
 - `data-crud-root`
 
@@ -3593,7 +3595,7 @@ Vendor or generated views excluded from repository checks, plus Breeze/shared la
 Centralize a shared config-driven CRUD card renderer behind server-generated page contracts while keeping Blade index pages mount-only, moving import UX and lifecycle into a shared import component, and leaving page-specific create/export behavior plus approved data adapters in each page module.
 
 **When to Use:**  
-Interactive Blade CRUD pages that share toolbar, desktop card rendering, mobile row cards, action menus, and list/create/import/sort mechanics but need different routes, columns, row display rules, or page-specific callbacks. All future CRUD index pages should use this abstraction unless a separately approved architecture entry says otherwise.
+Interactive Blade CRUD pages that share toolbar, desktop card or stacked-list rendering, mobile row cards, action menus, and list/create/import/sort mechanics but need different routes, columns, row display rules, or page-specific callbacks. All future CRUD index pages should use this abstraction unless a separately approved architecture entry says otherwise.
 
 **When Not to Use:**  
 Static pages, or domain workflows that exceed generic CRUD concerns.
@@ -3620,7 +3622,7 @@ Static pages, or domain workflows that exceed generic CRUD concerns.
 - Blade index shells remain mount-only for CRUD concerns and must provide a bounded viewport-height container for the shared CRUD module.  
 - CRUD pages that use the shared import abstraction emit a separate `data-import-config` contract instead of embedding import internals into the CRUD config.  
 - `data-crud-root` must fill the available bounded height with `h-full` / `min-h-0`-compatible layout so the shared renderer can size its records pane correctly.  
-- The shared CRUD card renderer owns toolbar layout, search input, create/import/export buttons, desktop cards, mobile row cards, empty states, and row-level action rendering.
+- The shared CRUD card renderer owns toolbar layout, search input, create/import/export buttons, desktop cards or opt-in stacked lists, mobile row cards, empty states, and row-level action rendering.
 - The shared CRUD card renderer may render the default vertical-dots row menu or configured row toggles when the CRUD config opts into them.
 - Toolbar and page chrome remain outside the records scroller; the records/results area is the only scrollable region for CRUD list rendering.  
 - Desktop and mobile variants follow the same scroll-containment contract: header/toolbar stays fixed in the component shell while only records scroll.  

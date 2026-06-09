@@ -7,6 +7,8 @@ const escapeHtml = (value) => String(value)
     .replaceAll('"', '&quot;')
     .replaceAll("'", '&#039;');
 
+const escapeAttributeExpression = (value) => escapeHtml(value);
+
 const recordDefinition = (value) => (value && typeof value === 'object' && !Array.isArray(value) ? value : {});
 
 const sanitizeExpression = (value, fallback = '') => (typeof value === 'string' && value.trim() !== '' ? value : fallback);
@@ -35,6 +37,7 @@ const normalizeCardRendererConfig = (config) => {
     const permissions = recordDefinition(config.permissions);
     const mobileCard = recordDefinition(config.mobileCard);
     const desktopCard = recordDefinition(config.desktopCard);
+    const desktopList = recordDefinition(config.desktopList);
     const mobileToggle = recordDefinition(mobileCard.toggle);
     const rowToggle = recordDefinition(config.rowToggle);
 
@@ -97,6 +100,34 @@ const normalizeCardRendererConfig = (config) => {
             iconBadgesExpression: sanitizeExpression(desktopCard.iconBadgesExpression),
             statsExpression: sanitizeExpression(desktopCard.statsExpression),
             urlExpression: sanitizeExpression(desktopCard.urlExpression, sanitizeExpression(mobileCard.urlExpression)),
+        },
+        desktopList: {
+            enabled: Boolean(desktopList.enabled),
+            titleExpression: sanitizeExpression(
+                desktopList.titleExpression,
+                sanitizeExpression(desktopCard.titleExpression, sanitizeExpression(mobileCard.titleExpression, "record.name || '—'"))
+            ),
+            subtitleExpression: sanitizeExpression(
+                desktopList.subtitleExpression,
+                sanitizeExpression(desktopCard.subtitleExpression, sanitizeExpression(mobileCard.subtitleExpression))
+            ),
+            metaExpression: sanitizeExpression(desktopList.metaExpression),
+            badgesExpression: sanitizeExpression(
+                desktopList.badgesExpression,
+                sanitizeExpression(desktopCard.badgesExpression, sanitizeExpression(mobileCard.badgesExpression))
+            ),
+            asideExpression: sanitizeExpression(desktopList.asideExpression),
+            urlExpression: sanitizeExpression(
+                desktopList.urlExpression,
+                sanitizeExpression(desktopCard.urlExpression, sanitizeExpression(mobileCard.urlExpression, "record.show_url || '#'"))
+            ),
+            subtitleUrlExpression: sanitizeExpression(
+                desktopList.subtitleUrlExpression,
+                sanitizeExpression(
+                    desktopList.urlExpression,
+                    sanitizeExpression(desktopCard.urlExpression, sanitizeExpression(mobileCard.urlExpression, "record.show_url || '#'"))
+                )
+            ),
         },
         rowToggle: {
             label: sanitizeExpression(rowToggle.label),
@@ -162,19 +193,34 @@ const renderActionItems = (config) => config.actions.map((action) => {
         <button
             type="button"
             class="${toneClasses}"
-            x-show="${action.showExpression}"
-            x-on:click="${action.handler}"
+            x-show="${escapeAttributeExpression(action.showExpression)}"
+            x-on:click="${escapeAttributeExpression(action.handler)}"
             role="menuitem"
         >${escapeHtml(action.label)}</button>
     `;
 }).join('');
 
 const renderActionCell = (config) => `
-    <div class="relative shrink-0" x-data="{ open: false }" x-on:click.stop>
+    <div
+        class="relative shrink-0"
+        x-data="{
+            open: false,
+            top: '0px',
+            right: '0px',
+            toggle(button) {
+                const rect = button.getBoundingClientRect();
+                this.top = (rect.bottom + 8) + 'px';
+                this.right = (window.innerWidth - rect.right) + 'px';
+                this.open = !this.open;
+            },
+        }"
+        x-bind:class="open ? 'z-50' : 'z-0'"
+        x-on:click.stop
+    >
         <button
             type="button"
             class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-gray-200 text-gray-500 transition hover:border-blue-300 hover:text-gray-900"
-            x-on:click="open = !open"
+            x-on:click="toggle($el)"
             aria-label="${escapeHtml(config.labels.actionsAriaLabel)}"
         >
             <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
@@ -182,8 +228,10 @@ const renderActionCell = (config) => `
             </svg>
         </button>
         <div
-            class="absolute right-0 z-20 mt-2 w-40 rounded-md border border-gray-200 bg-white py-1 shadow-lg"
+            class="fixed z-[80] w-40 rounded-md border border-gray-200 bg-white py-1 shadow-lg"
+            x-bind:style="{ top, right }"
             x-show="open"
+            x-on:click.outside="open = false"
             x-cloak
             role="menu"
         >
@@ -194,7 +242,7 @@ const renderActionCell = (config) => `
 
 const renderBadges = (expression, keySuffix) => expression !== '' ? `
     <div class="flex flex-wrap gap-1.5">
-        <template x-for="badge in ${expression}" :key="\`${keySuffix}-\${record.id}-\${badge}\`">
+        <template x-for="badge in ${escapeAttributeExpression(expression)}" :key="\`${keySuffix}-\${record.id}-\${badge}\`">
             <span class="inline-flex items-center rounded-full bg-blue-50 px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wide text-blue-700" x-text="badge"></span>
         </template>
     </div>
@@ -202,7 +250,7 @@ const renderBadges = (expression, keySuffix) => expression !== '' ? `
 
 const renderStats = (expression) => expression !== '' ? `
     <div class="-mx-4 grid grid-cols-6 gap-px border-y border-gray-100 bg-gray-100" data-crud-card-stats>
-        <template x-for="stat in ${expression}" :key="\`desktop-card-\${record.id}-stat-\${stat.label}\`">
+        <template x-for="stat in ${escapeAttributeExpression(expression)}" :key="\`desktop-card-\${record.id}-stat-\${stat.label}\`">
             <div class="bg-white px-4 py-2" :class="stat.span === 6 ? 'col-span-6' : stat.span === 2 ? 'col-span-2' : 'col-span-3'">
                 <dt class="truncate text-[0.65rem] font-semibold uppercase tracking-wide text-gray-500" x-text="stat.label"></dt>
                 <dd class="mt-1 truncate text-sm font-semibold text-gray-900" x-text="stat.value"></dd>
@@ -236,7 +284,7 @@ const iconBadgeMarkup = `
 
 const renderIconBadges = (expression) => expression !== '' ? `
     <div class="flex items-center gap-2" data-crud-card-icon-badges>
-        <template x-for="badge in ${expression}" :key="\`desktop-card-\${record.id}-icon-\${badge.icon}\`">
+        <template x-for="badge in ${escapeAttributeExpression(expression)}" :key="\`desktop-card-\${record.id}-icon-\${badge.icon}\`">
             <span
                 class="inline-flex shrink-0 items-center justify-center"
                 :class="badge.active ? 'text-blue-600' : 'text-gray-300'"
@@ -289,12 +337,12 @@ const renderCardGrid = (config) => {
                                     <div class="min-w-0">
                                         <a
                                             class="block truncate text-base font-semibold text-gray-900"
-                                            :href="${card.urlExpression}"
-                                            x-text="${card.titleExpression}"
+                                            :href="${escapeAttributeExpression(card.urlExpression)}"
+                                            x-text="${escapeAttributeExpression(card.titleExpression)}"
                                         ></a>
-                                        ${card.subtitleExpression !== '' ? `<p class="mt-0.5 truncate text-sm text-gray-500" x-text="${card.subtitleExpression}"></p>` : ''}
+                                        ${card.subtitleExpression !== '' ? `<p class="mt-0.5 truncate text-sm text-gray-500" x-text="${escapeAttributeExpression(card.subtitleExpression)}"></p>` : ''}
                                     </div>
-                                    ${card.titleAsideExpression !== '' ? `<p class="shrink-0 text-right text-xs font-medium text-gray-500" x-text="${card.titleAsideExpression}"></p>` : ''}
+                                    ${card.titleAsideExpression !== '' ? `<p class="shrink-0 text-right text-xs font-medium text-gray-500" x-text="${escapeAttributeExpression(card.titleAsideExpression)}"></p>` : ''}
                                 </div>
 
                                 <div class="mt-3">
@@ -302,7 +350,7 @@ const renderCardGrid = (config) => {
                                     ${renderBadges(card.badgesExpression, 'desktop-card-badge')}
                                 </div>
 
-                                ${card.bodyExpression !== '' ? `<p class="mt-4 line-clamp-2 text-sm text-gray-600" x-text="${card.bodyExpression}"></p>` : ''}
+                                ${card.bodyExpression !== '' ? `<p class="mt-4 line-clamp-2 text-sm text-gray-600" x-text="${escapeAttributeExpression(card.bodyExpression)}"></p>` : ''}
 
                                 <div class="mt-4">
                                     ${renderStats(card.statsExpression)}
@@ -311,7 +359,7 @@ const renderCardGrid = (config) => {
                                 <div class="mt-auto flex items-center justify-between gap-3 pt-4">
                                     <a
                                         class="text-sm font-semibold text-blue-600 transition group-hover:text-blue-700"
-                                        :href="${card.urlExpression}"
+                                        :href="${escapeAttributeExpression(card.urlExpression)}"
                                     >View</a>
                                     <div class="flex items-center gap-2">
                                         ${toggleMarkup}
@@ -327,15 +375,70 @@ const renderCardGrid = (config) => {
     `;
 };
 
+const renderDesktopList = (config) => {
+    const list = config.desktopList;
+    const hasActions = config.actions.length > 0;
+    const toggleMarkup = renderCardToggle(config);
+
+    return `
+        <div class="hidden h-full min-h-0 md:block">
+            <div class="flex h-full min-h-0 flex-col">
+                <div class="min-h-0 flex-1 overflow-y-auto p-6" data-crud-records-scroll>
+                    <div
+                        x-show="!${config.state.loading} && ${config.state.records}.length === 0"
+                        class="rounded-lg border border-dashed border-gray-200 bg-white px-4 py-10 text-center text-sm text-gray-500"
+                        data-crud-empty-state
+                    >
+                        ${escapeHtml(config.labels.emptyState)}
+                    </div>
+
+                    <ul
+                        role="list"
+                        class="rounded-lg border border-gray-200 bg-white shadow-sm"
+                        data-crud-stacked-list
+                        :class="${config.state.loading} ? 'opacity-80' : 'opacity-100'"
+                    >
+                        <template x-for="record in ${config.state.records}" :key="\`desktop-list-\${record.id}\`">
+                            <li class="flex items-center justify-between gap-x-6 border-b border-gray-100 px-5 py-4 last:border-b-0 transition hover:bg-gray-50" data-crud-list-row>
+                                <div class="min-w-0 flex-auto">
+                                    <div class="flex min-w-0 items-center gap-x-3">
+                                        <a
+                                            class="truncate text-sm font-semibold leading-6 text-gray-900 transition hover:text-blue-600"
+                                            :href="${escapeAttributeExpression(list.urlExpression)}"
+                                            x-text="${escapeAttributeExpression(list.titleExpression)}"
+                                        ></a>
+                                        ${renderBadges(list.badgesExpression, 'desktop-list-badge')}
+                                    </div>
+
+                                    <div class="mt-1 flex min-w-0 items-center gap-x-3 text-xs leading-5 text-gray-500">
+                                        ${list.subtitleExpression !== '' ? `<a class="truncate font-medium text-gray-600 hover:text-blue-600" :href="${escapeAttributeExpression(list.subtitleUrlExpression)}" x-text="${escapeAttributeExpression(list.subtitleExpression)}"></a>` : ''}
+                                        ${list.metaExpression !== '' ? `<span class="truncate" x-text="${escapeAttributeExpression(list.metaExpression)}"></span>` : ''}
+                                    </div>
+                                </div>
+
+                                <div class="flex shrink-0 items-center gap-x-4">
+                                    ${list.asideExpression !== '' ? `<p class="hidden text-xs font-medium text-gray-500 lg:block" x-text="${escapeAttributeExpression(list.asideExpression)}"></p>` : ''}
+                                    ${toggleMarkup}
+                                    ${hasActions ? renderActionCell(config) : ''}
+                                </div>
+                            </li>
+                        </template>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    `;
+};
+
 const renderMobileCards = (config) => {
     const card = config.mobileCard;
     const hasActions = card.showActions && config.actions.length > 0;
     const toggleMarkup = renderCardToggle(config);
     const titleAsideMarkup = card.titleAsideExpression !== '' ? `
-        <p class="ml-3 max-w-28 shrink-0 truncate text-right text-[0.7rem] font-medium leading-5 text-gray-500" data-crud-mobile-title-aside x-text="${card.titleAsideExpression}"></p>
+        <p class="ml-3 max-w-28 shrink-0 truncate text-right text-[0.7rem] font-medium leading-5 text-gray-500" data-crud-mobile-title-aside x-text="${escapeAttributeExpression(card.titleAsideExpression)}"></p>
     ` : '';
     const titleBadgesMarkup = card.titleBadgesExpression !== '' ? `
-        <template x-for="badge in ${card.titleBadgesExpression}" :key="\`mobile-card-\${record.id}-title-badge-\${badge}\`">
+        <template x-for="badge in ${escapeAttributeExpression(card.titleBadgesExpression)}" :key="\`mobile-card-\${record.id}-title-badge-\${badge}\`">
             <span class="inline-flex shrink-0 items-center rounded-full bg-gray-100 px-1.5 py-0.5 text-[0.6rem] font-semibold uppercase tracking-wide text-gray-700" data-crud-mobile-title-badge x-text="badge"></span>
         </template>
     ` : '';
@@ -343,7 +446,7 @@ const renderMobileCards = (config) => {
         ? `
             <div class="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-start gap-3">
                 <div class="flex min-w-0 items-center gap-2">
-                    <p class="truncate text-sm font-semibold text-gray-900" x-text="${card.titleExpression}"></p>
+                    <p class="truncate text-sm font-semibold text-gray-900" x-text="${escapeAttributeExpression(card.titleExpression)}"></p>
                     ${titleBadgesMarkup}
                 </div>
                 ${titleAsideMarkup}
@@ -352,7 +455,7 @@ const renderMobileCards = (config) => {
         : `
             <div class="flex min-w-0 items-center gap-3">
                 <div class="flex min-w-0 flex-1 items-center gap-2">
-                    <p class="truncate text-sm font-semibold text-gray-900" x-text="${card.titleExpression}"></p>
+                    <p class="truncate text-sm font-semibold text-gray-900" x-text="${escapeAttributeExpression(card.titleExpression)}"></p>
                     ${titleBadgesMarkup}
                 </div>
                 ${titleAsideMarkup}
@@ -372,15 +475,15 @@ const renderMobileCards = (config) => {
                     </div>
 
                     <template x-for="record in ${config.state.records}" :key="\`mobile-card-\${record.id}\`">
-                        <div class="flex items-center gap-3 border-b border-gray-300 bg-white px-4 py-2" data-crud-card>
-                            <a class="min-w-0 flex-1" :href="${card.urlExpression}">
+                        <div class="relative flex items-center gap-3 overflow-visible border-b border-gray-300 bg-white px-4 py-2" data-crud-card>
+                            <a class="min-w-0 flex-1" :href="${escapeAttributeExpression(card.urlExpression)}">
                                 ${titleRowMarkup}
-                                ${card.subtitleExpression !== '' ? `<p class="mt-0.5 truncate text-xs text-gray-600" x-text="${card.subtitleExpression}"></p>` : ''}
-                                ${card.bodyExpression !== '' ? `<p class="mt-1 truncate text-xs text-gray-600" x-text="${card.bodyExpression}"></p>` : ''}
+                                ${card.subtitleExpression !== '' ? `<p class="mt-0.5 truncate text-xs text-gray-600" x-text="${escapeAttributeExpression(card.subtitleExpression)}"></p>` : ''}
+                                ${card.bodyExpression !== '' ? `<p class="mt-1 truncate text-xs text-gray-600" x-text="${escapeAttributeExpression(card.bodyExpression)}"></p>` : ''}
                                 ${renderBadges(card.badgesExpression, 'mobile-card-badge')}
                                 ${card.iconBadgesExpression !== '' ? `
                                     <div class="mt-2 flex flex-wrap gap-2">
-                                        <template x-for="badge in ${card.iconBadgesExpression}" :key="\`mobile-card-\${record.id}-icon-\${badge.icon}\`">
+                                        <template x-for="badge in ${escapeAttributeExpression(card.iconBadgesExpression)}" :key="\`mobile-card-\${record.id}-icon-\${badge.icon}\`">
                                             <span
                                                 class="inline-flex shrink-0 items-center justify-center"
                                                 :class="badge.active ? 'text-blue-600' : 'text-gray-300'"
@@ -393,7 +496,7 @@ const renderMobileCards = (config) => {
                                     </div>
                                 ` : ''}
                             </a>
-                            <div class="flex shrink-0 items-center gap-2">
+                            <div class="relative z-10 flex shrink-0 items-center gap-2">
                                 ${toggleMarkup}
                                 ${hasActions ? renderActionCell(config) : ''}
                             </div>
@@ -419,7 +522,7 @@ export function mountCrudCardRenderer(targetEl, config) {
             </div>
             ${renderToolbar(normalized)}
             ${renderMobileCards(normalized)}
-            ${renderCardGrid(normalized)}
+            ${normalized.desktopList.enabled ? renderDesktopList(normalized) : renderCardGrid(normalized)}
         </div>
     `;
 }

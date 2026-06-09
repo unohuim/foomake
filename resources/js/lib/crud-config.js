@@ -40,6 +40,7 @@ export function normalizeCrudConfig(config) {
     const rawRowDisplay = sanitizeRecord(config.rowDisplay);
     const rawMobileCard = sanitizeRecord(config.mobileCard);
     const rawDesktopCard = sanitizeRecord(config.desktopCard);
+    const rawDesktopList = sanitizeRecord(config.desktopList);
     const rawMobileToggle = sanitizeRecord(rawMobileCard.toggle);
     const rawRowToggle = sanitizeRecord(config.rowToggle);
     const rawRowActions = sanitizeRecord(config.rowActions);
@@ -131,6 +132,34 @@ export function normalizeCrudConfig(config) {
             iconBadgesExpression: sanitizeLabel(rawDesktopCard.iconBadgesExpression),
             statsExpression: sanitizeLabel(rawDesktopCard.statsExpression),
             urlExpression: sanitizeLabel(rawDesktopCard.urlExpression, "record.show_url || '#'"),
+        },
+        desktopList: {
+            enabled: Boolean(rawDesktopList.enabled),
+            titleExpression: sanitizeLabel(
+                rawDesktopList.titleExpression,
+                sanitizeLabel(rawDesktopCard.titleExpression, sanitizeLabel(rawMobileCard.titleExpression, "record.name || '—'"))
+            ),
+            subtitleExpression: sanitizeLabel(
+                rawDesktopList.subtitleExpression,
+                sanitizeLabel(rawDesktopCard.subtitleExpression, sanitizeLabel(rawMobileCard.subtitleExpression))
+            ),
+            metaExpression: sanitizeLabel(rawDesktopList.metaExpression),
+            badgesExpression: sanitizeLabel(
+                rawDesktopList.badgesExpression,
+                sanitizeLabel(rawDesktopCard.badgesExpression, sanitizeLabel(rawMobileCard.badgesExpression))
+            ),
+            asideExpression: sanitizeLabel(rawDesktopList.asideExpression),
+            urlExpression: sanitizeLabel(
+                rawDesktopList.urlExpression,
+                sanitizeLabel(rawDesktopCard.urlExpression, sanitizeLabel(rawMobileCard.urlExpression, "record.show_url || '#'"))
+            ),
+            subtitleUrlExpression: sanitizeLabel(
+                rawDesktopList.subtitleUrlExpression,
+                sanitizeLabel(
+                    rawDesktopList.urlExpression,
+                    sanitizeLabel(rawDesktopCard.urlExpression, sanitizeLabel(rawMobileCard.urlExpression, "record.show_url || '#'"))
+                )
+            ),
         },
         rowActions: {
             mode: sanitizeLabel(rawRowActions.mode, 'menu'),

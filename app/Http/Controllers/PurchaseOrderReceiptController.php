@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\Workflows\BuildWorkflowProgressStepsAction;
 use App\Models\PurchaseOrder;
 use App\Models\PurchaseOrderLine;
 use App\Services\Purchasing\PurchaseOrderLifecycleService;
@@ -271,6 +272,7 @@ class PurchaseOrderReceiptController extends Controller
         $tenantCurrency = strtoupper(
             (string) ($request->user()?->tenant?->currency_code ?: config('app.currency_code', 'USD'))
         );
+        $workflow = $workflowTransitionService->purchaseOrderWorkflowPayload($freshOrder, $request->user());
 
         return [
             'id' => $receiptId,
@@ -293,7 +295,19 @@ class PurchaseOrderReceiptController extends Controller
                 ->values()
                 ->all(),
             'receipts' => $this->receiptHistoryPayload($freshOrder),
-            'workflow' => $workflowTransitionService->purchaseOrderWorkflowPayload($freshOrder, $request->user()),
+            'workflow' => $workflow,
+            'workflowProgressSteps' => app(BuildWorkflowProgressStepsAction::class)->execute(
+                (int) $request->user()->tenant_id,
+                'purchasing',
+                isset($workflow['currentStage']['id']) ? (int) $workflow['currentStage']['id'] : null,
+                null,
+                $freshOrder->last_completed_workflow_stage_id === null
+                    ? null
+                    : (int) $freshOrder->last_completed_workflow_stage_id,
+                ! isset($workflow['currentStage']['id'])
+                    && $freshOrder->last_completed_workflow_stage_id !== null
+                    && $freshOrder->workflowStatus() === PurchaseOrder::STATUS_COMPLETED
+            ),
             'can_receive' => $freshOrder->isReceivingStage()
                 && collect($lineTotals)->contains(fn (array $totals): bool => bccomp(
                     $totals['balance'],

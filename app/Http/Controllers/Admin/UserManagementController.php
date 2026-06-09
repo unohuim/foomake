@@ -288,6 +288,16 @@ class UserManagementController extends Controller
                 'subtitleExpression' => "record.email || '-'",
                 'bodyExpression' => "record.status || '-'",
             ],
+            'desktopList' => [
+                'enabled' => true,
+                'titleExpression' => "record.name || record.email || '-'",
+                'subtitleExpression' => "record.email || '-'",
+                'metaExpression' => "record.role || '-'",
+                'badgesExpression' => 'record.status ? [record.status] : []',
+                'asideExpression' => "record.type === 'invitation' ? 'Invited' : 'Member'",
+                'urlExpression' => "record.email ? 'mailto:' + record.email : '#'",
+                'subtitleUrlExpression' => "record.email ? 'mailto:' + record.email : '#'",
+            ],
             'rowActions' => [
                 'mode' => 'menu',
                 'icon' => 'ellipsis-vertical',

@@ -672,7 +672,13 @@ it('returns refreshed receipt state after a multi-line receipt succeeds', functi
         ->assertJsonPath('data.purchase_order.status', PurchaseOrder::STATUS_PARTIALLY_RECEIVED)
         ->assertJsonPath('data.lines.0.received_sum', '1.000000')
         ->assertJsonPath('data.lines.0.remaining_balance', '3.000000')
-        ->assertJsonPath('data.receipts.0.lines_count', 1);
+        ->assertJsonPath('data.receipts.0.lines_count', 1)
+        ->assertJsonStructure([
+            'data' => [
+                'workflow',
+                'workflowProgressSteps',
+            ],
+        ]);
 });
 
 it('validates receipt quantity against remaining balance', function () {

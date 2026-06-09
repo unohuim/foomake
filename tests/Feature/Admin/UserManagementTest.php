@@ -104,7 +104,11 @@ it('users index renders through the configured CRUD page module contract', funct
 
     expect($config['resource'])->toBe('admin-users')
         ->and($config['endpoints']['list'])->toBe(route('admin.users.list'))
-        ->and($config['columns'])->toBe(['name', 'email', 'role', 'status']);
+        ->and($config['columns'])->toBe(['name', 'email', 'role', 'status'])
+        ->and($config['desktopList']['enabled'])->toBeTrue()
+        ->and($config['desktopList']['titleExpression'])->toBe("record.name || record.email || '-'")
+        ->and($config['desktopList']['urlExpression'])->toBe("record.email ? 'mailto:' + record.email : '#'")
+        ->and($config['desktopList']['subtitleUrlExpression'])->toBe("record.email ? 'mailto:' + record.email : '#'");
 });
 
 it('users index does not render the bespoke members and invitations cards', function () {
@@ -487,6 +491,17 @@ it('users index config includes the shared vertical-dots row action menu contrac
             'resend-invite',
             'revoke-invite',
         ]);
+});
+
+it('shared CRUD card renderer supports an opt-in desktop stacked list contract', function () {
+    $renderer = file_get_contents(resource_path('js/lib/crud-card-page.js'));
+    $config = file_get_contents(resource_path('js/lib/crud-config.js'));
+
+    expect($renderer)->toContain('const renderDesktopList = (config) =>')
+        ->and($renderer)->toContain('data-crud-stacked-list')
+        ->and($renderer)->toContain('normalized.desktopList.enabled ? renderDesktopList(normalized) : renderCardGrid(normalized)')
+        ->and($config)->toContain('desktopList: {')
+        ->and($config)->toContain('enabled: Boolean(rawDesktopList.enabled)');
 });
 
 it('unauthorized users cannot access the users list endpoint', function () {

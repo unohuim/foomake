@@ -3,10 +3,11 @@ type: UI Architectural Pattern
 location:
   - resources/js/lib/crud-card-page.js
   - resources/js/pages/materials-index.js
-purpose: Provide the default renderer for configured CRUD index pages that preserves the shared CRUD config, toolbar, search, action, and toggle contracts while rendering desktop records as responsive Tailwind cards instead of a table.
+purpose: Provide the default renderer for configured CRUD index pages that preserves the shared CRUD config, toolbar, search, action, and toggle contracts while rendering desktop records as responsive Tailwind cards or an opt-in stacked list instead of a table.
 when_to_use:
   - Rendering configured CRUD index pages.
   - Replacing desktop table presentation with responsive Tailwind card summaries.
+  - Rendering compact desktop stacked lists for resources where inline links and row actions scan better than cards.
   - Reusing existing CRUD list, search, action, and toggle behavior while changing only the record presentation.
 when_not_to_use:
   - Static pages or detail subsections that already belong to the reusable detail-section pattern.
@@ -15,9 +16,11 @@ rules:
   - The card renderer must use the same data-crud-config and data-crud-root mount shell as the configured CRUD page module.
   - The card renderer must not introduce global JavaScript state.
   - The card renderer must keep toolbar actions, search, loading, empty-state, row actions, and toggle behavior config-driven.
-  - Desktop record presentation must be a responsive Tailwind card grid, not a table.
+  - Desktop record presentation must be a responsive Tailwind card grid or an explicitly configured stacked list, not a table.
   - Mobile rendering must remain compact and row-oriented unless a future approved config explicitly opts into a different mobile layout.
   - Page modules may provide a desktopCard contract for title, subtitle, body, badges, stats, aside text, and detail URL expressions.
+  - Page modules may provide a desktopList contract for title, subtitle, subtitle URL, meta, badges, aside text, and URL expressions when the desktop card grid is not the best fit.
+  - desktopList must be opt-in through `enabled: true`; card grid remains the fallback.
   - When desktopCard is absent, the renderer may fall back to the existing mobileCard expressions.
   - Backend routes and authorization remain authoritative; card links and actions only render configured URLs and handlers.
   - Configured CRUD index page modules must mount the card renderer for non-mobile views; the legacy table renderer is no longer the default index renderer.
@@ -28,6 +31,7 @@ public_interface:
   - data-crud-config
   - data-crud-root
   - desktopCard
+  - desktopList
 example_usage: |
   import { mountCrudCardRenderer } from '../lib/crud-card-page';
 
