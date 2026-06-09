@@ -1507,6 +1507,46 @@ test('make can persist actual output quantity and use it for the receipt stock m
         ->and((string) $receipt->quantity)->toBe('27.125000');
 });
 
+test('make advances the workflow to the next active manufacturing stage and refreshes the visible state', function () {
+    $tenant = ($this->makeTenant)('Tenant A');
+    $user = ($this->makeUser)($tenant);
+    ($this->grantPermission)($user, 'inventory-make-orders-execute');
+
+    [$productionStage, $completedStage] = ($this->createManufacturingWorkflowStages)($tenant);
+
+    $uom = ($this->makeUom)($tenant);
+    $input = ($this->makeItem)($tenant, $uom, 'Flour', false);
+    $output = ($this->makeItem)($tenant, $uom, 'Bread', true);
+    $recipe = ($this->makeRecipe)($tenant, $output, true, 'Workflow Advance Recipe', '5.000000');
+    ($this->addRecipeLine)($tenant, $recipe, $input, '2.000000');
+
+    $makeOrder = ($this->makeOrder)($tenant, $recipe, $user, [
+        'runs' => '3.000000',
+        'status' => MakeOrder::STATUS_SCHEDULED,
+        'workflow_stage_id' => $productionStage->id,
+        'due_date' => '2026-02-01',
+        'scheduled_at' => now(),
+    ]);
+
+    $this->actingAs($user)
+        ->postJson(route('manufacturing.make-orders.make', $makeOrder))
+        ->assertOk()
+        ->assertJsonPath('data.status', MakeOrder::STATUS_MADE)
+        ->assertJsonPath('data.workflow_stage_id', $completedStage->id)
+        ->assertJsonPath('data.workflow_state', $completedStage->name)
+        ->assertJsonPath('workflow.current_stage.id', $completedStage->id)
+        ->assertJsonPath('workflow.current_stage_label', $completedStage->name)
+        ->assertJsonPath('workflow.next_stage_action', null)
+        ->assertJsonStructure([
+            'workflowProgressSteps',
+        ]);
+
+    $makeOrder->refresh();
+
+    expect($makeOrder->status)->toBe(MakeOrder::STATUS_MADE)
+        ->and($makeOrder->workflow_stage_id)->toBe($completedStage->id);
+});
+
 test('make rejects invalid actual output quantity formats', function () {
     $tenant = ($this->makeTenant)('Tenant A');
     $user = ($this->makeUser)($tenant);

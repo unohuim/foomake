@@ -825,6 +825,12 @@ class MakeOrderController extends Controller
                 ]);
             }
 
+            $nextWorkflowStage = app(ResolveManufacturingWorkflowStageAction::class)->nextActiveStage($makeOrderModel);
+
+            if ($nextWorkflowStage !== null) {
+                $makeOrderModel->workflow_stage_id = $nextWorkflowStage->id;
+            }
+
             $makeOrderModel->status = MakeOrder::STATUS_MADE;
             $makeOrderModel->actual_output_qty = $actualOutputQty;
             $makeOrderModel->made_at = now();
