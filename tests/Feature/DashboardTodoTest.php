@@ -500,6 +500,10 @@ it('11c. dashboard Todo rows show workflow domain names', function (): void {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
     ($this->grantPermission)($user, 'inventory-make-orders-view');
+    ($this->grantPermission)($user, 'inventory-make-orders-execute');
+    ($this->grantPermission)($user, 'inventory-adjustments-execute');
+    ($this->grantPermission)($user, 'purchasing-purchase-orders-create');
+    ($this->grantPermission)($user, 'sales-sales-orders-update');
     $salesStage = ($this->makeWorkflowStage)($tenant, 'sales', 'Packing');
     $salesOrder = ($this->makeSalesOrder)($tenant, ['status' => SalesOrder::STATUS_PACKING]);
 

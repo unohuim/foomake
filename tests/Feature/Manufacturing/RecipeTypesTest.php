@@ -73,16 +73,22 @@ beforeEach(function () {
     };
 
     $this->grantPermission = function (User $user, string $slug): void {
-        $permission = Permission::query()->firstOrCreate([
-            'slug' => $slug,
-        ]);
+        $slugs = $slug === 'inventory-make-orders-execute'
+            ? ['inventory-make-orders-view', $slug]
+            : [$slug];
 
-        $role = Role::query()->firstOrCreate([
-            'name' => $slug . '-' . $user->id,
-        ]);
+        foreach ($slugs as $permissionSlug) {
+            $permission = Permission::query()->firstOrCreate([
+                'slug' => $permissionSlug,
+            ]);
 
-        $role->permissions()->syncWithoutDetaching([$permission->id]);
-        $user->roles()->syncWithoutDetaching([$role->id]);
+            $role = Role::query()->firstOrCreate([
+                'name' => $permissionSlug . '-' . $user->id,
+            ]);
+
+            $role->permissions()->syncWithoutDetaching([$permission->id]);
+            $user->roles()->syncWithoutDetaching([$role->id]);
+        }
     };
 
     $this->makeRecipe = function (

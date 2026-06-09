@@ -164,6 +164,7 @@ test('users with execute permission can create a draft and manage lines', functi
 });
 
 test('posting succeeds once and locks the count', function () {
+    ($this->grantPermission)($this->user, 'inventory-adjustments-view');
     ($this->grantPermission)($this->user, 'inventory-adjustments-execute');
 
     $count = ($this->makeCount)([

@@ -273,16 +273,17 @@ it('material detail inventory count create form notes create a domain note', fun
     $tenant = Tenant::factory()->create();
     $user = ($this->makeUser)($tenant);
     ($this->grantPermission)($user, 'inventory-adjustments-execute');
+    $suffix = Str::lower(Str::random(8));
 
     $category = UomCategory::query()->forceCreate([
         'tenant_id' => $tenant->id,
-        'name' => 'Each',
+        'name' => 'Each ' . $suffix,
     ]);
     $uom = Uom::query()->forceCreate([
         'tenant_id' => $tenant->id,
         'uom_category_id' => $category->id,
-        'name' => 'Each',
-        'symbol' => 'ea',
+        'name' => 'Each ' . $suffix,
+        'symbol' => 'ea-' . $suffix,
     ]);
     $item = Item::query()->forceCreate([
         'tenant_id' => $tenant->id,
@@ -336,17 +337,19 @@ it('purchase order create form notes create a domain note', function () {
 it('make order create form notes create a domain note', function () {
     $tenant = Tenant::factory()->create();
     $user = ($this->makeUser)($tenant);
+    ($this->grantPermission)($user, 'inventory-make-orders-view');
     ($this->grantPermission)($user, 'inventory-make-orders-execute');
+    $suffix = Str::lower(Str::random(8));
 
     $category = UomCategory::query()->forceCreate([
         'tenant_id' => $tenant->id,
-        'name' => 'Mass',
+        'name' => 'Mass ' . $suffix,
     ]);
     $uom = Uom::query()->forceCreate([
         'tenant_id' => $tenant->id,
         'uom_category_id' => $category->id,
-        'name' => 'Kilogram',
-        'symbol' => 'kg',
+        'name' => 'Kilogram ' . $suffix,
+        'symbol' => 'kg-' . $suffix,
     ]);
     $item = Item::query()->forceCreate([
         'tenant_id' => $tenant->id,

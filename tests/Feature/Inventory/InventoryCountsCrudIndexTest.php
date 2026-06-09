@@ -705,7 +705,10 @@ it('23. the show route remains the dedicated detail page and is not replaced by 
 
 it('24. count line behavior remains reachable through the existing line endpoint', function (): void {
     ($this->grantPermission)($this->user, 'inventory-adjustments-execute');
-    $count = ($this->makeCount)();
+    $count = ($this->makeCount)([
+        'created_by_user_id' => $this->user->id,
+        'tasked_by_user_id' => $this->user->id,
+    ]);
 
     $this->actingAs($this->user)
         ->postJson(route('inventory.counts.lines.store', $count), [
@@ -719,6 +722,7 @@ it('24. count line behavior remains reachable through the existing line endpoint
 });
 
 it('25. posting behavior remains reachable through the existing post endpoint', function (): void {
+    ($this->grantPermission)($this->user, 'inventory-adjustments-view');
     ($this->grantPermission)($this->user, 'inventory-adjustments-execute');
     $count = ($this->makeCount)();
     ($this->makeLine)($count, [

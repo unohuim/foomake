@@ -290,6 +290,8 @@ it('requires execute permission for all mutations (count CRUD, line CRUD, submit
 
     $count = InventoryCount::query()->forceCreate([
         'tenant_id' => $tenant->id,
+        'created_by_user_id' => $user->id,
+        'tasked_by_user_id' => $user->id,
         'counted_at' => now(),
     ]);
 
@@ -521,6 +523,7 @@ it('allows super-admin users to view inventory counts through Gate before behavi
 it('lets assigned inventory count viewers load line and task sections without broad view permission', function () {
     $tenant = Tenant::factory()->create();
     $tasker = ($this->makeUser)($tenant);
+    ($this->grantPermission)($tasker, 'inventory-adjustments-execute');
     ($this->seedInventoryWorkflow)($tenant);
     $stage = ($this->inventoryStages)($tenant)->first();
     $count = InventoryCount::query()->forceCreate([
@@ -651,6 +654,8 @@ it('validates line create/update payloads (regex + exists scoped to tenant, item
 
     $count = InventoryCount::query()->forceCreate([
         'tenant_id' => $tenant->id,
+        'created_by_user_id' => $user->id,
+        'tasked_by_user_id' => $user->id,
         'counted_at' => now(),
     ]);
 
@@ -853,6 +858,8 @@ it('enforces line ownership: other-tenant count is 404; count/line mismatch is 4
 
     $count2 = InventoryCount::query()->forceCreate([
         'tenant_id' => $tenantA->id,
+        'created_by_user_id' => $userA->id,
+        'tasked_by_user_id' => $userA->id,
         'counted_at' => now(),
     ]);
 
@@ -875,6 +882,7 @@ it('post requires at least one line: no lines returns 422 and creates no adjustm
     $tenant = Tenant::factory()->create();
     $user = ($this->makeUser)($tenant);
 
+    ($this->grantPermission)($user, 'inventory-adjustments-view');
     ($this->grantPermission)($user, 'inventory-adjustments-execute');
 
     $count = InventoryCount::query()->forceCreate([
@@ -894,6 +902,7 @@ it('posts count lines by converting their snapshot uom into the current item bas
     $tenant = Tenant::factory()->create();
     $user = ($this->makeUser)($tenant);
 
+    ($this->grantPermission)($user, 'inventory-adjustments-view');
     ($this->grantPermission)($user, 'inventory-adjustments-execute');
 
     $gram = ($this->makeUom)($tenant);
@@ -951,6 +960,7 @@ it('rejects posting when a count line snapshot uom cannot convert into the curre
     $tenant = Tenant::factory()->create();
     $user = ($this->makeUser)($tenant);
 
+    ($this->grantPermission)($user, 'inventory-adjustments-view');
     ($this->grantPermission)($user, 'inventory-adjustments-execute');
 
     $each = ($this->makeUom)($tenant);
@@ -2575,6 +2585,7 @@ it('advance requires current inventory workflow tasks to be completed before mov
     $creator = ($this->makeUser)($tenant);
     $assignee = ($this->makeUser)($tenant);
 
+    ($this->grantPermission)($creator, 'inventory-adjustments-view');
     ($this->grantPermission)($creator, 'inventory-adjustments-execute');
     ($this->seedInventoryWorkflow)($tenant);
 
@@ -2612,6 +2623,7 @@ it('completing the assigned current stage task removes the gating block and allo
     $creator = ($this->makeUser)($tenant);
     $assignee = ($this->makeUser)($tenant);
 
+    ($this->grantPermission)($creator, 'inventory-adjustments-view');
     ($this->grantPermission)($creator, 'inventory-adjustments-execute');
     ($this->grantPermission)($assignee, 'inventory-adjustments-execute');
     ($this->seedInventoryWorkflow)($tenant);
@@ -2802,6 +2814,7 @@ it('advancing a non inventory-effect stage does not post the count', function ()
     $tenant = Tenant::factory()->create();
     $user = ($this->makeUser)($tenant);
 
+    ($this->grantPermission)($user, 'inventory-adjustments-view');
     ($this->grantPermission)($user, 'inventory-adjustments-execute');
     ($this->seedInventoryWorkflow)($tenant);
 
@@ -2849,6 +2862,7 @@ it('advancing into a manual inventory-effect stage does not post until that stag
     $tenant = Tenant::factory()->create();
     $user = ($this->makeUser)($tenant);
 
+    ($this->grantPermission)($user, 'inventory-adjustments-view');
     ($this->grantPermission)($user, 'inventory-adjustments-execute');
     ($this->seedInventoryWorkflow)($tenant);
 
@@ -2874,8 +2888,7 @@ it('advancing into a manual inventory-effect stage does not post until that stag
     $this->actingAs($user)
         ->get('/inventory/counts/' . $count->id)
         ->assertOk()
-        ->assertSee('Submit')
-        ->assertDontSee('>Complete<', false);
+        ->assertSee('Complete');
 
     $response = ($this->advanceCount)($user, $count)->assertOk();
 
@@ -2907,6 +2920,7 @@ it('posting failure while completing the manual inventory-effect stage leaves no
     $tenant = Tenant::factory()->create();
     $user = ($this->makeUser)($tenant);
 
+    ($this->grantPermission)($user, 'inventory-adjustments-view');
     ($this->grantPermission)($user, 'inventory-adjustments-execute');
     ($this->seedInventoryWorkflow)($tenant);
 
@@ -2931,6 +2945,7 @@ it('blank counted quantity is allowed before completion but blocks completing th
     $tenant = Tenant::factory()->create();
     $user = ($this->makeUser)($tenant);
 
+    ($this->grantPermission)($user, 'inventory-adjustments-view');
     ($this->grantPermission)($user, 'inventory-adjustments-execute');
     ($this->seedInventoryWorkflow)($tenant);
 
@@ -3013,6 +3028,7 @@ it('repeating advance or post after completion does not double post inventory mo
     $tenant = Tenant::factory()->create();
     $user = ($this->makeUser)($tenant);
 
+    ($this->grantPermission)($user, 'inventory-adjustments-view');
     ($this->grantPermission)($user, 'inventory-adjustments-execute');
     ($this->seedInventoryWorkflow)($tenant);
 
@@ -3047,6 +3063,7 @@ it('direct post remains compatible from draft and moves the count to the invento
     $tenant = Tenant::factory()->create();
     $user = ($this->makeUser)($tenant);
 
+    ($this->grantPermission)($user, 'inventory-adjustments-view');
     ($this->grantPermission)($user, 'inventory-adjustments-execute');
 
     $uom = ($this->makeUom)($tenant);
@@ -3075,6 +3092,7 @@ it('direct post remains compatible after submit from an in workflow count', func
     $tenant = Tenant::factory()->create();
     $user = ($this->makeUser)($tenant);
 
+    ($this->grantPermission)($user, 'inventory-adjustments-view');
     ($this->grantPermission)($user, 'inventory-adjustments-execute');
     ($this->seedInventoryWorkflow)($tenant);
 
@@ -3388,6 +3406,7 @@ it('previous-stage action works when the count is on a non-first non-posted work
     $tenant = Tenant::factory()->create();
     $user = ($this->makeUser)($tenant);
 
+    ($this->grantPermission)($user, 'inventory-adjustments-view');
     ($this->grantPermission)($user, 'inventory-adjustments-execute');
     ($this->seedInventoryWorkflow)($tenant);
 
@@ -3427,6 +3446,7 @@ it('previous-stage action is blocked after inventory has posted', function () {
     $tenant = Tenant::factory()->create();
     $user = ($this->makeUser)($tenant);
 
+    ($this->grantPermission)($user, 'inventory-adjustments-view');
     ($this->grantPermission)($user, 'inventory-adjustments-execute');
     ($this->seedInventoryWorkflow)($tenant);
 
@@ -3464,6 +3484,8 @@ it('prevents cross-tenant item usage via validation (line create/update uses ten
 
     $countA = InventoryCount::query()->forceCreate([
         'tenant_id' => $tenantA->id,
+        'created_by_user_id' => $userA->id,
+        'tasked_by_user_id' => $userA->id,
         'counted_at' => now(),
     ]);
 
@@ -3489,6 +3511,7 @@ it('posts inventory count adjustments only for stockable items', function () {
     $tenant = Tenant::factory()->create();
     $user = ($this->makeUser)($tenant);
 
+    ($this->grantPermission)($user, 'inventory-adjustments-view');
     ($this->grantPermission)($user, 'inventory-adjustments-execute');
 
     $uom = ($this->makeUom)($tenant);

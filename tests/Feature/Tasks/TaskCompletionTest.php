@@ -101,6 +101,8 @@ beforeEach(function () {
         User $assignedUser,
         array $attributes = []
     ): Task {
+        ($this->grantPermission)($assignedUser, 'sales-sales-orders-update');
+
         return Task::withoutGlobalScopes()->create(array_merge([
             'tenant_id' => $tenant->id,
             'workflow_domain_id' => ($this->salesDomain)()->id,
@@ -289,6 +291,7 @@ it('8c. manual workflow-context tasks are stored against the current workflow st
     $customer = ($this->createCustomer)($tenant);
     $stage = ($this->createStage)($tenant);
     $order = ($this->createSalesOrder)($tenant, $customer->id);
+    ($this->grantPermission)($assignee, 'sales-sales-orders-update');
 
     $this->actingAs($creator)->postJson(route('tasks.store'), [
         'title' => 'Check labels',
@@ -313,6 +316,7 @@ it('8ca. manual workflow-context tasks may be stored before a workflow stage exi
     $assignee = ($this->makeUser)($tenant);
     $customer = ($this->createCustomer)($tenant);
     $order = ($this->createSalesOrder)($tenant, $customer->id);
+    ($this->grantPermission)($assignee, 'sales-sales-orders-update');
 
     $this->actingAs($creator)->postJson(route('tasks.store'), [
         'title' => 'Pre-stage follow-up',

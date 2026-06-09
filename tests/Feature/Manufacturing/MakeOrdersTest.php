@@ -175,16 +175,22 @@ beforeEach(function () {
     };
 
     $this->grantPermission = function (User $user, string $slug): void {
-        $permission = Permission::query()->firstOrCreate([
-            'slug' => $slug,
-        ]);
+        $slugs = $slug === 'inventory-make-orders-execute'
+            ? ['inventory-make-orders-view', $slug]
+            : [$slug];
 
-        $role = Role::query()->firstOrCreate([
-            'name' => $slug . '-' . $user->id,
-        ]);
+        foreach ($slugs as $permissionSlug) {
+            $permission = Permission::query()->firstOrCreate([
+                'slug' => $permissionSlug,
+            ]);
 
-        $role->permissions()->syncWithoutDetaching([$permission->id]);
-        $user->roles()->syncWithoutDetaching([$role->id]);
+            $role = Role::query()->firstOrCreate([
+                'name' => $permissionSlug . '-' . $user->id,
+            ]);
+
+            $role->permissions()->syncWithoutDetaching([$permission->id]);
+            $user->roles()->syncWithoutDetaching([$role->id]);
+        }
     };
 
     $this->grantPermissions = function (User $user, array $slugs): void {
@@ -343,7 +349,7 @@ test('users without inventory-make-orders-view cannot access make orders index',
         ->assertForbidden();
 });
 
-test('execute permission allows create and schedule but not view access', function () {
+test('operator permissions allow create schedule and view access', function () {
     $tenant = ($this->makeTenant)('Tenant A');
     $user = ($this->makeUser)($tenant);
     ($this->grantPermission)($user, 'inventory-make-orders-execute');
@@ -354,7 +360,7 @@ test('execute permission allows create and schedule but not view access', functi
 
     $this->actingAs($user)
         ->get(route('manufacturing.make-orders.index'))
-        ->assertForbidden();
+        ->assertOk();
 
     $storeResponse = $this->actingAs($user)
         ->postJson(route('manufacturing.make-orders.store'), [

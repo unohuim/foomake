@@ -19,6 +19,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Str;
 
 uses(RefreshDatabase::class);
 
@@ -749,7 +750,10 @@ it('requires create permission for index even with receive permission', function
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
 
-    ($this->grantPermission)($user, 'purchasing-purchase-orders-receive');
+    $permission = Permission::query()->firstOrCreate(['slug' => 'purchasing-purchase-orders-receive']);
+    $role = Role::query()->create(['name' => 'receive-only-' . Str::random(10)]);
+    $role->permissions()->syncWithoutDetaching([$permission->id]);
+    $user->roles()->syncWithoutDetaching([$role->id]);
 
     $this->actingAs($user)
         ->get('/purchasing/orders')
@@ -762,7 +766,10 @@ it('requires create permission for show even with receive permission', function 
     $supplier = ($this->makeSupplier)($tenant);
     $order = ($this->makeOrder)($tenant, $user, $supplier);
 
-    ($this->grantPermission)($user, 'purchasing-purchase-orders-receive');
+    $permission = Permission::query()->firstOrCreate(['slug' => 'purchasing-purchase-orders-receive']);
+    $role = Role::query()->create(['name' => 'receive-only-' . Str::random(10)]);
+    $role->permissions()->syncWithoutDetaching([$permission->id]);
+    $user->roles()->syncWithoutDetaching([$role->id]);
 
     $this->actingAs($user)
         ->get("/purchasing/orders/{$order->id}")

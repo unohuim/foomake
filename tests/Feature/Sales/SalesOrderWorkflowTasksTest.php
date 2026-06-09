@@ -209,6 +209,7 @@ it('1. entering packing after availability checks pass generates tasks from acti
     $stages = ($this->seedSalesStages)($tenant);
     $user = ($this->makeUser)($tenant);
     $assignee = ($this->makeUser)($tenant);
+    ($this->grantPermission)($assignee, 'sales-sales-orders-update');
     $customer = ($this->createCustomer)($tenant);
     $uom = ($this->makeUom)($tenant);
     $item = ($this->createItem)($tenant, $uom);
@@ -581,6 +582,7 @@ it('16. open shipping tasks block shipping to completed until they are complete'
     $stages = ($this->seedSalesStages)($tenant);
     $user = ($this->makeUser)($tenant);
     $assignee = ($this->makeUser)($tenant);
+    ($this->grantPermission)($assignee, 'sales-sales-orders-update');
     $customer = ($this->createCustomer)($tenant);
     $uom = ($this->makeUom)($tenant);
     $item = ($this->createItem)($tenant, $uom);

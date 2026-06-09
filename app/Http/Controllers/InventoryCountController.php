@@ -773,6 +773,8 @@ class InventoryCountController extends Controller
         return Gate::forUser($user)->allows('inventory-adjustments-execute')
             && (
                 $this->userCanOperateInventoryWorkflow($user)
+                || (int) $inventoryCount->created_by_user_id === (int) $user->id
+                || (int) $inventoryCount->tasked_by_user_id === (int) $user->id
                 || app(CanViewAssignedWorkflowResourceAction::class)->execute(
                     $user,
                     $inventoryCount,
