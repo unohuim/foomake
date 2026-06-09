@@ -205,6 +205,9 @@ export function mount(rootEl, payload) {
                 },
             }));
         },
+        refreshMaterialsIndex() {
+            window.dispatchEvent(new CustomEvent('materials-index-refresh'));
+        },
         outputUomDisplayPrecision() {
             return normalizePrecision(this.makeOrder.output_uom_display_precision, SCALE);
         },
@@ -229,6 +232,7 @@ export function mount(rootEl, payload) {
                 this.outputUomDisplayPrecision()
             );
             this.recalculateIngredientQuantitiesFromRuns(canonicalRuns);
+            this.refreshMaterialsIndex();
         },
         recalculateIngredientQuantitiesFromRuns(canonicalRuns) {
             if (canonicalRuns === null) {
@@ -543,6 +547,7 @@ export function mount(rootEl, payload) {
                 this.hydrateMakeOrderResponse(data.data);
                 this.hydrateWorkflowResponse(data.workflow);
                 this.hydrateIngredientsResponse(data.ingredients);
+                this.refreshMaterialsIndex();
                 if (Array.isArray(data.workflowProgressSteps)) {
                     this.workflowProgressSteps = data.workflowProgressSteps;
                 }
@@ -609,6 +614,7 @@ export function mount(rootEl, payload) {
                 this.hydrateMakeOrderResponse(data.data);
                 this.hydrateWorkflowResponse(data.workflow);
                 this.hydrateIngredientsResponse(data.ingredients);
+                this.refreshMaterialsIndex();
                 if (Array.isArray(data.workflowProgressSteps)) {
                     this.workflowProgressSteps = data.workflowProgressSteps;
                 }
@@ -810,6 +816,7 @@ export function mount(rootEl, payload) {
                 const data = await response.json();
                 this.ingredients.lines.push(data.data);
                 this.selectedIngredientItemId = '';
+                this.refreshMaterialsIndex();
                 this.showToast('success', 'Ingredient added.');
             } catch (error) {
                 this.showToast('error', 'Unable to add ingredient.');
@@ -849,6 +856,7 @@ export function mount(rootEl, payload) {
                 const data = await response.json();
                 const nextLine = asRecord(data.data);
                 this.ingredients.lines = this.ingredients.lines.map((entry) => (entry.id === line.id ? nextLine : entry));
+                this.refreshMaterialsIndex();
                 this.ingredientSavedState[line.id] = 'saved';
                 this.showToast('success', 'Ingredient saved.');
 
@@ -888,6 +896,7 @@ export function mount(rootEl, payload) {
                 this.ingredients.lines = nextLines.length > 0
                     ? nextLines
                     : this.ingredients.lines.filter((entry) => entry.id !== deletedLineId);
+                this.refreshMaterialsIndex();
             } catch (error) {
                 this.showToast('error', 'Unable to remove ingredient.');
             }

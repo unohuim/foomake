@@ -97,6 +97,10 @@ export function mount(rootEl, payload) {
         form: emptyForm(),
         init() {
             this.fetchMaterials();
+
+            window.addEventListener('materials-index-refresh', () => {
+                void this.fetchMaterials();
+            });
         },
         columnHeader(column) {
             return this.headers[column] || column;
