@@ -759,7 +759,11 @@ class RecipeController extends Controller
         ]);
 
         return response()->json([
-            'data' => $this->ingredientLinePayload($line->fresh(['inputItem.baseUom'])),
+            'data' => $this->ingredientLinePayload(
+                $line->fresh(['inputItem.baseUom']),
+                (int) $recipe->id,
+                (int) $versionModel->id
+            ),
         ], 201);
     }
 
@@ -797,10 +801,57 @@ class RecipeController extends Controller
         $lineModel->save();
 
         return response()->json([
-            'data' => $this->ingredientLinePayload($lineModel->fresh(['inputItem.baseUom'])),
+            'data' => $this->ingredientLinePayload(
+                $lineModel->fresh(['inputItem.baseUom']),
+                (int) $recipe->id,
+                (int) $versionModel->id
+            ),
             'meta' => [
                 'saved' => true,
             ],
+        ]);
+    }
+
+    /**
+     * Delete a version-owned ingredient line.
+     */
+    public function destroyIngredient(Request $request, Recipe $recipe, int $version, int $line): JsonResponse
+    {
+        Gate::authorize('inventory-make-orders-manage');
+
+        $versionModel = $this->editableCheckedOutVersion($request, $recipe, $version);
+
+        if ($versionModel instanceof JsonResponse) {
+            return $versionModel;
+        }
+
+        $lineModel = $versionModel->lines()
+            ->where('tenant_id', $request->user()->tenant_id)
+            ->whereKey($line)
+            ->firstOrFail();
+
+        $lineModel->delete();
+
+        $recipe->refresh()->load(['item.baseUom', 'currentVersion']);
+        $displayVersion = $recipe->displayVersionForUser((int) $request->user()->id);
+
+        return response()->json([
+            'deleted_line_id' => (int) $lineModel->id,
+            'recipe' => $this->recipeDetailPayload(
+                $recipe,
+                $displayVersion,
+                (int) $request->user()->id,
+                Gate::allows('inventory-make-orders-manage'),
+                Gate::allows('inventory-make-orders-execute')
+            ),
+            'ingredients' => $this->ingredientsPayload($recipe, $displayVersion, (int) $request->user()->id),
+            'sections' => $this->detailSectionsPayload(
+                $recipe,
+                Gate::allows('inventory-make-orders-manage'),
+                Gate::allows('inventory-make-orders-execute'),
+                Gate::allows('inventory-make-orders-view')
+            ),
+            'message' => 'Removed.',
         ]);
     }
 
@@ -1417,7 +1468,9 @@ class RecipeController extends Controller
             'status' => RecipeVersion::normalizeStatus($version->status),
             'recipe_type' => $version->recipe_type,
             'output_quantity' => (string) $version->output_quantity,
-            'lines' => $version->lines->map(fn (RecipeVersionLine $line): array => $this->ingredientLinePayload($line))->all(),
+            'lines' => $version->lines
+                ->map(fn (RecipeVersionLine $line): array => $this->ingredientLinePayload($line, (int) $version->recipe_id, (int) $version->id))
+                ->all(),
         ];
     }
 
@@ -1460,7 +1513,11 @@ class RecipeController extends Controller
                 && $this->userOwnsOpenCheckout($recipe, $displayVersion, $userId),
             'item_options' => $this->ingredientItemsPayload((int) $recipe->tenant_id, (int) $recipe->item_id),
             'lines' => $displayVersion?->lines
-                ? $displayVersion->lines->sortBy('sort_order')->values()->map(fn (RecipeVersionLine $line): array => $this->ingredientLinePayload($line))->all()
+                ? $displayVersion->lines
+                    ->sortBy('sort_order')
+                    ->values()
+                    ->map(fn (RecipeVersionLine $line): array => $this->ingredientLinePayload($line, (int) $recipe->id, (int) $displayVersion->id))
+                    ->all()
                 : [],
             'store_url' => $displayVersion ? route('manufacturing.recipes.ingredients.store', [$recipe, $displayVersion->id]) : null,
             'update_url_template' => $displayVersion
@@ -1474,7 +1531,7 @@ class RecipeController extends Controller
      *
      * @return array<string, mixed>
      */
-    private function ingredientLinePayload(RecipeVersionLine $line): array
+    private function ingredientLinePayload(RecipeVersionLine $line, int $recipeId, int $versionId): array
     {
         return [
             'id' => $line->id,
@@ -1486,6 +1543,7 @@ class RecipeController extends Controller
             'quantity_display' => QuantityFormatter::formatForUom((string) $line->quantity, $line->inputItem?->baseUom, 6),
             'uom_display_precision' => (int) ($line->inputItem?->baseUom?->display_precision ?? 6),
             'sort_order' => (int) $line->sort_order,
+            'remove_url' => route('manufacturing.recipes.ingredients.destroy', [$recipeId, $versionId, $line->id]),
         ];
     }
 

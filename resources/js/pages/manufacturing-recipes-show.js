@@ -497,6 +497,27 @@ export function mount(rootEl, payload) {
                 }
             }, 1000);
         },
+        async removeIngredient(line) {
+            if (!this.ingredients.can_edit || !line?.remove_url) {
+                return;
+            }
+
+            const response = await fetch(line.remove_url, {
+                method: 'DELETE',
+                headers: {
+                    Accept: 'application/json',
+                    'X-CSRF-TOKEN': this.csrfToken,
+                },
+            });
+
+            if (!response.ok) {
+                this.showToast('error', 'Unable to remove ingredient.');
+                return;
+            }
+
+            this.hydrateRecipeResponse(await response.json());
+            this.showToast('success', 'Ingredient removed.');
+        },
         async createMakeOrder(makeUrl) {
             if (!makeUrl) {
                 return;

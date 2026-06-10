@@ -493,10 +493,43 @@ test('19. ingredient qty display honors item uom display precision', function ()
         ->and($response->json('data.quantity') ?? null)->toBe('3.250000');
 });
 
+test('19a. recipe ingredient rows expose a remove url and delete cleanly from the checked out version', function (): void {
+    $tenant = ($this->makeTenant)('Tenant A');
+    $user = ($this->makeUser)($tenant);
+    ($this->grantPermission)($user, 'inventory-recipes-view');
+    ($this->grantPermission)($user, 'inventory-make-orders-manage');
+
+    $uom = ($this->makeUom)($tenant);
+    $output = ($this->makeItem)($tenant, $uom, 'Soup Output', ['is_manufacturable' => true]);
+    $ingredient = ($this->makeItem)($tenant, $uom, 'Ingredient ' . Str::uuid());
+    $recipe = ($this->createRecipe)($user, $output);
+    $draftVersionId = (int) ($this->createDraftVersion)($user, $recipe)->assertCreated()->json('data.id');
+    ($this->addRecipeIngredient)($user, $recipe, $draftVersionId, $ingredient);
+
+    $payload = ($this->extractPayload)(
+        actingAs($user)->get(route('manufacturing.recipes.show', $recipe))->assertOk(),
+        'manufacturing-recipes-show-payload'
+    );
+
+    $line = data_get($payload, 'ingredients.lines.0');
+
+    expect(data_get($line, 'remove_url'))->toBe(route('manufacturing.recipes.ingredients.destroy', [$recipe, $draftVersionId, data_get($line, 'id')]))
+        ->and(data_get($payload, 'ingredients.can_edit'))->toBeTrue();
+
+    $response = actingAs($user)->deleteJson(data_get($line, 'remove_url'))
+        ->assertOk();
+
+    expect(data_get($response->json(), 'ingredients.lines'))->toBe([])
+        ->and(data_get($response->json(), 'ingredients.can_edit'))->toBeTrue();
+});
+
 test('20. ingredients add combobox and plus button only render in editable state', function (): void {
     $source = File::get(resource_path('views/manufacturing/recipes/show.blade.php'));
 
     expect($source)->toContain('x-ingredients-detail-section')
+        ->and($source)->toContain(':show-actions="true"')
+        ->and($source)->toContain(':show-row-actions-menu="false"')
+        ->and($source)->toContain('data-ingredients-remove-button')
         ->and($source)->not->toContain('data-ingredient-add-bar')
         ->and($source)->not->toContain('data-ingredient-add-button');
 });

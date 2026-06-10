@@ -176,6 +176,8 @@
                 :description="__('Ingredients are shown for the current display version.')"
                 :default-open="true"
                 item-header="Item Name"
+                :show-actions="true"
+                :show-row-actions-menu="false"
                 :context-text-expression="'ingredients.can_edit ? \'Editing checked out version \' + ingredients.display_version_number : \'Showing version \' + ingredients.display_version_number'"
             />
         </div>

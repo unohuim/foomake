@@ -240,6 +240,8 @@ Route::middleware(['auth', EnsureEmailVerifiedOrInGracePeriod::class, EnsureTena
         ->name('manufacturing.recipes.ingredients.store');
     Route::patch('/manufacturing/recipes/{recipe}/versions/{version}/ingredients/{line}', [RecipeController::class, 'updateIngredient'])
         ->name('manufacturing.recipes.ingredients.update');
+    Route::delete('/manufacturing/recipes/{recipe}/versions/{version}/ingredients/{line}', [RecipeController::class, 'destroyIngredient'])
+        ->name('manufacturing.recipes.ingredients.destroy');
     Route::post('/manufacturing/recipes/{recipe}/lines', [RecipeController::class, 'storeLine'])
         ->name('manufacturing.recipes.lines.store');
     Route::patch('/manufacturing/recipes/{recipe}/lines/{line}', [RecipeController::class, 'updateLine'])
