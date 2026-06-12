@@ -340,6 +340,31 @@ it('10. detail page shows line and workflow actions for editable orders', functi
         ->and($payload['order']['status_update_url'] ?? null)->toBe(route('sales.orders.status.update', $order));
 });
 
+it('10a. draft detail page seeds shared sales workflow stages and uses the creating action label', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $customer = ($this->makeCustomer)($tenant);
+    $order = ($this->makeOrder)($tenant, $customer, null, ['status' => SalesOrder::STATUS_DRAFT]);
+    ($this->grantPermissions)($user, ['sales-sales-orders-manage']);
+
+    expect(WorkflowStage::withoutGlobalScopes()
+        ->where('tenant_id', $tenant->id)
+        ->count())->toBe(0);
+
+    $response = $this->actingAs($user)->get(route('sales.orders.show', $order))->assertOk();
+    $payload = ($this->extractPayload)($response, 'sales-orders-show-payload');
+
+    $salesDomainId = (int) (WorkflowDomain::query()->where('key', 'sales')->value('id') ?? 0);
+
+    expect($salesDomainId)->toBeGreaterThan(0)
+        ->and(WorkflowStage::withoutGlobalScopes()
+            ->where('tenant_id', $tenant->id)
+            ->where('workflow_domain_id', $salesDomainId)
+            ->count())->toBeGreaterThan(0)
+        ->and($payload['workflow']['actions'][0]['label'] ?? null)->toBe('CREATE')
+        ->and($payload['workflow']['actions'][0]['description'] ?? null)->toBe('Create this sales order.');
+});
+
 it('11. index page does not show workflow ui after move', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);

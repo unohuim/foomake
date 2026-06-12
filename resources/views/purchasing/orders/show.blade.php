@@ -37,7 +37,10 @@
                     <div data-purchase-order-action-button>
                         <x-workflow-action-button
                             :workflow="$payload['workflow']"
-                            :csrf-token="$payload['csrfToken']"
+                            mode="dispatch"
+                            action-event-name="purchase-order-status-action"
+                            sync-event-name="workflow-updated"
+                            sync-state-key="workflow"
                         />
                     </div>
                 </x-slot>

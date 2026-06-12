@@ -5,12 +5,15 @@ declare(strict_types=1);
 use App\Models\Item;
 use App\Models\ItemPurchaseOption;
 use App\Models\Permission;
+use App\Models\PurchaseOrder;
 use App\Models\Role;
 use App\Models\Supplier;
 use App\Models\Tenant;
 use App\Models\Uom;
 use App\Models\UomCategory;
 use App\Models\User;
+use App\Models\WorkflowDomain;
+use App\Models\WorkflowStage;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 
@@ -311,6 +314,45 @@ it('show payload includes actions when provided', function () {
         expect($payload['actions'])->toHaveKey('cancel');
         expect($payload['actions'])->toHaveKey('delete');
     }
+});
+
+it('show detail seeds shared purchasing workflow stages through the tenant seeder', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $supplier = ($this->makeSupplier)($tenant);
+
+    ($this->grantPermission)($user, 'purchasing-purchase-orders-create');
+
+    $order = PurchaseOrder::query()->create([
+        'tenant_id' => $tenant->id,
+        'created_by_user_id' => $user->id,
+        'supplier_id' => $supplier->id,
+        'order_date' => '2026-02-06',
+        'shipping_cents' => null,
+        'tax_cents' => 0,
+        'po_number' => null,
+        'notes' => null,
+        'status' => PurchaseOrder::STATUS_DRAFT,
+        'po_subtotal_cents' => 0,
+        'po_grand_total_cents' => 0,
+    ]);
+
+    expect(WorkflowStage::withoutGlobalScopes()
+        ->where('tenant_id', $tenant->id)
+        ->count())->toBe(0);
+
+    $response = $this->actingAs($user)->get(route('purchasing.orders.show', $order))->assertOk();
+    $payload = ($this->extractPayload)($response, 'purchasing-orders-show-payload');
+
+    $purchasingDomainId = (int) (WorkflowDomain::query()->where('key', 'purchasing')->value('id') ?? 0);
+
+    expect($purchasingDomainId)->toBeGreaterThan(0)
+        ->and(WorkflowStage::withoutGlobalScopes()
+            ->where('tenant_id', $tenant->id)
+            ->where('workflow_domain_id', $purchasingDomainId)
+            ->count())->toBeGreaterThan(0)
+        ->and($payload['workflow']['actions'] ?? [])
+            ->not->toBeEmpty();
 });
 
 it('shows empty lines array when no lines exist', function () {
@@ -684,8 +726,9 @@ it('purchase order detail source keeps receive action binding after workflow pay
     $pageModule = file_get_contents(resource_path('js/pages/purchasing-orders-show.js'));
     $workflowButton = file_get_contents(resource_path('js/components/workflow-action-button.js'));
 
-    expect($workflowButton)->toContain("['receive', 'short_close'].includes(action.type)")
-        ->and($workflowButton)->toContain("window.dispatchEvent(new CustomEvent('purchase-order-status-action'")
+    expect($workflowButton)->toContain("mode: options.mode || 'dispatch'")
+        ->and($workflowButton)->toContain("actionEventName: options.actionEventName || 'workflow-action-button'")
+        ->and($workflowButton)->toContain('window.dispatchEvent(new CustomEvent(this.actionEventName')
         ->and($source)->toContain('x-on:purchase-order-status-action.window="performStatusMenuAction($event.detail)"')
         ->and($source)->toContain('x-on:workflow-updated.document="handleWorkflowUpdated($event.detail)"')
         ->and($pageModule)->toContain('workflowActionHandlers()')

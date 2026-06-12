@@ -995,9 +995,22 @@ class MakeOrderController extends Controller
         $makeOrderModel->status = MakeOrder::STATUS_CANCELLED;
         $makeOrderModel->save();
 
+        $freshMakeOrder = $makeOrderModel->fresh([
+            'recipe.item.baseUom',
+            'recipeVersion',
+            'outputItem.baseUom',
+            'lines.inputItem.baseUom',
+            'workflowStage',
+            'madeByUser',
+            'taskedByUser',
+        ]);
+
         return response()->json([
             'removed_id' => $makeOrderModel->id,
-            'data' => $this->makeOrderPayload($makeOrderModel->fresh(['recipe', 'recipeVersion', 'outputItem.baseUom', 'workflowStage'])),
+            'data' => $this->makeOrderDetailPayload($freshMakeOrder),
+            'workflow' => $this->makeOrderWorkflowPayload($freshMakeOrder, $request->user()),
+            'workflowProgressSteps' => $this->makeOrderWorkflowProgressSteps($freshMakeOrder, $request->user()),
+            'ingredients' => $this->makeOrderIngredientsPayload($freshMakeOrder),
             'message' => 'Archived.',
         ]);
     }
@@ -1197,6 +1210,9 @@ class MakeOrderController extends Controller
                 : null,
             'status' => $makeOrder->status,
             'workflow_state' => $workflowState,
+            'status_label' => $workflowState,
+            'display_label' => $workflowState,
+            'currentLabel' => $workflowState,
             'workflow_stage_id' => $makeOrder->workflow_stage_id,
             'workflow_stage_name' => $makeOrder->workflowStage?->name,
             'made_by_user_id' => $makeOrder->made_by_user_id,
@@ -1362,12 +1378,14 @@ class MakeOrderController extends Controller
         $resolver = app(ResolveManufacturingWorkflowStageAction::class);
         $currentStage = $resolver->currentStage($makeOrder);
         $availableStages = collect();
+        $workflowState = $this->makeOrderWorkflowState($makeOrder);
 
         if ($makeOrder->status !== MakeOrder::STATUS_MADE && $makeOrder->status !== MakeOrder::STATUS_CANCELLED) {
             $availableStages = $resolver->availableTransitions($makeOrder);
         }
 
         $nextStageAction = null;
+        $actions = [];
 
         $canOperateWorkflow = $this->userCanOperateMakeOrderWorkflow($viewer);
 
@@ -1380,6 +1398,7 @@ class MakeOrderController extends Controller
                     'id' => $currentStage->id,
                     'label' => $currentStage->action_verb ?: $currentStage->name,
                     'type' => 'make',
+                    'description' => $this->workflowStageActionDescription($currentStage, 'Make this make order.'),
                     'endpoint' => route('manufacturing.make-orders.make', $makeOrder),
                 ];
             } else {
@@ -1392,10 +1411,21 @@ class MakeOrderController extends Controller
                         'id' => $nextStage->id,
                         'label' => $nextStage->action_verb ?: $nextStage->name,
                         'type' => 'stage',
+                        'description' => $this->workflowStageActionDescription($nextStage, 'Move this make order to the next workflow stage.'),
                         'endpoint' => route('manufacturing.make-orders.workflow-stage.update', $makeOrder),
                     ];
                 }
             }
+        }
+
+        if ($nextStageAction) {
+            $actions[] = $nextStageAction;
+        }
+
+        $cancelAction = $this->makeOrderCancelAction($makeOrder);
+
+        if ($cancelAction) {
+            $actions[] = $cancelAction;
         }
 
         return [
@@ -1408,9 +1438,20 @@ class MakeOrderController extends Controller
                 'workflow_domain_id' => $currentStage->workflow_domain_id,
                 'key' => $currentStage->key,
                 'name' => $currentStage->name,
+                'action_verb' => $currentStage->action_verb,
+                'status_complete_label' => $currentStage->status_complete_label,
                 'description' => $currentStage->description,
             ] : null,
-            'current_stage_label' => $this->makeOrderWorkflowState($makeOrder),
+            'status' => $workflowState,
+            'status_label' => $workflowState,
+            'display_label' => $workflowState,
+            'currentLabel' => $workflowState,
+            'current_stage_label' => $workflowState,
+            'header_menu' => [
+                'currentLabel' => $workflowState,
+                'options' => $actions,
+            ],
+            'actions' => $actions,
             'available_stages' => $availableStages
                 ->map(fn (WorkflowStage $stage): array => [
                     'id' => $stage->id,
@@ -1433,6 +1474,46 @@ class MakeOrderController extends Controller
             'tasked_by_user_id' => $makeOrder->tasked_by_user_id,
             'tasked_by_user_name' => $makeOrder->taskedByUser?->name,
             'current_stage_tasks' => $this->makeOrderWorkflowTasksPayload($makeOrder, $currentStage, $viewer),
+        ];
+    }
+
+    /**
+     * Build the cancel action payload for a Make Order.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function makeOrderCancelAction(MakeOrder $makeOrder): ?array
+    {
+        $manufacturingDomainId = WorkflowDomain::query()
+            ->where('key', 'manufacturing')
+            ->value('id');
+
+        if (! $manufacturingDomainId) {
+            return [
+                'id' => 'cancel',
+                'type' => 'cancel',
+                'label' => 'Cancel',
+                'description' => 'Cancel this make order.',
+                'endpoint' => route('manufacturing.make-orders.destroy', $makeOrder),
+                'method' => 'DELETE',
+                'requiresConfirmation' => true,
+            ];
+        }
+
+        $cancelStage = WorkflowStage::withoutGlobalScopes()
+            ->where('tenant_id', $makeOrder->tenant_id)
+            ->where('workflow_domain_id', $manufacturingDomainId)
+            ->where('key', 'cancelling')
+            ->first();
+
+        return [
+            'id' => 'cancel',
+            'type' => 'cancel',
+            'label' => 'Cancel',
+            'description' => $this->workflowStageActionDescription($cancelStage, 'Cancel this make order.'),
+            'endpoint' => route('manufacturing.make-orders.destroy', $makeOrder),
+            'method' => 'DELETE',
+            'requiresConfirmation' => true,
         ];
     }
 
@@ -1947,6 +2028,10 @@ class MakeOrderController extends Controller
      */
     private function makeOrderWorkflowState(MakeOrder $makeOrder): string
     {
+        if ($makeOrder->status === MakeOrder::STATUS_CANCELLED) {
+            return MakeOrder::STATUS_CANCELLED;
+        }
+
         if ($makeOrder->status === MakeOrder::STATUS_MADE) {
             return $makeOrder->workflowStage?->status_complete_label ?? MakeOrder::STATUS_MADE;
         }
@@ -1956,6 +2041,16 @@ class MakeOrderController extends Controller
         }
 
         return $makeOrder->workflowStage?->name ?? '—';
+    }
+
+    /**
+     * Resolve helper copy for a workflow stage action from the stage itself.
+     */
+    private function workflowStageActionDescription(?WorkflowStage $stage, string $fallback): string
+    {
+        return filled($stage?->description)
+            ? (string) $stage->description
+            : $fallback;
     }
 
     /**

@@ -26,6 +26,7 @@ use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
 
 class InventoryCountController extends Controller
@@ -142,6 +143,7 @@ class InventoryCountController extends Controller
                 : null,
             'payload' => [
                 'count' => $this->countPayload($count, Gate::allows('inventory-adjustments-execute')),
+                'workflow' => $this->inventoryWorkflowPayload($count, $canSubmitWorkflow, $canOperateWorkflow),
                 'workflowProgressSteps' => app(BuildWorkflowProgressStepsAction::class)->execute(
                     (int) $request->user()->tenant_id,
                     'inventory',
@@ -342,7 +344,7 @@ class InventoryCountController extends Controller
     }
 
     /**
-     * Delete an inventory count draft.
+     * Cancel an inventory count before it is posted.
      */
     public function destroy(Request $request, int $inventoryCount): JsonResponse
     {
@@ -350,14 +352,40 @@ class InventoryCountController extends Controller
 
         $count = $this->findInventoryCount($request, $inventoryCount);
 
-        if ($response = $this->ensureEditableDraft($count)) {
-            return $response;
+        if (
+            ! Schema::hasColumn('inventory_counts', 'workflow_cancelled_at')
+            || ! Schema::hasColumn('inventory_counts', 'workflow_cancelled_by_user_id')
+        ) {
+            return response()->json([
+                'message' => 'Inventory count cancellation is not installed on this database yet.',
+            ], 422);
         }
 
-        $count->delete();
+        if ($count->posted_at !== null) {
+            return response()->json([
+                'message' => 'Inventory count is posted and cannot be modified.',
+            ], 422);
+        }
+
+        if ($count->workflow_cancelled_at !== null) {
+            return response()->json([
+                'message' => 'Inventory count is already cancelled.',
+            ], 422);
+        }
+
+        $count->forceFill([
+            'workflow_cancelled_at' => now(),
+            'workflow_cancelled_by_user_id' => $request->user()?->id,
+        ])->save();
 
         return response()->json([
-            'deleted' => true,
+            'cancelled' => true,
+            'count' => $this->countPayload($count->fresh()),
+            'workflow' => $this->inventoryWorkflowPayload(
+                $count->fresh(),
+                $this->userCanSubmitInventoryCountWorkflow($request->user(), $count->fresh()),
+                $this->userCanOperateInventoryWorkflow($request->user())
+            ),
         ]);
     }
 
@@ -372,6 +400,11 @@ class InventoryCountController extends Controller
         SeedDefaultWorkflowStagesForTenantAction $seedDefaultStagesAction
     ): JsonResponse {
         $count = $this->findInventoryCount($request, $inventoryCount);
+        if ($count->workflow_cancelled_at !== null) {
+            return response()->json([
+                'message' => 'Inventory count is cancelled and cannot be modified.',
+            ], 422);
+        }
         abort_unless($this->userCanSubmitInventoryCountWorkflow($request->user(), $count), 403);
         $this->ensureInventoryWorkflowStagesExist($request, $resolver, $seedDefaultStagesAction);
 
@@ -401,6 +434,11 @@ class InventoryCountController extends Controller
         abort_unless($this->userCanOperateInventoryWorkflow($request->user()), 403);
 
         $count = $this->findInventoryCount($request, $inventoryCount);
+        if ($count->workflow_cancelled_at !== null) {
+            return response()->json([
+                'message' => 'Inventory count is cancelled and cannot be modified.',
+            ], 422);
+        }
         $this->ensureInventoryWorkflowStagesExist($request, $resolver, $seedDefaultStagesAction);
 
         try {
@@ -429,6 +467,11 @@ class InventoryCountController extends Controller
         abort_unless($this->userCanOperateInventoryWorkflow($request->user()), 403);
 
         $count = $this->findInventoryCount($request, $inventoryCount);
+        if ($count->workflow_cancelled_at !== null) {
+            return response()->json([
+                'message' => 'Inventory count is cancelled and cannot be modified.',
+            ], 422);
+        }
         $this->ensureInventoryWorkflowStagesExist($request, $resolver, $seedDefaultStagesAction);
 
         try {
@@ -457,6 +500,11 @@ class InventoryCountController extends Controller
         abort_unless($this->userCanOperateInventoryWorkflow($request->user()), 403);
 
         $count = $this->findInventoryCount($request, $inventoryCount);
+        if ($count->workflow_cancelled_at !== null) {
+            return response()->json([
+                'message' => 'Inventory count is cancelled and cannot be modified.',
+            ], 422);
+        }
         $this->ensureInventoryWorkflowStagesExist($request, $resolver, $seedDefaultStagesAction);
 
         try {
@@ -800,7 +848,7 @@ class InventoryCountController extends Controller
         bool $canSubmitWorkflow,
         bool $canOperateWorkflow
     ): bool {
-        if ($inventoryCount->posted_at !== null) {
+        if ($inventoryCount->posted_at !== null || $inventoryCount->workflow_cancelled_at !== null) {
             return false;
         }
 
@@ -824,9 +872,11 @@ class InventoryCountController extends Controller
      */
     private function ensureEditableDraft(InventoryCount $inventoryCount): ?JsonResponse
     {
-        if ($inventoryCount->posted_at !== null) {
+        if ($inventoryCount->posted_at !== null || $inventoryCount->workflow_cancelled_at !== null) {
             return response()->json([
-                'message' => 'Inventory count is posted and cannot be modified.',
+                'message' => $inventoryCount->workflow_cancelled_at !== null
+                    ? 'Inventory count is cancelled and cannot be modified.'
+                    : 'Inventory count is posted and cannot be modified.',
             ], 422);
         }
 
@@ -844,9 +894,15 @@ class InventoryCountController extends Controller
      */
     private function ensureEditableDetails(InventoryCount $inventoryCount): ?JsonResponse
     {
-        if ($inventoryCount->posted_at !== null || $inventoryCount->workflowStage?->is_inventory_effect_stage) {
+        if (
+            $inventoryCount->posted_at !== null
+            || $inventoryCount->workflow_cancelled_at !== null
+            || $inventoryCount->workflowStage?->is_inventory_effect_stage
+        ) {
             return response()->json([
-                'message' => 'Inventory count is posted and cannot be modified.',
+                'message' => $inventoryCount->workflow_cancelled_at !== null
+                    ? 'Inventory count is cancelled and cannot be modified.'
+                    : 'Inventory count is posted and cannot be modified.',
             ], 422);
         }
 
@@ -858,9 +914,11 @@ class InventoryCountController extends Controller
      */
     private function ensureEditableLines(InventoryCount $inventoryCount): ?JsonResponse
     {
-        if ($inventoryCount->posted_at !== null) {
+        if ($inventoryCount->posted_at !== null || $inventoryCount->workflow_cancelled_at !== null) {
             return response()->json([
-                'message' => 'Inventory count is posted and cannot be modified.',
+                'message' => $inventoryCount->workflow_cancelled_at !== null
+                    ? 'Inventory count is cancelled and cannot be modified.'
+                    : 'Inventory count is posted and cannot be modified.',
             ], 422);
         }
 
@@ -878,9 +936,15 @@ class InventoryCountController extends Controller
      */
     private function ensureRemovableLines(InventoryCount $inventoryCount): ?JsonResponse
     {
-        if ($inventoryCount->posted_at !== null || $inventoryCount->workflowStage?->is_inventory_effect_stage) {
+        if (
+            $inventoryCount->posted_at !== null
+            || $inventoryCount->workflow_cancelled_at !== null
+            || $inventoryCount->workflowStage?->is_inventory_effect_stage
+        ) {
             return response()->json([
-                'message' => 'Inventory count is posted and materials can no longer be removed.',
+                'message' => $inventoryCount->workflow_cancelled_at !== null
+                    ? 'Inventory count is cancelled and materials can no longer be removed.'
+                    : 'Inventory count is posted and materials can no longer be removed.',
             ], 422);
         }
 
@@ -898,9 +962,15 @@ class InventoryCountController extends Controller
      */
     private function ensureWorkflowStageCountedQuantityEditable(InventoryCount $inventoryCount): ?JsonResponse
     {
-        if ($inventoryCount->posted_at !== null || $inventoryCount->workflowStage?->is_inventory_effect_stage) {
+        if (
+            $inventoryCount->posted_at !== null
+            || $inventoryCount->workflow_cancelled_at !== null
+            || $inventoryCount->workflowStage?->is_inventory_effect_stage
+        ) {
             return response()->json([
-                'message' => 'Inventory count is posted and cannot be modified.',
+                'message' => $inventoryCount->workflow_cancelled_at !== null
+                    ? 'Inventory count is cancelled and cannot be modified.'
+                    : 'Inventory count is posted and cannot be modified.',
             ], 422);
         }
 
@@ -944,6 +1014,7 @@ class InventoryCountController extends Controller
         $canEditNotes = $canExecute && $this->ensureEditableDetails($inventoryCount) === null;
         $canEditMetadata = $canEditNotes && $showDetailsSection;
         $canViewMetadata = $showDetailsSection;
+        $isCancelled = $inventoryCount->workflow_cancelled_at !== null;
 
         return [
             'id' => $inventoryCount->id,
@@ -962,7 +1033,9 @@ class InventoryCountController extends Controller
                 ? $this->tenantAssigneeOptionsPayload((int) $inventoryCount->tenant_id, $inventoryCount->assignedToUser)
                 : [],
             'status' => $inventoryCount->status,
-            'lifecycle_status_label' => $inventoryCount->status === 'posted' ? 'Posted' : 'Draft',
+            'lifecycle_status_label' => $isCancelled
+                ? 'Cancelled'
+                : ($inventoryCount->status === 'posted' ? 'Posted' : 'Draft'),
             'created_by_user_id' => $inventoryCount->created_by_user_id,
             'tasked_by_user_id' => $inventoryCount->tasked_by_user_id,
             'assigned_to_user_id' => $inventoryCount->assigned_to_user_id,
@@ -970,14 +1043,21 @@ class InventoryCountController extends Controller
             'workflow_stage_id' => $inventoryCount->workflow_stage_id,
             'workflow_stage_key' => $inventoryCount->workflowStage?->key,
             'workflow_stage_name' => $inventoryCount->workflowStage?->name,
+            'display_label' => $this->workflowStatusLabel($inventoryCount),
+            'status_label' => $this->workflowStatusLabel($inventoryCount),
+            'currentLabel' => $this->workflowStatusLabel($inventoryCount),
             'workflow_status_label' => $this->workflowStatusLabel($inventoryCount),
             'is_draft_setup' => $this->isDraftSetup($inventoryCount),
+            'is_cancelled' => $isCancelled,
             'is_submitted' => $inventoryCount->workflow_stage_id !== null && $inventoryCount->posted_at === null,
-            'posted_at_display' => $inventoryCount->posted_at?->format('F j, Y'),
+            'posted_at_display' => $isCancelled
+                ? 'Cancelled'
+                : $inventoryCount->posted_at?->format('F j, Y'),
             'posted_at_iso' => $inventoryCount->posted_at?->format('Y-m-d'),
             'lines_count' => $inventoryCount->lines_count,
             'current_stage_tasks' => $this->currentStageTasksData($inventoryCount),
             'show_url' => route('inventory.counts.show', $inventoryCount),
+            'index_url' => route('inventory.counts.index'),
             'update_url' => route('inventory.counts.update', $inventoryCount),
             'delete_url' => route('inventory.counts.destroy', $inventoryCount),
             'previous_url' => route('inventory.counts.previous', $inventoryCount),
@@ -1272,9 +1352,11 @@ class InventoryCountController extends Controller
     {
         $canManage = $this->userCanMutateInventoryCountLines($request->user(), $inventoryCount);
         $canRemoveLines = $canManage
+            && $inventoryCount->workflow_cancelled_at === null
             && $inventoryCount->posted_at === null
             && $inventoryCount->workflow_stage_id === null;
         $canAddLines = $canManage
+            && $inventoryCount->workflow_cancelled_at === null
             && $inventoryCount->posted_at === null
             && $inventoryCount->workflow_stage_id === null;
         $showsCountedQuantity = $inventoryCount->workflow_stage_id !== null;
@@ -1498,6 +1580,10 @@ class InventoryCountController extends Controller
      */
     private function workflowStatusLabel(InventoryCount $inventoryCount): string
     {
+        if ($inventoryCount->workflow_cancelled_at !== null) {
+            return 'CANCELLED';
+        }
+
         if ($inventoryCount->workflow_stage_id === null) {
             return $inventoryCount->posted_at !== null ? 'COMPLETED' : 'Draft';
         }
@@ -1519,7 +1605,87 @@ class InventoryCountController extends Controller
             return $previousStage->status_complete_label ?: $previousStage->name;
         }
 
-        return 'Draft';
+        return $currentStage->status_complete_label ?: $currentStage->name ?: 'Draft';
+    }
+
+    /**
+     * Build the shared workflow action-button payload for an inventory count.
+     *
+     * @return array<string, mixed>
+     */
+    private function inventoryWorkflowPayload(
+        InventoryCount $inventoryCount,
+        bool $canSubmitWorkflow,
+        bool $canOperateWorkflow
+    ): array {
+        $resolver = app(ResolveInventoryWorkflowStageAction::class);
+        $currentStage = $resolver->currentStage($inventoryCount);
+        $nextStage = $this->nextWorkflowActionStage($inventoryCount, $resolver);
+        $actions = [];
+
+        if ($inventoryCount->workflow_cancelled_at === null) {
+            if ($inventoryCount->posted_at === null) {
+                $actions[] = [
+                    'id' => 'cancel',
+                    'type' => 'cancel',
+                    'label' => 'Cancel',
+                    'description' => 'Cancel this inventory count before it is posted.',
+                    'endpoint' => route('inventory.counts.destroy', $inventoryCount),
+                    'method' => 'DELETE',
+                    'requiresConfirmation' => true,
+                ];
+            }
+
+            if ($this->canShowNextWorkflowAction($inventoryCount, $canSubmitWorkflow, $canOperateWorkflow) && $nextStage !== null) {
+                $isInitialWorkflowAction = $inventoryCount->workflow_stage_id === null;
+
+                $actions[] = [
+                    'id' => 'next',
+                    'type' => $inventoryCount->workflow_stage_id === null ? 'submit' : 'advance',
+                    'label' => $isInitialWorkflowAction
+                        ? 'Submit'
+                        : $this->workflowActionButtonText($nextStage, $inventoryCount),
+                    'description' => $this->workflowActionDescription(
+                        $nextStage,
+                        $isInitialWorkflowAction
+                            ? 'Submit this inventory count into workflow.'
+                            : 'Advance this inventory count to the next workflow stage.'
+                    ),
+                    'endpoint' => $inventoryCount->workflow_stage_id === null
+                        ? route('inventory.counts.submit', $inventoryCount)
+                        : route('inventory.counts.advance', $inventoryCount),
+                    'method' => 'POST',
+                ];
+            }
+        }
+
+        $currentLabel = $this->workflowStatusLabel($inventoryCount);
+
+        return [
+            'status' => $inventoryCount->status,
+            'status_label' => $currentLabel,
+            'display_label' => $currentLabel,
+            'currentLabel' => $currentLabel,
+            'current_stage_label' => $currentLabel,
+            'current_stage' => $currentStage ? [
+                'id' => (int) $currentStage->id,
+                'workflow_domain_id' => (int) $currentStage->workflow_domain_id,
+                'key' => $currentStage->key,
+                'name' => $currentStage->name,
+                'action_verb' => $currentStage->action_verb,
+                'status_complete_label' => $currentStage->status_complete_label,
+                'description' => $currentStage->description,
+            ] : null,
+            'actions' => $actions,
+            'header_menu' => [
+                'currentLabel' => $currentLabel,
+                'options' => $actions,
+            ],
+            'previous_url' => route('inventory.counts.previous', $inventoryCount),
+            'submit_url' => route('inventory.counts.submit', $inventoryCount),
+            'advance_url' => route('inventory.counts.advance', $inventoryCount),
+            'post_url' => route('inventory.counts.post', $inventoryCount),
+        ];
     }
 
     /**
@@ -1598,6 +1764,10 @@ class InventoryCountController extends Controller
             return null;
         }
 
+        if ($inventoryCount !== null && $inventoryCount->workflow_stage_id === null) {
+            return 'Submit';
+        }
+
         if (
             $inventoryCount !== null
             && $inventoryCount->posted_at === null
@@ -1608,7 +1778,18 @@ class InventoryCountController extends Controller
             return 'Complete';
         }
 
-        return $workflowStage->action_verb ?: $workflowStage->name;
+        return $workflowStage->action_verb
+            ?: $workflowStage->name;
+    }
+
+    /**
+     * Resolve helper copy for an inventory workflow action.
+     */
+    private function workflowActionDescription(WorkflowStage $workflowStage, string $fallback): string
+    {
+        return filled($workflowStage->description)
+            ? (string) $workflowStage->description
+            : $fallback;
     }
 
     /**
@@ -1697,6 +1878,7 @@ class InventoryCountController extends Controller
         $canComplete = ! $isCompleted
             && $viewerUserId !== null
             && $canCompleteWorkflowTask
+            && $inventoryCount?->workflow_cancelled_at === null
             && (
                 (int) $task->assigned_to_user_id === (int) $viewerUserId
                 || (int) $inventoryCount?->assigned_to_user_id === (int) $viewerUserId

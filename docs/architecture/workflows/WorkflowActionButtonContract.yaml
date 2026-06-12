@@ -1,34 +1,37 @@
-name: Workflow Action Button Contract
+name: Multi-Step Action Button Contract
 type: UI Contract
 location:
   - resources/views/components/workflow-action-button.blade.php
   - resources/js/components/workflow-action-button.js
   - app/Services/Workflows/WorkflowTransitionService.php
-purpose: Define the reusable JSON-driven workflow action button used by workflow-enabled record detail headers.
+purpose: Define the reusable Tailwind and Alpine action button used by detail headers that expose multiple server-driven step actions.
 when_to_use:
-  - Rendering the current workflow status and available workflow actions in a resource detail header
-  - Completing the current workflow stage through AJAX
-  - Cancelling a workflow-enabled record through AJAX
+  - Rendering the current state label and available step actions in a resource detail header
+  - Driving purchase-order workflow transitions and recipe version actions from the same header button
+  - Reusing the same closed-button plus dropdown contract for other multi-step header actions
 when_not_to_use:
-  - Adding arbitrary custom dropdown actions
+  - Row action menus
+  - Arbitrary free-form dropdowns that are not server-driven step actions
   - Replacing backend authorization or transition validation
-  - Browser-refresh lifecycle transitions
 rules:
   - The button receives JSON state only.
-  - The closed button text is the derived workflow status.
-  - The primary dropdown action is the current stage `action_verb`, except Purchase Order receiving opens the PO-level receipt slide-over instead of auto-completing receipt inventory.
-  - The v1 dropdown action types are completing the current stage, opening Purchase Order receiving or short-close UI actions, and cancelling when allowed.
-  - The component submits actions through AJAX and replaces local workflow state from the JSON response.
+  - The closed button text is the derived current label from the supplied state payload.
+  - Dropdown actions are server-provided and are dispatched as raw action objects or submitted directly when the page module owns the fetch contract.
+  - The page module owns the actual mutation, authorization, and state refresh contract.
+  - The component must support named sync events so the header can refresh without a browser reload after successful actions.
   - The component must not introduce global JavaScript state.
   - UI action visibility is not authorization.
 public_interface:
-  - workflowActionButton
+  - workflowActionButton(workflow, csrfToken, options)
+  - actionEventName
+  - syncEventName
+  - syncStateKey
   - WorkflowTransitionService::purchaseOrderWorkflowPayload()
 example_usage: |
   workflow:
-    status: CREATED
-    currentStage:
-      actionVerb: Receive
+    status: Published
     actions:
-      - type: complete_stage
-        label: Receive
+      - id: publish
+        label: Publish
+        description: Make this version current for new make orders.
+    currentLabel: Published

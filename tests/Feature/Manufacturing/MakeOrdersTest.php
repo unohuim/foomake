@@ -1811,6 +1811,84 @@ test('make order detail loads draft workflow entry from configured workflow stag
     expect($secondStage->id)->not->toBe(data_get($payload, 'workflow.available_stages.0.id'));
 });
 
+test('make order detail workflow payload includes a cancel action alongside the next workflow action', function () {
+    $tenant = ($this->makeTenant)('Tenant A');
+    $user = ($this->makeUser)($tenant);
+    ($this->grantPermissions)($user, ['inventory-make-orders-view', 'inventory-make-orders-execute']);
+
+    [$productionStage, $completedStage] = ($this->createManufacturingWorkflowStages)($tenant);
+
+    $uom = ($this->makeUom)($tenant);
+    $output = ($this->makeItem)($tenant, $uom, 'Bread', true);
+    $recipe = ($this->makeRecipe)($tenant, $output, true, 'Workflow Recipe', '5.000000');
+    $makeOrder = ($this->makeOrder)($tenant, $recipe, $user, [
+        'status' => MakeOrder::STATUS_DRAFT,
+        'due_date' => '2026-06-01',
+        'scheduled_at' => null,
+        'workflow_stage_id' => null,
+        'tasked_by_user_id' => $user->id,
+        'made_by_user_id' => $user->id,
+    ]);
+
+    $payload = ($this->extractPayload)(
+        $this->actingAs($user)->get(route('manufacturing.make-orders.show', $makeOrder))->assertOk(),
+        'manufacturing-make-orders-show-payload'
+    );
+
+    expect(data_get($payload, 'workflow.actions'))->toHaveCount(2)
+        ->and(data_get($payload, 'workflow.actions.0.type'))->toBe('make')
+        ->and(data_get($payload, 'workflow.actions.0.endpoint'))->toBe(route('manufacturing.make-orders.make', $makeOrder))
+        ->and(data_get($payload, 'workflow.actions.1.type'))->toBe('cancel')
+        ->and(data_get($payload, 'workflow.actions.1.label'))->toBe('Cancel')
+        ->and(data_get($payload, 'workflow.actions.1.endpoint'))->toBe(route('manufacturing.make-orders.destroy', $makeOrder))
+        ->and(data_get($payload, 'workflow.actions.1.method'))->toBe('DELETE')
+        ->and(data_get($payload, 'workflow.actions.1.description'))->not->toBe('');
+
+    expect($productionStage->id)->not->toBe($completedStage->id);
+});
+
+test('cancelling a make order returns refreshed workflow state and removes action buttons', function () {
+    $tenant = ($this->makeTenant)('Tenant A');
+    $user = ($this->makeUser)($tenant);
+    ($this->grantPermissions)($user, ['inventory-make-orders-view', 'inventory-make-orders-execute']);
+
+    [$productionStage] = ($this->createManufacturingWorkflowStages)($tenant);
+
+    $uom = ($this->makeUom)($tenant);
+    $output = ($this->makeItem)($tenant, $uom, 'Bread', true);
+    $recipe = ($this->makeRecipe)($tenant, $output, true, 'Workflow Recipe', '5.000000');
+    $makeOrder = ($this->makeOrder)($tenant, $recipe, $user, [
+        'status' => MakeOrder::STATUS_SCHEDULED,
+        'workflow_stage_id' => $productionStage->id,
+        'due_date' => '2026-06-01',
+        'scheduled_at' => now(),
+        'tasked_by_user_id' => $user->id,
+        'made_by_user_id' => $user->id,
+    ]);
+
+    $this->actingAs($user)
+        ->deleteJson(route('manufacturing.make-orders.destroy', $makeOrder))
+        ->assertOk()
+        ->assertJsonPath('data.status', MakeOrder::STATUS_CANCELLED)
+        ->assertJsonPath('data.workflow_state', MakeOrder::STATUS_CANCELLED)
+        ->assertJsonPath('workflow.actions', [])
+        ->assertJsonPath('workflow.status', MakeOrder::STATUS_CANCELLED)
+        ->assertJsonPath('workflow.currentLabel', MakeOrder::STATUS_CANCELLED);
+});
+
+test('make order workflow action button keeps cancelled orders visible as a disabled cancelled state', function () {
+    $bladeSource = File::get(resource_path('views/components/workflow-action-button.blade.php'));
+    $jsSource = File::get(resource_path('js/components/workflow-action-button.js'));
+
+    expect($bladeSource)
+        ->toContain('x-if="isCancelledState()"')
+        ->toContain('disabled')
+        ->toContain('Cancelled')
+        ->and($jsSource)
+        ->toContain('isCancelledState()')
+        ->toContain("return 'Cancelled';");
+});
+
 test('moving a draft make order into workflow assigns the first configured stage by sort order', function () {
     $tenant = ($this->makeTenant)('Tenant A');
     $user = ($this->makeUser)($tenant);

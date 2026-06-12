@@ -3,6 +3,7 @@
 namespace App\Actions\Workflows;
 
 use App\Models\MakeOrder;
+use App\Models\Tenant;
 use App\Models\WorkflowDomain;
 use App\Models\WorkflowStage;
 use DomainException;
@@ -38,6 +39,8 @@ class ResolveManufacturingWorkflowStageAction
      */
     public function currentStage(MakeOrder $makeOrder): ?WorkflowStage
     {
+        $this->seedWorkflowStages($makeOrder);
+
         if ($makeOrder->workflow_stage_id === null) {
             return null;
         }
@@ -56,6 +59,8 @@ class ResolveManufacturingWorkflowStageAction
      */
     public function activeStages(MakeOrder $makeOrder): Collection
     {
+        $this->seedWorkflowStages($makeOrder);
+
         $stages = WorkflowStage::withoutGlobalScopes()
             ->where('tenant_id', $makeOrder->tenant_id)
             ->where('workflow_domain_id', $this->manufacturingDomainId())
@@ -88,6 +93,8 @@ class ResolveManufacturingWorkflowStageAction
      */
     public function firstActiveStage(MakeOrder $makeOrder): ?WorkflowStage
     {
+        $this->seedWorkflowStages($makeOrder);
+
         return $this->activeStages($makeOrder)->first();
     }
 
@@ -96,6 +103,8 @@ class ResolveManufacturingWorkflowStageAction
      */
     public function nextActiveStage(MakeOrder $makeOrder): ?WorkflowStage
     {
+        $this->seedWorkflowStages($makeOrder);
+
         $currentStage = $this->currentStage($makeOrder);
 
         if (! $currentStage) {
@@ -116,6 +125,8 @@ class ResolveManufacturingWorkflowStageAction
      */
     public function previousActiveStage(MakeOrder $makeOrder): ?WorkflowStage
     {
+        $this->seedWorkflowStages($makeOrder);
+
         $currentStage = $this->currentStage($makeOrder);
 
         if (! $currentStage) {
@@ -138,6 +149,8 @@ class ResolveManufacturingWorkflowStageAction
      */
     public function availableTransitions(MakeOrder $makeOrder): Collection
     {
+        $this->seedWorkflowStages($makeOrder);
+
         $currentStage = $this->currentStage($makeOrder);
 
         if (! $currentStage) {
@@ -179,5 +192,17 @@ class ResolveManufacturingWorkflowStageAction
         }
 
         return (int) $candidate->sort_order < (int) $current->sort_order;
+    }
+
+    /**
+     * Ensure the tenant has the shared default workflow stages for manufacturing.
+     */
+    private function seedWorkflowStages(MakeOrder $makeOrder): void
+    {
+        $tenant = Tenant::query()->find($makeOrder->tenant_id);
+
+        if ($tenant) {
+            app(SeedDefaultWorkflowStagesForTenantAction::class)->execute($tenant);
+        }
     }
 }

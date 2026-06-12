@@ -724,6 +724,7 @@ test('24aaa. recipe detail returns 200 when the shared dropdown renders the head
     $response = actingAs($user)->get(route('manufacturing.recipes.show', $recipe))
         ->assertOk()
         ->assertSee('data-recipe-active-version-menu', false)
+        ->assertSee('data-workflow-action-button', false)
         ->assertSee('Version 1.01')
         ->assertSee('Published');
 
@@ -747,8 +748,7 @@ test('24aaab. draft active version renders the header status action button with 
     actingAs($user)->get(route('manufacturing.recipes.show', $recipe))
         ->assertOk()
         ->assertSee('Version 1.00')
-        ->assertSee('data-recipe-active-version-menu', false)
-        ->assertSee('data-recipe-active-version-label', false)
+        ->assertSee('data-workflow-action-button', false)
         ->assertSee('Draft');
 });
 
@@ -768,7 +768,7 @@ test('24aaac. checked out active draft uses checked-out as the closed header cap
     $response = actingAs($user)->get(route('manufacturing.recipes.show', $recipe))
         ->assertOk()
         ->assertSee('Version 1.01')
-        ->assertSee('data-recipe-active-version-label', false)
+        ->assertSee('data-workflow-action-button', false)
         ->assertSee('Checked-Out');
 
     $payload = ($this->extractPayload)($response, 'manufacturing-recipes-show-payload');
@@ -805,6 +805,7 @@ test('24aaad. archived active version payload uses archived caption and archived
     $response = actingAs($user)->get(route('manufacturing.recipes.show', $recipe))
         ->assertOk()
         ->assertSee('Version 1.00')
+        ->assertSee('data-workflow-action-button', false)
         ->assertSee('Archived');
 
     $payload = ($this->extractPayload)($response, 'manufacturing-recipes-show-payload');
@@ -841,10 +842,12 @@ test('24ab. draft active version header menu publishes through the existing publ
         'manufacturing-recipes-show-payload'
     );
 
-    $publishAction = data_get($payload, 'recipe.active_version.header_menu.options.1.action');
+    $publishAction = data_get($payload, 'recipe.active_version.actions.1');
 
-    expect(data_get($publishAction, 'type'))->toBe('custom')
+    expect(data_get($publishAction, 'type'))->toBe('publish')
         ->and(data_get($publishAction, 'handlerKey'))->toBe('publishVersion')
+        ->and(data_get($publishAction, 'endpoint'))->toBe(route('manufacturing.recipes.versions.publish', [$recipe, $draftVersionId]))
+        ->and(data_get($publishAction, 'method'))->toBe('PATCH')
         ->and(data_get($payload, 'recipe.active_version.publish_url'))->toBe(route('manufacturing.recipes.versions.publish', [$recipe, $draftVersionId]));
 
     $response = actingAs($user)->patchJson(route('manufacturing.recipes.versions.publish', [$recipe, $draftVersionId]))
@@ -902,15 +905,13 @@ test('24d. recipe header status action menu uses the shared header action slot a
         ->and($viewSource)->toContain('<x-slot name="actions">')
         ->and($viewSource)->toContain('data-recipe-active-version-number-label')
         ->and($viewSource)->toContain('data-recipe-active-version-menu')
-        ->and($viewSource)->toContain('data-recipe-active-version-label')
-        ->and($viewSource)->toContain('text-sm font-semibold text-slate-700')
-        ->and($viewSource)->toContain('inline-flex items-stretch rounded-lg border border-slate-300 bg-white shadow-sm')
-        ->and($viewSource)->toContain('border-l border-slate-300 px-2.5 text-slate-500')
-        ->and($viewSource)->toContain('x-show="option.description"')
-        ->and($viewSource)->toContain('x-text="option.description"')
+        ->and($viewSource)->toContain('x-on:recipe-active-version-action.window="performHeaderVersionAction($event.detail)"')
+        ->and($viewSource)->toContain('data-workflow-action-button')
+        ->and($viewSource)->toContain('action-event-name="recipe-active-version-action"')
+        ->and($viewSource)->toContain('sync-event-name="recipe-active-version-sync"')
+        ->and($viewSource)->toContain('sync-state-key="activeVersion"')
         ->and($pageSource)->toContain("window.dispatchEvent(new CustomEvent('recipe-active-version-sync'")
-        ->and($pageSource)->toContain("window.dispatchEvent(new CustomEvent('recipe-active-version-action'")
-        ->and($pageSource)->toContain("Alpine.data('recipeActiveVersionHeaderMenu'")
+        ->and($pageSource)->not->toContain("Alpine.data('recipeActiveVersionHeaderMenu'")
         ->and($viewSource)->not->toContain('<el-select')
         ->and($viewSource)->not->toContain('<el-option')
         ->and($viewSource)->not->toContain('@tailwindplus/elements')

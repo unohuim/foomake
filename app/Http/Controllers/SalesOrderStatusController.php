@@ -6,6 +6,7 @@ use App\Actions\Sales\BuildSalesOrderIssuePlanAction;
 use App\Actions\Sales\CancelPackedSalesOrderAction;
 use App\Actions\Sales\MoveSalesOrderToPackingAction;
 use App\Actions\Sales\PackSalesOrderAction;
+use App\Actions\Workflows\BuildWorkflowProgressStepsAction;
 use App\Actions\Workflows\AssertWorkflowStageTasksCompletedAction;
 use App\Actions\Workflows\DeleteOpenSalesOrderTasksAction;
 use App\Actions\Workflows\GenerateWorkflowStageTasksAction;
@@ -15,10 +16,12 @@ use App\Models\SalesOrder;
 use App\Models\SalesOrderLine;
 use App\Models\StockMove;
 use App\Models\Task;
+use App\Models\WorkflowStage;
 use DomainException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Str;
 
 /**
  * Handle sales order lifecycle status updates.
@@ -37,12 +40,14 @@ class SalesOrderStatusController extends Controller
         CancelPackedSalesOrderAction $cancelPackedSalesOrderAction,
         AssertWorkflowStageTasksCompletedAction $assertWorkflowStageTasksCompletedAction,
         GenerateWorkflowStageTasksAction $generateWorkflowStageTasksAction,
-        DeleteOpenSalesOrderTasksAction $deleteOpenSalesOrderTasksAction
+        DeleteOpenSalesOrderTasksAction $deleteOpenSalesOrderTasksAction,
+        BuildWorkflowProgressStepsAction $buildWorkflowProgressStepsAction
     ): JsonResponse {
         Gate::authorize('sales-sales-orders-manage');
 
         $targetStatus = (string) $request->validated('status');
         $resolver = app(ResolveSalesWorkflowStageAction::class);
+        $currentStage = $resolver->currentStageForStatus($salesOrder);
         $targetStage = $resolver->activeStageForStatus($salesOrder, $targetStatus);
         $packedStage = $resolver->stageForStatus($salesOrder, SalesOrder::STATUS_PACKED);
 
@@ -73,7 +78,7 @@ class SalesOrderStatusController extends Controller
                     $assertWorkflowStageTasksCompletedAction,
                     $generateWorkflowStageTasksAction,
                     $targetStatus,
-                    $packedStage->key
+                    $targetStage?->key ?? $packedStage->key
                 ),
                 $targetStatus !== SalesOrder::STATUS_PACKING
                     && $targetStage !== null
@@ -110,6 +115,15 @@ class SalesOrderStatusController extends Controller
             ], 422);
         }
 
+        $salesOrder = $salesOrder->fresh();
+        $currentStage = $resolver->currentStageForStatus($salesOrder);
+        $progressStage = in_array($salesOrder->status, [
+            SalesOrder::STATUS_COMPLETED,
+            SalesOrder::STATUS_CANCELLED,
+        ], true)
+            ? null
+            : $resolver->currentStageForStatus($salesOrder);
+
         return response()->json([
             'data' => [
                 'id' => $salesOrder->id,
@@ -118,7 +132,19 @@ class SalesOrderStatusController extends Controller
                 'can_edit' => $salesOrder->isEditable(),
                 'can_manage_lines' => $salesOrder->allowsLineMutations(),
                 'current_stage_tasks' => $this->currentStageTasksData($salesOrder),
+                'workflowProgressSteps' => $buildWorkflowProgressStepsAction->execute(
+                    (int) $salesOrder->tenant_id,
+                    'sales',
+                    $progressStage?->id,
+                    $progressStage?->key,
+                    null,
+                    in_array($salesOrder->status, [
+                        SalesOrder::STATUS_COMPLETED,
+                        SalesOrder::STATUS_CANCELLED,
+                    ], true)
+                ),
             ],
+            'workflow' => $this->workflowPayload($salesOrder),
         ]);
     }
 
@@ -238,6 +264,114 @@ class SalesOrderStatusController extends Controller
             'completed_by_user_name' => $task->completedBy?->name,
             'complete_url' => route('tasks.complete', $task),
         ];
+    }
+
+    /**
+     * Build the shared workflow action-button payload for a sales order.
+     *
+     * @return array<string, mixed>
+     */
+    private function workflowPayload(SalesOrder $salesOrder): array
+    {
+        $resolver = app(ResolveSalesWorkflowStageAction::class);
+        $currentStage = $resolver->currentStageForStatus($salesOrder);
+        $displayStage = $resolver->previousActiveStage($salesOrder);
+        $actions = [];
+
+        foreach ($salesOrder->availableTransitions() as $status) {
+            $stage = $this->workflowActionStage($salesOrder, $status, $resolver);
+
+            $actions[] = [
+                'id' => $status,
+                'type' => $status,
+                'label' => $this->workflowActionLabel($status, $stage),
+                'description' => $this->workflowActionDescription($status, $stage),
+                'endpoint' => route('sales.orders.status.update', $salesOrder),
+                'method' => 'PATCH',
+            ];
+        }
+
+        $currentLabel = $displayStage?->status_complete_label
+            ?? $currentStage?->status_complete_label
+            ?? $currentStage?->name
+            ?? $salesOrder->status;
+
+        return [
+            'status' => $salesOrder->status,
+            'status_label' => $currentLabel,
+            'display_label' => $currentLabel,
+            'currentLabel' => $currentLabel,
+            'current_stage_label' => $currentLabel,
+            'current_stage' => $currentStage ? [
+                'id' => (int) $currentStage->id,
+                'workflow_domain_id' => (int) $currentStage->workflow_domain_id,
+                'key' => $currentStage->key,
+                'name' => $currentStage->name,
+                'action_verb' => $currentStage->action_verb,
+                'status_complete_label' => $currentStage->status_complete_label,
+                'description' => $currentStage->description,
+            ] : null,
+            'actions' => $actions,
+            'header_menu' => [
+                'currentLabel' => $currentLabel,
+                'options' => $actions,
+            ],
+        ];
+    }
+
+    /**
+     * Resolve the label for a sales workflow action.
+     */
+    private function workflowActionLabel(string $status, ?WorkflowStage $stage): string
+    {
+        return match ($status) {
+            SalesOrder::STATUS_CANCELLED => 'Cancel',
+            SalesOrder::STATUS_COMPLETED => 'Complete',
+            default => $this->workflowVerb($stage?->action_verb ?: $stage?->name ?: $status),
+        };
+    }
+
+    /**
+     * Resolve the helper copy for a sales workflow action.
+     */
+    private function workflowActionDescription(string $status, ?WorkflowStage $stage): string
+    {
+        if (filled($stage?->description)) {
+            return (string) $stage->description;
+        }
+
+        return match ($status) {
+            SalesOrder::STATUS_CANCELLED => 'Cancel this sales order.',
+            SalesOrder::STATUS_COMPLETED => 'Mark this sales order complete.',
+            default => 'Move this sales order to the next workflow stage.',
+        };
+    }
+
+    /**
+     * Resolve the workflow stage backing a sales-order action.
+     */
+    private function workflowActionStage(
+        SalesOrder $salesOrder,
+        string $status,
+        ResolveSalesWorkflowStageAction $resolver
+    ): ?WorkflowStage {
+        if ($salesOrder->status === SalesOrder::STATUS_DRAFT && $status === SalesOrder::STATUS_OPEN) {
+            return $resolver->stageForStatus($salesOrder, SalesOrder::STATUS_OPEN);
+        }
+
+        if ($status === SalesOrder::STATUS_CANCELLED || $status === SalesOrder::STATUS_COMPLETED) {
+            return null;
+        }
+
+        return $resolver->nextActiveStage($salesOrder);
+    }
+
+    /**
+     * Normalize workflow action verbs into sentence case for the UI.
+     */
+    private function workflowVerb(string $value): string
+    {
+        return Str::headline(Str::lower(trim($value)));
     }
 
     /**

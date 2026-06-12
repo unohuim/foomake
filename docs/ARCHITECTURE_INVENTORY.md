@@ -3301,6 +3301,40 @@ Shared row-action menus or searchable combobox/select inputs.
 
 ---
 
+### Multi-Step Action Button
+
+**Name:** Multi-Step Action Button
+**Type:** Blade / Alpine Component
+**Location:**
+- `resources/views/components/workflow-action-button.blade.php`
+- `resources/js/components/workflow-action-button.js`
+
+**Purpose:**
+Render a compact header action button that shows the current state label and exposes multiple server-driven step actions from the same dropdown.
+
+**When to Use:**
+Detail headers for workflow-enabled or versioned records where one button should expose the next valid actions.
+
+**When Not to Use:**
+Row action menus, free-form dropdowns, or single immutable buttons.
+
+**Public Interface:**
+- `<x-workflow-action-button :workflow="$state" mode="dispatch" action-event-name="..." sync-event-name="..." sync-state-key="..." />`
+- `workflowActionButton(workflow, csrfToken, options)`
+
+**Example Usage:**
+```blade
+<x-workflow-action-button
+    :workflow="$payload['workflow']"
+    mode="dispatch"
+    action-event-name="purchase-order-status-action"
+    sync-event-name="workflow-updated"
+    sync-state-key="workflow"
+/>
+```
+
+---
+
 ### Modal
 
 **Name:** Modal  

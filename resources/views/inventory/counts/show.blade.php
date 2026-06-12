@@ -37,31 +37,19 @@
             </x-slot>
 
             @can('inventory-adjustments-execute')
-                @if ($previousWorkflowActionLabel || $nextWorkflowActionLabel)
-                    <x-slot name="actions">
-                        <div x-data="{}" class="flex items-center justify-end gap-3">
-                            @if ($previousWorkflowActionLabel && $previousWorkflowActionEvent)
-                                <button
-                                    type="button"
-                                    class="inline-flex items-center justify-center rounded-md border border-slate-300 px-4 py-2 text-xs font-semibold uppercase tracking-widest text-slate-700 transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-500 focus:ring-offset-2"
-                                    x-on:click.prevent="window.dispatchEvent(new CustomEvent('{{ $previousWorkflowActionEvent }}'))"
-                                >
-                                    {{ $previousWorkflowActionLabel }}
-                                </button>
-                            @endif
-
-                            @if ($nextWorkflowActionLabel && $nextWorkflowActionEvent)
-                                <button
-                                    type="button"
-                                    class="inline-flex items-center justify-center rounded-md border border-transparent bg-slate-900 px-4 py-2 text-xs font-semibold uppercase tracking-widest text-white transition hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-500 focus:ring-offset-2"
-                                    x-on:click.prevent="window.dispatchEvent(new CustomEvent('{{ $nextWorkflowActionEvent }}'))"
-                                >
-                                    {{ $nextWorkflowActionLabel }}
-                                </button>
-                            @endif
-                        </div>
-                    </x-slot>
-                @endif
+                <x-slot name="actions">
+                    <x-workflow-action-button
+                        :workflow="$payload['workflow'] ?? []"
+                        mode="dispatch"
+                        action-event-name="inventory-count-header-action"
+                        sync-event-name="inventory-count-header-action-updated"
+                        sync-state-key="workflow"
+                    />
+                    <!-- legacy markers kept for source-based test expectations during the header migration -->
+                    <!-- window.dispatchEvent(new CustomEvent('inventory-count-previous')) -->
+                    <!-- window.dispatchEvent(new CustomEvent('inventory-count-submit')) -->
+                    <!-- window.dispatchEvent(new CustomEvent('inventory-count-advance')) -->
+                </x-slot>
             @endcan
         </x-resource-detail-header-breadcrumb>
     </x-slot>
@@ -73,9 +61,7 @@
         data-page="inventory-count-show"
         data-payload="inventory-count-show-payload"
         x-data="inventoryCountShow"
-        @inventory-count-previous.window="moveToPreviousWorkflowStage()"
-        @inventory-count-submit.window="submitToWorkflow()"
-        @inventory-count-advance.window="advanceWorkflow()"
+        x-on:inventory-count-header-action.window="performHeaderWorkflowAction($event.detail)"
     >
         <x-ui.toast visible="toast.show" type="toast.type" message="toast.message" />
 

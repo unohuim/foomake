@@ -835,9 +835,11 @@ it('31. make order detail header payload stays compact and avoids the old id onl
         ->and(data_get($payload, 'makeOrder.output_item_name'))->toBe($output->name)
         ->and(data_get($payload, 'makeOrder.status'))->toBe('DRAFT')
         ->and(data_get($payload, 'makeOrder.workflow_state'))->toBe('DRAFT')
+        ->and(data_get($payload, 'makeOrder.display_label'))->toBe('DRAFT')
         ->and(data_get($payload, 'makeOrder.runs_text'))->toBe('2')
         ->and(data_get($payload, 'makeOrder.expected_output_qty_text'))->not->toBe('')
-        ->and(data_get($payload, 'makeOrder.actual_output_qty_text'))->toBe('');
+        ->and(data_get($payload, 'makeOrder.actual_output_qty_text'))->toBe('')
+        ->and(data_get($payload, 'workflow.next_stage_action.description'))->not->toBe('');
 });
 
 it('31a. make order detail header renders recipe and runs before output item and expected output quantity', function (): void {
@@ -865,12 +867,16 @@ it('31c. make order detail header renders the next valid workflow stage action f
     expect($source)->toContain('<x-slot name="actions">')
         ->and($source)->toContain('<x-slot name="titleSuffix">')
         ->and($source)->toContain("x-data=\"makeOrderHeaderState('manufacturing-make-orders-show-payload')\"")
-        ->and($source)->toContain("x-show=\"action && action.label\"")
-        ->and($source)->toContain("window.dispatchEvent(new CustomEvent('make-order-header-action'))")
-        ->and($source)->toContain("x-text=\"action?.label || ''\"")
+        ->and($source)->toContain('data-workflow-action-button')
+        ->and($source)->toContain('action-event-name="make-order-header-action"')
+        ->and($source)->toContain('sync-event-name="make-order-header-action-updated"')
+        ->and($source)->toContain('sync-state-key="workflow"')
         ->and($source)->toContain('data-workflow-progress-panel x-html="workflowProgressHtml()"')
         ->and($source)->toContain('x-on:click="if (!$el.disabled) { $el.showPicker?.() }"')
         ->and($source)->not->toContain('data-make-order-header-workflow-button')
+        ->and($source)->not->toContain("x-show=\"action && action.label\"")
+        ->and($source)->not->toContain("window.dispatchEvent(new CustomEvent('make-order-header-action'))")
+        ->and($source)->not->toContain("x-text=\"action?.label || ''\"")
         ->and($source)->not->toContain("\$makeOrderPayload['workflow_stage_name'] ?? \$makeOrderPayload['status'] ?? '—'");
 });
 
@@ -1237,7 +1243,12 @@ it('35a. make order detail header payload uses workflow stage names and not life
         ->and(data_get($payload, 'makeOrder.actual_output_qty_text'))->toBe('')
         ->and(data_get($payload, 'makeOrder.workflow_stage_name'))->toBe('Production')
         ->and(data_get($payload, 'makeOrder.workflow_state'))->toBe('Production')
+        ->and(data_get($payload, 'makeOrder.display_label'))->toBe('Production')
         ->and(data_get($payload, 'makeOrder.status'))->toBe(MakeOrder::STATUS_SCHEDULED)
+        ->and(data_get($payload, 'workflow.display_label'))->toBe('Production')
+        ->and(data_get($payload, 'workflow.currentLabel'))->toBe('Production')
+        ->and(data_get($payload, 'workflow.actions.0.label'))->toBe('PRODUCE')
+        ->and(data_get($payload, 'workflow.actions.0.description'))->not->toBe('')
         ->and(data_get($payload, 'workflow.next_stage_action.label'))->toBe('PRODUCE');
 
     $stageA->forceFill(['name' => 'Cook', 'action_verb' => 'COOK'])->save();
@@ -1250,6 +1261,9 @@ it('35a. make order detail header payload uses workflow stage names and not life
 
     expect(data_get($renamedPayload, 'makeOrder.workflow_stage_name'))->toBe('Cook')
         ->and(data_get($renamedPayload, 'makeOrder.workflow_state'))->toBe('Cook')
+        ->and(data_get($renamedPayload, 'makeOrder.display_label'))->toBe('Cook')
+        ->and(data_get($renamedPayload, 'workflow.actions.0.label'))->toBe('COOK')
+        ->and(data_get($renamedPayload, 'workflow.actions.0.description'))->not->toBe('')
         ->and(data_get($renamedPayload, 'workflow.next_stage_action.label'))->toBe('COOK')
         ->and(data_get($renamedPayload, 'makeOrder.status'))->toBe(MakeOrder::STATUS_SCHEDULED);
 
@@ -1277,7 +1291,11 @@ it('35a. make order detail header payload uses workflow stage names and not life
 
     expect(data_get($withoutStagePayload, 'makeOrder.workflow_stage_name'))->toBeNull()
         ->and(data_get($withoutStagePayload, 'makeOrder.workflow_state'))->toBe(MakeOrder::STATUS_DRAFT)
+        ->and(data_get($withoutStagePayload, 'makeOrder.display_label'))->toBe(MakeOrder::STATUS_DRAFT)
         ->and(data_get($withoutStagePayload, 'makeOrder.status'))->toBe(MakeOrder::STATUS_SCHEDULED)
+        ->and(data_get($withoutStagePayload, 'workflow.display_label'))->toBe(MakeOrder::STATUS_DRAFT)
+        ->and(data_get($withoutStagePayload, 'workflow.currentLabel'))->toBe(MakeOrder::STATUS_DRAFT)
+        ->and(data_get($withoutStagePayload, 'workflow.next_stage_action.description'))->not->toBe('')
         ->and(data_get($withoutStagePayload, 'workflow.next_stage_action.label'))->toBe('COOK');
 });
 
@@ -1290,7 +1308,7 @@ it('35b. make order detail header source and controller payload do not hardcode 
     expect($viewSource)->not->toContain("\$makeOrderPayload['workflow_stage_name'] ?? \$makeOrderPayload['status'] ?? '—'")
         ->and($viewSource)->not->toContain("{{ \$makeOrderPayload['status'] }}")
         ->and($viewSource)->toContain('<x-dropdown-select')
-        ->and($viewSource)->toContain("x-text=\"makeOrder.workflow_state || 'DRAFT'\"")
+        ->and($viewSource)->toContain("x-text=\"makeOrder.display_label || makeOrder.workflow_state || 'DRAFT'\"")
         ->and($viewSource)->toContain('x-model="workflow.made_by_user_id"')
         ->and($viewSource)->toContain('type="date"')
         ->and($viewSource)->toContain('x-model="workflow.due_date"')
@@ -1331,6 +1349,7 @@ it('35b. make order detail header source and controller payload do not hardcode 
         ->and($pageModuleSource)->toContain('syncHeaderMakeOrder')
         ->and($pageModuleSource)->toContain("Alpine.data('makeOrderHeaderState'")
         ->and($pageModuleSource)->toContain("new CustomEvent('make-order-header-action-updated'")
+        ->and($pageModuleSource)->toContain("workflow: this.workflow")
         ->and($pageModuleSource)->toContain('saveWorkflowAssignment')
         ->and($pageModuleSource)->toContain('saveMakeOrderDetailQuantity')
         ->and($pageModuleSource)->toContain('$watch(\'workflow.made_by_user_id\'')
@@ -1414,7 +1433,7 @@ it('35d. make order detail header renders visible workflow state beside the titl
         ->and($headerSource)->toContain('data-resource-detail-header-title-row')
         ->and($showSource)->not->toContain("x-on:make-order-header-sync.window=\"syncHeader(\$event.detail)\"")
         ->and($showSource)->toContain('<x-slot name="titleSuffix">')
-        ->and($showSource)->toContain("x-text=\"makeOrder.workflow_state || 'DRAFT'\"");
+        ->and($showSource)->toContain("x-text=\"makeOrder.display_label || makeOrder.workflow_state || 'DRAFT'\"");
 });
 
 it('35e. make order detail details section keeps runs expected output actual output due date and assignee in one compact shared grid', function (): void {

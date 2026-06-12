@@ -3,6 +3,7 @@
 namespace App\Actions\Workflows;
 
 use App\Models\InventoryCount;
+use App\Models\Tenant;
 use App\Models\WorkflowDomain;
 use App\Models\WorkflowStage;
 use DomainException;
@@ -38,6 +39,8 @@ class ResolveInventoryWorkflowStageAction
      */
     public function currentStage(InventoryCount $inventoryCount): ?WorkflowStage
     {
+        $this->seedWorkflowStages($inventoryCount);
+
         if ($inventoryCount->workflow_stage_id === null) {
             return null;
         }
@@ -56,6 +59,8 @@ class ResolveInventoryWorkflowStageAction
      */
     public function activeStages(InventoryCount $inventoryCount): Collection
     {
+        $this->seedWorkflowStages($inventoryCount);
+
         return WorkflowStage::withoutGlobalScopes()
             ->where('tenant_id', $inventoryCount->tenant_id)
             ->where('workflow_domain_id', $this->inventoryDomainId())
@@ -70,6 +75,8 @@ class ResolveInventoryWorkflowStageAction
      */
     public function firstActiveStage(InventoryCount $inventoryCount): ?WorkflowStage
     {
+        $this->seedWorkflowStages($inventoryCount);
+
         return $this->activeStages($inventoryCount)->first();
     }
 
@@ -78,6 +85,8 @@ class ResolveInventoryWorkflowStageAction
      */
     public function nextActiveStage(InventoryCount $inventoryCount): ?WorkflowStage
     {
+        $this->seedWorkflowStages($inventoryCount);
+
         $currentStage = $this->currentStage($inventoryCount);
 
         if (! $currentStage) {
@@ -98,6 +107,8 @@ class ResolveInventoryWorkflowStageAction
      */
     public function previousActiveStage(InventoryCount $inventoryCount): ?WorkflowStage
     {
+        $this->seedWorkflowStages($inventoryCount);
+
         $currentStage = $this->currentStage($inventoryCount);
 
         if (! $currentStage) {
@@ -118,6 +129,8 @@ class ResolveInventoryWorkflowStageAction
      */
     public function inventoryEffectStage(InventoryCount $inventoryCount): ?WorkflowStage
     {
+        $this->seedWorkflowStages($inventoryCount);
+
         return $this->activeStages($inventoryCount)
             ->firstWhere('is_inventory_effect_stage', true);
     }
@@ -144,5 +157,17 @@ class ResolveInventoryWorkflowStageAction
         }
 
         return (int) $candidate->sort_order < (int) $current->sort_order;
+    }
+
+    /**
+     * Ensure the tenant has the shared default workflow stages for inventory.
+     */
+    private function seedWorkflowStages(InventoryCount $inventoryCount): void
+    {
+        $tenant = Tenant::query()->find($inventoryCount->tenant_id);
+
+        if ($tenant) {
+            app(SeedDefaultWorkflowStagesForTenantAction::class)->execute($tenant);
+        }
     }
 }

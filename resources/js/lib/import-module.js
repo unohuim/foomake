@@ -166,8 +166,8 @@ const renderImportPanelMarkup = (config) => `
                                             x-on:change="handleLocalFileChange($event)"
                                             data-shared-import-file-input
                                         />
-                                        <p class="mt-1 text-sm text-red-600" x-text="errors.source[0]"></p>
-                                        <p class="mt-1 text-sm text-red-600" x-text="errors.file[0]"></p>
+                                        <p class="mt-1 text-sm text-red-600" x-text="errors.source && errors.source[0]"></p>
+                                        <p class="mt-1 text-sm text-red-600" x-text="errors.file && errors.file[0]"></p>
                                     </div>
 
                                     <div class="w-full min-w-0 box-border rounded-lg border border-gray-200 bg-gray-50 px-4 py-4" x-show="selectedSource && selectedSourceEnabled() && !sourceConnected() && !isCachedFileSource() && !isFileUploadMode()">
@@ -472,6 +472,7 @@ export function createImportModule(options = {}) {
         bulkManufacturable: bulkManufacturableDefault,
         bulkPurchasable: bulkPurchasableDefault,
         bulkBaseUomId: bulkBaseUomIdDefault,
+        uoms: Array.isArray(config.uoms) ? config.uoms : [],
         createFulfillmentRecipes: createFulfillmentRecipesDefault,
         isLoadingPreview: false,
         isSubmittingImport: false,

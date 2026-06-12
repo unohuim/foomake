@@ -24,6 +24,7 @@ use App\Models\Task;
 use App\Models\Uom;
 use App\Models\UomCategory;
 use App\Models\User;
+use App\Models\WorkflowStage;
 use App\Support\Workflows\WorkflowAssignmentPermissions;
 use App\Services\WooCommerceOrderPreviewService;
 use Illuminate\Contracts\View\View;
@@ -35,6 +36,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
@@ -107,16 +109,30 @@ class SalesOrderController extends Controller
             ->where('is_sellable', true)
             ->orderBy('name')
             ->get();
+        $workflowResolver = app(ResolveSalesWorkflowStageAction::class);
+        $currentWorkflowStage = $workflowResolver->currentStageForStatus($salesOrder);
+        $displayStage = $workflowResolver->previousActiveStage($salesOrder);
+        $workflowProgressStage = $salesOrder->status === SalesOrder::STATUS_DRAFT
+            || in_array($salesOrder->status, [
+                SalesOrder::STATUS_COMPLETED,
+                SalesOrder::STATUS_CANCELLED,
+            ], true)
+            ? null
+            : $workflowResolver->currentStageForStatus($salesOrder);
 
         $payload = [
-            'order' => $this->orderData($salesOrder),
+            'order' => $this->orderData($salesOrder, $displayStage),
+            'workflow' => $this->salesWorkflowPayload($salesOrder),
             'workflowProgressSteps' => app(BuildWorkflowProgressStepsAction::class)->execute(
                 (int) $request->user()->tenant_id,
                 'sales',
+                $workflowProgressStage?->id,
+                $workflowProgressStage?->key,
                 null,
-                $salesOrder->status,
-                null,
-                $salesOrder->status === SalesOrder::STATUS_COMPLETED
+                in_array($salesOrder->status, [
+                    SalesOrder::STATUS_COMPLETED,
+                    SalesOrder::STATUS_CANCELLED,
+                ], true)
             ),
             'customers' => $customers->map(fn (Customer $customer): array => $this->customerOptionData($customer))->values()->all(),
             'sellableItems' => $sellableItems->map(fn (Item $item): array => $this->sellableItemData($item))->values()->all(),
@@ -426,11 +442,13 @@ class SalesOrderController extends Controller
      *
      * @return array<string, int|string|bool|null|array<int, array<string, int|string|null>>|list<string>>
      */
-    public function orderData(SalesOrder $order): array
+    public function orderData(SalesOrder $order, ?WorkflowStage $displayStage = null): array
     {
         $contactName = null;
         $orderTotalCents = '0.000000';
-        $currentStage = app(ResolveSalesWorkflowStageAction::class)->currentStageForStatus($order);
+        $resolver = app(ResolveSalesWorkflowStageAction::class);
+        $currentStage = $resolver->currentStageForStatus($order);
+        $displayStage = $displayStage ?? $resolver->previousActiveStage($order);
 
         if ($order->contact) {
             $contactName = $order->contact->full_name;
@@ -451,6 +469,9 @@ class SalesOrderController extends Controller
             'contact_name' => $contactName,
             'city' => $order->customer?->city,
             'status' => $order->status,
+            'display_label' => $displayStage?->status_complete_label ?? $currentStage?->status_complete_label ?? $currentStage?->name ?? $order->status,
+            'status_label' => $displayStage?->status_complete_label ?? $currentStage?->status_complete_label ?? $currentStage?->name ?? $order->status,
+            'currentLabel' => $displayStage?->status_complete_label ?? $currentStage?->status_complete_label ?? $currentStage?->name ?? $order->status,
             'can_edit' => $order->isEditable(),
             'can_manage_lines' => $order->allowsLineMutations(),
             'available_status_transitions' => $order->availableTransitions(),
@@ -662,6 +683,123 @@ class SalesOrderController extends Controller
             ->map(fn (Task $task): array => $this->taskData($task, $viewerUserId))
             ->values()
             ->all();
+    }
+
+    /**
+     * Build the shared workflow action-button payload for a sales order.
+     *
+     * @return array<string, mixed>
+     */
+    private function salesWorkflowPayload(SalesOrder $order): array
+    {
+        $resolver = app(ResolveSalesWorkflowStageAction::class);
+        $currentStage = $resolver->currentStageForStatus($order);
+        $displayStage = $resolver->previousActiveStage($order);
+        $actions = [];
+
+        foreach ($order->availableTransitions() as $status) {
+            $stage = $this->salesWorkflowActionStage($order, $status, $resolver);
+
+            $actions[] = [
+                'id' => $status,
+                'type' => $status,
+                'label' => $this->salesWorkflowActionLabel($order, $status, $stage),
+                'description' => $this->salesWorkflowActionDescription($order, $status, $stage),
+                'endpoint' => route('sales.orders.status.update', $order),
+                'method' => 'PATCH',
+            ];
+        }
+
+        $currentLabel = $displayStage?->status_complete_label
+            ?? $currentStage?->status_complete_label
+            ?? $currentStage?->name
+            ?? $order->status;
+
+        return [
+            'status' => $order->status,
+            'status_label' => $currentLabel,
+            'display_label' => $currentLabel,
+            'currentLabel' => $currentLabel,
+            'current_stage_label' => $currentLabel,
+            'current_stage' => $currentStage ? [
+                'id' => (int) $currentStage->id,
+                'workflow_domain_id' => (int) $currentStage->workflow_domain_id,
+                'key' => $currentStage->key,
+                'name' => $currentStage->name,
+                'action_verb' => $currentStage->action_verb,
+                'status_complete_label' => $currentStage->status_complete_label,
+                'description' => $currentStage->description,
+            ] : null,
+            'actions' => $actions,
+            'header_menu' => [
+                'currentLabel' => $currentLabel,
+                'options' => $actions,
+            ],
+            'status_update_url' => route('sales.orders.status.update', $order),
+        ];
+    }
+
+    /**
+     * Resolve the visible button label for a sales workflow action.
+     */
+    private function salesWorkflowActionLabel(SalesOrder $order, string $status, ?WorkflowStage $stage): string
+    {
+        if ($order->status === SalesOrder::STATUS_DRAFT && $status === SalesOrder::STATUS_OPEN) {
+            return 'CREATE';
+        }
+
+        return match ($status) {
+            SalesOrder::STATUS_CANCELLED => 'Cancel',
+            SalesOrder::STATUS_COMPLETED => 'Complete',
+            default => $this->workflowVerb($stage?->action_verb ?: $stage?->name ?: $status),
+        };
+    }
+
+    /**
+     * Resolve the visible helper text for a sales workflow action.
+     */
+    private function salesWorkflowActionDescription(SalesOrder $order, string $status, ?WorkflowStage $stage): string
+    {
+        if (filled($stage?->description)) {
+            return (string) $stage->description;
+        }
+
+        if ($order->status === SalesOrder::STATUS_DRAFT && $status === SalesOrder::STATUS_OPEN) {
+            return 'Create this sales order.';
+        }
+
+        return match ($status) {
+            SalesOrder::STATUS_CANCELLED => 'Cancel this sales order.',
+            SalesOrder::STATUS_COMPLETED => 'Mark this sales order complete.',
+            default => 'Move this sales order to the next workflow stage.',
+        };
+    }
+
+    /**
+     * Resolve the workflow stage backing a sales-order action.
+     */
+    private function salesWorkflowActionStage(
+        SalesOrder $order,
+        string $status,
+        ResolveSalesWorkflowStageAction $resolver
+    ): ?WorkflowStage {
+        if ($order->status === SalesOrder::STATUS_DRAFT && $status === SalesOrder::STATUS_OPEN) {
+            return $resolver->stageForStatus($order, SalesOrder::STATUS_OPEN);
+        }
+
+        if ($status === SalesOrder::STATUS_CANCELLED || $status === SalesOrder::STATUS_COMPLETED) {
+            return null;
+        }
+
+        return $resolver->nextActiveStage($order);
+    }
+
+    /**
+     * Normalize workflow action verbs into sentence case for the UI.
+     */
+    private function workflowVerb(string $value): string
+    {
+        return Str::headline(Str::lower(trim($value)));
     }
 
     /**

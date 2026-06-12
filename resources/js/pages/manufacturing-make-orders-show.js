@@ -98,6 +98,21 @@ const formatQuantityForPrecision = (value, precision) => {
     return `${absolute.slice(0, splitAt)}.${absolute.slice(splitAt)}`;
 };
 
+const isMakeEndpoint = (endpoint) => {
+    const candidate = String(endpoint || '').trim();
+
+    if (!candidate) {
+        return false;
+    }
+
+    try {
+        const parsed = new URL(candidate, window.location.origin);
+        return /\/make\/?$/.test(parsed.pathname);
+    } catch (error) {
+        return /\/make\/?$/.test(candidate);
+    }
+};
+
 export function mount(rootEl, payload) {
     const safePayload = payload || {};
     const workflowPayload = asRecord(safePayload.workflow);
@@ -119,7 +134,7 @@ export function mount(rootEl, payload) {
             }
 
             this.makeOrder = asRecord(headerPayload.makeOrder);
-            this.action = asRecord(headerPayload.workflow?.next_stage_action);
+            this.action = asRecord(headerPayload.workflow?.actions?.[0] || headerPayload.workflow?.next_stage_action);
 
             window.addEventListener('make-order-header-make-order-updated', (event) => {
                 this.makeOrder = {
@@ -129,7 +144,11 @@ export function mount(rootEl, payload) {
             });
 
             window.addEventListener('make-order-header-action-updated', (event) => {
-                this.action = asRecord(event.detail?.action);
+                this.action = asRecord(
+                    event.detail?.workflow?.actions?.[0]
+                    || event.detail?.workflow?.next_stage_action
+                    || event.detail?.action
+                );
             });
         },
     }));
@@ -301,9 +320,12 @@ export function mount(rootEl, payload) {
         syncHeaderWorkflowAction() {
             window.dispatchEvent(new CustomEvent('make-order-header-action-updated', {
                 detail: {
-                    action: this.workflow.next_stage_action && this.workflow.next_stage_action.label
-                        ? this.workflow.next_stage_action
-                        : null,
+                    workflow: this.workflow,
+                    action: this.workflow.actions?.[0] && this.workflow.actions[0].label
+                        ? this.workflow.actions[0]
+                        : (this.workflow.next_stage_action && this.workflow.next_stage_action.label
+                            ? this.workflow.next_stage_action
+                            : null),
                 },
             }));
         },
@@ -567,19 +589,69 @@ export function mount(rootEl, payload) {
             this.selectedWorkflowStageId = String(workflowStageId);
             await this.moveWorkflowStage();
         },
-        async performHeaderWorkflowAction() {
-            const action = asRecord(this.workflow.next_stage_action);
+        async performHeaderWorkflowAction(action = null) {
+            const actionRecord = asRecord(
+                action?.label
+                    ? action
+                    : action?.action && typeof action.action === 'object'
+                        ? action.action
+                        : this.workflow.actions?.[0] || this.workflow.next_stage_action
+            );
 
-            if (!action.id || this.workflowTransitionSaving) {
+            if (!actionRecord.id || this.workflowTransitionSaving) {
                 return;
             }
 
-            if (action.type === 'make') {
-                await this.makeCurrentOrder(action);
+            if (String(actionRecord.method || '').toUpperCase() === 'DELETE' || actionRecord.type === 'cancel') {
+                await this.cancelCurrentOrder(actionRecord);
                 return;
             }
 
-            await this.moveWorkflowStageTo(action.id);
+            if (isMakeEndpoint(actionRecord.endpoint)) {
+                await this.makeCurrentOrder(actionRecord);
+                return;
+            }
+
+            await this.moveWorkflowStageTo(actionRecord.id);
+        },
+        async cancelCurrentOrder(action) {
+            const endpoint = action.endpoint || '';
+
+            if (!endpoint) {
+                this.showToast('error', 'Unable to archive make order.');
+                return;
+            }
+
+            this.workflowTransitionSaving = true;
+
+            try {
+                const response = await fetch(endpoint, {
+                    method: 'DELETE',
+                    headers: {
+                        Accept: 'application/json',
+                        'X-CSRF-TOKEN': this.csrfToken,
+                    },
+                });
+
+                const data = await response.json().catch(() => ({}));
+
+                if (!response.ok) {
+                    this.showToast('error', data.message || 'Unable to archive make order.');
+                    return;
+                }
+
+                this.hydrateMakeOrderResponse(data.data);
+                this.hydrateWorkflowResponse(data.workflow);
+                this.hydrateIngredientsResponse(data.ingredients);
+                if (Array.isArray(data.workflowProgressSteps)) {
+                    this.workflowProgressSteps = data.workflowProgressSteps;
+                }
+                this.showToast('success', data.message || 'Archived.');
+            } catch (error) {
+                this.showToast('error', 'Unable to archive make order.');
+            } finally {
+                this.workflowTransitionSaving = false;
+            }
         },
         async makeCurrentOrder(action) {
             const endpoint = action.endpoint || '';

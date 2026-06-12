@@ -770,11 +770,24 @@ it('creates/updates/deletes draft counts and lines with correct JSON shape + sta
 
     expect(InventoryCountLine::query()->whereKey($line->id)->exists())->toBeFalse();
 
-    $this->actingAs($user)->deleteJson('/inventory/counts/' . $count->id)
-        ->assertOk()
-        ->assertJson(['deleted' => true]);
+    $cancelResponse = $this->actingAs($user)->deleteJson('/inventory/counts/' . $count->id);
 
-    expect(InventoryCount::query()->whereKey($count->id)->exists())->toBeFalse();
+    $cancelResponse
+        ->assertOk()
+        ->assertJson(['cancelled' => true])
+        ->assertJsonPath('count.status', 'cancelled')
+        ->assertJsonPath('count.workflow_status_label', 'CANCELLED');
+
+    $count->refresh();
+    expect(InventoryCount::query()->whereKey($count->id)->exists())->toBeTrue()
+        ->and($count->workflow_cancelled_at)->not->toBeNull()
+        ->and($count->status)->toBe('cancelled');
+
+    $this->actingAs($user)->patchJson('/inventory/counts/' . $count->id, [
+        'notes' => 'Cancelled counts stay read-only',
+    ])->assertStatus(422)->assertJson([
+        'message' => 'Inventory count is cancelled and cannot be modified.',
+    ]);
 });
 
 it('enforces tenant isolation: index/show scoped, other-tenant count is 404 for all actions', function () {
@@ -1167,7 +1180,7 @@ it('draft schedule action works without an assigned user and still moves the cou
     $this->actingAs($user)
         ->get('/inventory/counts/' . $count->id)
         ->assertOk()
-        ->assertSee('SCHEDULE')
+        ->assertSee('Submit')
         ->assertDontSee('Post Count');
 
     ($this->ensureCountHasMaterial)($user, $tenant, $count);
@@ -1203,7 +1216,7 @@ it('draft detail page shows the next workflow stage action verb as the submit ac
         ->assertSee('Inventory Counts')
         ->assertSee($count->name)
         ->assertSee('Draft')
-        ->assertSee('SCHEDULE')
+        ->assertSee('Submit')
         ->assertDontSee('Submit Count')
         ->assertDontSee('Post Count')
         ->assertDontSee('>COMPLETE<', false);
@@ -1225,6 +1238,103 @@ it('draft inventory count detail auto-resolves the next workflow stage button ev
     expect($response->getContent())->toContain("window.dispatchEvent(new CustomEvent('inventory-count-submit'))")
         ->and($response->getContent())->toContain('SCHEDULE')
         ->and($response->getContent())->not->toContain("window.dispatchEvent(new CustomEvent('inventory-count-advance'))");
+});
+
+it('draft inventory count detail exposes a shared cancel action in the workflow payload', function () {
+    $tenant = Tenant::factory()->create();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermission)($user, 'inventory-adjustments-view');
+    ($this->grantPermission)($user, 'inventory-adjustments-execute');
+    ($this->seedInventoryWorkflow)($tenant);
+
+    $count = ($this->createDraftCountViaApi)($user, [
+        'notes' => 'Draft cancel payload',
+    ]);
+
+    $response = $this->actingAs($user)->get('/inventory/counts/' . $count->id)->assertOk();
+
+    preg_match(
+        '/<script type="application\\/json" id="inventory-count-show-payload">\\s*(.*?)\\s*<\\/script>/s',
+        $response->getContent(),
+        $matches
+    );
+
+    $payload = json_decode($matches[1] ?? '[]', true);
+
+    expect($payload['workflow']['actions'] ?? [])
+        ->toHaveCount(2)
+        ->and($payload['workflow']['actions'][0]['type'] ?? null)->toBe('submit')
+        ->and($payload['workflow']['actions'][1]['type'] ?? null)->toBe('cancel')
+        ->and($payload['workflow']['actions'][1]['method'] ?? null)->toBe('DELETE')
+        ->and($payload['workflow']['actions'][1]['endpoint'] ?? null)->toBe(route('inventory.counts.destroy', $count))
+        ->and($payload['workflow']['actions'][1]['label'] ?? null)->toBe('Cancel');
+});
+
+it('submitted inventory count detail still exposes the shared cancel action', function () {
+    $tenant = Tenant::factory()->create();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermission)($user, 'inventory-adjustments-view');
+    ($this->grantPermission)($user, 'inventory-adjustments-execute');
+    ($this->seedInventoryWorkflow)($tenant);
+
+    $count = ($this->createDraftCountViaApi)($user, [
+        'notes' => 'Submitted cancel payload',
+    ]);
+
+    ($this->ensureCountHasMaterial)($user, $tenant, $count);
+    ($this->submitCount)($user, $count)->assertOk();
+
+    $response = $this->actingAs($user)->get('/inventory/counts/' . $count->id)->assertOk();
+
+    preg_match(
+        '/<script type="application\\/json" id="inventory-count-show-payload">\\s*(.*?)\\s*<\\/script>/s',
+        $response->getContent(),
+        $matches
+    );
+
+    $payload = json_decode($matches[1] ?? '[]', true);
+
+    expect($payload['workflow']['actions'] ?? [])
+        ->toHaveCount(2)
+        ->and($payload['workflow']['actions'][0]['type'] ?? null)->toBe('previous')
+        ->and($payload['workflow']['actions'][1]['type'] ?? null)->toBe('cancel')
+        ->and($payload['workflow']['actions'][1]['method'] ?? null)->toBe('DELETE')
+        ->and($payload['workflow']['actions'][1]['endpoint'] ?? null)->toBe(route('inventory.counts.destroy', $count))
+        ->and($payload['workflow']['actions'][1]['label'] ?? null)->toBe('Cancel');
+});
+
+it('inventory counts in the first active workflow stage still expose cancel', function () {
+    $tenant = Tenant::factory()->create();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermission)($user, 'inventory-adjustments-view');
+    ($this->grantPermission)($user, 'inventory-adjustments-execute');
+    ($this->seedInventoryWorkflow)($tenant);
+
+    $count = ($this->createDraftCountViaApi)($user, [
+        'notes' => 'Counted cancel payload',
+    ]);
+
+    ($this->ensureCountHasMaterial)($user, $tenant, $count);
+    ($this->submitCount)($user, $count)->assertOk();
+
+    $response = $this->actingAs($user)->get('/inventory/counts/' . $count->id)->assertOk();
+
+    preg_match(
+        '/<script type="application\\/json" id="inventory-count-show-payload">\\s*(.*?)\\s*<\\/script>/s',
+        $response->getContent(),
+        $matches
+    );
+
+    $payload = json_decode($matches[1] ?? '[]', true);
+
+    expect($payload['workflow']['actions'] ?? [])
+        ->toHaveCount(2)
+        ->and($payload['workflow']['actions'][0]['type'] ?? null)->toBe('submit')
+        ->and($payload['workflow']['actions'][1]['type'] ?? null)->toBe('cancel')
+        ->and($payload['workflow']['actions'][0]['label'] ?? null)->toBe('Submit');
 });
 
 it('completed inventory count detail does not show a draft stage advancement button', function () {
@@ -1531,7 +1641,7 @@ it('detail payload separates metadata visibility from metadata editability', fun
         ->and(collect($countPayload['assignee_options'] ?? [])->pluck('value')->contains((string) $assignee->id))->toBeTrue();
 });
 
-it('draft detail page renders the Schedule button wired to the submit workflow action only', function () {
+it('draft detail page renders the Submit button wired to the submit workflow action only', function () {
     $tenant = Tenant::factory()->create();
     $user = ($this->makeUser)($tenant);
 
@@ -1548,7 +1658,7 @@ it('draft detail page renders the Schedule button wired to the submit workflow a
     expect($response->getContent())->toContain("window.dispatchEvent(new CustomEvent('inventory-count-submit'))")
         ->and($response->getContent())->not->toContain("window.dispatchEvent(new CustomEvent('inventory-count-post'))")
         ->and($response->getContent())->not->toContain("window.dispatchEvent(new CustomEvent('inventory-count-advance'))")
-        ->and($response->getContent())->toContain('SCHEDULE')
+        ->and($response->getContent())->toContain('Submit')
         ->and($response->getContent())->not->toContain('>COMPLETE<');
 });
 

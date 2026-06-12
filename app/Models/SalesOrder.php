@@ -172,27 +172,18 @@ class SalesOrder extends Model
         }
 
         $resolver = app(\App\Actions\Workflows\ResolveSalesWorkflowStageAction::class);
+        $currentStage = $resolver->currentStageForStatus($this);
 
-        if ($this->status === self::STATUS_OPEN) {
-            $firstStage = $resolver->firstActiveStage($this);
-
-            if (! $firstStage) {
-                return [self::STATUS_COMPLETED, self::STATUS_CANCELLED];
-            }
-
-            return [$resolver->statusForStage($firstStage), self::STATUS_CANCELLED];
+        if (! $currentStage) {
+            return [self::STATUS_COMPLETED, self::STATUS_CANCELLED];
         }
 
-        if ($this->status === self::STATUS_PACKING) {
-            return [self::STATUS_PACKED, self::STATUS_CANCELLED];
+        $nextStatus = $currentStage->status_complete_label ? strtoupper(trim((string) $currentStage->status_complete_label)) : '';
+
+        if ($nextStatus !== '') {
+            return [$nextStatus, self::STATUS_CANCELLED];
         }
 
-        $nextStage = $resolver->nextActiveStage($this);
-
-        if ($nextStage) {
-            return [$resolver->statusForStage($nextStage), self::STATUS_CANCELLED];
-        }
-
-        return [self::STATUS_COMPLETED];
+        return [self::STATUS_COMPLETED, self::STATUS_CANCELLED];
     }
 }

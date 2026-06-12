@@ -19,7 +19,26 @@
             :items="$breadcrumbItems"
             :title="__('Sales Order #:id', ['id' => $salesOrder->id])"
             title-class="font-semibold text-xl text-gray-800 leading-tight"
-        />
+        >
+            <x-slot name="titleSuffix">
+                <span
+                    class="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700"
+                    x-text="order.display_label || order.currentLabel || 'DRAFT'"
+                >
+                    {{ data_get($payload, 'workflow.display_label', data_get($payload, 'order.currentLabel', 'DRAFT')) }}
+                </span>
+            </x-slot>
+
+            <x-slot name="actions">
+                <x-workflow-action-button
+                    :workflow="$payload['workflow'] ?? []"
+                    mode="dispatch"
+                    action-event-name="sales-order-status-action"
+                    sync-event-name="sales-order-status-action-updated"
+                    sync-state-key="workflow"
+                />
+            </x-slot>
+        </x-resource-detail-header-breadcrumb>
     </x-slot>
 
     <script type="application/json" id="sales-orders-show-payload">@json($payload)</script>
@@ -29,21 +48,19 @@
         data-page="sales-orders-show"
         data-payload="sales-orders-show-payload"
         x-data="salesOrdersShow"
+        x-on:sales-order-status-action.window="performHeaderWorkflowAction($event.detail)"
     >
         <x-ui.toast visible="toast.visible" type="toast.type" message="toast.message" />
 
         <div class="max-w-6xl mx-auto space-y-6 sm:px-6 lg:px-8">
-            <x-ui.workflow-progress
-                :steps="$payload['workflowProgressSteps'] ?? []"
-                data-workflow-progress-panel
-            />
+            <div data-workflow-progress-panel x-html="workflowProgressHtml()"></div>
 
             <div class="bg-white border border-gray-100 shadow-sm sm:rounded-lg">
                 <div class="p-6">
                     <div class="flex items-start justify-between gap-4">
                         <div>
                             <p class="text-sm text-gray-500">Status</p>
-                            <p class="mt-1 text-lg font-semibold text-gray-900" x-text="order.status"></p>
+                            <p class="mt-1 text-lg font-semibold text-gray-900" x-text="order.display_label || order.currentLabel || 'DRAFT'"></p>
                         </div>
                     </div>
 
@@ -80,17 +97,6 @@
                             <p class="text-sm text-gray-500">External status</p>
                             <p class="mt-1 text-base text-gray-900" x-text="order.external_status || '—'"></p>
                         </div>
-                    </div>
-
-                    <div class="mt-6 flex flex-wrap gap-2" x-show="canChangeStatus(order)">
-                        <template x-for="status in order.available_status_transitions" :key="`${order.id}-${status}`">
-                            <button
-                                type="button"
-                                class="inline-flex items-center rounded-md border border-gray-300 px-3 py-1.5 text-xs font-semibold uppercase tracking-widest text-gray-700 hover:bg-gray-50"
-                                x-on:click="submitStatus(status)"
-                                x-text="status"
-                            ></button>
-                        </template>
                     </div>
 
                     <div

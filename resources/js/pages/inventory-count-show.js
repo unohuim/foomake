@@ -11,6 +11,7 @@ export function mount(rootEl, payload) {
     const csrfToken = csrfMeta ? (csrfMeta.getAttribute('content') || '') : '';
     const sectionsPayload = asRecord(safePayload.sections);
     const countPayload = asRecord(safePayload.count);
+    const workflowPayload = asRecord(safePayload.workflow);
 
     rootEl.querySelectorAll('[data-js-crud-section-root]').forEach((sectionRootEl) => {
         const sectionKey = sectionRootEl.dataset.sectionKey || '';
@@ -257,6 +258,7 @@ export function mount(rootEl, payload) {
         csrf: csrfToken,
         toast: { show: false, type: 'success', message: '' },
         count: countPayload,
+        workflow: workflowPayload,
         details: {
             counted_at_iso: asString(countPayload.counted_at_iso),
             assigned_to_user_id: countPayload.assigned_to_user_id === null || countPayload.assigned_to_user_id === undefined
@@ -326,6 +328,59 @@ export function mount(rootEl, payload) {
             return value === '' || value === null || value === undefined
                 ? ''
                 : String(value);
+        },
+        performHeaderWorkflowAction(action = null) {
+            const actionType = asString(action?.type || action?.handlerKey || action?.id, '');
+
+            if (String(action?.method || '').toUpperCase() === 'DELETE' || actionType === 'cancel') {
+                this.cancelInventoryCount(action);
+                return;
+            }
+
+            if (actionType === 'previous') {
+                this.moveToPreviousWorkflowStage();
+                return;
+            }
+
+            if (actionType === 'submit') {
+                this.submitToWorkflow();
+                return;
+            }
+
+            if (actionType === 'advance') {
+                this.advanceWorkflow();
+            }
+        },
+
+        async cancelInventoryCount(action = null) {
+            const endpoint = asString(action?.endpoint || this.count.delete_url || '', '');
+
+            if (!endpoint) {
+                return;
+            }
+
+            try {
+                const response = await fetch(endpoint, {
+                    method: 'DELETE',
+                    headers: {
+                        Accept: 'application/json',
+                        'X-CSRF-TOKEN': this.csrf,
+                    },
+                });
+
+                const data = await response.json().catch(() => ({}));
+                const responseData = asRecord(data);
+
+                if (!response.ok) {
+                    this.showToast('error', responseData.message || 'Unable to cancel inventory count.');
+                    return;
+                }
+
+                this.showToast('success', 'Inventory count cancelled.');
+                window.location.reload();
+            } catch (error) {
+                this.showToast('error', 'Unable to cancel inventory count.');
+            }
         },
 
         detailsPayload(field) {
@@ -539,10 +594,10 @@ export function mount(rootEl, payload) {
 
             const data = await response.json().catch(() => ({}));
 
-            if (!response.ok) {
-                this.showToast('error', data.message || 'Unable to submit count.');
-                return;
-            }
+                if (!response.ok) {
+                    this.showToast('error', data.message || 'Unable to submit count.');
+                    return;
+                }
 
             window.location.reload();
         },

@@ -2121,12 +2121,17 @@ class RecipeController extends Controller
 
         return array_merge($row, [
             'status_label' => $currentLabel,
+            'actions' => $this->recipeVersionHeaderMenuOptions(
+                is_array($row['availableActions'] ?? null) ? $row['availableActions'] : [],
+                $normalizedStatus,
+                $row
+            ),
             'header_menu' => [
                 'currentLabel' => $currentLabel,
                 'options' => $this->recipeVersionHeaderMenuOptions(
                     is_array($row['availableActions'] ?? null) ? $row['availableActions'] : [],
-                    $this->recipeVersionSectionActions(),
-                    $normalizedStatus
+                    $normalizedStatus,
+                    $row
                 ),
             ],
         ]);
@@ -2151,32 +2156,87 @@ class RecipeController extends Controller
 
     /**
      * @param  array<int, string>  $availableActions
-     * @param  array<int, array<string, mixed>>  $catalog
      * @return array<int, array<string, mixed>>
      */
-    private function recipeVersionHeaderMenuOptions(array $availableActions, array $catalog, string $normalizedStatus): array
+    private function recipeVersionHeaderMenuOptions(array $availableActions, string $normalizedStatus, array $row): array
     {
+        $catalog = collect($this->recipeVersionSectionActions());
+
         return collect($availableActions)
-            ->map(function (string $actionId) use ($catalog, $normalizedStatus): ?array {
-                $action = collect($catalog)->firstWhere('id', $actionId);
+            ->map(function (string $actionId) use ($catalog, $normalizedStatus, $row): ?array {
+                $action = $catalog->firstWhere('id', $actionId);
 
                 if (! is_array($action)) {
                     return null;
                 }
 
-                return [
+                return array_filter([
+                    'id' => (string) ($action['id'] ?? $actionId),
+                    'type' => (string) ($action['id'] ?? $actionId),
                     'label' => (string) $action['label'],
                     'description' => $this->recipeVersionHeaderMenuDescription(
                         $actionId,
                         (string) ($action['description'] ?? ''),
                         $normalizedStatus
                     ),
-                    'action' => $action,
-                ];
+                    'tone' => (string) ($action['tone'] ?? 'default'),
+                    'handlerKey' => $this->recipeVersionActionHandlerKey($actionId, $action),
+                    'endpoint' => $this->recipeVersionActionEndpoint($actionId, $row),
+                    'method' => $this->recipeVersionActionMethod($actionId, $action),
+                    'requiresConfirmation' => (bool) ($action['requiresConfirmation'] ?? false),
+                ], static fn ($value): bool => $value !== null && $value !== '');
             })
             ->filter()
             ->values()
             ->all();
+    }
+
+    /**
+     * Resolve the client-side handler key for a recipe version action.
+     *
+     * @param  array<string, mixed>  $action
+     */
+    private function recipeVersionActionHandlerKey(string $actionId, array $action): ?string
+    {
+        return (string) ($action['handlerKey'] ?? '') !== ''
+            ? (string) $action['handlerKey']
+            : null;
+    }
+
+    /**
+     * Resolve the endpoint used by a recipe version action.
+     *
+     * @param  array<string, mixed>  $row
+     */
+    private function recipeVersionActionEndpoint(string $actionId, array $row): ?string
+    {
+        return match ($actionId) {
+            'view' => null,
+            'make' => (string) ($row['make_url'] ?? '') ?: null,
+            'check_in' => (string) ($row['check_in_url'] ?? '') ?: null,
+            'checkout' => (string) ($row['checkout_url'] ?? '') ?: null,
+            'publish' => (string) ($row['publish_url'] ?? '') ?: null,
+            'duplicate' => (string) ($row['duplicate_url'] ?? '') ?: null,
+            'delete' => isset($row['recipe_id'], $row['id'])
+                ? route('manufacturing.recipes.versions.destroy', [(int) $row['recipe_id'], (int) $row['id']])
+                : null,
+            'archive' => (string) ($row['archive_url'] ?? '') ?: null,
+            default => null,
+        };
+    }
+
+    /**
+     * Resolve the HTTP method for a recipe version action.
+     *
+     * @param  array<string, mixed>  $action
+     */
+    private function recipeVersionActionMethod(string $actionId, array $action): string
+    {
+        return (string) ($action['method'] ?? match ($actionId) {
+            'publish', 'archive' => 'PATCH',
+            'view' => 'GET',
+            default => 'POST',
+        });
     }
 
     private function recipeVersionHeaderMenuDescription(

@@ -21,6 +21,8 @@ use Illuminate\Support\Carbon;
  * @property int|null $workflow_stage_id
  * @property Carbon|null $posted_at
  * @property int|null $posted_by_user_id
+ * @property Carbon|null $workflow_cancelled_at
+ * @property int|null $workflow_cancelled_by_user_id
  * @property string|null $notes
  */
 class InventoryCount extends Model
@@ -38,12 +40,15 @@ class InventoryCount extends Model
         'workflow_stage_id',
         'posted_at',
         'posted_by_user_id',
+        'workflow_cancelled_at',
+        'workflow_cancelled_by_user_id',
         'notes',
     ];
 
     protected $casts = [
         'counted_at' => 'datetime',
         'posted_at' => 'datetime',
+        'workflow_cancelled_at' => 'datetime',
     ];
 
     /**
@@ -68,6 +73,14 @@ class InventoryCount extends Model
     public function postedByUser(): BelongsTo
     {
         return $this->belongsTo(User::class, 'posted_by_user_id');
+    }
+
+    /**
+     * @return BelongsTo
+     */
+    public function workflowCancelledByUser(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'workflow_cancelled_by_user_id');
     }
 
     /**
@@ -115,6 +128,10 @@ class InventoryCount extends Model
      */
     public function getStatusAttribute(): string
     {
+        if ($this->workflow_cancelled_at !== null) {
+            return 'cancelled';
+        }
+
         return $this->posted_at === null ? 'draft' : 'posted';
     }
 }

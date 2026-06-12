@@ -3,7 +3,7 @@
     data-page="manufacturing-make-orders-show"
     data-payload="manufacturing-make-orders-show-payload"
     x-data="manufacturingMakeOrdersShow"
-    x-on:make-order-header-action.window="performHeaderWorkflowAction()"
+    x-on:make-order-header-action.window="performHeaderWorkflowAction($event.detail)"
     x-on:make-order-next-stage.window="moveWorkflowStageTo($event.detail.workflowStageId)"
 >
     @php
@@ -20,9 +20,9 @@
                 <x-slot name="titleSuffix">
                     <span
                         class="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700"
-                        x-text="makeOrder.workflow_state || 'DRAFT'"
+                        x-text="makeOrder.display_label || makeOrder.workflow_state || 'DRAFT'"
                     >
-                        {{ data_get($makeOrderPayload, 'workflow_state', 'DRAFT') }}
+                        {{ data_get($makeOrderPayload, 'display_label', data_get($makeOrderPayload, 'workflow_state', 'DRAFT')) }}
                     </span>
                 </x-slot>
 
@@ -59,19 +59,13 @@
                 </x-slot>
 
                 <x-slot name="actions">
-                    <div
-                        class="flex items-center justify-end"
-                        x-show="action && action.label"
-                    >
-                        <button
-                            type="button"
-                            class="inline-flex items-center justify-center rounded-md border border-transparent bg-slate-900 px-4 py-2 text-xs font-semibold uppercase tracking-widest text-white transition hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-500 focus:ring-offset-2"
-                            x-on:click.prevent="window.dispatchEvent(new CustomEvent('make-order-header-action'))"
-                            x-text="action?.label || ''"
-                        >
-                            {{ $payload['workflow']['next_stage_action']['label'] ?? '' }}
-                        </button>
-                    </div>
+                    <x-workflow-action-button
+                        :workflow="$payload['workflow']"
+                        mode="dispatch"
+                        action-event-name="make-order-header-action"
+                        sync-event-name="make-order-header-action-updated"
+                        sync-state-key="workflow"
+                    />
                 </x-slot>
             </x-resource-detail-header-breadcrumb>
         </div>

@@ -3,7 +3,7 @@
     data-page="manufacturing-recipes-show"
     data-payload="manufacturing-recipes-show-payload"
     x-data="manufacturingRecipesShow"
-    x-on:recipe-active-version-action.window="performHeaderVersionAction($event.detail.action)"
+    x-on:recipe-active-version-action.window="performHeaderVersionAction($event.detail)"
 >
     @php
         $breadcrumbItems = [
@@ -45,51 +45,22 @@
                 @endif
                 <span class="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700">{{ data_get($activeVersion, 'display.outputQuantityText') ?? '—' }}</span>
             </div>
-            @if (! empty(data_get($activeVersion, 'header_menu.options', [])))
+            @if (! empty(data_get($activeVersion, 'actions', [])))
                 <x-slot name="actions">
-                    <div class="flex items-center gap-3" x-data="recipeActiveVersionHeaderMenu(@js($activeVersion))" data-recipe-active-version-menu>
+                    <div class="flex items-center gap-3" data-recipe-active-version-menu>
                         <span
                             class="text-sm font-medium text-slate-600"
                             data-recipe-active-version-number-label
-                            x-text="versionLabel()"
                         >
                             Version {{ data_get($activeVersion, 'version_number_display', '—') }}
                         </span>
-                        <x-dropdown align="right" width="w-64" contentClasses="rounded-xl border border-slate-200 bg-white p-1.5 shadow-lg ring-1 ring-black/5">
-                            <x-slot name="trigger">
-                                <button
-                                    type="button"
-                                    class="inline-flex items-stretch rounded-lg border border-slate-300 bg-white shadow-sm transition hover:border-slate-400 hover:bg-slate-50"
-                                >
-                                    <span class="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-slate-700">
-                                        <svg class="h-4 w-4 text-slate-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                                            <path fill-rule="evenodd" d="M16.704 5.29a1 1 0 0 1 .006 1.414l-8 8.07a1 1 0 0 1-1.42 0l-4-4.035a1 1 0 0 1 1.42-1.41l3.29 3.32 7.29-7.36a1 1 0 0 1 1.414 0Z" clip-rule="evenodd" />
-                                        </svg>
-                                        <span class="text-sm font-semibold text-slate-700" data-recipe-active-version-label x-text="statusLabel()">{{ data_get($activeVersion, 'status_label', '') }}</span>
-                                    </span>
-                                    <span class="inline-flex items-center border-l border-slate-300 px-2.5 text-slate-500">
-                                        <svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                                            <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 11.168l3.71-3.938a.75.75 0 1 1 1.08 1.04l-4.25 4.5a.75.75 0 0 1-1.08 0l-4.25-4.5a.75.75 0 0 1 .02-1.06Z" clip-rule="evenodd" />
-                                        </svg>
-                                    </span>
-                                </button>
-                            </x-slot>
-
-                            <div class="space-y-1" role="menu">
-                                <template x-for="option in menuOptions()" :key="option.label">
-                                    <button
-                                        type="button"
-                                        class="flex w-full items-start rounded-lg px-3 py-2 text-left text-sm transition hover:bg-slate-50"
-                                        x-on:click.prevent="dispatchAction(option.action)"
-                                    >
-                                        <span class="min-w-0 flex-1">
-                                            <span class="block font-medium text-slate-900" x-text="option.label"></span>
-                                            <span class="mt-1 block text-xs leading-5 text-slate-500" x-show="option.description" x-text="option.description"></span>
-                                        </span>
-                                    </button>
-                                </template>
-                            </div>
-                        </x-dropdown>
+                        <x-workflow-action-button
+                            :workflow="$activeVersion"
+                            mode="dispatch"
+                            action-event-name="recipe-active-version-action"
+                            sync-event-name="recipe-active-version-sync"
+                            sync-state-key="activeVersion"
+                        />
                     </div>
                 </x-slot>
             @endif
@@ -190,24 +161,6 @@
             <div data-js-crud-section-root data-section-key="versions"></div>
         @endif
 
-        @can('inventory-make-orders-manage')
-            <div class="flex justify-end gap-2">
-                <button
-                    type="button"
-                    class="inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-widest text-gray-700 shadow-sm transition hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-                    x-on:click="openEditRecipe()"
-                >
-                    {{ __('Edit Recipe') }}
-                </button>
-                <button
-                    type="button"
-                    class="inline-flex items-center rounded-md border border-transparent bg-red-600 px-4 py-2 text-xs font-semibold uppercase tracking-widest text-white transition hover:bg-red-500 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
-                    x-on:click="openDeleteRecipe()"
-                >
-                    {{ __('Delete') }}
-                </button>
-            </div>
-        @endcan
     </div>
 
     <x-slot name="overlays">

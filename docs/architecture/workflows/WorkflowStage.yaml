@@ -27,10 +27,12 @@ rules:
   - Workflow stages are database-backed rather than hardcoded.
   - Workflow stages represent tenant-configurable operational stages within a workflow domain.
   - Workflow stages store `name`, `action_verb`, `status_complete_label`, and `completion_mode`.
+  - Workflow stages may also store `description`, which is the short helper copy rendered under the stage action button.
   - `name` is the present-tense period of work.
   - `action_verb` is the verb shown for completing the current stage.
   - `status_complete_label` is the derived status after the stage completes.
   - `status_complete_label` must be selected from `WorkflowStatusOptions` for the stage's workflow domain.
+  - `description` should be seeded for core stages so the shared action button can render a consistent helper line.
   - `completion_mode` must be `manual` or `automatic`.
   - Seeded/default workflow stages are core stages with `is_core = true`.
   - User-created workflow stages default to `is_core = false`.

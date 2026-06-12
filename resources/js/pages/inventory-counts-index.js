@@ -375,14 +375,14 @@ export function mount(rootEl, payload) {
                 return;
             }
 
-            if (!window.confirm('Delete this inventory count?')) {
+            if (!window.confirm('Cancel this inventory count?')) {
                 return;
             }
 
             const deleteUrl = record.delete_url || buildCountEndpoint(this.endpoints.delete, record.id);
 
             if (!deleteUrl) {
-                this.showToast('error', 'Unable to delete count.');
+                this.showToast('error', 'Unable to cancel count.');
                 return;
             }
 
@@ -398,14 +398,14 @@ export function mount(rootEl, payload) {
                 const data = await response.json();
 
                 if (!response.ok) {
-                    this.showToast('error', data?.message || 'Unable to delete count.');
+                    this.showToast('error', data?.message || 'Unable to cancel count.');
                     return;
                 }
 
                 await this.fetchCounts();
-                this.showToast('success', 'Inventory count deleted.');
+                this.showToast('success', 'Inventory count cancelled.');
             } catch (error) {
-                this.showToast('error', 'Unable to delete count.');
+                this.showToast('error', 'Unable to cancel count.');
             }
         },
         view(record) {

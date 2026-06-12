@@ -4,10 +4,12 @@ namespace App\Services\Workflows;
 
 use App\Actions\Workflows\AssertWorkflowStageTasksCompletedAction;
 use App\Actions\Workflows\GenerateWorkflowStageTasksAction;
+use App\Actions\Workflows\SeedDefaultWorkflowStagesForTenantAction;
 use App\Models\PurchaseOrder;
 use App\Models\PurchaseOrderLine;
 use App\Models\Task;
 use App\Models\User;
+use App\Models\Tenant;
 use App\Models\WorkflowDomain;
 use App\Models\WorkflowStage;
 use App\Services\Purchasing\PurchaseOrderLifecycleService;
@@ -435,6 +437,10 @@ class WorkflowTransitionService
      */
     private function purchaseOrderStageDescription(WorkflowStage $stage): string
     {
+        if (filled($stage->description)) {
+            return (string) $stage->description;
+        }
+
         return match ($stage->key) {
             'creating' => 'Create this purchase order, and begin workflow.',
             'receiving' => 'Record received inventory for this purchase order.',
@@ -458,6 +464,8 @@ class WorkflowTransitionService
      */
     private function activeStagesForDomain(int $tenantId, string $domainKey): Collection
     {
+        $this->seedWorkflowStages($tenantId);
+
         $domainId = $this->domainId($domainKey);
 
         if (! $domainId) {
@@ -523,5 +531,17 @@ class WorkflowTransitionService
     private function naturalCase(string $value): string
     {
         return ucwords(strtolower($value));
+    }
+
+    /**
+     * Ensure the tenant has the shared default workflow stages seeded.
+     */
+    private function seedWorkflowStages(int $tenantId): void
+    {
+        $tenant = Tenant::query()->find($tenantId);
+
+        if ($tenant) {
+            app(SeedDefaultWorkflowStagesForTenantAction::class)->execute($tenant);
+        }
     }
 }

@@ -3,7 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Actions\Workflows\BuildWorkflowProgressStepsAction;
+use App\Actions\Workflows\SeedDefaultWorkflowStagesForTenantAction;
 use App\Models\PurchaseOrder;
+use App\Models\Tenant;
 use App\Models\WorkflowDomain;
 use App\Models\WorkflowStage;
 use App\Services\Purchasing\PurchaseOrderLifecycleService;
@@ -163,6 +165,12 @@ class PurchaseOrderStatusController extends Controller
      */
     private function workflowFieldsForStatus(PurchaseOrder $purchaseOrder, string $targetStatus): array
     {
+        $tenant = Tenant::query()->find($purchaseOrder->tenant_id);
+
+        if ($tenant) {
+            app(SeedDefaultWorkflowStagesForTenantAction::class)->execute($tenant);
+        }
+
         $stages = WorkflowStage::withoutGlobalScopes()
             ->where('tenant_id', $purchaseOrder->tenant_id)
             ->where('workflow_domain_id', $this->purchasingWorkflowDomainId() ?: 0)

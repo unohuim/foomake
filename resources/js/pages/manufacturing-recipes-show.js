@@ -46,33 +46,6 @@ export function mount(rootEl, payload) {
         sectionRootEl._jsCrudSectionApi.updateSectionConfig(sectionConfig);
     };
 
-    Alpine.data('recipeActiveVersionHeaderMenu', (initialActiveVersion = {}) => ({
-        activeVersion: asRecord(initialActiveVersion),
-        init() {
-            window.addEventListener('recipe-active-version-sync', (event) => {
-                this.activeVersion = asRecord(event?.detail?.activeVersion);
-            });
-        },
-        versionLabel() {
-            return `Version ${asString(this.activeVersion.version_number_display, '—')}`;
-        },
-        statusLabel() {
-            return asString(this.activeVersion.status_label, asString(this.activeVersion.header_menu?.currentLabel));
-        },
-        menuOptions() {
-            return Array.isArray(this.activeVersion.header_menu?.options) ? this.activeVersion.header_menu.options : [];
-        },
-        dispatchAction(action) {
-            if (!action || typeof action !== 'object') {
-                return;
-            }
-
-            window.dispatchEvent(new CustomEvent('recipe-active-version-action', {
-                detail: { action },
-            }));
-        },
-    }));
-
     Alpine.data('manufacturingRecipesShow', () => ({
         recipe: safePayload.recipe || {},
         sections: safePayload.sections || {},
@@ -137,16 +110,6 @@ export function mount(rootEl, payload) {
             const activeVersion = asRecord(this.recipe.active_version);
 
             return activeVersion.id ? activeVersion : null;
-        },
-        hasActiveVersionMenu() {
-            const activeVersion = this.activeVersion();
-
-            return Boolean(activeVersion && Array.isArray(activeVersion.header_menu?.options) && activeVersion.header_menu.options.length > 0);
-        },
-        activeVersionMenuOptions() {
-            const activeVersion = this.activeVersion();
-
-            return Array.isArray(activeVersion?.header_menu?.options) ? activeVersion.header_menu.options : [];
         },
         showToast(type, message) {
             this.toast.type = type;
@@ -303,12 +266,7 @@ export function mount(rootEl, payload) {
                 return;
             }
 
-            if (action.handlerKey === 'viewVersion') {
-                return;
-            }
-
-            if (action.handlerKey === 'makeVersion') {
-                await this.createMakeOrder(record.make_url || '');
+            if (action.handlerKey === 'viewVersion' || action.type === 'view') {
                 return;
             }
 
@@ -318,6 +276,7 @@ export function mount(rootEl, payload) {
                 publishVersion: record.publish_url,
                 duplicateVersion: record.duplicate_url,
                 archiveVersion: record.archive_url,
+                deleteVersion: record.remove_url || record.delete_url,
             };
             const actionToMethod = {
                 checkoutVersion: 'POST',
@@ -325,16 +284,19 @@ export function mount(rootEl, payload) {
                 publishVersion: 'PATCH',
                 duplicateVersion: 'POST',
                 archiveVersion: 'PATCH',
+                deleteVersion: 'DELETE',
             };
 
-            const endpoint = actionToUrl[action.handlerKey];
+            const endpoint = asString(action.endpoint || '', '')
+                || actionToUrl[action.handlerKey]
+                || actionToUrl[action.type];
 
             if (!endpoint) {
                 return;
             }
 
             const response = await fetch(endpoint, {
-                method: actionToMethod[action.handlerKey] || 'POST',
+                method: asString(action.method || '', '') || actionToMethod[action.handlerKey] || actionToMethod[action.type] || 'POST',
                 headers: {
                     Accept: 'application/json',
                     'X-CSRF-TOKEN': this.csrfToken,
@@ -346,7 +308,17 @@ export function mount(rootEl, payload) {
                 return;
             }
 
-            this.hydrateRecipeResponse(await response.json());
+            const data = await response.json().catch(() => ({}));
+
+            if (data?.data?.show_url) {
+                window.location.assign(data.data.show_url);
+                return;
+            }
+
+            if (data && typeof data === 'object') {
+                this.hydrateRecipeResponse(data);
+            }
+
             if (typeof afterSuccess === 'function') {
                 await afterSuccess();
             }
