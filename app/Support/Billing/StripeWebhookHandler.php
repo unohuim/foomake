@@ -2,10 +2,7 @@
 
 namespace App\Support\Billing;
 
-use App\Models\Tenant;
 use Illuminate\Http\Request;
-use Illuminate\Support\Carbon;
-use Illuminate\Support\Facades\Log;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
 /**
@@ -13,6 +10,13 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
  */
 class StripeWebhookHandler
 {
+    /**
+     * Create a new webhook handler instance.
+     */
+    public function __construct(private readonly StripeBillingService $billingService)
+    {
+    }
+
     /**
      * Verify and apply the webhook request.
      */
@@ -35,10 +39,10 @@ class StripeWebhookHandler
         }
 
         match ($type) {
-            'checkout.session.completed' => $this->handleCheckoutSessionCompleted($object),
+            'checkout.session.completed' => $this->billingService->applyCheckoutSession($object),
             'customer.subscription.created',
             'customer.subscription.updated',
-            'customer.subscription.deleted' => $this->handleSubscriptionChanged($object),
+            'customer.subscription.deleted' => $this->billingService->applySubscription($object),
             default => null,
         };
     }
@@ -75,122 +79,4 @@ class StripeWebhookHandler
         }
     }
 
-    /**
-     * Persist Stripe customer and subscription identifiers from completed Checkout.
-     *
-     * @param array<string, mixed> $session
-     */
-    private function handleCheckoutSessionCompleted(array $session): void
-    {
-        $tenant = $this->tenantFromStripeObject($session);
-
-        if (! $tenant) {
-            return;
-        }
-
-        $tenant->forceFill([
-            'billing_provider' => 'stripe',
-            'billing_provider_customer_id' => $session['customer'] ?? $tenant->billing_provider_customer_id,
-            'billing_provider_subscription_id' => $session['subscription'] ?? $tenant->billing_provider_subscription_id,
-        ])->save();
-    }
-
-    /**
-     * Persist provider-confirmed subscription status.
-     *
-     * @param array<string, mixed> $subscription
-     */
-    private function handleSubscriptionChanged(array $subscription): void
-    {
-        $tenant = $this->tenantFromStripeObject($subscription);
-
-        if (! $tenant) {
-            return;
-        }
-
-        $tenant->forceFill([
-            'billing_provider' => 'stripe',
-            'billing_provider_customer_id' => $subscription['customer'] ?? $tenant->billing_provider_customer_id,
-            'billing_provider_subscription_id' => $subscription['id'] ?? $tenant->billing_provider_subscription_id,
-            'billing_subscription_status' => $this->normalizedStatus((string) ($subscription['status'] ?? '')),
-            'billing_subscription_ends_at' => $this->subscriptionEndsAt($subscription),
-        ])->save();
-    }
-
-    /**
-     * Resolve the tenant referenced by a Stripe object.
-     *
-     * @param array<string, mixed> $object
-     */
-    private function tenantFromStripeObject(array $object): ?Tenant
-    {
-        $metadata = is_array($object['metadata'] ?? null) ? $object['metadata'] : [];
-        $tenantId = (int) ($metadata['tenant_id'] ?? $object['client_reference_id'] ?? 0);
-
-        if ($tenantId > 0) {
-            return Tenant::query()->find($tenantId);
-        }
-
-        $subscriptionId = (string) ($object['id'] ?? $object['subscription'] ?? '');
-        $customerId = (string) ($object['customer'] ?? '');
-
-        $tenant = null;
-
-        if ($subscriptionId !== '') {
-            $tenant = Tenant::query()
-                ->where('billing_provider', 'stripe')
-                ->where('billing_provider_subscription_id', $subscriptionId)
-                ->first();
-        }
-
-        if (! $tenant && $customerId !== '') {
-            $tenant = Tenant::query()
-                ->where('billing_provider', 'stripe')
-                ->where('billing_provider_customer_id', $customerId)
-                ->first();
-        }
-
-        if (! $tenant) {
-            Log::warning('Stripe webhook could not resolve tenant.', [
-                'stripe_object_id' => $object['id'] ?? null,
-                'stripe_customer_id' => $object['customer'] ?? null,
-            ]);
-        }
-
-        return $tenant;
-    }
-
-    /**
-     * Normalize Stripe subscription statuses into canonical tenant billing statuses.
-     */
-    private function normalizedStatus(string $status): ?string
-    {
-        return match ($status) {
-            Tenant::BILLING_SUBSCRIPTION_STATUS_ACTIVE,
-            Tenant::BILLING_SUBSCRIPTION_STATUS_TRIALING,
-            Tenant::BILLING_SUBSCRIPTION_STATUS_INCOMPLETE,
-            Tenant::BILLING_SUBSCRIPTION_STATUS_INCOMPLETE_EXPIRED,
-            Tenant::BILLING_SUBSCRIPTION_STATUS_PAST_DUE,
-            Tenant::BILLING_SUBSCRIPTION_STATUS_CANCELED,
-            Tenant::BILLING_SUBSCRIPTION_STATUS_UNPAID,
-            Tenant::BILLING_SUBSCRIPTION_STATUS_PAUSED => $status,
-            default => null,
-        };
-    }
-
-    /**
-     * Resolve the local subscription access end timestamp.
-     *
-     * @param array<string, mixed> $subscription
-     */
-    private function subscriptionEndsAt(array $subscription): ?Carbon
-    {
-        $endedAt = (int) ($subscription['ended_at'] ?? 0);
-
-        if ($endedAt > 0) {
-            return Carbon::createFromTimestamp($endedAt);
-        }
-
-        return null;
-    }
 }

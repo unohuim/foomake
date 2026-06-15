@@ -22,6 +22,12 @@
 
     <div class="py-12">
         <div class="mx-auto max-w-7xl space-y-6 sm:px-6 lg:px-8">
+            @if ($checkoutMessage)
+                <section class="border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-900 shadow-sm sm:rounded-lg">
+                    {{ $checkoutMessage }}
+                </section>
+            @endif
+
             <section class="bg-white p-6 shadow sm:rounded-lg">
                 <div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_18rem] lg:items-start">
                     <div>
@@ -40,7 +46,13 @@
                             <div class="rounded-lg border border-gray-200 p-4">
                                 <dt class="text-sm font-medium text-gray-500">{{ __('Subscription') }}</dt>
                                 <dd class="mt-1 text-sm text-gray-900">
-                                    {{ $subscriptionActive ? __('Active') : __('Not active') }}
+                                    @if ($subscriptionActive && $subscriptionPlanName)
+                                        {{ __('Active: :plan', ['plan' => $subscriptionPlanName]) }}
+                                    @elseif ($subscriptionActive)
+                                        {{ __('Active') }}
+                                    @else
+                                        {{ __('Not active') }}
+                                    @endif
                                 </dd>
                             </div>
 

@@ -4,6 +4,7 @@ const asRecord = (value) => (value && typeof value === 'object' && !Array.isArra
 const asArray = (value) => (Array.isArray(value) ? value : []);
 const SCALE = 6;
 const SCALE_FACTOR = 10n ** 6n;
+const workflowActionLoadingEvent = 'workflow-action-button-loading';
 
 const escapeHtml = (value) => String(value ?? '')
     .replace(/&/g, '&amp;')
@@ -11,6 +12,14 @@ const escapeHtml = (value) => String(value ?? '')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
+const setWorkflowActionLoading = (loading, error = '') => {
+    window.dispatchEvent(new CustomEvent(workflowActionLoadingEvent, {
+        detail: {
+            loading,
+            error,
+        },
+    }));
+};
 
 const normalizePrecision = (value, fallback = SCALE) => {
     const precision = Number.parseInt(String(value ?? fallback), 10);
@@ -542,6 +551,7 @@ export function mount(rootEl, payload) {
         },
         async moveWorkflowStage() {
             if (!this.workflow.can_move_stage || !this.workflow.transition_url || !this.selectedWorkflowStageId) {
+                setWorkflowActionLoading(false);
                 return;
             }
 
@@ -579,6 +589,7 @@ export function mount(rootEl, payload) {
                 this.showToast('error', 'Unable to move workflow stage.');
             } finally {
                 this.workflowTransitionSaving = false;
+                setWorkflowActionLoading(false);
             }
         },
         async moveWorkflowStageTo(workflowStageId) {
@@ -595,10 +606,11 @@ export function mount(rootEl, payload) {
                     ? action
                     : action?.action && typeof action.action === 'object'
                         ? action.action
-                        : this.workflow.actions?.[0] || this.workflow.next_stage_action
+                    : this.workflow.actions?.[0] || this.workflow.next_stage_action
             );
 
             if (!actionRecord.id || this.workflowTransitionSaving) {
+                setWorkflowActionLoading(false);
                 return;
             }
 
@@ -619,6 +631,7 @@ export function mount(rootEl, payload) {
 
             if (!endpoint) {
                 this.showToast('error', 'Unable to archive make order.');
+                setWorkflowActionLoading(false);
                 return;
             }
 
@@ -651,6 +664,7 @@ export function mount(rootEl, payload) {
                 this.showToast('error', 'Unable to archive make order.');
             } finally {
                 this.workflowTransitionSaving = false;
+                setWorkflowActionLoading(false);
             }
         },
         async makeCurrentOrder(action) {
@@ -658,6 +672,7 @@ export function mount(rootEl, payload) {
 
             if (!endpoint) {
                 this.showToast('error', 'Unable to make order.');
+                setWorkflowActionLoading(false);
                 return;
             }
 
@@ -695,6 +710,7 @@ export function mount(rootEl, payload) {
                 this.showToast('error', 'Unable to make order.');
             } finally {
                 this.workflowTransitionSaving = false;
+                setWorkflowActionLoading(false);
             }
         },
         async saveWorkflowAssignment() {
@@ -706,7 +722,7 @@ export function mount(rootEl, payload) {
             this.workflowAssignmentSaving = true;
 
             try {
-                const response = await fetch(this.workflow.assignment_update_url, {
+            const response = await fetch(this.workflow.assignment_update_url, {
                     method: 'PATCH',
                     headers: {
                         'Content-Type': 'application/json',

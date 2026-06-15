@@ -1,10 +1,12 @@
 @props([
     'steps' => [],
     'do_draft' => false,
+    'neutral_draft' => false,
 ])
 
 @php
     $shouldShowDraft = filter_var($do_draft, FILTER_VALIDATE_BOOLEAN);
+    $isNeutralDraft = filter_var($neutral_draft, FILTER_VALIDATE_BOOLEAN);
     $normalizedSteps = collect($steps)
         ->map(fn ($step, $index) => [
             'label' => (string) data_get($step, 'label', ''),
@@ -22,10 +24,13 @@
         ]))
         ->values();
 
+    $hasActiveStep = $normalizedSteps->where('current', true)->isNotEmpty()
+        || $normalizedSteps->where('status', 'completed')->isNotEmpty();
+
     if (
-        $normalizedSteps->isNotEmpty()
-        && $normalizedSteps->where('current', true)->isEmpty()
-        && $normalizedSteps->where('status', 'completed')->isEmpty()
+        ! $isNeutralDraft
+        && $normalizedSteps->isNotEmpty()
+        && ! $hasActiveStep
     ) {
         $normalizedSteps = $normalizedSteps
             ->map(fn ($step, $index) => array_merge($step, [
@@ -33,16 +38,22 @@
                 'current' => $index === 0,
             ]))
             ->values();
+
+        $hasActiveStep = true;
     }
 
-    $activeMobileStep = $normalizedSteps->search(fn ($step) => $step['current'] || $step['status'] === 'current');
+    $activeMobileStep = null;
 
-    if ($activeMobileStep === false) {
-        $activeMobileStep = $normalizedSteps->search(fn ($step) => $step['status'] === 'upcoming');
-    }
+    if ($normalizedSteps->isNotEmpty() && ($hasActiveStep || ! $isNeutralDraft)) {
+        $activeMobileStep = $normalizedSteps->search(fn ($step) => $step['current'] || $step['status'] === 'current');
 
-    if ($activeMobileStep === false) {
-        $activeMobileStep = max(0, $normalizedSteps->count() - 1);
+        if ($activeMobileStep === false) {
+            $activeMobileStep = $normalizedSteps->search(fn ($step) => $step['status'] === 'upcoming');
+        }
+
+        if ($activeMobileStep === false) {
+            $activeMobileStep = max(0, $normalizedSteps->count() - 1);
+        }
     }
 @endphp
 

@@ -87,6 +87,10 @@ class AdvanceInventoryCountWorkflowStageAction
                 'Complete all tasks for this stage before moving the inventory count forward.'
             );
 
+            if ((string) $currentStage->key === 'counting') {
+                $this->assertCountedQuantitiesPresent($lockedCount);
+            }
+
             if ($currentStage->is_inventory_effect_stage) {
                 app(PostInventoryCountAction::class)->execute($lockedCount, $userId);
 
@@ -249,5 +253,24 @@ class AdvanceInventoryCountWorkflowStageAction
         }
 
         throw new DomainException('Add at least one material item before moving past Scheduling.');
+    }
+
+    /**
+     * Require every counted material to have a filled quantity before leaving the Counting stage.
+     *
+     * @throws DomainException
+     */
+    private function assertCountedQuantitiesPresent(InventoryCount $inventoryCount): void
+    {
+        $hasBlankQuantity = $inventoryCount->lines()
+            ->where(function ($query): void {
+                $query->whereNull('counted_quantity')
+                    ->orWhereRaw("TRIM(counted_quantity) = ''");
+            })
+            ->exists();
+
+        if ($hasBlankQuantity) {
+            throw new DomainException('Enter a counted quantity for every item before moving past Counting.');
+        }
     }
 }

@@ -1110,6 +1110,7 @@ it('submits a draft count into the first active inventory workflow stage', funct
         ->and($count->posted_at)->toBeNull()
         ->and($response->json('count.workflow_stage_key'))->toBe('counting')
         ->and($response->json('count.workflow_status_label'))->toBe('SCHEDULED')
+        ->and($response->json('workflowProgressSteps'))->toBeArray()
         ->and($response->json('count.is_draft_setup'))->toBeFalse();
 });
 
@@ -1180,7 +1181,7 @@ it('draft schedule action works without an assigned user and still moves the cou
     $this->actingAs($user)
         ->get('/inventory/counts/' . $count->id)
         ->assertOk()
-        ->assertSee('Submit')
+        ->assertSee('Schedule')
         ->assertDontSee('Post Count');
 
     ($this->ensureCountHasMaterial)($user, $tenant, $count);
@@ -1197,7 +1198,7 @@ it('draft schedule action works without an assigned user and still moves the cou
         ->and($count->assigned_to_user_id)->toBeNull();
 });
 
-it('draft detail page shows the next workflow stage action verb as the submit action', function () {
+it('draft detail page shows the first workflow stage action verb as the submit action', function () {
     $tenant = Tenant::factory()->create();
     $user = ($this->makeUser)($tenant);
 
@@ -1216,7 +1217,7 @@ it('draft detail page shows the next workflow stage action verb as the submit ac
         ->assertSee('Inventory Counts')
         ->assertSee($count->name)
         ->assertSee('Draft')
-        ->assertSee('Submit')
+        ->assertSee('Schedule')
         ->assertDontSee('Submit Count')
         ->assertDontSee('Post Count')
         ->assertDontSee('>COMPLETE<', false);
@@ -1236,7 +1237,8 @@ it('draft inventory count detail auto-resolves the next workflow stage button ev
     $response = $this->actingAs($user)->get('/inventory/counts/' . $count->id)->assertOk();
 
     expect($response->getContent())->toContain("window.dispatchEvent(new CustomEvent('inventory-count-submit'))")
-        ->and($response->getContent())->toContain('SCHEDULE')
+        ->and($response->getContent())->toContain('data-workflow-progress-panel')
+        ->and($response->getContent())->toContain('Schedule')
         ->and($response->getContent())->not->toContain("window.dispatchEvent(new CustomEvent('inventory-count-advance'))");
 });
 
@@ -1334,7 +1336,7 @@ it('inventory counts in the first active workflow stage still expose cancel', fu
         ->toHaveCount(2)
         ->and($payload['workflow']['actions'][0]['type'] ?? null)->toBe('submit')
         ->and($payload['workflow']['actions'][1]['type'] ?? null)->toBe('cancel')
-        ->and($payload['workflow']['actions'][0]['label'] ?? null)->toBe('Submit');
+        ->and($payload['workflow']['actions'][0]['label'] ?? null)->toBe('Schedule');
 });
 
 it('completed inventory count detail does not show a draft stage advancement button', function () {
@@ -1641,7 +1643,7 @@ it('detail payload separates metadata visibility from metadata editability', fun
         ->and(collect($countPayload['assignee_options'] ?? [])->pluck('value')->contains((string) $assignee->id))->toBeTrue();
 });
 
-it('draft detail page renders the Submit button wired to the submit workflow action only', function () {
+it('draft detail page renders the first-stage action verb wired to the submit workflow action only', function () {
     $tenant = Tenant::factory()->create();
     $user = ($this->makeUser)($tenant);
 
@@ -1658,7 +1660,7 @@ it('draft detail page renders the Submit button wired to the submit workflow act
     expect($response->getContent())->toContain("window.dispatchEvent(new CustomEvent('inventory-count-submit'))")
         ->and($response->getContent())->not->toContain("window.dispatchEvent(new CustomEvent('inventory-count-post'))")
         ->and($response->getContent())->not->toContain("window.dispatchEvent(new CustomEvent('inventory-count-advance'))")
-        ->and($response->getContent())->toContain('Submit')
+        ->and($response->getContent())->toContain('Schedule')
         ->and($response->getContent())->not->toContain('>COMPLETE<');
 });
 
@@ -3051,7 +3053,7 @@ it('posting failure while completing the manual inventory-effect stage leaves no
         ->and(($this->countAdjustmentsFor)($tenant, $count))->toBe(0);
 });
 
-it('blank counted quantity is allowed before completion but blocks completing the inventory effect stage', function () {
+it('blank counted quantity blocks leaving the counting stage until every item has a quantity', function () {
     $tenant = Tenant::factory()->create();
     $user = ($this->makeUser)($tenant);
 
@@ -3076,15 +3078,14 @@ it('blank counted quantity is allowed before completion but blocks completing th
     ($this->ensureCountHasMaterial)($user, $tenant, $count);
 
     ($this->submitCount)($user, $count)->assertOk();
-    ($this->advanceCount)($user, $count)->assertOk();
 
     ($this->advanceCount)($user, $count)
         ->assertStatus(422)
-        ->assertJson(['message' => 'All inventory count lines must have a counted quantity before posting.']);
+        ->assertJson(['message' => 'Enter a counted quantity for every item before moving past Counting.']);
 
     $count->refresh();
 
-    expect($count->workflowStage?->key)->toBe('completing')
+    expect($count->workflowStage?->key)->toBe('counting')
         ->and($count->posted_at)->toBeNull()
         ->and(($this->countAdjustmentsFor)($tenant, $count))->toBe(0);
 });
@@ -3297,7 +3298,7 @@ it('first manual workflow stage exposes previous and next stage buttons after au
     expect($response->getContent())->toContain("window.dispatchEvent(new CustomEvent('inventory-count-previous'))")
         ->and($response->getContent())->toContain("window.dispatchEvent(new CustomEvent('inventory-count-advance'))")
         ->and($response->getContent())->toContain('Submit')
-        ->and($response->getContent())->toContain('SCHEDULE')
+        ->and($response->getContent())->toContain('Schedule')
         ->and($response->getContent())->not->toContain('Back to');
 });
 

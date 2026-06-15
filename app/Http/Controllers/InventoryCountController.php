@@ -28,6 +28,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
+use Illuminate\Support\Str;
 
 class InventoryCountController extends Controller
 {
@@ -141,28 +142,7 @@ class InventoryCountController extends Controller
             'nextWorkflowActionEvent' => $this->canShowNextWorkflowAction($count, $canSubmitWorkflow, $canOperateWorkflow)
                 ? $this->nextWorkflowActionEvent($count, $nextStage)
                 : null,
-            'payload' => [
-                'count' => $this->countPayload($count, Gate::allows('inventory-adjustments-execute')),
-                'workflow' => $this->inventoryWorkflowPayload($count, $canSubmitWorkflow, $canOperateWorkflow),
-                'workflowProgressSteps' => app(BuildWorkflowProgressStepsAction::class)->execute(
-                    (int) $request->user()->tenant_id,
-                    'inventory',
-                    $count->posted_at === null && $count->workflow_stage_id !== null
-                        ? (int) $count->workflow_stage_id
-                        : null,
-                    null,
-                    $count->workflow_stage_id === null ? null : (int) $count->workflow_stage_id,
-                    $count->posted_at !== null
-                ),
-                'sections' => [
-                    'countLines' => $this->countLinesSectionConfig($request, $count, $items),
-                    'tasks' => $this->tasksSectionConfig($count),
-                ],
-                'taskCreate' => [
-                    'users' => $this->manualTaskAssigneeOptions((int) $request->user()->tenant_id),
-                    'workflowDomainId' => $this->workflowDomainId('inventory'),
-                ],
-            ],
+            'payload' => $this->inventoryDetailPayload($request, $count),
         ]);
     }
 
@@ -380,12 +360,7 @@ class InventoryCountController extends Controller
 
         return response()->json([
             'cancelled' => true,
-            'count' => $this->countPayload($count->fresh()),
-            'workflow' => $this->inventoryWorkflowPayload(
-                $count->fresh(),
-                $this->userCanSubmitInventoryCountWorkflow($request->user(), $count->fresh()),
-                $this->userCanOperateInventoryWorkflow($request->user())
-            ),
+            ...$this->inventoryDetailPayload($request, $count->fresh()),
         ]);
     }
 
@@ -416,9 +391,7 @@ class InventoryCountController extends Controller
             ], 422);
         }
 
-        return response()->json([
-            'count' => $this->countPayload($count),
-        ]);
+        return response()->json($this->inventoryDetailPayload($request, $count));
     }
 
     /**
@@ -449,9 +422,7 @@ class InventoryCountController extends Controller
             ], 422);
         }
 
-        return response()->json([
-            'count' => $this->countPayload($count),
-        ]);
+        return response()->json($this->inventoryDetailPayload($request, $count));
     }
 
     /**
@@ -482,9 +453,7 @@ class InventoryCountController extends Controller
             ], 422);
         }
 
-        return response()->json([
-            'count' => $this->countPayload($count),
-        ]);
+        return response()->json($this->inventoryDetailPayload($request, $count));
     }
 
     /**
@@ -515,9 +484,7 @@ class InventoryCountController extends Controller
             ], 422);
         }
 
-        return response()->json([
-            'count' => $this->countPayload($count),
-        ]);
+        return response()->json($this->inventoryDetailPayload($request, $count));
     }
 
     /**
@@ -1065,6 +1032,54 @@ class InventoryCountController extends Controller
             'advance_url' => route('inventory.counts.advance', $inventoryCount),
             'post_url' => route('inventory.counts.post', $inventoryCount),
         ];
+    }
+
+    /**
+     * Build the complete inventory detail response payload for initial render and AJAX hydration.
+     *
+     * @return array<string, mixed>
+     */
+    private function inventoryDetailPayload(Request $request, InventoryCount $inventoryCount): array
+    {
+        $inventoryCount->loadMissing(['workflowStage', 'assignedToUser']);
+        $inventoryCount->loadCount('lines');
+
+        $canSubmitWorkflow = $this->userCanSubmitInventoryCountWorkflow($request->user(), $inventoryCount);
+        $canOperateWorkflow = $this->userCanOperateInventoryWorkflow($request->user());
+        $items = $this->countLineSelectableItems($request, $inventoryCount);
+
+        return [
+            'count' => $this->countPayload($inventoryCount, Gate::allows('inventory-adjustments-execute')),
+            'workflow' => $this->inventoryWorkflowPayload($inventoryCount, $canSubmitWorkflow, $canOperateWorkflow),
+            'workflowProgressSteps' => $this->inventoryWorkflowProgressSteps($inventoryCount),
+            'sections' => [
+                'countLines' => $this->countLinesSectionConfig($request, $inventoryCount, $items),
+                'tasks' => $this->tasksSectionConfig($inventoryCount),
+            ],
+            'taskCreate' => [
+                'users' => $this->manualTaskAssigneeOptions((int) $request->user()->tenant_id),
+                'workflowDomainId' => $this->workflowDomainId('inventory'),
+            ],
+        ];
+    }
+
+    /**
+     * Build the inventory workflow progress steps for the detail page.
+     *
+     * @return array<int, array{label: string, status: string, url: null, current: bool}>
+     */
+    private function inventoryWorkflowProgressSteps(InventoryCount $inventoryCount): array
+    {
+        return app(BuildWorkflowProgressStepsAction::class)->execute(
+            (int) $inventoryCount->tenant_id,
+            'inventory',
+            $inventoryCount->posted_at === null && $inventoryCount->workflow_stage_id !== null
+                ? (int) $inventoryCount->workflow_stage_id
+                : null,
+            null,
+            $inventoryCount->workflow_stage_id === null ? null : (int) $inventoryCount->workflow_stage_id,
+            $inventoryCount->posted_at !== null
+        );
     }
 
     /**
@@ -1642,13 +1657,11 @@ class InventoryCountController extends Controller
                 $actions[] = [
                     'id' => 'next',
                     'type' => $inventoryCount->workflow_stage_id === null ? 'submit' : 'advance',
-                    'label' => $isInitialWorkflowAction
-                        ? 'Submit'
-                        : $this->workflowActionButtonText($nextStage, $inventoryCount),
+                    'label' => $this->workflowActionButtonText($nextStage, $inventoryCount),
                     'description' => $this->workflowActionDescription(
                         $nextStage,
                         $isInitialWorkflowAction
-                            ? 'Submit this inventory count into workflow.'
+                            ? 'Schedule this inventory count.'
                             : 'Advance this inventory count to the next workflow stage.'
                     ),
                     'endpoint' => $inventoryCount->workflow_stage_id === null
@@ -1764,10 +1777,6 @@ class InventoryCountController extends Controller
             return null;
         }
 
-        if ($inventoryCount !== null && $inventoryCount->workflow_stage_id === null) {
-            return 'Submit';
-        }
-
         if (
             $inventoryCount !== null
             && $inventoryCount->posted_at === null
@@ -1778,8 +1787,13 @@ class InventoryCountController extends Controller
             return 'Complete';
         }
 
-        return $workflowStage->action_verb
-            ?: $workflowStage->name;
+        $actionVerb = trim((string) ($workflowStage->action_verb ?? ''));
+
+        if ($actionVerb !== '') {
+            return Str::title(Str::lower($actionVerb));
+        }
+
+        return $workflowStage->name;
     }
 
     /**

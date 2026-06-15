@@ -61,15 +61,13 @@
         data-page="inventory-count-show"
         data-payload="inventory-count-show-payload"
         x-data="inventoryCountShow"
+        x-on:task-created.window="appendCreatedTask($event)"
         x-on:inventory-count-header-action.window="performHeaderWorkflowAction($event.detail)"
     >
         <x-ui.toast visible="toast.show" type="toast.type" message="toast.message" />
 
         <div class="max-w-7xl mx-auto space-y-6 sm:px-6 lg:px-8">
-            <x-ui.workflow-progress
-                :steps="$payload['workflowProgressSteps'] ?? []"
-                data-workflow-progress-panel
-            />
+            <div data-workflow-progress-panel x-html="workflowProgressHtml()"></div>
 
             @if ($payload['count']['show_details_section'] ?? false)
                 <x-detail-section-card
@@ -126,10 +124,6 @@
                 x-data="taskCreateSection"
                 x-on:task-created.window="appendCreatedTask($event)"
             >
-                @php
-                    $currentStageTasks = $payload['count']['current_stage_tasks'] ?? [];
-                @endphp
-
                 <x-detail-section-card
                     title="Tasks"
                     :description="__('Complete required workflow tasks before moving the inventory count forward.')"
@@ -148,110 +142,60 @@
                         </button>
                     </x-slot>
 
-                    @if (count($currentStageTasks) > 0)
-                        <div class="space-y-0 sm:space-y-3">
-                            @foreach ($currentStageTasks as $task)
-                                <article
-                                    class="-mx-3 rounded-none border-y border-gray-200 bg-gray-50 px-3 py-2 sm:mx-0 sm:rounded-xl sm:border sm:border-gray-100 sm:p-4"
-                                    data-inventory-count-task-row
-                                >
-                                    <div class="flex items-center gap-3">
-                                        <div class="min-w-0 flex-1 space-y-1.5">
-                                            <div class="flex min-w-0 items-center gap-3">
-                                                <p class="truncate text-sm font-semibold text-gray-900">{{ $task['title'] ?? __('Task') }}</p>
-                                                <span
-                                                    class="inline-flex shrink-0 items-center rounded-full px-2.5 py-1 text-xs font-medium {{ ($task['is_completed'] ?? false) ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-200 text-gray-700' }}"
-                                                    data-inventory-count-task-status
-                                                >
-                                                    {{ $task['status'] ?? __('open') }}
-                                                </span>
-                                            </div>
+                    <div class="space-y-0 sm:space-y-3">
+                        <template x-if="currentStageTasks.length === 0">
+                            <div
+                                class="rounded-xl border border-dashed border-gray-300 px-4 py-8 text-center text-sm text-gray-500"
+                            >
+                                {{ __('No tasks for the current stage.') }}
+                            </div>
+                        </template>
 
-                                            <div class="flex min-w-0 items-center gap-3 text-xs text-gray-600 sm:text-sm">
-                                                @if (($task['assigned_to_display'] ?? '') !== '')
-                                                    <p class="truncate text-gray-700" data-inventory-count-task-assigned-to>
-                                                        {{ $task['assigned_to_display'] }}
-                                                    </p>
-                                                @endif
-                                                @if (($task['due_date'] ?? '') !== '')
-                                                    <p class="shrink-0 text-gray-600">
-                                                        {{ $task['due_date'] }}
-                                                    </p>
-                                                @endif
-                                            </div>
+                        <template x-for="task in currentStageTasks" :key="task.id">
+                            <article
+                                class="-mx-3 rounded-none border-y border-gray-200 bg-gray-50 px-3 py-2 sm:mx-0 sm:rounded-xl sm:border sm:border-gray-100 sm:p-4"
+                                data-inventory-count-task-row
+                                x-bind:data-inventory-count-task-id="task.id"
+                            >
+                                <div class="flex items-center gap-3">
+                                    <div class="min-w-0 flex-1 space-y-1.5">
+                                        <div class="flex min-w-0 items-center gap-3">
+                                            <p class="truncate text-sm font-semibold text-gray-900" x-text="task.title || 'Task'"></p>
+                                            <span
+                                                class="inline-flex shrink-0 items-center rounded-full px-2.5 py-1 text-xs font-medium"
+                                                x-bind:class="taskStatusClasses(task)"
+                                                x-text="task.status || 'open'"
+                                            ></span>
                                         </div>
 
-                                        @if (($task['available_actions'] ?? []) === ['complete'] && ! empty($task['complete_url']))
-                                            <form
-                                                class="shrink-0 self-center"
-                                                method="POST"
-                                                action="{{ $task['complete_url'] }}"
-                                                x-on:submit.prevent="completeInventoryCountTask($event)"
-                                                data-inventory-count-task-complete-form
-                                            >
-                                                @csrf
-                                                @method('PATCH')
-                                                <button
-                                                    type="submit"
-                                                    class="inline-flex items-center rounded-md border border-slate-300 px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wide text-slate-700 transition hover:bg-slate-50 sm:px-3 sm:py-1.5 sm:text-xs sm:tracking-widest"
-                                                    data-inventory-count-task-complete-button
-                                                >
-                                                    {{ __('Complete') }}
-                                                </button>
-                                            </form>
-                                        @endif
+                                        <div class="flex min-w-0 items-center gap-3 text-xs text-gray-600 sm:text-sm">
+                                            <p class="truncate text-gray-700" x-show="task.assigned_to_display" x-text="task.assigned_to_display"></p>
+                                            <p class="shrink-0 text-gray-600" x-show="task.due_date" x-text="task.due_date"></p>
+                                        </div>
                                     </div>
-                                </article>
-                            @endforeach
-                        </div>
-                    @else
-                        <div
-                            class="rounded-xl border border-dashed border-gray-300 px-4 py-8 text-center text-sm text-gray-500"
-                            x-show="createdTasks.length === 0"
-                        >
-                            {{ __('No tasks for the current stage.') }}
-                        </div>
-                    @endif
 
-                    <template x-if="createdTasks.length > 0">
-                        <div class="mt-3 space-y-0 sm:space-y-3">
-                            <template x-for="task in createdTasks" :key="task.id">
-                                <article class="-mx-3 rounded-none border-y border-gray-200 bg-gray-50 px-3 py-2 sm:mx-0 sm:rounded-xl sm:border sm:border-gray-100 sm:p-4">
-                                    <div class="flex items-center gap-3">
-                                        <div class="min-w-0 flex-1 space-y-1.5">
-                                            <div class="flex min-w-0 items-center gap-3">
-                                                <p class="truncate text-sm font-semibold text-gray-900" x-text="task.title || 'Task'"></p>
-                                                <span
-                                                    class="inline-flex shrink-0 items-center rounded-full px-2.5 py-1 text-xs font-medium"
-                                                    x-bind:class="taskStatusClasses(task)"
-                                                    x-text="task.status || 'open'"
-                                                ></span>
-                                            </div>
-
-                                            <div class="flex min-w-0 items-center gap-3 text-xs text-gray-600 sm:text-sm">
-                                                <p class="truncate text-gray-700" x-show="task.assigned_to_user_name" x-text="task.assigned_to_user_name"></p>
-                                                <p class="shrink-0 text-gray-600" x-show="task.due_date" x-text="task.due_date"></p>
-                                            </div>
-                                        </div>
-
-                                        <div
-                                            class="shrink-0 self-center"
-                                            x-show="task.can_complete && !task.is_completed"
+                                    <form
+                                        class="shrink-0 self-center"
+                                        method="POST"
+                                        x-bind:action="task.complete_url || ''"
+                                        x-on:submit.prevent="completeInventoryCountTask($event)"
+                                        x-show="task.can_complete && !task.is_completed && task.complete_url"
+                                        data-inventory-count-task-complete-form
+                                    >
+                                        @csrf
+                                        @method('PATCH')
+                                        <button
+                                            type="submit"
+                                            class="inline-flex items-center rounded-md border border-slate-300 px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wide text-slate-700 transition hover:bg-slate-50 sm:px-3 sm:py-1.5 sm:text-xs sm:tracking-widest"
+                                            data-inventory-count-task-complete-button
                                         >
-                                            <button
-                                                type="button"
-                                                class="inline-flex items-center rounded-md border border-slate-300 px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wide text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 sm:px-3 sm:py-1.5 sm:text-xs sm:tracking-widest"
-                                                x-bind:disabled="isTaskCompleting(task)"
-                                                x-on:click="completeCreatedTask(task)"
-                                            >
-                                                {{ __('Complete') }}
-                                            </button>
-                                        </div>
-                                    </div>
-                                </article>
-                            </template>
-                        </div>
-                    </template>
+                                            {{ __('Complete') }}
+                                        </button>
+                                    </form>
+                                </div>
+                            </article>
+                        </template>
+                    </div>
                 </x-detail-section-card>
 
                 @include('tasks.partials.create-task-slide-over', [

@@ -1,6 +1,7 @@
 export function mount(rootEl, payload) {
     const Alpine = window.Alpine;
     const safePayload = payload || {};
+    const workflowActionLoadingEvent = 'workflow-action-button-loading';
 
     const escapeHtml = (value) => String(value ?? '')
         .replace(/&/g, '&amp;')
@@ -8,6 +9,15 @@ export function mount(rootEl, payload) {
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#039;');
+
+    const setWorkflowActionLoading = (loading, error = '') => {
+        window.dispatchEvent(new CustomEvent(workflowActionLoadingEvent, {
+            detail: {
+                loading,
+                error,
+            },
+        }));
+    };
 
     const emptyLineErrors = () => ({
         item_id: [],
@@ -104,6 +114,7 @@ export function mount(rootEl, payload) {
                 : String(action?.type || action?.status || '').trim();
 
             if (!status) {
+                setWorkflowActionLoading(false);
                 return;
             }
 
@@ -307,37 +318,44 @@ export function mount(rootEl, payload) {
         },
         async submitStatus(status) {
             if (!this.order?.status_update_url) {
+                setWorkflowActionLoading(false);
                 return;
             }
 
-            const response = await fetch(this.order.status_update_url, {
-                method: 'PATCH',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Accept: 'application/json',
-                    'X-CSRF-TOKEN': this.csrfToken,
-                },
-                body: JSON.stringify({ status }),
-            });
+            try {
+                const response = await fetch(this.order.status_update_url, {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        Accept: 'application/json',
+                        'X-CSRF-TOKEN': this.csrfToken,
+                    },
+                    body: JSON.stringify({ status }),
+                });
 
-            if (response.status === 422) {
+                if (response.status === 422) {
+                    const data = await response.json();
+                    this.showToast('error', data.message || 'Unable to update status.');
+                    return;
+                }
+
+                if (!response.ok) {
+                    this.showToast('error', 'Unable to update status.');
+                    return;
+                }
+
                 const data = await response.json();
-                this.showToast('error', data.message || 'Unable to update status.');
-                return;
-            }
-
-            if (!response.ok) {
+                this.applyOrderLifecycleUpdate({
+                    ...(data.data || {}),
+                    workflow: data.workflow || null,
+                    workflowProgressSteps: data.data?.workflowProgressSteps || null,
+                });
+                this.showToast('success', 'Status updated.');
+            } catch (error) {
                 this.showToast('error', 'Unable to update status.');
-                return;
+            } finally {
+                setWorkflowActionLoading(false);
             }
-
-            const data = await response.json();
-            this.applyOrderLifecycleUpdate({
-                ...(data.data || {}),
-                workflow: data.workflow || null,
-                workflowProgressSteps: data.data?.workflowProgressSteps || null,
-            });
-            this.showToast('success', 'Status updated.');
         },
         async completeTask(task) {
             if (!task?.complete_url || !task.can_complete) {

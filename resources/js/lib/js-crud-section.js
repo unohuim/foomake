@@ -161,6 +161,7 @@ const normalizeLayoutEntry = (entry) => {
         linkClass: asString(safeEntry.linkClass),
         suffixClass: asString(safeEntry.suffixClass),
         fullWidth: Boolean(safeEntry.fullWidth),
+        requiredWhenBlank: Boolean(safeEntry.requiredWhenBlank),
         fallback: Object.prototype.hasOwnProperty.call(safeEntry, "fallback")
             ? String(safeEntry.fallback ?? "")
             : "—",
@@ -840,6 +841,9 @@ const renderCrudSection = () => `
                                                             <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75" />
                                                             <path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
                                                         </svg>
+                                                    </template>
+                                                    <template x-if="meta.requiredWhenBlank && rightMetaValueIsBlank(record, meta)">
+                                                        <span :class="rightMetaRequiredClass()">required</span>
                                                     </template>
                                                     <template x-if="meta.label">
                                                         <span :class="rightMetaLabelClass(meta)" x-text="meta.labelBare ? meta.label : \`\${meta.label}: \`"></span>
@@ -1940,6 +1944,14 @@ const createSectionState = (section, adapters, hostEl) => ({
         return meta.compactOnMobile
             ? "flex items-center gap-1.5 text-xs sm:gap-2.5 sm:text-sm"
             : "flex items-center gap-2.5 text-sm";
+    },
+    rightMetaRequiredClass() {
+        return "shrink-0 text-[0.65rem] font-medium text-red-600";
+    },
+    rightMetaValueIsBlank(record, meta) {
+        const value = record?.[meta.field];
+
+        return value === null || value === undefined || String(value).trim() === "";
     },
     smartNumberMetaRootClass(meta) {
         return meta.compactOnMobile ? "w-20 sm:w-24" : "w-24";

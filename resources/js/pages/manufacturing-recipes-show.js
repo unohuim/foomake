@@ -15,6 +15,15 @@ const emptyVersionErrors = () => ({
 const asRecord = (value) => (value && typeof value === 'object' && !Array.isArray(value) ? value : {});
 const asArray = (value) => (Array.isArray(value) ? value : []);
 const asString = (value, fallback = '') => (typeof value === 'string' && value.trim() !== '' ? value : fallback);
+const workflowActionLoadingEvent = 'workflow-action-button-loading';
+const setWorkflowActionLoading = (loading, error = '') => {
+    window.dispatchEvent(new CustomEvent(workflowActionLoadingEvent, {
+        detail: {
+            loading,
+            error,
+        },
+    }));
+};
 
 export function mount(rootEl, payload) {
     const safePayload = payload || {};
@@ -263,10 +272,12 @@ export function mount(rootEl, payload) {
         },
         async performVersionAction(action, record, afterSuccess = null) {
             if (!record || !action || typeof action !== 'object') {
+                setWorkflowActionLoading(false);
                 return;
             }
 
             if (action.handlerKey === 'viewVersion' || action.type === 'view') {
+                setWorkflowActionLoading(false);
                 return;
             }
 
@@ -292,37 +303,44 @@ export function mount(rootEl, payload) {
                 || actionToUrl[action.type];
 
             if (!endpoint) {
+                setWorkflowActionLoading(false);
                 return;
             }
 
-            const response = await fetch(endpoint, {
-                method: asString(action.method || '', '') || actionToMethod[action.handlerKey] || actionToMethod[action.type] || 'POST',
-                headers: {
-                    Accept: 'application/json',
-                    'X-CSRF-TOKEN': this.csrfToken,
-                },
-            });
+            try {
+                const response = await fetch(endpoint, {
+                    method: asString(action.method || '', '') || actionToMethod[action.handlerKey] || actionToMethod[action.type] || 'POST',
+                    headers: {
+                        Accept: 'application/json',
+                        'X-CSRF-TOKEN': this.csrfToken,
+                    },
+                });
 
-            if (!response.ok) {
+                if (!response.ok) {
+                    this.showToast('error', 'Unable to update recipe version.');
+                    return;
+                }
+
+                const data = await response.json().catch(() => ({}));
+
+                if (data?.data?.show_url) {
+                    window.location.assign(data.data.show_url);
+                    return;
+                }
+
+                if (data && typeof data === 'object') {
+                    this.hydrateRecipeResponse(data);
+                }
+
+                if (typeof afterSuccess === 'function') {
+                    await afterSuccess();
+                }
+                this.showToast('success', 'Recipe version updated.');
+            } catch (error) {
                 this.showToast('error', 'Unable to update recipe version.');
-                return;
+            } finally {
+                setWorkflowActionLoading(false);
             }
-
-            const data = await response.json().catch(() => ({}));
-
-            if (data?.data?.show_url) {
-                window.location.assign(data.data.show_url);
-                return;
-            }
-
-            if (data && typeof data === 'object') {
-                this.hydrateRecipeResponse(data);
-            }
-
-            if (typeof afterSuccess === 'function') {
-                await afterSuccess();
-            }
-            this.showToast('success', 'Recipe version updated.');
         },
         async performHeaderVersionAction(action) {
             const activeVersion = this.activeVersion();

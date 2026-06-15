@@ -2,8 +2,23 @@ import Alpine from 'alpinejs';
 import { mountCrudSection } from '../lib/js-crud-section';
 
 const inventoryCountToastEvent = 'inventory-count-toast';
+const workflowActionLoadingEvent = 'workflow-action-button-loading';
 const asRecord = (value) => (value && typeof value === 'object' && !Array.isArray(value) ? value : {});
 const asString = (value, fallback = '') => (typeof value === 'string' ? value : fallback);
+const escapeHtml = (value) => String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+const setWorkflowActionLoading = (loading, error = '') => {
+    window.dispatchEvent(new CustomEvent(workflowActionLoadingEvent, {
+        detail: {
+            loading,
+            error,
+        },
+    }));
+};
 
 export function mount(rootEl, payload) {
     const safePayload = payload || {};
@@ -12,6 +27,7 @@ export function mount(rootEl, payload) {
     const sectionsPayload = asRecord(safePayload.sections);
     const countPayload = asRecord(safePayload.count);
     const workflowPayload = asRecord(safePayload.workflow);
+    let showRequiredCountedQuantityCue = false;
 
     rootEl.querySelectorAll('[data-js-crud-section-root]').forEach((sectionRootEl) => {
         const sectionKey = sectionRootEl.dataset.sectionKey || '';
@@ -57,6 +73,7 @@ export function mount(rootEl, payload) {
                                 compactOnMobile: true,
                                 icon: 'check-circle',
                                 showSuccessIcon: Boolean(safeRecord._countedQuantitySaved),
+                                requiredWhenBlank: showRequiredCountedQuantityCue,
                             }];
                         }
 
@@ -259,6 +276,8 @@ export function mount(rootEl, payload) {
         toast: { show: false, type: 'success', message: '' },
         count: countPayload,
         workflow: workflowPayload,
+        workflowProgressSteps: Array.isArray(safePayload.workflowProgressSteps) ? safePayload.workflowProgressSteps : [],
+        currentStageTasks: Array.isArray(countPayload.current_stage_tasks) ? countPayload.current_stage_tasks : [],
         details: {
             counted_at_iso: asString(countPayload.counted_at_iso),
             assigned_to_user_id: countPayload.assigned_to_user_id === null || countPayload.assigned_to_user_id === undefined
@@ -276,23 +295,48 @@ export function mount(rootEl, payload) {
             ? ''
             : String(countPayload.assigned_to_user_id),
         lastSavedDetailsNotes: asString(countPayload.notes),
+        taskCompletingIds: [],
 
         hydrateCountResponse(data) {
-            if (!data || typeof data !== 'object') {
+            const responseData = asRecord(data);
+            const countData = asRecord(responseData.count || responseData);
+            const workflowData = asRecord(responseData.workflow);
+            const sectionsData = asRecord(responseData.sections);
+
+            if (!Object.keys(countData).length && !Object.keys(workflowData).length) {
                 return;
             }
 
             this.count = {
                 ...this.count,
-                ...data,
+                ...countData,
             };
-            this.details.counted_at_iso = data.counted_at_iso || '';
-            this.details.assigned_to_user_id = this.normalizedAssignedToUserId(data.assigned_to_user_id);
-            this.details.notes = data.notes || '';
-            this.details.assignee_options = Array.isArray(data.assignee_options) ? data.assignee_options : [];
+            this.workflow = Object.keys(workflowData).length > 0
+                ? {
+                    ...this.workflow,
+                    ...workflowData,
+                }
+                : this.workflow;
+            this.workflowProgressSteps = Array.isArray(responseData.workflowProgressSteps)
+                ? responseData.workflowProgressSteps
+                : this.workflowProgressSteps;
+            this.currentStageTasks = Array.isArray(countData.current_stage_tasks)
+                ? this.sortTasks(countData.current_stage_tasks)
+                : this.currentStageTasks;
+            this.details.counted_at_iso = countData.counted_at_iso || '';
+            this.details.assigned_to_user_id = this.normalizedAssignedToUserId(countData.assigned_to_user_id);
+            this.details.notes = countData.notes || '';
+            this.details.assignee_options = Array.isArray(countData.assignee_options) ? countData.assignee_options : [];
             this.lastSavedDetailsCountedAtIso = this.details.counted_at_iso;
             this.lastSavedDetailsAssignedToUserId = this.details.assigned_to_user_id;
             this.lastSavedDetailsNotes = this.details.notes;
+
+            if (sectionsData.countLines) {
+                void this.refreshCrudSection('countLines', sectionsData.countLines);
+            }
+
+            this.refreshHeaderStatusBadge();
+            this.dispatchInventoryWorkflowSync();
         },
 
         init() {
@@ -329,6 +373,267 @@ export function mount(rootEl, payload) {
                 ? ''
                 : String(value);
         },
+        sortTasks(tasks) {
+            return Array.isArray(tasks)
+                ? [...tasks]
+                    .map((task) => asRecord(task))
+                    .sort((left, right) => {
+                        const leftSortOrder = Number(left.sort_order ?? 0);
+                        const rightSortOrder = Number(right.sort_order ?? 0);
+
+                        if (leftSortOrder !== rightSortOrder) {
+                            return leftSortOrder - rightSortOrder;
+                        }
+
+                        return Number(left.id ?? 0) - Number(right.id ?? 0);
+                    })
+                : [];
+        },
+        appendCreatedTask(event) {
+            const task = asRecord(event?.detail?.task);
+
+            if (!task.id) {
+                return;
+            }
+
+            const nextTasks = this.currentStageTasks.filter((existingTask) => Number(existingTask.id) !== Number(task.id));
+            nextTasks.push(task);
+            this.currentStageTasks = this.sortTasks(nextTasks);
+        },
+        taskStatusClasses(task) {
+            return asRecord(task).is_completed
+                ? 'bg-emerald-100 text-emerald-700'
+                : 'bg-amber-100 text-amber-700';
+        },
+        isTaskCompleting(task) {
+            return this.taskCompletingIds.includes(Number(asRecord(task).id));
+        },
+        refreshHeaderStatusBadge() {
+            const badge = document.querySelector('[data-workflow-status-badge]');
+
+            if (!badge) {
+                return;
+            }
+
+            badge.textContent = this.count.workflow_status_label
+                || this.workflow.currentLabel
+                || 'Draft';
+        },
+        dispatchInventoryWorkflowSync() {
+            window.dispatchEvent(new CustomEvent('inventory-count-header-action-updated', {
+                detail: {
+                    workflow: this.workflow,
+                    workflowProgressSteps: this.workflowProgressSteps,
+                },
+            }));
+        },
+        async refreshCrudSection(sectionKey, sectionConfig = null) {
+            const sectionRootEl = document.querySelector(`[data-section-key="${sectionKey}"]`);
+
+            if (!sectionRootEl || !sectionRootEl._jsCrudSectionApi) {
+                return;
+            }
+
+            if (sectionConfig) {
+                sectionRootEl._jsCrudSectionApi.updateSectionConfig(sectionConfig);
+            }
+
+            if (typeof sectionRootEl._jsCrudSectionApi.refresh === 'function') {
+                await sectionRootEl._jsCrudSectionApi.refresh(1);
+            }
+        },
+        countLinesHaveBlankQuantities() {
+            const sectionRootEl = document.querySelector('[data-section-key="countLines"]');
+
+            if (!sectionRootEl) {
+                return false;
+            }
+
+            return Array.from(sectionRootEl.querySelectorAll('[data-smart-number-input-root] input'))
+                .filter((input) => input.type !== 'hidden' && !input.disabled)
+                .some((input) => String(input.value || '').trim() === '');
+        },
+        async setCountedQuantityRequiredCue(visible) {
+            if (showRequiredCountedQuantityCue === visible) {
+                return;
+            }
+
+            showRequiredCountedQuantityCue = visible;
+            await this.refreshCrudSection('countLines');
+        },
+        workflowProgressHtml() {
+            let steps = Array.isArray(this.workflowProgressSteps)
+                ? this.workflowProgressSteps
+                : [];
+
+            steps = steps
+                .map((step, index) => ({
+                    label: String(step?.label || ''),
+                    status: ['completed', 'current', 'upcoming'].includes(step?.status)
+                        ? step.status
+                        : 'upcoming',
+                    url: step?.url || null,
+                    current: Boolean(step?.current || step?.status === 'current'),
+                    number: String(index + 1).padStart(2, '0'),
+                }))
+                .filter((step) => step.label !== '' && step.label !== 'DRAFT')
+                .map((step, index) => ({
+                    ...step,
+                    number: String(index + 1).padStart(2, '0'),
+                }));
+
+            const hasActiveStep = steps.some((step) => step.current)
+                || steps.some((step) => step.status === 'completed');
+
+            if (
+                steps.length > 0
+                && !this.count.is_draft_setup
+                && !hasActiveStep
+            ) {
+                steps = steps.map((step, index) => ({
+                    ...step,
+                    status: index === 0 ? 'current' : step.status,
+                    current: index === 0,
+                }));
+            }
+
+            if (steps.length === 0) {
+                return '';
+            }
+
+            let activeMobileStep = null;
+
+            if (steps.length > 0 && (hasActiveStep || !this.count.is_draft_setup)) {
+                activeMobileStep = steps.findIndex((step) => step.current || step.status === 'current');
+
+                if (activeMobileStep < 0) {
+                    activeMobileStep = steps.findIndex((step) => step.status === 'upcoming');
+                }
+
+                if (activeMobileStep < 0) {
+                    activeMobileStep = Math.max(0, steps.length - 1);
+                }
+            }
+
+            const activeMobileStepLiteral = activeMobileStep === null ? 'null' : String(activeMobileStep);
+
+            return `
+                <nav class="w-full" aria-label="Progress" x-data="{ activeWorkflowStep: ${activeMobileStepLiteral} }" x-cloak>
+                    <div class="flex overflow-hidden rounded-md border border-gray-300 bg-white md:hidden" role="tablist" aria-label="Workflow stages" data-workflow-progress-mobile-tabs>
+                        ${steps.map((step, index) => this.workflowProgressMobileStepHtml(step, index, index === steps.length - 1)).join('')}
+                    </div>
+                    <ol role="list" class="hidden divide-y divide-gray-300 rounded-md border border-gray-300 bg-white md:flex md:divide-y-0">
+                        ${steps.map((step, index) => this.workflowProgressStepHtml(step, index === steps.length - 1)).join('')}
+                    </ol>
+                </nav>
+            `;
+        },
+        workflowProgressMobileStepHtml(step, index, isLast) {
+            const label = asString(step.label);
+            const isCompleted = step.status === 'completed';
+            const isCurrent = step.status === 'current' || step.current;
+            let circleClass = 'border-gray-300 bg-white text-gray-500';
+
+            if (isCompleted) {
+                circleClass = 'border-indigo-600 bg-indigo-600 text-white';
+            } else if (isCurrent) {
+                circleClass = 'border-indigo-600 bg-white text-indigo-600';
+            }
+
+            const labelClass = isCurrent ? 'text-indigo-600' : 'text-gray-900';
+            const circleContent = isCompleted
+                ? `
+                    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" class="size-5 text-white">
+                        <path fill-rule="evenodd" clip-rule="evenodd" d="M19.916 4.626a.75.75 0 0 1 .208 1.04l-9 13.5a.75.75 0 0 1-1.154.114l-6-6a.75.75 0 0 1 1.06-1.06l5.353 5.353 8.493-12.74a.75.75 0 0 1 1.04-.207Z"></path>
+                    </svg>
+                `
+                : `<span class="text-sm font-semibold">${escapeHtml(step.number)}</span>`;
+            const separator = isLast ? '' : `
+                <span aria-hidden="true" class="pointer-events-none absolute right-0 top-0 h-full w-5 md:hidden">
+                    <svg viewBox="0 0 22 80" fill="none" preserveAspectRatio="none" class="size-full text-gray-300">
+                        <path d="M0 -2L20 40L0 82" stroke="currentcolor" vector-effect="non-scaling-stroke" stroke-linejoin="round"></path>
+                    </svg>
+                </span>
+            `;
+
+            return `
+                <button
+                    type="button"
+                    role="tab"
+                    class="relative min-h-16 overflow-hidden bg-white py-2 pl-3 pr-6 transition-[flex-basis,flex-grow] duration-300 ease-out will-change-[flex-basis]"
+                    :class="activeWorkflowStep === ${index} ? 'basis-0 grow' : 'basis-16 grow-0'"
+                    :aria-selected="activeWorkflowStep === ${index} ? 'true' : 'false'"
+                    x-on:click="activeWorkflowStep = ${index}"
+                >
+                    <span class="flex h-full items-center" :class="activeWorkflowStep === ${index} ? 'justify-start gap-3' : 'justify-center'">
+                        <span class="flex size-9 shrink-0 items-center justify-center rounded-full border-2 ${circleClass}">
+                            ${circleContent}
+                        </span>
+                        <span
+                            class="min-w-0 truncate text-left text-sm font-medium transition-[max-width,opacity,transform] duration-300 ease-out ${labelClass}"
+                            :class="activeWorkflowStep === ${index} ? 'max-w-48 translate-x-0 opacity-100' : 'max-w-0 -translate-x-1 opacity-0'"
+                        >${escapeHtml(label)}</span>
+                    </span>
+                    ${separator}
+                </button>
+            `;
+        },
+        workflowProgressStepHtml(step, isLast) {
+            const label = escapeHtml(step.label);
+            const separator = isLast ? '' : `
+                <div aria-hidden="true" class="absolute right-0 top-0 hidden h-full w-5 md:block">
+                    <svg viewBox="0 0 22 80" fill="none" preserveAspectRatio="none" class="size-full text-gray-300">
+                        <path d="M0 -2L20 40L0 82" stroke="currentcolor" vector-effect="non-scaling-stroke" stroke-linejoin="round"></path>
+                    </svg>
+                </div>
+            `;
+
+            if (step.status === 'completed') {
+                return `
+                    <li class="relative md:flex md:flex-1">
+                        <span class="group flex w-full items-center">
+                            <span class="flex items-center px-4 py-3 text-sm font-medium sm:px-6">
+                                <span class="flex size-9 shrink-0 items-center justify-center rounded-full bg-indigo-600 group-hover:bg-indigo-700">
+                                    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" class="size-5 text-white">
+                                        <path fill-rule="evenodd" clip-rule="evenodd" d="M19.916 4.626a.75.75 0 0 1 .208 1.04l-9 13.5a.75.75 0 0 1-1.154.114l-6-6a.75.75 0 0 1 1.06-1.06l5.353 5.353 8.493-12.74a.75.75 0 0 1 1.04-.207Z"></path>
+                                    </svg>
+                                </span>
+                                <span class="ml-4 text-sm font-medium text-gray-900">${label}</span>
+                            </span>
+                        </span>
+                        ${separator}
+                    </li>
+                `;
+            }
+
+            if (step.status === 'current') {
+                return `
+                    <li class="relative md:flex md:flex-1">
+                        <span class="flex w-full items-center px-4 py-3 text-sm font-medium sm:px-6" aria-current="step">
+                            <span class="flex size-9 shrink-0 items-center justify-center rounded-full border-2 border-indigo-600">
+                                <span class="text-sm font-semibold text-indigo-600">${escapeHtml(step.number)}</span>
+                            </span>
+                            <span class="ml-4 text-sm font-medium text-indigo-600">${label}</span>
+                        </span>
+                        ${separator}
+                    </li>
+                `;
+            }
+
+            return `
+                <li class="relative md:flex md:flex-1">
+                    <span class="group flex w-full items-center">
+                        <span class="flex items-center px-4 py-3 text-sm font-medium sm:px-6">
+                            <span class="flex size-9 shrink-0 items-center justify-center rounded-full border-2 border-gray-300 group-hover:border-gray-400">
+                                <span class="text-sm font-semibold text-gray-500 group-hover:text-gray-900">${escapeHtml(step.number)}</span>
+                            </span>
+                            <span class="ml-4 text-sm font-medium text-gray-500 group-hover:text-gray-900">${label}</span>
+                        </span>
+                    </span>
+                    ${separator}
+                </li>
+            `;
+        },
         performHeaderWorkflowAction(action = null) {
             const actionType = asString(action?.type || action?.handlerKey || action?.id, '');
 
@@ -349,13 +654,17 @@ export function mount(rootEl, payload) {
 
             if (actionType === 'advance') {
                 this.advanceWorkflow();
+                return;
             }
+
+            setWorkflowActionLoading(false);
         },
 
         async cancelInventoryCount(action = null) {
             const endpoint = asString(action?.endpoint || this.count.delete_url || '', '');
 
             if (!endpoint) {
+                setWorkflowActionLoading(false);
                 return;
             }
 
@@ -376,10 +685,12 @@ export function mount(rootEl, payload) {
                     return;
                 }
 
+                this.hydrateCountResponse(responseData);
                 this.showToast('success', 'Inventory count cancelled.');
-                window.location.reload();
             } catch (error) {
                 this.showToast('error', 'Unable to cancel inventory count.');
+            } finally {
+                setWorkflowActionLoading(false);
             }
         },
 
@@ -425,10 +736,16 @@ export function mount(rootEl, payload) {
             }
 
             const button = form.querySelector('[data-inventory-count-task-complete-button]');
+            const row = form.closest('[data-inventory-count-task-row]');
+            const taskId = Number(row?.dataset.inventoryCountTaskId || 0);
 
             if (button) {
                 button.disabled = true;
                 button.classList.add('cursor-not-allowed', 'opacity-50');
+            }
+
+            if (taskId > 0 && !this.taskCompletingIds.includes(taskId)) {
+                this.taskCompletingIds = [...this.taskCompletingIds, taskId];
             }
 
             try {
@@ -456,40 +773,13 @@ export function mount(rootEl, payload) {
                 }
 
                 const task = asRecord(responseData.data);
-                const row = form.closest('[data-inventory-count-task-row]');
-                const status = row ? row.querySelector('[data-inventory-count-task-status]') : null;
-                const assignedTo = row ? row.querySelector('[data-inventory-count-task-assigned-to]') : null;
-                const completedBy = row ? row.querySelector('[data-inventory-count-task-completed-by]') : null;
-                const completedByName = completedBy
-                    ? completedBy.querySelector('[data-inventory-count-task-completed-by-name]')
-                    : null;
 
-                if (status) {
-                    status.textContent = task.status || 'completed';
-                    status.classList.remove('bg-gray-200', 'text-gray-700');
-                    status.classList.add('bg-emerald-100', 'text-emerald-700');
+                if (task.id) {
+                    const nextTasks = this.currentStageTasks.filter((currentTask) => Number(currentTask.id) !== Number(task.id));
+                    nextTasks.push(task);
+                    this.currentStageTasks = this.sortTasks(nextTasks);
                 }
 
-                if (assignedTo) {
-                    assignedTo.remove();
-                }
-
-                if (completedBy) {
-                    completedBy.classList.remove('hidden');
-
-                    if (completedByName) {
-                        if (!completedBy.textContent.includes('Completed By:')) {
-                            const label = document.createElement('span');
-                            label.className = 'text-gray-500';
-                            label.textContent = 'Completed By: ';
-                            completedBy.prepend(label);
-                        }
-
-                        completedByName.textContent = task.completed_by_user_name || '—';
-                    }
-                }
-
-                form.remove();
                 this.showToast('success', 'Task completed.');
             } catch (error) {
                 this.showToast('error', 'Unable to complete task.');
@@ -497,6 +787,10 @@ export function mount(rootEl, payload) {
                 if (button) {
                     button.disabled = false;
                     button.classList.remove('cursor-not-allowed', 'opacity-50');
+                }
+            } finally {
+                if (taskId > 0) {
+                    this.taskCompletingIds = this.taskCompletingIds.filter((value) => Number(value) !== taskId);
                 }
             }
         },
@@ -564,7 +858,7 @@ export function mount(rootEl, payload) {
                     return;
                 }
 
-                this.hydrateCountResponse(responseData.count || {});
+                this.hydrateCountResponse(responseData);
                 this.showToast('success', 'Inventory count details updated.');
             } catch (error) {
                 this.details.counted_at_iso = previousCountedAtIso;
@@ -580,74 +874,108 @@ export function mount(rootEl, payload) {
 
         async submitToWorkflow() {
             if (!this.count.submit_url) {
+                setWorkflowActionLoading(false);
                 this.showToast('error', 'Unable to submit count.');
                 return;
             }
 
-            const response = await fetch(this.count.submit_url, {
-                method: 'POST',
-                headers: {
-                    Accept: 'application/json',
-                    'X-CSRF-TOKEN': this.csrf,
-                },
-            });
+            try {
+                const response = await fetch(this.count.submit_url, {
+                    method: 'POST',
+                    headers: {
+                        Accept: 'application/json',
+                        'X-CSRF-TOKEN': this.csrf,
+                    },
+                });
 
-            const data = await response.json().catch(() => ({}));
+                const data = await response.json().catch(() => ({}));
 
                 if (!response.ok) {
                     this.showToast('error', data.message || 'Unable to submit count.');
                     return;
                 }
 
-            window.location.reload();
+                this.hydrateCountResponse(data);
+                this.showToast('success', 'Inventory count submitted.');
+            } catch (error) {
+                this.showToast('error', 'Unable to submit count.');
+            } finally {
+                setWorkflowActionLoading(false);
+            }
         },
 
         async moveToPreviousWorkflowStage() {
             if (!this.count.previous_url) {
+                setWorkflowActionLoading(false);
                 this.showToast('error', 'Unable to move count to the previous stage.');
                 return;
             }
 
-            const response = await fetch(this.count.previous_url, {
-                method: 'POST',
-                headers: {
-                    Accept: 'application/json',
-                    'X-CSRF-TOKEN': this.csrf,
-                },
-            });
+            try {
+                const response = await fetch(this.count.previous_url, {
+                    method: 'POST',
+                    headers: {
+                        Accept: 'application/json',
+                        'X-CSRF-TOKEN': this.csrf,
+                    },
+                });
 
-            const data = await response.json().catch(() => ({}));
+                const data = await response.json().catch(() => ({}));
 
-            if (!response.ok) {
-                this.showToast('error', data.message || 'Unable to move count to the previous stage.');
-                return;
+                if (!response.ok) {
+                    this.showToast('error', data.message || 'Unable to move count to the previous stage.');
+                    return;
+                }
+
+                this.hydrateCountResponse(data);
+                this.showToast('success', 'Inventory count moved to the previous stage.');
+            } catch (error) {
+                this.showToast('error', 'Unable to move count to the previous stage.');
+            } finally {
+                setWorkflowActionLoading(false);
             }
-
-            window.location.reload();
         },
 
         async advanceWorkflow() {
             if (!this.count.advance_url) {
+                setWorkflowActionLoading(false);
                 this.showToast('error', 'Unable to advance count.');
                 return;
             }
 
-            const response = await fetch(this.count.advance_url, {
-                method: 'POST',
-                headers: {
-                    Accept: 'application/json',
-                    'X-CSRF-TOKEN': this.csrf,
-                },
-            });
+            try {
+                if ((this.count.workflow_stage_key || '') === 'counting') {
+                    if (this.countLinesHaveBlankQuantities()) {
+                        await this.setCountedQuantityRequiredCue(true);
+                        this.showToast('error', 'Enter a counted quantity for every item before moving past Counting.');
+                        return;
+                    }
 
-            const data = await response.json().catch(() => ({}));
+                    await this.setCountedQuantityRequiredCue(false);
+                }
 
-            if (!response.ok) {
-                this.showToast('error', data.message || 'Unable to advance count.');
-                return;
+                const response = await fetch(this.count.advance_url, {
+                    method: 'POST',
+                    headers: {
+                        Accept: 'application/json',
+                        'X-CSRF-TOKEN': this.csrf,
+                    },
+                });
+
+                const data = await response.json().catch(() => ({}));
+
+                if (!response.ok) {
+                    this.showToast('error', data.message || 'Unable to advance count.');
+                    return;
+                }
+
+                this.hydrateCountResponse(data);
+                this.showToast('success', 'Inventory count advanced.');
+            } catch (error) {
+                this.showToast('error', 'Unable to advance count.');
+            } finally {
+                setWorkflowActionLoading(false);
             }
-
-            window.location.reload();
         },
     }));
 }

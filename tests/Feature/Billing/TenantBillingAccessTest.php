@@ -348,9 +348,68 @@ it('redirects billing admins to stripe checkout during trial and preserves trial
         return $request->hasHeader('Authorization', 'Bearer sk_test_123')
             && $payload['mode'] === 'subscription'
             && $payload['line_items'][0]['price'] === 'price_123'
+            && $payload['success_url'] === route('billing.index') . '?checkout=success&session_id={CHECKOUT_SESSION_ID}'
             && $payload['client_reference_id'] !== ''
             && $payload['subscription_data']['trial_end'] === $trialEndsAt->timestamp;
     });
+});
+
+it('syncs checkout success back into tenant billing access and shows the active plan', function (): void {
+    config([
+        'services.stripe.secret' => 'sk_test_123',
+        'services.stripe.subscription_price_id' => 'price_123',
+    ]);
+
+    $user = ($this->makeAdmin)([
+        'trial_ends_at' => now()->subDay(),
+        'billing_subscription_status' => null,
+        'billing_subscription_ends_at' => null,
+    ]);
+
+    Http::fake([
+        'https://api.stripe.com/v1/checkout/sessions/cs_test_123*' => Http::response([
+            'id' => 'cs_test_123',
+            'customer' => 'cus_123',
+            'subscription' => 'sub_123',
+            'metadata' => [
+                'tenant_id' => (string) $user->tenant->id,
+            ],
+        ]),
+        'https://api.stripe.com/v1/subscriptions/sub_123' => Http::response([
+            'id' => 'sub_123',
+            'customer' => 'cus_123',
+            'status' => 'active',
+            'ended_at' => null,
+            'metadata' => [
+                'tenant_id' => (string) $user->tenant->id,
+            ],
+        ]),
+        'https://api.stripe.com/v1/prices/price_123*' => Http::response([
+            'id' => 'price_123',
+            'nickname' => 'Team Billing',
+            'product' => [
+                'id' => 'prod_123',
+                'name' => 'Team Billing',
+            ],
+        ]),
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('billing.index', [
+            'checkout' => 'success',
+            'session_id' => 'cs_test_123',
+        ]))
+        ->assertOk()
+        ->assertSee('Subscription confirmed for Team Billing.')
+        ->assertSee('Access active')
+        ->assertSee('Active: Team Billing');
+
+    $user->tenant->refresh();
+
+    expect($user->tenant->billing_provider)->toBe('stripe')
+        ->and($user->tenant->billing_provider_customer_id)->toBe('cus_123')
+        ->and($user->tenant->billing_provider_subscription_id)->toBe('sub_123')
+        ->and($user->tenant->billing_subscription_status)->toBe(Tenant::BILLING_SUBSCRIPTION_STATUS_ACTIVE);
 });
 
 it('does not allow non-admin tenant users to start checkout', function (): void {

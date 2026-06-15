@@ -1,6 +1,7 @@
 export function mount(rootEl, payload) {
     const Alpine = window.Alpine;
     const safePayload = payload || {};
+    const workflowActionLoadingEvent = 'workflow-action-button-loading';
 
     const emptyHeaderErrors = () => ({
         supplier_id: [],
@@ -61,6 +62,15 @@ export function mount(rootEl, payload) {
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#039;');
+
+    const setWorkflowActionLoading = (loading, error = '') => {
+        window.dispatchEvent(new CustomEvent(workflowActionLoadingEvent, {
+            detail: {
+                loading,
+                error,
+            },
+        }));
+    };
 
     const initialSupplierId = normalizeId(safePayload.purchaseOrder?.supplier_id);
 
@@ -1663,6 +1673,7 @@ export function mount(rootEl, payload) {
         },
         async submitStatus(status) {
             if (!this.statusUpdateUrl) {
+                setWorkflowActionLoading(false);
                 return;
             }
 
@@ -1730,10 +1741,13 @@ export function mount(rootEl, payload) {
                 console.error(error);
                 this.statusError = 'Unable to update status.';
                 this.showToast('error', this.statusError);
+            } finally {
+                setWorkflowActionLoading(false);
             }
         },
         async submitStatusAction(action) {
             if (!this.statusUpdateUrl) {
+                setWorkflowActionLoading(false);
                 return;
             }
 
@@ -1801,6 +1815,8 @@ export function mount(rootEl, payload) {
                 console.error(error);
                 this.statusError = 'Unable to apply action.';
                 this.showToast('error', this.statusError);
+            } finally {
+                setWorkflowActionLoading(false);
             }
         },
     }));

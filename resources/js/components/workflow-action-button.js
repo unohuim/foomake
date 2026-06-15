@@ -1,4 +1,6 @@
 export function registerWorkflowActionButton(Alpine) {
+    const loadingEventName = 'workflow-action-button-loading';
+
     Alpine.data('workflowActionButton', (initialWorkflow = {}, csrfToken = '', options = {}) => ({
         workflow: initialWorkflow || {},
         csrfToken,
@@ -14,12 +16,31 @@ export function registerWorkflowActionButton(Alpine) {
 
                 if (nextState && typeof nextState === 'object') {
                     this.workflow = nextState;
+                    this.loading = false;
+                    this.error = '';
+                }
+            };
+
+            const loadingHandler = (event) => {
+                const detail = event?.detail || {};
+                const isLoading = typeof detail.loading === 'boolean' ? detail.loading : null;
+
+                if (isLoading === null) {
+                    return;
+                }
+
+                this.loading = isLoading;
+
+                if (!this.loading && typeof detail.error === 'string') {
+                    this.error = detail.error;
                 }
             };
 
             this.$el.addEventListener(this.syncEventName, syncHandler);
             window.addEventListener(this.syncEventName, syncHandler);
             document.addEventListener(this.syncEventName, syncHandler);
+            window.addEventListener(loadingEventName, loadingHandler);
+            document.addEventListener(loadingEventName, loadingHandler);
         },
         hasActions() {
             return this.menuActions().length > 0;
@@ -95,6 +116,14 @@ export function registerWorkflowActionButton(Alpine) {
             }
 
             if (this.mode === 'dispatch') {
+                this.loading = true;
+                this.error = '';
+                window.dispatchEvent(new CustomEvent(loadingEventName, {
+                    detail: {
+                        loading: true,
+                    },
+                }));
+
                 window.dispatchEvent(new CustomEvent(this.actionEventName, {
                     detail: actionToSubmit,
                 }));
@@ -149,6 +178,11 @@ export function registerWorkflowActionButton(Alpine) {
                 this.error = 'Unable to update workflow.';
             } finally {
                 this.loading = false;
+                window.dispatchEvent(new CustomEvent(loadingEventName, {
+                    detail: {
+                        loading: false,
+                    },
+                }));
             }
         },
     }));
