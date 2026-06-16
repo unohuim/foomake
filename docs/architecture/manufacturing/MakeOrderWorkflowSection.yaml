@@ -2,8 +2,7 @@ name: Make Order Details Section
 type: Manufacturing UI Pattern
 location:
   - app/Http/Controllers/MakeOrderController.php
-  - app/Actions/Manufacturing/MoveMakeOrderWorkflowStageAction.php
-  - app/Actions/Workflows/ResolveManufacturingWorkflowStageAction.php
+  - app/Services/Workflows/MakeOrderWorkflow.php
   - resources/views/manufacturing/make-orders/show.blade.php
   - resources/js/pages/manufacturing-make-orders-show.js
 purpose: Place operational workflow responsibilities and compact Make Order execution details on the detail page without overloading lifecycle status or mutating ingredient snapshots.
@@ -70,8 +69,9 @@ public_interface:
   - MakeOrderController::updateDueDate()
   - MakeOrderController::updateAssignment()
   - MakeOrderController::updateWorkflowStage()
-  - MoveMakeOrderWorkflowStageAction::execute()
-  - ResolveManufacturingWorkflowStageAction::availableTransitions()
+  - MakeOrderWorkflow::moveToStage()
+  - MakeOrderWorkflow::availableTransitions()
+  - MakeOrderWorkflow::responsePayload()
 example_usage: |
   Details payload:
     runs = 2.000000

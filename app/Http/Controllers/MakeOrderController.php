@@ -2,12 +2,8 @@
 
 namespace App\Http\Controllers;
 
-use App\Actions\Manufacturing\MoveMakeOrderWorkflowStageAction;
 use App\Actions\Notes\BuildNotesFeedPayloadAction;
-use App\Actions\Workflows\BuildWorkflowProgressStepsAction;
 use App\Actions\Workflows\CanViewAssignedWorkflowResourceAction;
-use App\Actions\Workflows\ResolveManufacturingWorkflowStageAction;
-use App\Actions\Workflows\SeedDefaultWorkflowStagesForTenantAction;
 use App\Models\Item;
 use App\Models\MakeOrder;
 use App\Models\MakeOrderLine;
@@ -16,10 +12,8 @@ use App\Models\Recipe;
 use App\Models\RecipeVersion;
 use App\Models\RecipeVersionLine;
 use App\Models\StockMove;
-use App\Models\Task;
 use App\Models\User;
-use App\Models\WorkflowDomain;
-use App\Models\WorkflowStage;
+use App\Services\Workflows\MakeOrderWorkflow;
 use App\Support\QuantityFormatter;
 use App\Support\Uom\UomConversionPathResolver;
 use App\Support\Workflows\WorkflowAssignmentPermissions;
@@ -121,8 +115,6 @@ class MakeOrderController extends Controller
             403
         );
 
-        $this->ensureManufacturingWorkflowStagesExist($request);
-
         $makeOrder->load([
             'recipe.item.baseUom',
             'recipeVersion',
@@ -138,16 +130,7 @@ class MakeOrderController extends Controller
                 ['label' => 'Make Orders', 'url' => route('manufacturing.make-orders.index'), 'current' => false],
                 ['label' => 'Make Order ' . $makeOrder->id, 'url' => null, 'current' => true],
             ],
-            'workflowProgressSteps' => app(BuildWorkflowProgressStepsAction::class)->execute(
-                (int) $request->user()->tenant_id,
-                'manufacturing',
-                $makeOrder->status !== MakeOrder::STATUS_MADE && $makeOrder->workflow_stage_id !== null
-                    ? (int) $makeOrder->workflow_stage_id
-                    : null,
-                null,
-                $makeOrder->workflow_stage_id === null ? null : (int) $makeOrder->workflow_stage_id,
-                $makeOrder->status === MakeOrder::STATUS_MADE
-            ),
+            'workflowProgressSteps' => $this->makeOrderWorkflowProgressSteps($makeOrder, $request->user()),
             'workflow' => $this->makeOrderWorkflowPayload($makeOrder, $request->user()),
             'ingredients' => $this->makeOrderIngredientsPayload($makeOrder),
             'taskCreate' => [
@@ -515,16 +498,9 @@ class MakeOrderController extends Controller
 
         if ($makeOrderModel->workflow_stage_id === null) {
             try {
-                $firstStage = app(ResolveManufacturingWorkflowStageAction::class)->firstActiveStage($makeOrderModel);
-
-                if (! $firstStage) {
-                    throw new DomainException('No active manufacturing workflow stage is configured.');
-                }
-
-                $makeOrderModel = app(MoveMakeOrderWorkflowStageAction::class)->execute(
+                $makeOrderModel = app(MakeOrderWorkflow::class)->enter(
                     $makeOrderModel,
-                    (int) $firstStage->id,
-                    (int) $request->user()->id
+                    $request->user()
                 );
             } catch (DomainException $exception) {
                 return $this->validationError([
@@ -544,7 +520,7 @@ class MakeOrderController extends Controller
     public function updateWorkflowStage(
         Request $request,
         int $makeOrder,
-        MoveMakeOrderWorkflowStageAction $moveWorkflowStageAction
+        MakeOrderWorkflow $makeOrderWorkflow
     ): JsonResponse {
         abort_unless($this->userCanOperateMakeOrderWorkflow($request->user()), 403);
 
@@ -555,8 +531,6 @@ class MakeOrderController extends Controller
                 Rule::exists('workflow_stages', 'id'),
             ],
         ]);
-
-        $this->ensureManufacturingWorkflowStagesExist($request);
 
         $makeOrderModel = MakeOrder::query()
             ->where('tenant_id', $request->user()->tenant_id)
@@ -572,10 +546,10 @@ class MakeOrderController extends Controller
             ->findOrFail($makeOrder);
 
         try {
-            $makeOrderModel = $moveWorkflowStageAction->execute(
+            $makeOrderModel = $makeOrderWorkflow->moveToStage(
                 $makeOrderModel,
                 (int) $validated['workflow_stage_id'],
-                (int) $request->user()->id
+                $request->user()
             );
         } catch (DomainException $exception) {
             return $this->validationError([
@@ -825,7 +799,7 @@ class MakeOrderController extends Controller
                 ]);
             }
 
-            $nextWorkflowStage = app(ResolveManufacturingWorkflowStageAction::class)->nextActiveStage($makeOrderModel);
+            $nextWorkflowStage = app(MakeOrderWorkflow::class)->nextActiveStage($makeOrderModel);
 
             if ($nextWorkflowStage !== null) {
                 $makeOrderModel->workflow_stage_id = $nextWorkflowStage->id;
@@ -1375,148 +1349,7 @@ class MakeOrderController extends Controller
      */
     private function makeOrderWorkflowPayload(MakeOrder $makeOrder, User $viewer): array
     {
-        $resolver = app(ResolveManufacturingWorkflowStageAction::class);
-        $currentStage = $resolver->currentStage($makeOrder);
-        $availableStages = collect();
-        $workflowState = $this->makeOrderWorkflowState($makeOrder);
-        $workflowLabel = $this->makeOrderWorkflowDisplayLabel($makeOrder);
-
-        if ($makeOrder->status !== MakeOrder::STATUS_MADE && $makeOrder->status !== MakeOrder::STATUS_CANCELLED) {
-            $availableStages = $resolver->availableTransitions($makeOrder);
-        }
-
-        $forwardAction = null;
-        $actions = [];
-
-        $canOperateWorkflow = $this->userCanOperateMakeOrderWorkflow($viewer);
-        $nextStage = $currentStage
-            ? $resolver->nextActiveStage($makeOrder)
-            : $resolver->firstActiveStage($makeOrder);
-
-        if (
-            $canOperateWorkflow
-            && ! in_array($makeOrder->status, [MakeOrder::STATUS_MADE, MakeOrder::STATUS_CANCELLED], true)
-            && $nextStage !== null
-        ) {
-            if ($currentStage?->is_inventory_effect_stage) {
-                $forwardAction = [
-                    'id' => $nextStage->id,
-                    'label' => $nextStage->action_verb ?: $nextStage->name,
-                    'type' => 'make',
-                    'description' => $this->workflowStageActionDescription($nextStage, 'Make this make order.'),
-                    'endpoint' => route('manufacturing.make-orders.make', $makeOrder),
-                ];
-            } else {
-                $forwardAction = [
-                    'id' => $nextStage->id,
-                    'label' => $nextStage->action_verb ?: $nextStage->name,
-                    'type' => 'stage',
-                    'description' => $this->workflowStageActionDescription($nextStage, 'Move this make order to the next workflow stage.'),
-                    'endpoint' => route('manufacturing.make-orders.workflow-stage.update', $makeOrder),
-                ];
-            }
-        }
-
-        if ($forwardAction) {
-            $actions[] = $forwardAction;
-        }
-
-        $cancelAction = (
-            $canOperateWorkflow
-            && ! in_array($makeOrder->status, [MakeOrder::STATUS_MADE, MakeOrder::STATUS_CANCELLED], true)
-        ) ? $this->makeOrderCancelAction($makeOrder) : null;
-
-        if ($cancelAction) {
-            $actions[] = $cancelAction;
-        }
-
-        return [
-            'default_open' => false,
-            'transition_url' => route('manufacturing.make-orders.workflow-stage.update', $makeOrder),
-            'can_move_stage' => $canOperateWorkflow
-                && ! in_array($makeOrder->status, [MakeOrder::STATUS_MADE, MakeOrder::STATUS_CANCELLED], true),
-            'current_stage' => $currentStage ? [
-                'id' => $currentStage->id,
-                'workflow_domain_id' => $currentStage->workflow_domain_id,
-                'key' => $currentStage->key,
-                'name' => $currentStage->name,
-                'action_verb' => $currentStage->action_verb,
-                'status_complete_label' => $currentStage->status_complete_label,
-                'description' => $currentStage->description,
-            ] : null,
-            'status' => $workflowLabel,
-            'status_label' => $workflowLabel,
-            'display_label' => $workflowLabel,
-            'currentLabel' => $workflowLabel,
-            'current_stage_label' => $workflowLabel,
-            'header_menu' => [
-                'currentLabel' => $workflowLabel,
-                'options' => $actions,
-            ],
-            'actions' => $actions,
-            'available_stages' => $availableStages
-                ->map(fn (WorkflowStage $stage): array => [
-                    'id' => $stage->id,
-                    'key' => $stage->key,
-                    'name' => $stage->name,
-                    'description' => $stage->description,
-                ])
-                ->values()
-                ->all(),
-            'next_stage_action' => $forwardAction,
-            'due_date' => $makeOrder->due_date?->format('Y-m-d'),
-            'due_date_update_url' => route('manufacturing.make-orders.due-date.update', $makeOrder),
-            'can_edit_due_date' => $canOperateWorkflow
-                && ! in_array($makeOrder->status, [MakeOrder::STATUS_MADE, MakeOrder::STATUS_CANCELLED], true),
-            'made_by_user_id' => $makeOrder->made_by_user_id,
-            'owner_user_name' => $makeOrder->madeByUser?->name,
-            'assignee_options' => $this->tenantAssigneeOptionsPayload($makeOrder->tenant_id),
-            'assignment_update_url' => route('manufacturing.make-orders.assignment.update', $makeOrder),
-            'can_edit_assignment' => $canOperateWorkflow,
-            'tasked_by_user_id' => $makeOrder->tasked_by_user_id,
-            'tasked_by_user_name' => $makeOrder->taskedByUser?->name,
-            'current_stage_tasks' => $this->makeOrderWorkflowTasksPayload($makeOrder, $currentStage, $viewer),
-        ];
-    }
-
-    /**
-     * Build the cancel action payload for a Make Order.
-     *
-     * @return array<string, mixed>|null
-     */
-    private function makeOrderCancelAction(MakeOrder $makeOrder): ?array
-    {
-        $manufacturingDomainId = WorkflowDomain::query()
-            ->where('key', 'manufacturing')
-            ->value('id');
-
-        if (! $manufacturingDomainId) {
-            return [
-                'id' => 'cancel',
-                'type' => 'cancel',
-                'label' => 'Cancel',
-                'description' => 'Cancel this make order.',
-                'endpoint' => route('manufacturing.make-orders.destroy', $makeOrder),
-                'method' => 'DELETE',
-                'requiresConfirmation' => true,
-            ];
-        }
-
-        $cancelStage = WorkflowStage::withoutGlobalScopes()
-            ->where('tenant_id', $makeOrder->tenant_id)
-            ->where('workflow_domain_id', $manufacturingDomainId)
-            ->where('key', 'cancelling')
-            ->first();
-
-        return [
-            'id' => 'cancel',
-            'type' => 'cancel',
-            'label' => 'Cancel',
-            'description' => $this->workflowStageActionDescription($cancelStage, 'Cancel this make order.'),
-            'endpoint' => route('manufacturing.make-orders.destroy', $makeOrder),
-            'method' => 'DELETE',
-            'requiresConfirmation' => true,
-        ];
+        return app(MakeOrderWorkflow::class)->responsePayload($makeOrder, $viewer);
     }
 
     /**
@@ -1526,16 +1359,7 @@ class MakeOrderController extends Controller
      */
     private function makeOrderWorkflowProgressSteps(MakeOrder $makeOrder, User $viewer): array
     {
-        return app(BuildWorkflowProgressStepsAction::class)->execute(
-            (int) $viewer->tenant_id,
-            'manufacturing',
-            $makeOrder->status !== MakeOrder::STATUS_MADE && $makeOrder->workflow_stage_id !== null
-                ? (int) $makeOrder->workflow_stage_id
-                : null,
-            null,
-            $makeOrder->workflow_stage_id === null ? null : (int) $makeOrder->workflow_stage_id,
-            $makeOrder->status === MakeOrder::STATUS_MADE
-        );
+        return app(MakeOrderWorkflow::class)->progressSteps($makeOrder);
     }
 
     /**
@@ -2030,111 +1854,7 @@ class MakeOrderController extends Controller
      */
     private function makeOrderWorkflowState(MakeOrder $makeOrder): string
     {
-        if ($makeOrder->status === MakeOrder::STATUS_CANCELLED) {
-            return MakeOrder::STATUS_CANCELLED;
-        }
-
-        if ($makeOrder->status === MakeOrder::STATUS_MADE) {
-            return $makeOrder->workflowStage?->status_complete_label ?? 'COMPLETED';
-        }
-
-        if ($makeOrder->workflow_stage_id === null) {
-            return MakeOrder::STATUS_DRAFT;
-        }
-
-        return $makeOrder->workflowStage?->name ?? '—';
-    }
-
-    /**
-     * Resolve the visible workflow status label for one Make Order.
-     */
-    private function makeOrderWorkflowDisplayLabel(MakeOrder $makeOrder): string
-    {
-        if ($makeOrder->status === MakeOrder::STATUS_CANCELLED) {
-            return 'CANCELLED';
-        }
-
-        if ($makeOrder->workflow_stage_id === null) {
-            return MakeOrder::STATUS_DRAFT;
-        }
-
-        if ($makeOrder->status === MakeOrder::STATUS_MADE) {
-            return 'COMPLETED';
-        }
-
-        $currentStage = app(ResolveManufacturingWorkflowStageAction::class)->currentStage($makeOrder);
-
-        return $currentStage?->status_complete_label
-            ?? $currentStage?->name
-            ?? MakeOrder::STATUS_DRAFT;
-    }
-
-    /**
-     * Resolve helper copy for a workflow stage action from the stage itself.
-     */
-    private function workflowStageActionDescription(?WorkflowStage $stage, string $fallback): string
-    {
-        return filled($stage?->description)
-            ? (string) $stage->description
-            : $fallback;
-    }
-
-    /**
-     * Build task payload data for the current Make Order workflow stage.
-     *
-     * @return array<int, array<string, int|string|bool|null>>
-     */
-    private function makeOrderWorkflowTasksPayload(
-        MakeOrder $makeOrder,
-        ?WorkflowStage $currentStage,
-        User $viewer
-    ): array {
-        if (! $currentStage) {
-            return [];
-        }
-
-        return Task::query()
-            ->with(['assignedTo', 'completedBy'])
-            ->where('tenant_id', $makeOrder->tenant_id)
-            ->where('workflow_domain_id', $currentStage->workflow_domain_id)
-            ->where('domain_record_id', $makeOrder->id)
-            ->where(function ($query) use ($currentStage): void {
-                $query->where('source', Task::SOURCE_MANUAL)
-                    ->orWhere(function ($query) use ($currentStage): void {
-                        $query->where('source', Task::SOURCE_GENERATED)
-                            ->where('workflow_stage_id', $currentStage->id);
-                    });
-            })
-            ->orderBy('sort_order')
-            ->orderBy('id')
-            ->get()
-            ->map(function (Task $task) use ($viewer): array {
-                $canComplete = ! $task->isCompleted()
-                    && (int) $task->assigned_to_user_id === (int) $viewer->id
-                    && app(WorkflowAssignmentPermissions::class)->userCanBeAssignedToDomain($viewer, 'manufacturing');
-
-                return [
-                    'id' => $task->id,
-                    'source' => $task->source,
-                    'workflow_stage_id' => $task->workflow_stage_id,
-                    'workflow_task_template_id' => $task->workflow_task_template_id,
-                    'assigned_to_user_id' => $task->assigned_to_user_id,
-                    'assigned_to_user_name' => $task->assignedTo?->name,
-                    'title' => $task->title,
-                    'description' => $task->description,
-                    'due_date' => $task->due_date?->format('Y-m-d'),
-                    'sort_order' => $task->sort_order,
-                    'status' => $task->status,
-                    'is_completed' => $task->isCompleted(),
-                    'can_complete' => $canComplete,
-                    'completed_at' => $task->completed_at?->toISOString(),
-                    'completed_by_user_id' => $task->completed_by_user_id,
-                    'completed_by_user_name' => $task->completedBy?->name,
-                    'complete_url' => route('tasks.complete', $task),
-                ];
-            })
-            ->values()
-            ->all();
+        return app(MakeOrderWorkflow::class)->stateLabel($makeOrder);
     }
 
     /**
@@ -2149,26 +1869,4 @@ class MakeOrderController extends Controller
         return (int) ($validated['per_page'] ?? $default);
     }
 
-    /**
-     * Seed default manufacturing workflow stages when none are configured for the tenant.
-     */
-    private function ensureManufacturingWorkflowStagesExist(Request $request): void
-    {
-        $manufacturingDomainId = WorkflowDomain::query()
-            ->where('key', 'manufacturing')
-            ->value('id');
-
-        if ($manufacturingDomainId) {
-            $hasConfiguredStages = WorkflowStage::withoutGlobalScopes()
-                ->where('tenant_id', $request->user()->tenant_id)
-                ->where('workflow_domain_id', $manufacturingDomainId)
-                ->exists();
-
-            if ($hasConfiguredStages) {
-                return;
-            }
-        }
-
-        app(SeedDefaultWorkflowStagesForTenantAction::class)->execute($request->user()->tenant);
-    }
 }

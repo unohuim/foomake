@@ -3,6 +3,8 @@ type: Template Method Service
 location:
   - app/Contracts/Workflows/Workflowable.php
   - app/Services/Workflows/BaseWorkflow.php
+  - app/Services/Workflows/MakeOrderWorkflow.php
+  - app/Services/Workflows/PurchaseOrderWorkflow.php
   - app/Services/Workflows/SalesOrderWorkflow.php
 purpose: Provide one shared workflow transition algorithm while allowing domain workflow services to supply domain-specific authorization, validation, and side effects.
 when_to_use:
@@ -26,6 +28,10 @@ rules:
 public_interface:
   - Workflowable
   - BaseWorkflow::transition()
+  - MakeOrderWorkflow::moveToStage()
+  - MakeOrderWorkflow::responsePayload()
+  - PurchaseOrderWorkflow::completeStage()
+  - PurchaseOrderWorkflow::responsePayload()
   - SalesOrderWorkflow::transition()
   - SalesOrderWorkflow::responsePayload()
   - SalesOrderWorkflow::availableTransitions()

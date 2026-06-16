@@ -461,7 +461,7 @@ it('22. detail controllers build workflow progress after normal page authorizati
     expect(($this->inventoryCountControllerSource)())->toContain('authorizeInventoryCountView')
         ->and(($this->inventoryCountControllerSource)())->toContain('BuildWorkflowProgressStepsAction')
         ->and(($this->makeOrderControllerSource)())->toContain('abort_unless')
-        ->and(($this->makeOrderControllerSource)())->toContain('BuildWorkflowProgressStepsAction')
+        ->and(($this->makeOrderControllerSource)())->toContain('MakeOrderWorkflow')
         ->and(($this->purchaseOrderControllerSource)())->toContain('abort_unless')
         ->and(($this->purchaseOrderControllerSource)())->toContain('PurchaseOrderWorkflow')
         ->and(($this->salesOrderControllerSource)())->toContain('abort_unless')

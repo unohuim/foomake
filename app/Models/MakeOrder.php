@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Contracts\Workflows\Workflowable;
 use App\Models\Concerns\HasTenantScope;
 use App\Models\Concerns\HasNotes;
 use Illuminate\Database\Eloquent\Casts\Attribute;
@@ -29,7 +30,7 @@ use Illuminate\Support\Carbon;
  * @property int|null $created_by_user_id
  * @property int|null $made_by_user_id
  */
-class MakeOrder extends Model
+class MakeOrder extends Model implements Workflowable
 {
     use HasNotes;
     use HasTenantScope;
@@ -142,6 +143,46 @@ class MakeOrder extends Model
     public function stockMoves(): MorphMany
     {
         return $this->morphMany(StockMove::class, 'source');
+    }
+
+    /**
+     * Return the workflow domain key for this make order.
+     */
+    public function workflowDomainKey(): string
+    {
+        return 'manufacturing';
+    }
+
+    /**
+     * Return the workflow task domain record id.
+     */
+    public function workflowRecordId(): int
+    {
+        return (int) $this->id;
+    }
+
+    /**
+     * Return the owning tenant id.
+     */
+    public function workflowTenantId(): int
+    {
+        return (int) $this->tenant_id;
+    }
+
+    /**
+     * Return the persisted lifecycle status.
+     */
+    public function workflowStatus(): string
+    {
+        return (string) $this->status;
+    }
+
+    /**
+     * Set the persisted lifecycle status.
+     */
+    public function setWorkflowStatus(string $status): void
+    {
+        $this->forceFill(['status' => $status]);
     }
 
     /**

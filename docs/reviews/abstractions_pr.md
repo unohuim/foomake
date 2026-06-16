@@ -217,7 +217,7 @@ Representative examples:
 
 The codebase already uses domain actions for some write flows:
 
-- `app/Actions/Manufacturing/MoveMakeOrderWorkflowStageAction.php`
+- `app/Services/Workflows/MakeOrderWorkflow.php`
 - `app/Actions/Inventory/ExecuteRecipeAction.php`
 - `app/Actions/Tasks/CompleteTaskAction.php`
 

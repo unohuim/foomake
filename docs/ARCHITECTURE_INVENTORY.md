@@ -630,6 +630,7 @@ Notes:
 **Location:**
 - `docs/architecture/manufacturing/MakeOrderWorkflowSection.yaml`
 - `app/Http/Controllers/MakeOrderController.php`
+- `app/Services/Workflows/MakeOrderWorkflow.php`
 - `resources/views/manufacturing/make-orders/show.blade.php`
 - `resources/js/pages/manufacturing-make-orders-show.js`
 
@@ -649,8 +650,9 @@ Render compact Runs, Expected Output, Actual Output, Due Date, and Assigned To d
 **Public Interface:**
 - `manufacturing.make-orders.due-date.update`
 - `manufacturing.make-orders.workflow-stage.update`
-- `MoveMakeOrderWorkflowStageAction::execute()`
-- `ResolveManufacturingWorkflowStageAction::availableTransitions()`
+- `MakeOrderWorkflow::moveToStage()`
+- `MakeOrderWorkflow::availableTransitions()`
+- `MakeOrderWorkflow::responsePayload()`
 
 ### Resource Detail Layout Pattern
 
@@ -751,6 +753,7 @@ $nextStage = $definition->nextStageAfter($currentStage);
 - `docs/architecture/workflows/BaseWorkflow.yaml`  
 - `app/Contracts/Workflows/Workflowable.php`  
 - `app/Services/Workflows/BaseWorkflow.php`  
+- `app/Services/Workflows/MakeOrderWorkflow.php`  
 - `app/Services/Workflows/PurchaseOrderWorkflow.php`  
 - `app/Services/Workflows/SalesOrderWorkflow.php`  
 
@@ -768,6 +771,8 @@ Provide one shared workflow transition algorithm while domain workflow services 
 **Public Interface:**  
 - `Workflowable`  
 - `BaseWorkflow::transition()`  
+- `MakeOrderWorkflow::moveToStage()`  
+- `MakeOrderWorkflow::responsePayload()`  
 - `PurchaseOrderWorkflow::completeStage()`  
 - `PurchaseOrderWorkflow::cancel()`  
 - `PurchaseOrderWorkflow::responsePayload()`  
