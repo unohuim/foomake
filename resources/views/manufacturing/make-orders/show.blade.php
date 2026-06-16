@@ -20,9 +20,9 @@
                 <x-slot name="titleSuffix">
                     <span
                         class="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700"
-                        x-text="makeOrder.display_label || makeOrder.workflow_state || 'DRAFT'"
+                        x-text="workflow.display_label || makeOrder.display_label || makeOrder.workflow_state || 'DRAFT'"
                     >
-                        {{ data_get($makeOrderPayload, 'display_label', data_get($makeOrderPayload, 'workflow_state', 'DRAFT')) }}
+                        {{ data_get($payload, 'workflow.display_label', data_get($makeOrderPayload, 'display_label', data_get($makeOrderPayload, 'workflow_state', 'DRAFT'))) }}
                     </span>
                 </x-slot>
 

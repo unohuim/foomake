@@ -1379,50 +1379,52 @@ class MakeOrderController extends Controller
         $currentStage = $resolver->currentStage($makeOrder);
         $availableStages = collect();
         $workflowState = $this->makeOrderWorkflowState($makeOrder);
+        $workflowLabel = $this->makeOrderWorkflowDisplayLabel($makeOrder);
 
         if ($makeOrder->status !== MakeOrder::STATUS_MADE && $makeOrder->status !== MakeOrder::STATUS_CANCELLED) {
             $availableStages = $resolver->availableTransitions($makeOrder);
         }
 
-        $nextStageAction = null;
+        $forwardAction = null;
         $actions = [];
 
         $canOperateWorkflow = $this->userCanOperateMakeOrderWorkflow($viewer);
+        $nextStage = $currentStage
+            ? $resolver->nextActiveStage($makeOrder)
+            : $resolver->firstActiveStage($makeOrder);
 
         if (
             $canOperateWorkflow
             && ! in_array($makeOrder->status, [MakeOrder::STATUS_MADE, MakeOrder::STATUS_CANCELLED], true)
+            && $nextStage !== null
         ) {
             if ($currentStage?->is_inventory_effect_stage) {
-                $nextStageAction = [
-                    'id' => $currentStage->id,
-                    'label' => $currentStage->action_verb ?: $currentStage->name,
+                $forwardAction = [
+                    'id' => $nextStage->id,
+                    'label' => $nextStage->action_verb ?: $nextStage->name,
                     'type' => 'make',
-                    'description' => $this->workflowStageActionDescription($currentStage, 'Make this make order.'),
+                    'description' => $this->workflowStageActionDescription($nextStage, 'Make this make order.'),
                     'endpoint' => route('manufacturing.make-orders.make', $makeOrder),
                 ];
             } else {
-                $nextStage = $currentStage
-                    ? $resolver->nextActiveStage($makeOrder)
-                    : $resolver->firstActiveStage($makeOrder);
-
-                if ($nextStage) {
-                    $nextStageAction = [
-                        'id' => $nextStage->id,
-                        'label' => $nextStage->action_verb ?: $nextStage->name,
-                        'type' => 'stage',
-                        'description' => $this->workflowStageActionDescription($nextStage, 'Move this make order to the next workflow stage.'),
-                        'endpoint' => route('manufacturing.make-orders.workflow-stage.update', $makeOrder),
-                    ];
-                }
+                $forwardAction = [
+                    'id' => $nextStage->id,
+                    'label' => $nextStage->action_verb ?: $nextStage->name,
+                    'type' => 'stage',
+                    'description' => $this->workflowStageActionDescription($nextStage, 'Move this make order to the next workflow stage.'),
+                    'endpoint' => route('manufacturing.make-orders.workflow-stage.update', $makeOrder),
+                ];
             }
         }
 
-        if ($nextStageAction) {
-            $actions[] = $nextStageAction;
+        if ($forwardAction) {
+            $actions[] = $forwardAction;
         }
 
-        $cancelAction = $this->makeOrderCancelAction($makeOrder);
+        $cancelAction = (
+            $canOperateWorkflow
+            && ! in_array($makeOrder->status, [MakeOrder::STATUS_MADE, MakeOrder::STATUS_CANCELLED], true)
+        ) ? $this->makeOrderCancelAction($makeOrder) : null;
 
         if ($cancelAction) {
             $actions[] = $cancelAction;
@@ -1442,13 +1444,13 @@ class MakeOrderController extends Controller
                 'status_complete_label' => $currentStage->status_complete_label,
                 'description' => $currentStage->description,
             ] : null,
-            'status' => $workflowState,
-            'status_label' => $workflowState,
-            'display_label' => $workflowState,
-            'currentLabel' => $workflowState,
-            'current_stage_label' => $workflowState,
+            'status' => $workflowLabel,
+            'status_label' => $workflowLabel,
+            'display_label' => $workflowLabel,
+            'currentLabel' => $workflowLabel,
+            'current_stage_label' => $workflowLabel,
             'header_menu' => [
-                'currentLabel' => $workflowState,
+                'currentLabel' => $workflowLabel,
                 'options' => $actions,
             ],
             'actions' => $actions,
@@ -1461,7 +1463,7 @@ class MakeOrderController extends Controller
                 ])
                 ->values()
                 ->all(),
-            'next_stage_action' => $nextStageAction,
+            'next_stage_action' => $forwardAction,
             'due_date' => $makeOrder->due_date?->format('Y-m-d'),
             'due_date_update_url' => route('manufacturing.make-orders.due-date.update', $makeOrder),
             'can_edit_due_date' => $canOperateWorkflow
@@ -2033,7 +2035,7 @@ class MakeOrderController extends Controller
         }
 
         if ($makeOrder->status === MakeOrder::STATUS_MADE) {
-            return $makeOrder->workflowStage?->status_complete_label ?? MakeOrder::STATUS_MADE;
+            return $makeOrder->workflowStage?->status_complete_label ?? 'COMPLETED';
         }
 
         if ($makeOrder->workflow_stage_id === null) {
@@ -2041,6 +2043,30 @@ class MakeOrderController extends Controller
         }
 
         return $makeOrder->workflowStage?->name ?? '—';
+    }
+
+    /**
+     * Resolve the visible workflow status label for one Make Order.
+     */
+    private function makeOrderWorkflowDisplayLabel(MakeOrder $makeOrder): string
+    {
+        if ($makeOrder->status === MakeOrder::STATUS_CANCELLED) {
+            return 'CANCELLED';
+        }
+
+        if ($makeOrder->workflow_stage_id === null) {
+            return MakeOrder::STATUS_DRAFT;
+        }
+
+        if ($makeOrder->status === MakeOrder::STATUS_MADE) {
+            return 'COMPLETED';
+        }
+
+        $currentStage = app(ResolveManufacturingWorkflowStageAction::class)->currentStage($makeOrder);
+
+        return $currentStage?->status_complete_label
+            ?? $currentStage?->name
+            ?? MakeOrder::STATUS_DRAFT;
     }
 
     /**

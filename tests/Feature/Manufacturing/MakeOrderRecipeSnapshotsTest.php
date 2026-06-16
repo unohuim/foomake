@@ -1002,13 +1002,79 @@ it('34. make order detail workflow payload includes due date assignee and availa
         ->and(data_get($payload, 'workflow.due_date'))->toBe('2026-06-01')
         ->and(data_get($payload, 'workflow.available_stages'))->toHaveCount(1)
         ->and(data_get($payload, 'workflow.available_stages.0.id'))->toBe($stageB->id)
-        ->and(data_get($payload, 'workflow.next_stage_action.id'))->toBe($stageA->id)
-        ->and(data_get($payload, 'workflow.next_stage_action.label'))->toBe('PRODUCE')
+        ->and(data_get($payload, 'workflow.actions.0.id'))->toBe($stageB->id)
+        ->and(data_get($payload, 'workflow.actions.0.label'))->toBe('COMPLETE')
+        ->and(data_get($payload, 'workflow.actions.0.type'))->toBe('make')
+        ->and(data_get($payload, 'workflow.next_stage_action.id'))->toBe($stageB->id)
+        ->and(data_get($payload, 'workflow.next_stage_action.label'))->toBe('COMPLETE')
         ->and(data_get($payload, 'workflow.next_stage_action.type'))->toBe('make')
         ->and(data_get($payload, 'workflow.next_stage_action.endpoint'))->toBe(route('manufacturing.make-orders.make', $makeOrder))
         ->and(data_get($payload, 'makeOrder.due_date'))->toBe('2026-06-01')
         ->and(data_get($payload, 'makeOrder'))->not->toHaveKey('owner_user_name')
         ->and(data_get($payload, 'makeOrder'))->not->toHaveKey('workflow_tasks');
+});
+
+it('34b. make order workflow payload follows the seeded manufacturing stages and shared action contract', function (): void {
+    $tenant = ($this->makeTenant)('Tenant A');
+    $user = ($this->makeUser)($tenant);
+    ($this->grantPermission)($user, 'inventory-make-orders-manage');
+    ($this->grantPermission)($user, 'inventory-make-orders-execute');
+    ($this->grantPermission)($user, 'inventory-make-orders-view');
+
+    app(\App\Actions\Workflows\SeedDefaultWorkflowStagesForTenantAction::class)->execute($tenant);
+
+    $manufacturingDomainId = WorkflowDomain::query()
+        ->where('key', 'manufacturing')
+        ->value('id');
+
+    $creatingStage = WorkflowStage::withoutGlobalScopes()
+        ->where('tenant_id', $tenant->id)
+        ->where('workflow_domain_id', $manufacturingDomainId)
+        ->where('key', 'creating')
+        ->firstOrFail();
+
+    $makingStage = WorkflowStage::withoutGlobalScopes()
+        ->where('tenant_id', $tenant->id)
+        ->where('workflow_domain_id', $manufacturingDomainId)
+        ->where('key', 'making')
+        ->firstOrFail();
+
+    $uom = ($this->makeUom)($tenant, 2);
+    $output = ($this->makeItem)($tenant, $uom, 'Soup', ['is_manufacturable' => true]);
+    $recipe = ($this->createRecipe)($user, $output);
+    $makeOrder = MakeOrder::query()->forceCreate([
+        'tenant_id' => $tenant->id,
+        'recipe_id' => $recipe->id,
+        'recipe_version_id' => $recipe->current_version_id,
+        'workflow_stage_id' => $creatingStage->id,
+        'tasked_by_user_id' => $user->id,
+        'made_by_user_id' => $user->id,
+        'output_item_id' => $recipe->item_id,
+        'runs' => '2.000000',
+        'expected_output_qty' => '20.000000',
+        'status' => MakeOrder::STATUS_SCHEDULED,
+        'due_date' => '2026-06-01',
+        'scheduled_at' => now(),
+        'made_at' => null,
+        'created_by_user_id' => $user->id,
+    ]);
+
+    $payload = ($this->extractPayload)(
+        actingAs($user)->get(route('manufacturing.make-orders.show', $makeOrder))->assertOk(),
+        'manufacturing-make-orders-show-payload'
+    );
+
+    expect(data_get($payload, 'workflow.display_label'))->toBe('SCHEDULED')
+        ->and(data_get($payload, 'workflow.currentLabel'))->toBe('SCHEDULED')
+        ->and(data_get($payload, 'workflow.current_stage.name'))->toBe('Creating')
+        ->and(data_get($payload, 'workflow.current_stage.status_complete_label'))->toBe('SCHEDULED')
+        ->and(data_get($payload, 'workflow.actions.0.label'))->toBe('MAKE')
+        ->and(data_get($payload, 'workflow.actions.0.type'))->toBe('stage')
+        ->and(data_get($payload, 'workflow.actions.0.endpoint'))->toBe(route('manufacturing.make-orders.workflow-stage.update', $makeOrder))
+        ->and(data_get($payload, 'workflow.next_stage_action.label'))->toBe('MAKE')
+        ->and(data_get($payload, 'workflow.available_stages.0.id'))->toBe($makingStage->id)
+        ->and(data_get($payload, 'makeOrder.display_label'))->toBe('Creating')
+        ->and(data_get($payload, 'makeOrder.workflow_state'))->toBe('Creating');
 });
 
 it('34a. make order workflow payload exposes editable tenant scoped assignee options and unassigned state', function (): void {
@@ -1262,9 +1328,9 @@ it('35a. make order detail header payload uses workflow stage names and not life
     expect(data_get($renamedPayload, 'makeOrder.workflow_stage_name'))->toBe('Cook')
         ->and(data_get($renamedPayload, 'makeOrder.workflow_state'))->toBe('Cook')
         ->and(data_get($renamedPayload, 'makeOrder.display_label'))->toBe('Cook')
-        ->and(data_get($renamedPayload, 'workflow.actions.0.label'))->toBe('COOK')
+        ->and(data_get($renamedPayload, 'workflow.actions.0.label'))->toBe('QA READY')
         ->and(data_get($renamedPayload, 'workflow.actions.0.description'))->not->toBe('')
-        ->and(data_get($renamedPayload, 'workflow.next_stage_action.label'))->toBe('COOK')
+        ->and(data_get($renamedPayload, 'workflow.next_stage_action.label'))->toBe('QA READY')
         ->and(data_get($renamedPayload, 'makeOrder.status'))->toBe(MakeOrder::STATUS_SCHEDULED);
 
     $withoutStage = MakeOrder::query()->forceCreate([
@@ -1308,7 +1374,7 @@ it('35b. make order detail header source and controller payload do not hardcode 
     expect($viewSource)->not->toContain("\$makeOrderPayload['workflow_stage_name'] ?? \$makeOrderPayload['status'] ?? '—'")
         ->and($viewSource)->not->toContain("{{ \$makeOrderPayload['status'] }}")
         ->and($viewSource)->toContain('<x-dropdown-select')
-        ->and($viewSource)->toContain("x-text=\"makeOrder.display_label || makeOrder.workflow_state || 'DRAFT'\"")
+        ->and($viewSource)->toContain("x-text=\"workflow.display_label || makeOrder.display_label || makeOrder.workflow_state || 'DRAFT'\"")
         ->and($viewSource)->toContain('x-model="workflow.made_by_user_id"')
         ->and($viewSource)->toContain('type="date"')
         ->and($viewSource)->toContain('x-model="workflow.due_date"')
@@ -1338,6 +1404,7 @@ it('35b. make order detail header source and controller payload do not hardcode 
         ->and($pageModuleSource)->toContain('workflow.due_date_update_url')
         ->and($pageModuleSource)->not->toContain('syncHeaderState')
         ->and($pageModuleSource)->not->toContain("new CustomEvent('make-order-header-sync'")
+        ->and($pageModuleSource)->toContain('actions: asArray(workflowPayload.actions)')
         ->and($pageModuleSource)->toContain('next_stage_action: asRecord(workflowPayload.next_stage_action)')
         ->and($pageModuleSource)->toContain('next_stage_action: asRecord(data.next_stage_action)')
         ->and($pageModuleSource)->toContain('performHeaderWorkflowAction')
@@ -1433,7 +1500,7 @@ it('35d. make order detail header renders visible workflow state beside the titl
         ->and($headerSource)->toContain('data-resource-detail-header-title-row')
         ->and($showSource)->not->toContain("x-on:make-order-header-sync.window=\"syncHeader(\$event.detail)\"")
         ->and($showSource)->toContain('<x-slot name="titleSuffix">')
-        ->and($showSource)->toContain("x-text=\"makeOrder.display_label || makeOrder.workflow_state || 'DRAFT'\"");
+        ->and($showSource)->toContain("x-text=\"workflow.display_label || makeOrder.display_label || makeOrder.workflow_state || 'DRAFT'\"");
 });
 
 it('35e. make order detail details section keeps runs expected output actual output due date and assignee in one compact shared grid', function (): void {
