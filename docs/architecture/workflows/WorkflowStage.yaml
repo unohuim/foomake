@@ -57,6 +57,8 @@ rules:
   - The workflow admin UI does not expose a manual reorder button for stages.
   - Current-stage chips, badges, and status surfaces must render from `workflow_stages.name` rather than `workflow_stages.action_verb`.
   - Workflow transition buttons must render from `workflow_stages.action_verb`.
+  - Shared header action buttons use the configured current-stage completion label for the closed caption and the next active stage's action verb for the dropdown action label.
+  - Shared header action buttons must render terminal completed and cancelled states as disabled buttons instead of live menus.
   - Default stage seeding must update stale labels for existing tenant stages.
   - Default sales workflow stages are seeded idempotently per tenant as Creating, Packing, Shipping, Invoicing, Completing, and inactive Cancelling, with Packing marked as the inventory-effect stage and no separate Packed stage.
   - Default purchasing workflow stages are seeded idempotently per tenant as active Creating, Receiving, and Completing stages plus inactive Cancelling; Creating completes to CREATED, Receiving completes to RECEIVED and is marked as the inventory-effect stage.

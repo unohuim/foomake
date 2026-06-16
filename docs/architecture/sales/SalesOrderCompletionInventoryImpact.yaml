@@ -34,6 +34,9 @@ rules:
   - Sales-order lines whose sold item has an active fulfillment recipe consume that recipe's stockable component lines only.
   - Fulfillment recipes used for sales orders must have at least one line.
   - Manufacturing recipes are never used for sales-order fulfillment in this phase.
+  - Sales order detail workflow actions must use the shared workflow-action-button contract and shared loading overlay while a server mutation is pending.
+  - Sales order action labels must come from the seeded workflow stage contract, with the closed label derived from the current stage and the dropdown action label derived from the next stage.
+  - Sales order workflow actions must hydrate the page in place after success instead of forcing a browser reload.
   - Each packed stock move is tenant-scoped and uses the same tenant_id as the sales order and line.
   - Each packed stock move uses the consumed item's base UoM.
   - Each packed stock move uses type = issue and status = POSTED.

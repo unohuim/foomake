@@ -3,11 +3,12 @@ type: UI Contract
 location:
   - resources/views/components/workflow-action-button.blade.php
   - resources/js/components/workflow-action-button.js
+  - resources/views/components/ui/loading-overlay.blade.php
   - app/Services/Workflows/WorkflowTransitionService.php
-purpose: Define the reusable Tailwind and Alpine action button used by detail headers that expose multiple server-driven step actions.
+purpose: Define the reusable Tailwind and Alpine action button used by detail headers that expose multiple server-driven step actions, together with the shared blocking loading overlay shown while a server mutation is pending.
 when_to_use:
   - Rendering the current state label and available step actions in a resource detail header
-  - Driving purchase-order workflow transitions and recipe version actions from the same header button
+  - Driving sales, purchasing, manufacturing, inventory-count, and recipe-version actions from the same header button
   - Reusing the same closed-button plus dropdown contract for other multi-step header actions
 when_not_to_use:
   - Row action menus
@@ -15,10 +16,12 @@ when_not_to_use:
   - Replacing backend authorization or transition validation
 rules:
   - The button receives JSON state only.
-  - The closed button text is the derived current label from the supplied state payload.
+  - The closed button text is the derived visible label from the supplied state payload.
   - Dropdown actions are server-provided and are dispatched as raw action objects or submitted directly when the page module owns the fetch contract.
   - The page module owns the actual mutation, authorization, and state refresh contract.
   - The component must support named sync events so the header can refresh without a browser reload after successful actions.
+  - The shared loading overlay must be shown while a server mutation is pending so repeat submits are blocked until the response returns.
+  - Terminal completed and cancelled states render as disabled buttons rather than live menus.
   - The component must not introduce global JavaScript state.
   - UI action visibility is not authorization.
 public_interface:
@@ -26,6 +29,7 @@ public_interface:
   - actionEventName
   - syncEventName
   - syncStateKey
+  - workflow-action-button-loading
   - WorkflowTransitionService::purchaseOrderWorkflowPayload()
 example_usage: |
   workflow:

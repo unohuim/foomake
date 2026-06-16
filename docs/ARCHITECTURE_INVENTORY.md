@@ -2170,6 +2170,39 @@ Notes:
 
 ---
 
+### Loading Overlay
+
+**Name:** Loading Overlay
+**Type:** UI Component
+**Location:**
+- `resources/views/components/ui/loading-overlay.blade.php`
+
+**Purpose:**
+Render a reusable blocking loading overlay for explicit user-initiated AJAX mutations while the app waits on a server response.
+
+**When to Use:**
+Long-running workflow mutations, checkout confirmations, or other explicit server writes that need to block repeat submits.
+
+**When Not to Use:**
+Passive page initialization, background polling, or non-blocking status indicators.
+
+**Public Interface:**
+- `<x-ui.loading-overlay title="Working..." subtitle="Waiting for the server response." />`
+- `title`
+- `subtitle`
+
+**Example Usage:**
+```blade
+<x-ui.loading-overlay
+    title="Saving..."
+    subtitle="Waiting for the server response."
+    x-show="loading"
+    x-transition.opacity
+/>
+```
+
+---
+
 ### Shared Resource Detail Header Breadcrumb Component
 
 **Name:** Shared Resource Detail Header Breadcrumb Component  
@@ -3310,7 +3343,7 @@ Shared row-action menus or searchable combobox/select inputs.
 - `resources/js/components/workflow-action-button.js`
 
 **Purpose:**
-Render a compact header action button that shows the current state label and exposes multiple server-driven step actions from the same dropdown.
+Render a compact header action button that shows the current derived state label and exposes multiple server-driven step actions from the same dropdown while the shared loading overlay blocks repeat submits.
 
 **When to Use:**
 Detail headers for workflow-enabled or versioned records where one button should expose the next valid actions.

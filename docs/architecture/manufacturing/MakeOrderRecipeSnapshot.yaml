@@ -40,6 +40,8 @@ rules:
   - Make Order workflow movement is stage-driven through `workflow_stage_id` and configured manufacturing workflow stages, not recipe-version-driven.
   - Make Order workflow movement must not mutate `make_order_lines` snapshot rows.
   - Make Order detail must use the shared resource detail header and reusable detail-section card contracts instead of a bespoke Core card.
+  - Make Order workflow actions must use the shared workflow-action-button contract and shared loading overlay while the page waits for the server response.
+  - Make Order workflow actions must hydrate the page in place after success instead of forcing a browser reload.
   - Runs are stored on make_orders.runs and are the execution multiplier, not the expected or actual output quantity.
   - Expected output quantity is persisted on make_orders.expected_output_qty and defaults to recipe_version.output_quantity multiplied by runs using BCMath string math.
   - Updating Make Order runs must recalculate expected_output_qty and stale client-submitted expected output values must be ignored.

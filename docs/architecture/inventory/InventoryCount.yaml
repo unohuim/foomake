@@ -25,6 +25,9 @@ rules:
   - Inventory Count detail workflow-status badges must not render the computed posted lifecycle value; `posted` is a storage lifecycle marker and must not appear as a workflow-stage status.
   - Inventory Count detail workflow-status badges should render Draft before the first Inventory workflow stage is completed, the previous completed stage's `status_complete_label` while sitting in a later non-posted stage, and the current inventory-effect stage's `status_complete_label` after posting.
   - Posted Inventory Count workflow progress should mark the inventory-effect stage complete and render no current workflow step.
+  - Inventory Count detail headers must use the shared workflow-action-button contract and shared loading overlay for explicit workflow mutations.
+  - Inventory Count header action text must come from the derived current/previous workflow label while the dropdown action label comes from the next seeded stage's `action_verb`.
+  - Inventory Count workflow actions must hydrate the page in place after success instead of forcing a browser reload.
   - The Inventory Count `Details` section keeps Count Date, Assigned To, and Notes together in one compact responsive layout consistent with other detail-edit sections.
   - Inventory Count `Details` updates use the existing inventory count update route through AJAX/autosave and may remain editable after submission until the count reaches a posted or inventory-effect stage.
   - Empty Inventory Count detail Notes should render as blank editable content and should not show placeholder dashes.
@@ -77,8 +80,8 @@ rules:
   - Posting must remain transactional and idempotent through posted_at guarding.
   - The direct /post compatibility path may move a count directly to the inventory-effect stage before posting.
   - Posting sets posted_at and posted_by_user_id.
-  - Draft detail pages expose only the next valid workflow action, defaulting to SCHEDULE when seeded stages are unchanged.
-  - Submitted non-terminal counts may expose both previous-stage and next-stage actions using stage names only.
+  - Draft detail pages keep the workflow badge neutral until the count enters workflow and expose the first valid workflow action from the seeded stage contract.
+  - Submitted non-terminal counts may expose both previous-stage and next-stage actions using the shared seeded stage labels and verbs from the workflow contract.
   - A current non-posted inventory-effect stage exposes a terminal `Complete` action even when the configured stage action verb was used to enter that stage.
   - Previous-stage actions are Inventory Count specific, are hidden on Draft/first-stage/posted states, and never reverse stock moves.
   - Inventory Count previous and next buttons must be resolved from configured stage order, not hardcoded stage keys.

@@ -1,0 +1,30 @@
+name: Loading Overlay
+type: UI Component
+location:
+  - resources/views/components/ui/loading-overlay.blade.php
+purpose: Render a reusable blocking loading overlay for explicit user-initiated AJAX mutations while the app waits on a server response.
+when_to_use:
+  - Waiting for a long-running AJAX mutation or workflow transition to finish
+  - Blocking repeat submits after a user has already initiated a server-confirmed action
+when_not_to_use:
+  - Passive page loading
+  - Background polling
+  - Non-blocking status badges or inline hints
+rules:
+  - The overlay is a shared Blade component and must not own global JavaScript state.
+  - The overlay accepts customizable title and subtitle text.
+  - The overlay is fixed to the viewport and visually blocks the active surface while visible.
+  - The overlay is intended for explicit user-initiated mutations, not general page initialization.
+  - The overlay must be controlled by the calling page module or shared action component.
+  - The overlay must use Blade and Tailwind utilities only.
+public_interface:
+  - <x-ui.loading-overlay title="Working..." subtitle="Waiting for the server response." />
+  - title
+  - subtitle
+example_usage: |
+  <x-ui.loading-overlay
+      title="Saving..."
+      subtitle="Waiting for the server response."
+      x-show="loading"
+      x-transition.opacity
+  />

@@ -189,7 +189,7 @@ Must include:
 ### Disallowed
 
 - Alert spam
-- Blocking full-page loaders
+- Blocking full-page loaders for passive page initialization
 - Silent failures
 
 ---
@@ -211,6 +211,7 @@ Expected shared components include:
 - Empty state
 - Confirm dialog
 - Smart number input
+- Loading overlay
 
 ---
 
@@ -451,7 +452,7 @@ Stock owns **inventory mechanics and unit semantics**.
 Sales, Purchasing, and Manufacturing consume these primitives but do not define them.
 
 Inventory Count detail uses the visible section label **Materials** for count-line CRUD.
-Inventory Count workflow buttons stay grouped and floated right in the detail header, with the previous-stage button on the left and the next-stage button on the right. Button text uses the stage name only.
+Inventory Count workflow actions use the shared workflow-action-button and shared loading overlay. The closed button label reflects the current derived workflow state, and the dropdown action label reflects the next seeded stage action verb.
 
 ---
 

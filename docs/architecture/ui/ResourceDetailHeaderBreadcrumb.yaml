@@ -24,6 +24,7 @@ rules:
   - The shared component must support grouped metadata rows for compact resource headers.
   - Workflow-enabled resources may render a shared header action slot for next-stage actions when a valid configured workflow transition exists.
   - Workflow-enabled resources may render a shared header action slot for workflow entry when a pre-workflow draft state can move into the first configured workflow stage.
+  - Workflow headers that expose server-driven actions must use the shared workflow-action-button contract and shared loading overlay rather than page-local bespoke buttons or loaders.
   - Workflow-enabled resources may render a compact title-adjacent state chip through the shared header title row when that visible state is part of the resource identity.
   - Header workflow action buttons are only UI entry points into the existing workflow-stage transition system and must not hardcode lifecycle status transitions.
   - When a resource header displays a workflow-stage chip, the label must come from the resource's configured workflow-stage payload rather than a lifecycle status fallback.

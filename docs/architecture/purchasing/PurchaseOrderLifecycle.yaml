@@ -35,6 +35,9 @@ rules:
   - Purchase order assignee options must be tenant-scoped and limited to users eligible for purchasing workflow work.
   - Line-level tax is entered with one decimal place, stored in basis points on purchase_order_lines, and PO tax totals are calculated per line.
   - Draft PO line pack_count stores whole package counts only.
+  - Purchase order detail workflow actions must use the shared workflow-action-button contract and shared loading overlay while a server mutation is pending.
+  - Purchase order action labels must come from the seeded workflow stage contract, with the closed label derived from the current stage and the dropdown action label derived from the next stage.
+  - Purchase order workflow actions must hydrate the page in place after success instead of forcing a browser reload.
   - Purchase order details, shipping, line add/remove, and line quantity/tax edits remain editable until cancellation, workflow completion, or completion of the configured purchasing inventory-effect stage.
   - Backend gates and transition rules are authoritative; UI visibility is not authorization.
 public_interface:
