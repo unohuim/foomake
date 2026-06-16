@@ -187,24 +187,27 @@ class PurchaseOrderStatusController extends Controller
             ->get()
             ->values();
 
+        $creatingStage = $stages->get('creating') ?? $activeStages->first();
+        $inventoryEffectStage = $activeStages->firstWhere('is_inventory_effect_stage', true)
+            ?? $stages->get('receiving')
+            ?? $activeStages->get(1);
+        $completingStage = $stages->get('completing') ?? $activeStages->last();
+
         return match ($targetStatus) {
             PurchaseOrder::STATUS_CREATED => [
-                'last_completed_workflow_stage_id' => $stages->get('creating')?->id,
-                'current_workflow_stage_id' => $stages->get('receiving')?->id
-                    ?? $activeStages->first()?->id,
+                'last_completed_workflow_stage_id' => $creatingStage?->id,
+                'current_workflow_stage_id' => $inventoryEffectStage?->id,
             ],
             PurchaseOrder::STATUS_PARTIALLY_RECEIVED => [
-                'last_completed_workflow_stage_id' => $stages->get('creating')?->id,
-                'current_workflow_stage_id' => $stages->get('receiving')?->id
-                    ?? $activeStages->first()?->id,
+                'last_completed_workflow_stage_id' => $creatingStage?->id,
+                'current_workflow_stage_id' => $inventoryEffectStage?->id,
             ],
             PurchaseOrder::STATUS_RECEIVED => [
-                'last_completed_workflow_stage_id' => $stages->get('receiving')?->id,
-                'current_workflow_stage_id' => $stages->get('completing')?->id
-                    ?? $activeStages->get(1)?->id,
+                'last_completed_workflow_stage_id' => $inventoryEffectStage?->id,
+                'current_workflow_stage_id' => $completingStage?->id,
             ],
             PurchaseOrder::STATUS_COMPLETED => [
-                'last_completed_workflow_stage_id' => $stages->get('completing')?->id,
+                'last_completed_workflow_stage_id' => $completingStage?->id,
                 'current_workflow_stage_id' => null,
             ],
             default => [],

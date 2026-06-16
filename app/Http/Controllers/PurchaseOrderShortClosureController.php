@@ -2,8 +2,12 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\Workflows\BuildWorkflowProgressStepsAction;
 use App\Models\PurchaseOrder;
+use App\Models\PurchaseOrderLine;
+use App\Support\QuantityFormatter;
 use App\Services\Purchasing\PurchaseOrderLifecycleService;
+use App\Services\Workflows\WorkflowTransitionService;
 use App\Support\Workflows\WorkflowAssignmentPermissions;
 use DomainException;
 use Illuminate\Http\JsonResponse;
@@ -20,7 +24,8 @@ class PurchaseOrderShortClosureController extends Controller
     public function store(
         Request $request,
         int $purchaseOrder,
-        PurchaseOrderLifecycleService $lifecycleService
+        PurchaseOrderLifecycleService $lifecycleService,
+        WorkflowTransitionService $workflowTransitionService
     ): JsonResponse {
         abort_unless(
             app(WorkflowAssignmentPermissions::class)->userCanOperateWorkflowDomain($request->user(), 'purchasing'),
@@ -152,9 +157,187 @@ class PurchaseOrderShortClosureController extends Controller
         }
 
         return response()->json([
-            'data' => [
-                'id' => $shortClosure->id,
-            ],
+            'data' => $this->shortClosureResponsePayload(
+                $shortClosure->id,
+                $purchaseOrder,
+                $lifecycleService,
+                $workflowTransitionService,
+                $request
+            ),
         ], 201);
+    }
+
+    /**
+     * Build the short-close success payload consumed by the PO detail page.
+     *
+     * @return array<string, mixed>
+     */
+    private function shortClosureResponsePayload(
+        int $shortClosureId,
+        PurchaseOrder $purchaseOrder,
+        PurchaseOrderLifecycleService $lifecycleService,
+        WorkflowTransitionService $workflowTransitionService,
+        Request $request
+    ): array {
+        $freshOrder = $purchaseOrder->fresh([
+            'supplier',
+            'lines',
+            'lines.item',
+            'lines.purchaseOption.packUom',
+            'receipts',
+            'receipts.lines',
+            'receipts.receivedByUser',
+            'shortClosures',
+            'shortClosures.lines',
+            'shortClosures.shortClosedByUser',
+        ]);
+
+        $lineTotals = $lifecycleService->computeLineTotals($freshOrder);
+        $tenantCurrency = strtoupper(
+            (string) ($request->user()?->tenant?->currency_code ?: config('app.currency_code', 'USD'))
+        );
+        $workflow = $workflowTransitionService->purchaseOrderWorkflowPayload($freshOrder, $request->user());
+
+        return [
+            'id' => $shortClosureId,
+            'purchase_order' => [
+                'id' => $freshOrder->id,
+                'status' => $freshOrder->status,
+                'persisted_status' => $freshOrder->status,
+                'workflow_status' => $freshOrder->workflowStatus(),
+                'is_cancelled' => $freshOrder->isCancelled(),
+                'is_editable' => $freshOrder->isWorkflowEditable(),
+                'is_back_ordered' => $freshOrder->back_ordered_at !== null,
+                'has_receipts' => $freshOrder->receipts->isNotEmpty(),
+            ],
+            'lines' => $freshOrder->lines
+                ->map(fn (PurchaseOrderLine $line): array => $this->linePayload(
+                    $line,
+                    $tenantCurrency,
+                    $lineTotals[$line->id] ?? []
+                ))
+                ->values()
+                ->all(),
+            'shortClosures' => $this->shortClosureHistoryPayload($freshOrder),
+            'workflow' => $workflow,
+            'workflowProgressSteps' => app(BuildWorkflowProgressStepsAction::class)->execute(
+                (int) $request->user()->tenant_id,
+                'purchasing',
+                isset($workflow['currentStage']['id']) ? (int) $workflow['currentStage']['id'] : null,
+                null,
+                $freshOrder->last_completed_workflow_stage_id === null
+                    ? null
+                    : (int) $freshOrder->last_completed_workflow_stage_id,
+                ! isset($workflow['currentStage']['id'])
+                    && $freshOrder->last_completed_workflow_stage_id !== null
+                    && $freshOrder->workflowStatus() === PurchaseOrder::STATUS_COMPLETED
+            ),
+            'can_receive' => $freshOrder->isReceivingStage()
+                && collect($lineTotals)->contains(fn (array $totals): bool => bccomp(
+                    $totals['balance'],
+                    '0',
+                    self::SCALE
+                ) === 1),
+        ];
+    }
+
+    /**
+     * Build line state for the short-close response.
+     *
+     * @return array<string, mixed>
+     */
+    private function linePayload(PurchaseOrderLine $line, string $tenantCurrency, array $lineTotals = []): array
+    {
+        $option = $line->purchaseOption;
+        $packCount = bcadd((string) $line->pack_count, '0', self::SCALE);
+        $packQuantity = $option ? bcadd((string) $option->pack_quantity, '0', self::SCALE) : null;
+        $packPrecision = (int) ($option?->packUom?->display_precision ?? 1);
+        $packQuantityDisplay = $packQuantity !== null
+            ? QuantityFormatter::format($packQuantity, $packPrecision)
+            : null;
+        $packUom = $option?->packUom?->symbol ?: $option?->packUom?->name;
+        $receivedSum = $lineTotals['received_sum'] ?? '0.000000';
+        $shortClosedSum = $lineTotals['short_closed_sum'] ?? '0.000000';
+        $balance = $lineTotals['balance'] ?? $packCount;
+
+        return [
+            'id' => $line->id,
+            'item_id' => $line->item_id,
+            'item_name' => $line->item?->name,
+            'item_purchase_option_id' => $line->item_purchase_option_id,
+            'pack_count' => (int) $line->pack_count,
+            'pack_count_display' => QuantityFormatter::format($packCount, $packPrecision),
+            'unit_price_cents' => $line->unit_price_cents,
+            'line_subtotal_cents' => $line->line_subtotal_cents,
+            'line_tax_cents' => $this->taxCentsForLine(
+                (int) $line->line_subtotal_cents,
+                (int) $line->line_tax_rate_bps
+            ),
+            'tax_percent' => $this->basisPointsToTaxPercent((int) $line->line_tax_rate_bps),
+            'line_tax_rate_bps' => (int) $line->line_tax_rate_bps,
+            'pack_quantity' => $packQuantity,
+            'pack_quantity_display' => $packQuantityDisplay,
+            'pack_precision' => $packPrecision,
+            'pack_uom_symbol' => $option?->packUom?->symbol,
+            'pack_uom_name' => $option?->packUom?->name,
+            'unit_context' => $packQuantityDisplay && $packUom ? "{$packQuantityDisplay} {$packUom} pack" : 'Pack',
+            'received_sum' => $receivedSum,
+            'received_sum_display' => QuantityFormatter::format($receivedSum, $packPrecision),
+            'short_closed_sum' => $shortClosedSum,
+            'short_closed_sum_display' => QuantityFormatter::format($shortClosedSum, $packPrecision),
+            'remaining_balance' => $balance,
+            'remaining_balance_display' => QuantityFormatter::format($balance, $packPrecision),
+            'currency_code' => $tenantCurrency,
+        ];
+    }
+
+    /**
+     * Convert basis points into displayable tax percentage text.
+     */
+    private function basisPointsToTaxPercent(int $basisPoints): string
+    {
+        $tenths = intdiv($basisPoints + 5, 10);
+        $whole = intdiv($tenths, 10);
+        $fraction = $tenths % 10;
+
+        return $whole . '.' . $fraction;
+    }
+
+    /**
+     * Calculate line-level tax cents from basis points.
+     */
+    private function taxCentsForLine(int $lineSubtotalCents, int $lineTaxRateBps): int
+    {
+        return intdiv(($lineSubtotalCents * $lineTaxRateBps) + 5000, 10000);
+    }
+
+    /**
+     * Build short-closure history payloads for the short-close response.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function shortClosureHistoryPayload(PurchaseOrder $purchaseOrder): array
+    {
+        return $purchaseOrder->shortClosures
+            ->sortByDesc('short_closed_at')
+            ->map(function ($shortClosure): array {
+                $total = '0.000000';
+
+                foreach ($shortClosure->lines as $line) {
+                    $total = bcadd($total, (string) $line->short_closed_quantity, self::SCALE);
+                }
+
+                return [
+                    'id' => $shortClosure->id,
+                    'short_closed_at' => $shortClosure->short_closed_at?->format('Y-m-d H:i:s'),
+                    'short_closed_by' => $shortClosure->shortClosedByUser?->name,
+                    'reference' => $shortClosure->reference,
+                    'notes' => $shortClosure->notes,
+                    'lines_count' => $shortClosure->lines->count(),
+                    'total_packs' => $total,
+                ];
+            })
+            ->values()
+            ->all();
     }
 }

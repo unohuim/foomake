@@ -776,6 +776,30 @@ it('workflow completion payload includes receive action state for immediate slid
         ]);
 });
 
+it('workflow payload uses the workflow complete endpoint for the draft create action', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermission)($user, 'purchasing-purchase-orders-create');
+    ($this->grantPermission)($user, 'purchasing-purchase-orders-receive');
+
+    $orderResponse = ($this->createOrder)($user, [])
+        ->assertCreated();
+
+    $orderId = (int) ($orderResponse->json('data.id') ?? 0);
+
+    $response = $this->actingAs($user)->get("/purchasing/orders/{$orderId}")->assertOk();
+    $payload = ($this->extractPayload)($response, 'purchasing-orders-show-payload');
+
+    $actions = collect($payload['workflow']['actions'] ?? []);
+    $createAction = $actions->firstWhere('type', 'complete_stage');
+
+    expect($createAction)->not()->toBeNull();
+    expect($createAction['label'] ?? null)->toBe('Create');
+    expect($createAction['endpoint'] ?? null)->toBe(route('purchasing.orders.workflow.complete', $orderId));
+    expect($createAction['method'] ?? null)->toBe('POST');
+});
+
 it('receipt history source displays total packs as whole numbers', function () {
     $pageModule = file_get_contents(resource_path('js/pages/purchasing-orders-show.js'));
 
@@ -1252,6 +1276,52 @@ it('includes short-close history in show payload after short-close event', funct
     expect($entry['total_packs'] ?? null)->toBe('3.000000');
     expect($entry['short_closed_at'] ?? null)->toBe('2026-02-21 10:00:00');
     expect($entry['short_closed_by'] ?? null)->toBe($user->name);
+});
+
+it('returns hydrated ajax payload after short-close event', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermission)($user, 'purchasing-purchase-orders-create');
+    ($this->grantPermission)($user, 'purchasing-purchase-orders-receive');
+
+    $uom = ($this->makeUom)($tenant);
+    $supplier = ($this->makeSupplier)($tenant);
+    $item = ($this->makeItem)($tenant, $uom);
+    $option = ($this->makeOption)($tenant, $supplier, $item, $uom);
+
+    $orderResponse = ($this->createOrder)($user, [
+        'supplier_id' => $supplier->id,
+        'order_date' => '2026-02-26',
+    ])->assertCreated();
+
+    $orderId = (int) ($orderResponse->json('data.id') ?? 0);
+
+    DB::table('purchase_orders')
+        ->where('id', $orderId)
+        ->update(['status' => 'CREATED']);
+
+    ($this->addLine)($user, $orderId, [
+        'item_purchase_option_id' => $option->id,
+        'pack_count' => 3,
+        'unit_price_cents' => 120,
+    ])->assertCreated();
+
+    $line = DB::table('purchase_order_lines')->where('purchase_order_id', $orderId)->first();
+
+    $this->actingAs($user)
+        ->postJson("/purchasing/orders/{$orderId}/short-closures", [
+            'short_closed_at' => '2026-02-26 11:00:00',
+            'reference' => 'SC-66',
+            'notes' => 'Closed through AJAX',
+            'purchase_order_line_id' => $line->id,
+            'short_closed_quantity' => '3.000000',
+        ])
+        ->assertCreated()
+        ->assertJsonPath('data.purchase_order.status', 'RECEIVED')
+        ->assertJsonPath('data.workflow.currentStage.name', 'Completing')
+        ->assertJsonPath('data.shortClosures.0.reference', 'SC-66')
+        ->assertJsonPath('data.lines.0.short_closed_sum', '3.000000');
 });
 
 it('shows updated status in show payload after short-close event', function () {

@@ -594,6 +594,16 @@ export function mount(rootEl, payload) {
                 return;
             }
 
+            if (action === 'back_order') {
+                this.submitStatusAction(action);
+                return;
+            }
+
+            if (option.endpoint) {
+                this.submitWorkflowAction(option);
+                return;
+            }
+
             if (action) {
                 this.submitStatusAction(action);
                 return;
@@ -1661,8 +1671,53 @@ export function mount(rootEl, payload) {
                     return;
                 }
 
-                window.location.reload();
-                return;
+                const data = await response.json();
+                const responseData = data.data || {};
+
+                if (responseData.purchase_order) {
+                    this.purchaseOrder = {
+                        ...this.purchaseOrder,
+                        ...responseData.purchase_order,
+                        status: responseData.purchase_order.status || this.purchaseOrder.status,
+                    };
+
+                    this.isEditable = Boolean(this.purchaseOrder.is_editable);
+                }
+
+                if (responseData.workflow) {
+                    this.workflow = responseData.workflow;
+                    if (Array.isArray(responseData.workflowProgressSteps)) {
+                        this.workflowProgressSteps = responseData.workflowProgressSteps;
+                    }
+                    const workflowUpdatedDetail = this.workflowUpdatedDetail(
+                        this.workflow,
+                        responseData.purchase_order || {},
+                        responseData.workflowProgressSteps
+                    );
+
+                    document.dispatchEvent(new CustomEvent('workflow-updated', {
+                        detail: workflowUpdatedDetail,
+                    }));
+                    this.$root.dispatchEvent(new CustomEvent('workflow-updated', {
+                        bubbles: true,
+                        detail: workflowUpdatedDetail,
+                    }));
+                }
+
+                if (Array.isArray(responseData.lines)) {
+                    this.lines = responseData.lines;
+                }
+
+                if (Array.isArray(responseData.shortClosures)) {
+                    this.shortClosures = responseData.shortClosures;
+                }
+
+                if (Object.prototype.hasOwnProperty.call(responseData, 'can_receive')) {
+                    this.canReceive = Boolean(responseData.can_receive);
+                }
+
+                this.closeShortClose();
+                this.showToast('success', 'Short close recorded.');
             } catch (error) {
                 // eslint-disable-next-line no-console
                 console.error(error);
@@ -1778,37 +1833,9 @@ export function mount(rootEl, payload) {
                 }
 
                 const data = await response.json();
-                const responseData = data.data || {};
-                const { workflow, workflowProgressSteps, ...purchaseOrderData } = responseData;
-
-                this.purchaseOrder = {
-                    ...this.purchaseOrder,
-                    ...purchaseOrderData,
-                    status: purchaseOrderData.status || this.purchaseOrder.status,
-                    persisted_status: purchaseOrderData.persisted_status || this.purchaseOrder.persisted_status,
-                    is_cancelled: Boolean(purchaseOrderData.is_cancelled),
-                    is_back_ordered: Boolean(purchaseOrderData.is_back_ordered),
-                };
-                this.isEditable = Boolean(this.purchaseOrder.is_editable);
-                if (workflow) {
-                    this.workflow = workflow;
-                    if (Array.isArray(workflowProgressSteps)) {
-                        this.workflowProgressSteps = workflowProgressSteps;
-                    }
-                    const workflowUpdatedDetail = this.workflowUpdatedDetail(
-                        workflow,
-                        purchaseOrderData,
-                        workflowProgressSteps
-                    );
-
-                    document.dispatchEvent(new CustomEvent('workflow-updated', {
-                        detail: workflowUpdatedDetail,
-                    }));
-                    this.$root.dispatchEvent(new CustomEvent('workflow-updated', {
-                        bubbles: true,
-                        detail: workflowUpdatedDetail,
-                    }));
-                }
+                this.applyWorkflowResponse(data.data || {}, {
+                    status,
+                });
                 this.showToast('success', 'Action applied.');
             } catch (error) {
                 // eslint-disable-next-line no-console
@@ -1817,6 +1844,81 @@ export function mount(rootEl, payload) {
                 this.showToast('error', this.statusError);
             } finally {
                 setWorkflowActionLoading(false);
+            }
+        },
+        async submitWorkflowAction(option) {
+            if (!option?.endpoint) {
+                return;
+            }
+
+            this.statusError = '';
+
+            try {
+                const response = await fetch(option.endpoint, {
+                    method: String(option.method || 'POST').toUpperCase(),
+                    headers: {
+                        Accept: 'application/json',
+                        'X-CSRF-TOKEN': this.csrfToken,
+                    },
+                });
+
+                if (response.status === 422) {
+                    const data = await response.json();
+                    this.statusError = data.message || 'Unable to apply action.';
+                    this.showToast('error', this.statusError);
+                    return;
+                }
+
+                if (!response.ok) {
+                    this.statusError = 'Unable to apply action.';
+                    this.showToast('error', this.statusError);
+                    return;
+                }
+
+                const data = await response.json();
+                this.applyWorkflowResponse(data.data || {});
+                this.showToast('success', 'Action applied.');
+            } catch (error) {
+                // eslint-disable-next-line no-console
+                console.error(error);
+                this.statusError = 'Unable to apply action.';
+                this.showToast('error', this.statusError);
+            } finally {
+                setWorkflowActionLoading(false);
+            }
+        },
+        applyWorkflowResponse(responseData, fallback = {}) {
+            const { workflow, workflowProgressSteps, ...purchaseOrderData } = responseData || {};
+
+            this.purchaseOrder = {
+                ...this.purchaseOrder,
+                ...purchaseOrderData,
+                status: purchaseOrderData.status || fallback.status || this.purchaseOrder.status,
+                persisted_status: purchaseOrderData.persisted_status || this.purchaseOrder.persisted_status,
+                is_cancelled: Boolean(purchaseOrderData.is_cancelled),
+                is_back_ordered: Boolean(purchaseOrderData.is_back_ordered),
+            };
+            this.isEditable = Boolean(this.purchaseOrder.is_editable);
+
+            if (workflow) {
+                this.workflow = workflow;
+                if (Array.isArray(workflowProgressSteps)) {
+                    this.workflowProgressSteps = workflowProgressSteps;
+                }
+
+                const workflowUpdatedDetail = this.workflowUpdatedDetail(
+                    workflow,
+                    purchaseOrderData,
+                    workflowProgressSteps
+                );
+
+                document.dispatchEvent(new CustomEvent('workflow-updated', {
+                    detail: workflowUpdatedDetail,
+                }));
+                this.$root.dispatchEvent(new CustomEvent('workflow-updated', {
+                    bubbles: true,
+                    detail: workflowUpdatedDetail,
+                }));
             }
         },
     }));

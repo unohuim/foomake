@@ -180,7 +180,7 @@ class WorkflowTransitionService
             && $purchaseOrder->workflow_cancelled_at === null
         ) {
             if ($currentStage) {
-                if ($currentStage->key === 'receiving') {
+                if ($currentStage->is_inventory_effect_stage) {
                     $actions[] = [
                         'type' => 'receive',
                         'label' => 'Receive',
@@ -199,7 +199,7 @@ class WorkflowTransitionService
                 }
             }
 
-            if ($currentStage?->key === 'receiving') {
+            if ($currentStage?->is_inventory_effect_stage) {
                 $actions[] = [
                     'type' => PurchaseOrder::ACTION_BACK_ORDER,
                     'label' => 'Back Order',
@@ -424,10 +424,10 @@ class WorkflowTransitionService
      */
     private function mirroredPurchaseOrderStatus(PurchaseOrder $purchaseOrder, WorkflowStage $completedStage): string
     {
-        return match ($completedStage->key) {
-            'creating' => PurchaseOrder::STATUS_CREATED,
-            'receiving' => PurchaseOrder::STATUS_RECEIVED,
-            'completing' => PurchaseOrder::STATUS_COMPLETED,
+        return match (true) {
+            $completedStage->key === 'creating' => PurchaseOrder::STATUS_CREATED,
+            $completedStage->is_inventory_effect_stage => PurchaseOrder::STATUS_RECEIVED,
+            $completedStage->key === 'completing' => PurchaseOrder::STATUS_COMPLETED,
             default => $purchaseOrder->status,
         };
     }
@@ -441,10 +441,10 @@ class WorkflowTransitionService
             return (string) $stage->description;
         }
 
-        return match ($stage->key) {
-            'creating' => 'Create this purchase order, and begin workflow.',
-            'receiving' => 'Record received inventory for this purchase order.',
-            'completing' => 'Mark this purchase order as complete.',
+        return match (true) {
+            $stage->key === 'creating' => 'Create this purchase order, and begin workflow.',
+            $stage->is_inventory_effect_stage => 'Record received inventory for this purchase order.',
+            $stage->key === 'completing' => 'Mark this purchase order as complete.',
             default => 'Complete the current workflow stage.',
         };
     }
