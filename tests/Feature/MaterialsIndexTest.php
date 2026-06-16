@@ -684,7 +684,7 @@ it('22b. shared crud card mobile renderer emits row toggle events and uses lime 
         ->and($rendererSource)->toContain('const toggleConfig = config.rowToggle.name')
         ->and($rendererSource)->toContain('data-crud-mobile-cards')
         ->and($rendererSource)->toContain('data-crud-card')
-        ->and($rendererSource)->toContain(':href="${card.urlExpression}"')
+        ->and($rendererSource)->toContain(':href="${escapeAttributeExpression(card.urlExpression)}"')
         ->and($rendererSource)->toContain('iconBadgesExpression')
         ->and($rendererSource)->toContain("badge.icon === 'rectangle-group'")
         ->and($rendererSource)->toContain("badge.icon === 'credit-card'")

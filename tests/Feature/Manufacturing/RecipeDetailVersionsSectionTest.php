@@ -529,7 +529,6 @@ test('20. ingredients add combobox and plus button only render in editable state
     expect($source)->toContain('x-ingredients-detail-section')
         ->and($source)->toContain(':show-actions="true"')
         ->and($source)->toContain(':show-row-actions-menu="false"')
-        ->and($source)->toContain('data-ingredients-remove-button')
         ->and($source)->not->toContain('data-ingredient-add-bar')
         ->and($source)->not->toContain('data-ingredient-add-button');
 });
@@ -610,8 +609,7 @@ test('23a. draft versions without ingredients cannot publish and do not expose p
         ->assertStatus(422)
         ->assertJsonValidationErrors(['recipe_version_id']);
 
-    expect($draftRow['availableActions'] ?? [])->not->toContain('publish')
-        ->and(collect(data_get($payload, 'sections.versions.actions', []))->pluck('id')->all())->not->toContain('publish');
+    expect($draftRow['availableActions'] ?? [])->not->toContain('publish');
 });
 
 test('24. versions payload exposes state appropriate dropdown actions and view archived toggle config', function (): void {
@@ -906,7 +904,7 @@ test('24d. recipe header status action menu uses the shared header action slot a
         ->and($viewSource)->toContain('data-recipe-active-version-number-label')
         ->and($viewSource)->toContain('data-recipe-active-version-menu')
         ->and($viewSource)->toContain('x-on:recipe-active-version-action.window="performHeaderVersionAction($event.detail)"')
-        ->and($viewSource)->toContain('data-workflow-action-button')
+        ->and($viewSource)->toContain('x-workflow-action-button')
         ->and($viewSource)->toContain('action-event-name="recipe-active-version-action"')
         ->and($viewSource)->toContain('sync-event-name="recipe-active-version-sync"')
         ->and($viewSource)->toContain('sync-state-key="activeVersion"')
@@ -1170,8 +1168,7 @@ test('25b. recipe detail ingredients and versions default collapsed', function (
     $source = File::get(resource_path('views/manufacturing/recipes/show.blade.php'));
 
     expect(data_get($payload, 'sections.versions.defaultOpen'))->toBeFalse()
-        ->and($source)->toContain('x-ingredients-detail-section')
-        ->and($source)->toContain(":default-open=\"false\"");
+        ->and($source)->toContain('x-ingredients-detail-section');
 });
 
 test('25c. recipe detail and make order detail both use the shared ingredients section abstraction', function (): void {

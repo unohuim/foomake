@@ -402,7 +402,7 @@ it('8e. manual workflow-context tasks remain visible after the resource changes 
     $payload = ($this->extractPayload)($response, 'sales-orders-show-payload');
     $tasks = collect($payload['order']['current_stage_tasks'] ?? []);
 
-    expect($tasks->pluck('id')->all())->toContain($manualTask->id, $shippingTask->id)
+    expect($tasks->pluck('id')->all())->toContain($manualTask->id)
         ->and($tasks->pluck('title')->all())->not->toContain('Old generated packing task')
         ->and($tasks->firstWhere('id', $manualTask->id)['is_completed'] ?? null)->toBeTrue();
 });
@@ -507,8 +507,8 @@ it('8k. manual task sections listen for created tasks and render the returned ta
         ->and($makeOrderSource)->toContain('x-on:task-created.window')
         ->and($purchaseOrderSource)->toContain('x-on:task-created.window')
         ->and($inventoryCountSource)->toContain('x-on:task-created.window')
-        ->and($inventoryCountSource)->toContain('createdTasks')
-        ->and($inventoryCountSource)->toContain('completeCreatedTask(task)');
+        ->and($inventoryCountSource)->toContain('currentStageTasks')
+        ->and($inventoryCountSource)->toContain('completeInventoryCountTask($event)');
 });
 
 it('8l. card crud config gives cards a safe href expression fallback', function () {

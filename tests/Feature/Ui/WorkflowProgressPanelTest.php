@@ -396,16 +396,16 @@ it('16. component does not introduce global JavaScript state', function (): void
 it('17. Inventory Count detail renders workflow progress at the top of content', function (): void {
     $source = ($this->inventoryCountShowSource)();
 
-    expect($source)->toContain('<x-ui.workflow-progress')
-        ->and($source)->toContain('$payload[\'workflowProgressSteps\']')
+    expect($source)->toContain('data-workflow-progress-panel')
+        ->and($source)->toContain('x-html="workflowProgressHtml()"')
         ->and($source)->toContain('data-workflow-progress-panel');
 });
 
 it('18. Make Order detail renders workflow progress at the top of content', function (): void {
     $source = ($this->makeOrderShowSource)();
 
-    expect($source)->toContain('<x-ui.workflow-progress')
-        ->and($source)->toContain('$payload[\'workflowProgressSteps\']')
+    expect($source)->toContain('data-workflow-progress-panel')
+        ->and($source)->toContain('x-html="workflowProgressHtml()"')
         ->and($source)->toContain('data-workflow-progress-panel');
 });
 
@@ -443,8 +443,8 @@ it('19a. Purchase Order detail refreshes workflow progress from ajax status resp
 it('20. Sales Order detail renders workflow progress at the top of content', function (): void {
     $source = ($this->salesOrderShowSource)();
 
-    expect($source)->toContain('<x-ui.workflow-progress')
-        ->and($source)->toContain('$payload[\'workflowProgressSteps\']')
+    expect($source)->toContain('data-workflow-progress-panel')
+        ->and($source)->toContain('x-html="workflowProgressHtml()"')
         ->and($source)->toContain('data-workflow-progress-panel');
 });
 
@@ -472,7 +472,9 @@ it('22a. detail controllers pass completed workflow state into the shared progre
     expect(($this->inventoryCountControllerSource)())->toContain('$count->posted_at !== null')
         ->and(($this->makeOrderControllerSource)())->toContain('$makeOrder->status === MakeOrder::STATUS_MADE')
         ->and(($this->purchaseOrderControllerSource)())->toContain('$purchaseOrder->workflowStatus() === PurchaseOrder::STATUS_COMPLETED')
-        ->and(($this->salesOrderControllerSource)())->toContain('$salesOrder->status === SalesOrder::STATUS_COMPLETED');
+        ->and(($this->salesOrderControllerSource)())->toContain('in_array($salesOrder->status, [')
+        ->and(($this->salesOrderControllerSource)())->toContain('SalesOrder::STATUS_COMPLETED')
+        ->and(($this->salesOrderControllerSource)())->toContain('SalesOrder::STATUS_CANCELLED');
 });
 
 it('23. workflow progress stage query is tenant scoped and active only', function (): void {

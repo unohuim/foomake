@@ -201,7 +201,11 @@ class ResolveSalesWorkflowStageAction
      */
     public function statusForStage(WorkflowStage $stage): string
     {
-        return Str::upper($stage->key);
+        $completeLabel = trim((string) ($stage->status_complete_label ?? ''));
+
+        return $completeLabel !== ''
+            ? Str::upper($completeLabel)
+            : Str::upper($stage->key);
     }
 
     /**
@@ -226,6 +230,8 @@ class ResolveSalesWorkflowStageAction
             SalesOrder::STATUS_OPEN => 'packing',
             SalesOrder::STATUS_PACKED => 'packing',
             SalesOrder::STATUS_PACKING => 'packing',
+            SalesOrder::STATUS_SHIPPING => 'shipping',
+            SalesOrder::STATUS_INVOICED => 'invoicing',
             default => Str::lower($status),
         };
     }

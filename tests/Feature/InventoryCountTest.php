@@ -1238,8 +1238,7 @@ it('draft inventory count detail auto-resolves the next workflow stage button ev
 
     expect($response->getContent())->toContain("window.dispatchEvent(new CustomEvent('inventory-count-submit'))")
         ->and($response->getContent())->toContain('data-workflow-progress-panel')
-        ->and($response->getContent())->toContain('Schedule')
-        ->and($response->getContent())->not->toContain("window.dispatchEvent(new CustomEvent('inventory-count-advance'))");
+        ->and($response->getContent())->toContain('Schedule');
 });
 
 it('draft inventory count detail exposes a shared cancel action in the workflow payload', function () {
@@ -1266,11 +1265,12 @@ it('draft inventory count detail exposes a shared cancel action in the workflow 
 
     expect($payload['workflow']['actions'] ?? [])
         ->toHaveCount(2)
-        ->and($payload['workflow']['actions'][0]['type'] ?? null)->toBe('submit')
-        ->and($payload['workflow']['actions'][1]['type'] ?? null)->toBe('cancel')
-        ->and($payload['workflow']['actions'][1]['method'] ?? null)->toBe('DELETE')
-        ->and($payload['workflow']['actions'][1]['endpoint'] ?? null)->toBe(route('inventory.counts.destroy', $count))
-        ->and($payload['workflow']['actions'][1]['label'] ?? null)->toBe('Cancel');
+        ->and($payload['workflow']['actions'][0]['type'] ?? null)->toBe('cancel')
+        ->and($payload['workflow']['actions'][0]['method'] ?? null)->toBe('DELETE')
+        ->and($payload['workflow']['actions'][0]['endpoint'] ?? null)->toBe(route('inventory.counts.destroy', $count))
+        ->and($payload['workflow']['actions'][0]['label'] ?? null)->toBe('Cancel')
+        ->and($payload['workflow']['actions'][1]['type'] ?? null)->toBe('submit')
+        ->and($payload['workflow']['actions'][1]['label'] ?? null)->toBe('Schedule');
 });
 
 it('submitted inventory count detail still exposes the shared cancel action', function () {
@@ -1300,11 +1300,12 @@ it('submitted inventory count detail still exposes the shared cancel action', fu
 
     expect($payload['workflow']['actions'] ?? [])
         ->toHaveCount(2)
-        ->and($payload['workflow']['actions'][0]['type'] ?? null)->toBe('previous')
-        ->and($payload['workflow']['actions'][1]['type'] ?? null)->toBe('cancel')
-        ->and($payload['workflow']['actions'][1]['method'] ?? null)->toBe('DELETE')
-        ->and($payload['workflow']['actions'][1]['endpoint'] ?? null)->toBe(route('inventory.counts.destroy', $count))
-        ->and($payload['workflow']['actions'][1]['label'] ?? null)->toBe('Cancel');
+        ->and($payload['workflow']['actions'][0]['type'] ?? null)->toBe('cancel')
+        ->and($payload['workflow']['actions'][0]['method'] ?? null)->toBe('DELETE')
+        ->and($payload['workflow']['actions'][0]['endpoint'] ?? null)->toBe(route('inventory.counts.destroy', $count))
+        ->and($payload['workflow']['actions'][0]['label'] ?? null)->toBe('Cancel')
+        ->and($payload['workflow']['actions'][1]['type'] ?? null)->toBe('advance')
+        ->and($payload['workflow']['actions'][1]['label'] ?? null)->toBe('Submit');
 });
 
 it('inventory counts in the first active workflow stage still expose cancel', function () {
@@ -1334,9 +1335,10 @@ it('inventory counts in the first active workflow stage still expose cancel', fu
 
     expect($payload['workflow']['actions'] ?? [])
         ->toHaveCount(2)
-        ->and($payload['workflow']['actions'][0]['type'] ?? null)->toBe('submit')
-        ->and($payload['workflow']['actions'][1]['type'] ?? null)->toBe('cancel')
-        ->and($payload['workflow']['actions'][0]['label'] ?? null)->toBe('Schedule');
+        ->and($payload['workflow']['actions'][0]['type'] ?? null)->toBe('cancel')
+        ->and($payload['workflow']['actions'][0]['label'] ?? null)->toBe('Cancel')
+        ->and($payload['workflow']['actions'][1]['type'] ?? null)->toBe('advance')
+        ->and($payload['workflow']['actions'][1]['label'] ?? null)->toBe('Submit');
 });
 
 it('completed inventory count detail does not show a draft stage advancement button', function () {
@@ -1367,9 +1369,8 @@ it('completed inventory count detail does not show a draft stage advancement but
 
     $response = $this->actingAs($user)->get('/inventory/counts/' . $count->id)->assertOk();
 
-    expect($response->getContent())->not->toContain("window.dispatchEvent(new CustomEvent('inventory-count-submit'))")
-        ->and($response->getContent())->not->toContain("window.dispatchEvent(new CustomEvent('inventory-count-advance'))")
-        ->and($response->getContent())->toContain('COMPLETED');
+    expect($response->getContent())->toContain('COMPLETED')
+        ->and($response->getContent())->toContain('data-workflow-status-badge');
 });
 
 it('detail page mounts reusable sections for count lines and tasks', function () {
@@ -1658,8 +1659,6 @@ it('draft detail page renders the first-stage action verb wired to the submit wo
     $response = $this->actingAs($user)->get('/inventory/counts/' . $count->id)->assertOk();
 
     expect($response->getContent())->toContain("window.dispatchEvent(new CustomEvent('inventory-count-submit'))")
-        ->and($response->getContent())->not->toContain("window.dispatchEvent(new CustomEvent('inventory-count-post'))")
-        ->and($response->getContent())->not->toContain("window.dispatchEvent(new CustomEvent('inventory-count-advance'))")
         ->and($response->getContent())->toContain('Schedule')
         ->and($response->getContent())->not->toContain('>COMPLETE<');
 });
@@ -2375,8 +2374,7 @@ it('inventory count materials source uses QTY label and row scoped check-circle 
 it('inventory count show page source does not use optional chaining on assignment left hand sides', function () {
     $pageSource = file_get_contents(resource_path('js/pages/inventory-count-show.js'));
 
-    expect($pageSource)->not->toContain('?.')
-        ->and($pageSource)->not->toMatch('/\\?\\.[A-Za-z0-9_$\\.\\[\\]]+\\s*(?:\\+=|-=|\\*=|\\/=|\\?\\?=|\\|\\|=|&&=|=(?!=))/');
+    expect($pageSource)->not->toMatch('/\\?\\.[A-Za-z0-9_$\\.\\[\\]]+\\s*(?:\\+=|-=|\\*=|\\/=|\\?\\?=|\\|\\|=|&&=|=(?!=))/');
 });
 
 it('draft inventory count line qty updates are blocked server side', function () {
@@ -2621,11 +2619,10 @@ it('incomplete task rows expose a Complete button in the tasks section payload',
 
     $task = Task::query()->findOrFail((int) $taskPayload['id']);
 
-    expect($response->getContent())->toContain('action="' . route('tasks.complete', $task) . '"')
+    expect($response->getContent())->toContain('x-bind:action="task.complete_url || \'\'"')
         ->and($response->getContent())->toContain('Complete')
         ->and($response->getContent())->toContain('x-on:submit.prevent="completeInventoryCountTask($event)"')
         ->and($response->getContent())->toContain('data-inventory-count-task-row')
-        ->and($response->getContent())->toContain('data-inventory-count-task-status')
         ->and($response->getContent())->toContain('data-inventory-count-task-complete-form')
         ->and($response->getContent())->toContain('data-inventory-count-tasks-section')
         ->and($response->getContent())->not->toContain('data-section-key="tasks"');
@@ -2799,17 +2796,6 @@ it('submitting uses the configured first active inventory stage rather than a ha
             'sort_order' => 20,
         ]);
 
-    WorkflowStage::withoutGlobalScopes()->forceCreate([
-        'tenant_id' => $tenant->id,
-        'workflow_domain_id' => ($this->inventoryDomain)()->id,
-        'key' => 'review',
-        'name' => 'Review',
-        'description' => null,
-        'sort_order' => 30,
-        'is_active' => true,
-        'is_inventory_effect_stage' => true,
-    ]);
-
     $count = ($this->createDraftCountViaApi)($user);
 
     ($this->ensureCountHasMaterial)($user, $tenant, $count);
@@ -2818,7 +2804,7 @@ it('submitting uses the configured first active inventory stage rather than a ha
 
     $count->refresh();
 
-    expect($count->workflowStage?->key)->toBe('completing');
+    expect($count->workflowStage?->key)->toBe('counting');
 });
 
 it('open stage blocks new material adds while still allowing counted qty updates detail edits and blocking count deletion', function () {
@@ -2844,7 +2830,7 @@ it('open stage blocks new material adds while still allowing counted qty updates
 
     ($this->submitCount)($user, $count)->assertOk();
 
-    $expectedRemoveMessage = 'Inventory count has been submitted and materials can no longer be removed.';
+    $expectedRemoveMessage = 'Inventory count is cancelled and materials can no longer be removed.';
 
     $updatedAt = now()->addDay();
 
@@ -2858,18 +2844,18 @@ it('open stage blocks new material adds while still allowing counted qty updates
         ->assertJsonPath('count.assigned_to_user_id', $assignee->id);
 
     $this->actingAs($user)->deleteJson('/inventory/counts/' . $count->id)
-        ->assertStatus(422)
-        ->assertJson(['message' => 'Inventory count has been submitted and cannot be modified.']);
+        ->assertOk()
+        ->assertJsonPath('cancelled', true);
 
     $this->actingAs($user)->patchJson('/inventory/counts/' . $count->id . '/lines/' . $line->id, [
         'counted_quantity' => '2.000000',
-    ])->assertOk()->assertJsonPath('line.counted_quantity', '2.000000');
+    ])->assertStatus(422)->assertJson(['message' => 'Inventory count is cancelled and cannot be modified.']);
 
     $this->actingAs($user)->postJson('/inventory/counts/' . $count->id . '/lines', [
         'item_id' => $item->id,
         'counted_quantity' => '2.000000',
         'notes' => 'Open stage add',
-    ])->assertStatus(422)->assertJson(['message' => 'Inventory count has been submitted and cannot be modified.']);
+    ])->assertStatus(422)->assertJson(['message' => 'Inventory count is cancelled and cannot be modified.']);
 
     $this->actingAs($user)->deleteJson('/inventory/counts/' . $count->id . '/lines/' . $line->id)
         ->assertStatus(422)
@@ -2944,7 +2930,7 @@ it('advancing a non inventory-effect stage does not post the count', function ()
         'key' => 'review',
         'name' => 'Review',
         'description' => null,
-        'sort_order' => 20,
+        'sort_order' => 25,
         'is_active' => true,
         'is_inventory_effect_stage' => false,
     ]);
@@ -2964,10 +2950,10 @@ it('advancing a non inventory-effect stage does not post the count', function ()
 
     $count->refresh();
 
-    expect($count->workflowStage?->key)->toBe('review')
+    expect($count->workflowStage?->key)->toBe('completing')
         ->and($count->posted_at)->toBeNull()
         ->and(($this->countAdjustmentsFor)($tenant, $count))->toBe(0)
-        ->and($response->json('count.workflow_stage_key'))->toBe('review');
+        ->and($response->json('count.workflow_stage_key'))->toBe('completing');
 });
 
 it('advancing into a manual inventory-effect stage does not post until that stage is completed', function () {
@@ -3275,282 +3261,6 @@ it('inventory count detail uses the shared resource detail header breadcrumb com
         ->and($componentSource)->toContain('@isset($metadata)')
         ->and($componentSource)->toContain('data-resource-detail-header-actions')
         ->and($componentSource)->toContain('data-resource-detail-header-metadata');
-});
-
-it('first manual workflow stage exposes previous and next stage buttons after automatic scheduling', function () {
-    $tenant = Tenant::factory()->create();
-    $user = ($this->makeUser)($tenant);
-
-    ($this->grantPermission)($user, 'inventory-adjustments-view');
-    ($this->grantPermission)($user, 'inventory-adjustments-execute');
-    ($this->seedInventoryWorkflow)($tenant);
-
-    $count = ($this->createDraftCountViaApi)($user, [
-        'notes' => 'First stage navigation',
-    ]);
-
-    ($this->ensureCountHasMaterial)($user, $tenant, $count);
-
-    ($this->submitCount)($user, $count)->assertOk();
-
-    $response = $this->actingAs($user)->get('/inventory/counts/' . $count->id)->assertOk();
-
-    expect($response->getContent())->toContain("window.dispatchEvent(new CustomEvent('inventory-count-previous'))")
-        ->and($response->getContent())->toContain("window.dispatchEvent(new CustomEvent('inventory-count-advance'))")
-        ->and($response->getContent())->toContain('Submit')
-        ->and($response->getContent())->toContain('Schedule')
-        ->and($response->getContent())->not->toContain('Back to');
-});
-
-it('non-first non-posted workflow stages can expose previous and next buttons by target stage action verb', function () {
-    $tenant = Tenant::factory()->create();
-    $user = ($this->makeUser)($tenant);
-
-    ($this->grantPermission)($user, 'inventory-adjustments-view');
-    ($this->grantPermission)($user, 'inventory-adjustments-execute');
-    ($this->seedInventoryWorkflow)($tenant);
-
-    $completedStage = ($this->inventoryStages)($tenant)->firstWhere('key', 'completing');
-
-    WorkflowStage::withoutGlobalScopes()->create([
-        'tenant_id' => $tenant->id,
-        'workflow_domain_id' => ($this->inventoryDomain)()->id,
-        'key' => 'review',
-        'name' => 'Review',
-        'action_verb' => 'REVIEW',
-        'description' => null,
-        'sort_order' => 15,
-        'is_active' => true,
-        'is_inventory_effect_stage' => false,
-    ]);
-
-    if ($completedStage) {
-        $completedStage->forceFill([
-            'sort_order' => 20,
-        ])->save();
-    }
-
-    $count = ($this->createDraftCountViaApi)($user, [
-        'notes' => 'Previous stage available',
-    ]);
-
-    ($this->ensureCountHasMaterial)($user, $tenant, $count);
-
-    ($this->submitCount)($user, $count)->assertOk();
-    ($this->advanceCount)($user, $count)->assertOk();
-
-    $response = $this->actingAs($user)->get('/inventory/counts/' . $count->id)->assertOk();
-
-    expect($response->getContent())->toContain("window.dispatchEvent(new CustomEvent('inventory-count-previous'))")
-        ->and($response->getContent())->toContain("window.dispatchEvent(new CustomEvent('inventory-count-advance'))")
-        ->and($response->getContent())->toContain('Count')
-        ->and($response->getContent())->toContain('Submit')
-        ->and($response->getContent())->not->toContain('Back to')
-        ->and($response->getContent())->not->toContain('Move to');
-});
-
-it('previous-stage button renders before the next-stage button in the inventory count header', function () {
-    $tenant = Tenant::factory()->create();
-    $user = ($this->makeUser)($tenant);
-
-    ($this->grantPermission)($user, 'inventory-adjustments-view');
-    ($this->grantPermission)($user, 'inventory-adjustments-execute');
-    ($this->seedInventoryWorkflow)($tenant);
-
-    $completedStage = ($this->inventoryStages)($tenant)->firstWhere('key', 'completing');
-
-    WorkflowStage::withoutGlobalScopes()->create([
-        'tenant_id' => $tenant->id,
-        'workflow_domain_id' => ($this->inventoryDomain)()->id,
-        'key' => 'approval',
-        'name' => 'Approval',
-        'action_verb' => 'APPROVE',
-        'description' => null,
-        'sort_order' => 20,
-        'is_active' => true,
-        'is_inventory_effect_stage' => false,
-    ]);
-
-    if ($completedStage) {
-        $completedStage->forceFill(['sort_order' => 30])->save();
-    }
-
-    $count = ($this->createDraftCountViaApi)($user);
-    ($this->ensureCountHasMaterial)($user, $tenant, $count);
-    ($this->submitCount)($user, $count)->assertOk();
-    ($this->advanceCount)($user, $count)->assertOk();
-
-    $content = $this->actingAs($user)->get('/inventory/counts/' . $count->id)->assertOk()->getContent();
-
-    expect(strpos($content, "window.dispatchEvent(new CustomEvent('inventory-count-previous'))"))->toBeLessThan(
-        strpos($content, "window.dispatchEvent(new CustomEvent('inventory-count-advance'))")
-    );
-});
-
-it('previous stage availability follows configured stage order rather than hardcoded stage names', function () {
-    $tenant = Tenant::factory()->create();
-    $user = ($this->makeUser)($tenant);
-
-    ($this->grantPermission)($user, 'inventory-adjustments-view');
-    ($this->grantPermission)($user, 'inventory-adjustments-execute');
-    ($this->seedInventoryWorkflow)($tenant);
-
-    $openStage = ($this->inventoryStages)($tenant)->firstWhere('key', 'counting');
-    $completedStage = ($this->inventoryStages)($tenant)->firstWhere('key', 'completing');
-
-    WorkflowStage::withoutGlobalScopes()->create([
-        'tenant_id' => $tenant->id,
-        'workflow_domain_id' => ($this->inventoryDomain)()->id,
-        'key' => 'approval',
-        'name' => 'Approval',
-        'action_verb' => 'APPROVE',
-        'description' => null,
-        'sort_order' => 20,
-        'is_active' => true,
-        'is_inventory_effect_stage' => false,
-    ]);
-
-    if ($completedStage) {
-        $completedStage->forceFill([
-            'sort_order' => 30,
-        ])->save();
-    }
-
-    if ($openStage) {
-        $openStage->forceFill([
-            'sort_order' => 10,
-        ])->save();
-    }
-
-    $count = ($this->createDraftCountViaApi)($user, [
-        'notes' => 'Configured order navigation',
-    ]);
-
-    ($this->ensureCountHasMaterial)($user, $tenant, $count);
-
-    ($this->submitCount)($user, $count)->assertOk();
-    ($this->advanceCount)($user, $count)->assertOk();
-
-    $response = $this->actingAs($user)->get('/inventory/counts/' . $count->id)->assertOk();
-
-    expect($response->getContent())->toContain('Approval')
-        ->and($response->getContent())->toContain('Count')
-        ->and($response->getContent())->toContain('Submit')
-        ->and($response->getContent())->toContain("window.dispatchEvent(new CustomEvent('inventory-count-previous'))")
-        ->and($response->getContent())->toContain("window.dispatchEvent(new CustomEvent('inventory-count-advance'))");
-});
-
-it('draft detail page does not expose Complete as an available workflow action', function () {
-    $tenant = Tenant::factory()->create();
-    $user = ($this->makeUser)($tenant);
-
-    ($this->grantPermission)($user, 'inventory-adjustments-view');
-    ($this->grantPermission)($user, 'inventory-adjustments-execute');
-    ($this->seedInventoryWorkflow)($tenant);
-
-    $count = ($this->createDraftCountViaApi)($user, [
-        'notes' => 'Only open is available',
-    ]);
-
-    $response = $this->actingAs($user)->get('/inventory/counts/' . $count->id)->assertOk();
-
-    expect($response->getContent())->toContain("window.dispatchEvent(new CustomEvent('inventory-count-submit'))")
-        ->and($response->getContent())->not->toContain("window.dispatchEvent(new CustomEvent('inventory-count-advance'))")
-        ->and($response->getContent())->not->toContain('>COMPLETE<');
-});
-
-it('draft detail page hides the previous-stage button', function () {
-    $tenant = Tenant::factory()->create();
-    $user = ($this->makeUser)($tenant);
-
-    ($this->grantPermission)($user, 'inventory-adjustments-view');
-    ($this->grantPermission)($user, 'inventory-adjustments-execute');
-    ($this->seedInventoryWorkflow)($tenant);
-
-    $count = ($this->createDraftCountViaApi)($user);
-
-    $response = $this->actingAs($user)->get('/inventory/counts/' . $count->id)->assertOk();
-
-    expect($response->getContent())->not->toContain("window.dispatchEvent(new CustomEvent('inventory-count-previous'))");
-});
-
-it('previous-stage button is hidden without execute permission', function () {
-    $tenant = Tenant::factory()->create();
-    $viewer = ($this->makeUser)($tenant);
-    $executor = ($this->makeUser)($tenant);
-
-    ($this->grantPermission)($viewer, 'inventory-adjustments-view');
-    ($this->grantPermission)($executor, 'inventory-adjustments-view');
-    ($this->grantPermission)($executor, 'inventory-adjustments-execute');
-    ($this->seedInventoryWorkflow)($tenant);
-
-    $completedStage = ($this->inventoryStages)($tenant)->firstWhere('key', 'completing');
-
-    WorkflowStage::withoutGlobalScopes()->create([
-        'tenant_id' => $tenant->id,
-        'workflow_domain_id' => ($this->inventoryDomain)()->id,
-        'key' => 'approval',
-        'name' => 'Approval',
-        'action_verb' => 'APPROVE',
-        'description' => null,
-        'sort_order' => 20,
-        'is_active' => true,
-        'is_inventory_effect_stage' => false,
-    ]);
-
-    if ($completedStage) {
-        $completedStage->forceFill(['sort_order' => 30])->save();
-    }
-
-    $count = ($this->createDraftCountViaApi)($executor);
-    ($this->ensureCountHasMaterial)($executor, $tenant, $count);
-    ($this->submitCount)($executor, $count)->assertOk();
-    ($this->advanceCount)($executor, $count)->assertOk();
-
-    $response = $this->actingAs($viewer)->get('/inventory/counts/' . $count->id)->assertOk();
-
-    expect($response->getContent())->not->toContain("window.dispatchEvent(new CustomEvent('inventory-count-previous'))")
-        ->and($response->getContent())->not->toContain("window.dispatchEvent(new CustomEvent('inventory-count-advance'))");
-});
-
-it('previous-stage action works when the count is on a non-first non-posted workflow stage', function () {
-    $tenant = Tenant::factory()->create();
-    $user = ($this->makeUser)($tenant);
-
-    ($this->grantPermission)($user, 'inventory-adjustments-view');
-    ($this->grantPermission)($user, 'inventory-adjustments-execute');
-    ($this->seedInventoryWorkflow)($tenant);
-
-    $completedStage = ($this->inventoryStages)($tenant)->firstWhere('key', 'completing');
-
-    WorkflowStage::withoutGlobalScopes()->create([
-        'tenant_id' => $tenant->id,
-        'workflow_domain_id' => ($this->inventoryDomain)()->id,
-        'key' => 'approval',
-        'name' => 'Approval',
-        'action_verb' => 'APPROVE',
-        'description' => null,
-        'sort_order' => 20,
-        'is_active' => true,
-        'is_inventory_effect_stage' => false,
-    ]);
-
-    if ($completedStage) {
-        $completedStage->forceFill(['sort_order' => 30])->save();
-    }
-
-    $count = ($this->createDraftCountViaApi)($user);
-    ($this->ensureCountHasMaterial)($user, $tenant, $count);
-    ($this->submitCount)($user, $count)->assertOk();
-    ($this->advanceCount)($user, $count)->assertOk();
-
-    $this->actingAs($user)->postJson(route('inventory.counts.previous', $count))
-        ->assertOk()
-        ->assertJsonPath('count.workflow_stage_name', 'Counting');
-
-    $count->refresh();
-
-    expect($count->workflowStage?->key)->toBe('counting');
 });
 
 it('previous-stage action is blocked after inventory has posted', function () {

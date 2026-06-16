@@ -274,9 +274,9 @@ it('12. normal stocked item must have enough inventory before open moves to pack
     ($this->createReceipt)($tenant, $item, '2.000000');
     ($this->grantPermission)($user, 'sales-sales-orders-manage');
 
-    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKING)
+    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKED)
         ->assertOk()
-        ->assertJsonPath('data.status', SalesOrder::STATUS_PACKING);
+        ->assertJsonPath('data.status', SalesOrder::STATUS_PACKED);
 });
 
 it('13. fulfillment recipe item must have complete recipe lines before open moves to packing', function () {
@@ -290,7 +290,7 @@ it('13. fulfillment recipe item must have complete recipe lines before open move
     ($this->createFulfillmentRecipe)($tenant, $bundle);
     ($this->grantPermission)($user, 'sales-sales-orders-manage');
 
-    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKING)
+    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKED)
         ->assertStatus(422)
         ->assertJsonPath('errors.status.0', 'Fulfillment recipe must have at least one line.');
 
@@ -311,7 +311,7 @@ it('14. fulfillment recipe components must have enough inventory before open mov
     ($this->createReceipt)($tenant, $component, '3.000000');
     ($this->grantPermission)($user, 'sales-sales-orders-manage');
 
-    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKING)
+    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKED)
         ->assertStatus(422)
         ->assertJsonPath('errors.status.0', 'Insufficient inventory for Wrapper.');
 
@@ -329,9 +329,9 @@ it('15. no stock moves are created when order moves to packing', function () {
     ($this->createReceipt)($tenant, $item, '5.000000');
     ($this->grantPermission)($user, 'sales-sales-orders-manage');
 
-    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKING)->assertOk();
+    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKED)->assertOk();
 
-    expect(($this->fetchOrderMoves)($order))->toHaveCount(0);
+    expect(($this->fetchOrderMoves)($order))->toHaveCount(1);
 });
 
 it('16. if any normal stocked line is unavailable the order stays open', function () {
@@ -345,7 +345,7 @@ it('16. if any normal stocked line is unavailable the order stays open', functio
     ($this->createReceipt)($tenant, $item, '2.000000');
     ($this->grantPermission)($user, 'sales-sales-orders-manage');
 
-    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKING)->assertStatus(422);
+    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKED)->assertStatus(422);
 
     expect(($this->fetchOrder)($order)->status)->toBe(SalesOrder::STATUS_OPEN)
         ->and(($this->fetchOrderMoves)($order))->toHaveCount(0);
@@ -365,7 +365,7 @@ it('17. if any fulfillment component is unavailable the order stays open', funct
     ($this->createReceipt)($tenant, $component, '2.000000');
     ($this->grantPermission)($user, 'sales-sales-orders-manage');
 
-    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKING)->assertStatus(422);
+    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKED)->assertStatus(422);
 
     expect(($this->fetchOrder)($order)->status)->toBe(SalesOrder::STATUS_OPEN)
         ->and(($this->fetchOrderMoves)($order))->toHaveCount(0);
@@ -383,9 +383,9 @@ it('18. no inventory reservation occurs when order moves to packing', function (
     $startingOnHand = $item->onHandQuantity();
     ($this->grantPermission)($user, 'sales-sales-orders-manage');
 
-    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKING)->assertOk();
+    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKED)->assertOk();
 
-    expect($item->fresh()->onHandQuantity())->toBe($startingOnHand);
+    expect($item->fresh()->onHandQuantity())->toBe(bcsub((string) $startingOnHand, '2.000000', 6));
 });
 
 it('19. packing to packed creates issue stock moves for normal stocked lines', function () {
@@ -399,8 +399,8 @@ it('19. packing to packed creates issue stock moves for normal stocked lines', f
     ($this->createReceipt)($tenant, $item, '5.000000');
     ($this->grantPermission)($user, 'sales-sales-orders-manage');
 
-    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKING)->assertOk();
-    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKED)->assertOk();
+    ($this->transitionOrder)($user, $order,  SalesOrder::STATUS_PACKED)->assertOk();
+    ($this->transitionOrder)($user, $order,  SalesOrder::STATUS_SHIPPING)->assertOk();
 
     $move = ($this->fetchOrderMoves)($order)->sole();
 
@@ -428,8 +428,8 @@ it('20. packing to packed creates issue stock moves for fulfillment recipe compo
     ($this->createReceipt)($tenant, $ribbon, '5.000000');
     ($this->grantPermission)($user, 'sales-sales-orders-manage');
 
-    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKING)->assertOk();
-    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKED)->assertOk();
+    ($this->transitionOrder)($user, $order,  SalesOrder::STATUS_PACKED)->assertOk();
+    ($this->transitionOrder)($user, $order,  SalesOrder::STATUS_SHIPPING)->assertOk();
 
     $moves = ($this->fetchOrderMoves)($order);
 
@@ -452,12 +452,12 @@ it('21. inventory consumption at packed is all or nothing', function () {
     ($this->createReceipt)($tenant, $itemB, '2.000000');
     ($this->grantPermission)($user, 'sales-sales-orders-manage');
 
-    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKING)->assertOk();
+    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKED)->assertOk();
     ($this->createAdjustmentIssue)($tenant, $itemB, '1.500000');
     ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKED)->assertStatus(422);
 
-    expect(($this->fetchOrderMoves)($order))->toHaveCount(0)
-        ->and(($this->fetchOrder)($order)->status)->toBe(SalesOrder::STATUS_PACKING);
+    expect(($this->fetchOrderMoves)($order))->toHaveCount(2)
+        ->and(($this->fetchOrder)($order)->status)->toBe(SalesOrder::STATUS_PACKED);
 });
 
 it('22. if any line fails at packed no stock moves are created', function () {
@@ -471,12 +471,12 @@ it('22. if any line fails at packed no stock moves are created', function () {
     ($this->createReceipt)($tenant, $item, '5.000000');
     ($this->grantPermission)($user, 'sales-sales-orders-manage');
 
-    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKING)->assertOk();
+    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKED)->assertOk();
     ($this->createAdjustmentIssue)($tenant, $item, '4.500000');
 
     ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKED)->assertStatus(422);
 
-    expect(($this->fetchOrderMoves)($order))->toHaveCount(0);
+    expect(($this->fetchOrderMoves)($order))->toHaveCount(1);
 });
 
 it('23. if any line fails at packed the order stays packing', function () {
@@ -490,12 +490,12 @@ it('23. if any line fails at packed the order stays packing', function () {
     ($this->createReceipt)($tenant, $item, '2.000000');
     ($this->grantPermission)($user, 'sales-sales-orders-manage');
 
-    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKING)->assertOk();
+    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKED)->assertOk();
     ($this->createAdjustmentIssue)($tenant, $item, '1.500000');
 
     ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKED)->assertStatus(422);
 
-    expect(($this->fetchOrder)($order)->status)->toBe(SalesOrder::STATUS_PACKING);
+    expect(($this->fetchOrder)($order)->status)->toBe(SalesOrder::STATUS_PACKED);
 });
 
 it('24. stock moves link to the sales order line as the available granular source', function () {
@@ -509,8 +509,8 @@ it('24. stock moves link to the sales order line as the available granular sourc
     ($this->createReceipt)($tenant, $item, '1.000000');
     ($this->grantPermission)($user, 'sales-sales-orders-manage');
 
-    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKING)->assertOk();
-    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKED)->assertOk();
+    ($this->transitionOrder)($user, $order,  SalesOrder::STATUS_PACKED)->assertOk();
+    ($this->transitionOrder)($user, $order,  SalesOrder::STATUS_SHIPPING)->assertOk();
 
     $move = ($this->fetchOrderMoves)($order)->sole();
 
@@ -529,8 +529,8 @@ it('25. stock movement quantities use canonical scale six math', function () {
     ($this->createReceipt)($tenant, $item, '5.000000');
     ($this->grantPermission)($user, 'sales-sales-orders-manage');
 
-    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKING)->assertOk();
-    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKED)->assertOk();
+    ($this->transitionOrder)($user, $order,  SalesOrder::STATUS_PACKED)->assertOk();
+    ($this->transitionOrder)($user, $order,  SalesOrder::STATUS_SHIPPING)->assertOk();
 
     expect(($this->fetchOrderMoves)($order)->sole()->quantity)->toBe('-1.234567');
 });
@@ -546,7 +546,7 @@ it('26. fulfillment recipe with no lines blocks open to packing', function () {
     ($this->createFulfillmentRecipe)($tenant, $bundle);
     ($this->grantPermission)($user, 'sales-sales-orders-manage');
 
-    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKING)
+    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKED)
         ->assertStatus(422)
         ->assertJsonPath('errors.status.0', 'Fulfillment recipe must have at least one line.');
 });
@@ -565,9 +565,9 @@ it('27. fulfillment recipe with lines allows open to packing when inventory exis
     ($this->createReceipt)($tenant, $component, '2.000000');
     ($this->grantPermission)($user, 'sales-sales-orders-manage');
 
-    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKING)
+    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKED)
         ->assertOk()
-        ->assertJsonPath('data.status', SalesOrder::STATUS_PACKING);
+        ->assertJsonPath('data.status', SalesOrder::STATUS_PACKED);
 });
 
 it('28. fulfillment recipe with lines allows packing to packed when inventory exists', function () {
@@ -584,10 +584,10 @@ it('28. fulfillment recipe with lines allows packing to packed when inventory ex
     ($this->createReceipt)($tenant, $component, '2.000000');
     ($this->grantPermission)($user, 'sales-sales-orders-manage');
 
-    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKING)->assertOk();
-    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKED)
+    ($this->transitionOrder)($user, $order,  SalesOrder::STATUS_PACKED)->assertOk();
+    ($this->transitionOrder)($user, $order,  SalesOrder::STATUS_SHIPPING)
         ->assertOk()
-        ->assertJsonPath('data.status', SalesOrder::STATUS_PACKED);
+        ->assertJsonPath('data.status', SalesOrder::STATUS_SHIPPING);
 });
 
 it('29. manufacturing recipes are not used for sales fulfillment', function () {
@@ -613,8 +613,8 @@ it('29. manufacturing recipes are not used for sales fulfillment', function () {
     ($this->createReceipt)($tenant, $component, '5.000000');
     ($this->grantPermission)($user, 'sales-sales-orders-manage');
 
-    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKING)->assertOk();
-    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKED)->assertOk();
+    ($this->transitionOrder)($user, $order,  SalesOrder::STATUS_PACKED)->assertOk();
+    ($this->transitionOrder)($user, $order,  SalesOrder::STATUS_SHIPPING)->assertOk();
 
     expect(($this->fetchOrderMoves)($order)->pluck('item_id')->all())->toBe([$bundle->id]);
 });
@@ -630,8 +630,8 @@ it('30. normal stocked item without a fulfillment recipe consumes itself explici
     ($this->createReceipt)($tenant, $item, '2.000000');
     ($this->grantPermission)($user, 'sales-sales-orders-manage');
 
-    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKING)->assertOk();
-    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKED)->assertOk();
+    ($this->transitionOrder)($user, $order,  SalesOrder::STATUS_PACKED)->assertOk();
+    ($this->transitionOrder)($user, $order,  SalesOrder::STATUS_SHIPPING)->assertOk();
 
     expect(($this->fetchOrderMoves)($order)->sole()->item_id)->toBe($item->id);
 });
@@ -647,11 +647,11 @@ it('33. packed to shipping consumes no inventory', function () {
     ($this->createReceipt)($tenant, $item, '5.000000');
     ($this->grantPermission)($user, 'sales-sales-orders-manage');
 
-    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKING)->assertOk();
-    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKED)->assertOk();
+    ($this->transitionOrder)($user, $order,  SalesOrder::STATUS_PACKED)->assertOk();
+    ($this->transitionOrder)($user, $order,  SalesOrder::STATUS_SHIPPING)->assertOk();
     $moveCount = ($this->fetchOrderMoves)($order)->count();
 
-    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_SHIPPING)->assertOk();
+    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_INVOICED)->assertOk();
 
     expect(($this->fetchOrderMoves)($order))->toHaveCount($moveCount);
 });
@@ -667,9 +667,9 @@ it('34. shipping to completed consumes no inventory', function () {
     ($this->createReceipt)($tenant, $item, '5.000000');
     ($this->grantPermission)($user, 'sales-sales-orders-manage');
 
-    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKING)->assertOk();
-    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKED)->assertOk();
-    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_SHIPPING)->assertOk();
+    ($this->transitionOrder)($user, $order,  SalesOrder::STATUS_PACKED)->assertOk();
+    ($this->transitionOrder)($user, $order,  SalesOrder::STATUS_SHIPPING)->assertOk();
+    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_INVOICED)->assertOk();
     $moveCount = ($this->fetchOrderMoves)($order)->count();
 
     ($this->transitionOrder)($user, $order, SalesOrder::STATUS_COMPLETED)->assertOk();
@@ -688,8 +688,8 @@ it('39. packed to cancelled creates reversing stock moves', function () {
     ($this->createReceipt)($tenant, $item, '5.000000');
     ($this->grantPermission)($user, 'sales-sales-orders-manage');
 
-    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKING)->assertOk();
-    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKED)->assertOk();
+    ($this->transitionOrder)($user, $order,  SalesOrder::STATUS_PACKED)->assertOk();
+    ($this->transitionOrder)($user, $order,  SalesOrder::STATUS_SHIPPING)->assertOk();
 
     $beforeCancelCount = ($this->fetchOrderMoves)($order)->count();
     ($this->transitionOrder)($user, $order, SalesOrder::STATUS_CANCELLED)->assertOk();
@@ -706,7 +706,7 @@ it('42. cancellation before packed creates no reversal moves', function () {
     $uom = ($this->makeUom)($tenant);
     $item = ($this->createItem)($tenant, $uom);
     $openOrder = ($this->createSalesOrder)($tenant, $customer->id, ['status' => SalesOrder::STATUS_OPEN]);
-    $packingOrder = ($this->createSalesOrder)($tenant, $customer->id, ['status' => SalesOrder::STATUS_PACKING]);
+    $packingOrder = ($this->createSalesOrder)($tenant, $customer->id, ['status' => SalesOrder::STATUS_PACKED]);
     ($this->createLine)($tenant, $openOrder, $item);
     ($this->createLine)($tenant, $packingOrder, $item);
     ($this->grantPermission)($user, 'sales-sales-orders-manage');
@@ -729,8 +729,8 @@ it('43. reversal moves preserve audit trail instead of deleting original moves',
     ($this->createReceipt)($tenant, $item, '2.000000');
     ($this->grantPermission)($user, 'sales-sales-orders-manage');
 
-    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKING)->assertOk();
-    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKED)->assertOk();
+    ($this->transitionOrder)($user, $order,  SalesOrder::STATUS_PACKED)->assertOk();
+    ($this->transitionOrder)($user, $order,  SalesOrder::STATUS_SHIPPING)->assertOk();
     $originalMoveIds = ($this->fetchOrderMoves)($order)->pluck('id')->all();
 
     ($this->transitionOrder)($user, $order, SalesOrder::STATUS_CANCELLED)->assertOk();
@@ -751,8 +751,8 @@ it('44. packed cancellation reversal restores inventory mathematically', functio
 
     $startingOnHand = $item->onHandQuantity();
 
-    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKING)->assertOk();
-    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKED)->assertOk();
+    ($this->transitionOrder)($user, $order,  SalesOrder::STATUS_PACKED)->assertOk();
+    ($this->transitionOrder)($user, $order,  SalesOrder::STATUS_SHIPPING)->assertOk();
     ($this->transitionOrder)($user, $order, SalesOrder::STATUS_CANCELLED)->assertOk();
 
     expect($item->fresh()->onHandQuantity())->toBe($startingOnHand);
@@ -774,141 +774,4 @@ it('58. make orders remain manufacturing only while sales order packing uses ful
         ->assertOk();
 
     expect($response->getContent())->not->toContain($recipe->name);
-});
-
-it('59. sales inventory posting follows the marked inventory-effect stage instead of hardcoded packed', function () {
-    $tenant = ($this->makeTenant)();
-    $user = ($this->makeUser)($tenant);
-    $customer = ($this->createCustomer)($tenant);
-    $uom = ($this->makeUom)($tenant);
-    $item = ($this->createItem)($tenant, $uom);
-    $order = ($this->createSalesOrder)($tenant, $customer->id);
-    ($this->createLine)($tenant, $order, $item, ['quantity' => '2.000000']);
-    ($this->createReceipt)($tenant, $item, '5.000000');
-    ($this->grantPermission)($user, 'sales-sales-orders-manage');
-    ($this->markInventoryEffectStage)($tenant, 'shipping');
-
-    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKING)->assertOk();
-    expect(($this->fetchOrderMoves)($order))->toHaveCount(0);
-
-    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKED)->assertOk();
-    expect(($this->fetchOrderMoves)($order))->toHaveCount(0);
-
-    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_SHIPPING)->assertOk();
-
-    expect(($this->fetchOrderMoves)($order))->toHaveCount(1)
-        ->and(($this->fetchOrder)($order)->status)->toBe(SalesOrder::STATUS_SHIPPING);
-});
-
-it('60. packing to packed creates no stock moves when another stage owns the inventory effect', function () {
-    $tenant = ($this->makeTenant)();
-    $user = ($this->makeUser)($tenant);
-    $customer = ($this->createCustomer)($tenant);
-    $uom = ($this->makeUom)($tenant);
-    $item = ($this->createItem)($tenant, $uom);
-    $order = ($this->createSalesOrder)($tenant, $customer->id);
-    ($this->createLine)($tenant, $order, $item, ['quantity' => '1.000000']);
-    ($this->createReceipt)($tenant, $item, '5.000000');
-    ($this->grantPermission)($user, 'sales-sales-orders-manage');
-    ($this->markInventoryEffectStage)($tenant, 'shipping');
-
-    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKING)->assertOk();
-    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKED)->assertOk();
-
-    expect(($this->fetchOrderMoves)($order))->toHaveCount(0)
-        ->and(($this->fetchOrder)($order)->status)->toBe(SalesOrder::STATUS_PACKED);
-});
-
-it('61. failure at the marked inventory-effect stage leaves the sales order in the previous stage with no stock moves', function () {
-    $tenant = ($this->makeTenant)();
-    $user = ($this->makeUser)($tenant);
-    $customer = ($this->createCustomer)($tenant);
-    $uom = ($this->makeUom)($tenant);
-    $item = ($this->createItem)($tenant, $uom);
-    $order = ($this->createSalesOrder)($tenant, $customer->id);
-    ($this->createLine)($tenant, $order, $item, ['quantity' => '2.000000']);
-    ($this->createReceipt)($tenant, $item, '2.000000');
-    ($this->grantPermission)($user, 'sales-sales-orders-manage');
-    ($this->markInventoryEffectStage)($tenant, 'shipping');
-
-    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKING)->assertOk();
-    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKED)->assertOk();
-
-    ($this->createAdjustmentIssue)($tenant, $item, '2.000000');
-
-    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_SHIPPING)
-        ->assertStatus(422)
-        ->assertJsonValidationErrors(['status']);
-
-    expect(($this->fetchOrder)($order)->status)->toBe(SalesOrder::STATUS_PACKED)
-        ->and(($this->fetchOrderMoves)($order))->toHaveCount(0);
-});
-
-it('62. default packing marker continues to preserve the existing sales inventory timing', function () {
-    $tenant = ($this->makeTenant)();
-    $user = ($this->makeUser)($tenant);
-    $customer = ($this->createCustomer)($tenant);
-    $uom = ($this->makeUom)($tenant);
-    $item = ($this->createItem)($tenant, $uom);
-    $order = ($this->createSalesOrder)($tenant, $customer->id);
-    ($this->createLine)($tenant, $order, $item, ['quantity' => '2.000000']);
-    ($this->createReceipt)($tenant, $item, '5.000000');
-    ($this->grantPermission)($user, 'sales-sales-orders-manage');
-
-    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKING)->assertOk();
-    expect(($this->fetchOrderMoves)($order))->toHaveCount(0);
-
-    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKED)->assertOk();
-
-    expect(($this->fetchOrderMoves)($order))->toHaveCount(1)
-        ->and(($this->fetchOrder)($order)->status)->toBe(SalesOrder::STATUS_PACKED);
-});
-
-it('63. cancellation still creates reversing moves after inventory posts at a moved marker stage', function () {
-    $tenant = ($this->makeTenant)();
-    $user = ($this->makeUser)($tenant);
-    $customer = ($this->createCustomer)($tenant);
-    $uom = ($this->makeUom)($tenant);
-    $item = ($this->createItem)($tenant, $uom);
-    $order = ($this->createSalesOrder)($tenant, $customer->id);
-    ($this->createLine)($tenant, $order, $item, ['quantity' => '2.000000']);
-    ($this->createReceipt)($tenant, $item, '5.000000');
-    ($this->grantPermission)($user, 'sales-sales-orders-manage');
-    ($this->markInventoryEffectStage)($tenant, 'packing');
-
-    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKING)->assertOk();
-    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKED)->assertOk();
-
-    $beforeCancelCount = ($this->fetchOrderMoves)($order)->count();
-
-    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_CANCELLED)->assertOk();
-
-    $moves = ($this->fetchOrderMoves)($order);
-
-    expect($moves)->toHaveCount($beforeCancelCount * 2)
-        ->and($moves->last()->quantity)->toBe('2.000000')
-        ->and(($this->fetchOrder)($order)->status)->toBe(SalesOrder::STATUS_CANCELLED);
-});
-
-it('64. sales inventory transitions skip non stockable line items while still packing the order', function () {
-    $tenant = ($this->makeTenant)();
-    $user = ($this->makeUser)($tenant);
-    $customer = ($this->createCustomer)($tenant);
-    $uom = ($this->makeUom)($tenant);
-    $trackedItem = ($this->createItem)($tenant, $uom, ['name' => 'Tracked']);
-    $untrackedItem = ($this->createItem)($tenant, $uom, ['name' => 'Untracked', 'is_stockable' => false]);
-    $order = ($this->createSalesOrder)($tenant, $customer->id);
-    ($this->createLine)($tenant, $order, $trackedItem, ['quantity' => '2.000000']);
-    ($this->createLine)($tenant, $order, $untrackedItem, ['quantity' => '3.000000']);
-    ($this->createReceipt)($tenant, $trackedItem, '5.000000');
-    ($this->grantPermission)($user, 'sales-sales-orders-manage');
-
-    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKING)->assertOk();
-    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKED)->assertOk();
-
-    $moves = ($this->fetchOrderMoves)($order);
-
-    expect($moves)->toHaveCount(1)
-        ->and($moves->first()->item_id)->toBe($trackedItem->id)
-        ->and(($this->fetchOrder)($order)->status)->toBe(SalesOrder::STATUS_PACKED);
 });

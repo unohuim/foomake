@@ -6,6 +6,7 @@ use App\Models\Item;
 use App\Models\Permission;
 use App\Models\Recipe;
 use App\Models\RecipeVersion;
+use App\Models\RecipeVersionLine;
 use App\Models\Role;
 use App\Models\Tenant;
 use App\Models\Uom;
@@ -90,10 +91,35 @@ beforeEach(function (): void {
     };
 
     $this->createDraftVersion = function (User $user, Recipe $recipe, array $overrides = []) {
-        return actingAs($user)->postJson(route('manufacturing.recipes.versions.store', $recipe), array_merge([
+        $response = actingAs($user)->postJson(route('manufacturing.recipes.versions.store', $recipe), array_merge([
             'recipe_type' => 'manufacturing',
             'output_quantity' => '12.500000',
         ], $overrides));
+
+        $response->assertCreated();
+
+        $versionId = (int) $response->json('data.id');
+        $version = RecipeVersion::query()->findOrFail($versionId);
+        $baseItem = Item::query()->findOrFail((int) $recipe->item_id);
+        $placeholderItem = Item::query()->forceCreate([
+            'tenant_id' => $recipe->tenant_id,
+            'name' => 'Placeholder ingredient ' . Str::random(12),
+            'base_uom_id' => $baseItem->base_uom_id,
+            'is_purchasable' => false,
+            'is_sellable' => false,
+            'is_manufacturable' => false,
+        ]);
+
+        RecipeVersionLine::query()->forceCreate([
+            'tenant_id' => $recipe->tenant_id,
+            'recipe_version_id' => $version->id,
+            'input_item_id' => $placeholderItem->id,
+            'uom_id' => $placeholderItem->base_uom_id,
+            'quantity' => '1.000000',
+            'sort_order' => 1,
+        ]);
+
+        return $response;
     };
 
     $this->checkoutVersion = function (User $user, Recipe $recipe, RecipeVersion|int $version) {

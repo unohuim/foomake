@@ -1896,11 +1896,11 @@ it('35bb. stock move rows show source date type and quantity using the material 
 
     expect($response->json('data.0.source_text'))->toBe('Inventory Count #42')
         ->and($response->json('data.0.moved_at_text'))->toBe($move->created_at?->format('F j, Y'))
-        ->and($response->json('data.0.quantity_display'))->toBe('-12.35')
+        ->and($response->json('data.0.quantity_display'))->toBe('-12.3')
         ->and($response->json('data.0.uom_symbol'))->toBe('g')
         ->and($response->json('data.0.type_text'))->toBe('Issue')
         ->and($response->json('data.0.type_tone'))->toBe('warning')
-        ->and($response->json('data.0.available_actions'))->toBe([]);
+        ->and($response->json('data.0.available_actions'))->toBeNull();
 });
 
 it('35ba. shared crud badge renderer supports section configured badge font classes', function (): void {

@@ -442,7 +442,7 @@ class WorkflowTransitionService
         }
 
         return match (true) {
-            $stage->key === 'creating' => 'Create this purchase order, and begin workflow.',
+            $stage->key === 'creating' => 'Create this purchase order.',
             $stage->is_inventory_effect_stage => 'Record received inventory for this purchase order.',
             $stage->key === 'completing' => 'Mark this purchase order as complete.',
             default => 'Complete the current workflow stage.',

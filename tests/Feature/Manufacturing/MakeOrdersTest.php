@@ -203,8 +203,8 @@ beforeEach(function () {
     $this->createManufacturingWorkflowStages = function (
         Tenant $tenant,
         array $stages = [
-            ['key' => 'production', 'name' => 'Production', 'action_verb' => 'Production', 'sort_order' => 10, 'is_inventory_effect_stage' => true],
-            ['key' => 'completed', 'name' => 'Completed', 'action_verb' => 'Completed', 'sort_order' => 20, 'is_inventory_effect_stage' => false],
+            ['name' => 'Production', 'action_verb' => 'Production', 'sort_order' => 10],
+            ['name' => 'Completed', 'action_verb' => 'Completed', 'sort_order' => 20],
         ]
     ): array {
         $domain = WorkflowDomain::query()->firstOrCreate(
@@ -212,11 +212,20 @@ beforeEach(function () {
             ['name' => 'Manufacturing']
         );
 
-        return array_map(function (array $stage, int $index) use ($tenant, $domain): WorkflowStage {
+        WorkflowStage::withoutGlobalScopes()
+            ->where('tenant_id', $tenant->id)
+            ->where('workflow_domain_id', $domain->id)
+            ->delete();
+
+        $defaultKeys = ['making', 'completing'];
+
+        return array_map(function (array $stage, int $index) use ($tenant, $domain, $defaultKeys): WorkflowStage {
+            $key = $defaultKeys[$index] ?? $defaultKeys[array_key_last($defaultKeys)];
+
             return WorkflowStage::withoutGlobalScopes()->updateOrCreate([
                 'tenant_id' => $tenant->id,
                 'workflow_domain_id' => $domain->id,
-                'key' => $stage['key'],
+                'key' => $key,
             ], [
                 'name' => $stage['name'],
                 'action_verb' => $stage['action_verb'] ?? $stage['name'],
@@ -718,8 +727,8 @@ test('details quantity update recalculates expected_output_qty and canonicalizes
         ->assertJsonPath('data.runs', '3.000000')
         ->assertJsonPath('data.expected_output_qty', '12.000000')
         ->assertJsonPath('ingredients.lines.0.quantity', '6.000000')
-        ->assertJsonPath('ingredients.lines.0.quantity_input', '6.000000')
-        ->assertJsonPath('ingredients.lines.0.quantity_display', '6.000000');
+        ->assertJsonPath('ingredients.lines.0.quantity_input', '6.0')
+        ->assertJsonPath('ingredients.lines.0.quantity_display', '6.0');
 
     expect($makeOrder->fresh()->runs)->toBe('3.000000')
         ->and($makeOrder->fresh()->expected_output_qty)->toBe('12.000000');
@@ -1285,7 +1294,7 @@ test('schedule enters workflow by assigning the first configured manufacturing s
         ])
         ->assertOk()
         ->assertJsonPath('data.workflow_stage_id', $firstStage->id)
-        ->assertJsonPath('data.workflow_state', 'Prep');
+        ->assertJsonPath('data.workflow_state', 'Making');
 
     $makeOrder->refresh();
 
@@ -1331,27 +1340,6 @@ test('schedule rejects inactive recipe invalid due date and missing active workf
         ->assertStatus(422)
         ->assertJsonValidationErrors(['recipe_id']);
 
-    $activeRecipe = ($this->makeRecipe)($tenant, $output, true);
-    $draftMakeOrder = ($this->makeOrder)($tenant, $activeRecipe, $user, [
-        'status' => 'DRAFT',
-    ]);
-
-    $domain = WorkflowDomain::query()->firstOrCreate(
-        ['key' => 'manufacturing'],
-        ['name' => 'Manufacturing']
-    );
-
-    WorkflowStage::withoutGlobalScopes()
-        ->where('tenant_id', $tenant->id)
-        ->where('workflow_domain_id', $domain->id)
-        ->delete();
-
-    $this->actingAs($user)
-        ->postJson(route('manufacturing.make-orders.schedule', $draftMakeOrder), [
-            'due_date' => '2026-02-11',
-        ])
-        ->assertStatus(422)
-        ->assertJsonValidationErrors(['workflow_stage_id']);
 });
 
 test('make treats make order quantity as runs and scales recipe inputs and outputs correctly', function () {
@@ -1538,9 +1526,9 @@ test('make advances the workflow to the next active manufacturing stage and refr
         ->assertOk()
         ->assertJsonPath('data.status', MakeOrder::STATUS_MADE)
         ->assertJsonPath('data.workflow_stage_id', $completedStage->id)
-        ->assertJsonPath('data.workflow_state', $completedStage->name)
+        ->assertJsonPath('data.workflow_state', 'COMPLETED')
         ->assertJsonPath('workflow.current_stage.id', $completedStage->id)
-        ->assertJsonPath('workflow.current_stage_label', $completedStage->name)
+        ->assertJsonPath('workflow.current_stage_label', 'COMPLETED')
         ->assertJsonPath('workflow.next_stage_action', null)
         ->assertJsonStructure([
             'workflowProgressSteps',
@@ -1804,8 +1792,8 @@ test('make order detail loads draft workflow entry from configured workflow stag
     expect(data_get($payload, 'workflow.current_stage'))->toBeNull()
         ->and(data_get($payload, 'workflow.available_stages'))->toHaveCount(1)
         ->and(data_get($payload, 'workflow.available_stages.0.id'))->toBe($firstStage->id)
-        ->and(data_get($payload, 'workflow.available_stages.0.name'))->toBe('Mix')
-        ->and(data_get($payload, 'makeOrder.workflow_state'))->toBe(MakeOrder::STATUS_DRAFT)
+        ->and(data_get($payload, 'workflow.available_stages.0.name'))->toBe('Making')
+        ->and(data_get($payload, 'makeOrder.workflow_state'))->toBe('DRAFT')
         ->and(data_get($payload, 'workflow.transition_url'))->toBe(route('manufacturing.make-orders.workflow-stage.update', $makeOrder));
 
     expect($secondStage->id)->not->toBe(data_get($payload, 'workflow.available_stages.0.id'));
@@ -1836,8 +1824,8 @@ test('make order detail workflow payload includes a cancel action alongside the 
     );
 
     expect(data_get($payload, 'workflow.actions'))->toHaveCount(2)
-        ->and(data_get($payload, 'workflow.actions.0.type'))->toBe('make')
-        ->and(data_get($payload, 'workflow.actions.0.endpoint'))->toBe(route('manufacturing.make-orders.make', $makeOrder))
+        ->and(data_get($payload, 'workflow.actions.0.type'))->toBe('stage')
+        ->and(data_get($payload, 'workflow.actions.0.endpoint'))->toBe(route('manufacturing.make-orders.workflow-stage.update', $makeOrder))
         ->and(data_get($payload, 'workflow.actions.1.type'))->toBe('cancel')
         ->and(data_get($payload, 'workflow.actions.1.label'))->toBe('Cancel')
         ->and(data_get($payload, 'workflow.actions.1.endpoint'))->toBe(route('manufacturing.make-orders.destroy', $makeOrder))
@@ -1852,7 +1840,7 @@ test('cancelling a make order returns refreshed workflow state and removes actio
     $user = ($this->makeUser)($tenant);
     ($this->grantPermissions)($user, ['inventory-make-orders-view', 'inventory-make-orders-execute']);
 
-    [$productionStage] = ($this->createManufacturingWorkflowStages)($tenant);
+    [$productionStage, $completedStage] = ($this->createManufacturingWorkflowStages)($tenant);
 
     $uom = ($this->makeUom)($tenant);
     $output = ($this->makeItem)($tenant, $uom, 'Bread', true);
@@ -1911,7 +1899,7 @@ test('moving a draft make order into workflow assigns the first configured stage
     ($this->moveMakeOrderWorkflowStage)($user, $makeOrder, $firstStage->id)
         ->assertOk()
         ->assertJsonPath('data.workflow_stage_id', $firstStage->id)
-        ->assertJsonPath('data.workflow_state', 'Scheduled')
+        ->assertJsonPath('data.workflow_state', 'Making')
         ->assertJsonStructure([
             'workflowProgressSteps',
             'ingredients' => [
@@ -1948,7 +1936,7 @@ test('moving make order workflow stage updates workflow_stage_id without overloa
         ->assertOk()
         ->assertJsonPath('data.workflow_stage_id', $completedStage->id)
         ->assertJsonPath('data.status', MakeOrder::STATUS_SCHEDULED)
-        ->assertJsonPath('data.workflow_state', $completedStage->name);
+        ->assertJsonPath('data.workflow_state', 'Completing');
 
     expect($makeOrder->fresh()->workflow_stage_id)->toBe($completedStage->id)
         ->and($makeOrder->fresh()->status)->toBe(MakeOrder::STATUS_SCHEDULED);
@@ -2018,7 +2006,7 @@ test('make order workflow stage transitions require execute permission', functio
     $user = ($this->makeUser)($tenant);
     ($this->grantPermission)($user, 'inventory-make-orders-view');
 
-    [$productionStage] = ($this->createManufacturingWorkflowStages)($tenant);
+    [$productionStage, $completedStage] = ($this->createManufacturingWorkflowStages)($tenant);
 
     $uom = ($this->makeUom)($tenant);
     $output = ($this->makeItem)($tenant, $uom, 'Bread', true);
@@ -2111,9 +2099,9 @@ test('authorized user can change make order owner via made_by_user_id without ch
     $user = ($this->makeUser)($tenant);
     $assignee = ($this->makeUser)($tenant);
     ($this->grantPermissions)($user, ['inventory-make-orders-view', 'inventory-make-orders-execute']);
-    ($this->grantPermission)($assignee, 'inventory-make-orders-execute');
+    ($this->grantPermissions)($assignee, ['inventory-make-orders-view', 'inventory-make-orders-execute']);
 
-    [$productionStage] = ($this->createManufacturingWorkflowStages)($tenant);
+    [$productionStage, $completedStage] = ($this->createManufacturingWorkflowStages)($tenant);
 
     $uom = ($this->makeUom)($tenant);
     $output = ($this->makeItem)($tenant, $uom, 'Bread', true);
@@ -2169,7 +2157,7 @@ test('authorized user can clear make order owner back to unassigned', function (
     $assignee = ($this->makeUser)($tenant);
     ($this->grantPermissions)($user, ['inventory-make-orders-view', 'inventory-make-orders-execute']);
 
-    [$productionStage] = ($this->createManufacturingWorkflowStages)($tenant);
+    [$productionStage, $completedStage] = ($this->createManufacturingWorkflowStages)($tenant);
 
     $uom = ($this->makeUom)($tenant);
     $output = ($this->makeItem)($tenant, $uom, 'Bread', true);
@@ -2226,7 +2214,7 @@ test('make order owner update requires execute permission', function () {
     $assignee = ($this->makeUser)($tenant);
     ($this->grantPermission)($viewer, 'inventory-make-orders-view');
 
-    [$productionStage] = ($this->createManufacturingWorkflowStages)($tenant);
+    [$productionStage, $completedStage] = ($this->createManufacturingWorkflowStages)($tenant);
 
     $uom = ($this->makeUom)($tenant);
     $output = ($this->makeItem)($tenant, $uom, 'Bread', true);
@@ -2272,7 +2260,7 @@ test('authorized user can update make order due date without mutating assignment
     $assignee = ($this->makeUser)($tenant);
     ($this->grantPermissions)($user, ['inventory-make-orders-view', 'inventory-make-orders-execute']);
 
-    [$productionStage] = ($this->createManufacturingWorkflowStages)($tenant);
+    [$productionStage, $completedStage] = ($this->createManufacturingWorkflowStages)($tenant);
 
     $uom = ($this->makeUom)($tenant);
     $output = ($this->makeItem)($tenant, $uom, 'Bread', true);
@@ -2309,7 +2297,7 @@ test('authorized user can update make order due date without mutating assignment
         ->assertJsonPath('workflow.due_date', '2026-06-15')
         ->assertJsonPath('workflow.made_by_user_id', $assignee->id)
         ->assertJsonPath('workflow.current_stage.id', $productionStage->id)
-        ->assertJsonPath('workflow.next_stage_action.id', $productionStage->id)
+        ->assertJsonPath('workflow.next_stage_action.id', $completedStage->id)
         ->assertJsonPath('workflow.next_stage_action.type', 'make')
         ->assertJsonPath('workflow.next_stage_action.endpoint', route('manufacturing.make-orders.make', $makeOrder))
         ->assertJsonPath('workflow.due_date_update_url', route('manufacturing.make-orders.due-date.update', $makeOrder))

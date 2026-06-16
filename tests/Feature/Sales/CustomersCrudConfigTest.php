@@ -1140,7 +1140,7 @@ it('33. customer import preview errors render through the shared import componen
         ->and($importModuleSource)->toContain('data-shared-import-panel')
         ->and($importModuleSource)->toContain('this.previewError = errorMessage;')
         ->and($importModuleSource)->toContain('this.errors.source = data.errors && Array.isArray(data.errors.source) ? data.errors.source : [];')
-        ->and($importModuleSource)->toContain('x-text="errors.source[0]"');
+        ->and($importModuleSource)->toContain('x-text="errors.source && errors.source[0]"');
 });
 
 it('34. import and create buttons still open page specific panels through configured callbacks', function () {

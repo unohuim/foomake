@@ -299,27 +299,21 @@ it('create action enters first purchasing workflow stage when purchase orders su
         'sort_order' => 20,
     ]);
 
-    $firstStage = WorkflowStage::withoutGlobalScopes()->create([
-        'tenant_id' => $tenant->id,
-        'workflow_domain_id' => $domain->id,
-        'key' => 'first',
-        'name' => 'First Stage',
-        'action_verb' => 'FIRST',
-        'sort_order' => 10,
-        'is_active' => true,
-        'is_inventory_effect_stage' => false,
-    ]);
+    app(\App\Actions\Workflows\SeedDefaultWorkflowStagesForTenantAction::class)->execute($tenant);
 
-    WorkflowStage::withoutGlobalScopes()->create([
-        'tenant_id' => $tenant->id,
-        'workflow_domain_id' => $domain->id,
-        'key' => 'second',
-        'name' => 'Second Stage',
-        'action_verb' => 'SECOND',
-        'sort_order' => 20,
-        'is_active' => true,
-        'is_inventory_effect_stage' => true,
-    ]);
+    $firstStage = WorkflowStage::withoutGlobalScopes()
+        ->where('tenant_id', $tenant->id)
+        ->where('workflow_domain_id', $domain->id)
+        ->where('key', 'creating')
+        ->firstOrFail();
+
+    WorkflowStage::withoutGlobalScopes()
+        ->where('tenant_id', $tenant->id)
+        ->where('workflow_domain_id', $domain->id)
+        ->where('key', 'receiving')
+        ->update([
+            'sort_order' => 20,
+        ]);
 
     ($this->grantPermission)($user, 'purchasing-purchase-orders-receive');
 

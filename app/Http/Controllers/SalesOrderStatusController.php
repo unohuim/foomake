@@ -49,7 +49,7 @@ class SalesOrderStatusController extends Controller
         $resolver = app(ResolveSalesWorkflowStageAction::class);
         $currentStage = $resolver->currentStageForStatus($salesOrder);
         $targetStage = $resolver->activeStageForStatus($salesOrder, $targetStatus);
-        $createStageKey = $resolver->stageForStatus($salesOrder, SalesOrder::STATUS_OPEN)?->key ?? 'packing';
+        $createStageKey = $resolver->firstActiveStage($salesOrder)?->key ?? 'creating';
 
         if (! $salesOrder->canTransitionTo($targetStatus)) {
             return response()->json([
@@ -326,14 +326,12 @@ class SalesOrderStatusController extends Controller
      */
     private function workflowActionDescription(string $status, ?WorkflowStage $stage): string
     {
-        if (filled($stage?->description)) {
-            return (string) $stage->description;
-        }
-
         return match ($status) {
             SalesOrder::STATUS_CANCELLED => 'Cancel this sales order.',
             SalesOrder::STATUS_COMPLETED => 'Mark this sales order complete.',
-            default => 'Move this sales order to the next workflow stage.',
+            default => filled($stage?->description)
+                ? (string) $stage->description
+                : 'Move this sales order to the next workflow stage.',
         };
     }
 
@@ -346,7 +344,7 @@ class SalesOrderStatusController extends Controller
         ResolveSalesWorkflowStageAction $resolver
     ): ?WorkflowStage {
         if ($salesOrder->status === SalesOrder::STATUS_DRAFT && $status === SalesOrder::STATUS_OPEN) {
-            return $resolver->stageForStatus($salesOrder, SalesOrder::STATUS_OPEN);
+            return $resolver->firstActiveStage($salesOrder);
         }
 
         if ($status === SalesOrder::STATUS_CANCELLED || $status === SalesOrder::STATUS_COMPLETED) {

@@ -787,7 +787,7 @@ it('23. the empty fulfillment recipe blocks sales order open to packing', functi
     $order = ($this->createSalesOrder)($tenant, $customer->id);
     ($this->createSalesOrderLine)($tenant, $order, $item);
 
-    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKING)
+    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKED)
         ->assertStatus(422)
         ->assertJsonPath('message', 'Fulfillment recipe must have at least one line.');
 });
@@ -822,9 +822,9 @@ it('24. after components are added and inventory exists sales order packing can 
     $order = ($this->createSalesOrder)($tenant, $customer->id);
     ($this->createSalesOrderLine)($tenant, $order, $item);
 
-    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKING)
+    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKED)
         ->assertOk()
-        ->assertJsonPath('data.status', SalesOrder::STATUS_PACKING);
+        ->assertJsonPath('data.status', SalesOrder::STATUS_PACKED);
 });
 
 it('25. import summary reports fulfillment recipes created count', function () {
@@ -1220,8 +1220,8 @@ it('40. sales order packing still consumes fulfillment recipe components only af
     $order = ($this->createSalesOrder)($tenant, $customer->id);
     $line = ($this->createSalesOrderLine)($tenant, $order, $item);
 
-    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKING)->assertOk();
     ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKED)->assertOk();
+    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_SHIPPING)->assertOk();
 
     $move = StockMove::query()
         ->where('source_type', SalesOrderLine::class)

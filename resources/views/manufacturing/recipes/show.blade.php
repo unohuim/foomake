@@ -144,7 +144,7 @@
         <div x-cloak x-show="ingredients.can_edit || ingredients.lines.length > 0">
             <x-ingredients-detail-section
                 title="Ingredients"
-                :description="__('Ingredients are shown for the current display version.')"
+                :description="__('Ingredients are shown for the checked out version.')"
                 :default-open="true"
                 item-header="Item Name"
                 :show-actions="true"

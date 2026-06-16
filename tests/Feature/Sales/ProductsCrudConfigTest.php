@@ -686,7 +686,7 @@ it('28a. shared crud mobile renderer keeps the primary label visible on mobile',
         ->and($rendererSource)->toContain('class="flex h-full min-h-0 flex-col"')
         ->and($rendererSource)->toContain('class="min-h-0 flex-1 overflow-y-auto p-0" data-crud-records-scroll')
         ->and($rendererSource)->toContain('class="border-t border-gray-300"')
-        ->and($rendererSource)->toContain('class="flex items-center gap-3 border-b border-gray-300 bg-white px-4 py-2" data-crud-card')
+        ->and($rendererSource)->toContain('class="relative flex items-center gap-3 overflow-visible border-b border-gray-300 bg-white px-4 py-2" data-crud-card')
         ->and($rendererSource)->not->toContain('rounded-lg border border-gray-100 bg-white p-4')
         ->and($rendererSource)->toContain('${renderToolbar(normalized)}')
         ->and($rendererSource)->toContain('class="min-w-0 flex-1"')
@@ -738,7 +738,7 @@ it('32. products vertical dots render the shared card dropdown menu contract', f
     expect($rendererSource)->toContain('renderActionCell')
         ->and($rendererSource)->toContain('role="menu"')
         ->and($rendererSource)->toContain('role="menuitem"')
-        ->and($rendererSource)->toContain('x-on:click="open = !open"');
+        ->and($rendererSource)->toContain('x-on:click="toggle()"');
 });
 
 it('33. products page module maps the edit action id to the product edit handler', function () {

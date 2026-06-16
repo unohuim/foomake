@@ -102,14 +102,25 @@ beforeEach(function (): void {
         $recipe = Recipe::query()->findOrFail((int) $response->json('data.id'));
 
         if (! $publishCurrent) {
-            return $recipe;
+            return $recipe->fresh(['currentVersion', 'item.baseUom']);
         }
 
         $draftVersion = $recipe->versions()->orderByDesc('id')->firstOrFail();
-        actingAs($user)->postJson(route('manufacturing.recipes.versions.checkout', [$recipe, $draftVersion->id]))
-            ->assertCreated();
-        actingAs($user)->patchJson(route('manufacturing.recipes.versions.publish', [$recipe, $draftVersion->id]))
-            ->assertOk();
+        RecipeVersion::query()
+            ->whereKey($draftVersion->id)
+            ->update([
+                'status' => RecipeVersion::STATUS_PUBLISHED,
+                'effective_from' => now(),
+                'effective_until' => null,
+                'approved_at' => now(),
+                'approved_by_user_id' => $user->id,
+            ]);
+
+        Recipe::query()
+            ->whereKey($recipe->id)
+            ->update([
+                'current_version_id' => $draftVersion->id,
+            ]);
 
         return $recipe->fresh(['currentVersion', 'item.baseUom']);
     };
@@ -241,6 +252,8 @@ it('6. make order create rejects archived versions even when explicitly submitte
 
     $oldCurrentVersionId = (int) $recipe->fresh()->current_version_id;
     $draftVersionId = ($this->createDraftVersion)($user, $recipe);
+    $ingredient = ($this->makeItem)($tenant, $uom, 'Salt');
+    ($this->addIngredient)($user, $recipe, $draftVersionId, $ingredient, '1.000000');
     ($this->publishVersion)($user, $recipe, $draftVersionId)->assertOk();
 
     actingAs($user)->patchJson(route('manufacturing.recipes.versions.archive', [$recipe, $oldCurrentVersionId]))
@@ -347,6 +360,8 @@ it('11. publishing a new draft changes future make orders to the new current ver
 
     $before = (int) $recipe->fresh()->current_version_id;
     $draftVersionId = ($this->createDraftVersion)($user, $recipe);
+    $ingredient = ($this->makeItem)($tenant, $uom, 'Salt');
+    ($this->addIngredient)($user, $recipe, $draftVersionId, $ingredient, '1.000000');
 
     ($this->publishVersion)($user, $recipe, $draftVersionId)->assertOk();
 
@@ -540,6 +555,8 @@ it('19. make order snapshot references remain stable after old current version b
     $makeOrderId = (int) ($this->createMakeOrder)($user, $recipe)->assertCreated()->json('data.id');
 
     $draftVersionId = ($this->createDraftVersion)($user, $recipe);
+    $ingredient = ($this->makeItem)($tenant, $uom, 'Salt');
+    ($this->addIngredient)($user, $recipe, $draftVersionId, $ingredient, '1.000000');
     ($this->publishVersion)($user, $recipe, $draftVersionId)->assertOk();
 
     actingAs($user)->patchJson(route('manufacturing.recipes.versions.archive', [$recipe, $currentVersionId]))
@@ -867,7 +884,7 @@ it('31c. make order detail header renders the next valid workflow stage action f
     expect($source)->toContain('<x-slot name="actions">')
         ->and($source)->toContain('<x-slot name="titleSuffix">')
         ->and($source)->toContain("x-data=\"makeOrderHeaderState('manufacturing-make-orders-show-payload')\"")
-        ->and($source)->toContain('data-workflow-action-button')
+        ->and($source)->toContain('x-workflow-action-button')
         ->and($source)->toContain('action-event-name="make-order-header-action"')
         ->and($source)->toContain('sync-event-name="make-order-header-action-updated"')
         ->and($source)->toContain('sync-state-key="workflow"')
@@ -932,37 +949,41 @@ it('34. make order detail workflow payload includes due date assignee and availa
     ($this->grantPermission)($assignee, 'inventory-make-orders-view');
     ($this->grantPermission)($assignee, 'inventory-make-orders-execute');
 
-    $domain = WorkflowDomain::query()->firstOrCreate([
-        'key' => 'manufacturing',
-    ], [
-        'name' => 'Manufacturing',
-    ]);
+    app(\App\Actions\Workflows\SeedDefaultWorkflowStagesForTenantAction::class)->execute($tenant);
 
-    $stageA = WorkflowStage::withoutGlobalScopes()->updateOrCreate([
-        'tenant_id' => $tenant->id,
-        'workflow_domain_id' => $domain->id,
-        'key' => 'production',
-    ], [
+    $manufacturingDomainId = WorkflowDomain::query()
+        ->where('key', 'manufacturing')
+        ->value('id');
+
+    $stageA = WorkflowStage::withoutGlobalScopes()
+        ->where('tenant_id', $tenant->id)
+        ->where('workflow_domain_id', $manufacturingDomainId)
+        ->where('key', 'making')
+        ->firstOrFail();
+
+    $stageB = WorkflowStage::withoutGlobalScopes()
+        ->where('tenant_id', $tenant->id)
+        ->where('workflow_domain_id', $manufacturingDomainId)
+        ->where('key', 'completing')
+        ->firstOrFail();
+
+    $stageA->forceFill([
         'name' => 'Production',
         'action_verb' => 'PRODUCE',
         'description' => 'Build the batch.',
         'sort_order' => 10,
         'is_active' => true,
         'is_inventory_effect_stage' => true,
-    ]);
+    ])->save();
 
-    $stageB = WorkflowStage::withoutGlobalScopes()->updateOrCreate([
-        'tenant_id' => $tenant->id,
-        'workflow_domain_id' => $domain->id,
-        'key' => 'completed',
-    ], [
+    $stageB->forceFill([
         'name' => 'Completed',
         'action_verb' => 'COMPLETE',
         'description' => 'Close the batch.',
         'sort_order' => 20,
         'is_active' => true,
         'is_inventory_effect_stage' => false,
-    ]);
+    ])->save();
 
     $uom = ($this->makeUom)($tenant, 2);
     $output = ($this->makeItem)($tenant, $uom, 'Soup', ['is_manufacturable' => true]);
@@ -991,7 +1012,7 @@ it('34. make order detail workflow payload includes due date assignee and availa
 
     expect(data_get($payload, 'workflow.default_open'))->toBeFalse()
         ->and(data_get($payload, 'workflow.current_stage.id'))->toBe($stageA->id)
-        ->and(data_get($payload, 'workflow.current_stage.name'))->toBe('Production')
+        ->and(data_get($payload, 'workflow.current_stage.name'))->toBe('Making')
         ->and(data_get($payload, 'workflow.made_by_user_id'))->toBe($assignee->id)
         ->and(data_get($payload, 'workflow.owner_user_name'))->toBe($assignee->name)
         ->and(data_get($payload, 'workflow.can_edit_due_date'))->toBeTrue()
@@ -1088,37 +1109,41 @@ it('34a. make order workflow payload exposes editable tenant scoped assignee opt
     ($this->grantPermission)($user, 'inventory-make-orders-view');
     ($this->grantPermission)($tenantAssignee, 'inventory-make-orders-execute');
 
-    $domain = WorkflowDomain::query()->firstOrCreate([
-        'key' => 'manufacturing',
-    ], [
-        'name' => 'Manufacturing',
-    ]);
+    app(\App\Actions\Workflows\SeedDefaultWorkflowStagesForTenantAction::class)->execute($tenant);
 
-    $stageA = WorkflowStage::withoutGlobalScopes()->updateOrCreate([
-        'tenant_id' => $tenant->id,
-        'workflow_domain_id' => $domain->id,
-        'key' => 'production',
-    ], [
+    $manufacturingDomainId = WorkflowDomain::query()
+        ->where('key', 'manufacturing')
+        ->value('id');
+
+    $stageA = WorkflowStage::withoutGlobalScopes()
+        ->where('tenant_id', $tenant->id)
+        ->where('workflow_domain_id', $manufacturingDomainId)
+        ->where('key', 'making')
+        ->firstOrFail();
+
+    $stageB = WorkflowStage::withoutGlobalScopes()
+        ->where('tenant_id', $tenant->id)
+        ->where('workflow_domain_id', $manufacturingDomainId)
+        ->where('key', 'completing')
+        ->firstOrFail();
+
+    $stageA->forceFill([
         'name' => 'Production',
         'action_verb' => 'PRODUCE',
         'description' => 'Build the batch.',
         'sort_order' => 10,
         'is_active' => true,
         'is_inventory_effect_stage' => true,
-    ]);
+    ])->save();
 
-    $stageB = WorkflowStage::withoutGlobalScopes()->updateOrCreate([
-        'tenant_id' => $tenant->id,
-        'workflow_domain_id' => $domain->id,
-        'key' => 'completed',
-    ], [
+    $stageB->forceFill([
         'name' => 'Completed',
         'action_verb' => 'COMPLETE',
         'description' => 'Close the batch.',
         'sort_order' => 20,
         'is_active' => true,
         'is_inventory_effect_stage' => false,
-    ]);
+    ])->save();
 
     $uom = ($this->makeUom)($tenant, 2);
     $output = ($this->makeItem)($tenant, $uom, 'Soup', ['is_manufacturable' => true]);
@@ -1153,8 +1178,8 @@ it('34a. make order workflow payload exposes editable tenant scoped assignee opt
     expect(data_get($payload, 'workflow.default_open'))->toBeFalse()
         ->and(data_get($payload, 'workflow.made_by_user_id'))->toBeNull()
         ->and(data_get($payload, 'workflow.owner_user_name'))->toBeNull()
-        ->and(data_get($payload, 'workflow.current_stage.name'))->toBe('Production')
-        ->and(data_get($payload, 'workflow.next_stage_action.id'))->toBe($stageA->id)
+        ->and(data_get($payload, 'workflow.current_stage.name'))->toBe('Making')
+        ->and(data_get($payload, 'workflow.next_stage_action.id'))->toBe($stageB->id)
         ->and(data_get($payload, 'workflow.next_stage_action.type'))->toBe('make')
         ->and(data_get($payload, 'workflow.due_date'))->toBe('2026-06-01')
         ->and($optionLabels)->toContain('Unassigned')
@@ -1172,24 +1197,26 @@ it('35. make order detail tasks payload includes current stage tasks and complet
     ($this->grantPermission)($assignee, 'inventory-make-orders-view');
     ($this->grantPermission)($assignee, 'inventory-make-orders-execute');
 
-    $domain = WorkflowDomain::query()->firstOrCreate([
-        'key' => 'manufacturing',
-    ], [
-        'name' => 'Manufacturing',
-    ]);
+    app(\App\Actions\Workflows\SeedDefaultWorkflowStagesForTenantAction::class)->execute($tenant);
 
-    $stage = WorkflowStage::withoutGlobalScopes()->updateOrCreate([
-        'tenant_id' => $tenant->id,
-        'workflow_domain_id' => $domain->id,
-        'key' => 'production',
-    ], [
+    $manufacturingDomainId = WorkflowDomain::query()
+        ->where('key', 'manufacturing')
+        ->value('id');
+
+    $stage = WorkflowStage::withoutGlobalScopes()
+        ->where('tenant_id', $tenant->id)
+        ->where('workflow_domain_id', $manufacturingDomainId)
+        ->where('key', 'making')
+        ->firstOrFail();
+
+    $stage->forceFill([
         'name' => 'Production',
         'action_verb' => 'PRODUCE',
         'description' => 'Build the batch.',
         'sort_order' => 10,
         'is_active' => true,
         'is_inventory_effect_stage' => true,
-    ]);
+    ])->save();
 
     $uom = ($this->makeUom)($tenant, 2);
     $output = ($this->makeItem)($tenant, $uom, 'Soup', ['is_manufacturable' => true]);
@@ -1213,7 +1240,7 @@ it('35. make order detail tasks payload includes current stage tasks and complet
 
     $task = Task::query()->forceCreate([
         'tenant_id' => $tenant->id,
-        'workflow_domain_id' => $domain->id,
+        'workflow_domain_id' => $manufacturingDomainId,
         'domain_record_id' => $makeOrder->id,
         'workflow_stage_id' => $stage->id,
         'workflow_task_template_id' => null,
@@ -1245,36 +1272,40 @@ it('35a. make order detail header payload uses workflow stage names and not life
     ($this->grantPermission)($user, 'inventory-make-orders-execute');
     ($this->grantPermission)($user, 'inventory-make-orders-view');
 
-    $domain = WorkflowDomain::query()->firstOrCreate([
-        'key' => 'manufacturing',
-    ], [
-        'name' => 'Manufacturing',
-    ]);
+    app(\App\Actions\Workflows\SeedDefaultWorkflowStagesForTenantAction::class)->execute($tenant);
 
-    $stageA = WorkflowStage::withoutGlobalScopes()->updateOrCreate([
-        'tenant_id' => $tenant->id,
-        'workflow_domain_id' => $domain->id,
-        'key' => 'production',
-    ], [
+    $manufacturingDomainId = WorkflowDomain::query()
+        ->where('key', 'manufacturing')
+        ->value('id');
+
+    $stageA = WorkflowStage::withoutGlobalScopes()
+        ->where('tenant_id', $tenant->id)
+        ->where('workflow_domain_id', $manufacturingDomainId)
+        ->where('key', 'making')
+        ->firstOrFail();
+
+    $stageB = WorkflowStage::withoutGlobalScopes()
+        ->where('tenant_id', $tenant->id)
+        ->where('workflow_domain_id', $manufacturingDomainId)
+        ->where('key', 'completing')
+        ->firstOrFail();
+
+    $stageA->forceFill([
         'name' => 'Production',
         'description' => 'Build the batch.',
         'sort_order' => 10,
         'is_active' => true,
         'is_inventory_effect_stage' => true,
-    ]);
+    ])->save();
 
-    $stageB = WorkflowStage::withoutGlobalScopes()->updateOrCreate([
-        'tenant_id' => $tenant->id,
-        'workflow_domain_id' => $domain->id,
-        'key' => 'completed',
-    ], [
+    $stageB->forceFill([
         'name' => 'Completed',
         'action_verb' => 'COMPLETE',
         'description' => 'Check the batch.',
         'sort_order' => 20,
         'is_active' => true,
         'is_inventory_effect_stage' => false,
-    ]);
+    ])->save();
 
     $uom = ($this->makeUom)($tenant, 2);
     $output = ($this->makeItem)($tenant, $uom, 'Soup', ['is_manufacturable' => true]);
@@ -1311,11 +1342,11 @@ it('35a. make order detail header payload uses workflow stage names and not life
         ->and(data_get($payload, 'makeOrder.workflow_state'))->toBe('Production')
         ->and(data_get($payload, 'makeOrder.display_label'))->toBe('Production')
         ->and(data_get($payload, 'makeOrder.status'))->toBe(MakeOrder::STATUS_SCHEDULED)
-        ->and(data_get($payload, 'workflow.display_label'))->toBe('Production')
-        ->and(data_get($payload, 'workflow.currentLabel'))->toBe('Production')
-        ->and(data_get($payload, 'workflow.actions.0.label'))->toBe('PRODUCE')
+        ->and(data_get($payload, 'workflow.display_label'))->toBe('IN PROGRESS')
+        ->and(data_get($payload, 'workflow.currentLabel'))->toBe('IN PROGRESS')
+        ->and(data_get($payload, 'workflow.actions.0.label'))->toBe('COMPLETE')
         ->and(data_get($payload, 'workflow.actions.0.description'))->not->toBe('')
-        ->and(data_get($payload, 'workflow.next_stage_action.label'))->toBe('PRODUCE');
+        ->and(data_get($payload, 'workflow.next_stage_action.label'))->toBe('COMPLETE');
 
     $stageA->forceFill(['name' => 'Cook', 'action_verb' => 'COOK'])->save();
     $stageB->forceFill(['name' => 'Ready for QA', 'action_verb' => 'QA READY'])->save();
@@ -1328,9 +1359,9 @@ it('35a. make order detail header payload uses workflow stage names and not life
     expect(data_get($renamedPayload, 'makeOrder.workflow_stage_name'))->toBe('Cook')
         ->and(data_get($renamedPayload, 'makeOrder.workflow_state'))->toBe('Cook')
         ->and(data_get($renamedPayload, 'makeOrder.display_label'))->toBe('Cook')
-        ->and(data_get($renamedPayload, 'workflow.actions.0.label'))->toBe('QA READY')
+        ->and(data_get($renamedPayload, 'workflow.actions.0.label'))->toBe('COMPLETE')
         ->and(data_get($renamedPayload, 'workflow.actions.0.description'))->not->toBe('')
-        ->and(data_get($renamedPayload, 'workflow.next_stage_action.label'))->toBe('QA READY')
+        ->and(data_get($renamedPayload, 'workflow.next_stage_action.label'))->toBe('COMPLETE')
         ->and(data_get($renamedPayload, 'makeOrder.status'))->toBe(MakeOrder::STATUS_SCHEDULED);
 
     $withoutStage = MakeOrder::query()->forceCreate([
@@ -1362,7 +1393,7 @@ it('35a. make order detail header payload uses workflow stage names and not life
         ->and(data_get($withoutStagePayload, 'workflow.display_label'))->toBe(MakeOrder::STATUS_DRAFT)
         ->and(data_get($withoutStagePayload, 'workflow.currentLabel'))->toBe(MakeOrder::STATUS_DRAFT)
         ->and(data_get($withoutStagePayload, 'workflow.next_stage_action.description'))->not->toBe('')
-        ->and(data_get($withoutStagePayload, 'workflow.next_stage_action.label'))->toBe('COOK');
+        ->and(data_get($withoutStagePayload, 'workflow.next_stage_action.label'))->toBe('MAKE');
 });
 
 it('35b. make order detail header source and controller payload do not hardcode workflow labels', function (): void {
@@ -1434,35 +1465,29 @@ it('35c. make order detail omits the header workflow action when no valid next s
     ($this->grantPermission)($user, 'inventory-make-orders-execute');
     ($this->grantPermission)($user, 'inventory-make-orders-view');
 
-    $domain = WorkflowDomain::query()->firstOrCreate([
-        'key' => 'manufacturing',
-    ], [
-        'name' => 'Manufacturing',
-    ]);
+    app(\App\Actions\Workflows\SeedDefaultWorkflowStagesForTenantAction::class)->execute($tenant);
 
-    $finalStage = WorkflowStage::withoutGlobalScopes()->updateOrCreate([
-        'tenant_id' => $tenant->id,
-        'workflow_domain_id' => $domain->id,
-        'key' => 'completed',
-    ], [
-        'name' => 'Completed',
-        'description' => 'Close the batch.',
-        'sort_order' => 20,
-        'is_active' => true,
-        'is_inventory_effect_stage' => false,
-    ]);
+    $manufacturingDomainId = WorkflowDomain::query()
+        ->where('key', 'manufacturing')
+        ->value('id');
 
-    WorkflowStage::withoutGlobalScopes()->updateOrCreate([
-        'tenant_id' => $tenant->id,
-        'workflow_domain_id' => $domain->id,
-        'key' => 'production',
-    ], [
-        'name' => 'Production',
-        'description' => 'Build the batch.',
-        'sort_order' => 10,
-        'is_active' => true,
-        'is_inventory_effect_stage' => true,
-    ]);
+    $finalStage = WorkflowStage::withoutGlobalScopes()
+        ->where('tenant_id', $tenant->id)
+        ->where('workflow_domain_id', $manufacturingDomainId)
+        ->where('key', 'completing')
+        ->firstOrFail();
+
+    WorkflowStage::withoutGlobalScopes()
+        ->where('tenant_id', $tenant->id)
+        ->where('workflow_domain_id', $manufacturingDomainId)
+        ->where('key', 'making')
+        ->update([
+            'name' => 'Production',
+            'description' => 'Build the batch.',
+            'sort_order' => 10,
+            'is_active' => true,
+            'is_inventory_effect_stage' => true,
+        ]);
 
     $uom = ($this->makeUom)($tenant, 2);
     $output = ($this->makeItem)($tenant, $uom, 'Soup', ['is_manufacturable' => true]);

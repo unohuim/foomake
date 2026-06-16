@@ -322,6 +322,7 @@ it('17. recipes list payload includes make only when recipe has a current publis
 
     $uom = ($this->makeUom)($tenant);
     $output = ($this->makeItem)($tenant, $uom, 'Soup Output', ['is_manufacturable' => true]);
+    $ingredient = ($this->makeItem)($tenant, $uom, 'Ingredient ' . Str::uuid());
     $recipeId = (int) ($this->createRecipe)($user, $output, ['name' => 'Rendered Recipe'])->assertCreated()->json('data.id');
     $recipe = Recipe::query()->findOrFail($recipeId);
 
@@ -331,6 +332,7 @@ it('17. recipes list payload includes make only when recipe has a current publis
         ->and($row['available_actions'] ?? [])->not->toContain('make');
 
     $draftVersionId = (int) ($this->createDraftVersion)($user, $recipe)->assertCreated()->json('data.id');
+    ($this->addRecipeVersionLine)($tenant, RecipeVersion::query()->findOrFail($draftVersionId), $ingredient, '1.000000');
     ($this->publishVersion)($user, $recipe, $draftVersionId)->assertOk();
 
     $publishedRow = actingAs($user)->getJson(route('manufacturing.recipes.list'))->assertOk()->json('data.0');

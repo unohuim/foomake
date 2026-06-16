@@ -519,7 +519,7 @@ it('9. purchase order detail renders the reusable workflow action button', funct
         ->assertSee('data-workflow-action-button', false)
         ->assertSee('Create')
         ->assertSee('Cancel')
-        ->assertSee('Create this purchase order, and begin workflow.');
+        ->assertSee('Create this purchase order.');
 });
 
 it('9a. purchase order detail workflow payload exposes assigned current-stage task completion', function (): void {

@@ -84,7 +84,9 @@ it('4. binds the configured close action to backdrop and close button', function
 BLADE
     );
 
-    expect(substr_count($html, 'x-on:click="closePanel()"'))->toBe(3);
+    expect($html)->toContain('x-on:click="if (slideOverPointerStartedOutside) { closePanel() }"')
+        ->and($html)->toContain('x-on:click.self="if (slideOverPointerStartedOutside) { closePanel() }"')
+        ->and($html)->toContain('x-on:click="closePanel()"');
 });
 
 it('5. binds the configured submit action when provided', function () {

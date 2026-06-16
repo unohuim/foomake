@@ -760,10 +760,6 @@ class SalesOrderController extends Controller
      */
     private function salesWorkflowActionDescription(SalesOrder $order, string $status, ?WorkflowStage $stage): string
     {
-        if (filled($stage?->description)) {
-            return (string) $stage->description;
-        }
-
         if ($order->status === SalesOrder::STATUS_DRAFT && $status === SalesOrder::STATUS_OPEN) {
             return 'Create this sales order.';
         }
@@ -771,7 +767,9 @@ class SalesOrderController extends Controller
         return match ($status) {
             SalesOrder::STATUS_CANCELLED => 'Cancel this sales order.',
             SalesOrder::STATUS_COMPLETED => 'Mark this sales order complete.',
-            default => 'Move this sales order to the next workflow stage.',
+            default => filled($stage?->description)
+                ? (string) $stage->description
+                : 'Move this sales order to the next workflow stage.',
         };
     }
 
@@ -784,7 +782,7 @@ class SalesOrderController extends Controller
         ResolveSalesWorkflowStageAction $resolver
     ): ?WorkflowStage {
         if ($order->status === SalesOrder::STATUS_DRAFT && $status === SalesOrder::STATUS_OPEN) {
-            return $resolver->stageForStatus($order, SalesOrder::STATUS_OPEN);
+            return $resolver->firstActiveStage($order);
         }
 
         if ($status === SalesOrder::STATUS_CANCELLED || $status === SalesOrder::STATUS_COMPLETED) {

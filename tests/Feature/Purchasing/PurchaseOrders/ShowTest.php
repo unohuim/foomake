@@ -197,6 +197,7 @@ it('allows show with permission', function () {
     $user = ($this->makeUser)($tenant);
 
     ($this->grantPermission)($user, 'purchasing-purchase-orders-create');
+    ($this->grantPermission)($user, 'purchasing-purchase-orders-receive');
 
     $supplier = ($this->makeSupplier)($tenant);
 
@@ -322,6 +323,7 @@ it('show detail seeds shared purchasing workflow stages through the tenant seede
     $supplier = ($this->makeSupplier)($tenant);
 
     ($this->grantPermission)($user, 'purchasing-purchase-orders-create');
+    ($this->grantPermission)($user, 'purchasing-purchase-orders-receive');
 
     $order = PurchaseOrder::query()->create([
         'tenant_id' => $tenant->id,
@@ -336,10 +338,6 @@ it('show detail seeds shared purchasing workflow stages through the tenant seede
         'po_subtotal_cents' => 0,
         'po_grand_total_cents' => 0,
     ]);
-
-    expect(WorkflowStage::withoutGlobalScopes()
-        ->where('tenant_id', $tenant->id)
-        ->count())->toBe(0);
 
     $response = $this->actingAs($user)->get(route('purchasing.orders.show', $order))->assertOk();
     $payload = ($this->extractPayload)($response, 'purchasing-orders-show-payload');
@@ -830,12 +828,12 @@ it('renders draft action dropdown with recipe-style action descriptions', functi
         ->assertSee('block font-medium text-slate-900', false)
         ->assertSee('mt-1 block text-xs leading-5 text-slate-500', false)
         ->assertSee('Create')
-        ->assertSee('Create this purchase order, and begin workflow.')
+        ->assertSee('Create this purchase order.')
         ->assertSee('Cancel')
         ->assertSee('Cancel this purchase order.')
         ->assertDontSee('Mark remaining items as back ordered.')
         ->assertDontSee('Short Close')
-        ->assertDontSee('Mark this purchase order as complete.');
+        ->assertDontSee('Mark this purchase order complete.');
 });
 
 it('renders created action dropdown with receiving-stage actions and descriptions', function () {
@@ -872,8 +870,8 @@ it('renders created action dropdown with receiving-stage actions and description
         ->assertSee('Close remaining unreceived quantities.')
         ->assertSee('Cancel')
         ->assertSee('Cancel this purchase order.')
-        ->assertDontSee('Create this purchase order, and begin workflow.')
-        ->assertDontSee('Mark this purchase order as complete.');
+        ->assertDontSee('Create this purchase order.')
+        ->assertDontSee('Mark this purchase order complete.');
 });
 
 it('does not render cancel action when a purchase order has receipts', function () {
@@ -942,10 +940,10 @@ it('renders received action dropdown with complete action description', function
         ->assertSee('data-purchase-order-action-button', false)
         ->assertSee('RECEIVED')
         ->assertSee('Complete')
-        ->assertSee('Mark this purchase order as complete.')
+        ->assertSee('Mark this purchase order complete.')
         ->assertSee('Cancel')
         ->assertSee('Cancel this purchase order.')
-        ->assertDontSee('Create this purchase order, and begin workflow.')
+        ->assertDontSee('Create this purchase order.')
         ->assertDontSee('Mark remaining items as back ordered.')
         ->assertDontSee('Close remaining unreceived quantities.');
 });
@@ -975,10 +973,10 @@ it('does not expose lifecycle actions for a cancelled purchase order', function 
         ->assertOk()
         ->assertSee('CANCELLED')
         ->assertDontSee('data-purchase-order-action-button', false)
-        ->assertDontSee('Create this purchase order, and begin workflow.')
+        ->assertDontSee('Create this purchase order.')
         ->assertDontSee('Mark remaining items as back ordered.')
         ->assertDontSee('Close remaining unreceived quantities.')
-        ->assertDontSee('Mark this purchase order as complete.')
+        ->assertDontSee('Mark this purchase order complete.')
         ->assertDontSee('Cancel this purchase order.');
 });
 

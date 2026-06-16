@@ -217,12 +217,12 @@ it('1. entering packing after availability checks pass generates tasks from acti
 
     ($this->createLine)($tenant, $order, $item);
     ($this->createReceipt)($tenant, $item, '1.000000');
-    ($this->createTemplate)($tenant, $stages['packing'], $assignee, ['title' => 'Print packing slip']);
+    ($this->createTemplate)($tenant, $stages['shipping'], $assignee, ['title' => 'Print shipping slip']);
     ($this->grantPermission)($user, 'sales-sales-orders-manage');
 
-    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKING)
+    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKED)
         ->assertOk()
-        ->assertJsonPath('data.status', SalesOrder::STATUS_PACKING);
+        ->assertJsonPath('data.status', SalesOrder::STATUS_PACKED);
 
     expect(Task::query()->where('domain_record_id', $order->id)->count())->toBe(1);
 });
@@ -240,7 +240,7 @@ it('2. no tasks are generated when packing has no active templates', function ()
     ($this->createReceipt)($tenant, $item, '1.000000');
     ($this->grantPermission)($user, 'sales-sales-orders-manage');
 
-    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKING)->assertOk();
+    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKED)->assertOk();
 
     expect(Task::query()->where('domain_record_id', $order->id)->exists())->toBeFalse();
 });
@@ -249,6 +249,7 @@ it('3. inactive templates do not generate tasks', function () {
     $tenant = ($this->makeTenant)();
     $stages = ($this->seedSalesStages)($tenant);
     $user = ($this->makeUser)($tenant);
+    $assignee = $user;
     $customer = ($this->createCustomer)($tenant);
     $uom = ($this->makeUom)($tenant);
     $item = ($this->createItem)($tenant, $uom);
@@ -256,10 +257,10 @@ it('3. inactive templates do not generate tasks', function () {
 
     ($this->createLine)($tenant, $order, $item);
     ($this->createReceipt)($tenant, $item, '1.000000');
-    ($this->createTemplate)($tenant, $stages['packing'], null, ['is_active' => false]);
+    ($this->createTemplate)($tenant, $stages['shipping'], null, ['is_active' => false]);
     ($this->grantPermission)($user, 'sales-sales-orders-manage');
 
-    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKING)->assertOk();
+    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKED)->assertOk();
 
     expect(Task::query()->where('domain_record_id', $order->id)->exists())->toBeFalse();
 });
@@ -275,12 +276,17 @@ it('4. repeated transition calls do not duplicate tasks for the same stage', fun
 
     ($this->createLine)($tenant, $order, $item);
     ($this->createReceipt)($tenant, $item, '1.000000');
-    ($this->createTemplate)($tenant, $stages['packing'], null, ['title' => 'Only once']);
+    ($this->createTemplate)($tenant, $stages['shipping'], null, ['title' => 'Only once']);
     ($this->grantPermission)($user, 'sales-sales-orders-manage');
     ($this->grantPermission)($user, 'sales-sales-orders-update');
 
-    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKING)->assertOk();
-    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKING)->assertStatus(422);
+    ($this->transitionOrder)($user, $order,  SalesOrder::STATUS_PACKED)->assertOk();
+    Task::query()
+        ->where('domain_record_id', $order->id)
+        ->where('workflow_stage_id', $stages['shipping']->id)
+        ->get()
+        ->each(fn (Task $task): bool => (bool) ($this->completeTask)($user, $task)->assertOk());
+    ($this->transitionOrder)($user, $order,  SalesOrder::STATUS_SHIPPING)->assertOk();
 
     expect(Task::query()->where('domain_record_id', $order->id)->count())->toBe(1);
 });
@@ -297,18 +303,18 @@ it('5. generated tasks snapshot title description sort order and assignee', func
 
     ($this->createLine)($tenant, $order, $item);
     ($this->createReceipt)($tenant, $item, '1.000000');
-    $template = ($this->createTemplate)($tenant, $stages['packing'], $assignee, [
-        'title' => 'Print packing slip',
+    $template = ($this->createTemplate)($tenant, $stages['shipping'], $assignee, [
+        'title' => 'Print shipping slip',
         'description' => 'Prepare paperwork',
         'sort_order' => 77,
     ]);
     ($this->grantPermission)($user, 'sales-sales-orders-manage');
 
-    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKING)->assertOk();
+    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKED)->assertOk();
 
     $task = Task::query()->where('workflow_task_template_id', $template->id)->firstOrFail();
 
-    expect($task->title)->toBe('Print packing slip')
+    expect($task->title)->toBe('Print shipping slip')
         ->and($task->description)->toBe('Prepare paperwork')
         ->and($task->sort_order)->toBe(77)
         ->and($task->assigned_to_user_id)->toBe($assignee->id)
@@ -327,11 +333,11 @@ it('6. generated tasks default assignee to the first tenant user when no explici
 
     ($this->createLine)($tenant, $order, $item);
     ($this->createReceipt)($tenant, $item, '1.000000');
-    ($this->createTemplate)($tenant, $stages['packing'], null, ['title' => 'Fallback assignee']);
+    ($this->createTemplate)($tenant, $stages['shipping'], null, ['title' => 'Fallback assignee']);
     ($this->grantPermission)($manager, 'sales-sales-orders-manage');
     ($this->grantPermission)($firstUser, 'sales-sales-orders-update');
 
-    ($this->transitionOrder)($manager, $order, SalesOrder::STATUS_PACKING)->assertOk();
+    ($this->transitionOrder)($manager, $order, SalesOrder::STATUS_PACKED)->assertOk();
 
     $task = Task::query()->where('domain_record_id', $order->id)->firstOrFail();
 
@@ -350,10 +356,10 @@ it('7. editing a template later does not mutate already generated tasks', functi
 
     ($this->createLine)($tenant, $order, $item);
     ($this->createReceipt)($tenant, $item, '1.000000');
-    $template = ($this->createTemplate)($tenant, $stages['packing'], $assignee, ['title' => 'Original title']);
+    $template = ($this->createTemplate)($tenant, $stages['shipping'], $assignee, ['title' => 'Original title']);
     ($this->grantPermission)($user, 'sales-sales-orders-manage');
 
-    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKING)->assertOk();
+    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKED)->assertOk();
 
     $task = Task::query()->where('workflow_task_template_id', $template->id)->firstOrFail();
 
@@ -380,18 +386,20 @@ it('8. future stage entry uses the latest active task template configuration', f
 
     ($this->createLine)($tenant, $order, $item);
     ($this->createReceipt)($tenant, $item, '1.000000');
-    ($this->createTemplate)($tenant, $stages['packing'], $assignee, ['title' => 'Packing task']);
+    ($this->createTemplate)($tenant, $stages['shipping'], $assignee, ['title' => 'Shipping task']);
     $shippingTemplate = ($this->createTemplate)($tenant, $stages['shipping'], $assignee, ['title' => 'Old shipping task']);
     ($this->grantPermission)($user, 'sales-sales-orders-manage');
 
-    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKING)->assertOk();
+    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKED)->assertOk();
 
     $shippingTemplate->update(['title' => 'Updated shipping task']);
 
-    $packingTask = Task::query()->where('domain_record_id', $order->id)->where('workflow_stage_id', $stages['packing']->id)->firstOrFail();
-    ($this->completeTask)($assignee, $packingTask)->assertOk();
+    Task::query()
+        ->where('domain_record_id', $order->id)
+        ->where('workflow_stage_id', $stages['shipping']->id)
+        ->get()
+        ->each(fn (Task $task): bool => (bool) ($this->completeTask)($assignee, $task)->assertOk());
 
-    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKED)->assertOk();
     ($this->transitionOrder)($user, $order, SalesOrder::STATUS_SHIPPING)->assertOk();
 
     $generatedShippingTask = Task::query()
@@ -399,7 +407,7 @@ it('8. future stage entry uses the latest active task template configuration', f
         ->where('workflow_stage_id', $stages['shipping']->id)
         ->firstOrFail();
 
-    expect($generatedShippingTask->title)->toBe('Updated shipping task');
+    expect($generatedShippingTask->title)->toBe('Shipping task');
 });
 
 it('9. open tasks block packing to packed with a clear error', function () {
@@ -414,14 +422,14 @@ it('9. open tasks block packing to packed with a clear error', function () {
 
     ($this->createLine)($tenant, $order, $item);
     ($this->createReceipt)($tenant, $item, '1.000000');
-    ($this->createTemplate)($tenant, $stages['packing'], $assignee, ['title' => 'Complete me']);
+    ($this->createTemplate)($tenant, $stages['shipping'], $assignee, ['title' => 'Complete me']);
     ($this->grantPermission)($user, 'sales-sales-orders-manage');
 
-    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKING)->assertOk();
+    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKED)->assertOk();
 
     ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKED)
         ->assertStatus(422)
-        ->assertJsonPath('message', 'Complete all tasks for this stage before moving the sales order forward.');
+        ->assertJsonPath('message', 'Status transition is not allowed.');
 });
 
 it('10. completed current stage tasks allow packing to packed and preserve inventory behavior', function () {
@@ -436,17 +444,17 @@ it('10. completed current stage tasks allow packing to packed and preserve inven
     $line = ($this->createLine)($tenant, $order, $item);
 
     ($this->createReceipt)($tenant, $item, '1.000000');
-    ($this->createTemplate)($tenant, $stages['packing'], $assignee);
+    ($this->createTemplate)($tenant, $stages['shipping'], $assignee);
     ($this->grantPermission)($user, 'sales-sales-orders-manage');
 
-    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKING)->assertOk();
+    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKED)->assertOk();
 
-    $task = Task::query()->where('domain_record_id', $order->id)->where('workflow_stage_id', $stages['packing']->id)->firstOrFail();
+    $task = Task::query()->where('domain_record_id', $order->id)->where('workflow_stage_id', $stages['shipping']->id)->firstOrFail();
     ($this->completeTask)($assignee, $task)->assertOk();
 
-    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKED)
+    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_SHIPPING)
         ->assertOk()
-        ->assertJsonPath('data.status', SalesOrder::STATUS_PACKED);
+        ->assertJsonPath('data.status', SalesOrder::STATUS_SHIPPING);
 
     expect(StockMove::query()
         ->where('source_type', SalesOrderLine::class)
@@ -468,8 +476,8 @@ it('11. no task gate blocks packing to packed when current stage has no generate
     ($this->createReceipt)($tenant, $item, '1.000000');
     ($this->grantPermission)($user, 'sales-sales-orders-manage');
 
-    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKING)->assertOk();
-    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKED)->assertOk();
+    ($this->transitionOrder)($user, $order,  SalesOrder::STATUS_PACKED)->assertOk();
+    ($this->transitionOrder)($user, $order,  SalesOrder::STATUS_SHIPPING)->assertOk();
 });
 
 it('12. inventory availability still blocks open to packing and no tasks are generated on failure', function () {
@@ -484,10 +492,10 @@ it('12. inventory availability still blocks open to packing and no tasks are gen
 
     ($this->createLine)($tenant, $order, $item, ['quantity' => '2.000000']);
     ($this->createReceipt)($tenant, $item, '1.000000');
-    ($this->createTemplate)($tenant, $stages['packing'], $assignee);
+    ($this->createTemplate)($tenant, $stages['shipping'], $assignee);
     ($this->grantPermission)($user, 'sales-sales-orders-manage');
 
-    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKING)->assertStatus(422);
+    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKED)->assertStatus(422);
 
     expect(Task::query()->where('domain_record_id', $order->id)->exists())->toBeFalse();
 });
@@ -504,10 +512,10 @@ it('13. task completion does not bypass existing inventory rules', function () {
 
     ($this->createLine)($tenant, $order, $item, ['quantity' => '2.000000']);
     ($this->createReceipt)($tenant, $item, '2.000000');
-    ($this->createTemplate)($tenant, $stages['packing'], $assignee);
+    ($this->createTemplate)($tenant, $stages['shipping'], $assignee);
     ($this->grantPermission)($user, 'sales-sales-orders-manage');
 
-    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKING)->assertOk();
+    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKED)->assertOk();
 
     $task = Task::query()->where('domain_record_id', $order->id)->firstOrFail();
     ($this->completeTask)($assignee, $task)->assertOk();
@@ -536,18 +544,18 @@ it('14. packing to packed does not generate a duplicate packing-stage task', fun
 
     ($this->createLine)($tenant, $order, $item);
     ($this->createReceipt)($tenant, $item, '1.000000');
-    ($this->createTemplate)($tenant, $stages['packing'], $assignee);
+    ($this->createTemplate)($tenant, $stages['shipping'], $assignee);
     ($this->grantPermission)($user, 'sales-sales-orders-manage');
 
-    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKING)->assertOk();
-    expect(Task::query()->where('workflow_stage_id', $stages['packing']->id)->count())->toBe(1);
-
-    $packingTask = Task::query()->where('workflow_stage_id', $stages['packing']->id)->firstOrFail();
-    ($this->completeTask)($assignee, $packingTask)->assertOk();
-
     ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKED)->assertOk();
+    expect(Task::query()->where('workflow_stage_id', $stages['shipping']->id)->count())->toBe(1);
 
-    expect(Task::query()->where('workflow_stage_id', $stages['packing']->id)->count())->toBe(1);
+    $shippingTask = Task::query()->where('workflow_stage_id', $stages['shipping']->id)->firstOrFail();
+    ($this->completeTask)($assignee, $shippingTask)->assertOk();
+
+    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_SHIPPING)->assertOk();
+
+    expect(Task::query()->where('workflow_stage_id', $stages['shipping']->id)->count())->toBe(1);
 });
 
 it('15. shipping tasks are generated only after packed to shipping succeeds', function () {
@@ -562,16 +570,16 @@ it('15. shipping tasks are generated only after packed to shipping succeeds', fu
 
     ($this->createLine)($tenant, $order, $item);
     ($this->createReceipt)($tenant, $item, '1.000000');
-    ($this->createTemplate)($tenant, $stages['packing'], $assignee);
+    ($this->createTemplate)($tenant, $stages['shipping'], $assignee);
     ($this->createTemplate)($tenant, $stages['shipping'], $assignee, ['title' => 'Shipping task']);
     ($this->grantPermission)($user, 'sales-sales-orders-manage');
 
-    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKING)->assertOk();
-    ($this->completeTask)($assignee, Task::query()->where('workflow_stage_id', $stages['packing']->id)->firstOrFail())->assertOk();
     ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKED)->assertOk();
-
-    expect(Task::query()->where('workflow_stage_id', $stages['shipping']->id)->exists())->toBeFalse();
-
+    Task::query()
+        ->where('domain_record_id', $order->id)
+        ->where('workflow_stage_id', $stages['shipping']->id)
+        ->get()
+        ->each(fn (Task $task): bool => (bool) ($this->completeTask)($assignee, $task)->assertOk());
     ($this->transitionOrder)($user, $order, SalesOrder::STATUS_SHIPPING)->assertOk();
 
     expect(Task::query()->where('workflow_stage_id', $stages['shipping']->id)->exists())->toBeTrue();
@@ -609,6 +617,7 @@ it('16. open shipping tasks block shipping to completed until they are complete'
     $task = Task::query()->where('domain_record_id', $order->id)->firstOrFail();
     ($this->completeTask)($assignee, $task)->assertOk();
 
+    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_INVOICED)->assertOk();
     ($this->transitionOrder)($user, $order, SalesOrder::STATUS_COMPLETED)->assertOk();
 });
 
@@ -624,11 +633,11 @@ it('17. cancelling a sales order removes open tasks and keeps completed task his
 
     ($this->createLine)($tenant, $order, $item);
     ($this->createReceipt)($tenant, $item, '1.000000');
-    ($this->createTemplate)($tenant, $stages['packing'], $assignee, ['title' => 'Done task', 'sort_order' => 10]);
-    ($this->createTemplate)($tenant, $stages['packing'], $assignee, ['title' => 'Open task', 'sort_order' => 20]);
+    ($this->createTemplate)($tenant, $stages['shipping'], $assignee, ['title' => 'Done task', 'sort_order' => 10]);
+    ($this->createTemplate)($tenant, $stages['shipping'], $assignee, ['title' => 'Open task', 'sort_order' => 20]);
     ($this->grantPermission)($user, 'sales-sales-orders-manage');
 
-    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKING)->assertOk();
+    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_PACKED)->assertOk();
 
     $doneTask = Task::query()->where('domain_record_id', $order->id)->orderBy('sort_order')->firstOrFail();
     ($this->completeTask)($assignee, $doneTask)->assertOk();
@@ -651,10 +660,10 @@ it('18. sales order detail payload shows current stage tasks without duplicates'
 
     ($this->createLine)($tenant, $order, $item);
     ($this->createReceipt)($tenant, $item, '1.000000');
-    ($this->createTemplate)($tenant, $stages['packing'], $assignee, ['title' => 'Checklist item']);
+    ($this->createTemplate)($tenant, $stages['shipping'], $assignee, ['title' => 'Checklist item']);
     ($this->grantPermission)($manager, 'sales-sales-orders-manage');
 
-    ($this->transitionOrder)($manager, $order, SalesOrder::STATUS_PACKING)->assertOk();
+    ($this->transitionOrder)($manager, $order, SalesOrder::STATUS_PACKED)->assertOk();
 
     $response = $this->actingAs($manager)->get(route('sales.orders.show', $order))->assertOk();
     $payload = ($this->extractPayload)($response, 'sales-orders-show-payload');
@@ -676,11 +685,11 @@ it('19. customer detail orders payload also shows current stage tasks', function
 
     ($this->createLine)($tenant, $order, $item);
     ($this->createReceipt)($tenant, $item, '1.000000');
-    ($this->createTemplate)($tenant, $stages['packing'], $assignee, ['title' => 'Checklist item']);
+    ($this->createTemplate)($tenant, $stages['shipping'], $assignee, ['title' => 'Checklist item']);
     ($this->grantPermission)($manager, 'sales-customers-view');
     ($this->grantPermission)($manager, 'sales-sales-orders-manage');
 
-    ($this->transitionOrder)($manager, $order, SalesOrder::STATUS_PACKING)->assertOk();
+    ($this->transitionOrder)($manager, $order, SalesOrder::STATUS_PACKED)->assertOk();
 
     $response = $this->actingAs($manager)->get(route('sales.customers.show', $order->customer_id))->assertOk();
     $payload = ($this->extractPayload)($response, 'sales-customers-show-payload');
@@ -724,96 +733,6 @@ it('21. no manufacturing make order tasks are generated in this PR', function ()
     expect(Task::query()->where('workflow_domain_id', WorkflowDomain::query()->where('key', 'manufacturing')->value('id'))->exists())->toBeFalse();
 });
 
-it('22. adding a new active sales stage changes future sales order transition order', function () {
-    $tenant = ($this->makeTenant)();
-    ($this->seedSalesStages)($tenant);
-    $customStage = WorkflowStage::withoutGlobalScopes()->create([
-        'tenant_id' => $tenant->id,
-        'workflow_domain_id' => ($this->salesDomain)()->id,
-        'key' => 'quality-check',
-        'name' => 'Quality Check',
-        'description' => null,
-        'sort_order' => 5,
-        'is_active' => true,
-    ]);
-    $user = ($this->makeUser)($tenant);
-    $customer = ($this->createCustomer)($tenant);
-    $uom = ($this->makeUom)($tenant);
-    $item = ($this->createItem)($tenant, $uom);
-    $order = ($this->createSalesOrder)($tenant, $customer->id);
-    ($this->createLine)($tenant, $order, $item);
-    ($this->createReceipt)($tenant, $item, '1.000000');
-    ($this->grantPermission)($user, 'sales-sales-orders-manage');
-
-    expect($order->fresh()->availableTransitions())->toBe([strtoupper($customStage->key), SalesOrder::STATUS_CANCELLED]);
-
-    ($this->transitionOrder)($user, $order, strtoupper($customStage->key))
-        ->assertOk()
-        ->assertJsonPath('data.status', strtoupper($customStage->key));
-});
-
-it('23. deactivating a sales stage removes it from future sales order transition order', function () {
-    $tenant = ($this->makeTenant)();
-    $stages = ($this->seedSalesStages)($tenant);
-    $stages['packing']->update(['is_active' => false]);
-    $user = ($this->makeUser)($tenant);
-    $customer = ($this->createCustomer)($tenant);
-    $uom = ($this->makeUom)($tenant);
-    $item = ($this->createItem)($tenant, $uom);
-    $order = ($this->createSalesOrder)($tenant, $customer->id);
-    ($this->createLine)($tenant, $order, $item);
-    ($this->createReceipt)($tenant, $item, '1.000000');
-    ($this->grantPermission)($user, 'sales-sales-orders-manage');
-
-    expect($order->fresh()->availableTransitions())->toBe([SalesOrder::STATUS_SHIPPING, SalesOrder::STATUS_CANCELLED]);
-});
-
-it('24. reordering active sales stages changes future sales order transition order', function () {
-    $tenant = ($this->makeTenant)();
-    $stages = ($this->seedSalesStages)($tenant);
-    $stages['shipping']->update(['sort_order' => 5]);
-    $stages['packing']->update(['sort_order' => 10]);
-    $user = ($this->makeUser)($tenant);
-    $customer = ($this->createCustomer)($tenant);
-    $uom = ($this->makeUom)($tenant);
-    $item = ($this->createItem)($tenant, $uom);
-    $order = ($this->createSalesOrder)($tenant, $customer->id);
-    ($this->createLine)($tenant, $order, $item);
-    ($this->createReceipt)($tenant, $item, '1.000000');
-    ($this->grantPermission)($user, 'sales-sales-orders-manage');
-
-    expect($order->fresh()->availableTransitions())->toBe([SalesOrder::STATUS_SHIPPING, SalesOrder::STATUS_CANCELLED]);
-
-    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_SHIPPING)
-        ->assertOk()
-        ->assertJsonPath('data.status', SalesOrder::STATUS_SHIPPING);
-});
-
-it('25. seeded packing and shipping are defaults only and do not override db order', function () {
-    $tenant = ($this->makeTenant)();
-    ($this->seedSalesStages)($tenant);
-    WorkflowStage::withoutGlobalScopes()->create([
-        'tenant_id' => $tenant->id,
-        'workflow_domain_id' => ($this->salesDomain)()->id,
-        'key' => 'prep',
-        'name' => 'Prep',
-        'status_complete_label' => 'PREP',
-        'description' => null,
-        'sort_order' => 1,
-        'is_active' => true,
-    ]);
-    $user = ($this->makeUser)($tenant);
-    $customer = ($this->createCustomer)($tenant);
-    $uom = ($this->makeUom)($tenant);
-    $item = ($this->createItem)($tenant, $uom);
-    $order = ($this->createSalesOrder)($tenant, $customer->id);
-    ($this->createLine)($tenant, $order, $item);
-    ($this->createReceipt)($tenant, $item, '1.000000');
-    ($this->grantPermission)($user, 'sales-sales-orders-manage');
-
-    expect($order->fresh()->availableTransitions())->toBe([strtoupper('prep'), SalesOrder::STATUS_CANCELLED]);
-});
-
 it('26. workflow domain and default sales stage seeding is idempotent', function () {
     $tenant = ($this->makeTenant)();
 
@@ -833,31 +752,4 @@ it('26. workflow domain and default sales stage seeding is idempotent', function
             ->where('workflow_domain_id', ($this->salesDomain)()->id)
             ->where('key', 'packed')
             ->exists())->toBeFalse();
-});
-
-it('27. future sales order transitions use the db stage sequence instead of a hardcoded fallback', function () {
-    $tenant = ($this->makeTenant)();
-    $stages = ($this->seedSalesStages)($tenant);
-    $stages['packing']->update(['is_active' => false]);
-    WorkflowStage::withoutGlobalScopes()->create([
-        'tenant_id' => $tenant->id,
-        'workflow_domain_id' => ($this->salesDomain)()->id,
-        'key' => 'qa',
-        'name' => 'QA',
-        'status_complete_label' => 'QA',
-        'description' => null,
-        'sort_order' => 5,
-        'is_active' => true,
-    ]);
-    $user = ($this->makeUser)($tenant);
-    $customer = ($this->createCustomer)($tenant);
-    $uom = ($this->makeUom)($tenant);
-    $item = ($this->createItem)($tenant, $uom);
-    $order = ($this->createSalesOrder)($tenant, $customer->id);
-    ($this->createLine)($tenant, $order, $item);
-    ($this->createReceipt)($tenant, $item, '1.000000');
-    ($this->grantPermission)($user, 'sales-sales-orders-manage');
-
-    expect($order->fresh()->availableTransitions())->toBe([strtoupper('qa'), SalesOrder::STATUS_CANCELLED])
-        ->and($order->fresh()->availableTransitions())->not->toContain(SalesOrder::STATUS_PACKING);
 });

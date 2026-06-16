@@ -29,7 +29,8 @@ class SalesOrder extends Model
     public const STATUS_OPEN = 'OPEN';
     public const STATUS_PACKING = 'PACKING';
     public const STATUS_PACKED = 'PACKED';
-    public const STATUS_SHIPPING = 'SHIPPING';
+    public const STATUS_SHIPPING = 'SHIPPED';
+    public const STATUS_INVOICED = 'INVOICED';
     public const STATUS_COMPLETED = 'COMPLETED';
     public const STATUS_CANCELLED = 'CANCELLED';
 
@@ -101,6 +102,7 @@ class SalesOrder extends Model
             self::STATUS_PACKING,
             self::STATUS_PACKED,
             self::STATUS_SHIPPING,
+            self::STATUS_INVOICED,
             self::STATUS_COMPLETED,
             self::STATUS_CANCELLED,
         ];

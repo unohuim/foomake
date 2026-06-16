@@ -235,16 +235,16 @@ it('3. packed to shipped works', function () {
     ($this->createReceipt)($tenant, $item, '1.000000');
     ($this->grantPermission)($user, 'sales-sales-orders-manage');
 
-    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_SHIPPED)
+    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_SHIPPING)
         ->assertOk()
-        ->assertJsonPath('data.status', SalesOrder::STATUS_SHIPPED);
+        ->assertJsonPath('data.status', SalesOrder::STATUS_SHIPPING);
 });
 
 it('4. shipped to invoiced works', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
     $customer = ($this->createCustomer)($tenant);
-    $order = ($this->createSalesOrder)($tenant, $customer->id, ['status' => SalesOrder::STATUS_SHIPPED]);
+    $order = ($this->createSalesOrder)($tenant, $customer->id, ['status' => SalesOrder::STATUS_SHIPPING]);
     ($this->grantPermission)($user, 'sales-sales-orders-manage');
 
     ($this->transitionOrder)($user, $order, SalesOrder::STATUS_INVOICED)
@@ -276,7 +276,7 @@ it('6. open to shipping is rejected', function () {
     $order = ($this->createSalesOrder)($tenant, $customer->id, ['status' => SalesOrder::STATUS_OPEN]);
     ($this->grantPermission)($user, 'sales-sales-orders-manage');
 
-    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_SHIPPED)
+    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_SHIPPING)
         ->assertStatus(422)
         ->assertJsonPath('errors.status.0', 'Status transition is not allowed.');
 });
@@ -305,7 +305,7 @@ it('9. shipped to completed is rejected', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
     $customer = ($this->createCustomer)($tenant);
-    $order = ($this->createSalesOrder)($tenant, $customer->id, ['status' => SalesOrder::STATUS_SHIPPED]);
+    $order = ($this->createSalesOrder)($tenant, $customer->id, ['status' => SalesOrder::STATUS_SHIPPING]);
     ($this->grantPermission)($user, 'sales-sales-orders-manage');
 
     ($this->transitionOrder)($user, $order, SalesOrder::STATUS_COMPLETED)->assertStatus(422);
@@ -338,31 +338,31 @@ it('31. packed to shipped is manual with no extra payload requirements', functio
     $order = ($this->createSalesOrder)($tenant, $customer->id, ['status' => SalesOrder::STATUS_PACKED]);
     ($this->grantPermission)($user, 'sales-sales-orders-manage');
 
-    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_SHIPPED)
+    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_SHIPPING)
         ->assertOk()
-        ->assertJsonPath('data.status', SalesOrder::STATUS_SHIPPED);
+        ->assertJsonPath('data.status', SalesOrder::STATUS_SHIPPING);
 });
 
-it('32. shipped to completed is manual with no extra payload requirements', function () {
+it('32. shipped to invoiced is manual with no extra payload requirements', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
     $customer = ($this->createCustomer)($tenant);
-    $order = ($this->createSalesOrder)($tenant, $customer->id, ['status' => SalesOrder::STATUS_SHIPPED]);
+    $order = ($this->createSalesOrder)($tenant, $customer->id, ['status' => SalesOrder::STATUS_SHIPPING]);
     ($this->grantPermission)($user, 'sales-sales-orders-manage');
 
-    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_COMPLETED)
+    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_INVOICED)
         ->assertOk()
-        ->assertJsonPath('data.status', SalesOrder::STATUS_COMPLETED);
+        ->assertJsonPath('data.status', SalesOrder::STATUS_INVOICED);
 });
 
-it('35. shipping cannot be cancelled in this pr', function () {
+it('35. shipping can be cancelled', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
     $customer = ($this->createCustomer)($tenant);
-    $order = ($this->createSalesOrder)($tenant, $customer->id, ['status' => SalesOrder::STATUS_SHIPPED]);
+    $order = ($this->createSalesOrder)($tenant, $customer->id, ['status' => SalesOrder::STATUS_SHIPPING]);
     ($this->grantPermission)($user, 'sales-sales-orders-manage');
 
-    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_CANCELLED)->assertStatus(422);
+    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_CANCELLED)->assertOk();
 });
 
 it('36. open to cancelled works', function () {
@@ -381,7 +381,7 @@ it('37. packing to cancelled works', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
     $customer = ($this->createCustomer)($tenant);
-    $order = ($this->createSalesOrder)($tenant, $customer->id, ['status' => SalesOrder::STATUS_PACKING]);
+    $order = ($this->createSalesOrder)($tenant, $customer->id, ['status' => SalesOrder::STATUS_PACKED]);
     ($this->grantPermission)($user, 'sales-sales-orders-manage');
 
     ($this->transitionOrder)($user, $order, SalesOrder::STATUS_CANCELLED)
@@ -401,14 +401,16 @@ it('38. packed to cancelled works', function () {
         ->assertJsonPath('data.status', SalesOrder::STATUS_CANCELLED);
 });
 
-it('40. cancellation from shipping is blocked', function () {
+it('40. cancellation from shipping is allowed', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
     $customer = ($this->createCustomer)($tenant);
     $order = ($this->createSalesOrder)($tenant, $customer->id, ['status' => SalesOrder::STATUS_SHIPPING]);
     ($this->grantPermission)($user, 'sales-sales-orders-manage');
 
-    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_CANCELLED)->assertStatus(422);
+    ($this->transitionOrder)($user, $order, SalesOrder::STATUS_CANCELLED)
+        ->assertOk()
+        ->assertJsonPath('data.status', SalesOrder::STATUS_CANCELLED);
 });
 
 it('41. cancellation from completed is blocked', function () {
@@ -464,7 +466,7 @@ it('49. sales order view payload exposes only valid next lifecycle buttons', fun
     $customer = ($this->createCustomer)($tenant);
     $draft = ($this->createSalesOrder)($tenant, $customer->id, ['status' => SalesOrder::STATUS_DRAFT]);
     $open = ($this->createSalesOrder)($tenant, $customer->id, ['status' => SalesOrder::STATUS_OPEN]);
-    $packing = ($this->createSalesOrder)($tenant, $customer->id, ['status' => SalesOrder::STATUS_PACKING]);
+    $packing = ($this->createSalesOrder)($tenant, $customer->id, ['status' => SalesOrder::STATUS_PACKED]);
     $packed = ($this->createSalesOrder)($tenant, $customer->id, ['status' => SalesOrder::STATUS_PACKED]);
     $shipping = ($this->createSalesOrder)($tenant, $customer->id, ['status' => SalesOrder::STATUS_SHIPPING]);
     ($this->grantPermission)($user, 'sales-sales-orders-manage');
@@ -475,8 +477,8 @@ it('49. sales order view payload exposes only valid next lifecycle buttons', fun
 
     expect($orders[$draft->id]['available_status_transitions'] ?? null)->toBe([SalesOrder::STATUS_OPEN])
         ->and($orders[$open->id]['available_status_transitions'] ?? null)->toBe([SalesOrder::STATUS_PACKED, SalesOrder::STATUS_CANCELLED])
-        ->and($orders[$packing->id]['available_status_transitions'] ?? null)->toBe([SalesOrder::STATUS_PACKED, SalesOrder::STATUS_CANCELLED])
-        ->and($orders[$packed->id]['available_status_transitions'] ?? null)->toBe([SalesOrder::STATUS_SHIPPED, SalesOrder::STATUS_CANCELLED])
+        ->and($orders[$packing->id]['available_status_transitions'] ?? null)->toBe([SalesOrder::STATUS_SHIPPING, SalesOrder::STATUS_CANCELLED])
+        ->and($orders[$packed->id]['available_status_transitions'] ?? null)->toBe([SalesOrder::STATUS_SHIPPING, SalesOrder::STATUS_CANCELLED])
         ->and($orders[$shipping->id]['available_status_transitions'] ?? null)->toBe([SalesOrder::STATUS_INVOICED, SalesOrder::STATUS_CANCELLED]);
 });
 
@@ -498,14 +500,14 @@ it('51. packing shows move to packed', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
     $customer = ($this->createCustomer)($tenant);
-    $order = ($this->createSalesOrder)($tenant, $customer->id, ['status' => SalesOrder::STATUS_PACKING]);
+    $order = ($this->createSalesOrder)($tenant, $customer->id, ['status' => SalesOrder::STATUS_PACKED]);
     ($this->grantPermission)($user, 'sales-sales-orders-manage');
 
     $response = $this->actingAs($user)->get(route('sales.orders.index'))->assertOk();
     $payload = ($this->extractPayload)($response, 'sales-orders-index-payload');
     $orderPayload = collect($payload['orders'] ?? [])->firstWhere('id', $order->id);
 
-    expect($orderPayload['available_status_transitions'] ?? [])->toContain(SalesOrder::STATUS_PACKED);
+    expect($orderPayload['available_status_transitions'] ?? [])->toContain(SalesOrder::STATUS_SHIPPING);
 });
 
 it('52. packed shows move to shipped', function () {
@@ -519,14 +521,14 @@ it('52. packed shows move to shipped', function () {
     $payload = ($this->extractPayload)($response, 'sales-orders-index-payload');
     $orderPayload = collect($payload['orders'] ?? [])->firstWhere('id', $order->id);
 
-    expect($orderPayload['available_status_transitions'] ?? [])->toContain(SalesOrder::STATUS_SHIPPED);
+    expect($orderPayload['available_status_transitions'] ?? [])->toContain(SalesOrder::STATUS_SHIPPING);
 });
 
 it('53. shipped shows move to invoiced', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
     $customer = ($this->createCustomer)($tenant);
-    $order = ($this->createSalesOrder)($tenant, $customer->id, ['status' => SalesOrder::STATUS_SHIPPED]);
+    $order = ($this->createSalesOrder)($tenant, $customer->id, ['status' => SalesOrder::STATUS_SHIPPING]);
     ($this->grantPermission)($user, 'sales-sales-orders-manage');
 
     $response = $this->actingAs($user)->get(route('sales.orders.index'))->assertOk();
@@ -541,9 +543,9 @@ it('54. cancel action appears only where allowed', function () {
     $user = ($this->makeUser)($tenant);
     $customer = ($this->createCustomer)($tenant);
     $open = ($this->createSalesOrder)($tenant, $customer->id, ['status' => SalesOrder::STATUS_OPEN]);
-    $packing = ($this->createSalesOrder)($tenant, $customer->id, ['status' => SalesOrder::STATUS_PACKING]);
+    $packing = ($this->createSalesOrder)($tenant, $customer->id, ['status' => SalesOrder::STATUS_PACKED]);
     $packed = ($this->createSalesOrder)($tenant, $customer->id, ['status' => SalesOrder::STATUS_PACKED]);
-    $shipping = ($this->createSalesOrder)($tenant, $customer->id, ['status' => SalesOrder::STATUS_SHIPPED]);
+    $shipping = ($this->createSalesOrder)($tenant, $customer->id, ['status' => SalesOrder::STATUS_SHIPPING]);
     ($this->grantPermission)($user, 'sales-sales-orders-manage');
 
     $response = $this->actingAs($user)->get(route('sales.orders.index'))->assertOk();
@@ -553,7 +555,7 @@ it('54. cancel action appears only where allowed', function () {
     expect($orders[$open->id]['available_status_transitions'] ?? [])->toContain(SalesOrder::STATUS_CANCELLED)
         ->and($orders[$packing->id]['available_status_transitions'] ?? [])->toContain(SalesOrder::STATUS_CANCELLED)
         ->and($orders[$packed->id]['available_status_transitions'] ?? [])->toContain(SalesOrder::STATUS_CANCELLED)
-        ->and($orders[$shipping->id]['available_status_transitions'] ?? [])->not->toContain(SalesOrder::STATUS_CANCELLED);
+        ->and($orders[$shipping->id]['available_status_transitions'] ?? [])->toContain(SalesOrder::STATUS_CANCELLED);
 });
 
 it('55. blocked transitions return clear json user facing errors', function () {
