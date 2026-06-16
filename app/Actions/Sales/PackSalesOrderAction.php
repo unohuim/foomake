@@ -45,11 +45,9 @@ class PackSalesOrderAction
                 throw new DomainException('Status transition is not allowed.');
             }
 
-            $currentStage = null;
+            $currentStage = app(ResolveSalesWorkflowStageAction::class)->currentStageForStatus($lockedOrder);
 
-            if ($lockedOrder->status !== SalesOrder::STATUS_OPEN) {
-                $currentStage = app(ResolveSalesWorkflowStageAction::class)->currentStageForStatus($lockedOrder);
-
+            if ($currentStage !== null) {
                 $assertWorkflowStageTasksCompletedAction->execute(
                     (int) $lockedOrder->tenant_id,
                     (int) $lockedOrder->id,

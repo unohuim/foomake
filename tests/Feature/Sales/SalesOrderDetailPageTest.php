@@ -365,6 +365,22 @@ it('10a. draft detail page seeds shared sales workflow stages and uses the creat
         ->and($payload['workflow']['actions'][0]['description'] ?? null)->toBe('Create this sales order.');
 });
 
+it('10b. packing detail page exposes shipping as the next action label', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $customer = ($this->makeCustomer)($tenant);
+    $order = ($this->makeOrder)($tenant, $customer, null, ['status' => SalesOrder::STATUS_PACKING]);
+    ($this->grantPermissions)($user, ['sales-sales-orders-manage']);
+
+    $response = $this->actingAs($user)->get(route('sales.orders.show', $order))->assertOk();
+    $payload = ($this->extractPayload)($response, 'sales-orders-show-payload');
+
+    expect($payload['workflow']['actions'][0]['label'] ?? null)->toBe('Ship')
+        ->and($payload['workflow']['actions'][0]['description'] ?? null)->toBe('Ship this sales order.')
+        ->and($payload['workflow']['actions'][0]['endpoint'] ?? null)->toBe(route('sales.orders.status.update', $order))
+        ->and($payload['workflow']['actions'][0]['method'] ?? null)->toBe('PATCH');
+});
+
 it('11. index page does not show workflow ui after move', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);

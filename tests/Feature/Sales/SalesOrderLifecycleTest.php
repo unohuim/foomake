@@ -200,6 +200,7 @@ it('1. draft to open still works', function () {
         ->assertJsonPath('data.status', SalesOrder::STATUS_OPEN)
         ->assertJsonPath('workflow.currentLabel', 'CREATED')
         ->assertJsonPath('workflow.current_stage.name', 'Packing')
+        ->assertJsonPath('workflow.actions.0.label', 'Ship')
         ->assertJsonPath('data.workflowProgressSteps.0.label', 'DRAFT')
         ->assertJsonPath('data.workflowProgressSteps.1.label', 'Creating')
         ->assertJsonPath('data.workflowProgressSteps.1.status', 'completed')

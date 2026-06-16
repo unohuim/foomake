@@ -9,12 +9,12 @@ use DomainException;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Validate a sales order for packing and transition it to PACKING.
+ * Validate a sales order for the packing workflow and transition it to the packing stage.
  */
 class MoveSalesOrderToPackingAction
 {
     /**
-     * Validate availability and move the order from OPEN to PACKING.
+     * Validate availability and move the order into the packing workflow.
      *
      * @throws DomainException
      */
@@ -38,7 +38,7 @@ class MoveSalesOrderToPackingAction
                 ->firstOrFail();
 
             if (
-                $lockedOrder->status !== SalesOrder::STATUS_OPEN
+                ! in_array($lockedOrder->status, [SalesOrder::STATUS_DRAFT, SalesOrder::STATUS_OPEN], true)
                 || ! $lockedOrder->canTransitionTo($targetStatus)
             ) {
                 throw new DomainException('Status transition is not allowed.');

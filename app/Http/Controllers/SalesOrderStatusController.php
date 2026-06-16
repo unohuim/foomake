@@ -49,7 +49,7 @@ class SalesOrderStatusController extends Controller
         $resolver = app(ResolveSalesWorkflowStageAction::class);
         $currentStage = $resolver->currentStageForStatus($salesOrder);
         $targetStage = $resolver->activeStageForStatus($salesOrder, $targetStatus);
-        $packedStage = $resolver->stageForStatus($salesOrder, SalesOrder::STATUS_PACKED);
+        $createStageKey = $resolver->stageForStatus($salesOrder, SalesOrder::STATUS_OPEN)?->key ?? 'packing';
 
         if (! $salesOrder->canTransitionTo($targetStatus)) {
             return response()->json([
@@ -72,30 +72,20 @@ class SalesOrderStatusController extends Controller
                         $deleteOpenSalesOrderTasksAction,
                         $resolver
                     ),
-                $targetStatus === SalesOrder::STATUS_PACKED && $packedStage?->is_inventory_effect_stage => $packSalesOrderAction->execute(
+                $salesOrder->status === SalesOrder::STATUS_DRAFT => $moveToPackingAction->execute(
+                    $salesOrder,
+                    $buildPlanAction,
+                    $generateWorkflowStageTasksAction,
+                    $targetStatus,
+                    $createStageKey
+                ),
+                $currentStage?->is_inventory_effect_stage && $targetStage !== null => $packSalesOrderAction->execute(
                     $salesOrder,
                     $buildPlanAction,
                     $assertWorkflowStageTasksCompletedAction,
                     $generateWorkflowStageTasksAction,
                     $targetStatus,
-                    $targetStage?->key ?? $packedStage->key
-                ),
-                $targetStatus !== SalesOrder::STATUS_PACKING
-                    && $targetStage !== null
-                    && $targetStage->is_inventory_effect_stage => $packSalesOrderAction->execute(
-                    $salesOrder,
-                    $buildPlanAction,
-                    $assertWorkflowStageTasksCompletedAction,
-                    $generateWorkflowStageTasksAction,
-                    $targetStatus,
-                    $targetStage->key
-                ),
-                $salesOrder->status === SalesOrder::STATUS_OPEN && $targetStage !== null => $moveToPackingAction->execute(
-                    $salesOrder,
-                    $buildPlanAction,
-                    $generateWorkflowStageTasksAction,
-                    $targetStatus,
-                    $targetStage->key
+                    $targetStage?->key ?? $currentStage?->key ?? 'packing'
                 ),
                 default => $this->transitionWithoutInventory(
                     $salesOrder,

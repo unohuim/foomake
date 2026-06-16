@@ -109,9 +109,17 @@ export function mount(rootEl, payload) {
             return Array.isArray(order?.available_status_transitions) && order.available_status_transitions.length > 0;
         },
         performHeaderWorkflowAction(action = null) {
-            const status = typeof action === 'string'
-                ? action
-                : String(action?.type || action?.status || '').trim();
+            const actionToSubmit = typeof action === 'string'
+                ? { type: action }
+                : action || {};
+            const endpoint = String(actionToSubmit.endpoint || '').trim();
+
+            if (endpoint) {
+                this.submitWorkflowAction(actionToSubmit);
+                return;
+            }
+
+            const status = String(actionToSubmit.type || actionToSubmit.status || '').trim();
 
             if (!status) {
                 setWorkflowActionLoading(false);
@@ -119,6 +127,51 @@ export function mount(rootEl, payload) {
             }
 
             this.submitStatus(status);
+        },
+        applyWorkflowResponse(data) {
+            this.applyOrderLifecycleUpdate({
+                ...(data.data || {}),
+                workflow: data.workflow || null,
+                workflowProgressSteps: data.data?.workflowProgressSteps || null,
+            });
+        },
+        async submitWorkflowAction(action) {
+            if (!action?.endpoint) {
+                return this.submitStatus(String(action?.type || action?.status || '').trim());
+            }
+
+            try {
+                const response = await fetch(action.endpoint, {
+                    method: action.method || 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        Accept: 'application/json',
+                        'X-CSRF-TOKEN': this.csrfToken,
+                    },
+                    body: JSON.stringify({
+                        status: String(action.type || action.status || '').trim(),
+                    }),
+                });
+
+                if (response.status === 422) {
+                    const data = await response.json();
+                    this.showToast('error', data.message || 'Unable to update workflow.');
+                    return;
+                }
+
+                if (!response.ok) {
+                    this.showToast('error', 'Unable to update workflow.');
+                    return;
+                }
+
+                const data = await response.json();
+                this.applyWorkflowResponse(data);
+                this.showToast('success', 'Status updated.');
+            } catch (error) {
+                this.showToast('error', 'Unable to update workflow.');
+            } finally {
+                setWorkflowActionLoading(false);
+            }
         },
         formatLineMoney(amount, currencyCode) {
             return `${currencyCode} ${amount}`;
@@ -345,11 +398,7 @@ export function mount(rootEl, payload) {
                 }
 
                 const data = await response.json();
-                this.applyOrderLifecycleUpdate({
-                    ...(data.data || {}),
-                    workflow: data.workflow || null,
-                    workflowProgressSteps: data.data?.workflowProgressSteps || null,
-                });
+                this.applyWorkflowResponse(data);
                 this.showToast('success', 'Status updated.');
             } catch (error) {
                 this.showToast('error', 'Unable to update status.');
