@@ -709,6 +709,72 @@ Notes:
 - Default Sales inventory impact is assigned to the seeded `Packing` stage, which completes to `PACKED`; there is no separate default `Packed` workflow stage.
 - Sales, Purchasing, Manufacturing, and Inventory each enforce exactly one active inventory-effect stage when stage defaults or admin edits touch the domain.
 
+### Workflow Definition
+
+**Name:** Workflow Definition  
+**Type:** Runtime Read Model  
+**Location:**  
+- `docs/architecture/workflows/WorkflowDefinition.yaml`  
+- `app/Providers/AppServiceProvider.php`  
+- `app/Support/Workflows/WorkflowDefinition.php`  
+- `app/Support/Workflows/WorkflowDefinitionRepository.php`  
+
+**Purpose:**  
+Load one tenant/domain workflow configuration once per request for runtime stage lookup without mutating default workflow configuration.
+
+**When to Use:**  
+- Resolving current, previous, next, and target stages during workflow runtime  
+- Building workflow response payloads after a transition  
+
+**When Not to Use:**  
+- Seeding workflow defaults  
+- Repairing workflow configuration  
+
+**Public Interface:**  
+- `AppServiceProvider` scoped `WorkflowDefinitionRepository` binding  
+- `WorkflowDefinitionRepository::for()`  
+- `WorkflowDefinition::activeStages()`  
+- `WorkflowDefinition::stageByStatus()`  
+- `WorkflowDefinition::progressSteps()`  
+
+**Example Usage:**  
+```php
+$definition = $definitions->for($tenantId, 'sales');
+$nextStage = $definition->nextStageAfter($currentStage);
+```
+
+### Base Workflow
+
+**Name:** Base Workflow  
+**Type:** Template Method Service  
+**Location:**  
+- `docs/architecture/workflows/BaseWorkflow.yaml`  
+- `app/Contracts/Workflows/Workflowable.php`  
+- `app/Services/Workflows/BaseWorkflow.php`  
+- `app/Services/Workflows/SalesOrderWorkflow.php`  
+
+**Purpose:**  
+Provide one shared workflow transition algorithm while domain workflow services supply authorization, validation, and side effects.
+
+**When to Use:**  
+- Implementing workflow transitions for a domain  
+- Moving transition orchestration out of controllers  
+
+**When Not to Use:**  
+- Workflow admin CRUD  
+- Passive progress rendering without mutation  
+
+**Public Interface:**  
+- `Workflowable`  
+- `BaseWorkflow::transition()`  
+- `SalesOrderWorkflow::transition()`  
+- `SalesOrderWorkflow::responsePayload()`  
+
+**Example Usage:**  
+```php
+$salesOrder = $salesOrderWorkflow->transition($salesOrder, $targetStatus);
+```
+
 ### Workflow Stage Task Gating
 
 **Name:** Workflow Stage Task Gating  
@@ -1341,12 +1407,10 @@ legacy_csv,SO-1001,2026-05-14,Ada Buyer,Jane Buyer,Toronto,OPEN,processing,LINE-
 **Location:**  
   - `docs/architecture/sales/SalesOrderCompletionInventoryImpact.yaml`  
   - `app/Actions/Sales/BuildSalesOrderIssuePlanAction.php`  
-  - `app/Actions/Sales/MoveSalesOrderToPackingAction.php`  
-  - `app/Actions/Sales/PackSalesOrderAction.php`  
-  - `app/Actions/Sales/CancelPackedSalesOrderAction.php`  
   - `app/Http/Controllers/SalesOrderStatusController.php`  
   - `app/Models/SalesOrder.php`  
   - `app/Models/StockMove.php`  
+  - `app/Services/Workflows/SalesOrderWorkflow.php`  
 
 **Purpose:**  
 Document the inventory-ledger effects of Sales Order operational-stage progression, including availability checks, transactional issue posting, and packed-order reversals under the seeded default sales workflow.
@@ -1359,9 +1423,8 @@ Editable header/line mutations, shipping/completion transitions without inventor
 
 **Public Interface:**  
   - `BuildSalesOrderIssuePlanAction::execute()`  
-  - `MoveSalesOrderToPackingAction::execute()`  
-  - `PackSalesOrderAction::execute()`  
-  - `CancelPackedSalesOrderAction::execute()`  
+  - `SalesOrderWorkflow::transition()`  
+  - `SalesOrderWorkflow::responsePayload()`  
   - `SalesOrder::STATUS_OPEN`  
   - `SalesOrder::STATUS_PACKING`  
   - `SalesOrder::STATUS_PACKED`  

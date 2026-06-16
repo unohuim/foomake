@@ -2,13 +2,11 @@ name: Sales Order Packing Inventory Impact
 type: Domain Rule
 location:
   - app/Actions/Sales/BuildSalesOrderIssuePlanAction.php
-  - app/Actions/Sales/MoveSalesOrderToPackingAction.php
-  - app/Actions/Sales/PackSalesOrderAction.php
-  - app/Actions/Sales/CancelPackedSalesOrderAction.php
   - app/Http/Controllers/SalesOrderStatusController.php
   - app/Models/SalesOrder.php
   - app/Models/SalesOrderLine.php
   - app/Models/StockMove.php
+  - app/Services/Workflows/SalesOrderWorkflow.php
   - resources/views/sales/orders/show.blade.php
 purpose: Document the inventory-ledger effects of the sales inventory-effect workflow stage and the safeguards around availability checks, issue posting, and reversal moves.
 when_to_use:
@@ -50,9 +48,8 @@ rules:
   - Stockable Material detail net-quantity stats treat non-terminal non-cancelled sales orders as open demand and subtract matching line quantities from net quantity.
 public_interface:
   - BuildSalesOrderIssuePlanAction::execute()
-  - MoveSalesOrderToPackingAction::execute()
-  - PackSalesOrderAction::execute()
-  - CancelPackedSalesOrderAction::execute()
+  - SalesOrderWorkflow::transition()
+  - SalesOrderWorkflow::responsePayload()
   - SalesOrder::STATUS_OPEN
   - SalesOrder::STATUS_PACKING
   - SalesOrder::STATUS_PACKED
@@ -60,4 +57,4 @@ public_interface:
   - SalesOrder::STATUS_COMPLETED
   - sales.orders.status.update
 example_usage: |
-  $packedOrder = $packSalesOrderAction->execute($salesOrder, $buildSalesOrderIssuePlanAction);
+  $packedOrder = $salesOrderWorkflow->transition($salesOrder, SalesOrder::STATUS_PACKED);

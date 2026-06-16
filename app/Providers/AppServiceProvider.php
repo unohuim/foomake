@@ -7,6 +7,7 @@ use App\Models\Tenant;
 use App\Observers\TenantObserver;
 use App\Services\Purchasing\DefaultSupplierDeleteGuard;
 use App\Services\Purchasing\SupplierDeleteGuard;
+use App\Support\Workflows\WorkflowDefinitionRepository;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\ServiceProvider;
@@ -19,6 +20,7 @@ class AppServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->app->bind(SupplierDeleteGuard::class, DefaultSupplierDeleteGuard::class);
+        $this->app->scoped(WorkflowDefinitionRepository::class);
     }
 
     /**

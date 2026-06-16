@@ -3,7 +3,6 @@
 namespace App\Actions\Workflows;
 
 use App\Models\SalesOrder;
-use App\Models\Tenant;
 use App\Models\WorkflowDomain;
 use App\Models\WorkflowStage;
 use DomainException;
@@ -22,8 +21,6 @@ class ResolveSalesWorkflowStageAction
      */
     public function salesDomainId(): int
     {
-        app(EnsureWorkflowDomainsSeededAction::class)->execute();
-
         $salesDomainId = WorkflowDomain::query()
             ->where('key', 'sales')
             ->value('id');
@@ -42,8 +39,6 @@ class ResolveSalesWorkflowStageAction
      */
     public function execute(SalesOrder $salesOrder, string $stageKey): WorkflowStage
     {
-        $this->seedWorkflowStages($salesOrder);
-
         $stage = WorkflowStage::withoutGlobalScopes()
             ->where('tenant_id', $salesOrder->tenant_id)
             ->where('workflow_domain_id', $this->salesDomainId())
@@ -62,8 +57,6 @@ class ResolveSalesWorkflowStageAction
      */
     public function currentStageForStatus(SalesOrder $salesOrder): ?WorkflowStage
     {
-        $this->seedWorkflowStages($salesOrder);
-
         if ($salesOrder->status === SalesOrder::STATUS_DRAFT) {
             return null;
         }
@@ -89,8 +82,6 @@ class ResolveSalesWorkflowStageAction
      */
     public function activeStageForStatus(SalesOrder $salesOrder, string $status): ?WorkflowStage
     {
-        $this->seedWorkflowStages($salesOrder);
-
         if (in_array($status, [
             SalesOrder::STATUS_OPEN,
             SalesOrder::STATUS_PACKING,
@@ -112,8 +103,6 @@ class ResolveSalesWorkflowStageAction
      */
     public function stageForStatus(SalesOrder $salesOrder, string $status): ?WorkflowStage
     {
-        $this->seedWorkflowStages($salesOrder);
-
         if ($status === SalesOrder::STATUS_OPEN) {
             return $this->workflowStageForStatusValue($salesOrder, SalesOrder::STATUS_OPEN);
         }
@@ -132,8 +121,6 @@ class ResolveSalesWorkflowStageAction
      */
     public function activeStages(SalesOrder $salesOrder): Collection
     {
-        $this->seedWorkflowStages($salesOrder);
-
         return WorkflowStage::withoutGlobalScopes()
             ->where('tenant_id', $salesOrder->tenant_id)
             ->where('workflow_domain_id', $this->salesDomainId())
@@ -148,8 +135,6 @@ class ResolveSalesWorkflowStageAction
      */
     public function firstActiveStage(SalesOrder $salesOrder): ?WorkflowStage
     {
-        $this->seedWorkflowStages($salesOrder);
-
         return $this->activeStages($salesOrder)->first();
     }
 
@@ -158,8 +143,6 @@ class ResolveSalesWorkflowStageAction
      */
     public function nextActiveStage(SalesOrder $salesOrder): ?WorkflowStage
     {
-        $this->seedWorkflowStages($salesOrder);
-
         $activeStages = $this->activeStages($salesOrder);
 
         $currentStage = $this->currentStageForStatus($salesOrder);
@@ -182,8 +165,6 @@ class ResolveSalesWorkflowStageAction
      */
     public function previousActiveStage(SalesOrder $salesOrder): ?WorkflowStage
     {
-        $this->seedWorkflowStages($salesOrder);
-
         $activeStages = $this->activeStages($salesOrder);
         $currentStage = $this->currentStageForStatus($salesOrder);
 
@@ -289,17 +270,5 @@ class ResolveSalesWorkflowStageAction
         }
 
         return (int) $candidate->sort_order < (int) $current->sort_order;
-    }
-
-    /**
-     * Ensure the tenant has the shared default workflow stages for sales.
-     */
-    private function seedWorkflowStages(SalesOrder $salesOrder): void
-    {
-        $tenant = Tenant::query()->find($salesOrder->tenant_id);
-
-        if ($tenant) {
-            app(SeedDefaultWorkflowStagesForTenantAction::class)->execute($tenant);
-        }
     }
 }

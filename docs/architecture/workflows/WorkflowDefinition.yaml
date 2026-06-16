@@ -1,0 +1,36 @@
+name: Workflow Definition
+type: Runtime Read Model
+location:
+  - app/Providers/AppServiceProvider.php
+  - app/Support/Workflows/WorkflowDefinition.php
+  - app/Support/Workflows/WorkflowDefinitionRepository.php
+purpose: Load one tenant and domain workflow configuration once per request for runtime stage lookup without mutating default workflow configuration.
+when_to_use:
+  - Resolving current, previous, next, and target workflow stages during a domain workflow transition
+  - Building workflow response payloads after a transition
+  - Avoiding repeated workflow-stage queries inside one request
+when_not_to_use:
+  - Seeding default workflow stages
+  - Repairing missing workflow configuration
+  - Replacing workflow admin validation
+rules:
+  - Runtime workflow definition loading must be read-only.
+  - Runtime workflow definition loading must not call tenant default-stage seeding.
+  - Runtime workflow definition loading must not call updateOrCreate for workflow stages or workflow domains.
+  - A loaded definition belongs to exactly one tenant and one workflow domain.
+  - Active workflow stages must be loaded in runtime order by sort_order and id.
+  - Current, previous, next, key, and completed-status label lookups must use the loaded definition instead of repeating database queries.
+  - Request-level in-memory caching is the default cache boundary.
+  - Cross-request cache may be added only with explicit invalidation when workflow admin changes stage configuration.
+public_interface:
+  - AppServiceProvider scoped WorkflowDefinitionRepository binding
+  - WorkflowDefinitionRepository::for()
+  - WorkflowDefinition::activeStages()
+  - WorkflowDefinition::firstStage()
+  - WorkflowDefinition::nextStageAfter()
+  - WorkflowDefinition::previousStageBefore()
+  - WorkflowDefinition::stageByStatus()
+  - WorkflowDefinition::progressSteps()
+example_usage: |
+  $definition = $definitions->for($tenantId, 'sales');
+  $nextStage = $definition->nextStageAfter($currentStage);

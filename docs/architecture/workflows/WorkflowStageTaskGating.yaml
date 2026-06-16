@@ -3,10 +3,9 @@ type: Domain Rule
 location:
   - app/Actions/Workflows/AssertWorkflowStageTasksCompletedAction.php
   - app/Actions/Workflows/GenerateWorkflowStageTasksAction.php
-  - app/Actions/Sales/MoveSalesOrderToPackingAction.php
-  - app/Actions/Sales/PackSalesOrderAction.php
   - app/Actions/Inventory/AdvanceInventoryCountWorkflowStageAction.php
   - app/Actions/Manufacturing/MoveMakeOrderWorkflowStageAction.php
+  - app/Services/Workflows/SalesOrderWorkflow.php
 purpose: Define the shared rule that workflow-stage entry creates configured tasks and leaving the current stage is blocked until required tasks are complete.
 when_to_use:
   - Sales-order operational stage transitions

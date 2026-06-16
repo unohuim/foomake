@@ -2,8 +2,10 @@
 
 namespace App\Models;
 
+use App\Contracts\Workflows\Workflowable;
 use App\Models\Concerns\HasTenantScope;
 use App\Models\Concerns\HasNotes;
+use App\Services\Workflows\SalesOrderWorkflow;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -19,7 +21,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property string|null $order_date
  * @property string $status
  */
-class SalesOrder extends Model
+class SalesOrder extends Model implements Workflowable
 {
     use HasFactory;
     use HasNotes;
@@ -165,27 +167,46 @@ class SalesOrder extends Model
      */
     public function availableTransitions(): array
     {
-        if ($this->status === self::STATUS_DRAFT) {
-            return [self::STATUS_OPEN];
-        }
+        return app(SalesOrderWorkflow::class)->availableTransitions($this);
+    }
 
-        if (in_array($this->status, self::terminalStatuses(), true)) {
-            return [];
-        }
+    /**
+     * Return the workflow domain key for this record.
+     */
+    public function workflowDomainKey(): string
+    {
+        return 'sales';
+    }
 
-        $resolver = app(\App\Actions\Workflows\ResolveSalesWorkflowStageAction::class);
-        $currentStage = $resolver->currentStageForStatus($this);
+    /**
+     * Return the record id used by generated workflow tasks.
+     */
+    public function workflowRecordId(): int
+    {
+        return (int) $this->id;
+    }
 
-        if (! $currentStage) {
-            return [self::STATUS_COMPLETED, self::STATUS_CANCELLED];
-        }
+    /**
+     * Return the tenant id that owns this workflow record.
+     */
+    public function workflowTenantId(): int
+    {
+        return (int) $this->tenant_id;
+    }
 
-        $nextStatus = $currentStage->status_complete_label ? strtoupper(trim((string) $currentStage->status_complete_label)) : '';
+    /**
+     * Return the persisted workflow status value.
+     */
+    public function workflowStatus(): string
+    {
+        return (string) $this->status;
+    }
 
-        if ($nextStatus !== '') {
-            return [$nextStatus, self::STATUS_CANCELLED];
-        }
-
-        return [self::STATUS_COMPLETED, self::STATUS_CANCELLED];
+    /**
+     * Set the persisted workflow status value.
+     */
+    public function setWorkflowStatus(string $status): void
+    {
+        $this->forceFill(['status' => $status]);
     }
 }

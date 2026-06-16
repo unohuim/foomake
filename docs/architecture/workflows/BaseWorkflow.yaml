@@ -1,0 +1,34 @@
+name: Base Workflow
+type: Template Method Service
+location:
+  - app/Contracts/Workflows/Workflowable.php
+  - app/Services/Workflows/BaseWorkflow.php
+  - app/Services/Workflows/SalesOrderWorkflow.php
+purpose: Provide one shared workflow transition algorithm while allowing domain workflow services to supply domain-specific authorization, validation, and side effects.
+when_to_use:
+  - Implementing runtime workflow transition behavior for a workflow-enabled domain
+  - Moving shared transition steps out of controllers
+  - Adding domain-specific workflow behavior through hooks rather than duplicating the full transition flow
+when_not_to_use:
+  - Passive workflow progress rendering without mutation
+  - Workflow admin configuration CRUD
+  - One-off domain actions that are not workflow transitions
+rules:
+  - BaseWorkflow::transition owns the shared transition algorithm.
+  - Domain workflow services should customize hooks instead of replacing the full transition algorithm.
+  - Controllers should delegate transition orchestration to the domain workflow service.
+  - Workflowable records expose domain key, tenant id, record id, and persisted workflow status.
+  - Base workflow runtime must load a WorkflowDefinition once and pass it through the transition.
+  - Domain services own permission slugs and domain-specific side effects.
+  - Task gating and task generation remain shared workflow behavior.
+  - Inventory impact remains domain-specific behavior triggered through domain hooks.
+  - Runtime workflow services must not seed default workflow stages.
+public_interface:
+  - Workflowable
+  - BaseWorkflow::transition()
+  - SalesOrderWorkflow::transition()
+  - SalesOrderWorkflow::responsePayload()
+  - SalesOrderWorkflow::availableTransitions()
+example_usage: |
+  $salesOrder = $salesOrderWorkflow->transition($salesOrder, $targetStatus);
+  return response()->json($salesOrderWorkflow->responsePayload($salesOrder));
