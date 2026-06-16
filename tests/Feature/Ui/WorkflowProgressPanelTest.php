@@ -434,9 +434,9 @@ it('19a. Purchase Order detail refreshes workflow progress from ajax status resp
         ->and(($this->purchaseOrderShowPageSource)())->not->toContain('workflowProgressSteps: workflowProgressSteps || []')
         ->and(($this->purchaseOrderShowPageSource)())->not->toContain('workflowProgressSteps: responseData.workflowProgressSteps || []')
         ->and(($this->purchaseOrderStatusControllerSource)())->toContain('workflowProgressSteps')
-        ->and(($this->purchaseOrderStatusControllerSource)())->toContain('BuildWorkflowProgressStepsAction')
+        ->and(($this->purchaseOrderStatusControllerSource)())->toContain('PurchaseOrderWorkflow')
         ->and(($this->purchaseOrderWorkflowControllerSource)())->toContain('workflowProgressSteps')
-        ->and(($this->purchaseOrderWorkflowControllerSource)())->toContain('BuildWorkflowProgressStepsAction')
+        ->and(($this->purchaseOrderWorkflowControllerSource)())->toContain('PurchaseOrderWorkflow')
         ->and(($this->workflowActionButtonSource)())->toContain('workflowUpdatedDetail.workflowProgressSteps = workflowProgressSteps');
 });
 
@@ -463,7 +463,7 @@ it('22. detail controllers build workflow progress after normal page authorizati
         ->and(($this->makeOrderControllerSource)())->toContain('abort_unless')
         ->and(($this->makeOrderControllerSource)())->toContain('BuildWorkflowProgressStepsAction')
         ->and(($this->purchaseOrderControllerSource)())->toContain('abort_unless')
-        ->and(($this->purchaseOrderControllerSource)())->toContain('BuildWorkflowProgressStepsAction')
+        ->and(($this->purchaseOrderControllerSource)())->toContain('PurchaseOrderWorkflow')
         ->and(($this->salesOrderControllerSource)())->toContain('abort_unless')
         ->and(($this->salesOrderControllerSource)())->toContain('BuildWorkflowProgressStepsAction');
 });
@@ -471,7 +471,7 @@ it('22. detail controllers build workflow progress after normal page authorizati
 it('22a. detail controllers pass completed workflow state into the shared progress builder', function (): void {
     expect(($this->inventoryCountControllerSource)())->toContain('$count->posted_at !== null')
         ->and(($this->makeOrderControllerSource)())->toContain('$makeOrder->status === MakeOrder::STATUS_MADE')
-        ->and(($this->purchaseOrderControllerSource)())->toContain('$purchaseOrder->workflowStatus() === PurchaseOrder::STATUS_COMPLETED')
+        ->and(($this->purchaseOrderControllerSource)())->toContain('$purchaseOrderWorkflow->progressSteps($purchaseOrder)')
         ->and(($this->salesOrderControllerSource)())->toContain('in_array($salesOrder->status, [')
         ->and(($this->salesOrderControllerSource)())->toContain('SalesOrder::STATUS_COMPLETED')
         ->and(($this->salesOrderControllerSource)())->toContain('SalesOrder::STATUS_CANCELLED');

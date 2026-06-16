@@ -28,7 +28,7 @@ abstract class BaseWorkflow
         $this->assertTransitionAllowed($record, $definition, $target);
 
         return DB::transaction(function () use ($record, $definition, $target): Workflowable {
-            $lockedRecord = $this->lockRecord($record);
+            $lockedRecord = $this->lockRecord($record, $definition);
             $this->assertTransitionAllowed($lockedRecord, $definition, $target);
             $this->assertCurrentStageTasksComplete($lockedRecord, $definition, $target);
             $this->beforePersist($lockedRecord, $definition, $target);
@@ -48,7 +48,7 @@ abstract class BaseWorkflow
     /**
      * Lock and return the workflow record.
      */
-    abstract protected function lockRecord(Workflowable $record): Workflowable;
+    abstract protected function lockRecord(Workflowable $record, WorkflowDefinition $definition): Workflowable;
 
     /**
      * Validate target movement.

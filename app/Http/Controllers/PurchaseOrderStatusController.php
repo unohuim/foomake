@@ -2,14 +2,9 @@
 
 namespace App\Http\Controllers;
 
-use App\Actions\Workflows\BuildWorkflowProgressStepsAction;
-use App\Actions\Workflows\SeedDefaultWorkflowStagesForTenantAction;
 use App\Models\PurchaseOrder;
-use App\Models\Tenant;
-use App\Models\WorkflowDomain;
-use App\Models\WorkflowStage;
 use App\Services\Purchasing\PurchaseOrderLifecycleService;
-use App\Services\Workflows\WorkflowTransitionService;
+use App\Services\Workflows\PurchaseOrderWorkflow;
 use App\Support\Workflows\WorkflowAssignmentPermissions;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -97,7 +92,7 @@ class PurchaseOrderStatusController extends Controller
             $purchaseOrder->forceFill(['status' => $targetStatus]);
 
             if (Schema::hasColumn('purchase_orders', 'current_workflow_stage_id')) {
-                $workflowFields = $this->workflowFieldsForStatus($purchaseOrder, $targetStatus);
+                $workflowFields = app(PurchaseOrderWorkflow::class)->fieldsForStatus($purchaseOrder, $targetStatus);
 
                 if ($workflowFields !== []) {
                     $purchaseOrder->forceFill($workflowFields);
@@ -148,7 +143,10 @@ class PurchaseOrderStatusController extends Controller
             $purchaseOrder->forceFill(array_merge([
                 'back_ordered_at' => Carbon::now(),
                 'back_ordered_by_user_id' => $request->user()?->id,
-            ], $this->workflowFieldsForStatus($purchaseOrder, PurchaseOrder::STATUS_CREATED)))->save();
+            ], app(PurchaseOrderWorkflow::class)->fieldsForStatus(
+                $purchaseOrder,
+                PurchaseOrder::STATUS_CREATED
+            )))->save();
         }
 
         $purchaseOrder->refresh();
@@ -159,81 +157,14 @@ class PurchaseOrderStatusController extends Controller
     }
 
     /**
-     * Build temporary workflow mirror fields for legacy status endpoint transitions.
-     *
-     * @return array<string, int|null>
-     */
-    private function workflowFieldsForStatus(PurchaseOrder $purchaseOrder, string $targetStatus): array
-    {
-        $tenant = Tenant::query()->find($purchaseOrder->tenant_id);
-
-        if ($tenant) {
-            app(SeedDefaultWorkflowStagesForTenantAction::class)->execute($tenant);
-        }
-
-        $stages = WorkflowStage::withoutGlobalScopes()
-            ->where('tenant_id', $purchaseOrder->tenant_id)
-            ->where('workflow_domain_id', $this->purchasingWorkflowDomainId() ?: 0)
-            ->whereIn('key', ['creating', 'receiving', 'completing'])
-            ->get()
-            ->keyBy('key');
-
-        $activeStages = WorkflowStage::withoutGlobalScopes()
-            ->where('tenant_id', $purchaseOrder->tenant_id)
-            ->where('workflow_domain_id', $this->purchasingWorkflowDomainId() ?: 0)
-            ->where('is_active', true)
-            ->orderBy('sort_order')
-            ->orderBy('id')
-            ->get()
-            ->values();
-
-        $creatingStage = $stages->get('creating') ?? $activeStages->first();
-        $inventoryEffectStage = $activeStages->firstWhere('is_inventory_effect_stage', true)
-            ?? $stages->get('receiving')
-            ?? $activeStages->get(1);
-        $completingStage = $stages->get('completing') ?? $activeStages->last();
-
-        return match ($targetStatus) {
-            PurchaseOrder::STATUS_CREATED => [
-                'last_completed_workflow_stage_id' => $creatingStage?->id,
-                'current_workflow_stage_id' => $inventoryEffectStage?->id,
-            ],
-            PurchaseOrder::STATUS_PARTIALLY_RECEIVED => [
-                'last_completed_workflow_stage_id' => $creatingStage?->id,
-                'current_workflow_stage_id' => $inventoryEffectStage?->id,
-            ],
-            PurchaseOrder::STATUS_RECEIVED => [
-                'last_completed_workflow_stage_id' => $inventoryEffectStage?->id,
-                'current_workflow_stage_id' => $completingStage?->id,
-            ],
-            PurchaseOrder::STATUS_COMPLETED => [
-                'last_completed_workflow_stage_id' => $completingStage?->id,
-                'current_workflow_stage_id' => null,
-            ],
-            default => [],
-        };
-    }
-
-    /**
-     * Resolve the purchasing workflow domain id.
-     */
-    private function purchasingWorkflowDomainId(): ?int
-    {
-        $domainId = WorkflowDomain::query()
-            ->where('key', 'purchasing')
-            ->value('id');
-
-        return $domainId ? (int) $domainId : null;
-    }
-
-    /**
      * Build the status response payload used by the PO detail header.
      *
      * @return array<string, bool|int|string|array<int|string, mixed>|null>
      */
     private function statusPayload(PurchaseOrder $purchaseOrder, Request $request): array
     {
-        $workflowPayload = app(WorkflowTransitionService::class)->purchaseOrderWorkflowPayload(
+        $purchaseOrderWorkflow = app(PurchaseOrderWorkflow::class);
+        $workflowPayload = $purchaseOrderWorkflow->responsePayload(
             $purchaseOrder,
             $request->user()
         );
@@ -247,18 +178,7 @@ class PurchaseOrderStatusController extends Controller
             'has_receipts' => $this->hasReceipts($purchaseOrder),
             'can_receive' => $this->canReceive($purchaseOrder),
             'workflow' => $workflowPayload,
-            'workflowProgressSteps' => app(BuildWorkflowProgressStepsAction::class)->execute(
-                (int) $request->user()->tenant_id,
-                'purchasing',
-                isset($workflowPayload['currentStage']['id']) ? (int) $workflowPayload['currentStage']['id'] : null,
-                null,
-                $purchaseOrder->last_completed_workflow_stage_id === null
-                    ? null
-                    : (int) $purchaseOrder->last_completed_workflow_stage_id,
-                ! isset($workflowPayload['currentStage']['id'])
-                    && $purchaseOrder->last_completed_workflow_stage_id !== null
-                    && $purchaseOrder->workflowStatus() === PurchaseOrder::STATUS_COMPLETED
-            ),
+            'workflowProgressSteps' => $purchaseOrderWorkflow->progressSteps($purchaseOrder),
         ];
 
         if (Schema::hasColumn('purchase_orders', 'current_workflow_stage_id')) {

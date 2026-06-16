@@ -751,6 +751,7 @@ $nextStage = $definition->nextStageAfter($currentStage);
 - `docs/architecture/workflows/BaseWorkflow.yaml`  
 - `app/Contracts/Workflows/Workflowable.php`  
 - `app/Services/Workflows/BaseWorkflow.php`  
+- `app/Services/Workflows/PurchaseOrderWorkflow.php`  
 - `app/Services/Workflows/SalesOrderWorkflow.php`  
 
 **Purpose:**  
@@ -767,6 +768,9 @@ Provide one shared workflow transition algorithm while domain workflow services 
 **Public Interface:**  
 - `Workflowable`  
 - `BaseWorkflow::transition()`  
+- `PurchaseOrderWorkflow::completeStage()`  
+- `PurchaseOrderWorkflow::cancel()`  
+- `PurchaseOrderWorkflow::responsePayload()`  
 - `SalesOrderWorkflow::transition()`  
 - `SalesOrderWorkflow::responsePayload()`  
 
@@ -2905,7 +2909,14 @@ $section['fields'] = $formConfig->fieldsForSupplier($request, $supplier);
 
 **Name:** Purchase Order Lifecycle
 **Type:** Domain Rule
-**Location:** `docs/architecture/purchasing/PurchaseOrderLifecycle.yaml`
+**Location:**
+- `docs/architecture/purchasing/PurchaseOrderLifecycle.yaml`
+- `app/Models/PurchaseOrder.php`
+- `app/Http/Controllers/PurchaseOrderController.php`
+- `app/Http/Controllers/PurchaseOrderStatusController.php`
+- `app/Http/Controllers/PurchaseOrderWorkflowController.php`
+- `app/Services/Purchasing/PurchaseOrderLifecycleService.php`
+- `app/Services/Workflows/PurchaseOrderWorkflow.php`
 
 **Purpose:**
 Track Purchase Order lifecycle through the shared workflow foundation while mirroring the legacy status column during migration.
@@ -2918,7 +2929,8 @@ Track Purchase Order lifecycle through the shared workflow foundation while mirr
 - The PO Receive action opens one PO-level multi-line receipt slide-over and submits one receipt event.
 - Receipt events with remaining receivable balance persist `PARTIALLY_RECEIVED`; additional partial receipts keep that status until all receivable balances are received or short-closed.
 - Purchasing workflow-stage `status_complete_label` values must come from `WorkflowStatusOptions`; `purchase_orders.status` remains constrained to persisted PO statuses, while the workflow-stage dropdown may also expose `OPEN` for workflow-derived stage configuration. Default seeded stages keep one normal Receiving stage and do not create a duplicate `PARTIALLY_RECEIVED` receiving stage.
-- Completing the configured inventory-impacting PO stage applies receipt inventory impact.
+- The configured inventory-impacting PO stage cannot be completed directly by the generic workflow-complete endpoint.
+- Created to Received requires the Receive slide-over; receipt submit records receipt details and then advances workflow fields when balances are closed.
 - Cancel transitions eligible purchase orders to persisted terminal status `CANCELLED`.
 - Back Order and Short Close are action events or markers, not `purchase_orders.status` values.
 - Purchase orders may carry one nullable workflow assignee in `purchase_orders.assigned_to_user_id`; assignment options are tenant-scoped and limited to purchasing workflow-eligible users.
@@ -2930,6 +2942,17 @@ Track Purchase Order lifecycle through the shared workflow foundation while mirr
 - Draft PO line quantity and tax are edited inline and autosaved through the line update endpoint, which must return refreshed line and PO totals JSON.
 - Draft PO line quantity input and validation use whole package counts only.
 - Backend transition rules and gates are authoritative.
+
+**Public Interface:**
+- `PurchaseOrder::statuses()`
+- `PurchaseOrderStatusController::update()`
+- `PurchaseOrderWorkflowController::complete()`
+- `PurchaseOrderWorkflowController::cancel()`
+- `PurchaseOrderLifecycleService::createReceipt()`
+- `PurchaseOrderLifecycleService::createShortClosure()`
+- `PurchaseOrderWorkflow::completeStage()`
+- `PurchaseOrderWorkflow::cancel()`
+- `PurchaseOrderWorkflow::responsePayload()`
 
 ### Purchase Order Receipt Inventory Impact
 

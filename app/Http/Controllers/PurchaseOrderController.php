@@ -3,7 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Actions\Notes\BuildNotesFeedPayloadAction;
-use App\Actions\Workflows\BuildWorkflowProgressStepsAction;
 use App\Actions\Workflows\CanViewAssignedWorkflowResourceAction;
 use App\Models\ItemPurchaseOption;
 use App\Models\Note;
@@ -14,7 +13,7 @@ use App\Models\User;
 use App\Support\Workflows\WorkflowAssignmentPermissions;
 use App\Support\QuantityFormatter;
 use App\Services\Purchasing\PurchaseOrderLifecycleService;
-use App\Services\Workflows\WorkflowTransitionService;
+use App\Services\Workflows\PurchaseOrderWorkflow;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
@@ -94,7 +93,7 @@ class PurchaseOrderController extends Controller
     /**
      * Store a new draft purchase order.
      */
-    public function store(Request $request, WorkflowTransitionService $workflowTransitionService): JsonResponse
+    public function store(Request $request, PurchaseOrderWorkflow $purchaseOrderWorkflow): JsonResponse
     {
         Gate::authorize('purchasing-purchase-orders-create');
 
@@ -130,7 +129,7 @@ class PurchaseOrderController extends Controller
             'po_subtotal_cents' => 0,
             'po_grand_total_cents' => 0,
         ]);
-        $purchaseOrder = $workflowTransitionService->initializePurchaseOrder($purchaseOrder);
+        $purchaseOrder = $purchaseOrderWorkflow->initialize($purchaseOrder);
         $this->createInitialNoteFromPurchaseOrderNotes($purchaseOrder, $request);
 
         return response()->json([
@@ -170,7 +169,7 @@ class PurchaseOrderController extends Controller
         Request $request,
         PurchaseOrder $purchaseOrder,
         PurchaseOrderLifecycleService $lifecycleService,
-        WorkflowTransitionService $workflowTransitionService
+        PurchaseOrderWorkflow $purchaseOrderWorkflow
     ): View
     {
         abort_unless((int) $purchaseOrder->tenant_id === (int) $request->user()->tenant_id, 404);
@@ -220,23 +219,12 @@ class PurchaseOrderController extends Controller
         $canReceive = app(WorkflowAssignmentPermissions::class)
             ->userCanOperateWorkflowDomain($request->user(), 'purchasing');
 
-        $workflowPayload = $workflowTransitionService->purchaseOrderWorkflowPayload($purchaseOrder, $request->user());
+        $workflowPayload = $purchaseOrderWorkflow->responsePayload($purchaseOrder, $request->user());
 
         $payload = [
             'purchaseOrder' => $this->purchaseOrderPayload($purchaseOrder, $request->user()),
             'workflow' => $workflowPayload,
-            'workflowProgressSteps' => app(BuildWorkflowProgressStepsAction::class)->execute(
-                (int) $request->user()->tenant_id,
-                'purchasing',
-                isset($workflowPayload['currentStage']['id']) ? (int) $workflowPayload['currentStage']['id'] : null,
-                null,
-                $purchaseOrder->last_completed_workflow_stage_id === null
-                    ? null
-                    : (int) $purchaseOrder->last_completed_workflow_stage_id,
-                ! isset($workflowPayload['currentStage']['id'])
-                    && $purchaseOrder->last_completed_workflow_stage_id !== null
-                    && $purchaseOrder->workflowStatus() === PurchaseOrder::STATUS_COMPLETED
-            ),
+            'workflowProgressSteps' => $purchaseOrderWorkflow->progressSteps($purchaseOrder),
             'lines' => $purchaseOrder->lines->map(function (PurchaseOrderLine $line) use ($tenantCurrency, $lineTotals) {
                 return $this->linePayload($line, $tenantCurrency, $lineTotals[$line->id] ?? []);
             })->values()->all(),

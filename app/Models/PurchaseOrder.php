@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Contracts\Workflows\Workflowable;
 use App\Models\Concerns\HasTenantScope;
 use App\Models\Concerns\HasNotes;
 use Illuminate\Database\Eloquent\Model;
@@ -31,7 +32,7 @@ use Illuminate\Support\Carbon;
  * @property int|null $last_completed_workflow_stage_id
  * @property Carbon|null $workflow_cancelled_at
  */
-class PurchaseOrder extends Model
+class PurchaseOrder extends Model implements Workflowable
 {
     use HasNotes;
     use HasTenantScope;
@@ -126,6 +127,38 @@ class PurchaseOrder extends Model
         }
 
         return self::STATUS_DRAFT;
+    }
+
+    /**
+     * Return the workflow domain key for this purchase order.
+     */
+    public function workflowDomainKey(): string
+    {
+        return 'purchasing';
+    }
+
+    /**
+     * Return the workflow task domain record id.
+     */
+    public function workflowRecordId(): int
+    {
+        return (int) $this->id;
+    }
+
+    /**
+     * Return the owning tenant id.
+     */
+    public function workflowTenantId(): int
+    {
+        return (int) $this->tenant_id;
+    }
+
+    /**
+     * Set the persisted purchase order status.
+     */
+    public function setWorkflowStatus(string $status): void
+    {
+        $this->forceFill(['status' => $status]);
     }
 
     /**

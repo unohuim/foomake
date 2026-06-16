@@ -146,7 +146,7 @@ class SalesOrderWorkflow extends BaseWorkflow
     /**
      * Lock and return the Sales Order.
      */
-    protected function lockRecord(Workflowable $record): Workflowable
+    protected function lockRecord(Workflowable $record, WorkflowDefinition $definition): Workflowable
     {
         return SalesOrder::query()
             ->whereKey($record->workflowRecordId())

@@ -2,11 +2,10 @@
 
 namespace App\Http\Controllers;
 
-use App\Actions\Workflows\BuildWorkflowProgressStepsAction;
 use App\Models\PurchaseOrder;
 use App\Models\PurchaseOrderLine;
 use App\Services\Purchasing\PurchaseOrderLifecycleService;
-use App\Services\Workflows\WorkflowTransitionService;
+use App\Services\Workflows\PurchaseOrderWorkflow;
 use App\Support\QuantityFormatter;
 use App\Support\Workflows\WorkflowAssignmentPermissions;
 use DomainException;
@@ -25,7 +24,7 @@ class PurchaseOrderReceiptController extends Controller
         Request $request,
         int $purchaseOrder,
         PurchaseOrderLifecycleService $lifecycleService,
-        WorkflowTransitionService $workflowTransitionService
+        PurchaseOrderWorkflow $purchaseOrderWorkflow
     ): JsonResponse {
         abort_unless(
             app(WorkflowAssignmentPermissions::class)->userCanOperateWorkflowDomain($request->user(), 'purchasing'),
@@ -205,7 +204,7 @@ class PurchaseOrderReceiptController extends Controller
                 $receipt->id,
                 $purchaseOrder,
                 $lifecycleService,
-                $workflowTransitionService,
+                $purchaseOrderWorkflow,
                 $request
             ),
         ], 201);
@@ -255,7 +254,7 @@ class PurchaseOrderReceiptController extends Controller
         int $receiptId,
         PurchaseOrder $purchaseOrder,
         PurchaseOrderLifecycleService $lifecycleService,
-        WorkflowTransitionService $workflowTransitionService,
+        PurchaseOrderWorkflow $purchaseOrderWorkflow,
         Request $request
     ): array {
         $freshOrder = $purchaseOrder->fresh([
@@ -272,7 +271,7 @@ class PurchaseOrderReceiptController extends Controller
         $tenantCurrency = strtoupper(
             (string) ($request->user()?->tenant?->currency_code ?: config('app.currency_code', 'USD'))
         );
-        $workflow = $workflowTransitionService->purchaseOrderWorkflowPayload($freshOrder, $request->user());
+        $workflow = $purchaseOrderWorkflow->responsePayload($freshOrder, $request->user());
 
         return [
             'id' => $receiptId,
@@ -296,18 +295,7 @@ class PurchaseOrderReceiptController extends Controller
                 ->all(),
             'receipts' => $this->receiptHistoryPayload($freshOrder),
             'workflow' => $workflow,
-            'workflowProgressSteps' => app(BuildWorkflowProgressStepsAction::class)->execute(
-                (int) $request->user()->tenant_id,
-                'purchasing',
-                isset($workflow['currentStage']['id']) ? (int) $workflow['currentStage']['id'] : null,
-                null,
-                $freshOrder->last_completed_workflow_stage_id === null
-                    ? null
-                    : (int) $freshOrder->last_completed_workflow_stage_id,
-                ! isset($workflow['currentStage']['id'])
-                    && $freshOrder->last_completed_workflow_stage_id !== null
-                    && $freshOrder->workflowStatus() === PurchaseOrder::STATUS_COMPLETED
-            ),
+            'workflowProgressSteps' => $purchaseOrderWorkflow->progressSteps($freshOrder),
             'can_receive' => $freshOrder->isReceivingStage()
                 && collect($lineTotals)->contains(fn (array $totals): bool => bccomp(
                     $totals['balance'],

@@ -2,10 +2,9 @@
 
 namespace App\Http\Controllers;
 
-use App\Actions\Workflows\BuildWorkflowProgressStepsAction;
 use App\Models\PurchaseOrder;
 use App\Services\Purchasing\PurchaseOrderLifecycleService;
-use App\Services\Workflows\WorkflowTransitionService;
+use App\Services\Workflows\PurchaseOrderWorkflow;
 use DomainException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -22,10 +21,10 @@ class PurchaseOrderWorkflowController extends Controller
         Request $request,
         PurchaseOrder $purchaseOrder,
         PurchaseOrderLifecycleService $lifecycleService,
-        WorkflowTransitionService $workflowTransitionService
+        PurchaseOrderWorkflow $purchaseOrderWorkflow
     ): JsonResponse {
         try {
-            $workflow = $workflowTransitionService->completePurchaseOrderStage(
+            $workflow = $purchaseOrderWorkflow->completeStage(
                 $purchaseOrder,
                 $request->user()
             );
@@ -41,7 +40,7 @@ class PurchaseOrderWorkflowController extends Controller
                     'lastCompletedWorkflowStage',
                     'lines',
                 ]), $lifecycleService),
-                'workflowProgressSteps' => $this->workflowProgressSteps($purchaseOrder->fresh(), $workflow, $request),
+                'workflowProgressSteps' => $purchaseOrderWorkflow->progressSteps($purchaseOrder->fresh()),
             ],
         ]);
     }
@@ -53,10 +52,10 @@ class PurchaseOrderWorkflowController extends Controller
         Request $request,
         PurchaseOrder $purchaseOrder,
         PurchaseOrderLifecycleService $lifecycleService,
-        WorkflowTransitionService $workflowTransitionService
+        PurchaseOrderWorkflow $purchaseOrderWorkflow
     ): JsonResponse {
         try {
-            $workflow = $workflowTransitionService->cancelPurchaseOrder(
+            $workflow = $purchaseOrderWorkflow->cancel(
                 $purchaseOrder,
                 $request->user()
             );
@@ -72,7 +71,7 @@ class PurchaseOrderWorkflowController extends Controller
                     'lastCompletedWorkflowStage',
                     'lines',
                 ]), $lifecycleService),
-                'workflowProgressSteps' => $this->workflowProgressSteps($purchaseOrder->fresh(), $workflow, $request),
+                'workflowProgressSteps' => $purchaseOrderWorkflow->progressSteps($purchaseOrder->fresh()),
             ],
         ]);
     }
@@ -88,27 +87,6 @@ class PurchaseOrderWorkflowController extends Controller
                 'workflow' => [$message],
             ],
         ], 422);
-    }
-
-    /**
-     * Build the workflow progress state returned to the detail page.
-     *
-     * @return array<int, array{label: string, status: string, url: null, current: bool}>
-     */
-    private function workflowProgressSteps(PurchaseOrder $purchaseOrder, array $workflow, Request $request): array
-    {
-        return app(BuildWorkflowProgressStepsAction::class)->execute(
-            (int) $request->user()->tenant_id,
-            'purchasing',
-            isset($workflow['currentStage']['id']) ? (int) $workflow['currentStage']['id'] : null,
-            null,
-            $purchaseOrder->last_completed_workflow_stage_id === null
-                ? null
-                : (int) $purchaseOrder->last_completed_workflow_stage_id,
-            ! isset($workflow['currentStage']['id'])
-                && $purchaseOrder->last_completed_workflow_stage_id !== null
-                && $purchaseOrder->workflowStatus() === PurchaseOrder::STATUS_COMPLETED
-        );
     }
 
     /**

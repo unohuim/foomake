@@ -3,7 +3,7 @@ type: Workflow Status Rule
 location:
   - app/Http/Controllers/InventoryCountController.php
   - app/Models/PurchaseOrder.php
-  - app/Services/Workflows/WorkflowTransitionService.php
+  - app/Services/Workflows/PurchaseOrderWorkflow.php
   - database/migrations/2026_05_28_000003_add_workflow_foundation_fields.php
 purpose: Define how workflow-enabled records derive visible status from workflow state while legacy domain status columns remain during migration.
 when_to_use:
@@ -26,7 +26,7 @@ rules:
 public_interface:
   - PurchaseOrder::workflowStatus()
   - MakeOrderController::makeOrderWorkflowPayload()
-  - WorkflowTransitionService::purchaseOrderWorkflowPayload()
+  - PurchaseOrderWorkflow::responsePayload()
 example_usage: |
   Purchase Order workflow display:
     current_workflow_stage = Receiving

@@ -4,7 +4,7 @@ location:
   - resources/views/components/workflow-action-button.blade.php
   - resources/js/components/workflow-action-button.js
   - resources/views/components/ui/loading-overlay.blade.php
-  - app/Services/Workflows/WorkflowTransitionService.php
+  - app/Services/Workflows/PurchaseOrderWorkflow.php
 purpose: Define the reusable Tailwind and Alpine action button used by detail headers that expose multiple server-driven step actions, together with the shared blocking loading overlay shown while a server mutation is pending.
 when_to_use:
   - Rendering the current state label and available step actions in a resource detail header
@@ -30,7 +30,7 @@ public_interface:
   - syncEventName
   - syncStateKey
   - workflow-action-button-loading
-  - WorkflowTransitionService::purchaseOrderWorkflowPayload()
+  - PurchaseOrderWorkflow::responsePayload()
 example_usage: |
   workflow:
     status: Published

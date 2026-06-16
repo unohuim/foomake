@@ -643,11 +643,11 @@ it('11. automatic stages complete until a manual stage is reached', function ():
     $this->actingAs($user)
         ->postJson(route('purchasing.orders.workflow.complete', $order))
         ->assertOk()
-        ->assertJsonPath('data.workflow.status', 'COMPLETED')
-        ->assertJsonPath('data.workflow.currentStage', null);
+        ->assertJsonPath('data.workflow.status', 'CREATED')
+        ->assertJsonPath('data.workflow.currentStage.actionVerb', 'Receive');
 });
 
-it('12. inventory effect fires when completing the inventory-impacting stage', function (): void {
+it('12. inventory-impacting stage requires receipt details before advancing', function (): void {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
     $supplier = ($this->makeSupplier)($tenant);
@@ -665,10 +665,10 @@ it('12. inventory effect fires when completing the inventory-impacting stage', f
 
     $this->actingAs($user)
         ->postJson(route('purchasing.orders.workflow.complete', $order))
-        ->assertOk()
-        ->assertJsonPath('data.workflow.status', 'COMPLETED');
+        ->assertStatus(422)
+        ->assertJsonPath('errors.workflow.0', 'Receive inventory before advancing this workflow stage.');
 
-    expect(DB::table('stock_moves')->where('source_type', 'purchase_order_receipt_line')->exists())->toBeTrue();
+    expect(DB::table('stock_moves')->where('source_type', 'purchase_order_receipt_line')->exists())->toBeFalse();
 });
 
 it('13. inventory-impacting stage may be last', function (): void {

@@ -5,7 +5,7 @@ location:
   - app/Http/Controllers/PurchaseOrderStatusController.php
   - app/Http/Controllers/PurchaseOrderWorkflowController.php
   - app/Services/Purchasing/PurchaseOrderLifecycleService.php
-  - app/Services/Workflows/WorkflowTransitionService.php
+  - app/Services/Workflows/PurchaseOrderWorkflow.php
 purpose: Keep purchase order lifecycle explicit while Purchase Orders adopt shared workflow state before the legacy status column is removed.
 when_to_use:
   - Changing purchase order status
@@ -25,7 +25,8 @@ rules:
   - Receipt events that leave any receivable balance open persist PARTIALLY_RECEIVED.
   - Additional partial receipt events keep PARTIALLY_RECEIVED until all receivable balances are received or short-closed.
   - Workflow stage completion mirrors legacy status only for migration compatibility.
-  - Completing the purchasing inventory-effect stage applies receipt inventory impact.
+  - The purchasing inventory-effect stage cannot be completed directly by the generic workflow-complete endpoint.
+  - Created to Received requires the Receive slide-over; receipt submit records receipt details and then advances workflow fields when balances are closed.
   - Cancel transitions eligible purchase orders to persisted terminal status CANCELLED.
   - Cancel sets workflow_cancelled_at and blocks future workflow actions.
   - cancelled_at and cancelled_by_user_id are audit metadata and are not display authority.
@@ -47,7 +48,8 @@ public_interface:
   - PurchaseOrderWorkflowController::cancel()
   - PurchaseOrderLifecycleService::createReceipt()
   - PurchaseOrderLifecycleService::createShortClosure()
-  - WorkflowTransitionService::completePurchaseOrderStage()
-  - WorkflowTransitionService::cancelPurchaseOrder()
+  - PurchaseOrderWorkflow::completeStage()
+  - PurchaseOrderWorkflow::cancel()
+  - PurchaseOrderWorkflow::responsePayload()
 example_usage: |
   $order->forceFill(['status' => PurchaseOrder::STATUS_CREATED])->save();

@@ -11,8 +11,7 @@ use App\Models\PurchaseOrderShortClosure;
 use App\Models\PurchaseOrderShortClosureLine;
 use App\Models\StockMove;
 use App\Models\User;
-use App\Models\WorkflowDomain;
-use App\Models\WorkflowStage;
+use App\Support\Workflows\WorkflowDefinitionRepository;
 use DomainException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -21,8 +20,10 @@ class PurchaseOrderLifecycleService
 {
     private const SCALE = 6;
 
-    public function __construct(private readonly ReceivePurchaseOptionAction $receivePurchaseOptionAction)
-    {
+    public function __construct(
+        private readonly ReceivePurchaseOptionAction $receivePurchaseOptionAction,
+        private readonly WorkflowDefinitionRepository $workflowDefinitions
+    ) {
     }
 
     /**
@@ -196,35 +197,13 @@ class PurchaseOrderLifecycleService
      */
     private function workflowFieldsForStatus(PurchaseOrder $order, string $status): array
     {
-        $domainId = WorkflowDomain::query()
-            ->where('key', 'purchasing')
-            ->value('id');
-
-        if (! $domainId) {
-            return [];
-        }
-
-        $stages = WorkflowStage::withoutGlobalScopes()
-            ->where('tenant_id', $order->tenant_id)
-            ->where('workflow_domain_id', $domainId)
-            ->whereIn('key', ['creating', 'receiving', 'completing'])
-            ->get()
-            ->keyBy('key');
-
-        $activeStages = WorkflowStage::withoutGlobalScopes()
-            ->where('tenant_id', $order->tenant_id)
-            ->where('workflow_domain_id', $domainId)
-            ->where('is_active', true)
-            ->orderBy('sort_order')
-            ->orderBy('id')
-            ->get()
-            ->values();
-
-        $creatingStage = $stages->get('creating') ?? $activeStages->first();
+        $definition = $this->workflowDefinitions->for((int) $order->tenant_id, 'purchasing');
+        $activeStages = $definition->activeStages();
+        $creatingStage = $definition->stageByKey('creating') ?? $definition->firstStage();
         $inventoryEffectStage = $activeStages->firstWhere('is_inventory_effect_stage', true)
-            ?? $stages->get('receiving')
+            ?? $definition->stageByKey('receiving')
             ?? $activeStages->get(1);
-        $completingStage = $stages->get('completing') ?? $activeStages->last();
+        $completingStage = $definition->stageByKey('completing') ?? $activeStages->last();
 
         return match ($status) {
             PurchaseOrder::STATUS_CREATED => [
