@@ -2092,6 +2092,7 @@ Notes:
 **Type:** Manufacturing UI Pattern
 **Location:**
 - `docs/architecture/manufacturing/MakeOrderWorkflowSection.yaml`
+- `app/Services/Workflows/MakeOrderWorkflow.php`
 - `app/Http/Controllers/MakeOrderController.php`
 - `resources/views/manufacturing/make-orders/show.blade.php`
 - `resources/js/pages/manufacturing-make-orders-show.js`
@@ -2112,8 +2113,9 @@ Render compact Runs, Expected Output, Actual Output, Due Date, and Assigned To d
 **Public Interface:**
 - `manufacturing.make-orders.due-date.update`
 - `manufacturing.make-orders.workflow-stage.update`
-- `MoveMakeOrderWorkflowStageAction::execute()`
-- `ResolveManufacturingWorkflowStageAction::availableTransitions()`
+- `MakeOrderWorkflow::moveToStage()`
+- `MakeOrderWorkflow::availableTransitions()`
+- `MakeOrderWorkflow::responsePayload()`
 
 ### Resource Detail Layout Pattern
 
@@ -2725,9 +2727,7 @@ legacy_csv,SO-1001,2026-05-14,Ada Buyer,Jane Buyer,Toronto,OPEN,processing,LINE-
 **Location:**  
   - `docs/architecture/sales/SalesOrderCompletionInventoryImpact.yaml`  
   - `app/Actions/Sales/BuildSalesOrderIssuePlanAction.php`  
-  - `app/Actions/Sales/MoveSalesOrderToPackingAction.php`  
-  - `app/Actions/Sales/PackSalesOrderAction.php`  
-  - `app/Actions/Sales/CancelPackedSalesOrderAction.php`  
+  - `app/Services/Workflows/SalesOrderWorkflow.php`
   - `app/Http/Controllers/SalesOrderStatusController.php`  
   - `app/Models/SalesOrder.php`  
   - `app/Models/StockMove.php`  
@@ -2743,9 +2743,8 @@ Editable header/line mutations, shipping/completion transitions without inventor
 
 **Public Interface:**  
   - `BuildSalesOrderIssuePlanAction::execute()`  
-  - `MoveSalesOrderToPackingAction::execute()`  
-  - `PackSalesOrderAction::execute()`  
-  - `CancelPackedSalesOrderAction::execute()`  
+  - `SalesOrderWorkflow::transition()`
+  - `SalesOrderWorkflow::responsePayload()`
   - `SalesOrder::STATUS_OPEN`  
   - `SalesOrder::STATUS_PACKING`  
   - `SalesOrder::STATUS_PACKED`  
@@ -2755,7 +2754,7 @@ Editable header/line mutations, shipping/completion transitions without inventor
 
 **Example Usage:**  
 ```php
-$packedOrder = $packSalesOrderAction->execute($salesOrder, $buildSalesOrderIssuePlanAction);
+$packedOrder = $salesOrderWorkflow->transition($salesOrder, SalesOrder::STATUS_PACKED);
 ```
 
 ---
@@ -9141,4 +9140,3 @@ QuickBooks Online integration reduces admin work, improves bookkeeping accuracy,
 - Each PR should remain small, test-first, and tenant-safe.
 - Documentation updates should only happen when explicitly required and approved.
 - Any reusable abstraction introduced by these PRs must be recorded in the architecture inventory when applicable.
-

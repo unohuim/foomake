@@ -9,7 +9,7 @@ Target split:
 - 95% shared workflow transition behavior
 - 5% domain-specific behavior
 
-This plan is documentation only. It does not approve implementation by itself.
+This document describes the implemented workflow runtime direction.
 
 ## Current Problem
 
@@ -25,13 +25,13 @@ Current shared pieces include:
 - `AssertWorkflowStageTasksCompletedAction`
 - `BuildWorkflowProgressStepsAction`
 
-Current issues:
+Issues addressed:
 
-- Sales, purchasing, manufacturing, and inventory each resolve workflow stages differently.
-- Sales runtime repeatedly calls workflow default seeding during normal transition requests.
-- Stage lookup causes repeated database reads inside the same request.
-- Transition behavior is spread across controllers, actions, and domain services.
-- Some sales workflow actions still carry stage-specific historical names.
+- Sales, purchasing, manufacturing, and inventory runtime code now consume request-scoped workflow definitions.
+- Runtime workflow paths no longer seed default workflow stages.
+- Stage lookup is centralized through workflow services instead of repeated controller/action queries.
+- Transition behavior moved out of controllers into domain workflow services.
+- Stage-specific legacy Sales/Make/Inventory action classes were retired.
 
 ## Non-Negotiable Rule
 
@@ -154,7 +154,7 @@ Domain subclasses customize hooks, not the whole algorithm.
 
 ### Domain Workflow Classes
 
-Domain-specific classes extend `BaseWorkflow`.
+Domain-specific classes own runtime behavior. Sales, Purchasing, and Make Orders use `BaseWorkflow` directly. Inventory Count uses the same `WorkflowDefinitionRepository` and shared task actions, but keeps a custom workflow service because it supports previous-stage movement and `/post` compatibility behavior that does not fit the current forward-only `BaseWorkflow::transition()` shape.
 
 Examples:
 
@@ -216,6 +216,8 @@ These should live in `BaseWorkflow`:
 12. Delete or close open generated tasks on cancellation where configured.
 13. Reload the record.
 14. Build shared workflow response payload.
+
+Inventory Count follows the same runtime rules where applicable, but implements submit, advance, previous, and post-compatible flows inside `InventoryCountWorkflow`.
 
 ## Domain-Specific Work
 
@@ -283,14 +285,18 @@ public function update(
 
 ## Migration Path
 
-1. Create `WorkflowDefinition` and `WorkflowDefinitionRepository`.
-2. Remove runtime seeding from workflow stage resolvers.
-3. Add request-level workflow definition caching.
-4. Add `Workflowable` contract or trait to one domain first.
-5. Introduce `BaseWorkflow`.
-6. Move Sales transition logic into `SalesOrderWorkflow`.
-7. Convert Purchasing, Manufacturing, and Inventory after Sales is stable.
-8. Remove stage-specific legacy action names once behavior is covered by the shared workflow class.
+Implemented:
+
+1. Created `WorkflowDefinition` and `WorkflowDefinitionRepository`.
+2. Removed runtime seeding from Sales, Purchasing, Make Order, and Inventory Count runtime paths.
+3. Added request-level workflow definition caching.
+4. Added `Workflowable` to `SalesOrder`, `PurchaseOrder`, `MakeOrder`, and `InventoryCount`.
+5. Introduced `BaseWorkflow`.
+6. Moved Sales transition logic into `SalesOrderWorkflow`.
+7. Moved Purchasing transition logic into `PurchaseOrderWorkflow`.
+8. Moved Make Order workflow movement into `MakeOrderWorkflow`.
+9. Moved Inventory Count workflow movement into `InventoryCountWorkflow`.
+10. Removed stage-specific legacy action names once behavior was covered by workflow services.
 
 ## Expected Result
 
