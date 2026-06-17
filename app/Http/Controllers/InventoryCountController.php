@@ -2,12 +2,8 @@
 
 namespace App\Http\Controllers;
 
-use App\Actions\Inventory\AdvanceInventoryCountWorkflowStageAction;
 use App\Actions\Notes\BuildNotesFeedPayloadAction;
-use App\Actions\Workflows\BuildWorkflowProgressStepsAction;
 use App\Actions\Workflows\CanViewAssignedWorkflowResourceAction;
-use App\Actions\Workflows\ResolveInventoryWorkflowStageAction;
-use App\Actions\Workflows\SeedDefaultWorkflowStagesForTenantAction;
 use App\Models\InventoryCount;
 use App\Models\InventoryCountLine;
 use App\Models\Item;
@@ -16,6 +12,7 @@ use App\Models\Task;
 use App\Models\User;
 use App\Models\WorkflowDomain;
 use App\Models\WorkflowStage;
+use App\Services\Workflows\InventoryCountWorkflow;
 use App\Support\QuantityFormatter;
 use App\Support\Workflows\WorkflowAssignmentPermissions;
 use DomainException;
@@ -115,14 +112,8 @@ class InventoryCountController extends Controller
             ? $this->countLineSelectableItems($request, $count)
             : collect();
 
-        $resolver = app(ResolveInventoryWorkflowStageAction::class);
-        $this->ensureInventoryWorkflowStagesExist(
-            $request,
-            $resolver,
-            app(SeedDefaultWorkflowStagesForTenantAction::class)
-        );
-        $previousStage = $this->previousWorkflowActionStage($count, $resolver);
-        $nextStage = $this->nextWorkflowActionStage($count, $resolver);
+        $previousStage = $this->previousWorkflowActionStage($count);
+        $nextStage = $this->nextWorkflowActionStage($count);
         $canSubmitWorkflow = $this->userCanSubmitInventoryCountWorkflow($request->user(), $count);
         $canOperateWorkflow = $this->userCanOperateInventoryWorkflow($request->user());
 
@@ -370,9 +361,7 @@ class InventoryCountController extends Controller
     public function submit(
         Request $request,
         int $inventoryCount,
-        AdvanceInventoryCountWorkflowStageAction $action,
-        ResolveInventoryWorkflowStageAction $resolver,
-        SeedDefaultWorkflowStagesForTenantAction $seedDefaultStagesAction
+        InventoryCountWorkflow $workflow
     ): JsonResponse {
         $count = $this->findInventoryCount($request, $inventoryCount);
         if ($count->workflow_cancelled_at !== null) {
@@ -381,10 +370,9 @@ class InventoryCountController extends Controller
             ], 422);
         }
         abort_unless($this->userCanSubmitInventoryCountWorkflow($request->user(), $count), 403);
-        $this->ensureInventoryWorkflowStagesExist($request, $resolver, $seedDefaultStagesAction);
 
         try {
-            $count = $action->submit($count, (int) $request->user()->id);
+            $count = $workflow->submit($count, $request->user());
         } catch (DomainException $e) {
             return response()->json([
                 'message' => $e->getMessage(),
@@ -400,9 +388,7 @@ class InventoryCountController extends Controller
     public function advance(
         Request $request,
         int $inventoryCount,
-        AdvanceInventoryCountWorkflowStageAction $action,
-        ResolveInventoryWorkflowStageAction $resolver,
-        SeedDefaultWorkflowStagesForTenantAction $seedDefaultStagesAction
+        InventoryCountWorkflow $workflow
     ): JsonResponse {
         abort_unless($this->userCanOperateInventoryWorkflow($request->user()), 403);
 
@@ -412,10 +398,9 @@ class InventoryCountController extends Controller
                 'message' => 'Inventory count is cancelled and cannot be modified.',
             ], 422);
         }
-        $this->ensureInventoryWorkflowStagesExist($request, $resolver, $seedDefaultStagesAction);
 
         try {
-            $count = $action->advance($count, (int) $request->user()->id);
+            $count = $workflow->advance($count, $request->user());
         } catch (DomainException $e) {
             return response()->json([
                 'message' => $e->getMessage(),
@@ -431,9 +416,7 @@ class InventoryCountController extends Controller
     public function post(
         Request $request,
         int $inventoryCount,
-        AdvanceInventoryCountWorkflowStageAction $action,
-        ResolveInventoryWorkflowStageAction $resolver,
-        SeedDefaultWorkflowStagesForTenantAction $seedDefaultStagesAction
+        InventoryCountWorkflow $workflow
     ): JsonResponse {
         abort_unless($this->userCanOperateInventoryWorkflow($request->user()), 403);
 
@@ -443,10 +426,9 @@ class InventoryCountController extends Controller
                 'message' => 'Inventory count is cancelled and cannot be modified.',
             ], 422);
         }
-        $this->ensureInventoryWorkflowStagesExist($request, $resolver, $seedDefaultStagesAction);
 
         try {
-            $count = $action->postCompatible($count, (int) $request->user()->id);
+            $count = $workflow->postCompatible($count, $request->user());
         } catch (DomainException $e) {
             return response()->json([
                 'message' => $e->getMessage(),
@@ -462,9 +444,7 @@ class InventoryCountController extends Controller
     public function previous(
         Request $request,
         int $inventoryCount,
-        AdvanceInventoryCountWorkflowStageAction $action,
-        ResolveInventoryWorkflowStageAction $resolver,
-        SeedDefaultWorkflowStagesForTenantAction $seedDefaultStagesAction
+        InventoryCountWorkflow $workflow
     ): JsonResponse {
         abort_unless($this->userCanOperateInventoryWorkflow($request->user()), 403);
 
@@ -474,10 +454,9 @@ class InventoryCountController extends Controller
                 'message' => 'Inventory count is cancelled and cannot be modified.',
             ], 422);
         }
-        $this->ensureInventoryWorkflowStagesExist($request, $resolver, $seedDefaultStagesAction);
 
         try {
-            $count = $action->previous($count, (int) $request->user()->id);
+            $count = $workflow->previous($count, $request->user());
         } catch (DomainException $e) {
             return response()->json([
                 'message' => $e->getMessage(),
@@ -951,26 +930,6 @@ class InventoryCountController extends Controller
     }
 
     /**
-     * Seed inventory workflow stages only when the tenant has not configured any yet.
-     */
-    private function ensureInventoryWorkflowStagesExist(
-        Request $request,
-        ResolveInventoryWorkflowStageAction $resolver,
-        SeedDefaultWorkflowStagesForTenantAction $seedDefaultStagesAction
-    ): void {
-        $inventoryDomainId = $resolver->inventoryDomainId();
-
-        $hasStages = WorkflowStage::withoutGlobalScopes()
-            ->where('tenant_id', (int) $request->user()->tenant_id)
-            ->where('workflow_domain_id', $inventoryDomainId)
-            ->exists();
-
-        if (! $hasStages) {
-            $seedDefaultStagesAction->execute($request->user()->tenant()->firstOrFail());
-        }
-    }
-
-    /**
      * Build JSON payload for inventory counts.
      */
     private function countPayload(InventoryCount $inventoryCount, bool $canExecute = true): array
@@ -1070,16 +1029,7 @@ class InventoryCountController extends Controller
      */
     private function inventoryWorkflowProgressSteps(InventoryCount $inventoryCount): array
     {
-        return app(BuildWorkflowProgressStepsAction::class)->execute(
-            (int) $inventoryCount->tenant_id,
-            'inventory',
-            $inventoryCount->posted_at === null && $inventoryCount->workflow_stage_id !== null
-                ? (int) $inventoryCount->workflow_stage_id
-                : null,
-            null,
-            $inventoryCount->workflow_stage_id === null ? null : (int) $inventoryCount->workflow_stage_id,
-            $inventoryCount->posted_at !== null
-        );
+        return app(InventoryCountWorkflow::class)->progressSteps($inventoryCount);
     }
 
     /**
@@ -1595,32 +1545,7 @@ class InventoryCountController extends Controller
      */
     private function workflowStatusLabel(InventoryCount $inventoryCount): string
     {
-        if ($inventoryCount->workflow_cancelled_at !== null) {
-            return 'CANCELLED';
-        }
-
-        if ($inventoryCount->workflow_stage_id === null) {
-            return $inventoryCount->posted_at !== null ? 'COMPLETED' : 'Draft';
-        }
-
-        $resolver = app(ResolveInventoryWorkflowStageAction::class);
-        $currentStage = $resolver->currentStage($inventoryCount);
-
-        if (! $currentStage) {
-            return 'Unknown';
-        }
-
-        if ($inventoryCount->posted_at !== null) {
-            return $currentStage->status_complete_label ?: $currentStage->name;
-        }
-
-        $previousStage = $resolver->previousActiveStage($inventoryCount);
-
-        if ($previousStage) {
-            return $previousStage->status_complete_label ?: $previousStage->name;
-        }
-
-        return $currentStage->status_complete_label ?: $currentStage->name ?: 'Draft';
+        return app(InventoryCountWorkflow::class)->statusLabel($inventoryCount);
     }
 
     /**
@@ -1633,110 +1558,45 @@ class InventoryCountController extends Controller
         bool $canSubmitWorkflow,
         bool $canOperateWorkflow
     ): array {
-        $resolver = app(ResolveInventoryWorkflowStageAction::class);
-        $currentStage = $resolver->currentStage($inventoryCount);
-        $nextStage = $this->nextWorkflowActionStage($inventoryCount, $resolver);
-        $actions = [];
-
-        if ($inventoryCount->workflow_cancelled_at === null) {
-            if ($inventoryCount->posted_at === null) {
-                $actions[] = [
-                    'id' => 'cancel',
-                    'type' => 'cancel',
-                    'label' => 'Cancel',
-                    'description' => 'Cancel this inventory count before it is posted.',
-                    'endpoint' => route('inventory.counts.destroy', $inventoryCount),
-                    'method' => 'DELETE',
-                    'requiresConfirmation' => true,
-                ];
-            }
-
-            if ($this->canShowNextWorkflowAction($inventoryCount, $canSubmitWorkflow, $canOperateWorkflow) && $nextStage !== null) {
-                $isInitialWorkflowAction = $inventoryCount->workflow_stage_id === null;
-
-                $actions[] = [
-                    'id' => 'next',
-                    'type' => $inventoryCount->workflow_stage_id === null ? 'submit' : 'advance',
-                    'label' => $this->workflowActionButtonText($nextStage, $inventoryCount),
-                    'description' => $this->workflowActionDescription(
-                        $nextStage,
-                        $isInitialWorkflowAction
-                            ? 'Schedule this inventory count.'
-                            : 'Advance this inventory count to the next workflow stage.'
-                    ),
-                    'endpoint' => $inventoryCount->workflow_stage_id === null
-                        ? route('inventory.counts.submit', $inventoryCount)
-                        : route('inventory.counts.advance', $inventoryCount),
-                    'method' => 'POST',
-                ];
-            }
-        }
-
-        $currentLabel = $this->workflowStatusLabel($inventoryCount);
-
-        return [
-            'status' => $inventoryCount->status,
-            'status_label' => $currentLabel,
-            'display_label' => $currentLabel,
-            'currentLabel' => $currentLabel,
-            'current_stage_label' => $currentLabel,
-            'current_stage' => $currentStage ? [
-                'id' => (int) $currentStage->id,
-                'workflow_domain_id' => (int) $currentStage->workflow_domain_id,
-                'key' => $currentStage->key,
-                'name' => $currentStage->name,
-                'action_verb' => $currentStage->action_verb,
-                'status_complete_label' => $currentStage->status_complete_label,
-                'description' => $currentStage->description,
-            ] : null,
-            'actions' => $actions,
-            'header_menu' => [
-                'currentLabel' => $currentLabel,
-                'options' => $actions,
-            ],
-            'previous_url' => route('inventory.counts.previous', $inventoryCount),
-            'submit_url' => route('inventory.counts.submit', $inventoryCount),
-            'advance_url' => route('inventory.counts.advance', $inventoryCount),
-            'post_url' => route('inventory.counts.post', $inventoryCount),
-        ];
+        return app(InventoryCountWorkflow::class)->responsePayload(
+            $inventoryCount,
+            $canSubmitWorkflow,
+            $canOperateWorkflow
+        );
     }
 
     /**
      * Resolve the next workflow stage the visible action should enter.
      */
-    private function nextWorkflowActionStage(
-        InventoryCount $inventoryCount,
-        ResolveInventoryWorkflowStageAction $resolver
-    ): ?WorkflowStage {
+    private function nextWorkflowActionStage(InventoryCount $inventoryCount): ?WorkflowStage
+    {
         if ($inventoryCount->posted_at !== null) {
             return null;
         }
 
         if ($inventoryCount->workflow_stage_id === null) {
-            return $resolver->firstActiveStage($inventoryCount);
+            return app(InventoryCountWorkflow::class)->firstActiveStage($inventoryCount);
         }
 
-        $currentStage = $resolver->currentStage($inventoryCount);
+        $currentStage = app(InventoryCountWorkflow::class)->currentStage($inventoryCount);
 
         if ($currentStage?->is_inventory_effect_stage) {
             return $currentStage;
         }
 
-        return $resolver->nextActiveStage($inventoryCount);
+        return app(InventoryCountWorkflow::class)->nextActiveStage($inventoryCount);
     }
 
     /**
      * Resolve the previous workflow stage the visible action may move back to.
      */
-    private function previousWorkflowActionStage(
-        InventoryCount $inventoryCount,
-        ResolveInventoryWorkflowStageAction $resolver
-    ): ?WorkflowStage {
+    private function previousWorkflowActionStage(InventoryCount $inventoryCount): ?WorkflowStage
+    {
         if ($inventoryCount->posted_at !== null || $inventoryCount->workflow_stage_id === null) {
             return null;
         }
 
-        return $resolver->previousActiveStage($inventoryCount);
+        return app(InventoryCountWorkflow::class)->previousActiveStage($inventoryCount);
     }
 
     /**
@@ -1831,35 +1691,7 @@ class InventoryCountController extends Controller
      */
     private function currentStageTasksData(InventoryCount $inventoryCount): array
     {
-        $inventoryCount->loadMissing('workflowStage');
-        $workflowDomainId = $inventoryCount->workflowStage?->workflow_domain_id
-            ?? $this->workflowDomainId('inventory');
-
-        if ($workflowDomainId === null) {
-            return [];
-        }
-
-        return Task::withoutGlobalScopes()
-            ->where('tenant_id', $inventoryCount->tenant_id)
-            ->where('workflow_domain_id', $workflowDomainId)
-            ->where('domain_record_id', $inventoryCount->id)
-            ->where(function ($query) use ($inventoryCount): void {
-                $query->where('source', Task::SOURCE_MANUAL);
-
-                if ($inventoryCount->workflow_stage_id !== null) {
-                    $query->orWhere(function ($query) use ($inventoryCount): void {
-                        $query->where('source', Task::SOURCE_GENERATED)
-                            ->where('workflow_stage_id', $inventoryCount->workflow_stage_id);
-                    });
-                }
-            })
-            ->with(['assignedTo', 'completedBy'])
-            ->orderBy('sort_order')
-            ->orderBy('id')
-            ->get()
-            ->map(fn (Task $task): array => $this->taskPayload($task, auth()->user()))
-            ->values()
-            ->all();
+        return app(InventoryCountWorkflow::class)->currentStageTasks($inventoryCount, auth()->user());
     }
 
     /**

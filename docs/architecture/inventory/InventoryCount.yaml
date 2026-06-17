@@ -2,6 +2,7 @@ name: InventoryCount
 type: Eloquent Model
 location:
   - app/Models/InventoryCount.php
+  - app/Services/Workflows/InventoryCountWorkflow.php
 purpose: Represent an inventory count session whose posted lifecycle remains derived from posted_at while operational progression uses tenant-configured Inventory workflow stages.
 when_to_use:
   - Recording inventory count sessions
@@ -95,6 +96,11 @@ rules:
   - Inventory count index Status shows the current workflow stage `name` rather than the posted lifecycle label.
   - Enum-like values must use values defined in docs/ENUMS.md.
 public_interface:
+  - InventoryCountWorkflow::submit()
+  - InventoryCountWorkflow::advance()
+  - InventoryCountWorkflow::previous()
+  - InventoryCountWorkflow::postCompatible()
+  - InventoryCountWorkflow::responsePayload()
   - lines()
   - workflowStage()
   - createdByUser()

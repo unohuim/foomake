@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Contracts\Workflows\Workflowable;
 use App\Models\Concerns\HasTenantScope;
 use App\Models\Concerns\HasNotes;
 use Illuminate\Database\Eloquent\Model;
@@ -25,7 +26,7 @@ use Illuminate\Support\Carbon;
  * @property int|null $workflow_cancelled_by_user_id
  * @property string|null $notes
  */
-class InventoryCount extends Model
+class InventoryCount extends Model implements Workflowable
 {
     use HasNotes;
     use HasTenantScope;
@@ -113,6 +114,45 @@ class InventoryCount extends Model
     public function workflowStage(): BelongsTo
     {
         return $this->belongsTo(WorkflowStage::class, 'workflow_stage_id');
+    }
+
+    /**
+     * Return the workflow domain key for this inventory count.
+     */
+    public function workflowDomainKey(): string
+    {
+        return 'inventory';
+    }
+
+    /**
+     * Return the workflow task domain record id.
+     */
+    public function workflowRecordId(): int
+    {
+        return (int) $this->id;
+    }
+
+    /**
+     * Return the owning tenant id.
+     */
+    public function workflowTenantId(): int
+    {
+        return (int) $this->tenant_id;
+    }
+
+    /**
+     * Return the workflow-facing status value.
+     */
+    public function workflowStatus(): string
+    {
+        return $this->getStatusAttribute();
+    }
+
+    /**
+     * Inventory Count workflow status is derived from fields owned by the domain.
+     */
+    public function setWorkflowStatus(string $status): void
+    {
     }
 
     /**

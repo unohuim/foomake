@@ -700,8 +700,8 @@ it('19. customer detail orders payload also shows current stage tasks', function
 
 it('19a. workflow stage task gating uses a shared generic assertion action for sales and inventory runtimes', function () {
     $genericSource = file_get_contents(app_path('Actions/Workflows/AssertWorkflowStageTasksCompletedAction.php'));
-    $salesSource = file_get_contents(app_path('Http/Controllers/SalesOrderStatusController.php'));
-    $inventorySource = file_get_contents(app_path('Actions/Inventory/AdvanceInventoryCountWorkflowStageAction.php'));
+    $salesSource = file_get_contents(app_path('Services/Workflows/SalesOrderWorkflow.php'));
+    $inventorySource = file_get_contents(app_path('Services/Workflows/InventoryCountWorkflow.php'));
 
     expect($genericSource)->toContain('class AssertWorkflowStageTasksCompletedAction')
         ->and($genericSource)->toContain('workflow_domain_id')
@@ -714,8 +714,8 @@ it('19a. workflow stage task gating uses a shared generic assertion action for s
 
 it('19b. workflow stage task generation uses a shared generic stage entry action for sales and inventory runtimes', function () {
     $genericSource = file_get_contents(app_path('Actions/Workflows/GenerateWorkflowStageTasksAction.php'));
-    $salesSource = file_get_contents(app_path('Http/Controllers/SalesOrderStatusController.php'));
-    $inventorySource = file_get_contents(app_path('Actions/Inventory/AdvanceInventoryCountWorkflowStageAction.php'));
+    $salesSource = file_get_contents(app_path('Services/Workflows/SalesOrderWorkflow.php'));
+    $inventorySource = file_get_contents(app_path('Services/Workflows/InventoryCountWorkflow.php'));
 
     expect($genericSource)->toContain('class GenerateWorkflowStageTasksAction')
         ->and($genericSource)->toContain('workflow_task_template_id')

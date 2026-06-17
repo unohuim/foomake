@@ -792,6 +792,7 @@ $salesOrder = $salesOrderWorkflow->transition($salesOrder, $targetStatus);
 - `docs/architecture/workflows/WorkflowStageTaskGating.yaml`  
 - `app/Actions/Workflows/AssertWorkflowStageTasksCompletedAction.php`  
 - `app/Actions/Workflows/GenerateWorkflowStageTasksAction.php`  
+- `app/Services/Workflows/InventoryCountWorkflow.php`  
 
 **Purpose:**  
 Apply one shared stage-entry task generation and stage-exit blocking rule across adopted workflow domains.
@@ -1909,7 +1910,9 @@ $onHand = $item->onHandQuantity();
 
 **Name:** InventoryCount  
 **Type:** Eloquent Model  
-**Location:** `app/Models/InventoryCount.php`
+**Location:**
+- `app/Models/InventoryCount.php`
+- `app/Services/Workflows/InventoryCountWorkflow.php`
 
 **Purpose:**  
 Represent inventory count sessions whose posted lifecycle remains derived from `posted_at` while draft setup stays outside workflow stages and submitted counts progress through the tenant-configured Inventory workflow.
@@ -1930,6 +1933,11 @@ Inventory adjustments outside a count context.
 - `workflowStage()`  
 - `stockMoves()`  
 - `getStatusAttribute()`
+- `InventoryCountWorkflow::submit()`
+- `InventoryCountWorkflow::advance()`
+- `InventoryCountWorkflow::previous()`
+- `InventoryCountWorkflow::postCompatible()`
+- `InventoryCountWorkflow::responsePayload()`
 
 **Example Usage:**  
 ```php

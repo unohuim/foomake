@@ -1,7 +1,7 @@
 name: Derived Workflow Status
 type: Workflow Status Rule
 location:
-  - app/Http/Controllers/InventoryCountController.php
+  - app/Services/Workflows/InventoryCountWorkflow.php
   - app/Models/PurchaseOrder.php
   - app/Services/Workflows/MakeOrderWorkflow.php
   - app/Services/Workflows/PurchaseOrderWorkflow.php
@@ -26,6 +26,7 @@ rules:
   - Workflow cancellation is terminal and blocks future workflow actions.
 public_interface:
   - PurchaseOrder::workflowStatus()
+  - InventoryCountWorkflow::statusLabel()
   - MakeOrderWorkflow::responsePayload()
   - PurchaseOrderWorkflow::responsePayload()
 example_usage: |

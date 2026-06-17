@@ -2,11 +2,8 @@
 
 namespace App\Http\Controllers;
 
-use App\Actions\Inventory\AdvanceInventoryCountWorkflowStageAction;
 use App\Actions\Inventory\BuildMaterialInventoryStatsAction;
 use App\Actions\Inventory\CanConvertInventoryBalancesToUomAction;
-use App\Actions\Workflows\ResolveInventoryWorkflowStageAction;
-use App\Actions\Workflows\SeedDefaultWorkflowStagesForTenantAction;
 use App\Models\InventoryCount;
 use App\Models\InventoryCountLine;
 use App\Models\Item;
@@ -15,6 +12,7 @@ use App\Models\Recipe;
 use App\Models\StockMove;
 use App\Models\Uom;
 use App\Models\User;
+use App\Services\Workflows\InventoryCountWorkflow;
 use App\Support\QuantityFormatter;
 use App\Support\Purchasing\SupplierPackageFormConfig;
 use App\Support\Workflows\WorkflowAssignmentPermissions;
@@ -1273,21 +1271,7 @@ class ItemController extends Controller
             return '';
         }
 
-        if ($inventoryCount->workflow_stage_id === null) {
-            return $inventoryCount->posted_at !== null ? 'COMPLETED' : 'Draft';
-        }
-
-        if ($inventoryCount->posted_at !== null) {
-            return $inventoryCount->workflowStage?->status_complete_label
-                ?: $inventoryCount->workflowStage?->name
-                ?: 'Unknown';
-        }
-
-        $previousStage = app(ResolveInventoryWorkflowStageAction::class)->previousActiveStage($inventoryCount);
-
-        return $previousStage?->status_complete_label
-            ?: $previousStage?->name
-            ?: 'Draft';
+        return app(InventoryCountWorkflow::class)->statusLabel($inventoryCount);
     }
 
     /**
@@ -1517,10 +1501,9 @@ class ItemController extends Controller
 
         $this->createInitialInventoryCountNote($inventoryCount, $request);
 
-        $this->ensureInventoryWorkflowStagesExist($request);
-        app(AdvanceInventoryCountWorkflowStageAction::class)->postCompatible(
+        app(InventoryCountWorkflow::class)->postCompatible(
             $inventoryCount,
-            (int) $request->user()->id
+            $request->user()
         );
     }
 
@@ -1544,25 +1527,6 @@ class ItemController extends Controller
             'visibility' => 'internal',
             'is_pinned' => false,
         ]);
-    }
-
-    /**
-     * Seed default inventory workflow stages only when the tenant has not configured them yet.
-     */
-    private function ensureInventoryWorkflowStagesExist(Request $request): void
-    {
-        $resolver = app(ResolveInventoryWorkflowStageAction::class);
-        $seedDefaultStagesAction = app(SeedDefaultWorkflowStagesForTenantAction::class);
-        $inventoryDomainId = $resolver->inventoryDomainId();
-
-        $hasStages = \App\Models\WorkflowStage::withoutGlobalScopes()
-            ->where('tenant_id', (int) $request->user()->tenant_id)
-            ->where('workflow_domain_id', $inventoryDomainId)
-            ->exists();
-
-        if (! $hasStages) {
-            $seedDefaultStagesAction->execute($request->user()->tenant()->firstOrFail());
-        }
     }
 
     /**
