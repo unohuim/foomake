@@ -172,6 +172,45 @@ export function mount(rootEl, payload) {
 
             return parts.join(' · ');
         },
+        recipeTitleBadges(record) {
+            const badges = [];
+            const version = String(record?.current_version_number_display || '').trim();
+            const type = String(record?.recipe_type_label || record?.recipe_type || '').trim();
+
+            if (type !== '') {
+                badges.push({
+                    label: type,
+                    tone: type.toLowerCase() === 'fulfillment' ? 'green' : 'blue',
+                });
+            }
+
+            if (version !== '') {
+                badges.push({
+                    label: version,
+                    tone: 'gray',
+                });
+            }
+
+            return badges;
+        },
+        recipeCardRows(record) {
+            return [
+                {
+                    left: [
+                        { label: 'Output', value: record?.output_item_name || '—' },
+                    ],
+                    right: [
+                        { label: 'Qty', value: record?.output_quantity_display || record?.output_quantity || '—' },
+                    ],
+                },
+                {
+                    left: [
+                        { label: 'Updated', value: record?.updated_at || '—' },
+                    ],
+                    right: [],
+                },
+            ];
+        },
         defaultCreateForm() {
             return {
                 item_id: '',

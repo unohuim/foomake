@@ -545,6 +545,50 @@ class MakeOrderController extends Controller
             ])
             ->findOrFail($makeOrder);
 
+        $targetStage = \App\Models\WorkflowStage::query()
+            ->where('tenant_id', $request->user()->tenant_id)
+            ->findOrFail((int) $validated['workflow_stage_id']);
+
+        $fieldErrors = [];
+
+        if (trim((string) $makeOrderModel->runs) === '' || bccomp((string) $makeOrderModel->runs, '0.000000', self::SCALE) !== 1) {
+            $fieldErrors['runs'] = ['Runs qty needs to be entered.'];
+        }
+
+        if (
+            trim((string) $makeOrderModel->expected_output_qty) === ''
+            || bccomp((string) $makeOrderModel->expected_output_qty, '0.000000', self::SCALE) !== 1
+        ) {
+            $fieldErrors['expected_output_qty'] = ['Set an expected output quantity before moving this make order into workflow.'];
+        }
+
+        if ($makeOrderModel->made_by_user_id === null) {
+            $fieldErrors['made_by_user_id'] = ['Assign this make order before moving it into workflow.'];
+        }
+
+        if (! $makeOrderModel->due_date) {
+            $fieldErrors['due_date'] = ['Set a due date before moving this make order into workflow.'];
+        } elseif ($makeOrderModel->due_date->startOfDay()->isBefore(now()->startOfDay())) {
+            $fieldErrors['due_date'] = ['Due date must be today or a future date before moving this make order into workflow.'];
+        }
+
+        if ($fieldErrors !== []) {
+            return $this->validationError(
+                $fieldErrors,
+                'Complete the required make order fields.'
+            );
+        }
+
+        if ($targetStage->key === 'completing') {
+            $actualOutputQty = trim((string) $makeOrderModel->actual_output_qty);
+
+            if ($actualOutputQty === '' || ! is_numeric($actualOutputQty) || bccomp($actualOutputQty, '0.000000', self::SCALE) !== 1) {
+                return $this->validationError([
+                    'actual_output_qty' => ['Actual output qty needs to be entered.'],
+                ], 'Actual output qty needs to be entered.');
+            }
+        }
+
         try {
             $makeOrderModel = $makeOrderWorkflow->moveToStage(
                 $makeOrderModel,
@@ -751,9 +795,13 @@ class MakeOrderController extends Controller
             }
 
             $actualOutputInput = $validated['actual_output_qty'] ?? $validated['actual_output_quantity'] ?? null;
-            $actualOutputQty = $actualOutputInput !== null
-                ? $this->canonicalQuantity((string) $actualOutputInput)
-                : null;
+            if ($actualOutputInput === null || trim((string) $actualOutputInput) === '') {
+                return $this->validationError([
+                    'actual_output_qty' => ['Actual output qty needs to be entered.'],
+                ], 'Actual output qty needs to be entered.');
+            }
+
+            $actualOutputQty = $this->canonicalQuantity((string) $actualOutputInput);
 
             foreach ($makeOrderModel->lines as $line) {
                 $inputItem = $line->inputItem;
@@ -1156,8 +1204,16 @@ class MakeOrderController extends Controller
             $makeOrder->outputItem?->baseUom,
             1
         );
+        $actualOutputQuantityDisplay = $makeOrder->actual_output_qty !== null
+            ? QuantityFormatter::formatForUom(
+                bcadd((string) $makeOrder->actual_output_qty, '0', self::SCALE),
+                $makeOrder->outputItem?->baseUom,
+                1
+            )
+            : '—';
         $workflowState = $this->makeOrderWorkflowState($makeOrder);
         $showUrl = route('manufacturing.make-orders.show', $makeOrder);
+        $outputUomSymbol = $makeOrder->outputItem?->baseUom?->symbol ?? '';
 
         return [
             'id' => $makeOrder->id,
@@ -1179,9 +1235,11 @@ class MakeOrderController extends Controller
             'actual_output_qty' => $makeOrder->actual_output_qty !== null
                 ? bcadd((string) $makeOrder->actual_output_qty, '0', self::SCALE)
                 : null,
+            'actual_output_qty_display' => $actualOutputQuantityDisplay,
             'actual_output_quantity' => $makeOrder->actual_output_qty !== null
                 ? bcadd((string) $makeOrder->actual_output_qty, '0', self::SCALE)
                 : null,
+            'actual_output_quantity_display' => $actualOutputQuantityDisplay,
             'status' => $makeOrder->status,
             'workflow_state' => $workflowState,
             'status_label' => $workflowState,
@@ -1195,12 +1253,15 @@ class MakeOrderController extends Controller
             'made_at' => $makeOrder->made_at?->format('Y-m-d H:i'),
             'show_url' => $showUrl,
             'recipe_version_output_qty' => $recipeVersionOutputQty,
+            'output_uom_symbol' => $outputUomSymbol,
             'output_uom_display_precision' => (int) ($makeOrder->outputItem?->baseUom?->display_precision ?? 6),
             'display' => [
                 'recipeNameText' => $makeOrder->recipe?->name ?? 'Unnamed recipe',
                 'runsText' => $runsText,
                 'dueDateText' => $makeOrder->due_date?->format('Y-m-d') ?? 'No due date',
                 'totalOutputQuantityText' => $totalOutputQuantityDisplay,
+                'actualOutputQuantityText' => $actualOutputQuantityDisplay,
+                'outputUomSymbol' => $outputUomSymbol,
                 'statusText' => $workflowState,
                 'statusTone' => $workflowState === 'DRAFT' ? 'muted' : 'default',
                 'versionBadgeText' => 'v' . ($makeOrder->recipeVersion?->versionNumberDisplay() ?? '—'),
@@ -1577,9 +1638,28 @@ class MakeOrderController extends Controller
                 ],
             ],
             'mobileCard' => [
-                'titleExpression' => "record.recipe_name || '—'",
-                'subtitleExpression' => "record.output_item_name || '—'",
-                'bodyExpression' => 'makeOrderMobileSummary(record)',
+                'titleExpression' => "record.output_item_name || '—'",
+                'titleAsideExpression' => "record.due_date || 'No due date'",
+                'titleAsidePlacement' => 'top-right',
+                'titleBadgesExpression' => 'makeOrderTitleBadges(record)',
+                'subtitleExpression' => '',
+                'detailRowsExpression' => 'makeOrderCardRows(record)',
+                'bodyExpression' => '',
+                'showBody' => false,
+                'showActions' => false,
+                'urlExpression' => 'record.show_url',
+            ],
+            'desktopCard' => [
+                'titleExpression' => "record.output_item_name || '—'",
+                'titleAsideExpression' => "record.due_date || 'No due date'",
+                'titleBadgesExpression' => 'makeOrderTitleBadges(record)',
+                'subtitleExpression' => '',
+                'detailRowsExpression' => 'makeOrderCardRows(record)',
+                'bodyExpression' => '',
+                'showBody' => false,
+                'compact' => true,
+                'showActions' => false,
+                'urlExpression' => 'record.show_url',
             ],
             'actions' => $actions,
         ];

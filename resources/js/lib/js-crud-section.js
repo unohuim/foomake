@@ -565,23 +565,23 @@ const renderCrudSection = () => `
     >
         <div class="flex items-start justify-between gap-2 bg-blue-50 px-3 py-4 sm:gap-3 sm:px-6 sm:py-5">
             <div class="min-w-0 flex-1">
-                <h3 class="text-lg font-semibold text-gray-900" x-text="section.title"></h3>
+                <h3 class="text-sm font-semibold text-gray-900 sm:text-lg" x-text="section.title"></h3>
                 <p
-                    class="mt-1 text-sm text-gray-500 sm:overflow-visible sm:whitespace-normal sm:text-clip"
+                    class="mt-0.5 text-[0.65rem] text-gray-500 sm:mt-1 sm:overflow-visible sm:whitespace-normal sm:text-sm sm:text-clip"
                     :class="descriptionExpanded ? 'whitespace-normal' : 'truncate'"
                     x-text="section.description"
                 ></p>
             </div>
             <button
                 type="button"
-                class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-gray-300 text-gray-600 transition hover:bg-gray-50 hover:text-gray-900"
+                class="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md border border-gray-300 text-gray-600 transition hover:bg-gray-50 hover:text-gray-900 sm:h-8 sm:w-8 sm:rounded-lg"
                 aria-expanded="false"
                 x-bind:aria-expanded="isOpen ? 'true' : 'false'"
                 x-on:click="toggleOpen()"
                 aria-label="Toggle section"
                 data-js-crud-section-toggle
             >
-                <svg class="h-4 w-4 text-gray-400 transition duration-[400ms] ease-in-out" :class="isOpen ? 'rotate-180' : ''" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+                <svg class="h-2.5 w-2.5 text-gray-400 transition duration-[400ms] ease-in-out sm:h-4 sm:w-4" :class="isOpen ? 'rotate-180' : ''" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
                     <path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
                 </svg>
             </button>
@@ -597,6 +597,7 @@ const renderCrudSection = () => `
                 <div
                     class="border-t border-gray-100 bg-white px-3 py-2 opacity-0 transition-opacity duration-[400ms] ease-in-out sm:px-6 sm:py-5"
                     :class="isOpen ? 'opacity-100' : 'opacity-0'"
+                    data-js-crud-section-body
                 >
                     <div class="mb-2 flex flex-col gap-2 sm:mb-4 sm:gap-3">
                         <p class="text-sm text-red-600" x-show="sectionError" x-text="sectionError"></p>
@@ -777,9 +778,10 @@ const renderCrudSection = () => `
                                     </template>
                                     <template x-for="badge in badgeItems(record)" :key="\`\${record.id}-\${badge.text}-badge\`">
                                         <span
-                                            class="inline-flex items-center rounded-full px-2.5 py-1 font-medium"
-                                            :class="[badge.toneClass, badge.textClass || 'text-xs']"
-                                            x-text="badge.text"
+                                            class="inline-flex items-center rounded-full px-1.5 py-0.5 font-medium leading-none sm:px-2.5 sm:py-1"
+                                            :class="[badge.toneClass, badge.textClass || 'text-[0.65rem] sm:text-xs']"
+                                            data-js-crud-section-badge
+                                            x-text="badgeText(badge)"
                                         ></span>
                                     </template>
                                     <template x-for="line in mobilePrimaryFieldItems(record)" :key="\`\${record.id}-\${line.label}-mobile-primary\`">
@@ -1554,6 +1556,19 @@ const createSectionState = (section, adapters, hostEl) => ({
                 textClass: entry.textClass,
             }))
             .filter((badge) => badge.text !== "—" && badge.text !== "");
+    },
+    badgeText(badge) {
+        const text = asString(badge?.text);
+
+        if (
+            this.section.resource !== "material-stock-moves" ||
+            !window.matchMedia("(max-width: 639px)").matches ||
+            text.length <= 20
+        ) {
+            return text;
+        }
+
+        return `${text.slice(0, 18)}..`;
     },
     rightMetaItems(record) {
         if (typeof this.adapters.rightMetaItems === "function") {

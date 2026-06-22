@@ -121,6 +121,31 @@ export function mount(rootEl, payload) {
                 return '-';
             }
         },
+        supplierTitleBadges(supplier) {
+            const currency = String(supplier?.currency_code || '').trim();
+
+            return currency !== ''
+                ? [{ label: currency, tone: 'gray' }]
+                : [];
+        },
+        supplierCardRows(supplier) {
+            return [
+                {
+                    left: [
+                        { label: 'Email', value: supplier?.email || '-' },
+                    ],
+                    right: [
+                        { label: 'Phone', value: supplier?.phone || '-' },
+                    ],
+                },
+                {
+                    left: [
+                        { label: 'Website', value: supplier?.url || '-' },
+                    ],
+                    right: [],
+                },
+            ];
+        },
         normalizeErrors(errors) {
             if (!errors || typeof errors !== 'object') {
                 return emptyErrors();

@@ -157,6 +157,37 @@ export function mount(rootEl, payload) {
 
             return '—';
         },
+        productTitleBadges(product) {
+            const badges = [];
+
+            if (product?.is_manufacturable) {
+                badges.push({
+                    label: 'Manufacturable',
+                    tone: 'blue',
+                });
+            }
+
+            if (product?.is_purchasable) {
+                badges.push({
+                    label: 'Purchasable',
+                    tone: 'green',
+                });
+            }
+
+            return badges;
+        },
+        productCardRows(product) {
+            return [
+                {
+                    left: [
+                        { label: 'Base UoM', value: this.productBaseUomLabel(product) },
+                    ],
+                    right: [
+                        { label: 'Price', value: this.formattedProductPrice(product) },
+                    ],
+                },
+            ];
+        },
         productCellText(product, column) {
             switch (column) {
             case 'name':

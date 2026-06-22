@@ -509,6 +509,16 @@ class SupplierController extends Controller
                 'subtitleExpression' => "record.email || '-'",
                 'bodyExpression' => "record.phone || record.currency_code || '-'",
             ],
+            'desktopCard' => [
+                'titleExpression' => "record.company_name || '-'",
+                'titleBadgesExpression' => 'supplierTitleBadges(record)',
+                'subtitleExpression' => "record.email || '-'",
+                'detailRowsExpression' => 'supplierCardRows(record)',
+                'bodyExpression' => '',
+                'showBody' => false,
+                'compact' => true,
+                'urlExpression' => 'record.show_url',
+            ],
             'actions' => $canManage ? [
                 [
                     'id' => 'edit',

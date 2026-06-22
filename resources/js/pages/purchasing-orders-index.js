@@ -89,6 +89,26 @@ export function mount(rootEl, payload) {
                 order?.po_grand_total_display || this.formatMoney(order?.po_grand_total_cents),
             ].join(' • ');
         },
+        purchaseOrderTitleBadges(order) {
+            const status = order?.status || '';
+
+            if (status === '') {
+                return [];
+            }
+
+            const tones = {
+                CANCELLED: 'gray',
+                COMPLETED: 'green',
+                CREATED: 'blue',
+                DRAFT: 'yellow',
+                RECEIVED: 'received',
+            };
+
+            return [{
+                label: status,
+                tone: tones[status] || 'gray',
+            }];
+        },
         formatMoney(cents) {
             if (cents === null || cents === undefined) {
                 return `${this.tenantCurrency} 0.00`;

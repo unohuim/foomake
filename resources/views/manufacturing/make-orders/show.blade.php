@@ -14,47 +14,59 @@
         <div>
             <x-resource-detail-header-breadcrumb
                 :items="$payload['breadcrumbs'] ?? []"
-                :title="$makeOrderPayload['title'] ?? ('Make Order ' . $makeOrder->id)"
+                :title="$makeOrderPayload['output_item_name'] ?? '—'"
                 x-data="makeOrderHeaderState('manufacturing-make-orders-show-payload')"
             >
+                <x-slot name="top">
+                    <x-ui.validation-banner class="mt-0 sm:mt-3" />
+                </x-slot>
+
+                <x-slot name="titleAbove">
+                    {{ 'MO-' . $makeOrder->id }}
+                </x-slot>
+
                 <x-slot name="titleSuffix">
-                    <span
-                        class="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700"
-                        x-text="workflow.display_label || makeOrder.display_label || makeOrder.workflow_state || 'DRAFT'"
-                    >
-                        {{ data_get($payload, 'workflow.display_label', data_get($makeOrderPayload, 'display_label', data_get($makeOrderPayload, 'workflow_state', 'DRAFT'))) }}
+                    <span class="text-sm font-medium text-gray-500">
+                        {{ $makeOrderPayload['due_date'] ?? 'No due date' }}
                     </span>
                 </x-slot>
 
                 <x-slot name="metadata">
-                    <div
-                        class="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-gray-500"
-                        data-resource-detail-header-metadata-group="primary"
-                    >
-                        <span class="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700">
-                            {{ $makeOrderPayload['recipe_name'] ?? '—' }}
-                        </span>
-                        <span
-                            class="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700"
-                            x-text="'{{ __('Runs') }} ' + (makeOrder.runs_text || '—')"
-                        >
-                            {{ __('Runs') }} {{ $makeOrderPayload['runs_text'] ?? '—' }}
-                        </span>
-                    </div>
+                    <div class="space-y-1 text-sm text-gray-600">
+                        <div class="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-[0.65rem] font-medium uppercase tracking-wide text-gray-500">
+                            <span>{{ __('Recipe') }}</span>
+                            <span class="text-[0.85rem] font-semibold text-gray-700">{{ $makeOrderPayload['recipe_name'] ?? '—' }}</span>
+                            <span class="text-gray-400">{{ $makeOrderPayload['display']['versionBadgeText'] ?? ('v' . ($makeOrderPayload['recipe_version_number_display'] ?? '—')) }}</span>
+                            <span>{{ __('Runs') }}</span>
+                            <span class="text-sm font-semibold text-gray-700">{{ $makeOrderPayload['runs_text'] ?? '—' }}</span>
+                        </div>
 
-                    <div
-                        class="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-gray-500"
-                        data-resource-detail-header-metadata-group="secondary"
-                    >
-                        <span class="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700">
-                            {{ $makeOrderPayload['output_item_name'] ?? '—' }}
-                        </span>
-                        <span
-                            class="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700"
-                            x-text="'{{ __('Expected Output') }} ' + (makeOrder.expected_output_qty_text || '—')"
-                        >
-                            {{ __('Expected Output') }} {{ $makeOrderPayload['expected_output_qty_text'] ?? '—' }}
-                        </span>
+                        <div class="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-[0.65rem] font-medium uppercase tracking-wide text-gray-500">
+                            <span>{{ __('Expected') }}</span>
+                            <span class="font-medium text-gray-700">
+                                @php
+                                    $expectedOutputQtyText = trim((string) ($makeOrderPayload['expected_output_qty_text'] ?? ''));
+                                    $actualOutputQtyText = trim((string) ($makeOrderPayload['actual_output_qty_text'] ?? ''));
+                                    $outputUomSymbol = trim((string) ($makeOrderPayload['output_uom_symbol'] ?? ''));
+                                    $formatQuantity = static function (string $value): string {
+                                        $normalized = trim($value);
+
+                                        if ($normalized === '' || !is_numeric($normalized)) {
+                                            return '';
+                                        }
+
+                                        $formatted = number_format((float) $normalized, 6, '.', ',');
+
+                                        return rtrim(rtrim($formatted, '0'), '.');
+                                    };
+                                @endphp
+                                {{ $expectedOutputQtyText !== '' ? $formatQuantity($expectedOutputQtyText) . ($outputUomSymbol !== '' ? ' ' . $outputUomSymbol : '') : '' }}
+                            </span>
+                            <span class="px-2">{{ __('Actual') }}</span>
+                            <span class="font-medium text-gray-700">
+                                {{ $actualOutputQtyText !== '' ? $formatQuantity($actualOutputQtyText) . ($outputUomSymbol !== '' ? ' ' . $outputUomSymbol : '') : '' }}
+                            </span>
+                        </div>
                     </div>
                 </x-slot>
 
@@ -68,6 +80,7 @@
                     />
                 </x-slot>
             </x-resource-detail-header-breadcrumb>
+
         </div>
     </x-slot>
 
@@ -75,9 +88,14 @@
 
     <x-ui.toast visible="toast.visible" type="toast.type" message="toast.message" />
 
-    <div class="mx-auto max-w-5xl space-y-6 px-1 pt-0 pb-8 sm:px-6 sm:pt-6 sm:pb-12 lg:px-8">
-        <div data-workflow-progress-panel x-html="workflowProgressHtml()"></div>
+    <x-ui.workflow-progress
+        :steps="$payload['workflowProgressSteps'] ?? []"
+        :neutral_draft="true"
+        class="-mx-1 sm:mx-0"
+        data-workflow-progress-panel
+    />
 
+    <div class="mx-auto max-w-5xl space-y-0 px-1 pt-0 pb-8 sm:space-y-6 sm:px-6 sm:pt-6 sm:pb-12 lg:px-8" data-make-order-detail-content>
         <x-detail-section-card
             title="Details"
             :description="__('Runs, expected output, actual output, due date, and assignment live here. Workflow movement stays in the header action.')"
@@ -164,11 +182,11 @@
                 <x-slot name="actions">
                     <button
                         type="button"
-                        class="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-gray-300 text-gray-600 transition hover:bg-gray-50 hover:text-gray-900"
+                        class="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-gray-300 text-gray-600 transition hover:bg-gray-50 hover:text-gray-900 sm:h-10 sm:w-10"
                         x-on:click="showTaskCreate = true"
                         aria-label="{{ __('Create task') }}"
                     >
-                        <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+                        <svg class="h-3.5 w-3.5 sm:h-5 sm:w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
                         </svg>
                     </button>

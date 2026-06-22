@@ -905,7 +905,7 @@ class ItemController extends Controller
                     [
                         'field' => 'display.statusText',
                         'toneField' => 'display.statusTone',
-                        'textClass' => 'text-[0.55rem] uppercase tracking-wide',
+                        'textClass' => 'text-[0.4rem] leading-[0.55rem] uppercase tracking-wide sm:text-[0.55rem]',
                         'fallback' => '',
                     ],
                 ],

@@ -7,12 +7,6 @@ export function mount(rootEl, payload) {
     const safePayload = payload || {};
     const crud = createGenericCrud(parseCrudConfig(rootEl));
     const crudRootEl = rootEl.querySelector('[data-crud-root]');
-    const actionDefinitions = (Array.isArray(crud.actions) ? crud.actions : []).map((action) => ({
-        ...action,
-        handler: action.id === 'archive'
-            ? 'archive(record)'
-            : '',
-    }));
     const rendererConfig = {
         ...crud,
         state: {
@@ -35,7 +29,7 @@ export function mount(rootEl, payload) {
             ...crud.mobileCard,
         },
         rowActions: crud.rowActions || {},
-        actions: actionDefinitions,
+        actions: [],
     };
 
     mountCrudCardRenderer(crudRootEl, rendererConfig);
@@ -140,6 +134,58 @@ export function mount(rootEl, payload) {
             }
 
             return parts.join(' · ');
+        },
+        makeOrderTitleBadges(record) {
+            const status = String(record?.status_label || record?.workflow_state || '').trim();
+
+            if (status === '') {
+                return [];
+            }
+
+            const normalized = status.toUpperCase();
+            const tones = {
+                CANCELLED: 'gray',
+                COMPLETED: 'green',
+                DRAFT: 'yellow',
+                MADE: 'green',
+                SCHEDULED: 'blue',
+                CREATED: 'blue',
+                'IN PROGRESS': 'blue',
+            };
+
+            return [{
+                label: status,
+                tone: tones[normalized] || 'gray',
+            }];
+        },
+        makeOrderCardRows(record) {
+            return [
+                {
+                    left: [
+                        { label: 'Recipe', value: record?.recipe_name || '—' },
+                        { label: 'Runs', value: record?.runs_display || record?.runs || '—' },
+                    ],
+                    right: [],
+                },
+                {
+                    left: [
+                        { label: 'Expected', value: this.makeOrderQuantityWithUom(record?.expected_output_qty_display || record?.qty_display, record) },
+                    ],
+                    right: [
+                        { label: 'Actual', value: this.makeOrderQuantityWithUom(record?.actual_output_qty_display || record?.actual_output_quantity_display, record) },
+                    ],
+                },
+            ];
+        },
+        makeOrderQuantityWithUom(value, record) {
+            const quantity = String(value || '—').trim();
+            const symbol = String(record?.output_uom_symbol || '').trim();
+
+            if (quantity === '—' || symbol === '') {
+                return quantity;
+            }
+
+            return `${quantity} ${symbol}`;
         },
         normalizeErrors(errors) {
             if (!errors || typeof errors !== 'object') {

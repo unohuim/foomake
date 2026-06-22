@@ -609,8 +609,18 @@ class PurchaseOrderController extends Controller
             ],
             'mobileCard' => [
                 'titleExpression' => "record.order || 'Draft PO'",
+                'titleAsideExpression' => "record.order_date || 'No order date'",
+                'titleAsideSecondaryExpression' => "record.po_grand_total_display || formatMoney(record.po_grand_total_cents)",
+                'titleBadgesExpression' => 'purchaseOrderTitleBadges(record)',
                 'subtitleExpression' => "record.supplier_name || 'Supplier not set'",
                 'bodyExpression' => 'purchaseOrderMobileSummary(record)',
+                'showBody' => false,
+            ],
+            'desktopCard' => [
+                'titleAsideExpression' => "record.order_date || 'No order date'",
+                'titleAsideSecondaryExpression' => "record.po_grand_total_display || formatMoney(record.po_grand_total_cents)",
+                'showBody' => false,
+                'compact' => true,
             ],
             'actions' => [],
         ];

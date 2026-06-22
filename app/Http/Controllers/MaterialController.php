@@ -139,7 +139,7 @@ class MaterialController extends Controller
             ],
             'mobileCard' => [
                 'titleExpression' => "record.item || '—'",
-                'titleAsideExpression' => 'materialCardUomLabel(record)',
+                'titleAsideStatsExpression' => 'materialMobileQuantityStats(record)',
                 'subtitleExpression' => '',
                 'bodyExpression' => '',
                 'layout' => 'flush-stacked',
@@ -147,6 +147,7 @@ class MaterialController extends Controller
                 'iconBadgesExpression' => 'materialFlagIcons(record)',
                 'urlExpression' => 'record.show_url',
                 'showActions' => false,
+                'showToggle' => false,
                 'toggle' => [
                     'name' => 'is_active',
                     'checkedExpression' => 'Boolean(record.is_active)',

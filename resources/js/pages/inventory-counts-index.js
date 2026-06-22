@@ -120,7 +120,26 @@ export function mount(rootEl, payload) {
         inventoryCountStatusBadges(record) {
             const status = String(record?.status_label || '').trim();
 
-            return status === '' ? [] : [status];
+            if (status === '') {
+                return [];
+            }
+
+            const normalized = status.toUpperCase();
+            const tones = {
+                CANCELLED: 'gray',
+                COMPLETED: 'green',
+                COUNTED: 'green',
+                CREATED: 'blue',
+                DRAFT: 'yellow',
+                POSTED: 'green',
+                RECEIVED: 'received',
+                SCHEDULED: 'blue',
+            };
+
+            return [{
+                label: status,
+                tone: tones[normalized] || 'gray',
+            }];
         },
         inventoryCountCardStats(record) {
             return [

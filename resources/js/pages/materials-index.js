@@ -203,6 +203,19 @@ export function mount(rootEl, payload) {
                 { label: 'MO Qty', value: this.formatMaterialCardQuantity(record?.make_display), span: 2 },
             ];
         },
+        materialMobileQuantityStats(record) {
+            const onHand = this.formatMaterialCardQuantity(record?.on_hand_display);
+            const net = this.formatMaterialCardQuantity(record?.net_display);
+            const make = this.formatMaterialCardQuantity(record?.make_display);
+            const symbol = String(record?.item_uom_symbol || '').trim();
+            const suffix = symbol === '' ? '' : ` ${symbol}`;
+
+            return [
+                { label: 'On hand', value: `${onHand}${suffix}` },
+                { label: 'MO Qty', value: `${make}${suffix}` },
+                { label: 'Net', value: `${net}${suffix}` },
+            ];
+        },
         showToast(type, message) {
             this.toast.type = type;
             this.toast.message = message;

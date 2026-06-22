@@ -30,6 +30,7 @@
         <x-resource-detail-header-breadcrumb
             :items="$breadcrumbItems"
             :title="$purchaseOrderTitle"
+            class="pb-4"
         >
             @can('purchasing-purchase-orders-receive')
                 @if (($payload['workflow']['actions'] ?? []) !== [])
@@ -54,10 +55,10 @@
     <div class="pt-0 pb-8 sm:pt-6 sm:pb-12">
         <x-ui.toast visible="toast.visible" type="toast.type" message="toast.message" />
 
-        <div class="mx-auto w-full min-w-0 max-w-7xl space-y-6 px-1 sm:px-6 lg:px-8" data-purchase-order-detail-content>
+        <div class="mx-auto w-full min-w-0 max-w-7xl space-y-0 px-1 sm:space-y-6 sm:px-6 lg:px-8" data-purchase-order-detail-content>
             <div data-workflow-progress-panel x-html="workflowProgressHtml()"></div>
 
-            <div class="grid w-full min-w-0 gap-4 sm:gap-6 lg:grid-cols-4 lg:items-start" data-purchase-order-detail-grid>
+            <div class="grid w-full min-w-0 gap-0 sm:gap-6 lg:grid-cols-4 lg:items-start" data-purchase-order-detail-grid>
                 <div class="min-w-0 space-y-0 sm:space-y-6 lg:col-span-3" data-purchase-order-main-column>
                     <x-detail-section-card title="Details" :default-open="$detailsDefaultOpen">
                         <div class="grid gap-6 sm:grid-cols-2">
@@ -129,10 +130,11 @@
             <x-detail-section-card title="Items" :default-open="true">
                 <div class="space-y-4">
                     <div class="space-y-2" x-show="isEditable">
-                        <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
+                        <div class="flex items-start gap-2 sm:gap-3">
                             <div class="min-w-0 flex-1">
                                 <x-combobox
                                     name="item_purchase_option_id"
+                                    class="[&_input]:rounded-lg [&_input]:px-3 [&_input]:py-2 [&_input]:pr-9 [&_input]:text-xs sm:[&_input]:text-sm"
                                     options-expression="supplierPackageComboboxOptions"
                                     selected-value=""
                                     placeholder="Search supplier packages"
@@ -147,16 +149,16 @@
                                 </p>
                                 <span class="mt-1 block text-xs text-red-600" x-text="lineErrors.supplier_id[0]"></span>
                             </div>
-                            <div class="flex justify-end sm:shrink-0">
+                            <div class="shrink-0 pt-1">
                                 <button
                                     type="button"
-                                    class="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-gray-300 text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                                    class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-gray-300 text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
                                     x-on:click="submitLine()"
                                     :disabled="isLineSubmitting || !form.supplier_id || !lineForm.item_purchase_option_id"
                                     :class="isLineSubmitting || !form.supplier_id || !lineForm.item_purchase_option_id ? 'cursor-not-allowed opacity-50' : ''"
                                     aria-label="Add supplier package"
                                 >
-                                    <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+                                    <svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
                                         <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
                                     </svg>
                                 </button>
@@ -169,7 +171,88 @@
                         This purchase order is locked and can no longer be edited.
                     </div>
 
-                    <div class="overflow-x-auto" x-show="lines.length > 0">
+                    <div class="space-y-2 md:hidden" x-show="lines.length > 0">
+                        <template x-for="line in lines" :key="'mobile-line-' + line.id">
+                            <div class="relative rounded-lg border border-gray-200 bg-white p-3 shadow-sm">
+                                <div class="flex items-start gap-3">
+                                    <div class="min-w-0 flex-1 truncate text-sm font-medium text-gray-900" x-text="line.item_name || 'Item'"></div>
+                                    <button
+                                        type="button"
+                                        class="inline-flex h-7 w-7 shrink-0 items-center justify-center text-gray-400 transition hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-50"
+                                        aria-label="Remove purchase order line"
+                                        x-on:click="deleteLine(line)"
+                                        :disabled="isDeleteLineSubmitting"
+                                        x-show="isEditable"
+                                    >
+                                        <svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
+                                        </svg>
+                                    </button>
+                                </div>
+
+                                <div class="mt-2 grid grid-cols-[minmax(0,1fr)_5rem_5.5rem] items-end gap-2">
+                                    <div class="min-w-0">
+                                        <div class="text-[0.65rem] font-semibold uppercase tracking-wide text-gray-400">Pack</div>
+                                        <div class="mt-1 truncate text-xs font-medium text-gray-600" x-text="lineLabel(line)"></div>
+                                    </div>
+
+                                    <div>
+                                        <div class="text-[0.65rem] font-semibold uppercase tracking-wide text-gray-400">Qty</div>
+                                        <div class="mt-1 flex items-center gap-1">
+                                            <span class="inline-flex h-4 w-4 shrink-0 items-center justify-center">
+                                                <svg data-line-autosave-success-icon class="h-4 w-4 text-lime-400 transition-opacity" x-bind:class="lineFieldSaved(line, 'pack_count') ? 'opacity-100' : 'opacity-0'" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75" />
+                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                                                </svg>
+                                            </span>
+                                            <x-ui.smart-number-input
+                                                name="pack_count"
+                                                type="integer"
+                                                inputmode="numeric"
+                                                class="min-w-0 flex-1 [&_input]:px-2 [&_input]:py-1 [&_input]:text-xs"
+                                                x-model="line.pack_count"
+                                                disabled-expression="!isEditable"
+                                                after-focus="$el.setSelectionRange($el.value.length, $el.value.length)"
+                                                x-on:smart-number-input:changed="autosaveLineField(line, 'pack_count', $event.detail)"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <div class="text-[0.65rem] font-semibold uppercase tracking-wide text-gray-400">Tax</div>
+                                        <div class="mt-1 flex items-center gap-1">
+                                            <span class="inline-flex h-4 w-4 shrink-0 items-center justify-center">
+                                                <svg data-line-autosave-success-icon class="h-4 w-4 text-lime-400 transition-opacity" x-bind:class="lineFieldSaved(line, 'tax_percent') ? 'opacity-100' : 'opacity-0'" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75" />
+                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                                                </svg>
+                                            </span>
+                                            <x-ui.smart-number-input
+                                                name="tax_percent"
+                                                type="percent"
+                                                precision="1"
+                                                class="min-w-0 flex-1 [&_input]:px-2 [&_input]:py-1 [&_input]:text-xs [&_span]:pr-2 [&_span]:text-xs"
+                                                x-model="line.tax_percent"
+                                                disabled-expression="!isEditable"
+                                                x-on:smart-number-input:changed="autosaveLineField(line, 'tax_percent', $event.detail)"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="mt-2 truncate text-[0.68rem] text-gray-500">
+                                    Received <span x-text="line.received_sum_display"></span>
+                                    <span class="px-1">·</span>
+                                    Short-closed <span x-text="line.short_closed_sum_display"></span>
+                                    <span class="px-1">·</span>
+                                    Remaining <span x-text="line.remaining_balance_display"></span>
+                                </div>
+
+                            </div>
+                        </template>
+                    </div>
+
+                    <div class="hidden overflow-x-auto md:block" x-show="lines.length > 0">
                         <table class="min-w-full divide-y divide-gray-100">
                             <thead>
                                 <tr>
@@ -357,11 +440,11 @@
                             <x-slot name="actions">
                                 <button
                                     type="button"
-                                    class="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-gray-300 text-gray-600 transition hover:bg-gray-50 hover:text-gray-900"
+                                    class="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-gray-300 text-gray-600 transition hover:bg-gray-50 hover:text-gray-900 sm:h-10 sm:w-10"
                                     x-on:click="showTaskCreate = true"
                                     aria-label="{{ __('Create task') }}"
                                 >
-                                    <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+                                    <svg class="h-3.5 w-3.5 sm:h-5 sm:w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
                                         <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
                                     </svg>
                                 </button>
@@ -480,7 +563,9 @@
             </div>
 
         </div>
+    </div>
 
+    <x-slot name="overlays">
         <div
             class="fixed inset-0 z-50 flex items-center justify-center"
             x-show="isDeleteLineOpen"
@@ -555,7 +640,7 @@
             x-on:keydown.escape.window="closeReceive()"
         >
             <div class="fixed inset-0 bg-gray-900/30" x-on:click="closeReceive()"></div>
-            <div class="relative z-50 flex h-full w-full max-w-3xl flex-col bg-white shadow-xl">
+            <form class="relative z-50 flex h-full w-full max-w-3xl flex-col bg-white shadow-xl" x-on:submit.prevent="submitReceive()">
                 <div class="border-b border-gray-100 p-6">
                     <div class="flex items-start justify-between">
                         <div>
@@ -668,9 +753,8 @@
                             Cancel
                         </button>
                         <button
-                            type="button"
+                            type="submit"
                             class="inline-flex items-center px-4 py-2 bg-blue-600 border border-transparent rounded-md text-xs font-semibold text-white uppercase tracking-widest hover:bg-blue-500"
-                            x-on:click="submitReceive()"
                             :disabled="isReceiveSubmitting"
                             :class="isReceiveSubmitting ? 'opacity-50 cursor-not-allowed' : ''"
                         >
@@ -678,7 +762,7 @@
                         </button>
                     </div>
                 </div>
-            </div>
+            </form>
         </div>
 
         <div
@@ -780,5 +864,5 @@
                 </div>
             </div>
         </div>
-    </div>
+    </x-slot>
 </x-resource-detail-layout>

@@ -612,6 +612,15 @@ class SalesProductController extends Controller
                 'subtitleExpression' => 'productBaseUomLabel(record)',
                 'bodyExpression' => 'formattedProductPrice(record)',
             ],
+            'desktopCard' => [
+                'titleExpression' => "record.name || '—'",
+                'titleBadgesExpression' => 'productTitleBadges(record)',
+                'subtitleExpression' => 'productBaseUomLabel(record)',
+                'detailRowsExpression' => 'productCardRows(record)',
+                'bodyExpression' => '',
+                'showBody' => false,
+                'compact' => true,
+            ],
             'actions' => [
                 [
                     'id' => 'edit',

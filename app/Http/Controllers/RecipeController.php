@@ -1040,8 +1040,19 @@ class RecipeController extends Controller
             ],
             'mobileCard' => [
                 'titleExpression' => "record.name || '—'",
+                'titleBadgesExpression' => 'recipeTitleBadges(record)',
                 'subtitleExpression' => "record.output_item_name || '—'",
                 'bodyExpression' => 'recipeMobileSummary(record)',
+            ],
+            'desktopCard' => [
+                'titleExpression' => "record.name || '—'",
+                'titleBadgesExpression' => 'recipeTitleBadges(record)',
+                'subtitleExpression' => "record.output_item_name || '—'",
+                'detailRowsExpression' => 'recipeCardRows(record)',
+                'bodyExpression' => '',
+                'showBody' => false,
+                'compact' => true,
+                'urlExpression' => 'record.show_url',
             ],
             'actions' => [
                 ['id' => 'make', 'label' => 'Make Order', 'tone' => 'default'],

@@ -73,14 +73,21 @@ const normalizeCardRendererConfig = (config) => {
         mobileCard: {
             titleExpression: sanitizeExpression(mobileCard.titleExpression, "record.name || '—'"),
             titleAsideExpression: sanitizeExpression(mobileCard.titleAsideExpression),
+            titleAsideStatsExpression: sanitizeExpression(mobileCard.titleAsideStatsExpression),
+            titleAsideSecondaryExpression: sanitizeExpression(mobileCard.titleAsideSecondaryExpression),
             titleAsidePlacement: sanitizeExpression(mobileCard.titleAsidePlacement),
             titleBadgesExpression: sanitizeExpression(mobileCard.titleBadgesExpression),
             subtitleExpression: sanitizeExpression(mobileCard.subtitleExpression),
+            detailRowsExpression: sanitizeExpression(mobileCard.detailRowsExpression),
             bodyExpression: sanitizeExpression(mobileCard.bodyExpression),
+            showBody: mobileCard.showBody !== false,
             badgesExpression: sanitizeExpression(mobileCard.badgesExpression),
             iconBadgesExpression: sanitizeExpression(mobileCard.iconBadgesExpression),
+            centerStatsExpression: sanitizeExpression(mobileCard.centerStatsExpression),
+            iconRowStatsExpression: sanitizeExpression(mobileCard.iconRowStatsExpression),
             urlExpression: sanitizeExpression(mobileCard.urlExpression),
             showActions: mobileCard.showActions !== false,
+            showToggle: mobileCard.showToggle !== false,
             toggle: {
                 name: sanitizeExpression(mobileToggle.name),
                 checkedExpression: sanitizeExpression(mobileToggle.checkedExpression),
@@ -94,12 +101,19 @@ const normalizeCardRendererConfig = (config) => {
         desktopCard: {
             titleExpression: sanitizeExpression(desktopCard.titleExpression, sanitizeExpression(mobileCard.titleExpression, "record.name || '—'")),
             titleAsideExpression: sanitizeExpression(desktopCard.titleAsideExpression, sanitizeExpression(mobileCard.titleAsideExpression)),
+            titleAsideSecondaryExpression: sanitizeExpression(desktopCard.titleAsideSecondaryExpression),
+            titleBadgesExpression: sanitizeExpression(desktopCard.titleBadgesExpression, sanitizeExpression(mobileCard.titleBadgesExpression)),
             subtitleExpression: sanitizeExpression(desktopCard.subtitleExpression, sanitizeExpression(mobileCard.subtitleExpression)),
+            subtitleAsideExpression: sanitizeExpression(desktopCard.subtitleAsideExpression),
+            detailRowsExpression: sanitizeExpression(desktopCard.detailRowsExpression, sanitizeExpression(mobileCard.detailRowsExpression)),
             bodyExpression: sanitizeExpression(desktopCard.bodyExpression, sanitizeExpression(mobileCard.bodyExpression)),
+            showBody: desktopCard.showBody !== false,
+            compact: Boolean(desktopCard.compact),
             badgesExpression: sanitizeExpression(desktopCard.badgesExpression, sanitizeExpression(mobileCard.badgesExpression)),
             iconBadgesExpression: sanitizeExpression(desktopCard.iconBadgesExpression),
             statsExpression: sanitizeExpression(desktopCard.statsExpression),
             urlExpression: sanitizeExpression(desktopCard.urlExpression, sanitizeExpression(mobileCard.urlExpression)),
+            showActions: desktopCard.showActions !== false,
         },
         desktopList: {
             enabled: Boolean(desktopList.enabled),
@@ -205,14 +219,30 @@ const renderActionCell = (config) => `
         class="relative shrink-0"
         x-data="{
             open: false,
+            menuTop: 0,
+            menuRight: 0,
             toggle() {
-                this.open = !this.open;
+                if (this.open) {
+                    this.open = false;
+                    return;
+                }
+
+                const rect = this.$refs.button.getBoundingClientRect();
+
+                this.menuTop = Math.max(8, Math.min(rect.bottom + 8, window.innerHeight - ${Math.max(44, (config.actions.length * 36) + 8)} - 8));
+                this.menuRight = Math.max(8, window.innerWidth - rect.right);
+                this.open = true;
             },
         }"
         x-bind:class="open ? 'z-50' : 'z-0'"
         x-on:click.stop
+        x-on:resize.window="open = false"
+        x-on:scroll.window="open = false"
+        x-on:wheel.window="open = false"
+        x-on:touchmove.window="open = false"
     >
         <button
+            x-ref="button"
             type="button"
             class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-gray-200 text-gray-500 transition hover:border-blue-300 hover:text-gray-900"
             x-on:click="toggle()"
@@ -222,16 +252,19 @@ const renderActionCell = (config) => `
                 <path stroke-linecap="round" stroke-linejoin="round" d="M12 6.75a.75.75 0 1 1 0-1.5.75.75 0 0 1 0 1.5ZM12 12.75a.75.75 0 1 1 0-1.5.75.75 0 0 1 0 1.5ZM12 18.75a.75.75 0 1 1 0-1.5.75.75 0 0 1 0 1.5Z" />
             </svg>
         </button>
-        <div
-            class="absolute right-0 top-full z-[80] mt-2 w-40 rounded-md border border-gray-200 bg-white py-1 shadow-lg"
-            x-show="open"
-            x-on:click.outside="open = false"
-            x-on:click.stop
-            x-cloak
-            role="menu"
-        >
-            ${renderActionItems(config)}
-        </div>
+        <template x-teleport="body">
+            <div
+                class="fixed z-[80] w-40 rounded-md border border-gray-200 bg-white py-1 shadow-lg"
+                x-bind:style="\`top: \${menuTop}px; right: \${menuRight}px;\`"
+                x-show="open"
+                x-on:click.outside="open = false"
+                x-on:click.stop
+                x-cloak
+                role="menu"
+            >
+                ${renderActionItems(config)}
+            </div>
+        </template>
     </div>
 `;
 
@@ -242,6 +275,17 @@ const renderBadges = (expression, keySuffix) => expression !== '' ? `
         </template>
     </div>
 ` : '';
+
+const badgeLabelExpression = (badgeExpression) => `typeof ${badgeExpression} === 'string' ? ${badgeExpression} : ${badgeExpression}.label`;
+
+const badgeToneClassExpression = (badgeExpression, fallbackToneClasses) => `{
+    'border border-green-600 bg-white text-green-700': typeof ${badgeExpression} !== 'string' && ${badgeExpression}.tone === 'received',
+    'bg-green-50 text-green-700': typeof ${badgeExpression} !== 'string' && ${badgeExpression}.tone === 'green',
+    'bg-blue-50 text-blue-700': typeof ${badgeExpression} !== 'string' && ${badgeExpression}.tone === 'blue',
+    'bg-yellow-50 text-yellow-800': typeof ${badgeExpression} !== 'string' && ${badgeExpression}.tone === 'yellow',
+    'bg-red-50 text-red-700': typeof ${badgeExpression} !== 'string' && ${badgeExpression}.tone === 'red',
+    '${fallbackToneClasses}': typeof ${badgeExpression} === 'string' || !['received', 'green', 'blue', 'yellow', 'red'].includes(${badgeExpression}.tone),
+}`;
 
 const renderStats = (expression) => expression !== '' ? `
     <div class="-mx-4 grid grid-cols-6 gap-px border-y border-gray-100 bg-gray-100" data-crud-card-stats>
@@ -254,24 +298,49 @@ const renderStats = (expression) => expression !== '' ? `
     </div>
 ` : '';
 
-const iconBadgeMarkup = `
+const renderDetailRows = (expression, keyPrefix, className = 'mt-3 space-y-2') => expression !== '' ? `
+    <div class="${className}" data-crud-card-detail-rows>
+        <template x-for="(row, rowIndex) in ${escapeAttributeExpression(expression)}" :key="\`${keyPrefix}-\${record.id}-detail-row-\${rowIndex}\`">
+            <div class="flex min-w-0 items-baseline justify-between gap-3 text-xs">
+                <div class="flex min-w-0 flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
+                    <template x-for="item in (row.left || [])" :key="\`${keyPrefix}-\${record.id}-detail-left-\${rowIndex}-\${item.label}\`">
+                        <span class="inline-flex min-w-0 items-baseline gap-1">
+                            <span class="shrink-0 text-[0.65rem] font-medium text-gray-400" x-text="item.label"></span>
+                            <span class="min-w-0 truncate text-xs font-medium text-gray-700" x-text="item.value"></span>
+                        </span>
+                    </template>
+                </div>
+                <div class="flex shrink-0 items-baseline gap-x-1.5 text-right">
+                    <template x-for="item in (row.right || [])" :key="\`${keyPrefix}-\${record.id}-detail-right-\${rowIndex}-\${item.label}\`">
+                        <span class="inline-flex items-baseline gap-1">
+                            <span class="text-[0.65rem] font-medium text-gray-400" x-text="item.label"></span>
+                            <span class="text-xs font-medium text-gray-700" x-text="item.value"></span>
+                        </span>
+                    </template>
+                </div>
+            </div>
+        </template>
+    </div>
+` : '';
+
+const iconBadgeMarkup = (sizeClasses = 'h-5 w-5') => `
     <template x-if="badge.icon === 'shopping-cart'">
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-7 w-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
+        <svg xmlns="http://www.w3.org/2000/svg" class="${sizeClasses}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437M7.5 14.25a3 3 0 0 0-3 3h15.75m-12.75-3h11.218c1.121-2.3 2.1-4.684 2.924-7.138a60.114 60.114 0 0 0-16.536-1.84M7.5 14.25 5.106 5.272M6 20.25a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0Zm12.75 0a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0Z" />
         </svg>
     </template>
     <template x-if="badge.icon === 'credit-card'">
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-7 w-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
+        <svg xmlns="http://www.w3.org/2000/svg" class="${sizeClasses}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 0 0 2.25-2.25V6.75A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25v10.5A2.25 2.25 0 0 0 4.5 19.5Z" />
         </svg>
     </template>
     <template x-if="badge.icon === 'cog'">
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-7 w-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
+        <svg xmlns="http://www.w3.org/2000/svg" class="${sizeClasses}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12a7.5 7.5 0 0 0 15 0m-15 0a7.5 7.5 0 1 1 15 0m-15 0H3m16.5 0H21m-1.5 0H12m-8.457 3.077 1.41-.513m14.095-5.13 1.41-.513M5.106 17.785l1.15-.964m11.49-9.642 1.149-.964M7.501 19.795l.75-1.3m7.5-12.99.75-1.3m-6.063 16.658.26-1.477m2.605-14.772.26-1.477m0 17.726-.26-1.477M10.698 4.614l-.26-1.477M16.5 19.794l-.75-1.299M7.5 4.205 12 12m6.894 5.785-1.149-.964M6.256 7.178l-1.15-.964m15.352 8.864-1.41-.513M4.954 9.435l-1.41-.514M12.002 12l-3.75 6.495" />
         </svg>
     </template>
     <template x-if="badge.icon === 'rectangle-group'">
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-7 w-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
+        <svg xmlns="http://www.w3.org/2000/svg" class="${sizeClasses}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 7.125C2.25 6.504 2.754 6 3.375 6h6c.621 0 1.125.504 1.125 1.125v3.75c0 .621-.504 1.125-1.125 1.125h-6a1.125 1.125 0 0 1-1.125-1.125v-3.75ZM14.25 8.625c0-.621.504-1.125 1.125-1.125h5.25c.621 0 1.125.504 1.125 1.125v8.25c0 .621-.504 1.125-1.125 1.125h-5.25a1.125 1.125 0 0 1-1.125-1.125v-8.25ZM3.75 16.125c0-.621.504-1.125 1.125-1.125h5.25c.621 0 1.125.504 1.125 1.125v2.25c0 .621-.504 1.125-1.125 1.125h-5.25a1.125 1.125 0 0 1-1.125-1.125v-2.25Z" />
         </svg>
     </template>
@@ -286,7 +355,7 @@ const renderIconBadges = (expression) => expression !== '' ? `
                 x-bind:title="badge.label"
                 x-bind:aria-label="badge.label"
             >
-                ${iconBadgeMarkup}
+                ${iconBadgeMarkup()}
             </span>
         </template>
     </div>
@@ -306,8 +375,33 @@ const renderCardToggle = (config) => {
 
 const renderCardGrid = (config) => {
     const card = config.desktopCard;
-    const hasActions = config.actions.length > 0;
+    const hasActions = card.showActions && config.actions.length > 0;
     const toggleMarkup = renderCardToggle(config);
+    const titleAsideMarkup = card.titleAsideSecondaryExpression !== '' ? `
+        <div class="flex shrink-0 self-stretch flex-col items-end justify-between text-right">
+            <p class="text-xs font-medium text-gray-500" x-text="${escapeAttributeExpression(card.titleAsideExpression)}"></p>
+            <p class="mt-2 text-sm font-semibold text-gray-900" x-text="${escapeAttributeExpression(card.titleAsideSecondaryExpression)}"></p>
+        </div>
+    ` : card.titleAsideExpression !== '' ? `<p class="shrink-0 text-right text-xs font-medium text-gray-500" x-text="${escapeAttributeExpression(card.titleAsideExpression)}"></p>` : '';
+    const titleBadgesMarkup = card.titleBadgesExpression !== '' ? `
+        <template x-for="badge in ${escapeAttributeExpression(card.titleBadgesExpression)}" :key="\`desktop-card-\${record.id}-title-badge-\${typeof badge === 'string' ? badge : badge.label}\`">
+            <span
+                class="inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wide"
+                data-crud-desktop-title-badge
+                :class="${badgeToneClassExpression('badge', 'bg-gray-100 text-gray-700')}"
+                x-text="${badgeLabelExpression('badge')}"
+            ></span>
+        </template>
+    ` : '';
+    const subtitleInlineMarkup = card.subtitleAsideExpression === '' && card.subtitleExpression !== ''
+        ? `<p class="mt-0.5 truncate text-sm text-gray-500" x-text="${escapeAttributeExpression(card.subtitleExpression)}"></p>`
+        : '';
+    const subtitleAsideMarkup = card.subtitleAsideExpression !== '' ? `
+        <div class="mt-0.5 flex min-w-0 items-center justify-between gap-3 text-sm text-gray-500">
+            ${card.subtitleExpression !== '' ? `<p class="min-w-0 truncate" x-text="${escapeAttributeExpression(card.subtitleExpression)}"></p>` : '<span></span>'}
+            <p class="shrink-0 text-right font-medium text-gray-700" x-text="${escapeAttributeExpression(card.subtitleAsideExpression)}"></p>
+        </div>
+    ` : '';
 
     return `
         <div class="hidden h-full min-h-0 md:block">
@@ -322,45 +416,46 @@ const renderCardGrid = (config) => {
                     </div>
 
                     <div
-                        class="grid gap-4 md:grid-cols-3"
+                        class="grid gap-4 md:grid-cols-2 lg:grid-cols-3"
                         data-crud-card-grid
                         :class="${config.state.loading} ? 'opacity-80' : 'opacity-100'"
                     >
                         <template x-for="record in ${config.state.records}" :key="\`desktop-card-\${record.id}\`">
-                            <article class="group flex min-h-56 flex-col rounded-lg border border-gray-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-md" data-crud-card>
-                                <div class="flex items-start justify-between gap-4">
-                                    <div class="min-w-0">
-                                        <a
-                                            class="block truncate text-base font-semibold text-gray-900"
-                                            :href="${escapeAttributeExpression(card.urlExpression)}"
-                                            x-text="${escapeAttributeExpression(card.titleExpression)}"
-                                        ></a>
-                                        ${card.subtitleExpression !== '' ? `<p class="mt-0.5 truncate text-sm text-gray-500" x-text="${escapeAttributeExpression(card.subtitleExpression)}"></p>` : ''}
+                            <article class="group flex ${card.compact ? '' : 'min-h-56'} flex-col rounded-lg border border-gray-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-md" data-crud-card>
+                                <div class="flex items-start justify-between gap-3">
+                                    <div class="min-w-0 flex-1">
+                                        <div class="flex min-w-0 items-center gap-2">
+                                            <a
+                                                class="truncate text-base font-semibold text-gray-900"
+                                                :href="${escapeAttributeExpression(card.urlExpression)}"
+                                                x-text="${escapeAttributeExpression(card.titleExpression)}"
+                                            ></a>
+                                            ${titleBadgesMarkup}
+                                        </div>
+                                        ${subtitleInlineMarkup}
                                     </div>
-                                    ${card.titleAsideExpression !== '' ? `<p class="shrink-0 text-right text-xs font-medium text-gray-500" x-text="${escapeAttributeExpression(card.titleAsideExpression)}"></p>` : ''}
+                                    ${titleAsideMarkup}
+                                    ${toggleMarkup || hasActions ? `
+                                        <div class="flex shrink-0 items-start gap-2">
+                                            ${toggleMarkup}
+                                            ${hasActions ? renderActionCell(config) : ''}
+                                        </div>
+                                    ` : ''}
                                 </div>
+                                ${subtitleAsideMarkup}
+                                ${renderDetailRows(card.detailRowsExpression, 'desktop-card', 'mt-2 space-y-1.5')}
 
-                                <div class="mt-3">
+                                ${card.iconBadgesExpression !== '' || card.badgesExpression !== '' ? `<div class="mt-2">
                                     ${renderIconBadges(card.iconBadgesExpression)}
                                     ${renderBadges(card.badgesExpression, 'desktop-card-badge')}
-                                </div>
+                                </div>` : ''}
 
-                                ${card.bodyExpression !== '' ? `<p class="mt-4 line-clamp-2 text-sm text-gray-600" x-text="${escapeAttributeExpression(card.bodyExpression)}"></p>` : ''}
+                                ${card.showBody && card.bodyExpression !== '' ? `<p class="mt-4 line-clamp-2 text-sm text-gray-600" x-text="${escapeAttributeExpression(card.bodyExpression)}"></p>` : ''}
 
-                                <div class="mt-4">
+                                ${card.statsExpression !== '' ? `<div class="mt-4">
                                     ${renderStats(card.statsExpression)}
-                                </div>
+                                </div>` : ''}
 
-                                <div class="mt-auto flex items-center justify-between gap-3 pt-4">
-                                    <a
-                                        class="text-sm font-semibold text-blue-600 transition group-hover:text-blue-700"
-                                        :href="${escapeAttributeExpression(card.urlExpression)}"
-                                    >View</a>
-                                    <div class="flex items-center gap-2">
-                                        ${toggleMarkup}
-                                        ${hasActions ? renderActionCell(config) : ''}
-                                    </div>
-                                </div>
                             </article>
                         </template>
                     </div>
@@ -428,13 +523,46 @@ const renderDesktopList = (config) => {
 const renderMobileCards = (config) => {
     const card = config.mobileCard;
     const hasActions = card.showActions && config.actions.length > 0;
-    const toggleMarkup = renderCardToggle(config);
+    const toggleMarkup = card.showToggle ? renderCardToggle(config) : '';
     const titleAsideMarkup = card.titleAsideExpression !== '' ? `
         <p class="ml-3 max-w-28 shrink-0 truncate text-right text-[0.7rem] font-medium leading-5 text-gray-500" data-crud-mobile-title-aside x-text="${escapeAttributeExpression(card.titleAsideExpression)}"></p>
     ` : '';
+    const titleAsideStatsMarkup = card.titleAsideStatsExpression !== '' ? `
+        <div class="grid shrink-0 grid-cols-2 items-center" data-crud-mobile-title-aside-stats>
+            <template x-for="stat in ${escapeAttributeExpression(card.titleAsideStatsExpression)}" :key="\`mobile-card-\${record.id}-title-aside-stat-\${stat.label}\`">
+                <div class="min-w-14 border-l border-gray-100 px-3 text-center leading-none">
+                    <div class="text-[0.55rem] font-normal leading-none text-gray-400" x-text="stat.label"></div>
+                    <div class="mt-0.5 text-[0.65rem] font-normal leading-none text-gray-600" x-text="stat.value"></div>
+                </div>
+            </template>
+        </div>
+    ` : '';
+    const subtitleMarkup = card.titleAsideSecondaryExpression !== '' && card.iconBadgesExpression === '' ? `
+        <div class="mt-0.5 flex min-w-0 items-center justify-between gap-3 text-xs text-gray-600">
+            ${card.subtitleExpression !== '' ? `<p class="truncate" x-text="${escapeAttributeExpression(card.subtitleExpression)}"></p>` : '<span></span>'}
+            <p class="shrink-0 text-right font-semibold text-gray-900" x-text="${escapeAttributeExpression(card.titleAsideSecondaryExpression)}"></p>
+        </div>
+    ` : card.subtitleExpression !== '' ? `<p class="mt-0.5 truncate text-xs text-gray-600" x-text="${escapeAttributeExpression(card.subtitleExpression)}"></p>` : '';
+    const iconRowAsideMarkup = card.iconRowStatsExpression !== '' && card.iconBadgesExpression !== ''
+        ? `<div class="grid shrink-0 grid-cols-2 items-baseline gap-x-5">
+            <template x-for="stat in ${escapeAttributeExpression(card.iconRowStatsExpression)}" :key="\`mobile-card-\${record.id}-icon-row-stat-\${stat.label}\`">
+                <div class="flex items-baseline gap-x-1">
+                    <span class="text-[0.55rem] font-normal text-gray-400" x-text="stat.label"></span>
+                    <span class="text-[0.65rem] font-normal text-gray-600" x-text="stat.value"></span>
+                </div>
+            </template>
+        </div>`
+        : card.titleAsideSecondaryExpression !== '' && card.iconBadgesExpression !== ''
+            ? `<p class="shrink-0 text-right text-[0.55rem] font-normal text-gray-400" x-text="${escapeAttributeExpression(card.titleAsideSecondaryExpression)}"></p>`
+        : '';
     const titleBadgesMarkup = card.titleBadgesExpression !== '' ? `
-        <template x-for="badge in ${escapeAttributeExpression(card.titleBadgesExpression)}" :key="\`mobile-card-\${record.id}-title-badge-\${badge}\`">
-            <span class="inline-flex shrink-0 items-center rounded-full bg-gray-100 px-1.5 py-0.5 text-[0.6rem] font-semibold uppercase tracking-wide text-gray-700" data-crud-mobile-title-badge x-text="badge"></span>
+        <template x-for="badge in ${escapeAttributeExpression(card.titleBadgesExpression)}" :key="\`mobile-card-\${record.id}-title-badge-\${typeof badge === 'string' ? badge : badge.label}\`">
+            <span
+                class="inline-flex shrink-0 items-center rounded-full px-1.5 py-0.5 text-[0.6rem] font-semibold uppercase tracking-wide"
+                data-crud-mobile-title-badge
+                :class="${badgeToneClassExpression('badge', 'bg-gray-100 text-gray-700')}"
+                x-text="${badgeLabelExpression('badge')}"
+            ></span>
         </template>
     ` : '';
     const titleRowMarkup = card.titleAsidePlacement === 'top-right'
@@ -456,6 +584,16 @@ const renderMobileCards = (config) => {
                 ${titleAsideMarkup}
             </div>
         `;
+    const centerStatsMarkup = card.centerStatsExpression !== '' ? `
+        <div class="pointer-events-none absolute left-1/2 top-1/2 z-0 grid -translate-x-1/2 -translate-y-1/2 gap-y-0.5">
+            <template x-for="stat in ${escapeAttributeExpression(card.centerStatsExpression)}" :key="\`mobile-card-\${record.id}-center-stat-\${stat.label}\`">
+                <div class="grid min-w-24 grid-cols-[auto_auto] items-baseline gap-x-2 leading-none">
+                    <div class="text-left text-[0.5rem] font-semibold uppercase tracking-wide text-gray-400" x-text="stat.label"></div>
+                    <div class="text-right text-[0.6rem] font-semibold text-gray-800" x-text="stat.value"></div>
+                </div>
+            </template>
+        </div>
+    ` : '';
 
     return `
         <div class="h-full min-h-0 md:hidden" data-crud-mobile-cards>
@@ -470,31 +608,37 @@ const renderMobileCards = (config) => {
                     </div>
 
                     <template x-for="record in ${config.state.records}" :key="\`mobile-card-\${record.id}\`">
-                        <div class="relative flex items-center gap-3 overflow-visible border-b border-gray-300 bg-white px-4 py-2" data-crud-card>
-                            <a class="min-w-0 flex-1" :href="${escapeAttributeExpression(card.urlExpression)}">
+                        <div class="relative grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 overflow-visible border-b border-gray-300 bg-white px-4 py-2" data-crud-card>
+                            ${centerStatsMarkup}
+                            <a class="min-w-0" :href="${escapeAttributeExpression(card.urlExpression)}">
                                 ${titleRowMarkup}
-                                ${card.subtitleExpression !== '' ? `<p class="mt-0.5 truncate text-xs text-gray-600" x-text="${escapeAttributeExpression(card.subtitleExpression)}"></p>` : ''}
-                                ${card.bodyExpression !== '' ? `<p class="mt-1 truncate text-xs text-gray-600" x-text="${escapeAttributeExpression(card.bodyExpression)}"></p>` : ''}
+                                ${subtitleMarkup}
+                                ${renderDetailRows(card.detailRowsExpression, 'mobile-card', 'mt-2 space-y-1.5')}
+                                ${card.showBody && card.bodyExpression !== '' ? `<p class="mt-1 truncate text-xs text-gray-600" x-text="${escapeAttributeExpression(card.bodyExpression)}"></p>` : ''}
                                 ${renderBadges(card.badgesExpression, 'mobile-card-badge')}
                                 ${card.iconBadgesExpression !== '' ? `
-                                    <div class="mt-2 flex flex-wrap gap-2">
-                                        <template x-for="badge in ${escapeAttributeExpression(card.iconBadgesExpression)}" :key="\`mobile-card-\${record.id}-icon-\${badge.icon}\`">
-                                            <span
-                                                class="inline-flex shrink-0 items-center justify-center"
-                                                :class="badge.active ? 'text-blue-600' : 'text-gray-300'"
-                                                x-bind:title="badge.label"
-                                                x-bind:aria-label="badge.label"
-                                            >
-                                                ${iconBadgeMarkup}
-                                            </span>
-                                        </template>
+                                    <div class="mt-2 flex items-center justify-between gap-3">
+                                        <div class="flex min-w-0 flex-wrap gap-2">
+                                            <template x-for="badge in ${escapeAttributeExpression(card.iconBadgesExpression)}" :key="\`mobile-card-\${record.id}-icon-\${badge.icon}\`">
+                                                <span
+                                                    class="inline-flex shrink-0 items-center justify-center"
+                                                    :class="badge.active ? 'text-blue-600' : 'text-gray-300'"
+                                                    x-bind:title="badge.label"
+                                                    x-bind:aria-label="badge.label"
+                                                >
+                                                    ${iconBadgeMarkup('h-4 w-4')}
+                                                </span>
+                                            </template>
+                                        </div>
+                                        ${iconRowAsideMarkup}
                                     </div>
                                 ` : ''}
                             </a>
-                            <div class="relative z-10 flex shrink-0 items-center gap-2">
+                            ${titleAsideStatsMarkup}
+                            ${toggleMarkup || hasActions ? `<div class="relative z-10 flex shrink-0 items-center gap-2">
                                 ${toggleMarkup}
                                 ${hasActions ? renderActionCell(config) : ''}
-                            </div>
+                            </div>` : ''}
                         </div>
                     </template>
                 </div>

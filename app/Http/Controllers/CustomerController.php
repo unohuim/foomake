@@ -1171,6 +1171,20 @@ class CustomerController extends Controller
                 'titleExpression' => "record.name || '—'",
                 'subtitleExpression' => "record.email || '—'",
                 'bodyExpression' => "record.address_summary || '—'",
+                'titleBadgesExpression' => 'customerTitleBadges(record)',
+                'detailRowsExpression' => 'customerCardRows(record)',
+                'showBody' => false,
+                'urlExpression' => 'record.show_url',
+            ],
+            'desktopCard' => [
+                'titleExpression' => "record.name || '—'",
+                'titleBadgesExpression' => 'customerTitleBadges(record)',
+                'subtitleExpression' => "record.customer_type_label || 'Customer'",
+                'detailRowsExpression' => 'customerCardRows(record)',
+                'bodyExpression' => '',
+                'showBody' => false,
+                'compact' => true,
+                'urlExpression' => 'record.show_url',
             ],
             'actions' => [
                 [

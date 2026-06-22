@@ -279,6 +279,43 @@ export function mount(rootEl, payload) {
                 return '—';
             }
         },
+        customerTitleBadges(customer) {
+            const badges = [];
+            const type = String(customer?.customer_type_label || '').trim();
+            const status = String(customer?.status || '').trim();
+
+            if (type !== '') {
+                badges.push({
+                    label: type,
+                    tone: type.toLowerCase() === 'consumer' ? 'blue' : 'gray',
+                });
+            }
+
+            if (status !== '' && status.toLowerCase() !== 'active') {
+                badges.push({
+                    label: status,
+                    tone: status.toLowerCase() === 'archived' ? 'gray' : 'yellow',
+                });
+            }
+
+            return badges;
+        },
+        customerCardRows(customer) {
+            return [
+                {
+                    left: [
+                        { label: 'Primary email', value: customer?.email || '—' },
+                    ],
+                    right: [],
+                },
+                {
+                    left: [
+                        { label: 'Address', value: customer?.address_summary || '—' },
+                    ],
+                    right: [],
+                },
+            ];
+        },
         showToast(type, message) {
             this.toast.type = type;
             this.toast.message = message;

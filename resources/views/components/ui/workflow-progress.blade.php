@@ -44,22 +44,18 @@
 
     $activeMobileStep = null;
 
-    if ($normalizedSteps->isNotEmpty() && ($hasActiveStep || ! $isNeutralDraft)) {
+    if ($normalizedSteps->isNotEmpty()) {
         $activeMobileStep = $normalizedSteps->search(fn ($step) => $step['current'] || $step['status'] === 'current');
 
         if ($activeMobileStep === false) {
-            $activeMobileStep = $normalizedSteps->search(fn ($step) => $step['status'] === 'upcoming');
-        }
-
-        if ($activeMobileStep === false) {
-            $activeMobileStep = max(0, $normalizedSteps->count() - 1);
+            $activeMobileStep = 0;
         }
     }
 @endphp
 
 @if ($normalizedSteps->isNotEmpty())
     <nav
-        {{ $attributes->merge(['class' => 'w-full']) }}
+        {{ $attributes->merge(['class' => '-mx-1 w-auto sm:mx-0 md:w-full']) }}
         aria-label="Progress"
         x-data="{ activeWorkflowStep: @js($activeMobileStep) }"
         x-cloak
@@ -84,7 +80,7 @@
                 <button
                     type="button"
                     role="tab"
-                    class="relative min-h-16 overflow-hidden bg-white py-2 pl-3 pr-6 transition-[flex-basis,flex-grow] duration-300 ease-out will-change-[flex-basis]"
+                    class="relative min-h-16 overflow-hidden bg-white py-2 pl-3 pr-6 transition-[flex-basis,flex-grow] duration-500 ease-in-out will-change-[flex-basis]"
                     :class="activeWorkflowStep === {{ $loop->index }} ? 'basis-0 grow' : 'basis-16 grow-0'"
                     :aria-selected="activeWorkflowStep === {{ $loop->index }} ? 'true' : 'false'"
                     x-on:click="activeWorkflowStep = {{ $loop->index }}"
@@ -113,7 +109,7 @@
                         </span>
 
                         <span
-                            class="min-w-0 truncate text-left text-sm font-medium transition-[max-width,opacity,transform] duration-300 ease-out {{ $isCurrent ? 'text-indigo-600' : 'text-gray-900' }}"
+                            class="min-w-0 truncate text-left text-sm font-medium transition-[max-width,opacity,transform] duration-500 ease-in-out {{ $isCurrent ? 'text-indigo-600' : 'text-gray-900' }}"
                             :class="activeWorkflowStep === {{ $loop->index }} ? 'max-w-48 translate-x-0 opacity-100' : 'max-w-0 -translate-x-1 opacity-0'"
                         >
                             {{ $step['label'] }}
@@ -141,82 +137,84 @@
             @endforeach
         </div>
 
-        <ol role="list" class="hidden divide-y divide-gray-300 rounded-md border border-gray-300 bg-white md:flex md:divide-y-0">
-            @foreach ($normalizedSteps as $step)
-                @php
-                    $isCompleted = $step['status'] === 'completed';
-                    $isCurrent = $step['status'] === 'current' || $step['current'];
-                    $tag = $step['url'] ? 'a' : 'span';
-                @endphp
+        <div class="hidden md:mx-auto md:mt-6 md:block md:max-w-5xl md:px-6 lg:px-8">
+            <ol role="list" class="divide-y divide-gray-300 rounded-md border border-gray-300 bg-white md:flex md:divide-y-0">
+                @foreach ($normalizedSteps as $step)
+                    @php
+                        $isCompleted = $step['status'] === 'completed';
+                        $isCurrent = $step['status'] === 'current' || $step['current'];
+                        $tag = $step['url'] ? 'a' : 'span';
+                    @endphp
 
-                <li class="relative md:flex md:flex-1">
-                    @if ($isCompleted)
-                        <{{ $tag }}
-                            @if ($step['url']) href="{{ $step['url'] }}" @endif
-                            class="group flex w-full items-center"
-                        >
-                            <span class="flex items-center px-4 py-3 text-sm font-medium sm:px-6">
-                                <span class="flex size-9 shrink-0 items-center justify-center rounded-full bg-indigo-600 group-hover:bg-indigo-700">
-                                    <svg
-                                        viewBox="0 0 24 24"
-                                        fill="currentColor"
-                                        aria-hidden="true"
-                                        class="size-5 text-white"
-                                    >
-                                        <path
-                                            fill-rule="evenodd"
-                                            clip-rule="evenodd"
-                                            d="M19.916 4.626a.75.75 0 0 1 .208 1.04l-9 13.5a.75.75 0 0 1-1.154.114l-6-6a.75.75 0 0 1 1.06-1.06l5.353 5.353 8.493-12.74a.75.75 0 0 1 1.04-.207Z"
-                                        />
-                                    </svg>
-                                </span>
-                                <span class="ml-4 text-sm font-medium text-gray-900">{{ $step['label'] }}</span>
-                            </span>
-                        </{{ $tag }}>
-                    @elseif ($isCurrent)
-                        <{{ $tag }}
-                            @if ($step['url']) href="{{ $step['url'] }}" @endif
-                            aria-current="step"
-                            class="flex w-full items-center px-4 py-3 text-sm font-medium sm:px-6"
-                        >
-                            <span class="flex size-9 shrink-0 items-center justify-center rounded-full border-2 border-indigo-600">
-                                <span class="text-sm font-semibold text-indigo-600">{{ $step['number'] }}</span>
-                            </span>
-                            <span class="ml-4 text-sm font-medium text-indigo-600">{{ $step['label'] }}</span>
-                        </{{ $tag }}>
-                    @else
-                        <{{ $tag }}
-                            @if ($step['url']) href="{{ $step['url'] }}" @endif
-                            class="group flex w-full items-center"
-                        >
-                            <span class="flex items-center px-4 py-3 text-sm font-medium sm:px-6">
-                                <span class="flex size-9 shrink-0 items-center justify-center rounded-full border-2 border-gray-300 group-hover:border-gray-400">
-                                    <span class="text-sm font-semibold text-gray-500 group-hover:text-gray-900">{{ $step['number'] }}</span>
-                                </span>
-                                <span class="ml-4 text-sm font-medium text-gray-500 group-hover:text-gray-900">{{ $step['label'] }}</span>
-                            </span>
-                        </{{ $tag }}>
-                    @endif
-
-                    @if (! $loop->last)
-                        <div aria-hidden="true" class="absolute right-0 top-0 hidden h-full w-5 md:block">
-                            <svg
-                                viewBox="0 0 22 80"
-                                fill="none"
-                                preserveAspectRatio="none"
-                                class="size-full text-gray-300"
+                    <li class="relative md:flex md:flex-1">
+                        @if ($isCompleted)
+                            <{{ $tag }}
+                                @if ($step['url']) href="{{ $step['url'] }}" @endif
+                                class="group flex w-full items-center"
                             >
-                                <path
-                                    d="M0 -2L20 40L0 82"
-                                    stroke="currentcolor"
-                                    vector-effect="non-scaling-stroke"
-                                    stroke-linejoin="round"
-                                />
-                            </svg>
-                        </div>
-                    @endif
-                </li>
-            @endforeach
-        </ol>
+                                <span class="flex items-center px-4 py-3 text-sm font-medium sm:px-6">
+                                    <span class="flex size-9 shrink-0 items-center justify-center rounded-full bg-indigo-600 group-hover:bg-indigo-700">
+                                        <svg
+                                            viewBox="0 0 24 24"
+                                            fill="currentColor"
+                                            aria-hidden="true"
+                                            class="size-5 text-white"
+                                        >
+                                            <path
+                                                fill-rule="evenodd"
+                                                clip-rule="evenodd"
+                                                d="M19.916 4.626a.75.75 0 0 1 .208 1.04l-9 13.5a.75.75 0 0 1-1.154.114l-6-6a.75.75 0 0 1 1.06-1.06l5.353 5.353 8.493-12.74a.75.75 0 0 1 1.04-.207Z"
+                                            />
+                                        </svg>
+                                    </span>
+                                    <span class="ml-4 text-sm font-medium text-gray-900">{{ $step['label'] }}</span>
+                                </span>
+                            </{{ $tag }}>
+                        @elseif ($isCurrent)
+                            <{{ $tag }}
+                                @if ($step['url']) href="{{ $step['url'] }}" @endif
+                                aria-current="step"
+                                class="flex w-full items-center px-4 py-3 text-sm font-medium sm:px-6"
+                            >
+                                <span class="flex size-9 shrink-0 items-center justify-center rounded-full border-2 border-indigo-600">
+                                    <span class="text-sm font-semibold text-indigo-600">{{ $step['number'] }}</span>
+                                </span>
+                                <span class="ml-4 text-sm font-medium text-indigo-600">{{ $step['label'] }}</span>
+                            </{{ $tag }}>
+                        @else
+                            <{{ $tag }}
+                                @if ($step['url']) href="{{ $step['url'] }}" @endif
+                                class="group flex w-full items-center"
+                            >
+                                <span class="flex items-center px-4 py-3 text-sm font-medium sm:px-6">
+                                    <span class="flex size-9 shrink-0 items-center justify-center rounded-full border-2 border-gray-300 group-hover:border-gray-400">
+                                        <span class="text-sm font-semibold text-gray-500 group-hover:text-gray-900">{{ $step['number'] }}</span>
+                                    </span>
+                                    <span class="ml-4 text-sm font-medium text-gray-500 group-hover:text-gray-900">{{ $step['label'] }}</span>
+                                </span>
+                            </{{ $tag }}>
+                        @endif
+
+                        @if (! $loop->last)
+                            <div aria-hidden="true" class="absolute right-0 top-0 hidden h-full w-5 md:block">
+                                <svg
+                                    viewBox="0 0 22 80"
+                                    fill="none"
+                                    preserveAspectRatio="none"
+                                    class="size-full text-gray-300"
+                                >
+                                    <path
+                                        d="M0 -2L20 40L0 82"
+                                        stroke="currentcolor"
+                                        vector-effect="non-scaling-stroke"
+                                        stroke-linejoin="round"
+                                    />
+                                </svg>
+                            </div>
+                        @endif
+                    </li>
+                @endforeach
+            </ol>
+        </div>
     </nav>
 @endif

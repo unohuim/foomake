@@ -37,6 +37,8 @@ class MakeOrderWorkflow extends BaseWorkflow
      */
     public function enter(MakeOrder $makeOrder, User $user): MakeOrder
     {
+        $this->assertFirstStagePrerequisites($makeOrder);
+
         $firstStage = $this->firstActiveStage($makeOrder);
 
         if (! $firstStage) {
@@ -128,7 +130,8 @@ class MakeOrderWorkflow extends BaseWorkflow
     {
         $makeOrder->loadMissing(['workflowStage', 'madeByUser', 'taskedByUser']);
 
-        $currentStage = $this->currentStage($makeOrder);
+        $isDraft = $makeOrder->status === MakeOrder::STATUS_DRAFT;
+        $currentStage = $isDraft ? null : $this->currentStage($makeOrder);
         $availableStages = collect();
         $workflowLabel = $this->displayLabel($makeOrder);
 
@@ -245,10 +248,23 @@ class MakeOrderWorkflow extends BaseWorkflow
      */
     public function progressSteps(MakeOrder $makeOrder): array
     {
-        return $this->definition($makeOrder)->progressSteps(
-            $makeOrder->status !== MakeOrder::STATUS_MADE ? $this->currentStage($makeOrder) : null,
+        $isDraft = $makeOrder->status === MakeOrder::STATUS_DRAFT;
+
+        $steps = $this->definition($makeOrder)->progressSteps(
+            $isDraft || $makeOrder->status === MakeOrder::STATUS_MADE ? null : $this->currentStage($makeOrder),
             $makeOrder->status === MakeOrder::STATUS_MADE
         );
+
+        if (! $isDraft) {
+            return $steps;
+        }
+
+        return array_map(static function (array $step): array {
+            $step['status'] = 'upcoming';
+            $step['current'] = false;
+
+            return $step;
+        }, $steps);
     }
 
     /**
@@ -362,6 +378,18 @@ class MakeOrderWorkflow extends BaseWorkflow
         }
 
         $currentStage = $this->currentStage($record);
+
+        if ($currentStage === null) {
+            $dueDate = $record->due_date;
+
+            if (! $dueDate) {
+                throw new DomainException('Set a due date before moving this make order into workflow.');
+            }
+
+            if ($dueDate->startOfDay()->isBefore(now()->startOfDay())) {
+                throw new DomainException('Due date must be today or a future date before moving this make order into workflow.');
+            }
+        }
 
         $record->workflow_stage_id = (int) $target;
 
@@ -573,5 +601,38 @@ class MakeOrderWorkflow extends BaseWorkflow
     {
         return $user !== null
             && app(WorkflowAssignmentPermissions::class)->userCanOperateWorkflowDomain($user, 'manufacturing');
+    }
+
+    /**
+     * Ensure the Make Order has the minimum setup required before entering workflow.
+     *
+     * @throws DomainException
+     */
+    private function assertFirstStagePrerequisites(MakeOrder $makeOrder): void
+    {
+        $runs = trim((string) $makeOrder->runs);
+        $expectedOutputQty = trim((string) $makeOrder->expected_output_qty);
+        $assignedToUserId = $makeOrder->made_by_user_id;
+        $dueDate = $makeOrder->due_date;
+
+        if ($runs === '' || ! is_numeric($runs) || bccomp($runs, '0.000000', 6) !== 1) {
+            throw new DomainException('Set runs before moving this make order into workflow.');
+        }
+
+        if ($expectedOutputQty === '' || ! is_numeric($expectedOutputQty) || bccomp($expectedOutputQty, '0.000000', 6) !== 1) {
+            throw new DomainException('Set an expected output quantity before moving this make order into workflow.');
+        }
+
+        if ($assignedToUserId === null) {
+            throw new DomainException('Assign this make order before moving it into workflow.');
+        }
+
+        if (! $dueDate) {
+            throw new DomainException('Set a due date before moving this make order into workflow.');
+        }
+
+        if ($dueDate->startOfDay()->isBefore(now()->startOfDay())) {
+            throw new DomainException('Due date must be today or a future date before moving this make order into workflow.');
+        }
     }
 }

@@ -291,6 +291,7 @@ Dense operational lists that need table-style scanning, static pages, or reusabl
 - `data-crud-config`
 - `data-crud-root`
 - optional `desktopCard`
+- optional `mobileCard`
 - optional `desktopList`
 
 **Example Usage:**
@@ -299,11 +300,33 @@ mountCrudCardRenderer(crudRootEl, {
     ...crud,
     desktopCard: {
         titleExpression: "record.item || '—'",
+        titleAsideExpression: "record.updated_at || ''",
+        titleAsideSecondaryExpression: "record.total_display || ''",
+        titleBadgesExpression: 'record.status ? [{ label: record.status, tone: record.status_tone || "gray" }] : []',
+        subtitleAsideExpression: "record.lines_count ? `Items: ${record.lines_count}` : ''",
+        showBody: false,
+        compact: true,
         statsExpression: 'inventoryAvailabilityStats(record)',
         urlExpression: 'record.show_url',
     },
+    mobileCard: {
+        titleExpression: "record.item || '—'",
+        titleBadgesExpression: 'record.status ? [{ label: record.status, tone: record.status_tone || "gray" }] : []',
+        subtitleExpression: "record.supplier_name || ''",
+        titleAsideStatsExpression: 'record.on_hand_display ? [{ label: "On hand", value: record.on_hand_display }] : []',
+        centerStatsExpression: 'record.on_hand_display ? [{ label: "On hand", value: record.on_hand_display }] : []',
+        iconRowStatsExpression: 'record.on_hand_display ? [{ label: "QTY", value: record.on_hand_display }] : []',
+        showBody: false,
+        showToggle: false,
+    },
 });
 ```
+
+Notes:
+- `desktopCard` may configure title-adjacent badges, subtitle-aside text, secondary right-side text, compact height, and body visibility.
+- `mobileCard` may configure title-adjacent badges, right-side text, title-aside stats, secondary row values, centered stats, icon-row stats, toggle visibility, and body visibility.
+- Badge tone mappings are page-module decisions; the shared renderer owns the Tailwind classes for supported semantic tones.
+- The card grid renders two columns at the smallest non-mobile breakpoint and three columns at larger desktop breakpoints.
 
 ### Toggle
 
@@ -1186,6 +1209,7 @@ Dense list pages that need table comparison or reusable detail-section subsectio
 **Public Interface:**
 - `mountCrudCardRenderer(targetEl, config)`
 - `desktopCard`
+- `mobileCard`
 - `desktopList`
 - `data-crud-config`
 - `data-crud-root`
@@ -1196,11 +1220,33 @@ mountCrudCardRenderer(crudRootEl, {
     ...crud,
     desktopCard: {
         titleExpression: "record.item || '—'",
+        titleAsideExpression: "record.updated_at || ''",
+        titleAsideSecondaryExpression: "record.total_display || ''",
+        titleBadgesExpression: 'record.status ? [{ label: record.status, tone: record.status_tone || "gray" }] : []',
+        subtitleAsideExpression: "record.lines_count ? `Items: ${record.lines_count}` : ''",
+        showBody: false,
+        compact: true,
         statsExpression: 'inventoryAvailabilityStats(record)',
         urlExpression: 'record.show_url',
     },
+    mobileCard: {
+        titleExpression: "record.item || '—'",
+        titleBadgesExpression: 'record.status ? [{ label: record.status, tone: record.status_tone || "gray" }] : []',
+        subtitleExpression: "record.supplier_name || ''",
+        titleAsideStatsExpression: 'record.on_hand_display ? [{ label: "On hand", value: record.on_hand_display }] : []',
+        centerStatsExpression: 'record.on_hand_display ? [{ label: "On hand", value: record.on_hand_display }] : []',
+        iconRowStatsExpression: 'record.on_hand_display ? [{ label: "QTY", value: record.on_hand_display }] : []',
+        showBody: false,
+        showToggle: false,
+    },
 });
 ```
+
+Notes:
+- `desktopCard` may configure title-adjacent badges, subtitle-aside text, secondary right-side text, compact height, and body visibility.
+- `mobileCard` may configure title-adjacent badges, right-side text, title-aside stats, secondary row values, centered stats, icon-row stats, toggle visibility, and body visibility.
+- Badge tone mappings are page-module decisions; the shared renderer owns the Tailwind classes for supported semantic tones.
+- The card grid renders two columns at the smallest non-mobile breakpoint and three columns at larger desktop breakpoints.
 
 ### Reusable Combobox Pattern
 

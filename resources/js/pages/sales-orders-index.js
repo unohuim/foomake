@@ -331,6 +331,52 @@ export function mount(rootEl, payload) {
         orderStatusSummary(order) {
             return order?.status || '—';
         },
+        salesOrderTitleBadges(record) {
+            const status = String(record?.status_label || record?.status || '').trim();
+
+            if (!status) {
+                return [];
+            }
+
+            return [{
+                label: status,
+                tone: record?.status === 'COMPLETED' ? 'green' : record?.status === 'CANCELLED' ? 'red' : 'blue',
+            }];
+        },
+        salesOrderCardRows(record) {
+            const customer = String(record?.customer_name || '—').trim() || '—';
+            const contact = String(record?.contact_name || '—').trim() || '—';
+            const city = String(record?.city || '—').trim() || '—';
+            const total = record?.order_total_amount ? `$${record.order_total_amount}` : '—';
+            const lines = Number.isFinite(Number(record?.line_count)) ? String(record.line_count) : '—';
+
+            return [
+                {
+                    left: [
+                        { label: 'Customer', value: customer },
+                    ],
+                    right: [
+                        { label: 'Total', value: total },
+                    ],
+                },
+                {
+                    left: [
+                        { label: 'Contact', value: contact },
+                    ],
+                    right: [
+                        { label: 'Lines', value: lines },
+                    ],
+                },
+                {
+                    left: [
+                        { label: 'City', value: city },
+                    ],
+                    right: [
+                        { label: 'Status', value: String(record?.status_label || record?.status || '—') },
+                    ],
+                },
+            ];
+        },
         previewStatusLabel(row) {
             if (row && row.is_duplicate) {
                 return 'Duplicate';

@@ -24,11 +24,11 @@
 >
     <div class="flex items-start justify-between gap-2 bg-blue-50 px-3 py-4 sm:gap-3 sm:px-6 sm:py-5">
         <div class="min-w-0 flex-1">
-            <h3 class="text-lg font-semibold text-gray-900">{{ $title }}</h3>
+            <h3 class="text-sm font-semibold text-gray-900 sm:text-lg">{{ $title }}</h3>
 
             @if ($description !== '')
                 <p
-                    class="mt-1 text-sm text-gray-500 sm:overflow-visible sm:whitespace-normal sm:text-clip"
+                    class="mt-0.5 text-[0.65rem] text-gray-500 sm:mt-1 sm:overflow-visible sm:whitespace-normal sm:text-sm sm:text-clip"
                     :class="descriptionExpanded ? 'whitespace-normal' : 'truncate'"
                 >
                     {{ $description }}
@@ -38,13 +38,13 @@
 
         <button
             type="button"
-            class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-gray-300 text-gray-600 transition hover:bg-gray-50 hover:text-gray-900"
+            class="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md border border-gray-300 text-gray-600 transition hover:bg-gray-50 hover:text-gray-900 sm:h-8 sm:w-8 sm:rounded-lg"
             x-bind:aria-expanded="open ? 'true' : 'false'"
             x-on:click="toggleSection()"
             aria-label="Toggle section"
             data-detail-section-toggle
         >
-            <svg class="h-4 w-4 text-gray-400 transition duration-[400ms] ease-in-out" :class="open ? 'rotate-180' : ''" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+            <svg class="h-2.5 w-2.5 text-gray-400 transition duration-[400ms] ease-in-out sm:h-4 sm:w-4" :class="open ? 'rotate-180' : ''" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
                 <path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
             </svg>
         </button>
@@ -60,6 +60,7 @@
             <div
                 class="border-t border-gray-100 bg-white px-3 py-2 opacity-0 transition-opacity duration-[400ms] ease-in-out sm:px-6 sm:py-5"
                 :class="open ? 'opacity-100' : 'opacity-0'"
+                data-detail-section-body
             >
                 @if (isset($toolbar) || isset($actions) || $showCreateButton)
                     <div class="mb-2 flex flex-col gap-2 sm:mb-4 sm:flex-row sm:items-center sm:justify-between sm:gap-3">

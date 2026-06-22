@@ -18,10 +18,17 @@ rules:
   - The card renderer must keep toolbar actions, search, loading, empty-state, row actions, and toggle behavior config-driven.
   - Desktop record presentation must be a responsive Tailwind card grid or an explicitly configured stacked list, not a table.
   - Mobile rendering must remain compact and row-oriented unless a future approved config explicitly opts into a different mobile layout.
-  - Page modules may provide a desktopCard contract for title, subtitle, body, badges, stats, aside text, and detail URL expressions.
+  - Page modules may provide a desktopCard contract for title, title-adjacent badges, subtitle, subtitle-aside text, body, badges, stats, aside text, secondary aside text, compact height, body visibility, and detail URL expressions.
+  - Page modules may provide a mobileCard contract for title, title-adjacent badges, subtitle, body, aside text, title-aside stats, secondary aside text, centered stats, icon-row stats, body visibility, badges, icon badges, toggle visibility, and detail URL expressions.
+  - Title-adjacent badges may be plain strings or objects with label and tone values supplied by the page module.
+  - Badge tone classes are renderer-owned; page modules choose semantic tones rather than Tailwind class strings.
+  - Resource-specific badge tone mappings must remain in the page module so domain display decisions do not leak into the shared renderer.
+  - desktopCard compact mode may remove the default minimum card height when a resource intentionally renders a dense card.
+  - desktopCard and mobileCard body visibility may be disabled when summary data is already represented in title, subtitle, badges, or aside fields.
   - Page modules may provide a desktopList contract for title, subtitle, subtitle URL, meta, badges, aside text, and URL expressions when the desktop card grid is not the best fit.
   - desktopList must be opt-in through `enabled: true`; card grid remains the fallback.
   - When desktopCard is absent, the renderer may fall back to the existing mobileCard expressions.
+  - The card grid renders two columns at the smallest non-mobile breakpoint and three columns at larger desktop breakpoints.
   - Backend routes and authorization remain authoritative; card links and actions only render configured URLs and handlers.
   - Configured CRUD index page modules must mount the card renderer for non-mobile views; the legacy table renderer is no longer the default index renderer.
 public_interface:
@@ -31,6 +38,7 @@ public_interface:
   - data-crud-config
   - data-crud-root
   - desktopCard
+  - mobileCard
   - desktopList
 example_usage: |
   import { mountCrudCardRenderer } from '../lib/crud-card-page';
@@ -42,10 +50,27 @@ example_usage: |
       desktopCard: {
           titleExpression: "record.item || '—'",
           titleAsideExpression: "record.item_uom_name || record.item_uom_symbol || '—'",
+          titleAsideSecondaryExpression: "record.total_display || ''",
+          titleBadgesExpression: 'record.status ? [{ label: record.status, tone: record.status_tone || "gray" }] : []',
           subtitleExpression: '',
+          subtitleAsideExpression: "record.lines_count ? `Items: ${record.lines_count}` : ''",
+          showBody: false,
+          compact: true,
           badgesExpression: '[]',
           statsExpression: 'materialAvailabilityStats(record)',
           urlExpression: 'record.show_url',
+      },
+      mobileCard: {
+          titleExpression: "record.item || '—'",
+          titleAsideExpression: "record.updated_at || ''",
+          titleAsideStatsExpression: 'record.on_hand_display ? [{ label: "On hand", value: record.on_hand_display }] : []',
+          titleAsideSecondaryExpression: "record.total_display || ''",
+          titleBadgesExpression: 'record.status ? [{ label: record.status, tone: record.status_tone || "gray" }] : []',
+          subtitleExpression: "record.supplier_name || ''",
+          centerStatsExpression: 'record.on_hand_display ? [{ label: "On hand", value: record.on_hand_display }] : []',
+          iconRowStatsExpression: 'record.on_hand_display ? [{ label: "QTY", value: record.on_hand_display }] : []',
+          showBody: false,
+          showToggle: false,
       },
       actions: [],
   });

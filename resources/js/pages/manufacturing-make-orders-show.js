@@ -209,6 +209,10 @@ export function mount(rootEl, payload) {
             ? ''
             : String(workflowPayload.made_by_user_id),
         workflowTransitionSaving: false,
+        validationError: {
+            visible: false,
+            message: '',
+        },
         workflowTaskSavingIds: [],
         makeOrderDetailSaving: false,
         ingredientSavedState: {},
@@ -344,6 +348,8 @@ export function mount(rootEl, payload) {
             let steps = Array.isArray(this.workflowProgressSteps)
                 ? this.workflowProgressSteps
                 : [];
+            const orderStatus = String(this.makeOrder?.status || '').trim().toUpperCase();
+            const isDraft = orderStatus === 'DRAFT';
 
             steps = steps
                 .map((step, index) => ({
@@ -365,6 +371,7 @@ export function mount(rootEl, payload) {
                 steps.length > 0
                 && !steps.some((step) => step.current)
                 && !steps.some((step) => step.status === 'completed')
+                && !isDraft
             ) {
                 steps = steps.map((step, index) => ({
                     ...step,
@@ -378,13 +385,16 @@ export function mount(rootEl, payload) {
             }
 
             let activeMobileStep = steps.findIndex((step) => step.current || step.status === 'current');
-
-            if (activeMobileStep < 0) {
+            if (activeMobileStep < 0 && !isDraft) {
                 activeMobileStep = steps.findIndex((step) => step.status === 'upcoming');
             }
 
-            if (activeMobileStep < 0) {
+            if (activeMobileStep < 0 && !isDraft) {
                 activeMobileStep = Math.max(0, steps.length - 1);
+            }
+
+            if (activeMobileStep < 0) {
+                activeMobileStep = 0;
             }
 
             return `
@@ -544,6 +554,61 @@ export function mount(rootEl, payload) {
                 this.toast.visible = false;
             }, 1500);
         },
+        showValidationError(message) {
+            this.validationError.message = message;
+            this.validationError.visible = true;
+            window.dispatchEvent(new CustomEvent('validation-error', {
+                detail: {
+                    message,
+                },
+            }));
+        },
+        validationMessageFromResponse(data, fallbackMessage) {
+            const errors = data && typeof data.errors === 'object' && data.errors !== null
+                ? data.errors
+                : {};
+            const preferredFieldOrder = [
+                'runs',
+                'expected_output_qty',
+                'made_by_user_id',
+                'due_date',
+            ];
+
+            for (const field of preferredFieldOrder) {
+                if (Array.isArray(errors[field]) && errors[field].length > 0) {
+                    return errors[field][0];
+                }
+            }
+
+            if (data?.message) {
+                return data.message;
+            }
+
+            return fallbackMessage;
+        },
+        firstWorkflowEntryValidationMessage() {
+            if (this.workflow.current_stage?.id) {
+                return '';
+            }
+
+            if (!canonicalizeScaleSix(this.makeOrder.runs_text)) {
+                return 'Runs qty needs to be entered.';
+            }
+
+            if (!canonicalizeScaleSix(this.makeOrder.expected_output_qty_text)) {
+                return 'Set an expected output quantity before moving this make order into workflow.';
+            }
+
+            if (!this.workflow.made_by_user_id) {
+                return 'Assign this make order before moving it into workflow.';
+            }
+
+            if (!this.workflow.due_date) {
+                return 'Set a due date before moving this make order into workflow.';
+            }
+
+            return '';
+        },
         goTo(url) {
             if (!url) {
                 return;
@@ -553,6 +618,14 @@ export function mount(rootEl, payload) {
         },
         async moveWorkflowStage() {
             if (!this.workflow.can_move_stage || !this.workflow.transition_url || !this.selectedWorkflowStageId) {
+                setWorkflowActionLoading(false);
+                return;
+            }
+
+            const entryValidationMessage = this.firstWorkflowEntryValidationMessage();
+
+            if (entryValidationMessage) {
+                this.showValidationError(entryValidationMessage);
                 setWorkflowActionLoading(false);
                 return;
             }
@@ -573,7 +646,13 @@ export function mount(rootEl, payload) {
                 });
 
                 if (!response.ok) {
-                    this.showToast('error', 'Unable to move workflow stage.');
+                    const data = await response.json().catch(() => ({}));
+                    const errorMessage = this.validationMessageFromResponse(
+                        data,
+                        'A valid due date is required before moving this make order into workflow.'
+                    );
+
+                    this.showValidationError(errorMessage);
                     return;
                 }
 
@@ -588,7 +667,7 @@ export function mount(rootEl, payload) {
                 this.selectedWorkflowStageId = '';
                 this.showToast('success', 'Workflow stage updated.');
             } catch (error) {
-                this.showToast('error', 'Unable to move workflow stage.');
+                this.showValidationError('A valid due date is required before moving this make order into workflow.');
             } finally {
                 this.workflowTransitionSaving = false;
                 setWorkflowActionLoading(false);
@@ -696,7 +775,15 @@ export function mount(rootEl, payload) {
                 const data = await response.json().catch(() => ({}));
 
                 if (!response.ok) {
-                    this.showToast('error', data.message || 'Unable to make order.');
+                    const errorMessage = data?.message
+                        || data?.errors?.due_date?.[0]
+                        || 'A valid due date is required before moving this make order into workflow.';
+
+                    if (response.status === 422 || String(errorMessage).toLowerCase().includes('due date')) {
+                        this.showValidationError(errorMessage);
+                    } else {
+                        this.showToast('error', errorMessage);
+                    }
                     return;
                 }
 
@@ -709,7 +796,7 @@ export function mount(rootEl, payload) {
                 }
                 this.showToast('success', 'Make order completed.');
             } catch (error) {
-                this.showToast('error', 'Unable to make order.');
+                this.showValidationError('A valid due date is required before moving this make order into workflow.');
             } finally {
                 this.workflowTransitionSaving = false;
                 setWorkflowActionLoading(false);
