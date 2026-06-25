@@ -33,9 +33,23 @@ class SalesOrderLineController extends Controller
         $item = Item::query()->findOrFail((int) $request->validated('item_id'));
         $quantity = $this->normalizeQuantity((string) $request->validated('quantity'));
         $unitPriceCents = (int) ($item->default_price_cents ?? 0);
-        $unitPriceCurrencyCode = strtoupper(
-            (string) ($item->default_price_currency_code ?: $request->user()?->tenant?->currency_code ?: config('app.currency_code', 'USD'))
-        );
+        $unitPriceCurrencyCode = strtoupper((string) ($item->default_price_currency_code ?: ''));
+        $orderCurrencyCode = strtoupper((string) (
+            $salesOrder->currency_code
+            ?: $salesOrder->customer?->currency_code
+            ?: $request->user()?->tenant?->currency_code
+            ?: config('app.currency_code', 'USD')
+        ));
+
+        if ($unitPriceCurrencyCode === '' || $unitPriceCurrencyCode !== $orderCurrencyCode) {
+            return response()->json([
+                'message' => 'The selected item price currency must match the sales order currency.',
+                'errors' => [
+                    'item_id' => ['The selected item price currency must match the sales order currency.'],
+                    'quantity' => [],
+                ],
+            ], 422);
+        }
 
         $line = SalesOrderLine::query()->create([
             'tenant_id' => $request->user()->tenant_id,
@@ -150,6 +164,7 @@ class SalesOrderLineController extends Controller
             'contact_id' => $order->contact_id,
             'contact_name' => $contactName,
             'city' => $order->customer?->city,
+            'currency_code' => $order->currency_code,
             'status' => $order->status,
             'can_edit' => $order->isEditable(),
             'can_manage_lines' => $order->allowsLineMutations(),

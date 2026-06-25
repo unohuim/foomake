@@ -5,6 +5,7 @@ export function mount(rootEl, payload) {
     const emptyErrors = () => ({
         name: [],
         status: [],
+        currency_code: [],
         notes: [],
         address_line_1: [],
         address_line_2: [],
@@ -37,6 +38,7 @@ export function mount(rootEl, payload) {
     const customerToForm = (customer) => ({
         name: customer.name || '',
         status: customer.status || 'active',
+        currency_code: customer.currency_code || '',
         notes: customer.notes || '',
         address_line_1: customer.address_line_1 || '',
         address_line_2: customer.address_line_2 || '',
@@ -398,6 +400,17 @@ export function mount(rootEl, payload) {
         canManageOrderLines(order) {
             return !!order?.can_manage_lines;
         },
+        orderItemsForOrder(order) {
+            const currencyCode = String(order?.currency_code || '').trim().toUpperCase();
+
+            if (currencyCode === '') {
+                return this.orderItems;
+            }
+
+            return this.orderItems.filter((item) => (
+                String(item?.default_price_currency_code || '').trim().toUpperCase() === currencyCode
+            ));
+        },
         canChangeOrderStatus(order) {
             return Array.isArray(order?.available_status_transitions) && order.available_status_transitions.length > 0;
         },
@@ -469,6 +482,7 @@ export function mount(rootEl, payload) {
                 body: JSON.stringify({
                     name: this.form.name,
                     status: this.form.status,
+                    currency_code: this.form.currency_code || null,
                     notes: this.form.notes || null,
                     ...addressPayload,
                 }),

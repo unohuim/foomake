@@ -59,6 +59,10 @@
                             <p class="mt-1 text-base text-gray-900" x-text="customer.customer_type_label || '—'"></p>
                         </div>
                         <div>
+                            <p class="text-sm text-gray-500">Preferred Currency</p>
+                            <p class="mt-1 text-base text-gray-900" x-text="customer.currency_code || 'Tenant default'"></p>
+                        </div>
+                        <div>
                             <p class="text-sm text-gray-500">Notes</p>
                             <p class="mt-1 text-base text-gray-900 whitespace-pre-line" x-text="customer.notes || '—'"></p>
                         </div>
@@ -382,7 +386,7 @@
                                                     <p class="text-xs text-gray-500">No lines yet.</p>
                                                 </div>
 
-                                                <div class="rounded-lg border border-gray-200 bg-white p-3" x-show="orderItems.length > 0 && canManageOrderLines(order)">
+                                                <div class="rounded-lg border border-gray-200 bg-white p-3" x-show="orderItemsForOrder(order).length > 0 && canManageOrderLines(order)">
                                                     <div class="grid gap-2 sm:grid-cols-[minmax(0,1fr)_140px_auto]">
                                                         <div>
                                                             <select
@@ -390,8 +394,8 @@
                                                                 x-model="orderLineForms[order.id].item_id"
                                                             >
                                                                 <option value="">Select item</option>
-                                                                <template x-for="item in orderItems" :key="item.id">
-                                                                    <option :value="String(item.id)" x-text="item.name"></option>
+                                                                <template x-for="item in orderItemsForOrder(order)" :key="item.id">
+                                                                    <option :value="String(item.id)" x-text="`${item.name} (${item.default_price_currency_code})`"></option>
                                                                 </template>
                                                             </select>
                                                             <p class="mt-1 text-xs text-red-600" x-text="(orderLineErrorsByOrder[order.id] || {}).item_id?.[0]"></p>
@@ -410,6 +414,10 @@
                                                         </button>
                                                     </div>
                                                     <p class="mt-2 text-xs text-red-600" x-show="orderLineGeneralErrorsByOrder[order.id]" x-text="orderLineGeneralErrorsByOrder[order.id]"></p>
+                                                </div>
+
+                                                <div class="rounded-lg border border-dashed border-gray-300 p-3" x-show="orderItems.length > 0 && orderItemsForOrder(order).length === 0 && canManageOrderLines(order)">
+                                                    <p class="text-xs text-gray-500">No sellable items are priced in this order currency.</p>
                                                 </div>
 
                                                 <div class="rounded-lg border border-dashed border-gray-300 p-3" x-show="!canManageOrderLines(order)">
@@ -486,6 +494,20 @@
                                                     </select>
                                                 </label>
                                                 <p class="mt-1 text-sm text-red-600" x-text="errors.status[0]"></p>
+                                            </div>
+
+                                            <div>
+                                                <label class="block text-sm font-medium text-gray-700">
+                                                    Preferred currency
+                                                    <input
+                                                        type="text"
+                                                        maxlength="3"
+                                                        class="mt-1 block w-full rounded-md border-gray-300 uppercase shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                                                        x-model="form.currency_code"
+                                                    />
+                                                </label>
+                                                <p class="mt-1 text-xs text-gray-500">Leave blank to use the tenant default currency.</p>
+                                                <p class="mt-1 text-sm text-red-600" x-text="errors.currency_code[0]"></p>
                                             </div>
 
                                             <div>

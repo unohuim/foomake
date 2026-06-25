@@ -57,6 +57,20 @@
                                             <p class="mt-1 text-sm text-red-600" x-text="formErrors.customer_type[0]"></p>
                                         </div>
 
+                                        <div>
+                                            <label class="block text-sm font-medium text-gray-700">
+                                                Preferred currency
+                                                <input
+                                                    type="text"
+                                                    maxlength="3"
+                                                    class="mt-1 block w-full rounded-md border-gray-300 uppercase shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                                                    x-model="form.currency_code"
+                                                />
+                                            </label>
+                                            <p class="mt-1 text-xs text-gray-500">Leave blank to use the tenant default currency.</p>
+                                            <p class="mt-1 text-sm text-red-600" x-text="formErrors.currency_code[0]"></p>
+                                        </div>
+
                                         <div x-show="formMode === 'edit'">
                                             <label class="block text-sm font-medium text-gray-700">
                                                 <span x-text="'Sta' + 'tus'"></span>

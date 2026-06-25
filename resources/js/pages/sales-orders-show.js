@@ -105,6 +105,17 @@ export function mount(rootEl, payload) {
         canManageOrderLines() {
             return !!this.order?.can_manage_lines;
         },
+        sellableItemsForOrder(order) {
+            const currencyCode = String(order?.currency_code || '').trim().toUpperCase();
+
+            if (currencyCode === '') {
+                return this.sellableItems;
+            }
+
+            return this.sellableItems.filter((item) => (
+                String(item?.default_price_currency_code || '').trim().toUpperCase() === currencyCode
+            ));
+        },
         canChangeStatus(order) {
             return Array.isArray(order?.available_status_transitions) && order.available_status_transitions.length > 0;
         },

@@ -13,6 +13,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  *
  * @property int $id
  * @property string $tenant_name
+ * @property string|null $currency_code
  * @property \Illuminate\Support\Carbon|null $trial_ends_at
  * @property \Illuminate\Support\Carbon|null $billing_exempt_until
  * @property string|null $billing_provider
@@ -39,6 +40,7 @@ class Tenant extends Model
      */
     protected $fillable = [
         'tenant_name',
+        'currency_code',
         'trial_ends_at',
         'billing_exempt_until',
         'billing_provider',

@@ -1370,6 +1370,48 @@ $order = SalesOrder::query()->create([
 
 ---
 
+### Sales Order Currency
+
+**Name:** Sales Order Currency
+**Type:** Domain Rule
+**Location:**
+- `docs/architecture/sales/SalesOrderCurrency.yaml`
+- `app/Models/Customer.php`
+- `app/Models/SalesOrder.php`
+- `app/Http/Controllers/CustomerController.php`
+- `app/Http/Controllers/SalesOrderController.php`
+- `app/Http/Controllers/SalesOrderLineController.php`
+- `database/migrations/2026_06_22_000001_add_currency_code_to_customers_table.php`
+- `database/migrations/2026_06_22_000002_add_currency_code_to_sales_orders_table.php`
+
+**Purpose:**
+Document customer preferred sales currency, sales-order currency snapshots, and single-currency sales order line pricing without foreign exchange conversion.
+
+**When to Use:**
+Creating customers, creating sales orders, adding sales-order lines, or rendering sales-order prices and totals.
+
+**When Not to Use:**
+Purchasing supplier price conversion, automatic product price conversion, or cross-currency reporting.
+
+**Public Interface:**
+- `customers.currency_code`
+- `sales_orders.currency_code`
+- `sales_order_lines.unit_price_currency_code`
+- `sales.orders.store`
+- `sales.orders.lines.store`
+
+**Example Usage:**
+```php
+$order = SalesOrder::query()->create([
+    'tenant_id' => $tenant->id,
+    'customer_id' => $customer->id,
+    'currency_code' => $customer->currency_code ?? $tenant->currency_code,
+    'status' => SalesOrder::STATUS_DRAFT,
+]);
+```
+
+---
+
 ### Sales Order Line Pricing And Editable Rules
 
 **Name:** Sales Order Line Pricing And Editable Rules  

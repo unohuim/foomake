@@ -92,6 +92,7 @@ beforeEach(function () {
             'tenant_id' => $tenant->id,
             'customer_id' => $customerId,
             'contact_id' => $contactId,
+            'currency_code' => $tenant->currency_code ?: 'USD',
             'status' => 'DRAFT',
             'created_at' => now(),
             'updated_at' => now(),
@@ -378,7 +379,31 @@ it('8. unit price snapshot is captured when a line is created', function () {
     $line = ($this->fetchSalesOrderLine)((int) $response->json('data.line.id'));
 
     expect((int) ($line?->unit_price_cents ?? 0))->toBe(1299)
-        ->and((string) ($line?->unit_price_currency_code ?? ''))->toBe('CAD');
+        ->and((string) ($line?->unit_price_currency_code ?? ''))->toBe('CAD')
+        ->and($response->json('data.order.currency_code'))->toBe('CAD');
+});
+
+it('8a. line create rejects item price currency that differs from the sales order currency', function () {
+    $tenant = ($this->makeTenant)(['currency_code' => 'USD']);
+    $user = ($this->makeUser)($tenant);
+    $customer = ($this->createCustomer)($tenant);
+    $order = ($this->createSalesOrder)($tenant, $customer->id, null, ['currency_code' => 'USD']);
+    $uom = ($this->makeUom)($tenant);
+    $item = ($this->createItem)($tenant, $uom, [
+        'default_price_cents' => 1299,
+        'default_price_currency_code' => 'CAD',
+    ]);
+
+    ($this->grantPermission)($user, 'sales-sales-orders-manage');
+
+    $response = $this->actingAs($user)
+        ->postJson(route('sales.orders.lines.store', $order->id), [
+            'item_id' => $item->id,
+            'quantity' => '1.000000',
+        ])->assertStatus(422);
+
+    ($this->assertStableLineErrors)($response);
+    expect($response->json('errors.item_id.0'))->toBe('The selected item price currency must match the sales order currency.');
 });
 
 it('9. later item price changes do not mutate an existing line unit price snapshot', function () {

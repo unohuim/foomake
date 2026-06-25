@@ -563,19 +563,22 @@ it('23. existing products create behavior is preserved', function () {
         'is_purchasable' => true,
         'is_manufacturable' => true,
         'default_price_amount' => '12.34',
+        'default_price_currency_code' => 'cad',
     ]);
 
     $response->assertCreated()
         ->assertJsonPath('data.name', 'Created Product')
         ->assertJsonPath('data.base_uom.name', 'Each')
-        ->assertJsonPath('data.price', '12.34');
+        ->assertJsonPath('data.price', '12.34')
+        ->assertJsonPath('data.currency', 'CAD');
 
     $item = Item::query()->where('tenant_id', $tenant->id)->where('name', 'Created Product')->first();
 
     expect($item)->not->toBeNull()
         ->and($item?->is_sellable)->toBeTrue()
         ->and($item?->is_manufacturable)->toBeTrue()
-        ->and($item?->default_price_cents)->toBe(1234);
+        ->and($item?->default_price_cents)->toBe(1234)
+        ->and($item?->default_price_currency_code)->toBe('CAD');
 });
 
 it('24. existing products sorting behavior is preserved for configured sortable fields', function () {
@@ -793,11 +796,13 @@ it('36. products edit submit updates the product', function () {
         'is_purchasable' => true,
         'is_manufacturable' => true,
         'default_price_amount' => '45.67',
+        'default_price_currency_code' => 'eur',
     ])->assertOk()
         ->assertJsonPath('data.name', 'Updated Product')
         ->assertJsonPath('data.base_uom.id', $replacementUom->id)
         ->assertJsonPath('data.base_uom.name', $replacementUom->name)
-        ->assertJsonPath('data.price', '45.67');
+        ->assertJsonPath('data.price', '45.67')
+        ->assertJsonPath('data.currency', 'EUR');
 
     $item->refresh();
 
@@ -805,7 +810,8 @@ it('36. products edit submit updates the product', function () {
         ->and($item->base_uom_id)->toBe($replacementUom->id)
         ->and($item->is_purchasable)->toBeTrue()
         ->and($item->is_manufacturable)->toBeTrue()
-        ->and($item->default_price_cents)->toBe(4567);
+        ->and($item->default_price_cents)->toBe(4567)
+        ->and($item->default_price_currency_code)->toBe('EUR');
 });
 
 it('37. products create and import behavior remain preserved while edit support exists', function () {

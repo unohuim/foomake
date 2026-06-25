@@ -18,6 +18,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property int $tenant_id
  * @property int $customer_id
  * @property int|null $contact_id
+ * @property string $currency_code
  * @property string|null $order_date
  * @property string $status
  */
@@ -43,6 +44,7 @@ class SalesOrder extends Model implements Workflowable
         'tenant_id',
         'customer_id',
         'contact_id',
+        'currency_code',
         'order_date',
         'status',
         'external_source',

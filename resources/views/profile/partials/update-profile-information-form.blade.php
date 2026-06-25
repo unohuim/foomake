@@ -5,7 +5,7 @@
         </h2>
 
         <p class="mt-1 text-sm text-gray-600">
-            {{ __("Update your account's profile information and email address.") }}
+            {{ __("Update your account's profile information, email address, and default currency.") }}
         </p>
     </header>
 
@@ -40,6 +40,24 @@
 
                 </div>
             @endif
+        </div>
+
+        <div>
+            <x-input-label for="currency_code" :value="__('Default Currency')" />
+            <x-text-input
+                id="currency_code"
+                name="currency_code"
+                type="text"
+                maxlength="3"
+                class="mt-1 block w-full uppercase"
+                :value="old('currency_code', $user->tenant?->currency_code ?: config('app.currency_code', 'USD'))"
+                required
+                autocomplete="off"
+            />
+            <p class="mt-1 text-sm text-gray-600">
+                {{ __('Used as the default for new product prices, purchase prices, and sales orders unless a customer or supplier overrides it.') }}
+            </p>
+            <x-input-error class="mt-2" :messages="$errors->get('currency_code')" />
         </div>
 
         <div class="flex items-center gap-4">

@@ -26,6 +26,8 @@ rules:
   - sales_order_lines.external_id, when present, stores source-system line identity and is never treated as the local primary key.
   - unit_price_cents is captured from the item at line creation and becomes an immutable snapshot.
   - unit_price_currency_code is captured at line creation and becomes an immutable snapshot.
+  - The captured unit_price_currency_code must match the parent sales order currency_code.
+  - Sales order line creation must fail when the selected item default_price_currency_code differs from the parent sales order currency_code.
   - line_total_cents is stored and exposed as a canonical scale-6 string in minor currency units.
   - Quantity edits recalculate line_total_cents from the stored unit price snapshot and must not mutate snapshot price fields.
   - Later item price changes must not mutate existing sales-order line snapshots.

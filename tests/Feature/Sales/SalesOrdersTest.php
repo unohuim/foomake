@@ -111,6 +111,7 @@ beforeEach(function () {
             'tenant_id' => $tenant->id,
             'customer_id' => $customerId,
             'contact_id' => $contactId,
+            'currency_code' => $tenant->currency_code ?: 'USD',
             'status' => 'DRAFT',
             'created_at' => now(),
             'updated_at' => now(),
@@ -370,6 +371,42 @@ it('6. create defaults status to draft and scopes the order to the authenticated
 
     expect((int) ($order?->tenant_id ?? 0))->toBe($tenant->id)
         ->and((string) ($order?->status ?? ''))->toBe('DRAFT');
+});
+
+it('6a. create defaults currency from the customer preferred currency', function () {
+    $tenant = ($this->makeTenant)(['currency_code' => 'USD']);
+    $user = ($this->makeUser)($tenant);
+    $customer = ($this->createCustomer)($tenant, ['currency_code' => 'CAD']);
+
+    ($this->grantPermission)($user, 'sales-sales-orders-manage');
+
+    $response = $this->actingAs($user)
+        ->postJson(route('sales.orders.store'), [
+            'customer_id' => $customer->id,
+        ])->assertCreated();
+
+    $order = ($this->fetchSalesOrder)((int) $response->json('data.id'));
+
+    expect((string) ($order?->currency_code ?? ''))->toBe('CAD')
+        ->and($response->json('data.currency_code'))->toBe('CAD');
+});
+
+it('6b. create defaults currency from tenant when customer currency is blank', function () {
+    $tenant = ($this->makeTenant)(['currency_code' => 'EUR']);
+    $user = ($this->makeUser)($tenant);
+    $customer = ($this->createCustomer)($tenant, ['currency_code' => null]);
+
+    ($this->grantPermission)($user, 'sales-sales-orders-manage');
+
+    $response = $this->actingAs($user)
+        ->postJson(route('sales.orders.store'), [
+            'customer_id' => $customer->id,
+        ])->assertCreated();
+
+    $order = ($this->fetchSalesOrder)((int) $response->json('data.id'));
+
+    expect((string) ($order?->currency_code ?? ''))->toBe('EUR')
+        ->and($response->json('data.currency_code'))->toBe('EUR');
 });
 
 it('7. create defaults contact to the selected customer primary contact when contact_id is omitted', function () {

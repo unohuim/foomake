@@ -1,0 +1,46 @@
+name: Sales Order Currency
+type: Domain Rule
+location:
+  - app/Models/Customer.php
+  - app/Models/SalesOrder.php
+  - app/Http/Controllers/CustomerController.php
+  - app/Http/Controllers/SalesOrderController.php
+  - app/Http/Controllers/SalesOrderLineController.php
+  - database/migrations/2026_06_22_000001_add_currency_code_to_customers_table.php
+  - database/migrations/2026_06_22_000002_add_currency_code_to_sales_orders_table.php
+purpose: Define customer preferred sales currency, sales order currency snapshots, and single-currency sales order line pricing without foreign exchange conversion.
+when_to_use:
+  - Creating customers with a preferred sales currency.
+  - Creating sales orders.
+  - Adding sales order lines.
+  - Rendering sales order totals and line prices.
+when_not_to_use:
+  - Purchasing supplier price conversion.
+  - Foreign exchange reporting.
+  - Automatically converting product prices between currencies.
+rules:
+  - Customer currency_code is optional and stores a normalized uppercase three-letter preferred sales currency.
+  - Sales orders persist currency_code as the immutable order currency snapshot.
+  - New sales orders default currency_code from customer currency_code, then tenant currency_code, then the app currency fallback.
+  - Updating a sales order customer does not recalculate the sales order currency_code.
+  - Each sales order is single-currency.
+  - Each product has one default price and one default price currency.
+  - Sales order line creation requires the selected product default_price_currency_code to match the parent sales order currency_code.
+  - Sales order line creation must fail with a validation-style JSON response when the product price currency does not match the sales order currency.
+  - Sales order line unit_price_currency_code remains an immutable snapshot after line creation.
+  - Product currency changes never mutate existing sales order line snapshots.
+  - Foreign exchange conversion is not performed for sales order lines or totals.
+  - Cross-currency sales reporting must group by currency unless a future explicit FX reporting domain is introduced.
+public_interface:
+  - customers.currency_code
+  - sales_orders.currency_code
+  - sales_order_lines.unit_price_currency_code
+  - sales.orders.store
+  - sales.orders.lines.store
+example_usage: |
+  $salesOrder = SalesOrder::query()->create([
+      'tenant_id' => $tenant->id,
+      'customer_id' => $customer->id,
+      'currency_code' => $customer->currency_code ?? $tenant->currency_code,
+      'status' => SalesOrder::STATUS_DRAFT,
+  ]);

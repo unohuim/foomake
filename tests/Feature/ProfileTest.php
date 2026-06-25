@@ -20,6 +20,7 @@ test('profile information can be updated', function () {
         ->patch('/profile', [
             'name' => 'Test User',
             'email' => 'test@example.com',
+            'currency_code' => $user->tenant?->currency_code ?: 'USD',
         ]);
 
     $response
@@ -41,6 +42,7 @@ test('email verification status is unchanged when the email address is unchanged
         ->patch('/profile', [
             'name' => 'Test User',
             'email' => $user->email,
+            'currency_code' => $user->tenant?->currency_code ?: 'USD',
         ]);
 
     $response
@@ -48,6 +50,41 @@ test('email verification status is unchanged when the email address is unchanged
         ->assertRedirect('/profile');
 
     $this->assertNotNull($user->refresh()->email_verified_at);
+});
+
+test('tenant default currency can be updated from profile', function () {
+    $user = User::factory()->create();
+
+    $response = $this
+        ->actingAs($user)
+        ->patch('/profile', [
+            'name' => $user->name,
+            'email' => $user->email,
+            'currency_code' => 'cad',
+        ]);
+
+    $response
+        ->assertSessionHasNoErrors()
+        ->assertRedirect('/profile');
+
+    $this->assertSame('CAD', $user->tenant?->refresh()->currency_code);
+});
+
+test('tenant default currency must be a three-letter code', function () {
+    $user = User::factory()->create();
+
+    $response = $this
+        ->actingAs($user)
+        ->from('/profile')
+        ->patch('/profile', [
+            'name' => $user->name,
+            'email' => $user->email,
+            'currency_code' => 'US',
+        ]);
+
+    $response
+        ->assertSessionHasErrors('currency_code')
+        ->assertRedirect('/profile');
 });
 
 test('user can delete their account', function () {

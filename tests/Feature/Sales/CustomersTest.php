@@ -229,6 +229,24 @@ it('7c. consumer customer type is accepted on create', function () {
         ->assertJsonPath('data.customer_type', 'consumer');
 });
 
+it('7e. customer currency is normalized on create', function () {
+    $tenant = ($this->makeTenant)(['currency_code' => 'USD']);
+    $user = ($this->makeUser)($tenant);
+    ($this->grantPermission)($user, 'sales-customers-manage');
+
+    ($this->postStore)($user, [
+        'name' => 'Euro Customer',
+        'currency_code' => 'eur',
+    ])->assertCreated()
+        ->assertJsonPath('data.currency_code', 'EUR');
+
+    $this->assertDatabaseHas('customers', [
+        'tenant_id' => $tenant->id,
+        'name' => 'Euro Customer',
+        'currency_code' => 'EUR',
+    ]);
+});
+
 it('7d. customer type must be valid on create', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
@@ -386,6 +404,41 @@ it('14. customer can be updated via AJAX', function () {
         'status' => 'inactive',
         'customer_type' => 'consumer',
         'notes' => 'Updated notes',
+    ]);
+});
+
+it('14a. customer currency can be updated and cleared', function () {
+    $tenant = ($this->makeTenant)(['currency_code' => 'USD']);
+    $user = ($this->makeUser)($tenant);
+    ($this->grantPermission)($user, 'sales-customers-manage');
+    $customer = ($this->createCustomer)($tenant, [
+        'name' => 'Currency Customer',
+        'status' => 'active',
+        'currency_code' => 'CAD',
+    ]);
+
+    ($this->patchUpdate)($user, $customer->id, [
+        'name' => 'Currency Customer',
+        'status' => 'active',
+        'currency_code' => 'eur',
+    ])->assertOk()
+        ->assertJsonPath('data.currency_code', 'EUR');
+
+    $this->assertDatabaseHas('customers', [
+        'id' => $customer->id,
+        'currency_code' => 'EUR',
+    ]);
+
+    ($this->patchUpdate)($user, $customer->id, [
+        'name' => 'Currency Customer',
+        'status' => 'active',
+        'currency_code' => null,
+    ])->assertOk()
+        ->assertJsonPath('data.currency_code', null);
+
+    $this->assertDatabaseHas('customers', [
+        'id' => $customer->id,
+        'currency_code' => null,
     ]);
 });
 

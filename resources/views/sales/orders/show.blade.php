@@ -169,7 +169,10 @@
                             <h3 class="text-lg font-medium text-gray-900">Order lines</h3>
                             <p class="mt-1 text-sm text-gray-600">Manage order quantities and sellable items from the detail view.</p>
                         </div>
-                        <p class="text-sm text-gray-500" x-text="`${order.line_count || 0} line(s)`"></p>
+                        <div class="text-right text-sm text-gray-500">
+                            <p x-text="`${order.line_count || 0} line(s)`"></p>
+                            <p class="mt-1" x-text="`Currency: ${order.currency_code || '—'}`"></p>
+                        </div>
                     </div>
 
                     <div class="mt-6 space-y-4" x-show="(order.lines || []).length > 0">
@@ -205,7 +208,7 @@
                         <p>No lines yet.</p>
                     </div>
 
-                    <div class="mt-6 rounded-lg border border-gray-200 p-4" x-show="sellableItems.length > 0 && canManageOrderLines()">
+                    <div class="mt-6 rounded-lg border border-gray-200 p-4" x-show="sellableItemsForOrder(order).length > 0 && canManageOrderLines()">
                         <div class="grid gap-3 sm:grid-cols-[minmax(0,1fr)_140px_auto]">
                             <div>
                                 <select
@@ -213,8 +216,8 @@
                                     x-model="lineForm.item_id"
                                 >
                                     <option value="">Select item</option>
-                                    <template x-for="item in sellableItems" :key="item.id">
-                                        <option :value="String(item.id)" x-text="item.name"></option>
+                                    <template x-for="item in sellableItemsForOrder(order)" :key="item.id">
+                                        <option :value="String(item.id)" x-text="`${item.name} (${item.default_price_currency_code})`"></option>
                                     </template>
                                 </select>
                                 <p class="mt-1 text-xs text-red-600" x-text="lineErrors.item_id[0]"></p>
@@ -233,6 +236,10 @@
                             </button>
                         </div>
                         <p class="mt-2 text-xs text-red-600" x-show="lineGeneralError" x-text="lineGeneralError"></p>
+                    </div>
+
+                    <div class="mt-6 rounded-lg border border-dashed border-gray-300 p-4" x-show="sellableItems.length > 0 && sellableItemsForOrder(order).length === 0 && canManageOrderLines()">
+                        <p class="text-xs text-gray-500">No sellable items are priced in this order currency.</p>
                     </div>
 
                     <div class="mt-6 rounded-lg border border-dashed border-gray-300 p-4" x-show="!canManageOrderLines()">

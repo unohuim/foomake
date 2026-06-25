@@ -361,6 +361,7 @@ class SalesOrderController extends Controller
             'tenant_id' => $request->user()->tenant_id,
             'customer_id' => $customer->id,
             'contact_id' => $this->resolveContactId($request, $customer, null),
+            'currency_code' => $this->resolveSalesOrderCurrencyCode($request->user()?->tenant, $customer),
             'order_date' => $this->normalizedOrderDate($request->validated('order_date')),
             'status' => SalesOrder::STATUS_DRAFT,
         ]);
@@ -468,6 +469,7 @@ class SalesOrderController extends Controller
             'contact_id' => $order->contact_id,
             'contact_name' => $contactName,
             'city' => $order->customer?->city,
+            'currency_code' => $order->currency_code,
             'status' => $order->status,
             'display_label' => $displayStage?->status_complete_label ?? $currentStage?->status_complete_label ?? $currentStage?->name ?? $order->status,
             'status_label' => $displayStage?->status_complete_label ?? $currentStage?->status_complete_label ?? $currentStage?->name ?? $order->status,
@@ -533,6 +535,7 @@ class SalesOrderController extends Controller
             'customer_name' => $order->customer?->name,
             'contact_name' => $contactName,
             'city' => $order->customer?->city,
+            'currency_code' => $order->currency_code,
             'status' => $order->status,
             'can_edit' => $order->isEditable(),
             'available_status_transitions' => $order->availableTransitions(),
@@ -553,6 +556,7 @@ class SalesOrderController extends Controller
         return [
             'id' => $customer->id,
             'name' => $customer->name,
+            'currency_code' => $customer->currency_code,
             'primary_contact_id' => $customer->contacts->firstWhere('is_primary', true)?->id,
             'contacts' => $customer->contacts
                 ->map(fn (CustomerContact $contact): array => [
@@ -634,6 +638,18 @@ class SalesOrderController extends Controller
         }
 
         return $existingOrder->contact_id;
+    }
+
+    /**
+     * Resolve the immutable sales order currency for a new order.
+     */
+    private function resolveSalesOrderCurrencyCode(?\App\Models\Tenant $tenant, Customer $customer): string
+    {
+        return strtoupper((string) (
+            $customer->currency_code
+            ?: $tenant?->currency_code
+            ?: config('app.currency_code', 'USD')
+        ));
     }
 
     /**
@@ -1260,10 +1276,12 @@ class SalesOrderController extends Controller
         $customer = $this->resolveImportedCustomer($tenantId, $externalSource, $row);
         $contact = $this->ensureImportedPrimaryContact($customer, $row);
         $localStatus = $this->localStatusForExternalStatus($externalStatus);
+        $currencyCode = $this->resolveImportedOrderCurrencyCode($tenantId, $customer, $row);
         $order = SalesOrder::query()->create([
             'tenant_id' => $tenantId,
             'customer_id' => $customer->id,
             'contact_id' => $contact?->id,
+            'currency_code' => $currencyCode,
             'order_date' => $this->normalizedOrderDate($row['date'] ?? null),
             'status' => $localStatus,
             'external_source' => $externalSource,
@@ -1280,7 +1298,6 @@ class SalesOrderController extends Controller
             $item = $this->resolveImportedItem($tenantId, $externalSource, $line);
             $quantity = bcadd((string) ($line['quantity'] ?? '0'), '0', self::SCALE);
             $unitPriceCents = $this->resolvedImportedUnitPriceCents($line);
-            $currencyCode = strtoupper((string) (($line['currency_code'] ?? config('app.currency_code', 'USD')) ?: 'USD'));
 
             SalesOrderLine::query()->create([
                 'tenant_id' => $tenantId,
@@ -1295,6 +1312,36 @@ class SalesOrderController extends Controller
         }
 
         return [$order->fresh(['customer', 'contact', 'lines.item']), true];
+    }
+
+    /**
+     * Resolve the imported sales order currency from source rows or tenant defaults.
+     *
+     * @param array<string, mixed> $row
+     */
+    private function resolveImportedOrderCurrencyCode(int $tenantId, Customer $customer, array $row): string
+    {
+        foreach (($row['lines'] ?? []) as $line) {
+            if (! is_array($line)) {
+                continue;
+            }
+
+            $lineCurrency = strtoupper(trim((string) ($line['currency_code'] ?? '')));
+
+            if ($lineCurrency !== '') {
+                return $lineCurrency;
+            }
+        }
+
+        $tenantCurrency = DB::table('tenants')
+            ->where('id', $tenantId)
+            ->value('currency_code');
+
+        return strtoupper((string) (
+            $customer->currency_code
+            ?: $tenantCurrency
+            ?: config('app.currency_code', 'USD')
+        ));
     }
 
     /**

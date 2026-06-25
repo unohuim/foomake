@@ -17,6 +17,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property string $name
  * @property string $status
  * @property string $customer_type
+ * @property string|null $currency_code
  * @property string|null $notes
  * @property string|null $address_line_1
  * @property string|null $address_line_2
@@ -50,6 +51,7 @@ class Customer extends Model
         'name',
         'status',
         'customer_type',
+        'currency_code',
         'notes',
         'address_line_1',
         'address_line_2',

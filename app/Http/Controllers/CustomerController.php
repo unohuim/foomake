@@ -319,6 +319,7 @@ class CustomerController extends Controller
             'name' => $validated['name'],
             'status' => $validated['status'] ?? Customer::STATUS_ACTIVE,
             'customer_type' => $validated['customer_type'] ?? Customer::TYPE_BUSINESS,
+            'currency_code' => $this->normalizeCurrencyCode($validated['currency_code'] ?? null),
             'notes' => $validated['notes'] ?? null,
         ]));
 
@@ -340,6 +341,7 @@ class CustomerController extends Controller
             'name' => $validated['name'],
             'status' => $validated['status'],
             'customer_type' => $validated['customer_type'] ?? $customer->customer_type,
+            'currency_code' => $this->normalizeCurrencyCode($validated['currency_code'] ?? null),
             'notes' => $validated['notes'] ?? null,
         ]));
 
@@ -379,6 +381,7 @@ class CustomerController extends Controller
             'status' => $customer->status,
             'customer_type' => $customer->customer_type,
             'customer_type_label' => $customer->customerTypeLabel(),
+            'currency_code' => $customer->currency_code,
             'notes' => $customer->notes,
             'address_line_1' => $customer->address_line_1,
             'address_line_2' => $customer->address_line_2,
@@ -410,6 +413,7 @@ class CustomerController extends Controller
             'status' => $customer->status,
             'customer_type' => $customer->customer_type,
             'customer_type_label' => $customer->customerTypeLabel(),
+            'currency_code' => $customer->currency_code,
             'notes' => null,
             'address_line_1' => $customer->address_line_1,
             'address_line_2' => $customer->address_line_2,
@@ -958,6 +962,7 @@ class CustomerController extends Controller
             'customer_name' => $order->customer?->name,
             'contact_id' => $order->contact_id,
             'contact_name' => $order->contact?->full_name,
+            'currency_code' => $order->currency_code,
             'status' => $order->status,
             'can_edit' => $order->isEditable(),
             'can_manage_lines' => $order->allowsLineMutations(),
@@ -981,6 +986,7 @@ class CustomerController extends Controller
         return [
             'id' => $customer->id,
             'name' => $customer->name,
+            'currency_code' => $customer->currency_code,
             'primary_contact_id' => $customer->contacts->firstWhere('is_primary', true)?->id,
             'contacts' => $customer->contacts
                 ->map(fn (CustomerContact $contact): array => [
@@ -1042,6 +1048,7 @@ class CustomerController extends Controller
             'name' => ['required', 'string', 'max:255'],
             'status' => ['nullable', 'string', Rule::in(Customer::statuses())],
             'customer_type' => ['nullable', 'string', Rule::in(Customer::types())],
+            'currency_code' => ['nullable', 'string', 'regex:/^[A-Za-z]{3}$/'],
             'notes' => ['nullable', 'string'],
         ]);
     }
@@ -1057,8 +1064,19 @@ class CustomerController extends Controller
             'name' => ['required', 'string', 'max:255'],
             'status' => ['required', 'string', Rule::in(Customer::statuses())],
             'customer_type' => ['nullable', 'string', Rule::in(Customer::types())],
+            'currency_code' => ['nullable', 'string', 'regex:/^[A-Za-z]{3}$/'],
             'notes' => ['nullable', 'string'],
         ]);
+    }
+
+    /**
+     * Normalize an optional three-letter currency code for persistence.
+     */
+    private function normalizeCurrencyCode(?string $currencyCode): ?string
+    {
+        $normalized = strtoupper(trim((string) $currencyCode));
+
+        return $normalized === '' ? null : $normalized;
     }
 
     /**
