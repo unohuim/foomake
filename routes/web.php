@@ -45,18 +45,33 @@ use App\Http\Controllers\WorkflowStageController;
 use App\Http\Controllers\WorkflowTaskTemplateController;
 use App\Http\Middleware\EnsureEmailVerifiedOrInGracePeriod;
 use App\Http\Middleware\EnsureTenantBillingAccess;
+use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
+use Illuminate\Session\Middleware\StartSession;
 use Illuminate\Support\Facades\Route;
+use Illuminate\View\Middleware\ShareErrorsFromSession;
 
 Route::get('/', function () {
     return view('welcome');
 });
 
 Route::get('/learn/{slug}', [MarketingPageController::class, 'show'])
+    ->withoutMiddleware([
+        StartSession::class,
+        ShareErrorsFromSession::class,
+        ValidateCsrfToken::class,
+        VerifyCsrfToken::class,
+    ])
     ->where('slug', '[a-z0-9]+(?:-[a-z0-9]+)*')
     ->name('marketing.pages.show');
 
 Route::get('/sitemap.xml', [MarketingPageController::class, 'sitemap'])
+    ->withoutMiddleware([
+        StartSession::class,
+        ShareErrorsFromSession::class,
+        ValidateCsrfToken::class,
+        VerifyCsrfToken::class,
+    ])
     ->name('marketing.sitemap');
 
 Route::view('/privacy', 'privacy')

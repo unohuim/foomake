@@ -268,3 +268,27 @@ it('33. public marketing route namespace avoids root route shadowing', function 
     $this->get('/learn/materials')
         ->assertNotFound();
 });
+
+it('34. marketing pages do not set Laravel session or CSRF cookies', function (): void {
+    $response = $this->get('/learn/food-manufacturing-mrp')
+        ->assertOk();
+
+    $cookieNames = collect($response->headers->getCookies())
+        ->map(fn ($cookie): string => $cookie->getName());
+
+    expect($cookieNames)
+        ->not->toContain('foomake-session')
+        ->not->toContain('XSRF-TOKEN');
+});
+
+it('35. sitemap does not set Laravel session or CSRF cookies', function (): void {
+    $response = $this->get('/sitemap.xml')
+        ->assertOk();
+
+    $cookieNames = collect($response->headers->getCookies())
+        ->map(fn ($cookie): string => $cookie->getName());
+
+    expect($cookieNames)
+        ->not->toContain('foomake-session')
+        ->not->toContain('XSRF-TOKEN');
+});
