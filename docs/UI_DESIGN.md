@@ -122,6 +122,7 @@ The UI should feel:
 ### Page Module Contract (Enforced)
 
 - Blade templates must not include executable `<script>` tags (JSON payloads only).
+- Exception: `resources/views/layouts/google-analytics.blade.php` is the approved centralized Google Analytics tag include.
 - Page modules remain the target pattern for new interactive pages.
 - During the current staged migration, Alpine directives in Blade are allowed, but executable `<script>` tags remain forbidden.
 
@@ -480,6 +481,7 @@ Each interactive page **must** have:
     - `data-payload="payload-script-id"`
 - A **single** `<script type="application/json">` payload block
 - **No executable `<script>` blocks** in Blade templates
+    - Exception: the approved centralized Google Analytics include under `resources/views/layouts/google-analytics.blade.php`
 
 All UI logic **must** live in:
 resources/js/pages/\*\*

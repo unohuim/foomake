@@ -407,6 +407,7 @@ cta_url: "/register"
 - `app/Models/VisitorAttribution.php`
 - `database/migrations/2026_06_05_000001_create_visitor_attributions_table.php`
 - `docs/architecture/marketing/FirstPartyAttribution.yaml`
+- `resources/views/layouts/google-analytics.blade.php`
 
 **Purpose:**
 Capture minimal first-party source attribution for anonymous public-page visitors and link it to a registered user when registration occurs.
@@ -415,13 +416,14 @@ Capture minimal first-party source attribution for anonymous public-page visitor
 Public marketing attribution, registration source linkage, and future demo request source linkage.
 
 **When Not to Use:**
-Authenticated app route analytics, behavioral tracking, third-party analytics, advertising pixels, heatmaps, or session replay.
+Behavioral tracking, Google Tag Manager, advertising pixels, heatmaps, or session replay.
 
 **Public Interface:**
 - `foomake_visitor_id` cookie
 - `VisitorAttribution`
 - `CaptureVisitorAttribution` middleware
 - `LinkVisitorAttributionToUserAction::execute()`
+- `resources/views/layouts/google-analytics.blade.php`
 
 **Example Usage:**
 ```php

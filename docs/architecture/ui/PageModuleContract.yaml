@@ -18,6 +18,7 @@ rules:
   - Every interactive page must include exactly one payload script tag with type application/json and an id matching data-payload.
   - Page roots may expose additional typed data-* config contracts such as data-crud-config and data-import-config when shared stateless helpers need server-generated configuration.
   - Blade templates must contain no executable script tags beyond JSON payload blocks.
+  - The centralized Google Analytics include at resources/views/layouts/google-analytics.blade.php is the only approved executable script exception.
   - The only allowed script tag in Blade is a payload block: <script type="application/json">.
   - All page UI logic must live in resources/js/pages/**.
   - During the current staged migration, Alpine directives may remain in Blade until a page is fully migrated to the page-module pattern.

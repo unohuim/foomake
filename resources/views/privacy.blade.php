@@ -1,6 +1,8 @@
 <!DOCTYPE html>
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
     <head>
+        @include('layouts.google-analytics')
+
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <title>Privacy | FooMake</title>
@@ -30,9 +32,12 @@
                 </section>
 
                 <section>
-                    <h2 class="text-lg font-semibold text-slate-950">What FooMake does not use</h2>
+                    <h2 class="text-lg font-semibold text-slate-950">Google Analytics</h2>
                     <p class="mt-3">
-                        FooMake does not currently use Google Analytics, Google Tag Manager, ad pixels, heatmaps, session replay, clickstream tracking, scroll-depth tracking, or time-on-page tracking.
+                        FooMake uses Google Analytics to understand aggregate site usage, traffic sources, and page performance across public and authenticated pages.
+                    </p>
+                    <p class="mt-3">
+                        FooMake does not currently use Google Tag Manager, ad pixels, heatmaps, session replay, or clickstream tracking.
                     </p>
                 </section>
 
@@ -42,7 +47,7 @@
                         Attribution records may store first and latest landing page, first and latest referrer, first and latest UTM source, medium, campaign, content, and term, plus first seen, last seen, and converted timestamps.
                     </p>
                     <p class="mt-3">
-                        Attribution records do not store IP address, user agent profiling, full route history, session replay, heatmaps, ad identifiers, or third-party analytics identifiers.
+                        FooMake attribution records do not store IP address, user agent profiling, full route history, session replay, heatmaps, ad identifiers, or Google Analytics client identifiers.
                     </p>
                 </section>
             </div>

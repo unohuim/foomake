@@ -5,29 +5,34 @@ location:
   - app/Actions/Marketing/LinkVisitorAttributionToUserAction.php
   - app/Models/VisitorAttribution.php
   - database/migrations/2026_06_05_000001_create_visitor_attributions_table.php
+  - resources/views/layouts/google-analytics.blade.php
 purpose: Capture minimal first-party source attribution for anonymous public-page visitors and link it to a user when normal registration occurs.
 when_to_use:
   - Public marketing page attribution
   - Registration source linkage
   - Future demo request source linkage
 when_not_to_use:
-  - Authenticated app route analytics
   - Behavioral tracking
-  - Third-party analytics or advertising pixels
+  - Advertising pixels
+  - Google Tag Manager
+  - Heatmaps or session replay
 rules:
   - Attribution uses a first-party visitor_id cookie only.
+  - Google Analytics may be loaded through the approved shared layout include for aggregate site measurement.
+  - Google Tag Manager is not used in this phase.
   - Attribution may store first and latest landing page, referrer, UTM source, UTM medium, UTM campaign, UTM content, UTM term, first_seen_at, last_seen_at, converted_at, and user_id.
-  - No IP address, user agent profiling, route history, clickstream, heatmaps, session replay, ad identifiers, or third-party analytics identifiers may be stored.
+  - First-party attribution records must not store IP address, user agent profiling, route history, clickstream, heatmaps, session replay, ad identifiers, or Google Analytics client identifiers.
   - First-touch fields are write-once.
   - Latest-touch fields may update on later anonymous public-page visits.
-  - Authenticated app navigation must not be tracked as route history.
+  - Authenticated app navigation must not be stored in first-party attribution as route history.
   - Registration may link an existing attribution row to the created user and set converted_at.
-  - Attribution must not create or require a cookie consent banner in this phase.
+  - Google Analytics consent requirements must be evaluated before targeting users in jurisdictions that require opt-in analytics consent.
 public_interface:
   - foomake_visitor_id cookie
   - VisitorAttribution
   - CaptureVisitorAttribution middleware
   - LinkVisitorAttributionToUserAction::execute()
+  - resources/views/layouts/google-analytics.blade.php
 example_usage: |
   $linkAttribution->execute(
       $request->cookies->get(CaptureVisitorAttribution::COOKIE_NAME),

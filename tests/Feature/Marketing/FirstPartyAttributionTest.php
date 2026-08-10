@@ -384,27 +384,29 @@ it('19. privacy page discloses first-party attribution', function (): void {
         ->assertSee('landing page, referrer, and UTM campaign parameters');
 });
 
-it('20. privacy page states prohibited analytics are not used', function (): void {
+it('20. privacy page discloses Google Analytics and prohibited tracking tools', function (): void {
     $this->get('/privacy')
         ->assertOk()
-        ->assertSee('does not currently use Google Analytics')
+        ->assertSee('uses Google Analytics')
+        ->assertSee('does not currently use Google Tag Manager')
         ->assertSee('ad pixels')
         ->assertSee('heatmaps')
         ->assertSee('session replay');
 });
 
-it('21. public pages do not include google analytics or tag manager scripts', function (): void {
+it('21. public pages include Google Analytics without Google Tag Manager containers', function (): void {
     $this->get('/')
         ->assertOk()
-        ->assertDontSee('googletagmanager', false)
-        ->assertDontSee('google-analytics', false)
-        ->assertDontSee('gtag(', false);
+        ->assertSee('https://www.googletagmanager.com/gtag/js?id=G-6TCDQX9Z49', false)
+        ->assertSee("gtag('config', 'G-6TCDQX9Z49');", false)
+        ->assertDontSee('GTM-', false);
 });
 
 it('22. marketing pages do not include pixels heatmaps or replay scripts', function (): void {
     $this->get('/learn/food-manufacturing-mrp')
         ->assertOk()
-        ->assertDontSee('googletagmanager', false)
+        ->assertSee('https://www.googletagmanager.com/gtag/js?id=G-6TCDQX9Z49', false)
+        ->assertDontSee('GTM-', false)
         ->assertDontSee('facebook.com/tr', false)
         ->assertDontSee('hotjar', false)
         ->assertDontSee('fullstory', false);
@@ -436,5 +438,5 @@ it('24. visitor id cookie value is not replaced when existing cookie is valid', 
 it('25. documentation records the first-party attribution pattern', function (): void {
     expect(File::exists(base_path('docs/architecture/marketing/FirstPartyAttribution.yaml')))->toBeTrue()
         ->and(File::get(base_path('docs/architecture/marketing/FirstPartyAttribution.yaml')))
-        ->toContain('No IP address, user agent profiling, route history, clickstream, heatmaps, session replay, ad identifiers, or third-party analytics identifiers may be stored.');
+        ->toContain('First-party attribution records must not store IP address, user agent profiling, route history, clickstream, heatmaps, session replay, ad identifiers, or Google Analytics client identifiers.');
 });
