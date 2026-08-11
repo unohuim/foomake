@@ -55,7 +55,7 @@ final class MarketingPageRepository
             description: (string) ($frontMatter['description'] ?? ''),
             headline: (string) ($frontMatter['headline'] ?? $frontMatter['title'] ?? ''),
             ctaLabel: (string) ($frontMatter['cta_label'] ?? 'Start beta access'),
-            ctaUrl: (string) ($frontMatter['cta_url'] ?? '/register'),
+            ctaUrl: (string) ($frontMatter['cta_url'] ?? '/#register'),
             html: $html,
             noindex: (bool) ($frontMatter['noindex'] ?? false),
             frontMatter: $frontMatter,

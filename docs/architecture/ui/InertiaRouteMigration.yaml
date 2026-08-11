@@ -1,0 +1,70 @@
+name: Inertia Route Migration
+type: UI Architecture Invariant
+location:
+  - app/Http/Middleware/HandleInertiaRequests.php
+  - resources/views/inertia.blade.php
+  - resources/js/inertia-app.js
+  - resources/js/pages/**
+  - resources/js/layouts/**
+  - resources/js/components/**
+purpose: Define the route-by-route Inertia and Vue migration path while preserving existing Blade and Alpine pages until each route is explicitly migrated.
+when_to_use:
+  - Migrating an existing Blade route to Inertia and Vue
+  - Creating new public feature, solution, help, or marketing pages in Vue
+  - Building shared Vue shells for guest or authenticated Inertia routes
+  - Building Vue components that communicate through props, events, and page-owned orchestration
+when_not_to_use:
+  - Unmigrated Blade and Alpine routes
+  - Server-owned domain behavior, validation, authorization, or tenancy
+  - Replacing backend route, controller, or policy authority with client state
+rules:
+  - Inertia migration is route-by-route; Blade remains valid for unmigrated routes.
+  - Vue is approved only for Inertia routes and shared components used by those routes.
+  - Inertia page components own page-level orchestration and pass structured props to child components.
+  - Laravel controllers must provide structured Inertia props as the page payload.
+  - Child Vue components must receive data through props and communicate through emitted events.
+  - Child Vue components must not depend on sibling component state.
+  - Child Vue components must not fetch boot data unless an architecture entry explicitly approves that exception.
+  - Shared Vue composables may own request helpers or local form mechanics but must not introduce global application state.
+  - Server-side Laravel routes, controllers, requests, gates, policies, tenancy scopes, and validation remain authoritative.
+  - AuthShell and GuestShell are top-level Vue layout concepts; desktop and mobile variants should be internal components rather than separate shells.
+  - GuestShell owns public page chrome and shared guest auth drawer behavior.
+  - AuthShell owns authenticated page chrome only for authenticated routes that have been explicitly migrated to Inertia.
+  - Phase 1 migrates the public home route and authenticated dashboard route only.
+public_interface:
+  - Inertia::render()
+  - resources/views/inertia.blade.php
+  - resources/js/inertia-app.js
+  - resources/js/pages/Home.vue
+  - resources/js/pages/Dashboard.vue
+  - resources/js/layouts/GuestShell.vue
+  - resources/js/layouts/AuthShell.vue
+  - resources/js/components/BaseDrawer.vue
+  - resources/js/components/BaseSlideUpDrawer.vue
+  - resources/js/components/AuthDrawer.vue
+  - resources/js/components/NavIcon.vue
+  - resources/js/components/InfiniteHorizontalNavRail.vue
+  - resources/js/components/ResourceIndex.vue
+  - resources/js/components/ResourceCreateDrawer.vue
+  - resources/js/components/ResourceExportDrawer.vue
+  - resources/js/components/ResourceImportDrawer.vue
+  - resources/js/components/DesktopSidebar.vue
+  - resources/js/components/MobileBottomNav.vue
+  - resources/js/components/DashboardTodo.vue
+example_usage: |
+  Controller:
+    return Inertia::render('Home', [
+        'hero' => [
+            'headline' => 'Keep the day’s batches moving without another clipboard.',
+        ],
+        'auth' => [
+            'loginUrl' => route('login', absolute: false),
+            'registerUrl' => route('register', absolute: false),
+        ],
+    ]);
+
+  Page:
+    <GuestShell @open-auth="openAuth">
+        <HeroSection :hero="hero" @primary-action="openAuth('register')" />
+        <AuthDrawer :open="authOpen" :mode="authMode" @close="closeAuth" />
+    </GuestShell>

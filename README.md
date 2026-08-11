@@ -39,6 +39,7 @@ All operational data is isolated via `tenant_id`.
 - Laravel 12
 - Laravel Breeze (Blade)
 - Alpine.js
+- Inertia + Vue for explicitly migrated routes
 - Vite
 - Tailwind CSS
 - Pest / PHPUnit

@@ -393,7 +393,7 @@ description: "FooMake helps small food manufacturers manage recipes, inventory, 
 slug: "food-manufacturing-mrp"
 headline: "MRP software built for small food manufacturers"
 cta_label: "Start beta access"
-cta_url: "/register"
+cta_url: "/#register"
 ---
 ```
 
@@ -431,6 +431,282 @@ $linkAttribution->execute(
     $request->cookies->get(CaptureVisitorAttribution::COOKIE_NAME),
     $user,
 );
+```
+
+## Inertia / Vue
+
+### Inertia Route Migration
+
+**Name:** Inertia Route Migration
+**Type:** UI Architecture Invariant
+**Location:**
+- `docs/architecture/ui/InertiaRouteMigration.yaml`
+- `app/Http/Middleware/HandleInertiaRequests.php`
+- `resources/views/inertia.blade.php`
+- `resources/js/inertia-app.js`
+- `resources/js/pages/**`
+- `resources/js/layouts/**`
+- `resources/js/components/**`
+
+**Purpose:**
+Allow route-by-route migration from Blade and Alpine to Inertia and Vue while preserving server-side Laravel authority and existing Blade routes until they are explicitly migrated.
+
+**When to Use:**
+Migrating a route to Inertia/Vue, creating new Vue-backed public pages, or building shared Vue guest/auth shells.
+
+**When Not to Use:**
+Unmigrated Blade routes, backend domain behavior, authorization, validation, tenancy, or replacing server authority with client state.
+
+**Public Interface:**
+- `Inertia::render()`
+- `resources/views/inertia.blade.php`
+- `resources/js/inertia-app.js`
+- `resources/js/pages/Home.vue`
+- `resources/js/pages/Dashboard.vue`
+- `resources/js/layouts/GuestShell.vue`
+- `resources/js/layouts/AuthShell.vue`
+- `resources/js/components/AuthDrawer.vue`
+- `resources/js/components/BaseSlideUpDrawer.vue`
+- `resources/js/components/DesktopSidebar.vue`
+- `resources/js/components/InfiniteHorizontalNavRail.vue`
+- `resources/js/components/MobileBottomNav.vue`
+- `resources/js/components/NavIcon.vue`
+- `resources/js/components/ResourceIndex.vue`
+- `resources/js/components/ResourceCreateDrawer.vue`
+- `resources/js/components/ResourceExportDrawer.vue`
+- `resources/js/components/ResourceImportDrawer.vue`
+
+**Example Usage:**
+```php
+return Inertia::render('Home', [
+    'hero' => [
+        'headline' => 'Keep the day’s batches moving without another clipboard.',
+    ],
+]);
+```
+
+### Base Drawer
+
+**Name:** Base Drawer
+**Type:** UI Component Abstraction
+**Location:**
+- `docs/architecture/ui/BaseDrawer.yaml`
+- `resources/js/components/BaseDrawer.vue`
+- `resources/js/components/*Drawer.vue`
+
+**Purpose:**
+Provide one shared Vue drawer boundary for overlay, outside-click closing, Escape closing, accessibility wiring, and 500ms slide/fade drawer transition behavior.
+
+**When to Use:**
+Building an Inertia Vue drawer or slideout that should share the standard drawer interaction model.
+
+**When Not to Use:**
+Unmigrated Blade/Alpine drawers, centered modal dialogs, or feature-specific form/request orchestration.
+
+**Public Interface:**
+- `open`
+- `labelledBy`
+- `closeLabel`
+- `panelClass`
+- `close`
+- default slot
+
+**Transition Contract:**
+Drawer panel movement, panel opacity, and backdrop opacity transition over 500ms for both expand and collapse. Visible drawer content must remain mounted until the 500ms collapse transition has completed.
+
+**Example Usage:**
+```vue
+<BaseDrawer
+    :open="authOpen"
+    labelled-by="auth-drawer-title"
+    @close="closeAuth"
+>
+    <AuthDrawerContent />
+</BaseDrawer>
+```
+
+### Base Slide Up Drawer
+
+**Name:** Base Slide Up Drawer
+**Type:** UI Component Abstraction
+**Location:**
+- `docs/architecture/ui/BaseSlideUpDrawer.yaml`
+- `resources/js/components/BaseSlideUpDrawer.vue`
+- `resources/js/components/MobileBottomNav.vue`
+
+**Purpose:**
+Provide one shared Vue bottom-sheet drawer boundary for mobile authenticated navigation menus.
+
+**When to Use:**
+Building mobile Inertia Vue menus that slide up from the bottom viewport edge while sharing overlay, outside-click closing, Escape closing, accessibility wiring, and 500ms slide/fade transition behavior.
+
+**When Not to Use:**
+Desktop sidebar flyouts, drop-up account menus, unmigrated Blade/Alpine drawers, centered modal dialogs, or feature-specific form/request orchestration.
+
+**Public Interface:**
+- `open`
+- `labelledBy`
+- `close`
+- default slot
+
+**Transition Contract:**
+Bottom-sheet movement, panel opacity, and backdrop opacity transition over 500ms for both expand and collapse. Visible drawer content must remain mounted until the 500ms collapse transition has completed.
+
+**Style Contract:**
+Mobile navigation and account drawer headers visually inherit from the mobile nav bars with dark navy backgrounds and plain header content. Bottom-sheet top corners use slight rounding rather than large rounded corners.
+
+Nested items inside mobile navigation drawers render as inline accordions, not separate boxed containers.
+
+**Example Usage:**
+```vue
+<BaseSlideUpDrawer
+    :open="Boolean(activeEntry)"
+    labelled-by="mobile-nav-drawer-title"
+    @close="closeMenu"
+>
+    <MobileNavMenu :entry="activeEntry" />
+</BaseSlideUpDrawer>
+```
+
+### Infinite Horizontal Nav Rail
+
+**Name:** Infinite Horizontal Nav Rail
+**Type:** UI Component Abstraction
+**Location:**
+- `docs/architecture/ui/InfiniteHorizontalNavRail.yaml`
+- `resources/js/components/InfiniteHorizontalNavRail.vue`
+- `resources/js/components/MobileBottomNav.vue`
+
+**Purpose:**
+Provide a reusable mobile horizontal navigation rail that fits all items when possible and falls back to an infinite swipe rail when items overflow.
+
+**When to Use:**
+Rendering compact mobile navigation actions in constrained horizontal space, while reusing the bottom navigation scroll-hint and fit-measurement behavior.
+
+**When Not to Use:**
+Desktop sidebar navigation, long-form tab lists where native wrapping is clearer, domain data tables, carousels, or content galleries.
+
+**Public Interface:**
+- `entries`
+- `activeKey`
+- `storageKey`
+- `select`
+
+**Behavior Contract:**
+The rail renders one normal item set when all entries fit. It renders repeated item sets only when entries overflow. The scroll hint arrow appears only when overflowing and hides after three completed scroll bursts. A caller-provided per-user localStorage key may persist the hint acknowledgement as UI education state only.
+
+**Example Usage:**
+```vue
+<InfiniteHorizontalNavRail
+    :entries="navigationGroups"
+    :active-key="activeMenuKey"
+    :storage-key="scrollHintStorageKey"
+    @select="openMenu"
+/>
+```
+
+### Resource Index Vue
+
+**Name:** Resource Index Vue
+**Type:** UI Component Abstraction
+**Location:**
+- `docs/architecture/ui/ResourceIndexVue.yaml`
+- `resources/js/components/ResourceIndex.vue`
+
+**Purpose:**
+Provide the Inertia/Vue equivalent of the existing Blade configured resource index shell while preserving backend-owned resource contracts.
+
+**When to Use:**
+Building an Inertia/Vue CRUD resource index page, reusing the standard resource index toolbar, bounded height shell, search field, toolbar actions, and scroll-contained records pane.
+
+**When Not to Use:**
+Unmigrated Blade/Alpine resource index pages, resource detail pages, or domain-specific create/import/export/validation/authorization behavior.
+
+**Public Interface:**
+- `labels`
+- `permissions`
+- `records`
+- `search`
+- `loading`
+- `error`
+- `boundedHeightClass`
+- `update:search`
+- `search`
+- `create`
+- `import`
+- `export`
+- default/empty/loading/error slots
+- toolbar action slots
+
+**Behavior Contract:**
+ResourceIndex owns only the generic shell and toolbar interaction surface. Records render through slots, data arrives through props, user intent leaves through events, and the records pane remains the only scrollable region.
+
+**Example Usage:**
+```vue
+<ResourceIndex
+    v-model:search="search"
+    :records="records"
+    :labels="resource.labels"
+    :permissions="resource.permissions"
+    :loading="loading"
+    :error="error"
+    @search="fetchRecords"
+    @create="openCreatePanel"
+>
+    <template #default="{ records }">
+        <ResourceCards :records="records" />
+    </template>
+</ResourceIndex>
+```
+
+### Resource Index Drawer Vue
+
+**Name:** Resource Index Drawer Vue
+**Type:** UI Component Abstraction
+**Location:**
+- `docs/architecture/ui/ResourceIndexDrawerVue.yaml`
+- `resources/js/components/ResourceCreateDrawer.vue`
+- `resources/js/components/ResourceExportDrawer.vue`
+- `resources/js/components/ResourceImportDrawer.vue`
+
+**Purpose:**
+Provide Vue drawer dependencies for Inertia resource index pages while preserving backend-owned resource contracts and page-owned domain behavior.
+
+**When to Use:**
+Building create, export, or import drawers for an Inertia/Vue resource index page, or migrating configured Blade CRUD index dependencies to Vue one route at a time.
+
+**When Not to Use:**
+Unmigrated Blade/Alpine resource index pages, resource detail drawers, or domain-specific field validation/import/export/persistence behavior.
+
+**Public Interface:**
+- `ResourceCreateDrawer`
+- `ResourceExportDrawer`
+- `ResourceImportDrawer`
+- `open`
+- `labels`
+- `submitting`
+- `error/errors`
+- `close`
+- `submit`
+- slots for default content, footer, error, bulk options, preview rows, and preview states
+- `toggle-row-selection`
+- `toggle-visible-selection`
+
+**Behavior Contract:**
+The drawer components compose `BaseDrawer`, inherit the standard 500ms slide/fade transition, receive state through props, and emit user intent through events. Resource-specific form fields, import row rendering, export URL authority, submit payloads, authorization, validation, and persistence remain owned by the page component and backend.
+
+**Example Usage:**
+```vue
+<ResourceCreateDrawer
+    :open="createOpen"
+    title="Add Material"
+    :submitting="submitting"
+    :error="generalError"
+    @close="closeCreate"
+    @submit="submitCreate"
+>
+    <MaterialFields v-model="form" :errors="errors" />
+</ResourceCreateDrawer>
 ```
 
 ### Reusable CRUD Detail Section Pattern
@@ -547,7 +823,8 @@ Notes:
 - `app/Actions/Workflows/CanViewAssignedWorkflowResourceAction.php`
 - `app/Http/Controllers/DashboardController.php`
 - `app/Support/Workflows/WorkflowAssignmentPermissions.php`
-- `resources/views/dashboard.blade.php`
+- `resources/js/pages/Dashboard.vue`
+- `resources/js/components/DashboardTodo.vue`
 - `tests/Feature/DashboardTodoTest.php`
 
 **Purpose:**

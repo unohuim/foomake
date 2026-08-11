@@ -87,6 +87,8 @@ These rules are mandatory for all new tests.
 
 - Blade is the primary templating system
 - Alpine.js is used for lightweight interactivity
+- Inertia and Vue may be used only for routes explicitly migrated under `docs/architecture/ui/InertiaRouteMigration.yaml`
+- Blade and Alpine remain valid for unmigrated routes
 - No global JavaScript state unless explicitly approved
 - Prefer progressive enhancement over JavaScript-first solutions
 

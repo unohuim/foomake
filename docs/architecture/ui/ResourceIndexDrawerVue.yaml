@@ -1,0 +1,73 @@
+name: Resource Index Drawer Vue
+type: UI Component Abstraction
+location:
+  - resources/js/components/ResourceCreateDrawer.vue
+  - resources/js/components/ResourceExportDrawer.vue
+  - resources/js/components/ResourceImportDrawer.vue
+purpose: Provide Vue drawer dependencies for Inertia resource index pages while preserving backend-owned resource contracts and page-owned domain behavior.
+when_to_use:
+  - Building create, export, or import drawers for an Inertia/Vue resource index page
+  - Reusing the standard drawer shell, header, footer, scope chooser, source chooser, preview shell, and action controls
+  - Migrating configured Blade CRUD index dependencies to Vue one route at a time
+when_not_to_use:
+  - Unmigrated Blade and Alpine resource index pages
+  - Resource detail drawers
+  - Domain-specific field validation, import row normalization, export URL authority, or persistence behavior
+rules:
+  - ResourceCreateDrawer owns only generic create drawer chrome, submit/cancel actions, error slot, footer slot, and default form content slot.
+  - ResourceExportDrawer owns only the export confirmation UX, scope selection, labels, and submit/cancel events.
+  - ResourceImportDrawer owns only the import drawer shell, source selector, accordions, preview controls, preview shell states, footer, and slots for resource-specific options and rows.
+  - Drawer components must compose BaseDrawer and inherit its 500ms slide/fade transition behavior.
+  - Drawer components must receive state through props and emit user intent through events.
+  - Drawer components must not fetch boot data, own domain mutations, build authoritative backend routes, or introduce global JavaScript state.
+  - Resource-specific form fields, import bulk options, preview row rendering, submit payloads, authorization, validation, and persistence remain owned by the page component and backend.
+  - Backend routes, policies, validation, and tenant scoping remain authoritative.
+public_interface:
+  - ResourceCreateDrawer
+  - ResourceExportDrawer
+  - ResourceImportDrawer
+  - open
+  - labels
+  - submitting
+  - error/errors
+  - close
+  - submit
+  - slots for default content, footer, error, bulk-options, preview rows, and preview states
+  - toggle-row-selection
+  - toggle-visible-selection
+example_usage: |
+  <ResourceCreateDrawer
+      :open="createOpen"
+      title="Add Material"
+      :submitting="submitting"
+      :error="generalError"
+      @close="closeCreate"
+      @submit="submitCreate"
+  >
+      <MaterialFields v-model="form" :errors="errors" />
+  </ResourceCreateDrawer>
+
+  <ResourceExportDrawer
+      v-model:scope="exportScope"
+      :open="exportOpen"
+      :labels="resource.labels"
+      :submitting="exportSubmitting"
+      :error="exportError"
+      @close="closeExport"
+      @submit="submitExport"
+  />
+
+  <ResourceImportDrawer
+      v-model:selected-source="selectedSource"
+      v-model:preview-search="previewSearch"
+      :open="importOpen"
+      :labels="importLabels"
+      :sources="sources"
+      :preview-rows="previewRows"
+      @close="closeImport"
+      @submit="submitImport"
+  >
+      <template #preview-rows="{ rows }">
+          <ImportPreviewRows :rows="rows" />
+      </template>
+  </ResourceImportDrawer>

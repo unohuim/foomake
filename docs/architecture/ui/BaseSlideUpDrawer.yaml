@@ -1,0 +1,45 @@
+name: Base Slide Up Drawer
+type: UI Component Abstraction
+location:
+  - resources/js/components/BaseSlideUpDrawer.vue
+  - resources/js/components/MobileBottomNav.vue
+purpose: Provide one shared Vue bottom-sheet drawer boundary for mobile authenticated navigation menus.
+when_to_use:
+  - Building mobile Inertia Vue menus that slide up from the bottom viewport edge
+  - Sharing bottom-sheet overlay, outside-click closing, Escape closing, accessibility wiring, and transition behavior
+  - Rendering menu-specific content through a slot while keeping mobile drawer behavior consistent
+when_not_to_use:
+  - Desktop sidebar flyouts or drop-up account menus
+  - Unmigrated Blade and Alpine drawers
+  - Centered modal dialogs
+  - Feature-specific form state, validation, or request orchestration
+rules:
+  - BaseSlideUpDrawer owns the mobile backdrop, bottom panel container, Escape-to-close behavior, outside-panel click closing, and 500ms Tailwind transition.
+  - Bottom-sheet movement and opacity must transition together over the same 500ms duration.
+  - Bottom-sheet opacity must increase while expanding and decrease while collapsing.
+  - Bottom-sheet backdrops must fade over the same 500ms duration as the panel.
+  - Bottom-sheet top corners must use slight rounding rather than large rounded corners.
+  - Mobile navigation and account drawer headers must visually inherit from the mobile nav bars with dark navy backgrounds and plain header content.
+  - Feature-specific drawer content must remain mounted until the 500ms collapse transition has completed.
+  - Bottom-sheet implementations must not use immediate content removal for visible drawer content during collapse.
+  - Mobile navigation drawer headers should include a top-right close button using `text-gray-200`.
+  - Nested items inside mobile navigation drawers must render as inline accordions, not separate boxed containers.
+  - Clicking outside the drawer panel must emit close.
+  - Clicking inside the drawer panel must not close the drawer by default.
+  - Bottom-sheet drawers must be mobile-only unless a new architecture entry approves desktop usage.
+  - Feature-specific mobile drawer components must compose BaseSlideUpDrawer and provide content through the default slot.
+  - BaseSlideUpDrawer must not own auth, domain, request, navigation data, or page orchestration state.
+  - BaseSlideUpDrawer must not introduce global application state.
+public_interface:
+  - open
+  - labelledBy
+  - close
+  - default slot
+example_usage: |
+  <BaseSlideUpDrawer
+      :open="Boolean(activeEntry)"
+      labelled-by="mobile-nav-drawer-title"
+      @close="closeMenu"
+  >
+      <MobileNavMenu :entry="activeEntry" />
+  </BaseSlideUpDrawer>

@@ -1,0 +1,57 @@
+name: Resource Index Vue
+type: UI Component Abstraction
+location:
+  - resources/js/components/ResourceIndex.vue
+purpose: Provide the Inertia/Vue equivalent of the existing Blade configured resource index shell while preserving backend-owned resource contracts.
+when_to_use:
+  - Building an Inertia/Vue CRUD resource index page
+  - Reusing the standard resource index toolbar, bounded height shell, search field, toolbar actions, and scroll-contained records pane
+  - Migrating a Blade configured CRUD index page to Vue one route at a time
+when_not_to_use:
+  - Unmigrated Blade and Alpine resource index pages
+  - Resource detail pages
+  - Domain-specific create, import, export, validation, authorization, or persistence behavior
+rules:
+  - ResourceIndex owns only the generic resource index shell and toolbar interaction surface.
+  - ResourceIndex must receive resource state through props and emit user intent through events.
+  - ResourceIndex must not fetch boot data, own domain mutations, or introduce global JavaScript state.
+  - The records pane must be the scrollable region while toolbar chrome remains fixed inside the component shell.
+  - The component must preserve h-full and min-h-0-compatible layout rules for resource index pages.
+  - Search must emit both update:search and debounced search events.
+  - Create, import, and export controls must be permission-driven from props.
+  - Record rendering must be provided by slots so page components own resource-specific presentation.
+  - Backend routes, policies, validation, and tenant scoping remain authoritative.
+public_interface:
+  - labels
+  - permissions
+  - records
+  - search
+  - loading
+  - error
+  - boundedHeightClass
+  - update:search
+  - search
+  - create
+  - import
+  - export
+  - default slot
+  - empty slot
+  - loading slot
+  - error slot
+  - toolbar-actions-before slot
+  - toolbar-actions-after slot
+example_usage: |
+  <ResourceIndex
+      v-model:search="search"
+      :records="records"
+      :labels="resource.labels"
+      :permissions="resource.permissions"
+      :loading="loading"
+      :error="error"
+      @search="fetchRecords"
+      @create="openCreatePanel"
+  >
+      <template #default="{ records }">
+          <ResourceCards :records="records" />
+      </template>
+  </ResourceIndex>

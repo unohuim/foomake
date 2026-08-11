@@ -30,7 +30,7 @@
                     FooMake
                 </a>
                 <a
-                    href="{{ url('/register') }}"
+                    href="/#register"
                     class="rounded-md bg-blue-950 px-3 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-950"
                 >
                     Start beta access

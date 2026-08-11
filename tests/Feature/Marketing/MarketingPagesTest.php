@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Route;
+use Inertia\Testing\AssertableInertia as Assert;
 
 beforeEach(function (): void {
     $this->marketingSlugs = [
@@ -87,7 +88,7 @@ it('9. renders the CTA label', function (): void {
 it('10. renders the CTA URL', function (): void {
     $this->get('/learn/production-planning-for-small-food-manufacturers')
         ->assertOk()
-        ->assertSee('href="/register"', false);
+        ->assertSee('href="/#register"', false);
 });
 
 it('11. renders Open Graph title metadata', function (): void {
@@ -111,7 +112,7 @@ description: "A temporary noindex test page."
 slug: "noindex-test"
 headline: "Noindex test"
 cta_label: "Start beta access"
-cta_url: "/register"
+cta_url: "/#register"
 noindex: true
 ---
 
@@ -190,9 +191,12 @@ it('24. marketing routes do not break protected dashboard route', function (): v
 it('25. homepage includes links to marketing pages', function (): void {
     $this->get('/')
         ->assertOk()
-        ->assertSee('/learn/food-manufacturing-mrp')
-        ->assertSee('/learn/inventory-management-for-food-manufacturers')
-        ->assertSee('/learn/recipe-management-software');
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('Home')
+            ->has('learnLinks')
+            ->where('learnLinks.0.url', '/learn/food-manufacturing-mrp')
+            ->where('learnLinks.1.url', '/learn/inventory-management-for-food-manufacturers')
+            ->where('learnLinks.2.url', '/learn/recipe-management-software'));
 });
 
 it('26. sitemap includes marketing pages', function (): void {
@@ -214,7 +218,7 @@ description: "A temporary script sanitization test page."
 slug: "unsafe-script-test"
 headline: "Unsafe script test"
 cta_label: "Start beta access"
-cta_url: "/register"
+cta_url: "/#register"
 ---
 
 This content is safe.

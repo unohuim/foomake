@@ -4,7 +4,7 @@ description: "FooMake gives small food manufacturers clear inventory visibility 
 slug: "inventory-management-for-food-manufacturers"
 headline: "Inventory management for small food manufacturers"
 cta_label: "Start beta access"
-cta_url: "/register"
+cta_url: "/#register"
 ---
 
 Inventory management for food manufacturers is more than a stock number. Small teams need to know what is on hand, what is being purchased, what is being made, and what sales orders may consume.

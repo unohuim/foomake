@@ -4,7 +4,7 @@ description: "FooMake helps small food manufacturers manage recipes, inventory, 
 slug: "food-manufacturing-mrp"
 headline: "MRP software built for small food manufacturers"
 cta_label: "Start beta access"
-cta_url: "/register"
+cta_url: "/#register"
 ---
 
 Food manufacturing MRP should help a small team run the day, not bury it in enterprise process. FooMake is simple MRP software for small food manufacturers who have outgrown spreadsheets and need one place for materials, recipes, purchasing, production, inventory counts, sales orders, and assigned work.

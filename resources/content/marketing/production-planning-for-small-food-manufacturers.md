@@ -4,7 +4,7 @@ description: "FooMake helps small food manufacturers plan production with recipe
 slug: "production-planning-for-small-food-manufacturers"
 headline: "Production planning for small food manufacturers"
 cta_label: "Start beta access"
-cta_url: "/register"
+cta_url: "/#register"
 ---
 
 Production planning should help a small food team decide what to make, what materials are needed, what work is assigned, and what customer demand is coming.

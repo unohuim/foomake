@@ -21,6 +21,7 @@ use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\CustomerContactController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ProfileConnectorController;
+use App\Http\Controllers\PublicHomeController;
 use App\Http\Controllers\PurchaseOrderController;
 use App\Http\Controllers\PurchaseOrderLineController;
 use App\Http\Controllers\PurchaseOrderReceiptController;
@@ -51,9 +52,7 @@ use Illuminate\Session\Middleware\StartSession;
 use Illuminate\Support\Facades\Route;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
 
-Route::get('/', function () {
-    return view('welcome');
-});
+Route::get('/', PublicHomeController::class);
 
 Route::get('/learn/{slug}', [MarketingPageController::class, 'show'])
     ->withoutMiddleware([

@@ -1,0 +1,35 @@
+name: Infinite Horizontal Nav Rail
+type: UI Component Abstraction
+location:
+  - resources/js/components/InfiniteHorizontalNavRail.vue
+  - resources/js/components/MobileBottomNav.vue
+purpose: Provide a reusable mobile horizontal navigation rail that fits all items when possible and falls back to an infinite swipe rail when items overflow.
+when_to_use:
+  - Rendering compact mobile navigation actions in a constrained horizontal space
+  - Providing swipeable mobile navigation without hiding the current active item treatment
+  - Reusing the bottom navigation scroll-hint and fit-measurement behavior
+when_not_to_use:
+  - Desktop sidebar navigation
+  - Long-form tab lists where native wrapping is clearer
+  - Domain data tables, carousels, or content galleries
+rules:
+  - The rail must render one normal item set when all entries fit in the available width.
+  - The rail may render repeated item sets only when entries overflow the available width.
+  - Infinite scroll behavior must remain local to the component and must not introduce global JavaScript state.
+  - The scroll hint arrow must appear only when the rail overflows.
+  - The scroll hint arrow must be hidden after three completed scroll bursts.
+  - Scroll hint acknowledgement may be persisted in browser localStorage using a caller-provided per-user key.
+  - LocalStorage-backed hint state is UI education state only and must not drive authorization, routing, or domain behavior.
+  - The rail must emit selected entries to its parent rather than owning drawer or page orchestration.
+public_interface:
+  - entries
+  - activeKey
+  - storageKey
+  - select
+example_usage: |
+  <InfiniteHorizontalNavRail
+      :entries="navigationGroups"
+      :active-key="activeMenuKey"
+      :storage-key="scrollHintStorageKey"
+      @select="openMenu"
+  />

@@ -15,6 +15,8 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rules;
 use Illuminate\View\View;
+use Inertia\Inertia;
+use Symfony\Component\HttpFoundation\Response;
 
 class RegisteredUserController extends Controller
 {
@@ -31,7 +33,7 @@ class RegisteredUserController extends Controller
      *
      * @throws \Illuminate\Validation\ValidationException
      */
-    public function store(Request $request, LinkVisitorAttributionToUserAction $linkAttribution): RedirectResponse
+    public function store(Request $request, LinkVisitorAttributionToUserAction $linkAttribution): RedirectResponse|Response
     {
         $request->validate([
             'name' => ['required', 'string', 'max:255'],
@@ -66,6 +68,12 @@ class RegisteredUserController extends Controller
 
         Auth::login($user);
 
-        return redirect(route('dashboard', absolute: false));
+        $dashboardUrl = route('dashboard', absolute: false);
+
+        if ($request->headers->has('X-Inertia')) {
+            return Inertia::location($dashboardUrl);
+        }
+
+        return redirect($dashboardUrl);
     }
 }

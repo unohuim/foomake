@@ -10,6 +10,8 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\View\View;
+use Inertia\Inertia;
+use Symfony\Component\HttpFoundation\Response;
 
 class AuthenticatedSessionController extends Controller
 {
@@ -24,7 +26,7 @@ class AuthenticatedSessionController extends Controller
     /**
      * Handle an incoming authentication request.
      */
-    public function store(LoginRequest $request, LinkVisitorAttributionToUserAction $linkAttribution): RedirectResponse
+    public function store(LoginRequest $request, LinkVisitorAttributionToUserAction $linkAttribution): RedirectResponse|Response
     {
         $request->authenticate();
 
@@ -39,7 +41,13 @@ class AuthenticatedSessionController extends Controller
             );
         }
 
-        return redirect()->intended(route('dashboard', absolute: false));
+        $response = redirect()->intended(route('dashboard', absolute: false));
+
+        if ($request->headers->has('X-Inertia')) {
+            return Inertia::location($response->getTargetUrl());
+        }
+
+        return $response;
     }
 
     /**

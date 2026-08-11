@@ -107,6 +107,7 @@ The UI should feel:
 
 - Blade
 - Alpine.js
+- Inertia and Vue only for routes explicitly migrated under `docs/architecture/ui/InertiaRouteMigration.yaml`
 - Native JavaScript
 - Tailwind CSS utilities
 - AJAX / fetch-based interactions
@@ -114,6 +115,7 @@ The UI should feel:
 ### Disallowed (without approval)
 
 - SPA frameworks (React, Vue, etc.)
+- Vue outside the approved route-by-route Inertia migration path
 - Global JS state
 - Client-side routing
 - CSS files or inline styles
@@ -142,6 +144,19 @@ The UI should feel:
 - Slide-overs preferred for create/edit
 - Modals for confirmation and short forms
 - Never stack modals
+- Drawer and slide-up panel motion must use 500ms Tailwind transitions for both expand and collapse
+- Drawers must transition opacity while moving: opacity increases during expand and decreases during collapse
+- Drawers must not remove visible panel content until the 500ms collapse transition has completed
+- Drawer backdrops must fade over the same 500ms transition window as the panel
+- Clicks outside drawer panels must collapse the drawer; clicks inside the panel must not collapse it by default
+- Drawers should include an explicit top-right close button when header space allows; on dark drawer headers, the close icon should use `text-gray-200`
+- Mobile slide-up drawer top edges should be slightly rounded, not large pill-like rounded corners
+- Mobile navigation and account drawer headers should visually inherit from the mobile nav bars with dark navy backgrounds and plain header content
+- Sidebar dropdowns and drawer-like navigation panels must use 500ms height/opacity transitions instead of immediate `v-if` removal
+- Nested items inside mobile drawer navigation must render as inline accordions, not separate boxed containers
+- Mobile horizontal navigation rails must render all items normally when they fit and switch to infinite horizontal swipe behavior only when items overflow
+- Infinite mobile navigation rails must show a subtle right-arrow hint until the user has completed three scroll bursts
+- Scroll-hint acknowledgement may persist in browser localStorage as UI education state, not server/domain state
 - Native date-picker fields may auto-collapse after a date selection when that improves operational flow, but selected values and time input behavior must be preserved
 
 ### Tables & Lists

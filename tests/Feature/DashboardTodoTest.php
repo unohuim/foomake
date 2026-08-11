@@ -24,6 +24,7 @@ use Database\Seeders\TenancyRolesPermissionsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Inertia\Testing\AssertableInertia as Assert;
 
 uses(RefreshDatabase::class);
 
@@ -252,7 +253,9 @@ it('1. authenticated user can see the Todo section on the dashboard', function (
     $this->actingAs($user)
         ->get(route('dashboard'))
         ->assertOk()
-        ->assertSee('Todo');
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('Dashboard')
+            ->where('todo.heading', 'Todo'));
 });
 
 it('2. unauthenticated user cannot access the dashboard', function (): void {
@@ -267,8 +270,11 @@ it('3. Todo section renders as a detail-section accordion', function (): void {
     $this->actingAs($user)
         ->get(route('dashboard'))
         ->assertOk()
-        ->assertSee('data-detail-section-card', false)
-        ->assertSee('data-dashboard-todo-section', false);
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('Dashboard')
+            ->has('todo')
+            ->has('todo.responsibilities')
+            ->has('todo.stageTasks'));
 });
 
 it('4. empty assigned work shows a calm empty state', function (): void {
@@ -278,7 +284,10 @@ it('4. empty assigned work shows a calm empty state', function (): void {
     $this->actingAs($user)
         ->get(route('dashboard'))
         ->assertOk()
-        ->assertSee('No assigned work.');
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('Dashboard')
+            ->where('todo.hasTodo', false)
+            ->where('todo.emptyState', 'No assigned work.'));
 });
 
 it('5. assigned make order workflow responsibility appears', function (): void {
@@ -393,18 +402,20 @@ it('9. assigned make order workflow responsibility links to its resource', funct
         ->assertSee(route('manufacturing.make-orders.show', $makeOrder), false);
 });
 
-it('9a. Todo rows use full-row mobile links without x borders', function (): void {
+it('9a. Todo rows are provided to the Vue dashboard component', function (): void {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
     ($this->grantPermissions)($user, ['inventory-make-orders-view', 'inventory-make-orders-execute']);
-    ($this->makeMakeOrder)($tenant, $user);
+    $makeOrder = ($this->makeMakeOrder)($tenant, $user);
 
     $this->actingAs($user)
         ->get(route('dashboard'))
         ->assertOk()
-        ->assertSee('data-dashboard-todo-mobile-row', false)
-        ->assertSee('-mx-3 mt-0 overflow-hidden border-y border-gray-200 sm:mx-0 sm:mt-3 sm:rounded-lg sm:border', false)
-        ->assertSee('block px-4 py-3 hover:bg-gray-50 sm:hidden', false);
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('Dashboard')
+            ->has('todo.responsibilities', 1)
+            ->where('todo.responsibilities.0.title', 'Make Order #' . $makeOrder->id)
+            ->where('todo.responsibilities.0.url', route('manufacturing.make-orders.show', $makeOrder)));
 });
 
 it('10. assigned inventory count workflow responsibility appears', function (): void {

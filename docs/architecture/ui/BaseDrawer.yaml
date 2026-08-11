@@ -1,0 +1,44 @@
+name: Base Drawer
+type: UI Component Abstraction
+location:
+  - resources/js/components/BaseDrawer.vue
+  - resources/js/components/*Drawer.vue
+purpose: Provide one shared Vue drawer boundary for overlay, outside-click closing, Escape closing, accessibility wiring, and drawer transition behavior.
+when_to_use:
+  - Building an Inertia Vue drawer or slideout
+  - Sharing drawer overlay and panel animation behavior across feature-specific drawers
+  - Rendering drawer-specific content through a slot while keeping close behavior consistent
+when_not_to_use:
+  - Unmigrated Blade and Alpine drawers
+  - Modals that are centered dialogs rather than side drawers
+  - Feature-specific form state, validation, or submit orchestration
+rules:
+  - BaseDrawer owns the backdrop, panel container, Escape-to-close behavior, outside-panel click closing, and close button.
+  - Clicking outside the drawer panel must emit close.
+  - Clicking inside the drawer panel must not close the drawer by default.
+  - Drawer open and close animation must use a 500ms Tailwind transition unless a new architecture entry approves a different timing.
+  - Drawer panel movement and opacity must transition together over the same 500ms duration.
+  - Drawer opacity must increase while expanding and decrease while collapsing.
+  - Drawer backdrops must fade over the same 500ms duration as the drawer panel.
+  - Feature-specific drawer content must remain mounted until the 500ms collapse transition has completed.
+  - Drawer implementations must not use immediate content removal for visible drawer content during collapse.
+  - Feature-specific drawer components must compose BaseDrawer and provide content through the default slot.
+  - Feature-specific drawer components must own their own form fields, validation display, and emitted domain events.
+  - BaseDrawer must not own auth, domain, request, or page orchestration state.
+  - BaseDrawer must not introduce global application state.
+public_interface:
+  - open
+  - labelledBy
+  - closeLabel
+  - panelClass
+  - close
+  - default slot
+example_usage: |
+  <BaseDrawer
+      :open="authOpen"
+      labelled-by="auth-drawer-title"
+      close-label="Close auth drawer"
+      @close="closeAuth"
+  >
+      <AuthDrawerContent @submit-login="submitLogin" />
+  </BaseDrawer>

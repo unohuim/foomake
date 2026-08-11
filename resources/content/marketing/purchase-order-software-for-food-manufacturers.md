@@ -4,7 +4,7 @@ description: "FooMake helps small food manufacturers manage supplier packs, purc
 slug: "purchase-order-software-for-food-manufacturers"
 headline: "Purchase order software for small food manufacturers"
 cta_label: "Start beta access"
-cta_url: "/register"
+cta_url: "/#register"
 ---
 
 Purchase order software for food manufacturers needs to understand supplier packs, ingredient availability, and receiving. Buying twenty-five kilograms of oats is not the same as typing one generic line item into a spreadsheet.

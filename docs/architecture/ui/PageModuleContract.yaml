@@ -13,6 +13,7 @@ when_not_to_use:
   - Static Blade pages with no interactivity
   - Purely presentational Blade partials that emit events only
   - Backend-only changes with no UI behavior impact
+  - Routes explicitly migrated to Inertia and Vue under docs/architecture/ui/InertiaRouteMigration.yaml
 rules:
   - Every interactive page must have exactly one page root element with data-page and data-payload attributes.
   - Every interactive page must include exactly one payload script tag with type application/json and an id matching data-payload.
@@ -27,6 +28,7 @@ rules:
   - Alpine.start() must run exactly once and only after the page module has mounted when data-page is present.
   - Page module loading must be build-safe and not rely on unbounded dynamic imports; the loader must resolve known modules (e.g., via import.meta.glob).
   - No global JavaScript state may be introduced to implement this pattern.
+  - Inertia/Vue routes follow docs/architecture/ui/InertiaRouteMigration.yaml instead of the Blade page-module contract.
   - Payload parsing must be safe (JSON parse with fallback to an empty object).
   - Page modules must avoid build-invalid syntax such as optional chaining on assignment LHS.
   - Page modules may call shared DOM refresh helpers after successful AJAX mutations when server-rendered navigation or other page chrome becomes stale.

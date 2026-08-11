@@ -4,7 +4,7 @@ description: "FooMake is simple MRP for small manufacturers who need materials, 
 slug: "mrp-for-small-manufacturers"
 headline: "MRP for small manufacturers"
 cta_label: "Start beta access"
-cta_url: "/register"
+cta_url: "/#register"
 ---
 
 MRP for small manufacturers should be practical. Teams need clearer materials, purchasing, inventory, production, and sales order workflows without committing to a heavy enterprise ERP rollout.
