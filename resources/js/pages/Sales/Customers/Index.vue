@@ -2,6 +2,7 @@
 import { Head, router } from "@inertiajs/vue3";
 import { computed, reactive, ref } from "vue";
 
+import BaseDropdown from "../../../components/BaseDropdown.vue";
 import ResourceCreateDrawer from "../../../components/ResourceCreateDrawer.vue";
 import ResourceExportDrawer from "../../../components/ResourceExportDrawer.vue";
 import ResourceImportDrawer from "../../../components/ResourceImportDrawer.vue";
@@ -60,6 +61,8 @@ const formSubmitting = ref(false);
 const formError = ref("");
 const formErrors = ref({});
 const form = reactive(emptyForm());
+const customerDetailsOpen = ref(true);
+const customerAddressOpen = ref(false);
 
 const exportDrawerOpen = ref(false);
 const exportScope = ref("current");
@@ -121,7 +124,7 @@ const showConnectionRequired = computed(() => selectedImportSource.value !== ""
 function emptyForm() {
     return {
         name: "",
-        customer_type: "retail",
+        customer_type: "business",
         currency_code: "USD",
         status: "active",
         notes: "",
@@ -158,10 +161,55 @@ function customerStatusLabel(customer) {
         ?? "Active";
 }
 
-function customerTypeLabel(customer) {
-    return customer.customer_type_label
-        ?? optionEntries(props.payload.customerTypes).find((typeOption) => typeOption.value === customer.customer_type)?.label
-        ?? "Customer";
+function customerTitleBadges(customer) {
+    const badges = [];
+    const type = String(customer?.customer_type_label || "").trim();
+    const status = String(customer?.status || "").trim();
+
+    if (type !== "") {
+        badges.push({
+            label: type,
+            tone: type.toLowerCase() === "consumer" ? "blue" : "gray",
+        });
+    }
+
+    if (status !== "" && status.toLowerCase() !== "active") {
+        badges.push({
+            label: customerStatusLabel(customer),
+            tone: status.toLowerCase() === "archived" ? "gray" : "yellow",
+        });
+    }
+
+    return badges;
+}
+
+function customerCardRows(customer) {
+    return [
+        {
+            left: [
+                { label: "Primary email", value: customer?.email || "-" },
+            ],
+            right: [],
+        },
+        {
+            left: [
+                { label: "Address", value: customer?.address_summary || "-" },
+            ],
+            right: [],
+        },
+    ];
+}
+
+function badgeToneClasses(badge) {
+    if (badge.tone === "blue") {
+        return "bg-blue-50 text-blue-700";
+    }
+
+    if (badge.tone === "yellow") {
+        return "bg-yellow-50 text-yellow-800";
+    }
+
+    return "bg-gray-100 text-gray-700";
 }
 
 function showToast(message, tone = "success") {
@@ -233,30 +281,23 @@ async function fetchCustomers(nextSearch = search.value) {
     }
 }
 
-function toggleSort(column) {
-    if (sort.column === column) {
-        sort.direction = sort.direction === "asc" ? "desc" : "asc";
-    } else {
-        sort.column = column;
-        sort.direction = "asc";
-    }
-
-    fetchCustomers();
-}
-
 function openCreateDrawer() {
     formMode.value = "create";
     editingCustomerId.value = null;
     resetForm();
+    customerDetailsOpen.value = true;
+    customerAddressOpen.value = false;
     formDrawerOpen.value = true;
 }
 
 function openEditDrawer(customer) {
     formMode.value = "edit";
     editingCustomerId.value = customer.id;
+    customerDetailsOpen.value = true;
+    customerAddressOpen.value = false;
     resetForm({
         name: customer.name ?? "",
-        customer_type: customer.customer_type ?? "retail",
+        customer_type: customer.customer_type ?? "business",
         currency_code: customer.currency_code ?? "USD",
         status: customer.status ?? "active",
         notes: customer.notes ?? "",
@@ -675,76 +716,162 @@ async function submitImport() {
                     @import="openImportDrawer"
                 >
                     <template #default="{ records }">
-                        <div class="border-b border-gray-100 bg-gray-50 px-4 py-2">
-                            <div class="flex flex-wrap items-center gap-2 text-xs font-medium text-gray-600">
-                                <span class="mr-1 text-gray-500">Sort</span>
-                                <button
-                                    v-for="column in crudConfig.sortable"
-                                    :key="column"
-                                    type="button"
-                                    class="cursor-pointer rounded-md px-2.5 py-1 transition hover:bg-white hover:text-gray-900"
-                                    :class="sort.column === column ? 'bg-white text-gray-900 shadow-sm ring-1 ring-gray-200' : ''"
-                                    @click="toggleSort(column)"
-                                >
-                                    {{ crudConfig.headers[column] ?? column }}
-                                    <span v-if="sort.column === column" aria-hidden="true">
-                                        {{ sort.direction === "asc" ? "ASC" : "DESC" }}
-                                    </span>
-                                </button>
-                            </div>
-                        </div>
+                        <div>
+                            <div class="h-full min-h-0 md:hidden" data-crud-mobile-cards>
+                                <div class="min-h-0 flex-1 overflow-y-auto p-0" data-crud-records-scroll>
+                                    <div class="border-t border-gray-300">
+                                        <div
+                                            v-for="customer in records"
+                                            :key="`mobile-card-${customer.id}`"
+                                            class="relative grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 overflow-visible border-b border-gray-300 bg-white px-4 py-2"
+                                            data-crud-card
+                                        >
+                                            <a class="min-w-0 cursor-pointer" :href="customer.show_url">
+                                                <div class="flex min-w-0 items-center gap-3">
+                                                    <div class="flex min-w-0 flex-1 items-center gap-2">
+                                                        <p class="truncate text-sm font-semibold text-gray-900">
+                                                            {{ customer.name || "-" }}
+                                                        </p>
+                                                        <span
+                                                            v-for="badge in customerTitleBadges(customer)"
+                                                            :key="`mobile-card-${customer.id}-title-badge-${badge.label}`"
+                                                            class="inline-flex shrink-0 items-center rounded-full px-1.5 py-0.5 text-[0.6rem] font-semibold uppercase tracking-wide"
+                                                            :class="badgeToneClasses(badge)"
+                                                            data-crud-mobile-title-badge
+                                                        >
+                                                            {{ badge.label }}
+                                                        </span>
+                                                    </div>
+                                                </div>
 
-                        <div class="divide-y divide-gray-100">
-                            <article
-                                v-for="customer in records"
-                                :key="customer.id"
-                                class="px-4 py-4 transition hover:bg-gray-50 sm:px-6"
-                            >
-                                <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                                    <div class="min-w-0 flex-1">
-                                        <div class="flex flex-wrap items-center gap-2">
-                                            <a
-                                                :href="customer.show_url"
-                                                class="cursor-pointer truncate text-sm font-semibold text-gray-950 hover:text-blue-700"
-                                            >
-                                                {{ customer.name || "Unnamed customer" }}
+                                                <p class="mt-0.5 truncate text-xs text-gray-600">
+                                                    {{ customer.email || "-" }}
+                                                </p>
+
+                                                <div class="mt-2 space-y-1.5" data-crud-card-detail-rows>
+                                                    <div
+                                                        v-for="(row, rowIndex) in customerCardRows(customer)"
+                                                        :key="`mobile-card-${customer.id}-detail-row-${rowIndex}`"
+                                                        class="flex min-w-0 items-baseline justify-between gap-3 text-xs"
+                                                    >
+                                                        <div class="flex min-w-0 flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
+                                                            <span
+                                                                v-for="item in row.left"
+                                                                :key="`mobile-card-${customer.id}-detail-left-${rowIndex}-${item.label}`"
+                                                                class="inline-flex min-w-0 items-baseline gap-1"
+                                                            >
+                                                                <span class="shrink-0 text-[0.65rem] font-medium text-gray-400">{{ item.label }}</span>
+                                                                <span class="min-w-0 truncate text-xs font-medium text-gray-700">{{ item.value }}</span>
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                </div>
                                             </a>
-                                            <span class="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700">
-                                                {{ customerTypeLabel(customer) }}
-                                            </span>
-                                            <span class="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
-                                                {{ customerStatusLabel(customer) }}
-                                            </span>
-                                        </div>
 
-                                        <div class="mt-2 grid gap-2 text-sm text-gray-600 md:grid-cols-3">
-                                            <p class="truncate">
-                                                {{ customer.email || "No email" }}
-                                            </p>
-                                            <p class="truncate md:col-span-2">
-                                                {{ customer.address_summary || "No address" }}
-                                            </p>
-                                        </div>
-                                    </div>
+                                            <div class="relative z-10 flex shrink-0 items-center gap-2">
+                                                <BaseDropdown :aria-label="labels.actionsAriaLabel">
+                                                    <template #trigger>
+                                                        <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 6.75a.75.75 0 1 1 0-1.5.75.75 0 0 1 0 1.5ZM12 12.75a.75.75 0 1 1 0-1.5.75.75 0 0 1 0 1.5ZM12 18.75a.75.75 0 1 1 0-1.5.75.75 0 0 1 0 1.5Z" />
+                                                        </svg>
+                                                    </template>
 
-                                    <div class="flex shrink-0 items-center gap-2">
-                                        <button
-                                            type="button"
-                                            class="cursor-pointer rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold uppercase tracking-widest text-gray-700 transition hover:bg-gray-50"
-                                            @click="openEditDrawer(customer)"
-                                        >
-                                            Edit
-                                        </button>
-                                        <button
-                                            type="button"
-                                            class="cursor-pointer rounded-md border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold uppercase tracking-widest text-amber-700 transition hover:bg-amber-50"
-                                            @click="archiveCustomer(customer)"
-                                        >
-                                            Archive
-                                        </button>
+                                                    <template #default="{ close }">
+                                                        <button type="button" class="cursor-pointer flex w-full items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-50" role="menuitem" @click="close(); openEditDrawer(customer)">
+                                                            Edit
+                                                        </button>
+                                                        <button type="button" class="cursor-pointer flex w-full items-center px-4 py-2 text-sm text-red-600 hover:bg-red-50" role="menuitem" @click="close(); archiveCustomer(customer)">
+                                                            Archive
+                                                        </button>
+                                                    </template>
+                                                </BaseDropdown>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
-                            </article>
+                            </div>
+
+                            <div class="hidden h-full min-h-0 md:block">
+                                <div class="flex h-full min-h-0 flex-col">
+                                    <div class="min-h-0 flex-1 overflow-y-auto p-6" data-crud-records-scroll>
+                                        <div
+                                            class="customer-card-grid grid gap-4"
+                                            data-crud-card-grid
+                                            :class="loading ? 'opacity-80' : 'opacity-100'"
+                                        >
+                                            <article
+                                                v-for="customer in records"
+                                                :key="`desktop-card-${customer.id}`"
+                                                class="group flex flex-col rounded-lg border border-gray-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-md"
+                                                data-crud-card
+                                            >
+                                                <div class="flex items-start justify-between gap-3">
+                                                    <div class="min-w-0 flex-1">
+                                                        <div class="flex min-w-0 items-center gap-2">
+                                                            <a
+                                                                class="cursor-pointer truncate text-base font-semibold text-gray-900"
+                                                                :href="customer.show_url"
+                                                            >
+                                                                {{ customer.name || "-" }}
+                                                            </a>
+                                                            <span
+                                                                v-for="badge in customerTitleBadges(customer)"
+                                                                :key="`desktop-card-${customer.id}-title-badge-${badge.label}`"
+                                                                class="inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wide"
+                                                                :class="badgeToneClasses(badge)"
+                                                                data-crud-desktop-title-badge
+                                                            >
+                                                                {{ badge.label }}
+                                                            </span>
+                                                        </div>
+                                                        <p class="mt-0.5 truncate text-sm text-gray-500">
+                                                            {{ customer.customer_type_label || "Customer" }}
+                                                        </p>
+                                                    </div>
+
+                                                    <div class="relative flex shrink-0 items-start gap-2">
+                                                        <BaseDropdown :aria-label="labels.actionsAriaLabel">
+                                                            <template #trigger>
+                                                                <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+                                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 6.75a.75.75 0 1 1 0-1.5.75.75 0 0 1 0 1.5ZM12 12.75a.75.75 0 1 1 0-1.5.75.75 0 0 1 0 1.5ZM12 18.75a.75.75 0 1 1 0-1.5.75.75 0 0 1 0 1.5Z" />
+                                                                </svg>
+                                                            </template>
+
+                                                            <template #default="{ close }">
+                                                                <button type="button" class="cursor-pointer flex w-full items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-50" role="menuitem" @click="close(); openEditDrawer(customer)">
+                                                                    Edit
+                                                                </button>
+                                                                <button type="button" class="cursor-pointer flex w-full items-center px-4 py-2 text-sm text-red-600 hover:bg-red-50" role="menuitem" @click="close(); archiveCustomer(customer)">
+                                                                    Archive
+                                                                </button>
+                                                            </template>
+                                                        </BaseDropdown>
+                                                    </div>
+                                                </div>
+
+                                                <div class="mt-2 space-y-1.5" data-crud-card-detail-rows>
+                                                    <div
+                                                        v-for="(row, rowIndex) in customerCardRows(customer)"
+                                                        :key="`desktop-card-${customer.id}-detail-row-${rowIndex}`"
+                                                        class="flex min-w-0 items-baseline justify-between gap-3 text-xs"
+                                                    >
+                                                        <div class="flex min-w-0 flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
+                                                            <span
+                                                                v-for="item in row.left"
+                                                                :key="`desktop-card-${customer.id}-detail-left-${rowIndex}-${item.label}`"
+                                                                class="inline-flex min-w-0 items-baseline gap-1"
+                                                            >
+                                                                <span class="shrink-0 text-[0.65rem] font-medium text-gray-400">{{ item.label }}</span>
+                                                                <span class="min-w-0 truncate text-xs font-medium text-gray-700">{{ item.value }}</span>
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </article>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </template>
                 </ResourceIndex>
@@ -757,28 +884,54 @@ async function submitImport() {
             :submit-label="formMode === 'edit' ? 'Save Customer' : 'Create Customer'"
             :submitting="formSubmitting"
             :error="formError"
-            panel-class="w-screen max-w-2xl"
+            panel-class="w-screen max-w-md"
             @close="closeFormDrawer"
             @submit="submitForm"
         >
-            <div class="space-y-6">
-                <div class="grid gap-4 sm:grid-cols-2">
-                    <label class="block text-sm font-medium text-gray-700 sm:col-span-2">
-                        Name
+            <div class="space-y-3">
+                <section class="rounded-lg border border-gray-200 bg-white p-3 shadow-sm">
+                    <button
+                        type="button"
+                        class="cursor-pointer flex w-full items-center justify-between gap-4 text-left"
+                        :class="customerDetailsOpen ? 'mb-3' : ''"
+                        :aria-expanded="customerDetailsOpen"
+                        @click="customerDetailsOpen = !customerDetailsOpen"
+                    >
+                        <h3 class="text-xs font-bold uppercase tracking-wide text-[#001f3f]">
+                            Customer Details
+                        </h3>
+                        <svg
+                            class="h-4 w-4 text-[#001f3f] transition-transform"
+                            :class="customerDetailsOpen ? '' : 'rotate-180'"
+                            xmlns="http://www.w3.org/2000/svg"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke-width="1.8"
+                            stroke="currentColor"
+                            aria-hidden="true"
+                        >
+                            <path stroke-linecap="round" stroke-linejoin="round" d="m5 15 7-7 7 7" />
+                        </svg>
+                    </button>
+
+                    <div v-show="customerDetailsOpen" class="grid gap-3 sm:grid-cols-2">
+                    <label class="block text-xs font-semibold text-[#001f3f] sm:col-span-2">
+                        Name <span class="text-red-500">*</span>
                         <input
                             v-model="form.name"
                             type="text"
-                            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                            class="mt-1.5 block h-8 w-full rounded-md border-gray-300 text-xs shadow-sm focus:border-[#6f895d] focus:ring-[#6f895d]"
+                            placeholder="Full name"
                             required
                         >
-                        <span v-if="formErrors.name?.[0]" class="mt-1 block text-sm text-red-600">{{ formErrors.name[0] }}</span>
+                        <span v-if="formErrors.name?.[0]" class="mt-1 block text-xs text-red-600">{{ formErrors.name[0] }}</span>
                     </label>
 
-                    <label class="block text-sm font-medium text-gray-700">
+                    <label class="block text-xs font-semibold text-[#001f3f]">
                         Customer Type
                         <select
                             v-model="form.customer_type"
-                            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                            class="mt-1.5 block h-8 w-full rounded-md border-gray-300 text-xs shadow-sm focus:border-[#6f895d] focus:ring-[#6f895d]"
                         >
                             <option
                                 v-for="typeOption in optionEntries(payload.customerTypes)"
@@ -788,25 +941,25 @@ async function submitImport() {
                                 {{ typeOption.label }}
                             </option>
                         </select>
-                        <span v-if="formErrors.customer_type?.[0]" class="mt-1 block text-sm text-red-600">{{ formErrors.customer_type[0] }}</span>
+                        <span v-if="formErrors.customer_type?.[0]" class="mt-1 block text-xs text-red-600">{{ formErrors.customer_type[0] }}</span>
                     </label>
 
-                    <label class="block text-sm font-medium text-gray-700">
+                    <label class="block text-xs font-semibold text-[#001f3f]">
                         Currency
                         <input
                             v-model="form.currency_code"
                             type="text"
                             maxlength="3"
-                            class="mt-1 block w-full uppercase rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                            class="mt-1.5 block h-8 w-full rounded-md border-gray-300 text-xs uppercase shadow-sm focus:border-[#6f895d] focus:ring-[#6f895d]"
                         >
-                        <span v-if="formErrors.currency_code?.[0]" class="mt-1 block text-sm text-red-600">{{ formErrors.currency_code[0] }}</span>
+                        <span v-if="formErrors.currency_code?.[0]" class="mt-1 block text-xs text-red-600">{{ formErrors.currency_code[0] }}</span>
                     </label>
 
-                    <label v-if="formMode === 'edit'" class="block text-sm font-medium text-gray-700 sm:col-span-2">
+                    <label v-if="formMode === 'edit'" class="block text-xs font-semibold text-[#001f3f] sm:col-span-2">
                         Status
                         <select
                             v-model="form.status"
-                            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                            class="mt-1.5 block h-8 w-full rounded-md border-gray-300 text-xs shadow-sm focus:border-[#6f895d] focus:ring-[#6f895d]"
                         >
                             <option
                                 v-for="statusOption in optionEntries(payload.statuses)"
@@ -816,67 +969,88 @@ async function submitImport() {
                                 {{ statusOption.label }}
                             </option>
                         </select>
-                        <span v-if="formErrors.status?.[0]" class="mt-1 block text-sm text-red-600">{{ formErrors.status[0] }}</span>
+                        <span v-if="formErrors.status?.[0]" class="mt-1 block text-xs text-red-600">{{ formErrors.status[0] }}</span>
                     </label>
 
-                    <label class="block text-sm font-medium text-gray-700 sm:col-span-2">
+                    <label class="block text-xs font-semibold text-[#001f3f] sm:col-span-2">
                         Notes
                         <textarea
                             v-model="form.notes"
-                            rows="3"
-                            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                            rows="2"
+                            class="mt-1.5 block w-full rounded-md border-gray-300 text-xs shadow-sm focus:border-[#6f895d] focus:ring-[#6f895d]"
+                            placeholder="Add a note..."
                         />
-                        <span v-if="formErrors.notes?.[0]" class="mt-1 block text-sm text-red-600">{{ formErrors.notes[0] }}</span>
+                        <span v-if="formErrors.notes?.[0]" class="mt-1 block text-xs text-red-600">{{ formErrors.notes[0] }}</span>
                     </label>
-                </div>
+                    </div>
+                </section>
 
-                <section class="space-y-4 border-t border-gray-200 pt-6">
-                    <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500">
-                        Address
-                    </h3>
+                <section class="rounded-lg border border-gray-200 bg-white p-3 shadow-sm">
+                    <button
+                        type="button"
+                        class="cursor-pointer flex w-full items-center justify-between gap-4 text-left"
+                        :class="customerAddressOpen ? 'mb-3 border-b border-gray-200 pb-3' : ''"
+                        :aria-expanded="customerAddressOpen"
+                        @click="customerAddressOpen = !customerAddressOpen"
+                    >
+                        <h3 class="flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-[#6f895d]">
+                            <svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 21s6-5.33 6-11a6 6 0 1 0-12 0c0 5.67 6 11 6 11Z" />
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 10.5h.008v.008H12V10.5Z" />
+                            </svg>
+                            Address
+                        </h3>
+                        <svg
+                            class="h-4 w-4 text-[#001f3f] transition-transform"
+                            :class="customerAddressOpen ? '' : 'rotate-180'"
+                            xmlns="http://www.w3.org/2000/svg"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke-width="1.8"
+                            stroke="currentColor"
+                            aria-hidden="true"
+                        >
+                            <path stroke-linecap="round" stroke-linejoin="round" d="m5 15 7-7 7 7" />
+                        </svg>
+                    </button>
 
-                    <div class="grid gap-4 sm:grid-cols-2">
-                        <label class="block text-sm font-medium text-gray-700 sm:col-span-2">
+                    <div v-show="customerAddressOpen" class="grid gap-3 sm:grid-cols-2">
+                        <label class="block text-xs font-semibold text-[#001f3f] sm:col-span-2">
                             Address Line 1
-                            <input v-model="form.address_line_1" type="text" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
-                            <span v-if="formErrors.address_line_1?.[0]" class="mt-1 block text-sm text-red-600">{{ formErrors.address_line_1[0] }}</span>
+                            <input v-model="form.address_line_1" type="text" class="mt-1.5 block h-8 w-full rounded-md border-gray-300 text-xs shadow-sm focus:border-[#6f895d] focus:ring-[#6f895d]" placeholder="Street address, P.O. box, company name, etc.">
+                            <span v-if="formErrors.address_line_1?.[0]" class="mt-1 block text-xs text-red-600">{{ formErrors.address_line_1[0] }}</span>
                         </label>
 
-                        <label class="block text-sm font-medium text-gray-700 sm:col-span-2">
-                            Address Line 2
-                            <input v-model="form.address_line_2" type="text" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
-                            <span v-if="formErrors.address_line_2?.[0]" class="mt-1 block text-sm text-red-600">{{ formErrors.address_line_2[0] }}</span>
+                        <label class="block text-xs font-semibold text-[#001f3f] sm:col-span-2">
+                            Address Line 2 <span class="font-normal text-gray-500">(optional)</span>
+                            <input v-model="form.address_line_2" type="text" class="mt-1.5 block h-8 w-full rounded-md border-gray-300 text-xs shadow-sm focus:border-[#6f895d] focus:ring-[#6f895d]" placeholder="Apartment, suite, unit, building, floor, etc.">
+                            <span v-if="formErrors.address_line_2?.[0]" class="mt-1 block text-xs text-red-600">{{ formErrors.address_line_2[0] }}</span>
                         </label>
 
-                        <label class="block text-sm font-medium text-gray-700">
+                        <label class="block text-xs font-semibold text-[#001f3f]">
                             City
-                            <input v-model="form.city" type="text" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
-                            <span v-if="formErrors.city?.[0]" class="mt-1 block text-sm text-red-600">{{ formErrors.city[0] }}</span>
+                            <input v-model="form.city" type="text" class="mt-1.5 block h-8 w-full rounded-md border-gray-300 text-xs shadow-sm focus:border-[#6f895d] focus:ring-[#6f895d]" placeholder="City">
+                            <span v-if="formErrors.city?.[0]" class="mt-1 block text-xs text-red-600">{{ formErrors.city[0] }}</span>
                         </label>
 
-                        <label class="block text-sm font-medium text-gray-700">
+                        <label class="block text-xs font-semibold text-[#001f3f]">
                             Region
-                            <input v-model="form.region" type="text" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
-                            <span v-if="formErrors.region?.[0]" class="mt-1 block text-sm text-red-600">{{ formErrors.region[0] }}</span>
+                            <input v-model="form.region" type="text" class="mt-1.5 block h-8 w-full rounded-md border-gray-300 text-xs shadow-sm focus:border-[#6f895d] focus:ring-[#6f895d]" placeholder="State, province, or region">
+                            <span v-if="formErrors.region?.[0]" class="mt-1 block text-xs text-red-600">{{ formErrors.region[0] }}</span>
                         </label>
 
-                        <label class="block text-sm font-medium text-gray-700">
+                        <label class="block text-xs font-semibold text-[#001f3f]">
                             Postal Code
-                            <input v-model="form.postal_code" type="text" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
-                            <span v-if="formErrors.postal_code?.[0]" class="mt-1 block text-sm text-red-600">{{ formErrors.postal_code[0] }}</span>
+                            <input v-model="form.postal_code" type="text" class="mt-1.5 block h-8 w-full rounded-md border-gray-300 text-xs shadow-sm focus:border-[#6f895d] focus:ring-[#6f895d]" placeholder="Postal code">
+                            <span v-if="formErrors.postal_code?.[0]" class="mt-1 block text-xs text-red-600">{{ formErrors.postal_code[0] }}</span>
                         </label>
 
-                        <label class="block text-sm font-medium text-gray-700">
+                        <label class="block text-xs font-semibold text-[#001f3f]">
                             Country Code
-                            <input v-model="form.country_code" type="text" maxlength="2" class="mt-1 block w-full uppercase rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
-                            <span v-if="formErrors.country_code?.[0]" class="mt-1 block text-sm text-red-600">{{ formErrors.country_code[0] }}</span>
+                            <input v-model="form.country_code" type="text" maxlength="2" class="mt-1.5 block h-8 w-full rounded-md border-gray-300 text-xs uppercase shadow-sm focus:border-[#6f895d] focus:ring-[#6f895d]" placeholder="US">
+                            <span v-if="formErrors.country_code?.[0]" class="mt-1 block text-xs text-red-600">{{ formErrors.country_code[0] }}</span>
                         </label>
 
-                        <label class="block text-sm font-medium text-gray-700 sm:col-span-2">
-                            Formatted Address
-                            <textarea v-model="form.formatted_address" rows="2" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500" />
-                            <span v-if="formErrors.formatted_address?.[0]" class="mt-1 block text-sm text-red-600">{{ formErrors.formatted_address[0] }}</span>
-                        </label>
                     </div>
                 </section>
             </div>
@@ -955,3 +1129,9 @@ async function submitImport() {
         </ResourceImportDrawer>
     </AuthShell>
 </template>
+
+<style scoped>
+.customer-card-grid {
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 18rem), 1fr));
+}
+</style>

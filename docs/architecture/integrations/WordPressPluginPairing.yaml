@@ -1,0 +1,45 @@
+name: WordPress Plugin Pairing
+type: Integration Trust Boundary
+location:
+  - app/Http/Controllers/ProfileConnectorController.php
+  - app/Http/Controllers/WordPressPluginApiController.php
+  - app/Models/WordPressPluginConnection.php
+  - app/Models/WordPressPluginPairingCode.php
+  - database/migrations/2026_06_23_000001_create_wordpress_plugin_connections_table.php
+  - database/migrations/2026_06_23_000002_create_wordpress_plugin_pairing_codes_table.php
+  - integrations/wordpress/foomake-connector/foomake-connector.php
+purpose: Define the approved trust handshake between an installed WordPress plugin and a FooMake tenant.
+when_to_use:
+  - Pairing an installed WordPress plugin with a FooMake tenant
+  - Issuing or validating a plugin token
+  - Showing or revoking WordPress plugin connection status
+when_not_to_use:
+  - WooCommerce consumer key and secret storage
+  - Customer, product, or sales order import logic
+  - Browser session authentication for plugin API calls
+rules:
+  - FooMake tenant admins approve pairing through authenticated FooMake web routes.
+  - WordPress plugins start pairing without tenant authority and must not receive a token until a tenant admin approves the pairing code.
+  - Pairing codes must be random, stored only as hashes, short-lived, and single-use.
+  - Plugin access tokens must be random, stored raw only in WordPress options, and stored only as hashes in FooMake.
+  - Plugin tokens are scoped to one tenant and one plugin UUID.
+  - FooMake must support server-side revocation that invalidates the stored token hash.
+  - Plugin API routes must authenticate by bearer token after pairing and must not rely on browser session state.
+  - WordPress plugin local disconnect may clear local token state but server-side revocation remains FooMake-owned.
+public_interface:
+  - profile.connectors.wordpress.pair
+  - profile.connectors.wordpress.pair.approve
+  - profile.connectors.wordpress-plugin.destroy
+  - api.wordpress-plugin.pairing.start
+  - api.wordpress-plugin.pairing.complete
+  - api.wordpress-plugin.status
+  - WordPressPluginConnection
+  - WordPressPluginPairingCode
+example_usage: |
+  Plugin:
+    POST /api/wordpress-plugin/pairing/start
+    Open returned pairing_url in the browser
+    POST /api/wordpress-plugin/pairing/complete after approval callback
+
+  FooMake:
+    DELETE /profile/connectors/wordpress-plugin

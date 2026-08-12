@@ -30,13 +30,15 @@ rules:
   - AuthShell and GuestShell are top-level Vue layout concepts; desktop and mobile variants should be internal components rather than separate shells.
   - GuestShell owns public page chrome and shared guest auth drawer behavior.
   - AuthShell owns authenticated page chrome only for authenticated routes that have been explicitly migrated to Inertia.
-  - Phase 1 migrates the public home route and authenticated dashboard route only.
+  - The public home route, authenticated dashboard route, sales customers index route, and profile connectors route are approved Inertia migrations.
 public_interface:
   - Inertia::render()
   - resources/views/inertia.blade.php
   - resources/js/inertia-app.js
   - resources/js/pages/Home.vue
   - resources/js/pages/Dashboard.vue
+  - resources/js/pages/Profile/Connectors/Index.vue
+  - resources/js/pages/Profile/Connectors/WordPressPair.vue
   - resources/js/layouts/GuestShell.vue
   - resources/js/layouts/AuthShell.vue
   - resources/js/components/BaseDrawer.vue
@@ -51,6 +53,9 @@ public_interface:
   - resources/js/components/DesktopSidebar.vue
   - resources/js/components/MobileBottomNav.vue
   - resources/js/components/DashboardTodo.vue
+  - resources/js/components/connectors/WooCommerceConnectorCard.vue
+  - resources/js/components/connectors/WordPressPluginConnectionCard.vue
+  - resources/js/components/connectors/WordPressPluginDownload.vue
 example_usage: |
   Controller:
     return Inertia::render('Home', [

@@ -140,27 +140,36 @@ watch(
         labelled-by="resource-import-drawer-title"
         close-label="Close import drawer"
         panel-class="w-screen max-w-3xl"
+        close-button-class="text-white hover:text-[#dbe8d0] focus-visible:outline-white"
         @close="emit('close')"
     >
         <div class="flex h-full flex-col divide-y divide-gray-200">
-            <div class="h-0 flex-1 overflow-y-auto p-6">
-                <div class="pr-10">
-                    <h2 id="resource-import-drawer-title" class="text-lg font-medium text-gray-900">
+            <div class="import-header-texture relative overflow-hidden bg-[#001f3f] px-6 pb-6 pt-10 text-white sm:px-8">
+                <div class="relative flex h-11 w-11 items-center justify-center rounded-full border-2 border-[#6f895d]/60 bg-white/5">
+                    <svg class="h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v12m0-12 4.5 4.5M12 3 7.5 7.5M4.5 15v3A2.25 2.25 0 0 0 6.75 20.25h10.5A2.25 2.25 0 0 0 19.5 18v-3" />
+                    </svg>
+                </div>
+
+                <div class="relative pr-10">
+                    <h2 id="resource-import-drawer-title" class="mt-4 text-xl font-semibold leading-tight text-white">
                         {{ resolvedLabels.title }}
                     </h2>
-                    <p class="mt-1 text-sm text-gray-600">
+                    <p class="mt-2 max-w-xl text-sm leading-6 text-blue-50">
                         {{ resolvedLabels.description }}
                     </p>
                 </div>
+            </div>
 
-                <div class="mt-6 flex min-h-0 flex-1 flex-col gap-4">
+            <div class="h-0 flex-1 overflow-y-auto p-6">
+                <div class="flex min-h-0 flex-1 flex-col gap-4">
                     <div class="rounded-lg border border-gray-200 bg-white p-4">
                         <label class="block text-sm font-medium text-gray-700" for="resource-import-source">
                             {{ resolvedLabels.source }}
                             <select
                                 id="resource-import-source"
                                 v-model="localSelectedSource"
-                                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#6f895d] focus:ring-[#6f895d]"
                                 data-resource-import-source
                                 @change="updateSource"
                             >
@@ -257,7 +266,7 @@ watch(
                                         <input
                                             v-model="localPreviewSearch"
                                             type="search"
-                                            class="block w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                                            class="block w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-[#6f895d] focus:ring-[#6f895d]"
                                             :placeholder="resolvedLabels.previewSearch"
                                             data-resource-import-preview-search
                                             @input="updatePreviewSearch"
@@ -267,7 +276,7 @@ watch(
                                         <input
                                             v-model="localShowDuplicateRows"
                                             type="checkbox"
-                                            class="rounded border-gray-300 text-blue-600 shadow-sm focus:ring-blue-500"
+                                            class="rounded border-gray-300 text-[#6f895d] shadow-sm focus:ring-[#6f895d]"
                                             data-resource-import-show-duplicates
                                             @change="updateShowDuplicateRows"
                                         >
@@ -279,7 +288,7 @@ watch(
                                     <label class="cursor-pointer inline-flex items-center gap-3 text-sm text-gray-700">
                                         <input
                                             type="checkbox"
-                                            class="rounded border-gray-300 text-blue-600 shadow-sm focus:ring-blue-500"
+                                            class="rounded border-gray-300 text-[#6f895d] shadow-sm focus:ring-[#6f895d]"
                                             data-resource-import-select-visible
                                             @change="emit('toggle-visible-selection', $event)"
                                         >
@@ -303,7 +312,7 @@ watch(
                             <div class="max-h-[32rem] overflow-y-auto px-4 pb-32">
                                 <slot v-if="loadingPreview" name="preview-loading">
                                     <div class="space-y-4">
-                                        <div class="rounded-lg border border-blue-100 bg-blue-50 p-4 text-sm text-blue-700">
+                                        <div class="rounded-lg border border-[#6f895d]/20 bg-[#6f895d]/10 p-4 text-sm text-[#4f6642]">
                                             {{ resolvedLabels.loadingPreview }}
                                         </div>
                                         <div class="grid gap-4 lg:grid-cols-2">
@@ -342,7 +351,7 @@ watch(
                                             <div class="flex min-h-10 items-center gap-3">
                                                 <input
                                                     type="checkbox"
-                                                    class="shrink-0 rounded border-gray-300 text-blue-600 shadow-sm focus:ring-blue-500"
+                                                    class="shrink-0 rounded border-gray-300 text-[#6f895d] shadow-sm focus:ring-[#6f895d]"
                                                     :checked="Boolean(row.selected)"
                                                     :disabled="row.is_duplicate"
                                                     @change="emit('toggle-row-selection', { row, event: $event })"
@@ -376,7 +385,7 @@ watch(
                     </button>
                     <button
                         type="button"
-                        class="cursor-pointer inline-flex items-center rounded-md border border-transparent bg-blue-600 px-4 py-2 text-xs font-semibold uppercase tracking-widest text-white hover:bg-blue-500"
+                        class="cursor-pointer inline-flex items-center rounded-md border border-transparent bg-[#6f895d] px-4 py-2 text-xs font-semibold uppercase tracking-widest text-white hover:brightness-105"
                         :disabled="submitting"
                         :class="submitting ? 'cursor-not-allowed opacity-60' : ''"
                         @click="emit('submit')"
@@ -388,3 +397,18 @@ watch(
         </div>
     </BaseDrawer>
 </template>
+
+<style scoped>
+.import-header-texture::before {
+    background-image:
+        radial-gradient(circle at 1px 1px, rgba(255, 255, 255, 0.18) 1px, transparent 0),
+        linear-gradient(135deg, rgba(255, 255, 255, 0.08) 0 1px, transparent 1px 12px),
+        linear-gradient(135deg, rgba(255, 255, 255, 0.07), transparent 48%);
+    background-size: 16px 16px, 18px 18px, 100% 100%;
+    content: "";
+    inset: 0;
+    opacity: 0.75;
+    pointer-events: none;
+    position: absolute;
+}
+</style>

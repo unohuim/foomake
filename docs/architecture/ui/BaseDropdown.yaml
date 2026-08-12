@@ -1,0 +1,44 @@
+name: Base Dropdown
+type: UI Component Abstraction
+location:
+  - resources/js/components/BaseDropdown.vue
+purpose: Provide one shared Vue dropdown boundary for trigger rendering, teleported menu positioning, outside-click closing, Escape closing, and viewport-change closing.
+when_to_use:
+  - Building compact Inertia/Vue action menus
+  - Rendering vertical-dots row actions in Vue resource cards or lists
+  - Sharing dropdown close behavior across Vue page components
+when_not_to_use:
+  - Unmigrated Blade and Alpine dropdowns
+  - Drawers, slide-up panels, or centered dialogs
+  - Domain-specific action authorization, validation, persistence, or request orchestration
+rules:
+  - BaseDropdown owns open state for the dropdown instance.
+  - Dropdown trigger content must be supplied through the trigger slot.
+  - Dropdown menu content must be supplied through the default slot.
+  - The default slot must receive a close callback for action items that should collapse the menu after selection.
+  - Clicking outside the trigger or teleported menu must close the dropdown.
+  - Pressing Escape must close the dropdown.
+  - Window resize or scroll must close the dropdown so stale fixed positioning is not preserved.
+  - Dropdown menus must be teleported to body so scroll containers and card shells do not clip row actions.
+  - BaseDropdown must not own auth, domain, request, or page orchestration state.
+  - BaseDropdown must not introduce global application state.
+public_interface:
+  - ariaLabel
+  - align
+  - buttonClass
+  - menuClass
+  - offset
+  - trigger slot
+  - default slot
+example_usage: |
+  <BaseDropdown aria-label="Customer actions">
+      <template #trigger>
+          <VerticalDotsIcon />
+      </template>
+
+      <template #default="{ close }">
+          <button type="button" role="menuitem" @click="close(); edit(record)">
+              Edit
+          </button>
+      </template>
+  </BaseDropdown>

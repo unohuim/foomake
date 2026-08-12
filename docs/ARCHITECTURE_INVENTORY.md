@@ -433,6 +433,81 @@ $linkAttribution->execute(
 );
 ```
 
+## Integrations
+
+### WordPress WooCommerce Plugin
+
+**Name:** WordPress WooCommerce Plugin
+**Type:** Integration Package Boundary
+**Location:**
+- `docs/architecture/integrations/WordPressWooCommercePlugin.yaml`
+- `integrations/wordpress/foomake-connector`
+- `app/Support/Integrations/WordPressPluginArchive.php`
+- `app/Http/Controllers/ProfileConnectorController.php`
+- `app/Http/Controllers/WordPressPluginApiController.php`
+
+**Purpose:**
+Define the repository-owned WordPress plugin package boundary for FooMake-specific WooCommerce connector distribution.
+
+**When to Use:**
+Maintaining the installable WordPress plugin source package or serving an authenticated downloadable zip from FooMake.
+
+**When Not to Use:**
+Laravel-side WooCommerce API preview/import logic, tenant connector credential persistence, or generated zip source control.
+
+**Public Interface:**
+- `integrations/wordpress/foomake-connector/foomake-connector.php`
+- `integrations/wordpress/foomake-connector/readme.txt`
+- `WordPressPluginArchive::build()`
+- `profile.connectors.woocommerce.plugin.download`
+- `admin_post_foomake_connector_start_pairing`
+- `admin_post_foomake_connector_complete_pairing`
+
+**Example Usage:**
+```php
+$archivePath = app(WordPressPluginArchive::class)->build();
+
+return response()
+    ->download($archivePath, 'foomake-connector.zip')
+    ->deleteFileAfterSend(true);
+```
+
+### WordPress Plugin Pairing
+
+**Name:** WordPress Plugin Pairing
+**Type:** Integration Trust Boundary
+**Location:**
+- `docs/architecture/integrations/WordPressPluginPairing.yaml`
+- `app/Http/Controllers/ProfileConnectorController.php`
+- `app/Http/Controllers/WordPressPluginApiController.php`
+- `app/Models/WordPressPluginConnection.php`
+- `app/Models/WordPressPluginPairingCode.php`
+- `integrations/wordpress/foomake-connector/foomake-connector.php`
+
+**Purpose:**
+Define the approved trust handshake between an installed WordPress plugin and a FooMake tenant.
+
+**When to Use:**
+Pairing an installed WordPress plugin with a FooMake tenant, issuing or validating a plugin token, or revoking plugin access.
+
+**When Not to Use:**
+WooCommerce credential storage, customer/product/order import logic, or browser session authentication for plugin API calls.
+
+**Public Interface:**
+- `profile.connectors.wordpress.pair`
+- `profile.connectors.wordpress.pair.approve`
+- `profile.connectors.wordpress-plugin.destroy`
+- `api.wordpress-plugin.pairing.start`
+- `api.wordpress-plugin.pairing.complete`
+- `api.wordpress-plugin.status`
+- `WordPressPluginConnection`
+- `WordPressPluginPairingCode`
+
+**Example Usage:**
+```text
+WordPress plugin starts pairing, FooMake tenant admin approves, plugin exchanges the approved code for a bearer token.
+```
+
 ## Inertia / Vue
 
 ### Inertia Route Migration
@@ -463,6 +538,8 @@ Unmigrated Blade routes, backend domain behavior, authorization, validation, ten
 - `resources/js/inertia-app.js`
 - `resources/js/pages/Home.vue`
 - `resources/js/pages/Dashboard.vue`
+- `resources/js/pages/Profile/Connectors/Index.vue`
+- `resources/js/pages/Profile/Connectors/WordPressPair.vue`
 - `resources/js/layouts/GuestShell.vue`
 - `resources/js/layouts/AuthShell.vue`
 - `resources/js/components/AuthDrawer.vue`
@@ -475,6 +552,9 @@ Unmigrated Blade routes, backend domain behavior, authorization, validation, ten
 - `resources/js/components/ResourceCreateDrawer.vue`
 - `resources/js/components/ResourceExportDrawer.vue`
 - `resources/js/components/ResourceImportDrawer.vue`
+- `resources/js/components/connectors/WooCommerceConnectorCard.vue`
+- `resources/js/components/connectors/WordPressPluginConnectionCard.vue`
+- `resources/js/components/connectors/WordPressPluginDownload.vue`
 
 **Example Usage:**
 ```php
@@ -508,6 +588,7 @@ Unmigrated Blade/Alpine drawers, centered modal dialogs, or feature-specific for
 - `labelledBy`
 - `closeLabel`
 - `panelClass`
+- `closeButtonClass`
 - `close`
 - default slot
 
@@ -657,6 +738,50 @@ ResourceIndex owns only the generic shell and toolbar interaction surface. Recor
         <ResourceCards :records="records" />
     </template>
 </ResourceIndex>
+```
+
+### Base Dropdown
+
+**Name:** Base Dropdown
+**Type:** UI Component Abstraction
+**Location:**
+- `docs/architecture/ui/BaseDropdown.yaml`
+- `resources/js/components/BaseDropdown.vue`
+
+**Purpose:**
+Provide one shared Vue dropdown boundary for trigger rendering, teleported menu positioning, outside-click closing, Escape closing, and viewport-change closing.
+
+**When to Use:**
+Compact Inertia/Vue action menus, especially vertical-dots row actions in Vue resource cards or lists.
+
+**When Not to Use:**
+Unmigrated Blade/Alpine dropdowns, drawers, slide-up panels, centered dialogs, or domain-specific action orchestration.
+
+**Public Interface:**
+- `ariaLabel`
+- `align`
+- `buttonClass`
+- `menuClass`
+- `offset`
+- trigger slot
+- default slot
+
+**Behavior Contract:**
+BaseDropdown owns only local dropdown visibility, fixed teleported menu positioning, outside-click close, Escape close, and viewport-change close. Menu actions remain page-owned and should call the slot-provided `close` callback when selection should collapse the dropdown.
+
+**Example Usage:**
+```vue
+<BaseDropdown aria-label="Customer actions">
+    <template #trigger>
+        <VerticalDotsIcon />
+    </template>
+
+    <template #default="{ close }">
+        <button type="button" role="menuitem" @click="close(); edit(record)">
+            Edit
+        </button>
+    </template>
+</BaseDropdown>
 ```
 
 ### Resource Index Drawer Vue

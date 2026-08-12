@@ -1,0 +1,39 @@
+name: WordPress WooCommerce Plugin
+type: Integration Package Boundary
+location:
+  - integrations/wordpress/foomake-connector
+  - app/Support/Integrations/WordPressPluginArchive.php
+  - app/Http/Controllers/ProfileConnectorController.php
+  - app/Http/Controllers/WordPressPluginApiController.php
+purpose: Define the repository-owned WordPress plugin package boundary for FooMake-specific WooCommerce connector distribution.
+when_to_use:
+  - Maintaining the FooMake WordPress plugin source package
+  - Building a downloadable plugin zip for authenticated tenant admins
+  - Adding WordPress-side connector behavior that belongs in the installable plugin
+when_not_to_use:
+  - Laravel-side WooCommerce API preview or import logic
+  - Tenant connector credential persistence
+  - Generated zip archives or runtime storage
+  - Tenant approval and token invariants owned by docs/architecture/integrations/WordPressPluginPairing.yaml
+rules:
+  - WordPress plugin source must live under integrations/wordpress/foomake-connector.
+  - The generated plugin zip is an artifact and must not be committed as source of truth.
+  - The downloadable zip must include a foomake-connector root directory.
+  - Plugin downloads must require authenticated Laravel authorization.
+  - The plugin package must not contain tenant-specific secrets, API keys, consumer secrets, or user credentials.
+  - Laravel remains authoritative for tenant connector credential storage and import behavior.
+  - WordPress plugin code must be reviewable source files rather than opaque generated content.
+  - Plugin pairing behavior must follow the WordPress Plugin Pairing architecture entry.
+public_interface:
+  - integrations/wordpress/foomake-connector/foomake-connector.php
+  - integrations/wordpress/foomake-connector/readme.txt
+  - WordPressPluginArchive::build()
+  - profile.connectors.woocommerce.plugin.download
+  - admin_post_foomake_connector_start_pairing
+  - admin_post_foomake_connector_complete_pairing
+example_usage: |
+  $archivePath = app(WordPressPluginArchive::class)->build();
+
+  return response()
+      ->download($archivePath, 'foomake-connector.zip')
+      ->deleteFileAfterSend(true);

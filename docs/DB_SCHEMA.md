@@ -65,6 +65,8 @@ Migrations remain the **sole source of truth**.
 - uoms
 - users
 - visitor_attributions
+- wordpress_plugin_connections
+- wordpress_plugin_pairing_codes
 - workflow_domains
 - workflow_stages
 - workflow_task_templates
@@ -201,6 +203,70 @@ Migrations remain the **sole source of truth**.
 
 - PK: `id`
 - Unique: `(tenant_id, source)`
+- Implicit (FK index): `tenant_id`
+
+---
+
+## wordpress_plugin_connections
+
+**Tenant-owned:** Yes
+**Purpose:** Tenant-scoped installed WordPress plugin token connection state
+
+### Columns
+
+| Name              | Type      | Nullable | Notes                     |
+| ----------------- | --------- | -------- | ------------------------- |
+| id                | bigint    | No       | Primary key               |
+| tenant_id         | bigint    | No       | FK -> tenants.id (CASCADE) |
+| plugin_uuid       | string    | No       | Installed plugin identity |
+| site_url          | text      | No       | WordPress site URL        |
+| site_name         | string    | Yes      | WordPress site name       |
+| status            | string    | No       | Plugin connection status  |
+| access_token_hash | string    | Yes      | Hashed plugin bearer token |
+| last_seen_at      | timestamp | Yes      | Last successful token status check |
+| connected_at      | timestamp | Yes      | Token issue time          |
+| revoked_at        | timestamp | Yes      | Server-side revocation time |
+| created_at        | timestamp | Yes      | —                         |
+| updated_at        | timestamp | Yes      | —                         |
+
+### Keys & Indexes
+
+- PK: `id`
+- Unique: `(tenant_id, plugin_uuid)`
+- Unique: `access_token_hash`
+- Index: `(tenant_id, status)`
+- Implicit (FK index): `tenant_id`
+
+---
+
+## wordpress_plugin_pairing_codes
+
+**Tenant-owned:** No, pending codes become tenant-linked only after approval
+**Purpose:** Short-lived WordPress plugin pairing requests before token exchange
+
+### Columns
+
+| Name         | Type      | Nullable | Notes                         |
+| ------------ | --------- | -------- | ----------------------------- |
+| id           | bigint    | No       | Primary key                   |
+| tenant_id    | bigint    | Yes      | FK -> tenants.id (SET NULL) after approval |
+| plugin_uuid  | string    | No       | Installed plugin identity     |
+| site_url     | text      | No       | WordPress site URL            |
+| site_name    | string    | Yes      | WordPress site name           |
+| callback_url | text      | No       | WordPress admin callback URL  |
+| code_hash    | string    | No       | Hashed raw pairing code       |
+| expires_at   | timestamp | No       | Pairing expiry                |
+| approved_at  | timestamp | Yes      | Tenant admin approval time    |
+| consumed_at  | timestamp | Yes      | Token exchange time           |
+| created_at   | timestamp | Yes      | —                             |
+| updated_at   | timestamp | Yes      | —                             |
+
+### Keys & Indexes
+
+- PK: `id`
+- Unique: `code_hash`
+- Index: `(tenant_id, approved_at)`
+- Index: `expires_at`
 - Implicit (FK index): `tenant_id`
 
 ---

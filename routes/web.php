@@ -44,6 +44,7 @@ use App\Http\Controllers\UomController;
 use App\Http\Controllers\WorkflowController;
 use App\Http\Controllers\WorkflowStageController;
 use App\Http\Controllers\WorkflowTaskTemplateController;
+use App\Http\Controllers\WordPressPluginApiController;
 use App\Http\Middleware\EnsureEmailVerifiedOrInGracePeriod;
 use App\Http\Middleware\EnsureTenantBillingAccess;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
@@ -79,6 +80,22 @@ Route::view('/privacy', 'privacy')
 Route::post('/billing/stripe/webhook', [BillingWebhookController::class, 'store'])
     ->withoutMiddleware([VerifyCsrfToken::class])
     ->name('billing.stripe.webhook');
+
+Route::prefix('/api/wordpress-plugin')
+    ->withoutMiddleware([
+        StartSession::class,
+        ShareErrorsFromSession::class,
+        ValidateCsrfToken::class,
+        VerifyCsrfToken::class,
+    ])
+    ->group(function (): void {
+        Route::post('/pairing/start', [WordPressPluginApiController::class, 'startPairing'])
+            ->name('api.wordpress-plugin.pairing.start');
+        Route::post('/pairing/complete', [WordPressPluginApiController::class, 'completePairing'])
+            ->name('api.wordpress-plugin.pairing.complete');
+        Route::get('/status', [WordPressPluginApiController::class, 'status'])
+            ->name('api.wordpress-plugin.status');
+    });
 
 Route::get('/dashboard', DashboardController::class)
     ->middleware(['auth', EnsureEmailVerifiedOrInGracePeriod::class, EnsureTenantBillingAccess::class])
@@ -468,10 +485,18 @@ Route::middleware(['auth', EnsureEmailVerifiedOrInGracePeriod::class, EnsureTena
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::get('/profile/connectors', [ProfileConnectorController::class, 'index'])
         ->name('profile.connectors.index');
+    Route::get('/profile/connectors/wordpress/pair', [ProfileConnectorController::class, 'showWordPressPairing'])
+        ->name('profile.connectors.wordpress.pair');
+    Route::post('/profile/connectors/wordpress/pair', [ProfileConnectorController::class, 'approveWordPressPairing'])
+        ->name('profile.connectors.wordpress.pair.approve');
     Route::post('/profile/connectors/woocommerce', [ProfileConnectorController::class, 'storeWooCommerce'])
         ->name('profile.connectors.woocommerce.store');
     Route::delete('/profile/connectors/woocommerce', [ProfileConnectorController::class, 'destroyWooCommerce'])
         ->name('profile.connectors.woocommerce.destroy');
+    Route::get('/profile/connectors/woocommerce/plugin/download', [ProfileConnectorController::class, 'downloadWooCommercePlugin'])
+        ->name('profile.connectors.woocommerce.plugin.download');
+    Route::delete('/profile/connectors/wordpress-plugin', [ProfileConnectorController::class, 'destroyWordPressPluginConnection'])
+        ->name('profile.connectors.wordpress-plugin.destroy');
     Route::post('/sales/products/import-sources/{source}/connect', [ProfileConnectorController::class, 'storeWooCommerce'])
         ->name('sales.products.import.connect');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');

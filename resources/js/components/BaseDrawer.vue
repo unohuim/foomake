@@ -18,6 +18,10 @@ const props = defineProps({
         type: String,
         default: "w-screen max-w-md",
     },
+    closeButtonClass: {
+        type: String,
+        default: "text-slate-400 hover:text-slate-600 focus-visible:outline-blue-950",
+    },
 });
 
 const emit = defineEmits(["close"]);
@@ -60,7 +64,8 @@ onBeforeUnmount(() => {
             >
                 <button
                     type="button"
-                    class="cursor-pointer absolute right-4 top-4 z-10 rounded-md text-slate-400 transition hover:text-slate-600 focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-950"
+                    class="cursor-pointer absolute right-4 top-4 z-10 rounded-md transition focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+                    :class="closeButtonClass"
                     @click="emit('close')"
                 >
                     <span class="sr-only">{{ closeLabel }}</span>

@@ -1,0 +1,64 @@
+<?php
+
+namespace App\Models;
+
+use App\Models\Concerns\HasTenantScope;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+
+/**
+ * Store a tenant-scoped FooMake token connection for an installed WordPress plugin.
+ */
+class WordPressPluginConnection extends Model
+{
+    use HasTenantScope;
+
+    public const STATUS_CONNECTED = 'connected';
+
+    public const STATUS_REVOKED = 'revoked';
+
+    /**
+     * @var list<string>
+     */
+    protected $fillable = [
+        'tenant_id',
+        'plugin_uuid',
+        'site_url',
+        'site_name',
+        'status',
+        'access_token_hash',
+        'last_seen_at',
+        'connected_at',
+        'revoked_at',
+    ];
+
+    /**
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return [
+            'last_seen_at' => 'datetime',
+            'connected_at' => 'datetime',
+            'revoked_at' => 'datetime',
+        ];
+    }
+
+    /**
+     * Get the owning tenant.
+     */
+    public function tenant(): BelongsTo
+    {
+        return $this->belongsTo(Tenant::class);
+    }
+
+    /**
+     * Determine whether the plugin token is currently usable.
+     */
+    public function isConnected(): bool
+    {
+        return $this->status === self::STATUS_CONNECTED
+            && filled($this->access_token_hash)
+            && $this->revoked_at === null;
+    }
+}

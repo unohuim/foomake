@@ -31,6 +31,7 @@ public_interface:
   - labelledBy
   - closeLabel
   - panelClass
+  - closeButtonClass
   - close
   - default slot
 example_usage: |
