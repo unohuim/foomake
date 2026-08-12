@@ -7,7 +7,7 @@
  * Author: FooMake
  * Author URI: https://foomake.com/
  * Requires at least: 6.0
- * Requires PHP: 8.1
+ * Requires PHP: 7.4
  * WC requires at least: 8.0
  * Text Domain: foomake-connector
  */
@@ -35,7 +35,7 @@ add_action('admin_post_foomake_connector_disconnect', 'foomake_connector_disconn
 /**
  * Register the FooMake connector admin page under WooCommerce when available.
  */
-function foomake_connector_register_menu(): void
+function foomake_connector_register_menu()
 {
     $parent = class_exists('WooCommerce') ? 'woocommerce' : 'options-general.php';
     $capability = class_exists('WooCommerce') ? 'manage_woocommerce' : 'manage_options';
@@ -53,7 +53,7 @@ function foomake_connector_register_menu(): void
 /**
  * Render the connector admin page.
  */
-function foomake_connector_render_admin_page(): void
+function foomake_connector_render_admin_page()
 {
     $capability = foomake_connector_manage_capability();
 
@@ -153,7 +153,7 @@ function foomake_connector_render_admin_page(): void
 /**
  * Start pairing by creating a pending request in FooMake and redirecting to approval.
  */
-function foomake_connector_start_pairing(): void
+function foomake_connector_start_pairing()
 {
     if (! current_user_can(foomake_connector_manage_capability())) {
         wp_die(esc_html__('You do not have permission to manage the FooMake connector.', 'foomake-connector'));
@@ -205,7 +205,7 @@ function foomake_connector_start_pairing(): void
 /**
  * Complete pairing after FooMake approval redirects back with a code.
  */
-function foomake_connector_complete_pairing(): void
+function foomake_connector_complete_pairing()
 {
     if (! current_user_can(foomake_connector_manage_capability())) {
         wp_die(esc_html__('You do not have permission to manage the FooMake connector.', 'foomake-connector'));
@@ -251,7 +251,7 @@ function foomake_connector_complete_pairing(): void
 /**
  * Clear this WordPress site's local FooMake token.
  */
-function foomake_connector_disconnect(): void
+function foomake_connector_disconnect()
 {
     if (! current_user_can(foomake_connector_manage_capability())) {
         wp_die(esc_html__('You do not have permission to manage the FooMake connector.', 'foomake-connector'));
@@ -270,7 +270,7 @@ function foomake_connector_disconnect(): void
 /**
  * Refresh token status from FooMake when a token exists.
  */
-function foomake_connector_refresh_status(): string
+function foomake_connector_refresh_status()
 {
     $token = foomake_connector_access_token();
 
@@ -314,7 +314,7 @@ function foomake_connector_refresh_status(): string
  *
  * @param mixed $connection
  */
-function foomake_connector_store_connection_payload($connection): void
+function foomake_connector_store_connection_payload($connection)
 {
     if (! is_array($connection)) {
         return;
@@ -329,7 +329,7 @@ function foomake_connector_store_connection_payload($connection): void
 /**
  * Get the current FooMake base URL.
  */
-function foomake_connector_base_url(): string
+function foomake_connector_base_url()
 {
     return untrailingslashit((string) get_option(FOOMAKE_CONNECTOR_OPTION_BASE_URL, 'https://foomake.com'));
 }
@@ -337,7 +337,7 @@ function foomake_connector_base_url(): string
 /**
  * Get or create this plugin install's UUID.
  */
-function foomake_connector_plugin_uuid(): string
+function foomake_connector_plugin_uuid()
 {
     $uuid = (string) get_option(FOOMAKE_CONNECTOR_OPTION_PLUGIN_UUID, '');
 
@@ -354,7 +354,7 @@ function foomake_connector_plugin_uuid(): string
 /**
  * Get the stored FooMake access token.
  */
-function foomake_connector_access_token(): string
+function foomake_connector_access_token()
 {
     return (string) get_option(FOOMAKE_CONNECTOR_OPTION_ACCESS_TOKEN, '');
 }
@@ -362,7 +362,7 @@ function foomake_connector_access_token(): string
 /**
  * Return the capability required for the current install state.
  */
-function foomake_connector_manage_capability(): string
+function foomake_connector_manage_capability()
 {
     return class_exists('WooCommerce') ? 'manage_woocommerce' : 'manage_options';
 }
@@ -372,7 +372,7 @@ function foomake_connector_manage_capability(): string
  *
  * @param array<string, string> $query
  */
-function foomake_connector_redirect(array $query = []): void
+function foomake_connector_redirect(array $query = [])
 {
     wp_safe_redirect(add_query_arg($query, foomake_connector_admin_url()));
     exit;
@@ -381,7 +381,7 @@ function foomake_connector_redirect(array $query = []): void
 /**
  * Return the plugin admin page URL for either WooCommerce or Settings placement.
  */
-function foomake_connector_admin_url(): string
+function foomake_connector_admin_url()
 {
     $path = class_exists('WooCommerce') ? 'admin.php' : 'options-general.php';
 
@@ -391,7 +391,7 @@ function foomake_connector_admin_url(): string
 /**
  * Determine whether SSL verification should be used for the FooMake base URL.
  */
-function foomake_connector_should_verify_ssl(string $base_url): bool
+function foomake_connector_should_verify_ssl($base_url)
 {
     $host = parse_url($base_url, PHP_URL_HOST);
 
@@ -402,13 +402,13 @@ function foomake_connector_should_verify_ssl(string $base_url): bool
     $host = strtolower($host);
 
     return ! in_array($host, ['localhost', '127.0.0.1'], true)
-        && ! str_ends_with($host, '.test');
+        && substr($host, -5) !== '.test';
 }
 
 /**
  * Resolve a short admin notice from query arguments.
  */
-function foomake_connector_notice_message(): string
+function foomake_connector_notice_message()
 {
     if (isset($_GET['foomake_paired'])) {
         return __('FooMake pairing completed.', 'foomake-connector');
@@ -422,21 +422,23 @@ function foomake_connector_notice_message(): string
         return '';
     }
 
-    return match (sanitize_text_field(wp_unslash($_GET['foomake_error']))) {
+    $error = sanitize_text_field(wp_unslash($_GET['foomake_error']));
+    $messages = [
         'missing_base_url' => __('Enter a FooMake URL before pairing.', 'foomake-connector'),
         'pairing_start_failed' => __('FooMake could not be reached to start pairing.', 'foomake-connector'),
         'pairing_start_rejected' => __('FooMake rejected the pairing start request.', 'foomake-connector'),
         'missing_pairing_code' => __('FooMake did not return a pairing code.', 'foomake-connector'),
         'pairing_complete_failed' => __('FooMake could not be reached to complete pairing.', 'foomake-connector'),
         'pairing_complete_rejected' => __('FooMake rejected the approved pairing code.', 'foomake-connector'),
-        default => __('FooMake pairing could not be completed.', 'foomake-connector'),
-    };
+    ];
+
+    return $messages[$error] ?? __('FooMake pairing could not be completed.', 'foomake-connector');
 }
 
 /**
  * Warn administrators when WooCommerce is not active.
  */
-function foomake_connector_woocommerce_notice(): void
+function foomake_connector_woocommerce_notice()
 {
     if (class_exists('WooCommerce')) {
         return;
