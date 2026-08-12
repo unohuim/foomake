@@ -37,7 +37,7 @@ onBeforeUnmount(() => {
 
 <template>
     <div
-        class="fixed inset-0 z-50 transition-[visibility] duration-500 md:hidden"
+        class="fixed inset-0 z-[1000] transition-[visibility] duration-500 md:hidden"
         :class="open ? 'visible pointer-events-auto' : 'invisible pointer-events-none'"
         role="dialog"
         aria-modal="true"

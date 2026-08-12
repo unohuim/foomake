@@ -19,9 +19,17 @@ const closeTimer = ref(null);
 const accountOpen = ref(false);
 const openNestedItems = ref({});
 
+const mobileLabels = {
+    dashboard: "Home",
+    sales: "Sell",
+    purchasing: "Buy",
+    manufacturing: "Make",
+    stock: "Stock",
+};
+
 const entries = computed(() => props.shell.navigation.groups.map((group) => ({
     ...group,
-    label: group.key === "dashboard" ? "Home" : group.label,
+    label: mobileLabels[group.key] ?? group.label,
     url: group.key === "dashboard" ? group.items[0].url : null,
 })));
 
@@ -118,7 +126,7 @@ onBeforeUnmount(() => {
                 @select="openMenu"
             />
 
-            <div class="flex flex-none items-center px-2 py-1">
+            <div class="flex flex-none items-center px-2 py-2">
                 <button
                     type="button"
                     class="cursor-pointer flex h-7 w-7 items-center justify-center rounded-full bg-[#6f895d] text-[10px] font-semibold text-white shadow-sm transition hover:brightness-105"

@@ -22,6 +22,7 @@ rules:
   - Mobile navigation and account drawer headers must visually inherit from the mobile nav bars with dark navy backgrounds and plain header content.
   - Feature-specific drawer content must remain mounted until the 500ms collapse transition has completed.
   - Bottom-sheet implementations must not use immediate content removal for visible drawer content during collapse.
+  - Bottom-sheet overlays must use the shared app-overlay layer and remain above page chrome, sticky headers, nav bars, and toasts.
   - Mobile navigation drawer headers should include a top-right close button using `text-gray-200`.
   - Nested items inside mobile navigation drawers must render as inline accordions, not separate boxed containers.
   - Clicking outside the drawer panel must emit close.

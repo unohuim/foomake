@@ -69,6 +69,7 @@ function foomake_connector_render_admin_page()
     $status = (string) get_option(FOOMAKE_CONNECTOR_OPTION_STATUS, $has_token ? 'connected' : 'disconnected');
     $last_seen_at = (string) get_option(FOOMAKE_CONNECTOR_OPTION_LAST_SEEN_AT, '');
     $notice = foomake_connector_notice_message();
+    $is_connected = $has_token && $status === 'connected';
 
     ?>
     <div class="wrap">
@@ -126,6 +127,7 @@ function foomake_connector_render_admin_page()
                                 type="url"
                                 class="regular-text"
                                 value="<?php echo esc_attr($base_url); ?>"
+                                <?php disabled($is_connected); ?>
                                 required
                             >
                             <p class="description">
@@ -136,7 +138,15 @@ function foomake_connector_render_admin_page()
                 </tbody>
             </table>
 
-            <?php submit_button(__('Connect to FooMake', 'foomake-connector')); ?>
+            <?php
+            submit_button(
+                $is_connected ? __('Connected to FooMake', 'foomake-connector') : __('Connect to FooMake', 'foomake-connector'),
+                'primary',
+                'submit',
+                true,
+                $is_connected ? ['disabled' => 'disabled'] : []
+            );
+            ?>
         </form>
 
         <?php if ($has_token) : ?>

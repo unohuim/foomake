@@ -595,6 +595,9 @@ Unmigrated Blade/Alpine drawers, centered modal dialogs, or feature-specific for
 **Transition Contract:**
 Drawer panel movement, panel opacity, and backdrop opacity transition over 500ms for both expand and collapse. Visible drawer content must remain mounted until the 500ms collapse transition has completed.
 
+**Layer Contract:**
+Drawer overlays use the shared app-overlay layer and remain above page chrome, sticky headers, nav bars, toasts, and page content.
+
 **Example Usage:**
 ```vue
 <BaseDrawer
@@ -632,6 +635,9 @@ Desktop sidebar flyouts, drop-up account menus, unmigrated Blade/Alpine drawers,
 
 **Transition Contract:**
 Bottom-sheet movement, panel opacity, and backdrop opacity transition over 500ms for both expand and collapse. Visible drawer content must remain mounted until the 500ms collapse transition has completed.
+
+**Layer Contract:**
+Bottom-sheet overlays use the shared app-overlay layer and remain above page chrome, sticky headers, nav bars, toasts, and page content.
 
 **Style Contract:**
 Mobile navigation and account drawer headers visually inherit from the mobile nav bars with dark navy backgrounds and plain header content. Bottom-sheet top corners use slight rounding rather than large rounded corners.
@@ -768,6 +774,9 @@ Unmigrated Blade/Alpine dropdowns, drawers, slide-up panels, centered dialogs, o
 
 **Behavior Contract:**
 BaseDropdown owns only local dropdown visibility, fixed teleported menu positioning, outside-click close, Escape close, and viewport-change close. Menu actions remain page-owned and should call the slot-provided `close` callback when selection should collapse the dropdown.
+
+**Layer Contract:**
+Dropdown menus use the shared app-menu layer and render above drawer overlays when both are present.
 
 **Example Usage:**
 ```vue

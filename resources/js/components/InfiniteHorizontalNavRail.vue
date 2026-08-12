@@ -153,7 +153,7 @@ onBeforeUnmount(() => {
     <div ref="navRailViewport" class="relative min-w-0 flex-1">
         <div
             ref="navRail"
-            class="flex gap-1 px-1.5 py-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+            class="flex gap-1 px-1.5 py-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
             :class="canFitAllEntries ? 'justify-around overflow-hidden' : 'overflow-x-auto overscroll-x-contain'"
             @scroll.passive="handleRailScroll"
         >
@@ -161,7 +161,7 @@ onBeforeUnmount(() => {
                 <a
                     v-if="entry.url"
                     :href="entry.url"
-                    class="cursor-pointer flex min-w-[3.35rem] flex-none flex-col items-center gap-0.5 rounded-lg px-1 py-1 text-[8.5px] font-semibold leading-tight transition duration-300"
+                    class="cursor-pointer flex min-w-[3.35rem] flex-none flex-col items-center gap-0.5 rounded-lg px-1 py-1 text-[9px] font-semibold leading-tight transition duration-300"
                     :class="entry.active ? 'bg-white/15 text-white shadow-lg shadow-slate-950/20 ring-1 ring-white/10' : 'text-blue-100/75 hover:bg-white/10 hover:text-white'"
                 >
                     <NavIcon :name="entry.key" class="h-3.5 w-3.5" />
@@ -171,7 +171,7 @@ onBeforeUnmount(() => {
                 <button
                     v-else
                     type="button"
-                    class="cursor-pointer flex min-w-[3.35rem] flex-none flex-col items-center gap-0.5 rounded-lg px-1 py-1 text-[8.5px] font-semibold leading-tight transition duration-300"
+                    class="cursor-pointer flex min-w-[3.35rem] flex-none flex-col items-center gap-0.5 rounded-lg px-1 py-1 text-[9px] font-semibold leading-tight transition duration-300"
                     :class="entry.active || activeKey === entry.key ? 'bg-white/15 text-white shadow-lg shadow-slate-950/20 ring-1 ring-white/10' : 'text-blue-100/75 hover:bg-white/10 hover:text-white'"
                     :aria-expanded="activeKey === entry.key ? 'true' : 'false'"
                     @click="selectEntry(entry)"

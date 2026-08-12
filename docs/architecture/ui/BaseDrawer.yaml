@@ -20,6 +20,7 @@ rules:
   - Drawer panel movement and opacity must transition together over the same 500ms duration.
   - Drawer opacity must increase while expanding and decrease while collapsing.
   - Drawer backdrops must fade over the same 500ms duration as the drawer panel.
+  - Drawer overlays must use the shared app-overlay layer and remain above page chrome, sticky headers, nav bars, and toasts.
   - Feature-specific drawer content must remain mounted until the 500ms collapse transition has completed.
   - Drawer implementations must not use immediate content removal for visible drawer content during collapse.
   - Feature-specific drawer components must compose BaseDrawer and provide content through the default slot.

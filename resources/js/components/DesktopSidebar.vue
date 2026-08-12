@@ -84,7 +84,7 @@ onBeforeUnmount(() => {
 
 <template>
     <aside
-        class="hidden min-h-screen shrink-0 overflow-hidden border-r border-white/10 bg-[#001f3f] text-white shadow-2xl shadow-slate-950/20 transition-[width] duration-500 ease-in-out md:flex md:flex-col"
+        class="relative z-[100] hidden min-h-screen shrink-0 overflow-hidden border-r border-white/10 bg-[#001f3f] text-white shadow-2xl shadow-slate-950/20 transition-[width] duration-500 ease-in-out md:flex md:flex-col"
         :class="collapsed ? 'w-16' : 'w-64'"
         data-desktop-sidebar
     >
@@ -266,8 +266,8 @@ onBeforeUnmount(() => {
         >
             <div ref="accountRoot" class="relative h-14">
                 <div
-                    class="absolute bottom-0 left-0 right-0 overflow-hidden rounded-2xl bg-white/10 text-left ring-1 ring-white/10 transition-[max-height,background-color,box-shadow,opacity] duration-500 ease-in-out"
-                    :class="accountOpen && !collapsed ? 'max-h-80 bg-[#082b52] opacity-100 shadow-2xl shadow-slate-950/30' : 'max-h-14 opacity-90'"
+                    class="absolute bottom-0 left-0 right-0 z-[120] overflow-hidden rounded-2xl text-left ring-1 ring-white/10 transition-[max-height,background-color,box-shadow,opacity] duration-500 ease-in-out"
+                    :class="accountOpen && !collapsed ? 'max-h-80 bg-[#082b52] opacity-100 shadow-2xl shadow-slate-950/30' : 'max-h-14 bg-white/10 opacity-100'"
                 >
                     <button
                         type="button"

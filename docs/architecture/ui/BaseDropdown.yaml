@@ -20,6 +20,7 @@ rules:
   - Pressing Escape must close the dropdown.
   - Window resize or scroll must close the dropdown so stale fixed positioning is not preserved.
   - Dropdown menus must be teleported to body so scroll containers and card shells do not clip row actions.
+  - Dropdown menus must render above drawer overlays when both are present so menus remain selectable inside overlay surfaces.
   - BaseDropdown must not own auth, domain, request, or page orchestration state.
   - BaseDropdown must not introduce global application state.
 public_interface:

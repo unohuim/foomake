@@ -150,9 +150,11 @@ The UI should feel:
 - Drawer backdrops must fade over the same 500ms transition window as the panel
 - Clicks outside drawer panels must collapse the drawer; clicks inside the panel must not collapse it by default
 - Drawers should include an explicit top-right close button when header space allows; on dark drawer headers, the close icon should use `text-gray-200`
+- Drawers and slide-up drawers use the shared app-overlay layer (`z-[1000]`); teleported dropdown menus use the app-menu layer (`z-[1100]`) so sticky page chrome, nav bars, toasts, and page content do not cover active overlays
 - Mobile slide-up drawer top edges should be slightly rounded, not large pill-like rounded corners
 - Mobile navigation and account drawer headers should visually inherit from the mobile nav bars with dark navy backgrounds and plain header content
 - Sidebar dropdowns and drawer-like navigation panels must use 500ms height/opacity transitions instead of immediate `v-if` removal
+- The current desktop sidebar user-menu visual baseline is `docs/designs/codex/user_menu.png`
 - Nested items inside mobile drawer navigation must render as inline accordions, not separate boxed containers
 - Mobile horizontal navigation rails must render all items normally when they fit and switch to infinite horizontal swipe behavior only when items overflow
 - Infinite mobile navigation rails must show a subtle right-arrow hint until the user has completed three scroll bursts

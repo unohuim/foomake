@@ -133,7 +133,7 @@ onBeforeUnmount(() => {
             <div
                 v-if="open"
                 ref="menu"
-                class="fixed z-[80]"
+                class="fixed z-[1100]"
                 :class="menuClass"
                 :style="menuStyle"
                 role="menu"
