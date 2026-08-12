@@ -22,9 +22,12 @@ rules:
   - WordPress plugins start pairing without tenant authority and must not receive a token until a tenant admin approves the pairing code.
   - Pairing codes must be random, stored only as hashes, short-lived, and single-use.
   - Plugin access tokens must be random, stored raw only in WordPress options, and stored only as hashes in FooMake.
+  - FooMake-to-plugin site access tokens must be random, stored in WordPress options, and stored encrypted in FooMake.
   - Plugin tokens are scoped to one tenant and one plugin UUID.
+  - FooMake-to-plugin site access tokens are scoped to one tenant and one plugin UUID and must be revoked with the plugin connection.
   - FooMake must support server-side revocation that invalidates the stored token hash.
   - Plugin API routes must authenticate by bearer token after pairing and must not rely on browser session state.
+  - Existing plugin connections may receive a missing FooMake-to-plugin token during authenticated status refresh so paired sites do not need a new approval flow.
   - WordPress plugin local disconnect may clear local token state but server-side revocation remains FooMake-owned.
 public_interface:
   - profile.connectors.wordpress.pair

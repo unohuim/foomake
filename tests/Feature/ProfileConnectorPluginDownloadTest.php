@@ -10,6 +10,7 @@ use App\Models\WordPressPluginConnection;
 use App\Models\WordPressPluginPairingCode;
 use App\Support\Integrations\WordPressPluginArchive;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
 use Inertia\Testing\AssertableInertia as Assert;
 
 uses(RefreshDatabase::class);
@@ -317,13 +318,17 @@ it('exchanges an approved pairing code for a bearer token and connection payload
         ->assertOk()
         ->assertJsonPath('token_type', 'Bearer')
         ->assertJsonPath('connection.connected', true)
+        ->assertJsonStructure(['connection' => ['site_access_token']])
         ->assertJsonPath('connection.tenant_name', $user->tenant->tenant_name);
 
     $token = (string) $response->json('access_token');
+    $siteAccessToken = (string) $response->json('connection.site_access_token');
     $connection = WordPressPluginConnection::withoutGlobalScopes()->firstOrFail();
 
     expect($token)->not->toBe('')
+        ->and($siteAccessToken)->not->toBe('')
         ->and($connection->access_token_hash)->toBe(hash('sha256', $token))
+        ->and($connection->site_access_token)->toBe($siteAccessToken)
         ->and($connection->tenant_id)->toBe($user->tenant_id);
 });
 
@@ -384,9 +389,13 @@ it('returns wordpress plugin status for a valid bearer token and updates last se
         ->getJson(route('api.wordpress-plugin.status'))
         ->assertOk()
         ->assertJsonPath('connection.connected', true)
+        ->assertJsonStructure(['connection' => ['site_access_token']])
         ->assertJsonPath('connection.tenant_name', $user->tenant->tenant_name);
 
-    expect(WordPressPluginConnection::withoutGlobalScopes()->firstOrFail()->last_seen_at)->not->toBeNull();
+    $connection = WordPressPluginConnection::withoutGlobalScopes()->firstOrFail();
+
+    expect($connection->last_seen_at)->not->toBeNull()
+        ->and($connection->site_access_token)->not->toBe('');
 });
 
 it('rejects wordpress plugin status for a revoked token', function (): void {
@@ -463,4 +472,52 @@ it('includes wordpress plugin connection state on the connectors page', function
             ->where('connectors.wordPressPlugin.site_url', $this->siteUrl)
             ->where('connectors.pluginRevokeUrl', route('profile.connectors.wordpress-plugin.destroy'))
         );
+});
+
+it('loads customer import preview rows through a connected wordpress plugin', function (): void {
+    $user = ($this->makeUser)([], ['system-users-manage']);
+    $siteAccessToken = 'site-access-token';
+
+    WordPressPluginConnection::query()->create([
+        'tenant_id' => $user->tenant_id,
+        'plugin_uuid' => $this->pluginUuid,
+        'site_url' => $this->siteUrl,
+        'site_name' => 'Local Woo',
+        'status' => WordPressPluginConnection::STATUS_CONNECTED,
+        'access_token_hash' => hash('sha256', 'token'),
+        'site_access_token' => $siteAccessToken,
+        'connected_at' => now(),
+        'last_seen_at' => now(),
+    ]);
+
+    Http::fake([
+        'http://wordpress.test/wp-json/foomake/v1/customers' => Http::response([
+            'data' => [
+                [
+                    'external_id' => '42',
+                    'name' => 'Acme Foods',
+                    'email' => 'buyer@example.com',
+                    'phone' => '555-1212',
+                    'address_line_1' => '1 Main St',
+                    'address_line_2' => '',
+                    'city' => 'Toronto',
+                    'region' => 'ON',
+                    'postal_code' => 'M5V 1A1',
+                    'country_code' => 'CA',
+                ],
+            ],
+        ]),
+    ]);
+
+    $this->actingAs($user)
+        ->postJson(route('sales.customers.import.preview'), [
+            'source' => 'woocommerce',
+        ])
+        ->assertOk()
+        ->assertJsonPath('data.is_connected', true)
+        ->assertJsonPath('data.rows.0.external_id', '42')
+        ->assertJsonPath('data.rows.0.name', 'Acme Foods');
+
+    Http::assertSent(fn ($request): bool => $request->hasHeader('X-FooMake-Site-Token', $siteAccessToken)
+        && $request->url() === 'http://wordpress.test/wp-json/foomake/v1/customers');
 });

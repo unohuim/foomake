@@ -16,8 +16,10 @@ use App\Models\SalesOrder;
 use App\Models\SalesOrderLine;
 use App\Models\Task;
 use App\Models\User;
+use App\Models\WordPressPluginConnection;
 use App\Navigation\NavigationEligibility;
 use App\Services\WooCommerceCustomerPreviewService;
+use App\Services\WordPressPluginCustomerPreviewService;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -168,7 +170,8 @@ class CustomerController extends Controller
      */
     public function previewImport(
         PreviewExternalCustomerImportRequest $request,
-        WooCommerceCustomerPreviewService $previewService
+        WooCommerceCustomerPreviewService $previewService,
+        WordPressPluginCustomerPreviewService $pluginPreviewService
     ): JsonResponse {
         $source = (string) $request->validated('source');
 
@@ -186,15 +189,21 @@ class CustomerController extends Controller
             ]);
         }
 
-        $connection = $this->connectedSourceForTenant((int) $request->user()->tenant_id, $source);
+        $tenantId = (int) $request->user()->tenant_id;
+        $connection = $this->connectedSourceForTenant($tenantId, $source);
+        $pluginConnection = $source === ExternalProductSourceConnection::SOURCE_WOOCOMMERCE && ! $connection
+            ? $this->connectedWordPressPluginForTenant($tenantId)
+            : null;
 
-        if (! $connection) {
+        if (! $connection && ! $pluginConnection) {
             return $this->notConnectedResponse();
         }
 
         try {
             $rows = match ($source) {
-                ExternalProductSourceConnection::SOURCE_WOOCOMMERCE => $previewService->previewRows($connection),
+                ExternalProductSourceConnection::SOURCE_WOOCOMMERCE => $pluginConnection
+                    ? $pluginPreviewService->previewRows($pluginConnection)
+                    : $previewService->previewRows($connection),
                 default => throw new WooCommerceException('The selected source is not supported.'),
             };
         } catch (WooCommerceException $exception) {
@@ -222,7 +231,7 @@ class CustomerController extends Controller
     {
         $source = (string) $request->validated('source');
 
-        if ($source !== 'file-upload' && ! $this->connectedSourceForTenant((int) $request->user()->tenant_id, $source)) {
+        if ($source !== 'file-upload' && ! $this->hasConnectedImportSourceForTenant((int) $request->user()->tenant_id, $source)) {
             return $this->notConnectedResponse();
         }
 
@@ -1537,15 +1546,21 @@ class CustomerController extends Controller
             ->keyBy('source');
 
         $wooCommerce = $connections->get(ExternalProductSourceConnection::SOURCE_WOOCOMMERCE);
+        $wordPressPlugin = $this->connectedWordPressPluginForTenant($tenantId);
+        $wooCommerceConnected = ($wooCommerce?->isConnected() ?? false) || $wordPressPlugin !== null;
 
         return [
             [
                 'value' => ExternalProductSourceConnection::SOURCE_WOOCOMMERCE,
                 'label' => 'WooCommerce',
                 'enabled' => true,
-                'connected' => $wooCommerce?->isConnected() ?? false,
-                'status' => $wooCommerce?->status ?? ExternalProductSourceConnection::STATUS_DISCONNECTED,
-                'status_label' => ($wooCommerce?->isConnected() ?? false) ? 'Connected' : 'Disconnected',
+                'connected' => $wooCommerceConnected,
+                'status' => $wooCommerceConnected
+                    ? ExternalProductSourceConnection::STATUS_CONNECTED
+                    : ($wooCommerce?->status ?? ExternalProductSourceConnection::STATUS_DISCONNECTED),
+                'status_label' => $wooCommerceConnected
+                    ? ($wooCommerce?->isConnected() ? 'Connected with API keys' : 'Connected with WordPress plugin')
+                    : 'Disconnected',
             ],
             [
                 'value' => 'shopify',
@@ -1573,6 +1588,34 @@ class CustomerController extends Controller
         }
 
         return $connection;
+    }
+
+    /**
+     * Determine whether the tenant has a connected import source.
+     */
+    private function hasConnectedImportSourceForTenant(int $tenantId, string $source): bool
+    {
+        return $this->connectedSourceForTenant($tenantId, $source) !== null
+            || ($source === ExternalProductSourceConnection::SOURCE_WOOCOMMERCE
+                && $this->connectedWordPressPluginForTenant($tenantId) !== null);
+    }
+
+    /**
+     * Return the connected WordPress plugin when it can serve WooCommerce imports.
+     */
+    private function connectedWordPressPluginForTenant(int $tenantId): ?WordPressPluginConnection
+    {
+        /** @var WordPressPluginConnection|null $connection */
+        $connection = WordPressPluginConnection::query()
+            ->where('tenant_id', $tenantId)
+            ->where('status', WordPressPluginConnection::STATUS_CONNECTED)
+            ->whereNull('revoked_at')
+            ->latest('last_seen_at')
+            ->latest('connected_at')
+            ->latest('id')
+            ->first();
+
+        return $connection?->canServeImports() ? $connection : null;
     }
 
     /**

@@ -450,10 +450,13 @@ $linkAttribution->execute(
 Define the repository-owned WordPress plugin package boundary for FooMake-specific WooCommerce connector distribution.
 
 **When to Use:**
-Maintaining the installable WordPress plugin source package or serving an authenticated downloadable zip from FooMake.
+Maintaining the installable WordPress plugin source package, serving an authenticated downloadable zip from FooMake, or serving FooMake-authorized WooCommerce preview data from the paired WordPress site.
 
 **When Not to Use:**
-Laravel-side WooCommerce API preview/import logic, tenant connector credential persistence, or generated zip source control.
+Tenant connector credential persistence, import persistence, or generated zip source control.
+
+**Rules:**
+Laravel remains authoritative for tenant connector credential storage, plugin pairing state, duplicate detection, and import persistence. WordPress-side REST endpoints must require the FooMake-to-plugin site access token before returning WooCommerce data.
 
 **Public Interface:**
 - `integrations/wordpress/foomake-connector/foomake-connector.php`
@@ -462,6 +465,7 @@ Laravel-side WooCommerce API preview/import logic, tenant connector credential p
 - `profile.connectors.woocommerce.plugin.download`
 - `admin_post_foomake_connector_start_pairing`
 - `admin_post_foomake_connector_complete_pairing`
+- `GET /wp-json/foomake/v1/customers`
 
 **Example Usage:**
 ```php
@@ -492,6 +496,9 @@ Pairing an installed WordPress plugin with a FooMake tenant, issuing or validati
 
 **When Not to Use:**
 WooCommerce credential storage, customer/product/order import logic, or browser session authentication for plugin API calls.
+
+**Rules:**
+Plugin access tokens are stored raw only in WordPress and hashed in FooMake. FooMake-to-plugin site access tokens are stored in WordPress, encrypted in FooMake, scoped to one tenant/plugin UUID, revoked with the plugin connection, and may be issued to existing connections during authenticated status refresh.
 
 **Public Interface:**
 - `profile.connectors.wordpress.pair`

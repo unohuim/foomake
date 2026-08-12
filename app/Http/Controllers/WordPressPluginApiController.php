@@ -90,8 +90,9 @@ class WordPressPluginApiController extends Controller
 
         $plainToken = Str::random(80);
         $tokenHash = $this->hashToken($plainToken);
+        $siteAccessToken = Str::random(80);
 
-        $connection = DB::transaction(function () use ($pairing, $tokenHash): WordPressPluginConnection {
+        $connection = DB::transaction(function () use ($pairing, $tokenHash, $siteAccessToken): WordPressPluginConnection {
             /** @var WordPressPluginConnection $connection */
             $connection = WordPressPluginConnection::withoutGlobalScopes()->updateOrCreate(
                 [
@@ -103,6 +104,7 @@ class WordPressPluginApiController extends Controller
                     'site_name' => $pairing->site_name,
                     'status' => WordPressPluginConnection::STATUS_CONNECTED,
                     'access_token_hash' => $tokenHash,
+                    'site_access_token' => $siteAccessToken,
                     'connected_at' => now(),
                     'last_seen_at' => now(),
                     'revoked_at' => null,
@@ -119,7 +121,7 @@ class WordPressPluginApiController extends Controller
         return response()->json([
             'access_token' => $plainToken,
             'token_type' => 'Bearer',
-            'connection' => $this->connectionData($connection),
+            'connection' => $this->connectionData($connection, $siteAccessToken),
         ]);
     }
 
@@ -134,12 +136,19 @@ class WordPressPluginApiController extends Controller
             return response()->json(['message' => 'Invalid or revoked plugin token.'], 401);
         }
 
+        $siteAccessToken = (string) $connection->site_access_token;
+
+        if ($siteAccessToken === '') {
+            $siteAccessToken = Str::random(80);
+        }
+
         $connection->forceFill([
             'last_seen_at' => now(),
+            'site_access_token' => $siteAccessToken,
         ])->save();
 
         return response()->json([
-            'connection' => $this->connectionData($connection->fresh('tenant')),
+            'connection' => $this->connectionData($connection->fresh('tenant'), $siteAccessToken),
         ]);
     }
 
@@ -191,9 +200,9 @@ class WordPressPluginApiController extends Controller
      *
      * @return array<string, mixed>
      */
-    private function connectionData(WordPressPluginConnection $connection): array
+    private function connectionData(WordPressPluginConnection $connection, ?string $siteAccessToken = null): array
     {
-        return [
+        $payload = [
             'status' => $connection->status,
             'connected' => $connection->isConnected(),
             'site_url' => $connection->site_url,
@@ -202,5 +211,11 @@ class WordPressPluginApiController extends Controller
             'last_seen_at' => $connection->last_seen_at?->toAtomString(),
             'connected_at' => $connection->connected_at?->toAtomString(),
         ];
+
+        if (is_string($siteAccessToken) && $siteAccessToken !== '') {
+            $payload['site_access_token'] = $siteAccessToken;
+        }
+
+        return $payload;
     }
 }

@@ -10,6 +10,7 @@ when_to_use:
   - Maintaining the FooMake WordPress plugin source package
   - Building a downloadable plugin zip for authenticated tenant admins
   - Adding WordPress-side connector behavior that belongs in the installable plugin
+  - Serving FooMake-authorized WooCommerce preview data from the paired WordPress site
 when_not_to_use:
   - Laravel-side WooCommerce API preview or import logic
   - Tenant connector credential persistence
@@ -21,7 +22,9 @@ rules:
   - The downloadable zip must include a foomake-connector root directory.
   - Plugin downloads must require authenticated Laravel authorization.
   - The plugin package must not contain tenant-specific secrets, API keys, consumer secrets, or user credentials.
-  - Laravel remains authoritative for tenant connector credential storage and import behavior.
+  - Laravel remains authoritative for tenant connector credential storage, plugin pairing state, and import persistence.
+  - WordPress-side REST endpoints must require the FooMake-to-plugin site access token before returning WooCommerce data.
+  - Plugin-backed preview endpoints may return normalized customer, product, or sales order rows, but FooMake remains authoritative for duplicate detection and import persistence.
   - WordPress plugin code must be reviewable source files rather than opaque generated content.
   - Plugin pairing behavior must follow the WordPress Plugin Pairing architecture entry.
 public_interface:
@@ -31,6 +34,7 @@ public_interface:
   - profile.connectors.woocommerce.plugin.download
   - admin_post_foomake_connector_start_pairing
   - admin_post_foomake_connector_complete_pairing
+  - GET /wp-json/foomake/v1/customers
 example_usage: |
   $archivePath = app(WordPressPluginArchive::class)->build();
 

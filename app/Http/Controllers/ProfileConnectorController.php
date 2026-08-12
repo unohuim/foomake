@@ -189,6 +189,7 @@ class ProfileConnectorController extends Controller
             $connection->forceFill([
                 'status' => WordPressPluginConnection::STATUS_REVOKED,
                 'access_token_hash' => null,
+                'site_access_token' => null,
                 'revoked_at' => now(),
             ])->save();
         }

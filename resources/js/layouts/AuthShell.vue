@@ -26,11 +26,11 @@ const shellPayload = computed(() => ({
 </script>
 
 <template>
-    <div class="min-h-screen bg-gray-100 font-sans text-slate-950 antialiased md:flex">
+    <div class="flex h-screen overflow-hidden bg-gray-100 font-sans text-slate-950 antialiased md:flex">
         <DesktopSidebar :shell="shellPayload" />
         <MobileBottomNav :shell="shellPayload" />
 
-        <div class="min-w-0 flex-1">
+        <div class="flex min-h-0 min-w-0 flex-1 flex-col">
             <header class="bg-[#001f3f] md:bg-[#f5f7fa]">
                 <div class="mx-auto max-w-7xl px-4 pb-3 pt-7 sm:px-6 lg:px-8">
                     <h1 class="text-2xl font-semibold leading-tight text-blue-100 md:text-slate-950">
@@ -39,7 +39,7 @@ const shellPayload = computed(() => ({
                 </div>
             </header>
 
-            <main class="pb-20 md:pb-0">
+            <main class="min-h-0 flex-1 overflow-hidden pb-20 md:pb-0">
                 <slot />
             </main>
         </div>

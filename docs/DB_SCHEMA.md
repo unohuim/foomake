@@ -223,6 +223,7 @@ Migrations remain the **sole source of truth**.
 | site_name         | string    | Yes      | WordPress site name       |
 | status            | string    | No       | Plugin connection status  |
 | access_token_hash | string    | Yes      | Hashed plugin bearer token |
+| site_access_token | text      | Yes      | Encrypted FooMake-to-plugin token |
 | last_seen_at      | timestamp | Yes      | Last successful token status check |
 | connected_at      | timestamp | Yes      | Token issue time          |
 | revoked_at        | timestamp | Yes      | Server-side revocation time |

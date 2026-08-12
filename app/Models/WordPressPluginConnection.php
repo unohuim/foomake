@@ -32,6 +32,7 @@ class WordPressPluginConnection extends Model
         'site_name',
         'status',
         'access_token_hash',
+        'site_access_token',
         'last_seen_at',
         'connected_at',
         'revoked_at',
@@ -46,6 +47,7 @@ class WordPressPluginConnection extends Model
             'last_seen_at' => 'datetime',
             'connected_at' => 'datetime',
             'revoked_at' => 'datetime',
+            'site_access_token' => 'encrypted',
         ];
     }
 
@@ -65,5 +67,13 @@ class WordPressPluginConnection extends Model
         return $this->status === self::STATUS_CONNECTED
             && filled($this->access_token_hash)
             && $this->revoked_at === null;
+    }
+
+    /**
+     * Determine whether FooMake can call the paired WordPress plugin.
+     */
+    public function canServeImports(): bool
+    {
+        return $this->isConnected() && filled($this->site_access_token);
     }
 }

@@ -691,8 +691,8 @@ async function submitImport() {
     <Head title="Customers" />
 
     <AuthShell :shell="shell" title="Customers">
-        <div class="px-4 pb-10 pt-5 sm:px-6 lg:px-8">
-            <div class="relative mx-auto max-w-7xl">
+        <div class="flex h-full min-h-0 px-4 pt-5 sm:px-6 lg:px-8">
+            <div class="relative mx-auto flex min-h-0 w-full max-w-7xl">
                 <div
                     v-if="toast"
                     class="fixed right-4 top-4 z-50 rounded-md px-4 py-3 text-sm shadow-lg"
@@ -709,16 +709,16 @@ async function submitImport() {
                     :records="customers"
                     :loading="loading"
                     :error="listError"
-                    bounded-height-class="h-[calc(100vh-10rem)]"
+                    bounded-height-class="h-full"
                     @search="fetchCustomers"
                     @create="openCreateDrawer"
                     @export="openExportDrawer"
                     @import="openImportDrawer"
                 >
                     <template #default="{ records }">
-                        <div>
+                        <div class="min-h-0">
                             <div class="h-full min-h-0 md:hidden" data-crud-mobile-cards>
-                                <div class="min-h-0 flex-1 overflow-y-auto p-0" data-crud-records-scroll>
+                                <div class="min-h-0 p-0" data-crud-records-scroll>
                                     <div class="border-t border-gray-300">
                                         <div
                                             v-for="customer in records"
@@ -793,7 +793,7 @@ async function submitImport() {
 
                             <div class="hidden h-full min-h-0 md:block">
                                 <div class="flex h-full min-h-0 flex-col">
-                                    <div class="min-h-0 flex-1 overflow-y-auto p-6" data-crud-records-scroll>
+                                    <div class="min-h-0 flex-1 p-6" data-crud-records-scroll>
                                         <div
                                             class="customer-card-grid grid gap-4"
                                             data-crud-card-grid

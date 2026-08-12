@@ -3,7 +3,7 @@
  * Plugin Name: FooMake Connector
  * Plugin URI: https://foomake.com/
  * Description: Connects WooCommerce stores to FooMake for customer, product, and sales order import workflows.
- * Version: 0.1.0
+ * Version: 0.2.0
  * Author: FooMake
  * Author URI: https://foomake.com/
  * Requires at least: 6.0
@@ -16,11 +16,12 @@ if (! defined('ABSPATH')) {
     exit;
 }
 
-define('FOOMAKE_CONNECTOR_VERSION', '0.1.0');
+define('FOOMAKE_CONNECTOR_VERSION', '0.2.0');
 define('FOOMAKE_CONNECTOR_FILE', __FILE__);
 define('FOOMAKE_CONNECTOR_OPTION_BASE_URL', 'foomake_connector_base_url');
 define('FOOMAKE_CONNECTOR_OPTION_PLUGIN_UUID', 'foomake_connector_plugin_uuid');
 define('FOOMAKE_CONNECTOR_OPTION_ACCESS_TOKEN', 'foomake_connector_access_token');
+define('FOOMAKE_CONNECTOR_OPTION_SITE_ACCESS_TOKEN', 'foomake_connector_site_access_token');
 define('FOOMAKE_CONNECTOR_OPTION_TENANT_NAME', 'foomake_connector_tenant_name');
 define('FOOMAKE_CONNECTOR_OPTION_SITE_URL', 'foomake_connector_site_url');
 define('FOOMAKE_CONNECTOR_OPTION_STATUS', 'foomake_connector_status');
@@ -31,6 +32,7 @@ add_action('admin_notices', 'foomake_connector_woocommerce_notice');
 add_action('admin_post_foomake_connector_start_pairing', 'foomake_connector_start_pairing');
 add_action('admin_post_foomake_connector_complete_pairing', 'foomake_connector_complete_pairing');
 add_action('admin_post_foomake_connector_disconnect', 'foomake_connector_disconnect');
+add_action('rest_api_init', 'foomake_connector_register_rest_routes');
 
 /**
  * Register the FooMake connector admin page under WooCommerce when available.
@@ -247,13 +249,16 @@ function foomake_connector_complete_pairing()
 
     $body = json_decode((string) wp_remote_retrieve_body($response), true);
     $token = is_array($body) ? (string) ($body['access_token'] ?? '') : '';
+    $connection = is_array($body) ? ($body['connection'] ?? []) : [];
+    $site_access_token = is_array($connection) ? (string) ($connection['site_access_token'] ?? '') : '';
 
-    if (wp_remote_retrieve_response_code($response) !== 200 || $token === '') {
+    if (wp_remote_retrieve_response_code($response) !== 200 || $token === '' || $site_access_token === '') {
         foomake_connector_redirect(['foomake_error' => 'pairing_complete_rejected']);
     }
 
     update_option(FOOMAKE_CONNECTOR_OPTION_ACCESS_TOKEN, $token, false);
-    foomake_connector_store_connection_payload(is_array($body) ? ($body['connection'] ?? []) : []);
+    update_option(FOOMAKE_CONNECTOR_OPTION_SITE_ACCESS_TOKEN, $site_access_token, false);
+    foomake_connector_store_connection_payload($connection);
 
     foomake_connector_redirect(['foomake_paired' => '1']);
 }
@@ -270,6 +275,7 @@ function foomake_connector_disconnect()
     check_admin_referer('foomake_connector_disconnect');
 
     delete_option(FOOMAKE_CONNECTOR_OPTION_ACCESS_TOKEN);
+    delete_option(FOOMAKE_CONNECTOR_OPTION_SITE_ACCESS_TOKEN);
     update_option(FOOMAKE_CONNECTOR_OPTION_STATUS, 'disconnected', false);
     delete_option(FOOMAKE_CONNECTOR_OPTION_TENANT_NAME);
     delete_option(FOOMAKE_CONNECTOR_OPTION_LAST_SEEN_AT);
@@ -334,6 +340,118 @@ function foomake_connector_store_connection_payload($connection)
     update_option(FOOMAKE_CONNECTOR_OPTION_TENANT_NAME, (string) ($connection['tenant_name'] ?? ''), false);
     update_option(FOOMAKE_CONNECTOR_OPTION_SITE_URL, (string) ($connection['site_url'] ?? home_url('/')), false);
     update_option(FOOMAKE_CONNECTOR_OPTION_LAST_SEEN_AT, (string) ($connection['last_seen_at'] ?? ''), false);
+
+    if (isset($connection['site_access_token']) && (string) $connection['site_access_token'] !== '') {
+        update_option(FOOMAKE_CONNECTOR_OPTION_SITE_ACCESS_TOKEN, (string) $connection['site_access_token'], false);
+    }
+}
+
+/**
+ * Register FooMake-facing REST routes.
+ */
+function foomake_connector_register_rest_routes()
+{
+    register_rest_route('foomake/v1', '/customers', [
+        'methods' => 'GET',
+        'callback' => 'foomake_connector_rest_customers',
+        'permission_callback' => 'foomake_connector_rest_can_serve',
+    ]);
+}
+
+/**
+ * Authorize FooMake server-to-plugin REST requests.
+ *
+ * @param WP_REST_Request $request
+ */
+function foomake_connector_rest_can_serve($request)
+{
+    $expected = (string) get_option(FOOMAKE_CONNECTOR_OPTION_SITE_ACCESS_TOKEN, '');
+    $provided = (string) $request->get_header('x_foomake_site_token');
+
+    if ($provided === '') {
+        $provided = (string) $request->get_header('x-foomake-site-token');
+    }
+
+    return $expected !== ''
+        && $provided !== ''
+        && hash_equals($expected, $provided)
+        && (string) get_option(FOOMAKE_CONNECTOR_OPTION_STATUS, 'disconnected') === 'connected';
+}
+
+/**
+ * Return normalized WooCommerce customer rows for FooMake import preview.
+ */
+function foomake_connector_rest_customers()
+{
+    if (! class_exists('WooCommerce') || ! function_exists('wc_get_customers')) {
+        return new WP_Error(
+            'foomake_woocommerce_unavailable',
+            __('WooCommerce is not available.', 'foomake-connector'),
+            ['status' => 503]
+        );
+    }
+
+    $customers = wc_get_customers([
+        'limit' => 100,
+        'orderby' => 'ID',
+        'order' => 'ASC',
+    ]);
+
+    $rows = [];
+
+    foreach ($customers as $customer) {
+        if (! is_object($customer) || ! method_exists($customer, 'get_id')) {
+            continue;
+        }
+
+        $rows[] = foomake_connector_normalize_customer($customer);
+    }
+
+    return rest_ensure_response([
+        'data' => $rows,
+    ]);
+}
+
+/**
+ * Normalize one WooCommerce customer object for FooMake import preview.
+ *
+ * @param object $customer
+ * @return array<string, string>
+ */
+function foomake_connector_normalize_customer($customer)
+{
+    $first_name = method_exists($customer, 'get_first_name') ? (string) $customer->get_first_name() : '';
+    $last_name = method_exists($customer, 'get_last_name') ? (string) $customer->get_last_name() : '';
+    $name = trim($first_name . ' ' . $last_name);
+
+    if ($name === '' && method_exists($customer, 'get_billing_company')) {
+        $name = (string) $customer->get_billing_company();
+    }
+
+    if ($name === '' && method_exists($customer, 'get_username')) {
+        $name = (string) $customer->get_username();
+    }
+
+    if ($name === '' && method_exists($customer, 'get_email')) {
+        $name = (string) $customer->get_email();
+    }
+
+    if ($name === '') {
+        $name = 'Woo Customer ' . (string) $customer->get_id();
+    }
+
+    return [
+        'external_id' => (string) $customer->get_id(),
+        'name' => $name,
+        'email' => method_exists($customer, 'get_email') ? (string) $customer->get_email() : '',
+        'phone' => method_exists($customer, 'get_billing_phone') ? (string) $customer->get_billing_phone() : '',
+        'address_line_1' => method_exists($customer, 'get_billing_address_1') ? (string) $customer->get_billing_address_1() : '',
+        'address_line_2' => method_exists($customer, 'get_billing_address_2') ? (string) $customer->get_billing_address_2() : '',
+        'city' => method_exists($customer, 'get_billing_city') ? (string) $customer->get_billing_city() : '',
+        'region' => method_exists($customer, 'get_billing_state') ? (string) $customer->get_billing_state() : '',
+        'postal_code' => method_exists($customer, 'get_billing_postcode') ? (string) $customer->get_billing_postcode() : '',
+        'country_code' => method_exists($customer, 'get_billing_country') ? (string) $customer->get_billing_country() : '',
+    ];
 }
 
 /**
