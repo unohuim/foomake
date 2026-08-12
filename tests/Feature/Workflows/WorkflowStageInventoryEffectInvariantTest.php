@@ -110,6 +110,14 @@ it('1. guest cannot access workflow management', function (): void {
         ->assertRedirect(route('login'));
 });
 
+it('1a. sales workflow status resolution uses database grammar safe column wrapping', function (): void {
+    $source = file_get_contents(base_path('app/Actions/Workflows/ResolveSalesWorkflowStageAction.php'));
+
+    expect($source)->not->toContain('UPPER(`')
+        ->and($source)->toContain("\$query->getGrammar()->wrap('status_complete_label')")
+        ->and($source)->toContain("\$query->getGrammar()->wrap('key')");
+});
+
 it('2. authenticated users without workflow-manage cannot create stages', function (): void {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);

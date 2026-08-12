@@ -228,8 +228,13 @@ class ResolveSalesWorkflowStageAction
             ->where('tenant_id', $salesOrder->tenant_id)
             ->where('workflow_domain_id', $this->salesDomainId())
             ->where(function ($query) use ($normalizedStatus): void {
-                $query->whereRaw('UPPER(`status_complete_label`) = ?', [$normalizedStatus])
-                    ->orWhereRaw('UPPER(`key`) = ?', [Str::upper($this->stageKeyForStatus($normalizedStatus))]);
+                $query->whereRaw(
+                    'UPPER(' . $query->getGrammar()->wrap('status_complete_label') . ') = ?',
+                    [$normalizedStatus]
+                )->orWhereRaw(
+                    'UPPER(' . $query->getGrammar()->wrap('key') . ') = ?',
+                    [Str::upper($this->stageKeyForStatus($normalizedStatus))]
+                );
             })
             ->first();
     }
