@@ -31,9 +31,9 @@ const shellPayload = computed(() => ({
         <MobileBottomNav :shell="shellPayload" />
 
         <div class="min-w-0 flex-1">
-            <header class="bg-[#f5f7fa]">
+            <header class="bg-[#001f3f] md:bg-[#f5f7fa]">
                 <div class="mx-auto max-w-7xl px-4 pb-3 pt-7 sm:px-6 lg:px-8">
-                    <h1 class="text-2xl font-semibold leading-tight text-slate-950">
+                    <h1 class="text-2xl font-semibold leading-tight text-blue-100 md:text-slate-950">
                         {{ title }}
                     </h1>
                 </div>
