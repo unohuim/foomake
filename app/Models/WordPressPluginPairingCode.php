@@ -11,6 +11,11 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class WordPressPluginPairingCode extends Model
 {
     /**
+     * @var string
+     */
+    protected $table = 'wordpress_plugin_pairing_codes';
+
+    /**
      * @var list<string>
      */
     protected $fillable = [

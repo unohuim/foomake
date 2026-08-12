@@ -18,6 +18,11 @@ class WordPressPluginConnection extends Model
     public const STATUS_REVOKED = 'revoked';
 
     /**
+     * @var string
+     */
+    protected $table = 'wordpress_plugin_connections';
+
+    /**
      * @var list<string>
      */
     protected $fillable = [
