@@ -22,10 +22,10 @@ beforeEach(function () {
     $this->recipeLineSource = fn (): string => File::get(resource_path('views/manufacturing/recipes/partials/line-form-slide-over.blade.php'));
     $this->makeOrderSource = fn (): string => File::get(resource_path('views/manufacturing/make-orders/partials/create-make-order-slide-over.blade.php'));
     $this->adminUsersSource = fn (): string => File::get(resource_path('views/admin/users/index.blade.php'));
-    $this->salesProductsSource = fn (): string => File::get(resource_path('views/sales/products/index.blade.php'));
+    $this->salesProductsSource = fn (): string => File::get(resource_path('js/pages/Sales/Products/Index.vue'));
     $this->salesCustomersSource = fn (): string => File::get(resource_path('views/sales/customers/index.blade.php'));
-    $this->salesCustomerDetailSource = fn (): string => File::get(resource_path('views/sales/customers/show.blade.php'));
-    $this->salesOrdersSource = fn (): string => File::get(resource_path('views/sales/orders/index.blade.php'));
+    $this->salesCustomerDetailSource = fn (): string => File::get(resource_path('js/pages/Sales/Customers/Show.vue'));
+    $this->salesOrdersSource = fn (): string => File::get(resource_path('js/pages/Sales/Orders/Index.vue'));
     $this->suppliersSource = fn (): string => File::get(resource_path('views/purchasing/suppliers/index.blade.php'));
     $this->inventoryCountFormSource = fn (): string => File::get(resource_path('views/inventory/counts/partials/count-form.blade.php'));
     $this->inventoryCountLineFormSource = fn (): string => File::get(resource_path('views/inventory/counts/partials/line-form.blade.php'));
@@ -289,24 +289,24 @@ it('23. make order create and edit slide-over uses the shared shell component', 
 
 it('23a. create slide-over date fields open the native picker when clicking the field', function () {
     expect(($this->makeOrderSource)())->toContain('x-on:click="$el.showPicker?.()"')
-        ->and(($this->salesOrdersSource)())->toContain('x-on:click="$el.showPicker?.()"')
+        ->and(($this->salesOrdersSource)())->toContain('@click="$event.target.showPicker?.()"')
         ->and(($this->inventoryCountFormSource)())->toContain('x-on:click="$el.showPicker?.()"');
 });
 
 it('24. configured CRUD index form drawers use the shared shell component', function () {
     expect(($this->adminUsersSource)())->toContain('<x-slide-over-shell')
-        ->and(($this->salesProductsSource)())->toContain('<x-slide-over-shell')
+        ->and(($this->salesProductsSource)())->toContain('ResourceCreateDrawer')
         ->and(($this->salesCustomersSource)())->toContain('<x-slide-over-shell')
-        ->and(($this->salesOrdersSource)())->toContain('<x-slide-over-shell')
+        ->and(($this->salesOrdersSource)())->toContain('ResourceCreateDrawer')
         ->and(($this->suppliersSource)())->toContain('<x-slide-over-shell');
 });
 
-it('25. customer detail form drawers use the shared shell component', function () {
+it('25. customer detail form drawers use the shared Vue drawer component', function () {
     $source = ($this->salesCustomerDetailSource)();
 
-    expect(substr_count($source, '<x-slide-over-shell'))->toBeGreaterThanOrEqual(3)
-        ->and($source)->toContain('submitContactForm()')
-        ->and($source)->toContain('submitOrderForm()');
+    expect(substr_count($source, '<BaseDrawer'))->toBeGreaterThanOrEqual(3)
+        ->and($source)->toContain('submitContact')
+        ->and($source)->toContain('submitTask');
 });
 
 it('26. inventory count form drawers use the shared shell component', function () {

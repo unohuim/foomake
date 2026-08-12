@@ -105,6 +105,12 @@ beforeEach(function () {
     };
 
     $this->extractPayload = function ($response, string $payloadId): array {
+        $props = $response->viewData('page')['props'] ?? null;
+
+        if ($payloadId === 'sales-products-index-payload' && is_array($props) && isset($props['payload'])) {
+            return $props['payload'];
+        }
+
         preg_match(
             '/<script[^>]+id="' . preg_quote($payloadId, '/') . '"[^>]*>(.*?)<\\/script>/s',
             $response->getContent(),

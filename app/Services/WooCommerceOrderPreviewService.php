@@ -56,6 +56,12 @@ class WooCommerceOrderPreviewService
             throw new WooCommerceException('The WooCommerce order response was missing line items.');
         }
 
+        $currencyCode = strtoupper(trim((string) ($order['currency'] ?? '')));
+
+        if ($currencyCode === '') {
+            $currencyCode = 'USD';
+        }
+
         $billing = is_array($order['billing'] ?? null) ? $order['billing'] : [];
         $customerName = trim(
             trim((string) ($billing['first_name'] ?? '')) . ' ' . trim((string) ($billing['last_name'] ?? ''))
@@ -88,7 +94,7 @@ class WooCommerceOrderPreviewService
                 'postal_code' => (string) ($billing['postcode'] ?? ''),
                 'country_code' => (string) ($billing['country'] ?? ''),
             ],
-            'lines' => array_map(function (array $line): array {
+            'lines' => array_map(function (array $line) use ($currencyCode): array {
                 if (! isset($line['id'], $line['name'], $line['quantity'])) {
                     throw new WooCommerceException('The WooCommerce order line response was malformed.');
                 }
@@ -109,7 +115,7 @@ class WooCommerceOrderPreviewService
                     'name' => (string) $line['name'],
                     'quantity' => bcadd($quantity, '0', 6),
                     'unit_price_cents' => $unitPriceCents,
-                    'currency_code' => 'USD',
+                    'currency_code' => $currencyCode,
                 ];
             }, $order['line_items']),
         ];

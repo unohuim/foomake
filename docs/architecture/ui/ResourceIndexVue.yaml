@@ -2,6 +2,7 @@ name: Resource Index Vue
 type: UI Component Abstraction
 location:
   - resources/js/components/ResourceIndex.vue
+  - resources/js/components/ResourceCardGrid.vue
 purpose: Provide the Inertia/Vue equivalent of the existing Blade configured resource index shell while preserving backend-owned resource contracts.
 when_to_use:
   - Building an Inertia/Vue CRUD resource index page
@@ -20,6 +21,7 @@ rules:
   - Search must emit both update:search and debounced search events.
   - Create, import, and export controls must be permission-driven from props.
   - Record rendering must be provided by slots so page components own resource-specific presentation.
+  - Repeated index card layouts should use ResourceCardGrid; page components provide resource-specific titles, title asides, badges, detail rows, links, and actions.
   - Backend routes, policies, validation, and tenant scoping remain authoritative.
 public_interface:
   - labels
@@ -40,6 +42,7 @@ public_interface:
   - error slot
   - toolbar-actions-before slot
   - toolbar-actions-after slot
+  - ResourceCardGrid
 example_usage: |
   <ResourceIndex
       v-model:search="search"

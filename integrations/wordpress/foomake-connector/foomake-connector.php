@@ -3,7 +3,7 @@
  * Plugin Name: FooMake Connector
  * Plugin URI: https://foomake.com/
  * Description: Connects WooCommerce stores to FooMake for customer, product, and sales order import workflows.
- * Version: 0.2.0
+ * Version: 0.2.1
  * Author: FooMake
  * Author URI: https://foomake.com/
  * Requires at least: 6.0
@@ -16,7 +16,7 @@ if (! defined('ABSPATH')) {
     exit;
 }
 
-define('FOOMAKE_CONNECTOR_VERSION', '0.2.0');
+define('FOOMAKE_CONNECTOR_VERSION', '0.2.1');
 define('FOOMAKE_CONNECTOR_FILE', __FILE__);
 define('FOOMAKE_CONNECTOR_OPTION_BASE_URL', 'foomake_connector_base_url');
 define('FOOMAKE_CONNECTOR_OPTION_PLUGIN_UUID', 'foomake_connector_plugin_uuid');
@@ -356,6 +356,12 @@ function foomake_connector_register_rest_routes()
         'callback' => 'foomake_connector_rest_customers',
         'permission_callback' => 'foomake_connector_rest_can_serve',
     ]);
+
+    register_rest_route('foomake/v1', '/orders', [
+        'methods' => 'GET',
+        'callback' => 'foomake_connector_rest_orders',
+        'permission_callback' => 'foomake_connector_rest_can_serve',
+    ]);
 }
 
 /**
@@ -452,6 +458,189 @@ function foomake_connector_normalize_customer($customer)
         'postal_code' => method_exists($customer, 'get_billing_postcode') ? (string) $customer->get_billing_postcode() : '',
         'country_code' => method_exists($customer, 'get_billing_country') ? (string) $customer->get_billing_country() : '',
     ];
+}
+
+/**
+ * Return normalized WooCommerce order rows for FooMake import preview.
+ */
+function foomake_connector_rest_orders()
+{
+    if (! class_exists('WooCommerce') || ! function_exists('wc_get_orders')) {
+        return new WP_Error(
+            'foomake_woocommerce_unavailable',
+            __('WooCommerce is not available.', 'foomake-connector'),
+            ['status' => 503]
+        );
+    }
+
+    $orders = wc_get_orders([
+        'limit' => 100,
+        'orderby' => 'ID',
+        'order' => 'DESC',
+    ]);
+
+    $rows = [];
+
+    foreach ($orders as $order) {
+        if (! is_object($order) || ! method_exists($order, 'get_id')) {
+            continue;
+        }
+
+        $normalized = foomake_connector_normalize_order($order);
+
+        if ($normalized !== null) {
+            $rows[] = $normalized;
+        }
+    }
+
+    return rest_ensure_response([
+        'data' => $rows,
+    ]);
+}
+
+/**
+ * Normalize one WooCommerce order object for FooMake import preview.
+ *
+ * @param object $order
+ * @return array<string, mixed>|null
+ */
+function foomake_connector_normalize_order($order)
+{
+    $lines = [];
+
+    foreach ($order->get_items('line_item') as $line) {
+        if (! is_object($line) || ! method_exists($line, 'get_id')) {
+            continue;
+        }
+
+        $lines[] = foomake_connector_normalize_order_line($line, (string) $order->get_currency());
+    }
+
+    if ($lines === []) {
+        return null;
+    }
+
+    $first_name = method_exists($order, 'get_billing_first_name') ? (string) $order->get_billing_first_name() : '';
+    $last_name = method_exists($order, 'get_billing_last_name') ? (string) $order->get_billing_last_name() : '';
+    $name = trim($first_name . ' ' . $last_name);
+
+    if ($name === '' && method_exists($order, 'get_billing_company')) {
+        $name = (string) $order->get_billing_company();
+    }
+
+    if ($name === '') {
+        $name = 'Woo Customer ' . (string) $order->get_customer_id();
+    }
+
+    $created_at = method_exists($order, 'get_date_created') ? $order->get_date_created() : null;
+    $date = is_object($created_at) && method_exists($created_at, 'date')
+        ? (string) $created_at->date('Y-m-d')
+        : '';
+
+    return [
+        'external_id' => (string) $order->get_id(),
+        'external_source' => 'woocommerce',
+        'external_status' => method_exists($order, 'get_status') ? (string) $order->get_status() : '',
+        'date' => $date,
+        'customer' => [
+            'external_id' => method_exists($order, 'get_customer_id') ? (string) $order->get_customer_id() : '',
+            'name' => $name,
+            'email' => method_exists($order, 'get_billing_email') ? (string) $order->get_billing_email() : '',
+            'phone' => method_exists($order, 'get_billing_phone') ? (string) $order->get_billing_phone() : '',
+            'address_line_1' => method_exists($order, 'get_billing_address_1') ? (string) $order->get_billing_address_1() : '',
+            'address_line_2' => method_exists($order, 'get_billing_address_2') ? (string) $order->get_billing_address_2() : '',
+            'city' => method_exists($order, 'get_billing_city') ? (string) $order->get_billing_city() : '',
+            'region' => method_exists($order, 'get_billing_state') ? (string) $order->get_billing_state() : '',
+            'postal_code' => method_exists($order, 'get_billing_postcode') ? (string) $order->get_billing_postcode() : '',
+            'country_code' => method_exists($order, 'get_billing_country') ? (string) $order->get_billing_country() : '',
+        ],
+        'lines' => $lines,
+    ];
+}
+
+/**
+ * Normalize one WooCommerce order line for FooMake import preview.
+ *
+ * @param object $line
+ * @return array<string, mixed>
+ */
+function foomake_connector_normalize_order_line($line, string $currency_code)
+{
+    $product = method_exists($line, 'get_product') ? $line->get_product() : null;
+    $sku = is_object($product) && method_exists($product, 'get_sku') ? (string) $product->get_sku() : '';
+    $variation_id = method_exists($line, 'get_variation_id') ? (string) $line->get_variation_id() : '';
+    $product_id = method_exists($line, 'get_product_id') ? (string) $line->get_product_id() : '';
+    $product_external_id = $sku !== '' ? $sku : ($variation_id !== '' ? $variation_id : $product_id);
+
+    return [
+        'external_id' => (string) $line->get_id(),
+        'product_external_id' => $product_external_id,
+        'name' => method_exists($line, 'get_name') ? (string) $line->get_name() : '',
+        'quantity' => foomake_connector_normalize_quantity(method_exists($line, 'get_quantity') ? $line->get_quantity() : 0),
+        'unit_price_cents' => foomake_connector_order_line_unit_price_cents($line),
+        'currency_code' => strtoupper($currency_code !== '' ? $currency_code : 'USD'),
+    ];
+}
+
+/**
+ * Normalize a WooCommerce quantity to FooMake's scale-six string.
+ *
+ * @param mixed $quantity
+ */
+function foomake_connector_normalize_quantity($quantity)
+{
+    return number_format((float) $quantity, 6, '.', '');
+}
+
+/**
+ * Resolve the order-line unit price in cents from WooCommerce's line subtotal.
+ *
+ * @param object $line
+ */
+function foomake_connector_order_line_unit_price_cents($line)
+{
+    $quantity_units = foomake_connector_decimal_to_scaled_int(
+        method_exists($line, 'get_quantity') ? $line->get_quantity() : 0,
+        6
+    );
+    $subtotal_cents = foomake_connector_decimal_to_scaled_int(
+        method_exists($line, 'get_subtotal') ? $line->get_subtotal() : 0,
+        2
+    );
+
+    if ($quantity_units <= 0) {
+        return 0;
+    }
+
+    return intdiv(($subtotal_cents * 1000000) + intdiv($quantity_units, 2), $quantity_units);
+}
+
+/**
+ * Convert a decimal-like value into an integer at the requested scale.
+ *
+ * @param mixed $value
+ */
+function foomake_connector_decimal_to_scaled_int($value, int $scale)
+{
+    $normalized = trim((string) $value);
+
+    if ($normalized === '') {
+        return 0;
+    }
+
+    $negative = substr($normalized, 0, 1) === '-';
+
+    if ($negative) {
+        $normalized = substr($normalized, 1);
+    }
+
+    $parts = explode('.', $normalized, 2);
+    $whole = preg_replace('/\D/', '', $parts[0] ?? '') ?: '0';
+    $fraction = preg_replace('/\D/', '', $parts[1] ?? '') ?: '';
+    $fraction = str_pad(substr($fraction, 0, $scale), $scale, '0');
+    $scaled = ((int) $whole * (10 ** $scale)) + (int) $fraction;
+
+    return $negative ? $scaled * -1 : $scaled;
 }
 
 /**

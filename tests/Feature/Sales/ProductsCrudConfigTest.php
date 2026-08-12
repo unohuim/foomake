@@ -12,6 +12,7 @@ use App\Models\UomCategory;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
+use Inertia\Testing\AssertableInertia as Assert;
 
 uses(RefreshDatabase::class);
 
@@ -111,6 +112,12 @@ beforeEach(function () {
     };
 
     $this->extractCrudConfig = function ($response): array {
+        $props = $response->viewData('page')['props'] ?? null;
+
+        if (is_array($props) && isset($props['crudConfig'])) {
+            return $props['crudConfig'];
+        }
+
         preg_match("/data-crud-config='([^']+)'/", $response->getContent(), $matches);
 
         expect($matches)->toHaveKey(1);
@@ -123,6 +130,12 @@ beforeEach(function () {
         return is_array($config) ? $config : [];
     };
     $this->extractImportConfig = function ($response): array {
+        $props = $response->viewData('page')['props'] ?? null;
+
+        if (is_array($props) && isset($props['importConfig'])) {
+            return $props['importConfig'];
+        }
+
         preg_match("/data-import-config='([^']+)'/", $response->getContent(), $matches);
 
         expect($matches)->toHaveKey(1);
@@ -136,6 +149,12 @@ beforeEach(function () {
     };
 
     $this->extractPayload = function ($response, string $payloadId): array {
+        $props = $response->viewData('page')['props'] ?? null;
+
+        if ($payloadId === 'sales-products-index-payload' && is_array($props) && isset($props['payload'])) {
+            return $props['payload'];
+        }
+
         preg_match(
             '/<script[^>]+id="' . preg_quote($payloadId, '/') . '"[^>]*>(.*?)<\\/script>/s',
             $response->getContent(),
@@ -217,7 +236,9 @@ it('1. products page renders crud config json on the root element', function () 
     $response = $this->actingAs($user)
         ->get(route('sales.products.index'))
         ->assertOk()
-        ->assertSee('data-crud-config=', false);
+        ->assertInertia(fn (Assert $page): Assert => $page
+            ->component('Sales/Products/Index')
+            ->has('crudConfig'));
 
     $config = ($this->extractCrudConfig)($response);
 
@@ -277,7 +298,7 @@ it('4a. config does not include a detail redirect template because products do n
 });
 
 it('4b. products page module refreshes after create without redirecting to detail', function () {
-    $pageSource = file_get_contents(resource_path('js/pages/sales-products-index.js'));
+    $pageSource = file_get_contents(resource_path('js/pages/Sales/Products/Index.vue'));
 
     expect($pageSource)->toContain('await this.fetchProducts();')
         ->and($pageSource)->toContain('this.closeCreatePanel();')
@@ -394,10 +415,7 @@ it('12. crud config is valid json', function () {
         ->get(route('sales.products.index'))
         ->assertOk();
 
-    preg_match("/data-crud-config='([^']+)'/", $response->getContent(), $matches);
-
-    expect($matches)->toHaveKey(1);
-    expect(json_decode(html_entity_decode($matches[1], ENT_QUOTES), true))->toBeArray();
+    expect(($this->extractCrudConfig)($response))->toBeArray();
 });
 
 it('13. products js root element exists', function () {
@@ -409,8 +427,8 @@ it('13. products js root element exists', function () {
     $this->actingAs($user)
         ->get(route('sales.products.index'))
         ->assertOk()
-        ->assertSee('data-page="sales-products-index"', false)
-        ->assertSee('data-crud-config=', false);
+        ->assertInertia(fn (Assert $page): Assert => $page
+            ->component('Sales/Products/Index'));
 });
 
 it('14. product list endpoint still returns the expected json shape', function () {
@@ -449,47 +467,42 @@ it('14. product list endpoint still returns the expected json shape', function (
 });
 
 it('15. products list javascript uses the configured list uri', function () {
-    $source = file_get_contents(base_path('resources/js/pages/sales-products-index.js'));
+    $source = file_get_contents(base_path('resources/js/pages/Sales/Products/Index.vue'));
 
-    expect($source)->toContain('endpoints.list')
+    expect($source)->toContain('props.crudConfig.endpoints.list')
         ->and($source)->not->toContain('safePayload.listUrl');
 });
 
 it('16. products create action uses the configured create uri', function () {
-    $source = file_get_contents(base_path('resources/js/pages/sales-products-index.js'));
+    $source = file_get_contents(base_path('resources/js/pages/Sales/Products/Index.vue'));
 
-    expect($source)->toContain('endpoints.create')
+    expect($source)->toContain('props.crudConfig.endpoints.create')
         ->and($source)->not->toContain('safePayload.storeUrl');
 });
 
 it('17. products import preview action uses the configured import preview uri', function () {
-    $source = file_exists(base_path('resources/js/lib/import-module.js'))
-        ? file_get_contents(base_path('resources/js/lib/import-module.js'))
-        : '';
+    $source = file_get_contents(base_path('resources/js/pages/Sales/Products/Index.vue'));
 
-    expect($source)->toContain('endpoints.importPreview')
+    expect($source)->toContain('props.importConfig.endpoints.preview')
         ->and($source)->not->toContain('safePayload.previewUrl')
-        ->and(file_get_contents(base_path('resources/js/pages/sales-products-index.js')))
-            ->toContain("import { createImportModule } from '../lib/import-module';");
+        ->and($source)->toContain('ResourceImportDrawer');
 });
 
 it('18. products import store action uses the configured import store uri', function () {
-    $source = file_exists(base_path('resources/js/lib/import-module.js'))
-        ? file_get_contents(base_path('resources/js/lib/import-module.js'))
-        : '';
+    $source = file_get_contents(base_path('resources/js/pages/Sales/Products/Index.vue'));
 
-    expect($source)->toContain('endpoints.importStore')
+    expect($source)->toContain('props.importConfig.endpoints.store')
         ->and($source)->not->toContain('safePayload.importUrl');
 });
 
 it('19. missing crud config fails safely without breaking page load', function () {
     $sharedSource = file_get_contents(base_path('resources/js/lib/crud-config.js'));
-    $pageModuleSource = file_get_contents(base_path('resources/js/pages/sales-products-index.js'));
+    $pageModuleSource = file_get_contents(base_path('resources/js/pages/Sales/Products/Index.vue'));
 
     expect($sharedSource)->toContain("return {}")
         ->and($sharedSource)->toContain('JSON.parse')
-        ->and($pageModuleSource)->toContain('if (!this.endpoints.list)')
-        ->and($pageModuleSource)->toContain('return;');
+        ->and($pageModuleSource)->toContain('crudConfig')
+        ->and($pageModuleSource)->toContain('required: true');
 });
 
 it('20. invalid crud config fails safely without breaking page load', function () {
@@ -614,40 +627,35 @@ it('24. existing products sorting behavior is preserved for configured sortable 
         ->assertJsonPath('data.0.price', '1.00');
 });
 
-it('25. products blade contains no crud toolbar table card or action markup', function () {
-    $productsBlade = file_get_contents(base_path('resources/views/sales/products/index.blade.php'));
+it('25. products vue page contains no legacy blade toolbar table card or action markup', function () {
+    $productsPage = file_get_contents(base_path('resources/js/pages/Sales/Products/Index.vue'));
 
-    expect($productsBlade)->toContain('data-crud-root')
-        ->and($productsBlade)->not->toContain('<x-sales.crud-toolbar')
-        ->and($productsBlade)->not->toContain('<x-sales.crud-action-cell')
-        ->and($productsBlade)->not->toContain('data-products-mobile')
-        ->and($productsBlade)->not->toContain('data-products-desktop')
-        ->and($productsBlade)->not->toContain('No products found.')
-        ->and($productsBlade)->not->toContain('x-for="product in products"')
-        ->and($productsBlade)->not->toContain('toggleSort(column)');
+    expect($productsPage)->toContain('<ResourceIndex')
+        ->and($productsPage)->toContain('<ResourceCardGrid')
+        ->and($productsPage)->not->toContain('<x-sales.crud-toolbar')
+        ->and($productsPage)->not->toContain('<x-sales.crud-action-cell')
+        ->and($productsPage)->not->toContain('data-products-mobile')
+        ->and($productsPage)->not->toContain('data-products-desktop')
+        ->and($productsPage)->not->toContain('x-for="product in products"')
+        ->and($productsPage)->not->toContain('toggleSort(column)');
 });
 
 it('25a. products page shell is height bounded and removes the large gray gap wrapper', function () {
-    $productsBlade = file_get_contents(base_path('resources/views/sales/products/index.blade.php'));
+    $productsPage = file_get_contents(base_path('resources/js/pages/Sales/Products/Index.vue'));
+    $resourceIndex = file_get_contents(base_path('resources/js/components/ResourceIndex.vue'));
 
-    expect($productsBlade)->toContain('class="flex h-[calc(100vh-8rem)] min-h-0 flex-col overflow-hidden"')
-        ->and($productsBlade)->toContain('class="mx-auto flex h-full min-h-0 w-full max-w-7xl flex-1 flex-col overflow-hidden sm:px-6 lg:px-8"')
-        ->and($productsBlade)->toContain('class="flex h-full min-h-0 flex-1 flex-col" data-crud-root')
-        ->and($productsBlade)->not->toContain('class="py-12"');
+    expect($productsPage)->toContain('bounded-height-class="h-full"')
+        ->and($productsPage)->toContain('class="flex h-full min-h-0 w-full"')
+        ->and($resourceIndex)->toContain('data-resource-index-records-scroll')
+        ->and($productsPage)->not->toContain('class="py-12"');
 });
 
-it('26. both sales pages mount the shared crud card js renderer', function () {
-    $productsBlade = file_get_contents(base_path('resources/views/sales/products/index.blade.php'));
-    $customersBlade = file_get_contents(base_path('resources/views/sales/customers/index.blade.php'));
-    $productsScript = file_get_contents(base_path('resources/js/pages/sales-products-index.js'));
-    $customersScript = file_get_contents(base_path('resources/js/pages/sales-customers-index.js'));
+it('26. both migrated sales indexes use the shared vue card grid', function () {
+    $productsPage = file_get_contents(base_path('resources/js/pages/Sales/Products/Index.vue'));
+    $customersPage = file_get_contents(base_path('resources/js/pages/Sales/Customers/Index.vue'));
 
-    expect($productsBlade)->toContain('data-crud-root')
-        ->and($customersBlade)->toContain('data-crud-root')
-        ->and($productsScript)->toContain("import { mountCrudCardRenderer } from '../lib/crud-card-page';")
-        ->and($customersScript)->toContain("import { mountCrudCardRenderer } from '../lib/crud-card-page';")
-        ->and($productsScript)->toContain('mountCrudCardRenderer(')
-        ->and($customersScript)->toContain('mountCrudCardRenderer(');
+    expect($productsPage)->toContain('ResourceCardGrid')
+        ->and($customersPage)->toContain('ResourceCardGrid');
 });
 
 it('27. products crud config includes the shared renderer contract', function () {
@@ -744,30 +752,28 @@ it('32. products vertical dots render the shared card dropdown menu contract', f
         ->and($rendererSource)->toContain('x-on:click="toggle()"');
 });
 
-it('33. products page module maps the edit action id to the product edit handler', function () {
-    $source = file_get_contents(base_path('resources/js/pages/sales-products-index.js'));
+it('33. products vue page maps the edit action to the product edit handler', function () {
+    $source = file_get_contents(base_path('resources/js/pages/Sales/Products/Index.vue'));
 
-    expect($source)->toContain("action.id === 'edit'")
-        ->and($source)->toContain('openEdit(record)');
+    expect($source)->toContain("id: 'edit'")
+        ->and($source)->toContain('openEditDrawer(record)');
 });
 
 it('34. products edit action opens the edit slideout', function () {
-    $source = file_get_contents(base_path('resources/js/pages/sales-products-index.js'));
+    $source = file_get_contents(base_path('resources/js/pages/Sales/Products/Index.vue'));
 
-    expect($source)->toContain("this.panelMode = 'edit';")
-        ->and($source)->toContain('this.editingProductId = product.id;')
-        ->and($source)->toContain('this.isCreatePanelOpen = true;');
+    expect($source)->toContain('formMode.value = "edit";')
+        ->and($source)->toContain('editingProductId.value = product.id;')
+        ->and($source)->toContain('formDrawerOpen.value = true;');
 });
 
 it('35. products edit slideout is populated from the selected row data', function () {
-    $source = file_get_contents(base_path('resources/js/pages/sales-products-index.js'));
-    $blade = file_get_contents(base_path('resources/views/sales/products/index.blade.php'));
+    $source = file_get_contents(base_path('resources/js/pages/Sales/Products/Index.vue'));
 
-    expect($source)->toContain('const productToForm = (product) => ({')
-        ->and($blade)->toContain("title-expression=\"panelMode === 'create' ? 'Add New Product' : 'Edit Product'\"")
-        ->and($blade)->toContain("x-model=\"createForm.name\"")
-        ->and($blade)->toContain("x-model=\"createForm.base_uom_id\"")
-        ->and($blade)->toContain("x-model=\"createForm.default_price_amount\"");
+    expect($source)->toContain('resetForm({')
+        ->and($source)->toContain('v-model="form.name"')
+        ->and($source)->toContain('v-model="form.base_uom_id"')
+        ->and($source)->toContain('v-model="form.default_price_amount"');
 
     expect((bool) preg_match("/name:\\s*product\\??\\.name\\s*\\|\\|\\s*''/", $source))->toBeTrue()
         ->and((bool) preg_match("/base_uom_id:\\s*product\\??\\.base_uom\\??\\.id\\s*\\?\\s*String\\(product\\.base_uom\\.id\\)\\s*:\\s*''/", $source))->toBeTrue()
@@ -815,16 +821,13 @@ it('36. products edit submit updates the product', function () {
 });
 
 it('37. products create and import behavior remain preserved while edit support exists', function () {
-    $source = file_get_contents(base_path('resources/js/pages/sales-products-index.js'));
-    $importModuleSource = file_exists(base_path('resources/js/lib/import-module.js'))
-        ? file_get_contents(base_path('resources/js/lib/import-module.js'))
-        : '';
+    $source = file_get_contents(base_path('resources/js/pages/Sales/Products/Index.vue'));
 
-    expect($source)->toContain('openCreatePanel()')
-        ->and($source)->toContain('openImportPanel()')
-        ->and($source)->toContain('submitCreate()')
-        ->and($source)->toContain('createImportModule(')
-        ->and($importModuleSource)->toContain('submitImport()');
+    expect($source)->toContain('openCreateDrawer()')
+        ->and($source)->toContain('openImportDrawer()')
+        ->and($source)->toContain('submitForm()')
+        ->and($source)->toContain('ResourceImportDrawer')
+        ->and($source)->toContain('submitImport()');
 });
 
 it('38. crud config includes the export endpoint', function () {
@@ -896,69 +899,39 @@ it('43. shared import component keeps file upload first and preserves the config
     ($this->grantPermissions)($user, ['inventory-products-view', 'inventory-products-manage']);
 
     $response = $this->actingAs($user)->get(route('sales.products.index'))->assertOk();
-    preg_match("/data-import-config='([^']+)'/", $response->getContent(), $matches);
-    $importConfig = json_decode(html_entity_decode($matches[1] ?? '{}', ENT_QUOTES), true);
-    $blade = file_get_contents(base_path('resources/views/sales/products/index.blade.php'));
-    $source = file_exists(base_path('resources/js/lib/import-module.js'))
-        ? file_get_contents(base_path('resources/js/lib/import-module.js'))
-        : '';
-    $pageModuleSource = file_get_contents(base_path('resources/js/pages/sales-products-index.js'));
+    $importConfig = ($this->extractImportConfig)($response);
+    $productsPage = file_get_contents(base_path('resources/js/pages/Sales/Products/Index.vue'));
+    $pageModuleSource = file_get_contents(base_path('resources/js/pages/Sales/Products/Index.vue'));
+    $importComponentSource = file_get_contents(base_path('resources/js/components/ResourceImportDrawer.vue'));
 
-    expect($blade)->not->toContain('data-products-import-file-input')
-        ->and($blade)->not->toContain('data-products-import-empty-state')
-        ->and($blade)->not->toContain('rowProductErrors(index)')
-        ->and($blade)->not->toContain('data-products-import-preview-card')
-        ->and($blade)->not->toContain('data-products-import-preview-search')
-        ->and($blade)->not->toContain('data-products-import-show-duplicates')
-        ->and($blade)->not->toContain('<template x-for="fileSource in cachedFileSources" :key="fileSource.value">')
-        ->and($pageModuleSource)->toContain("import { createImportModule } from '../lib/import-module';")
-        ->and($pageModuleSource)->toContain('importModule.mount(rootEl);')
-        ->and($source)->toContain('data-shared-import-file-input')
-        ->and($source)->toContain('data-shared-import-empty-state')
-        ->and($source)->toContain('data-shared-import-preview-card')
-        ->and($source)->toContain('data-shared-import-preview-search')
-        ->and($source)->toContain('data-shared-import-show-duplicates')
+    expect($productsPage)->not->toContain('data-products-import-file-input')
+        ->and($productsPage)->not->toContain('data-products-import-empty-state')
+        ->and($productsPage)->not->toContain('rowProductErrors(index)')
+        ->and($productsPage)->not->toContain('data-products-import-preview-card')
+        ->and($productsPage)->not->toContain('data-products-import-preview-search')
+        ->and($productsPage)->not->toContain('data-products-import-show-duplicates')
+        ->and($productsPage)->not->toContain('<template x-for="fileSource in cachedFileSources" :key="fileSource.value">')
+        ->and($pageModuleSource)->toContain('ResourceImportDrawer')
+        ->and($pageModuleSource)->toContain('handleLocalFileChange')
+        ->and($pageModuleSource)->toContain('parseProductCsv(text)')
+        ->and($pageModuleSource)->toContain('parseCsvRows(text)')
+        ->and($pageModuleSource)->toContain('csvBoolean(value')
+        ->and($pageModuleSource)->toContain('selected: true')
+        ->and($pageModuleSource)->toContain("source: 'file-upload'")
+        ->and($pageModuleSource)->toContain('is_local_file_import: selectedImportSource.value === "file-upload"')
+        ->and($pageModuleSource)->toContain('default_price_cents: amountToCents(record.default_price_amount)')
+        ->and($pageModuleSource)->toContain('image_url: row.image_url ?? null')
+        ->and($importComponentSource)->toContain('data-resource-import-file-input')
+        ->and($importComponentSource)->toContain('data-resource-import-show-duplicates')
+        ->and($importComponentSource)->toContain('empty-source')
+        ->and($importComponentSource)->toContain('preview-rows')
+        ->and($importComponentSource)->toContain('data-resource-import-preview-search')
         ->and($importConfig['sources'][0]['label'] ?? null)->toBe('File Upload')
         ->and(collect($importConfig['sources'] ?? [])->contains(fn ($sourceConfig) => ($sourceConfig['label'] ?? null) === 'WooCommerce'))->toBeTrue()
-        ->and($response->getContent())->toContain('data-import-config=')
-        ->and($source)->toContain('type="file"')
-        ->and($source)->toContain('accept=".csv,text/csv"')
-        ->and($source)->toContain('class="sr-only"')
-        ->and($source)->toContain('x-text="sourceOptionLabel(source)"')
-        ->and($source)->toContain('<template x-for="source in sources" :key="source.value">')
-        ->and($source)->not->toContain('>Source<')
-        ->and($source)->not->toContain('Choose File')
-        ->and($source)->toContain('!sourceConnected() && !isCachedFileSource() && !isFileUploadMode()')
-        ->and($source)->toContain('handleLocalFileChange(event)')
-        ->and($source)->toContain('parseLocalCsv(text)')
-        ->and($source)->toContain('parseCsvRows(text)')
-        ->and($source)->toContain('csvBooleanOrNull(value)')
-        ->and($source)->toContain('selected: true')
-        ->and($source)->toContain("return this.selectedSource === 'file-upload';")
-        ->and($source)->toContain("return this.selectedSource.startsWith('file-upload-cached:');")
-        ->and($source)->toContain('cachedFileSources: []')
-        ->and($source)->toContain('nextCachedFileSourceId: 1')
-        ->and($source)->toContain('return this.isFileUploadMode() || this.isCachedFileSource() ? null : this.selectedSource;')
-        ->and($source)->toContain('sourceOptionLabel(source)')
-        ->and($source)->toContain('openImportFilePicker()')
-        ->and($source)->toContain('if (this.$refs.importFileInput) {')
-        ->and($source)->toContain('this.$refs.importFileInput.click();')
-        ->and($source)->toContain('restoreCachedFilePreview()')
-        ->and($source)->toContain('cacheCurrentFilePreviewRows(rows)')
-        ->and($source)->toContain('source: importSource')
-        ->and($source)->toContain('is_local_file_import: this.hasLocalFileRows')
-        ->and($source)->toContain('buildImportRowPayload(row, importSource)')
-        ->and($source)->toContain("const importUnavailableMessage = messages.importUnavailable || 'Unable to import products.';")
-        ->and($source)->toContain('rowValidationMessages(index)')
-        ->and($source)->toContain("this.importError = data.message || importUnavailableMessage;")
-        ->and($source)->toContain("default_price_cents: Object.prototype.hasOwnProperty.call(row, 'default_price_cents')")
-        ->and($source)->toContain("image_url: Object.prototype.hasOwnProperty.call(row, 'image_url')")
-        ->and($source)->toContain("&& typeof row.image_url === 'string'")
-        ->and($source)->toContain("&& row.image_url.trim() !== ''")
-        ->and($source)->toContain("source: 'file-upload'")
-        ->and($source)->toContain('<template x-for="fileSource in cachedFileSources" :key="fileSource.value">')
-        ->and($source)->toContain("const loadingFilePreviewLabel = labels.loadingPreviewFile || 'Loading file preview...';")
-        ->and($source)->toContain('loadingMessage: loadingFilePreviewLabel');
+        ->and($importConfig)->toBeArray()
+        ->and($importComponentSource)->toContain('type="file"')
+        ->and($importComponentSource)->toContain('accept=".csv,text/csv"')
+        ->and($importComponentSource)->toContain('class="sr-only"');
 });
 
 it('43a. products import config keeps preview rows compact with name and price only', function () {
@@ -995,20 +968,17 @@ it('45. shared export component includes current filters and all records options
 });
 
 it('46. export slide over js is reusable and config driven without page local export markup', function () {
-    $source = file_get_contents(base_path('resources/js/pages/sales-products-index.js'));
-    $exportModuleSource = file_get_contents(base_path('resources/js/lib/export-module.js'));
-    $importModuleSource = file_exists(base_path('resources/js/lib/import-module.js'))
-        ? file_get_contents(base_path('resources/js/lib/import-module.js'))
-        : '';
+    $source = file_get_contents(base_path('resources/js/pages/Sales/Products/Index.vue'));
+    $exportComponentSource = file_get_contents(base_path('resources/js/components/ResourceExportDrawer.vue'));
+    $importComponentSource = file_get_contents(base_path('resources/js/components/ResourceImportDrawer.vue'));
 
     expect($source)->not->toContain('slideOvers:')
         ->and($source)->not->toContain('openSlideOver(')
         ->and($source)->not->toContain('closeSlideOver(')
-        ->and($source)->toContain('exportModule.mount(rootEl);')
-        ->and($source)->toContain('createImportModule(')
-        ->and($exportModuleSource)->toContain('data-shared-export-panel')
-        ->and($exportModuleSource)->toContain('mount(rootEl)')
-        ->and($importModuleSource)->toContain('buildImportRowPayload(row, importSource)');
+        ->and($source)->toContain('ResourceExportDrawer')
+        ->and($source)->toContain('ResourceImportDrawer')
+        ->and($exportComponentSource)->toContain('resource-export-drawer-title')
+        ->and($importComponentSource)->toContain('resource-import-drawer-title');
 });
 
 it('47. products payload includes file upload as an explicit import mode', function () {

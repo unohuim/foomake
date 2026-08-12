@@ -2111,7 +2111,6 @@ it('36. resource detail pages use a shared resource detail layout component', fu
         'purchasing/orders/show.blade.php',
         'purchasing/suppliers/show.blade.php',
         'sales/orders/show.blade.php',
-        'sales/customers/show.blade.php',
         'inventory/counts/show.blade.php',
     ];
 

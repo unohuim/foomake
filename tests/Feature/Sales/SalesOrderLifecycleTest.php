@@ -171,6 +171,12 @@ beforeEach(function () {
     $this->fetchOrder = fn (SalesOrder $order): SalesOrder => SalesOrder::query()->findOrFail($order->id);
 
     $this->extractPayload = function ($response, string $payloadId): array {
+        $props = $response->viewData('page')['props'] ?? null;
+
+        if ($payloadId === 'sales-orders-index-payload' && is_array($props) && isset($props['payload'])) {
+            return $props['payload'];
+        }
+
         $html = $response->getContent();
         $pattern = '/<script type="application\\/json" id="' . preg_quote($payloadId, '/') . '">\\s*(.*?)\\s*<\\/script>/s';
 
@@ -620,7 +626,7 @@ it('57. existing sales order line behavior still works', function () {
 });
 
 it('59. future quantity display is not introduced', function () {
-    $source = file_get_contents(base_path('resources/views/sales/orders/index.blade.php'));
+    $source = file_get_contents(base_path('resources/js/pages/Sales/Orders/Index.vue'));
 
     expect($source)->not->toContain('Future quantity')
         ->and($source)->not->toContain('future_quantity');
@@ -628,7 +634,7 @@ it('59. future quantity display is not introduced', function () {
 
 it('60. task checklist system is introduced on the sales orders page', function () {
     $detailSource = file_get_contents(base_path('resources/views/sales/orders/show.blade.php'));
-    $indexSource = file_get_contents(base_path('resources/views/sales/orders/index.blade.php'));
+    $indexSource = file_get_contents(base_path('resources/js/pages/Sales/Orders/Index.vue'));
 
     expect($detailSource)->toContain('Checklist')
         ->and($detailSource)->toContain('current_stage_tasks')

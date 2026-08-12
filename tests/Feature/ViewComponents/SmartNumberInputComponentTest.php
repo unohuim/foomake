@@ -25,7 +25,7 @@ beforeEach(function () {
     $this->makeOrderCreateSource = fn (): string => File::get(resource_path('views/manufacturing/make-orders/partials/create-make-order-slide-over.blade.php'));
     $this->makeOrderShowSource = fn (): string => File::get(resource_path('views/manufacturing/make-orders/show.blade.php'));
     $this->purchaseOrderShowSource = fn (): string => File::get(resource_path('views/purchasing/orders/show.blade.php'));
-    $this->salesProductsSource = fn (): string => File::get(resource_path('views/sales/products/index.blade.php'));
+    $this->salesProductsSource = fn (): string => File::get(resource_path('js/pages/Sales/Products/Index.vue'));
     $this->crudSectionJsSource = fn (): string => File::get(resource_path('js/lib/js-crud-section.js'));
     $this->inventoryCountShowJsSource = fn (): string => File::get(resource_path('js/pages/inventory-count-show.js'));
     $this->inventoryCountControllerSource = fn (): string => File::get(app_path('Http/Controllers/InventoryCountController.php'));

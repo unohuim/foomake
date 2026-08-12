@@ -6,14 +6,16 @@ location:
   - app/Http/Requests/Sales/ImportExternalSalesOrdersRequest.php
   - app/Models/SalesOrder.php
   - app/Models/SalesOrderLine.php
+  - app/Services/WordPressPluginOrderPreviewService.php
   - database/migrations/2026_05_14_120000_add_external_identity_to_sales_orders_table.php
   - database/migrations/2026_05_14_130000_add_external_id_to_sales_order_lines_table.php
-  - resources/js/pages/sales-orders-index.js
-  - resources/views/sales/orders/index.blade.php
+  - integrations/wordpress/foomake-connector/foomake-connector.php
+  - resources/js/pages/Sales/Orders/Index.vue
 purpose: Document the line-level external CSV export contract, grouped file-upload preview/import behavior, tenant-scoped duplicate identity, and external status sync rules for Sales Orders.
 when_to_use:
   - Exporting Sales Orders as external/import-compatible CSV
   - Previewing Sales Orders from file-upload CSV rows before import
+  - Previewing Sales Orders from a paired WordPress plugin
   - Importing grouped external Sales Orders and Sales Order lines
   - Re-importing existing external Sales Orders to refresh external sync fields
 when_not_to_use:
@@ -27,6 +29,7 @@ rules:
   - Export uses source-system identities only and must not emit app internal order or line IDs as import identities.
   - Required CSV columns are external_source, order_external_id, order_date, customer_name, contact_name, city, status, external_status, line_external_id, product_external_id, product_name, quantity, and unit_price.
   - File-upload preview groups rows into unique orders by tenant_id plus external_source plus order_external_id.
+  - WooCommerce Sales Order preview must work through either stored API credentials or a paired WordPress plugin connection when the plugin can serve imports.
   - File-upload preview renders one compact preview record per grouped order and keeps line rows internal to the grouped import payload.
   - external_source is required for CSV import and every row in one CSV file must use the same external_source.
   - Import creates one sales_orders row per grouped order and one sales_order_lines row per grouped CSV row.
@@ -42,6 +45,7 @@ public_interface:
   - sales.orders.export
   - sales.orders.import.preview
   - sales.orders.import.store
+  - GET /wp-json/foomake/v1/orders
   - external_source
   - external_id
   - external_status

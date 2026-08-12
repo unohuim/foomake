@@ -365,6 +365,45 @@ it('prevents an approved pairing code from being exchanged twice', function (): 
         ->assertJsonPath('message', 'The pairing code has already been used.');
 });
 
+it('revokes older active plugin connections when a new plugin uuid pairs for the tenant', function (): void {
+    $user = ($this->makeUser)([], ['system-users-manage']);
+
+    WordPressPluginConnection::query()->create([
+        'tenant_id' => $user->tenant_id,
+        'plugin_uuid' => '123e4567-e89b-12d3-a456-426614174111',
+        'site_url' => 'https://old.example.test/',
+        'site_name' => 'Old Woo',
+        'status' => WordPressPluginConnection::STATUS_CONNECTED,
+        'access_token_hash' => hash('sha256', 'old-token'),
+        'site_access_token' => 'old-site-token',
+        'connected_at' => now()->subDay(),
+    ]);
+
+    ($this->createPairing)('new-current-code', [
+        'tenant_id' => $user->tenant_id,
+        'approved_at' => now(),
+    ]);
+
+    $this->postJson(route('api.wordpress-plugin.pairing.complete'), [
+        'code' => 'new-current-code',
+        'plugin_uuid' => $this->pluginUuid,
+    ])->assertOk();
+
+    $oldConnection = WordPressPluginConnection::withoutGlobalScopes()
+        ->where('plugin_uuid', '123e4567-e89b-12d3-a456-426614174111')
+        ->firstOrFail();
+
+    expect($oldConnection->status)->toBe(WordPressPluginConnection::STATUS_REVOKED)
+        ->and($oldConnection->access_token_hash)->toBeNull()
+        ->and($oldConnection->site_access_token)->toBeNull()
+        ->and($oldConnection->revoked_at)->not->toBeNull()
+        ->and(WordPressPluginConnection::withoutGlobalScopes()
+            ->where('tenant_id', $user->tenant_id)
+            ->where('status', WordPressPluginConnection::STATUS_CONNECTED)
+            ->whereNull('revoked_at')
+            ->count())->toBe(1);
+});
+
 it('rejects wordpress plugin status requests without a bearer token', function (): void {
     $this->getJson(route('api.wordpress-plugin.status'))
         ->assertUnauthorized()
@@ -471,6 +510,41 @@ it('includes wordpress plugin connection state on the connectors page', function
             ->where('connectors.wordPressPlugin.connected', true)
             ->where('connectors.wordPressPlugin.site_url', $this->siteUrl)
             ->where('connectors.pluginRevokeUrl', route('profile.connectors.wordpress-plugin.destroy'))
+        );
+});
+
+it('prefers an active wordpress plugin connection over a newer stale disconnected row on the connectors page', function (): void {
+    $user = ($this->makeUser)([], ['system-users-manage']);
+
+    WordPressPluginConnection::query()->create([
+        'tenant_id' => $user->tenant_id,
+        'plugin_uuid' => $this->pluginUuid,
+        'site_url' => $this->siteUrl,
+        'site_name' => 'Active Woo',
+        'status' => WordPressPluginConnection::STATUS_CONNECTED,
+        'access_token_hash' => hash('sha256', 'active-token'),
+        'connected_at' => now()->subDay(),
+        'last_seen_at' => now(),
+    ]);
+
+    WordPressPluginConnection::query()->create([
+        'tenant_id' => $user->tenant_id,
+        'plugin_uuid' => '123e4567-e89b-12d3-a456-426614174999',
+        'site_url' => 'https://stale.example.test/',
+        'site_name' => 'Stale Woo',
+        'status' => WordPressPluginConnection::STATUS_REVOKED,
+        'access_token_hash' => null,
+        'connected_at' => now(),
+        'revoked_at' => now(),
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('profile.connectors.index'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page): Assert => $page
+            ->where('connectors.wordPressPlugin.connected', true)
+            ->where('connectors.wordPressPlugin.site_name', 'Active Woo')
+            ->where('connectors.wordPressPlugin.site_url', $this->siteUrl)
         );
 });
 

@@ -35,6 +35,7 @@ public_interface:
   - admin_post_foomake_connector_start_pairing
   - admin_post_foomake_connector_complete_pairing
   - GET /wp-json/foomake/v1/customers
+  - GET /wp-json/foomake/v1/orders
 example_usage: |
   $archivePath = app(WordPressPluginArchive::class)->build();
 

@@ -95,7 +95,7 @@ beforeEach(function () {
 
     $this->customersBladeSource = file_get_contents(base_path('resources/views/sales/customers/index.blade.php'));
     $this->customersPageModuleSource = file_get_contents(base_path('resources/js/pages/sales-customers-index.js'));
-    $this->productsPageModuleSource = file_get_contents(base_path('resources/js/pages/sales-products-index.js'));
+    $this->productsPageModuleSource = file_get_contents(base_path('resources/js/pages/Sales/Products/Index.vue'));
     $this->importModulePath = base_path('resources/js/lib/import-module.js');
     $this->importModuleSource = file_exists($this->importModulePath)
         ? file_get_contents($this->importModulePath)

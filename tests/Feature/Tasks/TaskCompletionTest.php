@@ -491,7 +491,7 @@ it('8j. task drawer behavior is registered outside inline Alpine expressions', f
 
 it('8k. manual task sections listen for created tasks and render the returned task row', function () {
     $materialSource = file_get_contents(resource_path('views/materials/show.blade.php'));
-    $customerSource = file_get_contents(resource_path('views/sales/customers/show.blade.php'));
+    $customerSource = file_get_contents(resource_path('js/pages/Sales/Customers/Show.vue'));
     $salesOrderSource = file_get_contents(resource_path('views/sales/orders/show.blade.php'));
     $makeOrderSource = file_get_contents(resource_path('views/manufacturing/make-orders/show.blade.php'));
     $purchaseOrderSource = file_get_contents(resource_path('views/purchasing/orders/show.blade.php'));
@@ -500,7 +500,7 @@ it('8k. manual task sections listen for created tasks and render the returned ta
     expect($materialSource)->toContain('x-on:task-created.window')
         ->and($materialSource)->toContain('createdTasks')
         ->and($materialSource)->toContain('completeCreatedTask(task)')
-        ->and($customerSource)->toContain('x-on:task-created.window')
+        ->and($customerSource)->toContain('openTaskCreate')
         ->and($customerSource)->toContain('createdTasks')
         ->and($customerSource)->toContain('completeCreatedTask(task)')
         ->and($salesOrderSource)->toContain('x-on:task-created.window')

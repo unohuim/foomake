@@ -115,6 +115,10 @@ beforeEach(function () {
         return $this->actingAs($user)->get(route('sales.customers.show', $customerId));
     };
 
+    $this->getShowPayload = function (User $user, int $customerId) {
+        return $this->actingAs($user)->getJson(route('sales.customers.show.payload', $customerId));
+    };
+
     $this->postStore = function (User $user, int $customerId, array $payload = []) {
         return $this->actingAs($user)->postJson(
             route('sales.customers.contacts.store', $customerId),
@@ -170,10 +174,10 @@ it('1. customer detail page renders a Contacts section', function () {
 
     ($this->grantPermission)($user, 'sales-customers-view');
 
-    ($this->getShow)($user, $customer->id)
+    ($this->getShowPayload)($user, $customer->id)
         ->assertOk()
-        ->assertSee('Contacts')
-        ->assertSee('data-section="customer-contacts"', false);
+        ->assertJsonPath('data.customer.name', 'Northwind Foods')
+        ->assertJsonPath('data.contacts', []);
 });
 
 it('2. Contacts section lists existing contacts for that customer', function () {
@@ -203,13 +207,18 @@ it('2. Contacts section lists existing contacts for that customer', function () 
         'email' => 'hidden@example.test',
     ]);
 
-    ($this->getShow)($user, $customer->id)
+    $contacts = ($this->getShowPayload)($user, $customer->id)
         ->assertOk()
-        ->assertSee('Jane Buyer')
-        ->assertSee('jane@example.test')
-        ->assertSee('Purchasing Lead')
-        ->assertSee('Moe Operator')
-        ->assertDontSee('Hidden Contact');
+        ->json('data.contacts');
+
+    $contactNames = array_map(
+        static fn (array $contact): string => (string) ($contact['full_name'] ?? ''),
+        $contacts
+    );
+
+    expect($contactNames)->toContain('Jane Buyer')
+        ->and($contactNames)->toContain('Moe Operator')
+        ->and($contactNames)->not->toContain('Hidden Contact');
 });
 
 it('3. Contacts section shows create edit delete and set-primary controls only for users with customer manage permission', function () {
@@ -225,13 +234,10 @@ it('3. Contacts section shows create edit delete and set-primary controls only f
     ($this->grantPermission)($user, 'sales-customers-view');
     ($this->grantPermission)($user, 'sales-customers-manage');
 
-    ($this->getShow)($user, $customer->id)
+    ($this->getShowPayload)($user, $customer->id)
         ->assertOk()
-        ->assertSee('data-contact-action="create"', false)
-        ->assertSee('data-contact-action="edit"', false)
-        ->assertSee('data-contact-action="delete"', false)
-        ->assertSee('data-contact-action="set-primary"', false)
-        ->assertSee(trim($contact->first_name . ' ' . $contact->last_name));
+        ->assertJsonPath('data.canManage', true)
+        ->assertJsonPath('data.contacts.0.full_name', trim($contact->first_name . ' ' . $contact->last_name));
 });
 
 it('4. Contacts section hides management controls from unauthorized users', function () {
@@ -246,13 +252,10 @@ it('4. Contacts section hides management controls from unauthorized users', func
         'is_primary' => true,
     ]);
 
-    ($this->getShow)($user, $customer->id)
+    ($this->getShowPayload)($user, $customer->id)
         ->assertOk()
-        ->assertSee('Visible Contact')
-        ->assertDontSee('data-contact-action="create"', false)
-        ->assertDontSee('data-contact-action="edit"', false)
-        ->assertDontSee('data-contact-action="delete"', false)
-        ->assertDontSee('data-contact-action="set-primary"', false);
+        ->assertJsonPath('data.canManage', false)
+        ->assertJsonPath('data.contacts.0.full_name', 'Visible Contact');
 });
 
 it('4a. guest cannot view customer detail page', function () {

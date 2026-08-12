@@ -156,7 +156,7 @@ beforeEach(function () {
 
     $this->customersBlade = file_get_contents(base_path('resources/views/sales/customers/index.blade.php'));
     $this->customersScript = file_get_contents(base_path('resources/js/pages/sales-customers-index.js'));
-    $this->productsScript = file_get_contents(base_path('resources/js/pages/sales-products-index.js'));
+    $this->productsScript = file_get_contents(base_path('resources/js/pages/Sales/Products/Index.vue'));
     $this->customerControllerSource = file_get_contents(base_path('app/Http/Controllers/CustomerController.php'));
     $this->exportModulePath = base_path('resources/js/lib/export-module.js');
     $this->exportModuleSource = file_exists($this->exportModulePath)
@@ -743,11 +743,9 @@ it('23. customers export remains tenant scoped', function () {
 
 it('24. products export module integration remains intact', function () {
     expect($this->productsScript)
-        ->toContain("import { createExportModule } from '../lib/export-module';")
-        ->and($this->productsScript)->toContain('const exportModule = createExportModule(')
-        ->and($this->productsScript)->toContain('...exportModule,')
-        ->and($this->productsScript)->toContain("exportHandler: 'openExportPanel()'")
-        ->and($this->productsScript)->toContain("export: 'openExportPanel()'");
+        ->toContain('ResourceExportDrawer')
+        ->and($this->productsScript)->toContain('@export="openExportDrawer"')
+        ->and($this->productsScript)->toContain('@submit="submitExport"');
 });
 
 it('25. customers import behavior remains independent from export extraction', function () {

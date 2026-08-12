@@ -11,6 +11,7 @@ use App\Models\SalesOrder;
 use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Inertia\Testing\AssertableInertia as Assert;
 
 uses(RefreshDatabase::class);
 
@@ -158,6 +159,12 @@ beforeEach(function () {
     };
 
     $this->extractCrudConfig = function ($response): array {
+        $props = $response->viewData('page')['props'] ?? null;
+
+        if (is_array($props) && isset($props['crudConfig'])) {
+            return $props['crudConfig'];
+        }
+
         preg_match("/data-crud-config='([^']+)'/", $response->getContent(), $matches);
 
         expect($matches)->toHaveKey(1);
@@ -170,6 +177,12 @@ beforeEach(function () {
     };
 
     $this->extractImportConfig = function ($response): array {
+        $props = $response->viewData('page')['props'] ?? null;
+
+        if (is_array($props) && isset($props['importConfig'])) {
+            return $props['importConfig'];
+        }
+
         preg_match("/data-import-config='([^']+)'/", $response->getContent(), $matches);
 
         expect($matches)->toHaveKey(1);
@@ -221,27 +234,29 @@ it('2. sales orders index denies authenticated users without permission', functi
     ($this->indexResponse)($user)->assertForbidden();
 });
 
-it('3. sales orders index renders the shared crud mount contract', function () {
+it('3. sales orders index renders the shared inertia resource index contract', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
     ($this->grantPermissions)($user, ['sales-sales-orders-manage', 'system-users-manage']);
 
     ($this->indexResponse)($user)
         ->assertOk()
-        ->assertSee('data-crud-config=', false)
-        ->assertSee('data-import-config=', false)
-        ->assertSee('data-crud-root', false);
+        ->assertInertia(fn (Assert $page): Assert => $page
+            ->component('Sales/Orders/Index')
+            ->has('crudConfig')
+            ->has('importConfig'));
 });
 
-it('4. sales orders index payload keeps the page module contract', function () {
+it('4. sales orders index payload keeps the inertia page contract', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
     ($this->grantPermissions)($user, ['sales-sales-orders-manage', 'system-users-manage']);
 
     ($this->indexResponse)($user)
-        ->assertSee('data-page="sales-orders-index"', false)
-        ->assertSee('data-payload="sales-orders-index-payload"', false)
-        ->assertSee('sales-orders-index-payload', false);
+        ->assertInertia(fn (Assert $page): Assert => $page
+            ->component('Sales/Orders/Index')
+            ->has('payload.orders')
+            ->has('payload.customers'));
 });
 
 it('5. crud config identifies the orders resource', function () {
@@ -651,14 +666,14 @@ it('28. orders preview display search keeps external identity searchable without
 });
 
 it('29. compact preview helpers map customer name to the title and date city to the metadata line', function () {
-    $source = file_get_contents(base_path('resources/js/pages/sales-orders-index.js'));
+    $source = file_get_contents(base_path('resources/js/pages/Sales/Orders/Index.vue'));
 
     expect($source)->toContain('truncatedPreviewCustomerName(row)')
         ->and($source)->toContain('compactPreviewMeta(row)')
-        ->and($source)->toContain('return this.truncatedCustomerName(customer.name || \'\');')
-        ->and($source)->toContain("const date = row && typeof row.date === 'string' && row.date.trim() !== ''")
-        ->and($source)->toContain("const city = typeof customer.city === 'string' && customer.city.trim() !== ''")
-        ->and($source)->toContain('return `${date} • ${city}`;');
+        ->and($source)->toContain('return truncatedCustomerName(customer.name || "");')
+        ->and($source)->toContain('const date = typeof row?.date === "string" && row.date.trim() !== ""')
+        ->and($source)->toContain('const city = typeof customer.city === "string" && customer.city.trim() !== ""')
+        ->and($source)->toContain('return `${date} - ${city}`;');
 });
 
 it('30. sales orders preview card contract does not render order line names or raw woo metadata expressions', function () {
@@ -670,51 +685,46 @@ it('30. sales orders preview card contract does not render order line names or r
         ->and($config)->not->toContain("'titleExpression' => '`Order #\${row.external_id}`'");
 });
 
-it('31. sales orders page module mounts the shared import module through the shared adapter path', function () {
-    $source = file_get_contents(base_path('resources/js/pages/sales-orders-index.js'));
+it('31. sales orders vue page composes the shared import drawer and page-owned adapters', function () {
+    $source = file_get_contents(base_path('resources/js/pages/Sales/Orders/Index.vue'));
 
-    expect($source)->toContain("import { createImportModule } from '../lib/import-module';")
-        ->and($source)->toContain('const importModule = createImportModule(')
-        ->and($source)->toContain('config: importConfig')
-        ->and($source)->toContain('parseLocalRows: (text, helpers) => {')
+    expect($source)->toContain('ResourceImportDrawer')
+        ->and($source)->toContain('function parseOrderCsv(text)')
         ->and($source)->toContain('truncatedPreviewCustomerName(row)')
         ->and($source)->toContain('compactPreviewMeta(row)')
-        ->and($source)->toContain("source: defaultBody.is_local_file_import ? 'file-upload' : importSource")
-        ->and($source)->toContain('importModule.mount(rootEl);');
+        ->and($source)->toContain('source: selectedImportSource.value === "file-upload" ? "file-upload" : selectedImportSource.value');
 });
 
-it('32. sales orders page uses the shared export module without page local export markup', function () {
-    $source = file_get_contents(base_path('resources/js/pages/sales-orders-index.js'));
-    $exportModuleSource = file_get_contents(base_path('resources/js/lib/export-module.js'));
+it('32. sales orders page uses the shared export drawer without legacy export markup', function () {
+    $source = file_get_contents(base_path('resources/js/pages/Sales/Orders/Index.vue'));
+    $exportDrawerSource = file_get_contents(base_path('resources/js/components/ResourceExportDrawer.vue'));
 
-    expect($source)->toContain("import { createExportModule } from '../lib/export-module';")
-        ->and($source)->toContain('const exportModule = createExportModule(')
-        ->and($source)->toContain('exportModule.mount(rootEl);')
-        ->and($source)->toContain("exportHandler: 'openExportPanel()'")
-        ->and($source)->toContain("export: 'openExportPanel()'")
+    expect($source)->toContain('ResourceExportDrawer')
+        ->and($source)->toContain('@export="openExportDrawer"')
+        ->and($source)->toContain('@submit="submitExport"')
         ->and($source)->not->toContain('buildExportUrl() {')
         ->and($source)->not->toContain('submitExport() {')
-        ->and($exportModuleSource)->toContain('data-shared-export-panel');
+        ->and($exportDrawerSource)->toContain('resource-export-drawer-title');
 });
 
 it('33. exported orders csv headers are accepted by the orders file upload parser contract', function () {
-    $source = file_get_contents(base_path('resources/js/pages/sales-orders-index.js'));
+    $source = file_get_contents(base_path('resources/js/pages/Sales/Orders/Index.vue'));
 
-    expect($source)->toContain("const exportHeaders = [")
-        ->and($source)->toContain("'external_source'")
-        ->and($source)->toContain("'order_external_id'")
-        ->and($source)->toContain("'order_date'")
-        ->and($source)->toContain("'customer_name'")
-        ->and($source)->toContain("'contact_name'")
-        ->and($source)->toContain("'city'")
-        ->and($source)->toContain("'status'")
-        ->and($source)->toContain("'external_status'")
-        ->and($source)->toContain("'line_external_id'")
-        ->and($source)->toContain("'product_external_id'")
-        ->and($source)->toContain("'product_name'")
-        ->and($source)->toContain("'quantity'")
-        ->and($source)->toContain("'unit_price'")
-        ->and($source)->toContain('const hasExportHeaders = exportHeaders.every((header) => headers.includes(header));');
+    expect($source)->toContain('const orderCsvHeaders = [')
+        ->and($source)->toContain('"external_source"')
+        ->and($source)->toContain('"order_external_id"')
+        ->and($source)->toContain('"order_date"')
+        ->and($source)->toContain('"customer_name"')
+        ->and($source)->toContain('"contact_name"')
+        ->and($source)->toContain('"city"')
+        ->and($source)->toContain('"status"')
+        ->and($source)->toContain('"external_status"')
+        ->and($source)->toContain('"line_external_id"')
+        ->and($source)->toContain('"product_external_id"')
+        ->and($source)->toContain('"product_name"')
+        ->and($source)->toContain('"quantity"')
+        ->and($source)->toContain('"unit_price"')
+        ->and($source)->toContain('const missingHeaders = orderCsvHeaders.filter((header) => !headers.includes(header));');
 });
 
 it('34. orders preview endpoint accepts grouped file upload rows from the exported csv contract', function () {
@@ -778,11 +788,11 @@ it('36. sales orders payload includes file upload as an explicit import mode', f
 });
 
 it('37. sales orders page source does not contain optional chaining assignment patterns', function () {
-    $source = file_get_contents(base_path('resources/js/pages/sales-orders-index.js'));
+    $source = file_get_contents(base_path('resources/js/pages/Sales/Orders/Index.vue'));
 
     expect($source)->not->toMatch('/\\?\\.[A-Za-z0-9_]+\\s*=/')
         ->and($source)->not->toContain('row?.customer?.city =')
-        ->and($source)->toContain("const customer = row && typeof row.customer === 'object' && !Array.isArray(row.customer)");
+        ->and($source)->toContain('const customer = row?.customer && typeof row.customer === "object" ? row.customer : {};');
 });
 
 it('38. import and list endpoints deny authenticated users without existing sales order permission', function () {

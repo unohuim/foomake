@@ -1,0 +1,29 @@
+name: Best Practice Accountability
+type: Engineering Quality Invariant
+location:
+  - AGENTS.md
+  - docs/AI_RULES.md
+  - docs/CONVENTIONS.md
+purpose: Require AI-assisted and human development to choose best-practice implementations and surface non-best-practice code encountered during scoped work.
+when_to_use:
+  - Implementing or reviewing code, tests, docs, configuration, integrations, or UI
+  - Choosing between a quick workable fix and a durable domain-appropriate fix
+  - Discovering existing code in the touched area that violates best practice
+when_not_to_use:
+  - Untouched unrelated code outside the approved scope
+  - Explicitly approved temporary deviations with documented follow-up
+  - Cases where requirements are unclear and work must pause for clarification
+rules:
+  - Contributors must choose best-practice implementations by default.
+  - Contributors must not knowingly preserve non-best-practice behavior in touched code merely because it currently works.
+  - When a non-best-practice implementation is noticed in the touched area, contributors must flag it before continuing.
+  - The flag must identify the risk, the better pattern, and whether correcting it is inside the approved scope.
+  - If the better pattern expands scope, contributors must request explicit approval before implementing it.
+  - Historical rows may exist for auditability, but current-state reads must select by current-state semantics rather than by newest row alone.
+  - Durable external connections must have a single authoritative current connection per tenant and connector unless an architecture entry explicitly approves multiple active connections.
+public_interface:
+  - AGENTS.md
+  - docs/AI_RULES.md
+  - docs/CONVENTIONS.md
+example_usage: |
+  If connector code stores historical rows, the current connector status query must prefer active current rows and flag any newest-row selection as unsafe before implementation continues.

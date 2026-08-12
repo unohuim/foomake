@@ -10,6 +10,10 @@ const props = defineProps({
         type: String,
         required: true,
     },
+    showHeader: {
+        type: Boolean,
+        default: true,
+    },
     shell: {
         type: Object,
         required: true,
@@ -31,9 +35,9 @@ const shellPayload = computed(() => ({
         <MobileBottomNav :shell="shellPayload" />
 
         <div class="flex min-h-0 min-w-0 flex-1 flex-col">
-            <header class="bg-[#001f3f] md:bg-[#f5f7fa]">
+            <header v-if="showHeader" class="bg-[#001f3f]">
                 <div class="mx-auto max-w-7xl px-4 pb-3 pt-7 sm:px-6 lg:px-8">
-                    <h1 class="text-2xl font-semibold leading-tight text-blue-100 md:text-slate-950">
+                    <h1 class="text-2xl font-semibold leading-tight text-blue-100">
                         {{ title }}
                     </h1>
                 </div>

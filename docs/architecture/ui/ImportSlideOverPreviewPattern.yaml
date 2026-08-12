@@ -3,11 +3,11 @@ type: UI Pattern
 location:
   - app/Http/Controllers/SalesProductController.php
   - app/Http/Controllers/CustomerController.php
-  - resources/views/sales/products/index.blade.php
+  - resources/js/pages/Sales/Products/Index.vue
   - resources/views/sales/customers/index.blade.php
   - resources/js/lib/import-config.js
   - resources/js/lib/import-module.js
-  - resources/js/pages/sales-products-index.js
+  - resources/js/pages/Sales/Products/Index.vue
   - resources/js/pages/sales-customers-index.js
 purpose: Define a reusable config-driven import slide-over component that owns the full import UX and lifecycle, auto-preview loads rows from the selected source, keeps bulk options and preview records in accordions, and preserves backend import authority.
 when_to_use:
@@ -58,8 +58,8 @@ public_interface:
 example_usage: |
   Blade page root:
     <div
-        data-page="sales-products-index"
-        data-payload="sales-products-index-payload"
+        Inertia::render('Sales/Products/Index')
+        payload prop
         data-import-config='@json($importConfig)'
         x-data="salesProductsIndex"
     ></div>

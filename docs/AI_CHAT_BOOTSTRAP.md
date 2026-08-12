@@ -295,7 +295,7 @@ This keeps navigation aligned with current process-based domain ownership.
 
 ### PR2-MAT-001 — Materials Navigation + Index ✅ (Implemented, later expanded)
 
-**Goal**  
+**Goal**
 Expose Materials as a first-class domain with read-only visibility.
 
 **Includes**
@@ -323,7 +323,7 @@ Expose Materials as a first-class domain with read-only visibility.
 
 ### PR2-UOM-001 — UoM Categories CRUD (AJAX) ✅ (Implemented)
 
-**Goal**  
+**Goal**
 Allow managing UoM Categories required by Units and Items.
 
 **Includes**
@@ -342,7 +342,7 @@ Allow managing UoM Categories required by Units and Items.
 
 ### PR2-UOM-002 — Units of Measure CRUD (AJAX) ✅ (Implemented)
 
-**Goal**  
+**Goal**
 Allow managing Units of Measure within categories.
 
 **Includes**
@@ -549,7 +549,7 @@ Add architecture YAML:
 
 ### PR2-MAT-002 — Create Material (AJAX) ✅ (Implemented, renumbered)
 
-**Goal**  
+**Goal**
 Allow creating a Material once UoMs exist.
 
 **Includes**
@@ -583,7 +583,7 @@ Allow creating a Material once UoMs exist.
 
 ### PR2-MAT-003 — Edit Material (AJAX) ✅ (Implemented)
 
-**Goal**  
+**Goal**
 Allow editing an existing Material safely.
 
 **Includes**
@@ -602,7 +602,7 @@ Allow editing an existing Material safely.
 
 ### PR2-MAT-004 — Row Actions Menu + Delete ✅ (Implemented)
 
-**Goal**  
+**Goal**
 Introduce contextual actions and safe deletion.
 
 **Includes**
@@ -621,7 +621,7 @@ Introduce contextual actions and safe deletion.
 
 ### PR2-MAT-005 — Material Detail View (Read-Only) ✅ (Implemented, later expanded)
 
-**Goal**  
+**Goal**
 Provide a stable anchor for future expansions.
 
 **Includes**
@@ -655,7 +655,7 @@ _(Unchanged)_
 
 ### PR3-REC-001 — Recipes Index + Detail (Read-Only) ✅ (Implemented, later expanded)
 
-**Goal**  
+**Goal**
 Expose recipes as a visible domain with a stable read-only anchor for later CRUD and execution.
 
 **Includes**
@@ -681,7 +681,7 @@ Expose recipes as a visible domain with a stable read-only anchor for later CRUD
 
 ### PR3-REC-002 — Recipes CRUD + Recipe Lines CRUD (AJAX) ✅ (Implemented)
 
-**Goal**  
+**Goal**
 Enable full recipe authoring with minimal, calm AJAX-first UX.
 
 **Includes**
@@ -721,10 +721,10 @@ Enable full recipe authoring with minimal, calm AJAX-first UX.
 
 ### PR3-REC-003 — Recipe Output Quantity Support + Recipe Naming ✅ (Implemented)
 
-**Goal**  
+**Goal**
 Introduce explicit output quantity and user-defined naming for recipes.
 
-**Problem Statement**  
+**Problem Statement**
 Recipes currently need both explicit output quantity and a user-facing name so multiple recipes for the same output item can be distinguished.
 
 **Includes**
@@ -768,7 +768,7 @@ Execute 2 runs → output receipt = 20
 
 ### PR3-MO-001 — Make Orders (Execute Recipe) ✅ (Implemented via persisted make orders)
 
-**Goal**  
+**Goal**
 Allow executing a recipe to create ledger movements.
 
 **Includes**
@@ -797,7 +797,7 @@ Allow executing a recipe to create ledger movements.
 
 ### PR3b — Make Orders Lifecycle (Persisted) ✅ (Implemented)
 
-**Goal**  
+**Goal**
 Implement persisted Make Orders with full lifecycle (Draft → Scheduled → Made/Executed), replacing direct execution. Index list at /manufacturing/make-orders.
 
 **Includes**
@@ -841,7 +841,7 @@ This domain introduces **supplier management, supplier-specific material pricing
 
 ### PR2-PUR-001 — Suppliers Index + Create (AJAX) ✅ (Implemented)
 
-**Goal**  
+**Goal**
 Introduce tenant-owned Suppliers as a first-class Purchasing domain.
 
 **Includes**
@@ -872,7 +872,7 @@ Introduce tenant-owned Suppliers as a first-class Purchasing domain.
 
 ### PR2-MAT-006 — Material Planning Price (Schema + UI) ✅ (Implemented)
 
-**Goal**  
+**Goal**
 Add a **planning-only placeholder price** to materials.
 
 **Includes**
@@ -897,7 +897,7 @@ Add a **planning-only placeholder price** to materials.
 
 ### PR2-PUR-002 — Supplier CRUD (Edit + Delete) ✅ (Implemented)
 
-**Goal**  
+**Goal**
 Complete supplier lifecycle management.
 
 **Includes**
@@ -911,7 +911,7 @@ Complete supplier lifecycle management.
 
 ### PR2-PUR-003 — Supplier ↔ Material Catalog + Pricing ✅ (Implemented)
 
-**Goal**  
+**Goal**
 Define which materials are bought from which suppliers, including **supplier-specific pricing**.
 
 **Includes**
@@ -956,7 +956,7 @@ Define which materials are bought from which suppliers, including **supplier-spe
 
 Introduce Purchase Orders with **immutable pricing snapshots** captured at the moment a line is added.
 
-This PR establishes the **foundation of the PO system**: draft creation, line management, and permanent price capture.  
+This PR establishes the **foundation of the PO system**: draft creation, line management, and permanent price capture.
 This was the original foundation slice. The current implementation later expanded into lifecycle and receiving behavior covered by `PR2-PUR-005`.
 
 ---
@@ -1408,10 +1408,10 @@ After PR2 completion:
 
 ### PR2-UOM-TEN-001 — Tenant-Scoped Units of Measure (Schema + Refactor) ✅ (Implemented)
 
-**Problem Statement**  
+**Problem Statement**
 UoM Categories and Units required tenant ownership to match CRUD access expectations.
 
-**Implementation Note**  
+**Implementation Note**
 Tenant scoping is already implemented in the current codebase.
 
 **Includes**
@@ -1435,7 +1435,7 @@ Tenant scoping is already implemented in the current codebase.
 
 ### PR2-UI-001 — Navigation-Only Tailwind Refactor
 
-**Goal**  
+**Goal**
 Replace the Breeze-based navigation UI only with a modern, sleek, dark Tailwind-only navigation system.
 
 **Includes**
@@ -1470,7 +1470,7 @@ Replace the Breeze-based navigation UI only with a modern, sleek, dark Tailwind-
 
 ### PR2-UOM-003 — UoM Display Precision + Global Quantity Formatting (UI-only) ✅ (Implemented)
 
-**Goal**  
+**Goal**
 Introduce a UoM-level display precision field and enforce consistent quantity formatting across all UI views.
 
 **Includes**
@@ -1536,7 +1536,7 @@ Introduce a UoM-level display precision field and enforce consistent quantity fo
 
 # Conventions
 
-This document defines the **mandatory development conventions** for this repository.  
+This document defines the **mandatory development conventions** for this repository.
 All human and AI-assisted contributions must comply.
 
 These rules are contractual.
@@ -1604,13 +1604,13 @@ These rules are contractual.
 
 To avoid cross-test contamination and CI-only failures:
 
-- **Do not declare global functions in test files.**  
+- **Do not declare global functions in test files.**
   Pest loads all test files into a shared PHP runtime; global helper functions
   (`function foo() {}`) will collide across files.
     - Use `beforeEach()` closures (`$this->makeX = fn () => ...`) instead.
     - Alternatively, define helpers as local closures inside the test.
 
-- **When asserting or throwing PHP built-in exceptions, use fully-qualified names**  
+- **When asserting or throwing PHP built-in exceptions, use fully-qualified names**
   (e.g. `\DomainException::class`) or a proper `use` import.
     - Avoid bare `DomainException::class` without qualification, which can lead to
       warnings like “use statement has no effect” or inconsistent behavior.
@@ -1671,7 +1671,7 @@ These rules are mandatory for all new tests.
 
 Reusable abstractions and patterns are tracked centrally.
 
-- All reusable backend or frontend abstractions **must** be recorded in  
+- All reusable backend or frontend abstractions **must** be recorded in
   `docs/ARCHITECTURE_INVENTORY.md`
 - Each entry must include:
     - Purpose
@@ -1832,26 +1832,26 @@ Each entry includes:
 
 ### Single Database Tenant Scoping
 
-**Name:** Single Database Tenant Scoping  
-**Type:** Architectural Pattern  
-**Location:**  
-- `app/Models/Concerns/HasTenantScope.php`  
-- `app/Models/Scopes/TenantScope.php`  
+**Name:** Single Database Tenant Scoping
+**Type:** Architectural Pattern
+**Location:**
+- `app/Models/Concerns/HasTenantScope.php`
+- `app/Models/Scopes/TenantScope.php`
 - `database/migrations/`
 
-**Purpose:**  
+**Purpose:**
 Ensure tenant isolation by enforcing `tenant_id` on tenant-owned data and scoping queries by authenticated tenant.
 
-**When to Use:**  
+**When to Use:**
 Any tenant-owned model or table.
 
-**When Not to Use:**  
+**When Not to Use:**
 Global/system tables or authentication identity resolution.
 
-**Public Interface:**  
+**Public Interface:**
 - `use HasTenantScope`
 
-**Example Usage:**  
+**Example Usage:**
 ```php
 class Item extends Model
 {
@@ -1863,25 +1863,25 @@ class Item extends Model
 
 ### Tenant Scope Trait
 
-**Name:** Tenant Scope Trait  
-**Type:** Trait / Global Eloquent Scope  
-**Location:**  
-- `app/Models/Concerns/HasTenantScope.php`  
+**Name:** Tenant Scope Trait
+**Type:** Trait / Global Eloquent Scope
+**Location:**
+- `app/Models/Concerns/HasTenantScope.php`
 - `app/Models/Scopes/TenantScope.php`
 
-**Purpose:**  
+**Purpose:**
 Apply a global scope that filters tenant-owned models by `tenant_id`.
 
-**When to Use:**  
+**When to Use:**
 Any tenant-owned Eloquent model.
 
-**When Not to Use:**  
+**When Not to Use:**
 Global/system models or auth identity models like `User`.
 
-**Public Interface:**  
+**Public Interface:**
 - `use HasTenantScope`
 
-**Example Usage:**  
+**Example Usage:**
 ```php
 class StockMove extends Model
 {
@@ -1891,47 +1891,47 @@ class StockMove extends Model
 
 ### Configured CRUD Page Module Pattern
 
-**Name:** Configured CRUD Page Module Pattern  
-**Type:** UI Architectural Pattern  
-**Location:**  
-- `app/Http/Controllers/SalesProductController.php`  
-- `app/Http/Controllers/CustomerController.php`  
+**Name:** Configured CRUD Page Module Pattern
+**Type:** UI Architectural Pattern
+**Location:**
+- `app/Http/Controllers/SalesProductController.php`
+- `app/Http/Controllers/CustomerController.php`
 - `app/Http/Controllers/SupplierController.php`
-- `app/Http/Controllers/MaterialController.php`  
-- `app/Http/Controllers/InventoryCountController.php`  
-- `resources/views/sales/products/index.blade.php`  
-- `resources/views/sales/customers/index.blade.php`  
+- `app/Http/Controllers/MaterialController.php`
+- `app/Http/Controllers/InventoryCountController.php`
+- `resources/js/pages/Sales/Products/Index.vue`
+- `resources/views/sales/customers/index.blade.php`
 - `resources/views/purchasing/suppliers/index.blade.php`
-- `resources/views/materials/index.blade.php`  
-- `resources/views/inventory/counts/index.blade.php`  
-- `resources/views/manufacturing/make-orders/index.blade.php`  
-- `resources/js/lib/crud-config.js`  
-- `resources/js/lib/generic-crud.js`  
-- `resources/js/lib/crud-page.js`  
-- `resources/js/pages/sales-products-index.js`  
-- `resources/js/pages/sales-customers-index.js`  
+- `resources/views/materials/index.blade.php`
+- `resources/views/inventory/counts/index.blade.php`
+- `resources/views/manufacturing/make-orders/index.blade.php`
+- `resources/js/lib/crud-config.js`
+- `resources/js/lib/generic-crud.js`
+- `resources/js/lib/crud-page.js`
+- `resources/js/pages/Sales/Products/Index.vue`
+- `resources/js/pages/sales-customers-index.js`
 - `resources/js/pages/purchasing-suppliers-index.js`
 - `resources/js/pages/materials-index.js`
 - `resources/js/pages/inventory-counts-index.js`
 - `resources/js/pages/manufacturing-make-orders.js`
 
-**Purpose:**  
+**Purpose:**
 Provide a mount-only Blade shell plus server-configured shared CRUD renderer so index pages reuse one toolbar, list, empty-state, and row-action pattern without global JavaScript state.
 
-**When to Use:**  
+**When to Use:**
 Any interactive CRUD index page that can express its list, row display, actions, and optional import/export behavior from a server-generated contract.
 
-**When Not to Use:**  
+**When Not to Use:**
 Static pages, multi-step workflows, or pages that cannot express their behavior through the shared CRUD contract.
 
-**Public Interface:**  
-- `data-crud-config`  
-- `data-crud-root`  
-- `createGenericCrud(parseCrudConfig(rootEl))`  
-- `mountCrudRenderer(rootEl, config)`  
+**Public Interface:**
+- `data-crud-config`
+- `data-crud-root`
+- `createGenericCrud(parseCrudConfig(rootEl))`
+- `mountCrudRenderer(rootEl, config)`
 - optional `detailUrlTemplate`
 
-**Example Usage:**  
+**Example Usage:**
 ```php
 $crudConfig = [
     'resource' => 'materials',
@@ -1952,34 +1952,34 @@ Notes:
 
 ### Reusable CRUD Detail Section Pattern
 
-**Name:** Reusable CRUD Detail Section Pattern  
-**Type:** UI Architectural Pattern  
-**Location:**  
-- `resources/js/lib/js-crud-section.js`  
-- `resources/js/pages/materials-show.js`  
+**Name:** Reusable CRUD Detail Section Pattern
+**Type:** UI Architectural Pattern
+**Location:**
+- `resources/js/lib/js-crud-section.js`
+- `resources/js/pages/materials-show.js`
 - `resources/js/pages/purchasing-suppliers-show.js`
-- `resources/js/pages/inventory-count-show.js`  
-- `resources/views/materials/show.blade.php`  
+- `resources/js/pages/inventory-count-show.js`
+- `resources/views/materials/show.blade.php`
 - `resources/views/purchasing/suppliers/show.blade.php`
-- `resources/views/inventory/counts/show.blade.php`  
+- `resources/views/inventory/counts/show.blade.php`
 
-**Purpose:**  
+**Purpose:**
 Provide a shared expandable detail-section CRUD surface for record sublists such as supplier packages, purchase orders, and inventory count materials.
 
-**When to Use:**  
-- Detail pages that manage a scoped child-record collection with list/create/update/delete behavior  
-- Row-action menus that must escape beyond the section/card boundary  
+**When to Use:**
+- Detail pages that manage a scoped child-record collection with list/create/update/delete behavior
+- Row-action menus that must escape beyond the section/card boundary
 
-**When Not to Use:**  
-- Index pages already covered by the configured CRUD page module  
-- One-off embedded forms without list state  
+**When Not to Use:**
+- Index pages already covered by the configured CRUD page module
+- One-off embedded forms without list state
 
-**Public Interface:**  
-- `data-js-crud-section-root`  
-- `data-section-key`  
-- `mountCrudSection(rootEl, { section, adapters })`  
+**Public Interface:**
+- `data-js-crud-section-root`
+- `data-section-key`
+- `mountCrudSection(rootEl, { section, adapters })`
 
-**Example Usage:**  
+**Example Usage:**
 ```html
 <div data-js-crud-section-root data-section-key="countLines"></div>
 <div data-js-crud-section-root data-section-key="tasks"></div>
@@ -2119,51 +2119,51 @@ Render compact Runs, Expected Output, Actual Output, Due Date, and Assigned To d
 
 ### Resource Detail Layout Pattern
 
-**Name:** Resource Detail Layout Pattern  
-**Type:** UI Architectural Pattern  
-**Location:**  
+**Name:** Resource Detail Layout Pattern
+**Type:** UI Architectural Pattern
+**Location:**
 - [docs/architecture/ui/ResourceDetailLayoutPattern.yaml](docs/architecture/ui/ResourceDetailLayoutPattern.yaml)
 
-**Purpose:**  
+**Purpose:**
 Provide a shared resource-detail shell where top navigation and the page header remain sticky while only the detail content pane scrolls.
 
-**Rules:**  
-- Resource detail pages that need sticky shell behavior must use `x-resource-detail-layout` rather than duplicating page-local sticky wrappers.  
-- The top navigation remains sticky above the page header.  
-- The page header remains sticky beneath the navigation bar.  
-- The detail content pane is the only scrollable region owned by the resource detail shell.  
-- Sticky shell behavior remains opt-in through the shared app layout and does not become the default for non-detail pages.  
-- Resource detail pages keep sticky chrome with a scrollable content area; top navigation and page header remain visible while only the detail content pane scrolls.  
-- Slide-over overlays used by resource detail pages must render outside the detail scroll container so sticky chrome and overflow contexts do not clip the backdrop or panel.  
-- Slide-over overlays used by resource detail pages must appear above sticky navigation and page headers.  
-- Resource-detail slide-over backdrops cover the viewport and support backdrop or outside-click close behavior.  
+**Rules:**
+- Resource detail pages that need sticky shell behavior must use `x-resource-detail-layout` rather than duplicating page-local sticky wrappers.
+- The top navigation remains sticky above the page header.
+- The page header remains sticky beneath the navigation bar.
+- The detail content pane is the only scrollable region owned by the resource detail shell.
+- Sticky shell behavior remains opt-in through the shared app layout and does not become the default for non-detail pages.
+- Resource detail pages keep sticky chrome with a scrollable content area; top navigation and page header remain visible while only the detail content pane scrolls.
+- Slide-over overlays used by resource detail pages must render outside the detail scroll container so sticky chrome and overflow contexts do not clip the backdrop or panel.
+- Slide-over overlays used by resource detail pages must appear above sticky navigation and page headers.
+- Resource-detail slide-over backdrops cover the viewport and support backdrop or outside-click close behavior.
 
 ### Workflow Stage Inventory Effect Invariant
 
-**Name:** Workflow Stage Inventory Effect Invariant  
-**Type:** Workflow Configuration Invariant  
-**Location:**  
-- `docs/architecture/workflows/WorkflowStageInventoryEffectInvariant.yaml`  
-- `app/Actions/Workflows/EnforceWorkflowStageInventoryEffectInvariantAction.php`  
-- `database/migrations/2026_05_20_000001_add_is_inventory_effect_stage_to_workflow_stages_table.php`  
+**Name:** Workflow Stage Inventory Effect Invariant
+**Type:** Workflow Configuration Invariant
+**Location:**
+- `docs/architecture/workflows/WorkflowStageInventoryEffectInvariant.yaml`
+- `app/Actions/Workflows/EnforceWorkflowStageInventoryEffectInvariantAction.php`
+- `database/migrations/2026_05_20_000001_add_is_inventory_effect_stage_to_workflow_stages_table.php`
 
-**Purpose:**  
+**Purpose:**
 Allow workflow stages to identify which stock-impacting operational stage owns inventory posting while preventing workflow admin from leaving stock-impacting workflow domains without exactly one active inventory-effect stage.
 
-**When to Use:**  
-- Stock workflow-stage admin configuration  
-- Sales runtime inventory-effect stage resolution  
+**When to Use:**
+- Stock workflow-stage admin configuration
+- Sales runtime inventory-effect stage resolution
 
-**When Not to Use:**  
-- Purchase-order runtime receiving  
-- Make-order runtime execution  
-- Inventory-count runtime posting  
+**When Not to Use:**
+- Purchase-order runtime receiving
+- Make-order runtime execution
+- Inventory-count runtime posting
 
-**Public Interface:**  
-- `EnforceWorkflowStageInventoryEffectInvariantAction::normalizeAndAssert()`  
-- `WorkflowStage::$is_inventory_effect_stage`  
+**Public Interface:**
+- `EnforceWorkflowStageInventoryEffectInvariantAction::normalizeAndAssert()`
+- `WorkflowStage::$is_inventory_effect_stage`
 
-**Example Usage:**  
+**Example Usage:**
 ```php
 $stage->is_inventory_effect_stage = true;
 ```
@@ -2176,29 +2176,29 @@ Notes:
 
 ### Workflow Stage Task Gating
 
-**Name:** Workflow Stage Task Gating  
-**Type:** Workflow Domain Rule  
-**Location:**  
-- `docs/architecture/workflows/WorkflowStageTaskGating.yaml`  
-- `app/Actions/Workflows/AssertWorkflowStageTasksCompletedAction.php`  
-- `app/Actions/Workflows/GenerateWorkflowStageTasksAction.php`  
+**Name:** Workflow Stage Task Gating
+**Type:** Workflow Domain Rule
+**Location:**
+- `docs/architecture/workflows/WorkflowStageTaskGating.yaml`
+- `app/Actions/Workflows/AssertWorkflowStageTasksCompletedAction.php`
+- `app/Actions/Workflows/GenerateWorkflowStageTasksAction.php`
 
-**Purpose:**  
+**Purpose:**
 Apply one shared stage-entry task generation and stage-exit blocking rule across adopted workflow domains.
 
-**When to Use:**  
-- Sales-order stage transitions  
-- Inventory-count stage transitions  
+**When to Use:**
+- Sales-order stage transitions
+- Inventory-count stage transitions
 
-**When Not to Use:**  
-- Draft setup outside workflow stages  
-- Purchase-order and make-order runtime integrations before approval  
+**When Not to Use:**
+- Draft setup outside workflow stages
+- Purchase-order and make-order runtime integrations before approval
 
-**Public Interface:**  
-- `AssertWorkflowStageTasksCompletedAction::execute()`  
-- `GenerateWorkflowStageTasksAction::execute()`  
+**Public Interface:**
+- `AssertWorkflowStageTasksCompletedAction::execute()`
+- `GenerateWorkflowStageTasksAction::execute()`
 
-**Example Usage:**  
+**Example Usage:**
 ```php
 $generateWorkflowStageTasksAction->execute($tenantId, $recordId, $stage, $preferredAssigneeUserId);
 ```
@@ -2207,23 +2207,23 @@ $generateWorkflowStageTasksAction->execute($tenantId, $recordId, $stage, $prefer
 
 ### User Auth Identity Safety
 
-**Name:** User Auth Identity Safety  
-**Type:** Architectural Rule  
+**Name:** User Auth Identity Safety
+**Type:** Architectural Rule
 **Location:** `app/Models/User.php`
 
-**Purpose:**  
+**Purpose:**
 Keep authentication and identity resolution independent from tenant scoping.
 
-**When to Use:**  
+**When to Use:**
 Authentication and identity lookup.
 
-**When Not to Use:**  
+**When Not to Use:**
 Tenant-owned domain data queries.
 
-**Public Interface:**  
+**Public Interface:**
 - `User::query()`
 
-**Example Usage:**  
+**Example Usage:**
 ```php
 $user = User::where('email', $email)->first();
 ```
@@ -2232,28 +2232,28 @@ $user = User::where('email', $email)->first();
 
 ### Manufacturing Recipes Tenant Isolation
 
-**Name:** Manufacturing Recipes Tenant Isolation  
-**Type:** Tenancy Rule  
-**Location:**  
-- `docs/architecture/tenancy/ManufacturingRecipesTenantIsolation.yaml`  
-- `app/Models/Recipe.php`  
+**Name:** Manufacturing Recipes Tenant Isolation
+**Type:** Tenancy Rule
+**Location:**
+- `docs/architecture/tenancy/ManufacturingRecipesTenantIsolation.yaml`
+- `app/Models/Recipe.php`
 - `app/Models/RecipeLine.php`
 
-**Purpose:**  
+**Purpose:**
 Ensure recipe queries are tenant-scoped and cross-tenant access results in 404s.
 
-**When to Use:**  
+**When to Use:**
 Recipe index/show queries and route model binding.
 
-**When Not to Use:**  
+**When Not to Use:**
 Auth identity resolution or global/system models.
 
-**Public Interface:**  
-- `use HasTenantScope`  
-- `Recipe::query()`  
+**Public Interface:**
+- `use HasTenantScope`
+- `Recipe::query()`
 - `RecipeLine::query()`
 
-**Example Usage:**  
+**Example Usage:**
 ```php
 $recipe = Recipe::query()->findOrFail($id);
 ```
@@ -2262,28 +2262,28 @@ $recipe = Recipe::query()->findOrFail($id);
 
 ### Recipe Output Eligibility
 
-**Name:** Recipe Output Eligibility  
-**Type:** Domain Rule  
-**Location:**  
-- `docs/architecture/manufacturing/RecipeReadModel.yaml`  
-- `docs/architecture/inventory/ExecuteRecipeAction.yaml`  
-- `app/Http/Controllers/RecipeController.php`  
-- `app/Models/Recipe.php`  
+**Name:** Recipe Output Eligibility
+**Type:** Domain Rule
+**Location:**
+- `docs/architecture/manufacturing/RecipeReadModel.yaml`
+- `docs/architecture/inventory/ExecuteRecipeAction.yaml`
+- `app/Http/Controllers/RecipeController.php`
+- `app/Models/Recipe.php`
 
-**Purpose:**  
+**Purpose:**
 Constrain which normal `items` may be used as recipe outputs and which `recipe_type` values each item supports.
 
-**When to Use:**  
+**When to Use:**
 Recipe creation, recipe updates, recipe output pickers, and manufacturing execution gating.
 
-**When Not to Use:**  
+**When Not to Use:**
 Generic item listing, purchasing rules, or sales import filtering unrelated to recipes.
 
-**Public Interface:**  
-- `Recipe::recipeTypeEligibilityError(Item $item, ?string $recipeType)`  
+**Public Interface:**
+- `Recipe::recipeTypeEligibilityError(Item $item, ?string $recipeType)`
 - recipe output candidate payload from `RecipeController`
 
-**Example Usage:**  
+**Example Usage:**
 ```php
 $error = Recipe::recipeTypeEligibilityError($item, $recipeType);
 ```
@@ -2299,28 +2299,28 @@ Notes:
 
 ### Item Stockability / Inventory Tracking Eligibility
 
-**Name:** Item Stockability / Inventory Tracking Eligibility  
-**Type:** Domain Rule  
-**Location:**  
-- `docs/architecture/inventory/Item.yaml`  
-- `docs/architecture/inventory/StockMove.yaml`  
-- `app/Models/Item.php`  
-- `database/migrations/2026_05_25_000001_add_is_stockable_to_items_table.php`  
+**Name:** Item Stockability / Inventory Tracking Eligibility
+**Type:** Domain Rule
+**Location:**
+- `docs/architecture/inventory/Item.yaml`
+- `docs/architecture/inventory/StockMove.yaml`
+- `app/Models/Item.php`
+- `database/migrations/2026_05_25_000001_add_is_stockable_to_items_table.php`
 
-**Purpose:**  
+**Purpose:**
 Separate general item participation in business workflows from stock-ledger participation.
 
-**When to Use:**  
+**When to Use:**
 Any purchasing, manufacturing, sales, or counting workflow that might otherwise create stock moves.
 
-**When Not to Use:**  
+**When Not to Use:**
 Permission checks, recipe output eligibility, or generic item naming/UoM concerns.
 
-**Public Interface:**  
-- `items.is_stockable`  
-- `Item::$casts['is_stockable']`  
+**Public Interface:**
+- `items.is_stockable`
+- `Item::$casts['is_stockable']`
 
-**Example Usage:**  
+**Example Usage:**
 ```php
 if ($item->is_stockable) {
     // create stock move
@@ -2337,29 +2337,29 @@ Notes:
 
 ### Item External Import Identity
 
-**Name:** Item External Import Identity  
-**Type:** Domain Import Rule  
-**Location:**  
-- `docs/architecture/inventory/Item.yaml`  
-- `app/Http/Controllers/SalesProductController.php`  
+**Name:** Item External Import Identity
+**Type:** Domain Import Rule
+**Location:**
+- `docs/architecture/inventory/Item.yaml`
+- `app/Http/Controllers/SalesProductController.php`
 - `app/Http/Requests/Sales/ImportExternalProductsRequest.php`
 
-**Purpose:**  
+**Purpose:**
 Define how imported products use tenant-scoped external identity for duplicate preview, existing-item matching, and fulfillment-safe ecommerce imports.
 
-**When to Use:**  
+**When to Use:**
 Sales product preview/import flows that read or write `external_source` and `external_id`.
 
-**When Not to Use:**  
+**When Not to Use:**
 Internal items without an external identity, or generic item CRUD unrelated to import behavior.
 
-**Public Interface:**  
-- `external_source`  
-- `external_id`  
-- preview duplicate metadata on import rows  
+**Public Interface:**
+- `external_source`
+- `external_id`
+- preview duplicate metadata on import rows
 - fulfillment import summary field `fulfillment_recipes_not_attempted_existing_item`
 
-**Example Usage:**  
+**Example Usage:**
 ```php
 $existing = Item::query()
     ->where('tenant_id', $tenantId)
@@ -2377,23 +2377,23 @@ Notes:
 
 ### Tenant
 
-**Name:** Tenant  
-**Type:** Eloquent Model  
+**Name:** Tenant
+**Type:** Eloquent Model
 **Location:** `app/Models/Tenant.php`
 
-**Purpose:**  
+**Purpose:**
 Represent a tenant in a single-database, multi-tenant architecture.
 
-**When to Use:**  
+**When to Use:**
 Associating users and data with a tenant.
 
-**When Not to Use:**  
+**When Not to Use:**
 Global/system configuration unrelated to a tenant.
 
-**Public Interface:**  
+**Public Interface:**
 - `users()`
 
-**Example Usage:**  
+**Example Usage:**
 ```php
 $tenant = Tenant::create(['tenant_name' => 'Acme Foods']);
 $users = $tenant->users;
@@ -2405,24 +2405,24 @@ $users = $tenant->users;
 
 ### Domain Authorization Layer
 
-**Name:** Domain Authorization Layer  
-**Type:** Authorization Pattern (Laravel Gates)  
+**Name:** Domain Authorization Layer
+**Type:** Authorization Pattern (Laravel Gates)
 **Location:** `app/Providers/AuthServiceProvider.php`
 
-**Purpose:**  
+**Purpose:**
 Centralize authorization using permission slugs and Laravel Gates.
 
-**When to Use:**  
+**When to Use:**
 Any access control decision.
 
-**When Not to Use:**  
+**When Not to Use:**
 UI-only visibility decisions without backend enforcement.
 
-**Public Interface:**  
-- `Gate::allows()`  
+**Public Interface:**
+- `Gate::allows()`
 - `Gate::authorize()`
 
-**Example Usage:**  
+**Example Usage:**
 ```php
 Gate::authorize('inventory-materials-manage');
 ```
@@ -2431,25 +2431,25 @@ Gate::authorize('inventory-materials-manage');
 
 ### Workflow Manage Permission
 
-**Name:** Workflow Manage Permission  
-**Type:** Authorization Rule  
-**Location:**  
-- `docs/PERMISSIONS_MATRIX.md`  
-- `docs/PR3_ROADMAP.md`  
+**Name:** Workflow Manage Permission
+**Type:** Authorization Rule
+**Location:**
+- `docs/PERMISSIONS_MATRIX.md`
+- `docs/PR3_ROADMAP.md`
 
-**Purpose:**  
+**Purpose:**
 Document the gate that controls workflow-configuration access from the profile dropdown `Connectors -> Workflows` entry.
 
-**When to Use:**  
+**When to Use:**
 Workflow stage and workflow task-template configuration surfaces.
 
-**When Not to Use:**  
+**When Not to Use:**
 Assigned-user task completion or existing sales-order lifecycle transitions that retain their current permissions.
 
-**Public Interface:**  
-- `workflow-manage`  
+**Public Interface:**
+- `workflow-manage`
 
-**Example Usage:**  
+**Example Usage:**
 ```php
 Gate::authorize('workflow-manage');
 ```
@@ -2460,37 +2460,37 @@ Gate::authorize('workflow-manage');
 
 ### Configured CRUD Page Module Pattern
 
-**Name:** Configured CRUD Page Module Pattern  
-**Type:** UI Architectural Pattern  
-**Location:**  
-- `docs/architecture/ui/ConfiguredCrudPageModulePattern.yaml`  
-- `resources/js/lib/crud-config.js`  
-- `resources/js/lib/crud-page.js`  
-- `resources/js/pages/sales-products-index.js`  
+**Name:** Configured CRUD Page Module Pattern
+**Type:** UI Architectural Pattern
+**Location:**
+- `docs/architecture/ui/ConfiguredCrudPageModulePattern.yaml`
+- `resources/js/lib/crud-config.js`
+- `resources/js/lib/crud-page.js`
+- `resources/js/pages/Sales/Products/Index.vue`
 - `resources/js/pages/sales-customers-index.js`
 - `resources/js/pages/purchasing-suppliers-index.js`
 
-**Purpose:**  
+**Purpose:**
 Provide a shared config-driven CRUD page shell where toolbar actions, list rendering, and common AJAX behavior are owned by a reusable renderer rather than resource-specific Blade markup.
 
-**When to Use:**  
+**When to Use:**
 Interactive CRUD index pages that can express their list, toolbar actions, and row rendering contract through server-generated config.
 
-**When Not to Use:**  
+**When Not to Use:**
 Static pages or workflows that cannot fit the shared CRUD action and rendering contract.
 
-**Public Interface:**  
-- `data-crud-config`  
-- `endpoints.list`  
-- `endpoints.create`  
-- `endpoints.importPreview`  
-- `endpoints.importStore`  
-- `endpoints.export` when export is enabled  
-- `permissions.showImport`  
-- `permissions.showExport`  
+**Public Interface:**
+- `data-crud-config`
+- `endpoints.list`
+- `endpoints.create`
+- `endpoints.importPreview`
+- `endpoints.importStore`
+- `endpoints.export` when export is enabled
+- `permissions.showImport`
+- `permissions.showExport`
 - `permissions.showCreate`
 
-**Example Usage:**  
+**Example Usage:**
 ```php
 $crudConfig = [
     'resource' => 'products',
@@ -2514,28 +2514,28 @@ Notes:
 
 ### Reusable Combobox Pattern
 
-**Name:** Reusable Combobox Pattern  
-**Type:** UI Architecture Invariant  
-**Location:**  
-- `docs/architecture/ui/ReusableComboboxPattern.yaml`  
-- `resources/views/components/combobox.blade.php`  
-- `resources/views/components/combo-item.blade.php`  
-- `resources/js/components/combobox.js`  
+**Name:** Reusable Combobox Pattern
+**Type:** UI Architecture Invariant
+**Location:**
+- `docs/architecture/ui/ReusableComboboxPattern.yaml`
+- `resources/views/components/combobox.blade.php`
+- `resources/views/components/combo-item.blade.php`
+- `resources/js/components/combobox.js`
 
-**Purpose:**  
+**Purpose:**
 Provide a reusable searchable single-select combobox with hidden-input form submission, preserved option metadata, and local keyboard behavior.
 
-**When to Use:**  
+**When to Use:**
 Large option sets that are no longer manageable in a native select and still need standard scalar form submission.
 
-**When Not to Use:**  
+**When Not to Use:**
 Small native selects, multi-select workflows, or cases where page-specific business rules would have to be hard-coded into the generic component.
 
-**Public Interface:**  
-- `<x-combobox>`  
-- `<x-combo-item>`  
+**Public Interface:**
+- `<x-combobox>`
+- `<x-combo-item>`
 
-**Example Usage:**  
+**Example Usage:**
 ```blade
 <x-combobox
     x-model="createForm.item_id"
@@ -2556,31 +2556,31 @@ Notes:
 
 ### Customer Contact Primary Invariant
 
-**Name:** Customer Contact Primary Invariant  
-**Type:** Domain Rule  
-**Location:**  
-- `docs/architecture/sales/CustomerContactPrimaryInvariant.yaml`  
-- `app/Http/Controllers/CustomerContactController.php`  
-- `app/Models/Customer.php`  
-- `app/Models/CustomerContact.php`  
+**Name:** Customer Contact Primary Invariant
+**Type:** Domain Rule
+**Location:**
+- `docs/architecture/sales/CustomerContactPrimaryInvariant.yaml`
+- `app/Http/Controllers/CustomerContactController.php`
+- `app/Models/Customer.php`
+- `app/Models/CustomerContact.php`
 
-**Purpose:**  
+**Purpose:**
 Document the customer-contact relationship, the split first-name/last-name contact shape, and the exactly-one-primary-when-contacts-exist invariant for customer contacts.
 
-**When to Use:**  
+**When to Use:**
 Any customer contact create, update, delete, or primary-designation flow on the customer detail Contacts section.
 
-**When Not to Use:**  
+**When Not to Use:**
 Customer records without contact mutations or unrelated sales-order contact snapshots.
 
-**Public Interface:**  
-- `Customer::contacts()`  
-- `sales.customers.contacts.store`  
-- `sales.customers.contacts.update`  
-- `sales.customers.contacts.destroy`  
-- `sales.customers.contacts.primary.update`  
+**Public Interface:**
+- `Customer::contacts()`
+- `sales.customers.contacts.store`
+- `sales.customers.contacts.update`
+- `sales.customers.contacts.destroy`
+- `sales.customers.contacts.primary.update`
 
-**Example Usage:**  
+**Example Usage:**
 ```php
 $customer->contacts()->create([
     'tenant_id' => $tenant->id,
@@ -2594,35 +2594,35 @@ $customer->contacts()->create([
 
 ### Sales Order Draft Contact Assignment
 
-**Name:** Sales Order Draft Contact Assignment  
-**Type:** Domain Rule  
-**Location:**  
-- `docs/architecture/sales/SalesOrderDraftContactAssignment.yaml`  
-- `app/Http/Controllers/SalesOrderController.php`  
-- `app/Http/Requests/Sales/StoreSalesOrderRequest.php`  
-- `app/Http/Requests/Sales/UpdateSalesOrderRequest.php`  
-- `app/Models/SalesOrder.php`  
+**Name:** Sales Order Draft Contact Assignment
+**Type:** Domain Rule
+**Location:**
+- `docs/architecture/sales/SalesOrderDraftContactAssignment.yaml`
+- `app/Http/Controllers/SalesOrderController.php`
+- `app/Http/Requests/Sales/StoreSalesOrderRequest.php`
+- `app/Http/Requests/Sales/UpdateSalesOrderRequest.php`
+- `app/Models/SalesOrder.php`
 
-**Purpose:**  
+**Purpose:**
 Document the sales-order customer/contact rules used by editable Sales Order header flows on the shared Orders index shell and the Sales Order detail page.
 
-**When to Use:**  
+**When to Use:**
 Any editable sales-order create, update, delete, or validation flow, including customer changes that may re-default the assigned contact.
 
-**When Not to Use:**  
+**When Not to Use:**
 Sales-order lines, pricing snapshots, fulfillment/inventory effects, invoicing, or customer-contact primary designation outside a sales-order assignment.
 
-**Public Interface:**  
-- `SalesOrder::STATUS_DRAFT`  
-- `SalesOrder::STATUS_OPEN`  
-- `SalesOrder::isEditable()`  
-- `SalesOrder::statuses()`  
-- `sales.orders.index`  
-- `sales.orders.store`  
-- `sales.orders.update`  
-- `sales.orders.destroy`  
+**Public Interface:**
+- `SalesOrder::STATUS_DRAFT`
+- `SalesOrder::STATUS_OPEN`
+- `SalesOrder::isEditable()`
+- `SalesOrder::statuses()`
+- `sales.orders.index`
+- `sales.orders.store`
+- `sales.orders.update`
+- `sales.orders.destroy`
 
-**Example Usage:**  
+**Example Usage:**
 ```php
 $order = SalesOrder::query()->create([
     'tenant_id' => $tenant->id,
@@ -2636,35 +2636,35 @@ $order = SalesOrder::query()->create([
 
 ### Sales Order Line Pricing And Editable Rules
 
-**Name:** Sales Order Line Pricing And Editable Rules  
-**Type:** Domain Rule  
-**Location:**  
-- `docs/architecture/sales/SalesOrderLinePricingAndDraftRules.yaml`  
-- `app/Http/Controllers/SalesOrderLineController.php`  
-- `app/Http/Requests/Sales/StoreSalesOrderLineRequest.php`  
-- `app/Http/Requests/Sales/UpdateSalesOrderLineRequest.php`  
-- `app/Models/SalesOrder.php`  
-- `app/Models/SalesOrderLine.php`  
+**Name:** Sales Order Line Pricing And Editable Rules
+**Type:** Domain Rule
+**Location:**
+- `docs/architecture/sales/SalesOrderLinePricingAndDraftRules.yaml`
+- `app/Http/Controllers/SalesOrderLineController.php`
+- `app/Http/Requests/Sales/StoreSalesOrderLineRequest.php`
+- `app/Http/Requests/Sales/UpdateSalesOrderLineRequest.php`
+- `app/Models/SalesOrder.php`
+- `app/Models/SalesOrderLine.php`
 
-**Purpose:**  
+**Purpose:**
 Document the editable sales-order line mutation rules, immutable unit-price snapshots, canonical scale-6 quantity/line-total behavior, and optional source-line identity used on the Sales Order detail page.
 
-**When to Use:**  
+**When to Use:**
 Any sales-order line create, delete, or quantity-update flow for editable sales orders.
 
-**When Not to Use:**  
+**When Not to Use:**
 Sales-order header customer/contact assignment, lifecycle transitions, fulfillment, shipping, invoicing, payments, or completion inventory impact.
 
-**Public Interface:**  
-- `SalesOrder::STATUS_DRAFT`  
-- `SalesOrder::STATUS_OPEN`  
-- `SalesOrder::allowsLineMutations()`  
-- `SalesOrder::lines()`  
-- `sales.orders.lines.store`  
-- `sales.orders.lines.update`  
-- `sales.orders.lines.destroy`  
+**Public Interface:**
+- `SalesOrder::STATUS_DRAFT`
+- `SalesOrder::STATUS_OPEN`
+- `SalesOrder::allowsLineMutations()`
+- `SalesOrder::lines()`
+- `sales.orders.lines.store`
+- `sales.orders.lines.update`
+- `sales.orders.lines.destroy`
 
-**Example Usage:**  
+**Example Usage:**
 ```php
 $line = SalesOrderLine::query()->create([
     'tenant_id' => $tenant->id,
@@ -2681,37 +2681,37 @@ $line = SalesOrderLine::query()->create([
 
 ### Sales Order External CSV Import Export
 
-**Name:** Sales Order External CSV Import Export  
-**Type:** Domain Import Export Rule  
-**Location:**  
-- `docs/architecture/sales/SalesOrderExternalCsvImportExport.yaml`  
-- `app/Http/Controllers/SalesOrderController.php`  
-- `app/Http/Requests/Sales/PreviewExternalSalesOrderImportRequest.php`  
-- `app/Http/Requests/Sales/ImportExternalSalesOrdersRequest.php`  
-- `app/Models/SalesOrder.php`  
-- `app/Models/SalesOrderLine.php`  
-- `resources/js/pages/sales-orders-index.js`  
+**Name:** Sales Order External CSV Import Export
+**Type:** Domain Import Export Rule
+**Location:**
+- `docs/architecture/sales/SalesOrderExternalCsvImportExport.yaml`
+- `app/Http/Controllers/SalesOrderController.php`
+- `app/Http/Requests/Sales/PreviewExternalSalesOrderImportRequest.php`
+- `app/Http/Requests/Sales/ImportExternalSalesOrdersRequest.php`
+- `app/Models/SalesOrder.php`
+- `app/Models/SalesOrderLine.php`
+- `resources/js/pages/Sales/Orders/Index.vue`
 
-**Purpose:**  
+**Purpose:**
 Document the line-level external CSV export contract, grouped file-upload preview/import behavior, tenant-scoped duplicate identity, and external status sync rules for Sales Orders.
 
-**When to Use:**  
+**When to Use:**
 Any Sales Orders CSV export, file-upload preview/import flow, duplicate identity check, or external status sync behavior.
 
-**When Not to Use:**  
+**When Not to Use:**
 Native Sales Order header forms, native Sales Order line mutations on the detail page, or inventory-impacting workflow transitions.
 
-**Public Interface:**  
-- `sales.orders.export`  
-- `sales.orders.import.preview`  
-- `sales.orders.import.store`  
-- `external_source`  
-- `external_id`  
-- `external_status`  
-- `external_status_synced_at`  
-- `sales_order_lines.external_id`  
+**Public Interface:**
+- `sales.orders.export`
+- `sales.orders.import.preview`
+- `sales.orders.import.store`
+- `external_source`
+- `external_id`
+- `external_status`
+- `external_status_synced_at`
+- `sales_order_lines.external_id`
 
-**Example Usage:**  
+**Example Usage:**
 ```text
 external_source,order_external_id,order_date,customer_name,contact_name,city,status,external_status,line_external_id,product_external_id,product_name,quantity,unit_price
 legacy_csv,SO-1001,2026-05-14,Ada Buyer,Jane Buyer,Toronto,OPEN,processing,LINE-1,SKU-2001,Imported Item,2.000000,15.00
@@ -2722,37 +2722,37 @@ legacy_csv,SO-1001,2026-05-14,Ada Buyer,Jane Buyer,Toronto,OPEN,processing,LINE-
 
 ### Sales Order Packing Inventory Impact
 
-**Name:** Sales Order Packing Inventory Impact  
-**Type:** Domain Rule  
-**Location:**  
-  - `docs/architecture/sales/SalesOrderCompletionInventoryImpact.yaml`  
-  - `app/Actions/Sales/BuildSalesOrderIssuePlanAction.php`  
+**Name:** Sales Order Packing Inventory Impact
+**Type:** Domain Rule
+**Location:**
+  - `docs/architecture/sales/SalesOrderCompletionInventoryImpact.yaml`
+  - `app/Actions/Sales/BuildSalesOrderIssuePlanAction.php`
   - `app/Services/Workflows/SalesOrderWorkflow.php`
-  - `app/Http/Controllers/SalesOrderStatusController.php`  
-  - `app/Models/SalesOrder.php`  
-  - `app/Models/StockMove.php`  
+  - `app/Http/Controllers/SalesOrderStatusController.php`
+  - `app/Models/SalesOrder.php`
+  - `app/Models/StockMove.php`
 
-**Purpose:**  
+**Purpose:**
 Document the inventory-ledger effects of Sales Order operational-stage progression, including availability checks, transactional issue posting, and packed-order reversals under the seeded default sales workflow.
 
-**When to Use:**  
+**When to Use:**
 Moving a sales order into packing, posting packed inventory issue moves, or cancelling a packed order with reversal moves.
 
-**When Not to Use:**  
+**When Not to Use:**
 Editable header/line mutations, shipping/completion transitions without inventory impact, or downstream invoicing/payment behavior.
 
-**Public Interface:**  
-  - `BuildSalesOrderIssuePlanAction::execute()`  
+**Public Interface:**
+  - `BuildSalesOrderIssuePlanAction::execute()`
   - `SalesOrderWorkflow::transition()`
   - `SalesOrderWorkflow::responsePayload()`
-  - `SalesOrder::STATUS_OPEN`  
-  - `SalesOrder::STATUS_PACKING`  
-  - `SalesOrder::STATUS_PACKED`  
-  - `SalesOrder::STATUS_SHIPPING`  
-  - `SalesOrder::STATUS_COMPLETED`  
-  - `sales.orders.status.update`  
+  - `SalesOrder::STATUS_OPEN`
+  - `SalesOrder::STATUS_PACKING`
+  - `SalesOrder::STATUS_PACKED`
+  - `SalesOrder::STATUS_SHIPPING`
+  - `SalesOrder::STATUS_COMPLETED`
+  - `sales.orders.status.update`
 
-**Example Usage:**  
+**Example Usage:**
 ```php
 $packedOrder = $salesOrderWorkflow->transition($salesOrder, SalesOrder::STATUS_PACKED);
 ```
@@ -2761,25 +2761,25 @@ $packedOrder = $salesOrderWorkflow->transition($salesOrder, SalesOrder::STATUS_P
 
 ### Workflow Domain
 
-**Name:** Workflow Domain  
-**Type:** System-Owned Domain Rule  
-**Location:**  
-- `docs/architecture/workflows/WorkflowDomain.yaml`  
-- `docs/PR3_ROADMAP.md`  
+**Name:** Workflow Domain
+**Type:** System-Owned Domain Rule
+**Location:**
+- `docs/architecture/workflows/WorkflowDomain.yaml`
+- `docs/PR3_ROADMAP.md`
 
-**Purpose:**  
+**Purpose:**
 Define the fixed domain layer that scopes tenant-owned workflow stages, workflow task templates, and generated tasks across operational modules.
 
-**When to Use:**  
+**When to Use:**
 Domain-general workflow infrastructure for sales first, with purchasing and manufacturing later.
 
-**When Not to Use:**  
+**When Not to Use:**
 Admin-managed taxonomy creation or product-specific workflow overrides.
 
-**Public Interface:**  
-- `docs/architecture/workflows/WorkflowDomain.yaml`  
+**Public Interface:**
+- `docs/architecture/workflows/WorkflowDomain.yaml`
 
-**Example Usage:**  
+**Example Usage:**
 ```text
 sales -> workflow stages -> workflow task templates -> generated tasks
 ```
@@ -2788,26 +2788,26 @@ sales -> workflow stages -> workflow task templates -> generated tasks
 
 ### Workflow Stage
 
-**Name:** Workflow Stage  
-**Type:** Tenant-Scoped Domain Rule  
-**Location:**  
-- `docs/architecture/workflows/WorkflowStage.yaml`  
-- `docs/PR3_ROADMAP.md`  
+**Name:** Workflow Stage
+**Type:** Tenant-Scoped Domain Rule
+**Location:**
+- `docs/architecture/workflows/WorkflowStage.yaml`
+- `docs/PR3_ROADMAP.md`
 
-**Purpose:**  
+**Purpose:**
 Define the database-backed operational middle-stage abstraction that can be configured per tenant and workflow domain.
 
-**When to Use:**  
+**When to Use:**
 Operational stage ordering, activation, and admin CRUD behavior within a workflow domain.
 
-**When Not to Use:**  
+**When Not to Use:**
 System lifecycle statuses that remain hard-coded domain rules.
 
-**Public Interface:**  
-- `docs/architecture/workflows/WorkflowStage.yaml`  
-- `workflow-manage`  
+**Public Interface:**
+- `docs/architecture/workflows/WorkflowStage.yaml`
+- `workflow-manage`
 
-**Example Usage:**  
+**Example Usage:**
 ```text
 tenant sales stages ordered by sort_order
 ```
@@ -2816,26 +2816,26 @@ tenant sales stages ordered by sort_order
 
 ### Workflow Task Template
 
-**Name:** Workflow Task Template  
-**Type:** Tenant-Scoped Domain Rule  
-**Location:**  
-- `docs/architecture/workflows/WorkflowTaskTemplate.yaml`  
-- `docs/PR3_ROADMAP.md`  
+**Name:** Workflow Task Template
+**Type:** Tenant-Scoped Domain Rule
+**Location:**
+- `docs/architecture/workflows/WorkflowTaskTemplate.yaml`
+- `docs/PR3_ROADMAP.md`
 
-**Purpose:**  
+**Purpose:**
 Define the admin-managed template abstraction used to generate stage-specific tasks.
 
-**When to Use:**  
+**When to Use:**
 Task-definition CRUD, activation, ordering, and assignee defaults for a workflow stage.
 
-**When Not to Use:**  
+**When Not to Use:**
 Retroactively mutating existing generated tasks or creating ad hoc tasks outside the configured template flow.
 
-**Public Interface:**  
-- `docs/architecture/workflows/WorkflowTaskTemplate.yaml`  
-- `workflow-manage`  
+**Public Interface:**
+- `docs/architecture/workflows/WorkflowTaskTemplate.yaml`
+- `workflow-manage`
 
-**Example Usage:**  
+**Example Usage:**
 ```text
 packing stage template: Print packing slip
 ```
@@ -2844,25 +2844,25 @@ packing stage template: Print packing slip
 
 ### Task
 
-**Name:** Task  
-**Type:** Tenant-Scoped Generated Record Rule  
-**Location:**  
-- `docs/architecture/workflows/Task.yaml`  
-- `docs/PR3_ROADMAP.md`  
+**Name:** Task
+**Type:** Tenant-Scoped Generated Record Rule
+**Location:**
+- `docs/architecture/workflows/Task.yaml`
+- `docs/PR3_ROADMAP.md`
 
-**Purpose:**  
+**Purpose:**
 Define the generated task record that snapshots template data against a specific workflow domain record.
 
-**When to Use:**  
+**When to Use:**
 Stage-entry task generation, assigned-user completion, and immutable snapshot behavior for workflow tasks.
 
-**When Not to Use:**  
+**When Not to Use:**
 General project-management features, comments, due dates, multi-assignee tasks, or task reopening flows.
 
-**Public Interface:**  
-- `docs/architecture/workflows/Task.yaml`  
+**Public Interface:**
+- `docs/architecture/workflows/Task.yaml`
 
-**Example Usage:**  
+**Example Usage:**
 ```text
 sales order 42 enters current stage -> generate tenant-scoped stage tasks
 ```
@@ -2871,25 +2871,25 @@ sales order 42 enters current stage -> generate tenant-scoped stage tasks
 
 ### Sales Order Workflow Task Gating
 
-**Name:** Sales Order Workflow Task Gating  
-**Type:** Domain Rule  
-**Location:**  
-- `docs/architecture/workflows/SalesOrderWorkflowTaskGating.yaml`  
-- `docs/PR3_ROADMAP.md`  
+**Name:** Sales Order Workflow Task Gating
+**Type:** Domain Rule
+**Location:**
+- `docs/architecture/workflows/SalesOrderWorkflowTaskGating.yaml`
+- `docs/PR3_ROADMAP.md`
 
-**Purpose:**  
+**Purpose:**
 Define the rule that forward sales-order operational transitions are blocked by open current-stage workflow tasks in addition to existing sales-order domain guards.
 
-**When to Use:**  
+**When to Use:**
 The interaction between sales-order stage entry, generated task creation, and forward lifecycle gating.
 
-**When Not to Use:**  
+**When Not to Use:**
 Draft editing, unrelated task systems, or purchasing/manufacturing task generation before those integrations are implemented.
 
-**Public Interface:**  
-- `docs/architecture/workflows/SalesOrderWorkflowTaskGating.yaml`  
+**Public Interface:**
+- `docs/architecture/workflows/SalesOrderWorkflowTaskGating.yaml`
 
-**Example Usage:**  
+**Example Usage:**
 ```text
 current operational stage -> next stage is blocked while current-stage generated tasks remain open
 ```
@@ -2898,37 +2898,37 @@ current operational stage -> next stage is blocked while current-stage generated
 
 ### Sales Products Filtered Item View
 
-**Name:** Sales Products Filtered Item View  
-**Type:** Read Model / Domain Invariant  
-**Location:**  
-- `app/Http/Controllers/SalesProductController.php`  
-- `app/Models/Item.php`  
-- `resources/views/sales/products/index.blade.php`  
-- `routes/web.php`  
+**Name:** Sales Products Filtered Item View
+**Type:** Read Model / Domain Invariant
+**Location:**
+- `app/Http/Controllers/SalesProductController.php`
+- `app/Models/Item.php`
+- `resources/js/pages/Sales/Products/Index.vue`
+- `routes/web.php`
 
-**Purpose:**  
+**Purpose:**
 Document that Sales → Products is a sales-facing filtered view of normal tenant-owned items rather than a separate product entity, exposed as a mount-only Blade shell with a shared JSON-configured CRUD renderer.
 
-**When to Use:**  
+**When to Use:**
 Rendering, listing, searching, sorting, creating, or importing sales-facing products while preserving the shared `Item` identity.
 
-**When Not to Use:**  
+**When Not to Use:**
 Introducing a separate products table/model or treating imported products as distinct from materials.
 
-**Public Interface:**  
-- `sales.products.index`  
-- `sales.products.list`  
-- `sales.products.store`  
-- `sales.products.import.preview`  
-- `sales.products.import.store`  
-- `Item::query()->where('is_sellable', true)`  
+**Public Interface:**
+- `sales.products.index`
+- `sales.products.list`
+- `sales.products.store`
+- `sales.products.import.preview`
+- `sales.products.import.store`
+- `Item::query()->where('is_sellable', true)`
 
-**Notes:**  
-- `/sales/products` remains the user-facing page route and renders the Blade shell.  
-- Desktop table rows and mobile cards are sourced from the same JSON list endpoint rather than Blade-rendered records.  
-- This slice does not introduce product update/delete endpoints or a separate product entity.  
+**Notes:**
+- `/sales/products` remains the user-facing page route and renders the Blade shell.
+- Desktop table rows and mobile cards are sourced from the same JSON list endpoint rather than Blade-rendered records.
+- This slice does not introduce product update/delete endpoints or a separate product entity.
 
-**Example Usage:**  
+**Example Usage:**
 ```php
 $products = Item::query()
     ->where('is_sellable', true)
@@ -2940,30 +2940,30 @@ $products = Item::query()
 
 ### Manufacturing Recipes Read-Only Access
 
-**Name:** Manufacturing Recipes Read-Only Access  
-**Type:** Authorization Rule  
-**Location:**  
-- `docs/architecture/auth/ManufacturingRecipesReadOnlyAccess.yaml`  
-- `app/Providers/AuthServiceProvider.php`  
-- `app/Http/Controllers/RecipeController.php`  
-- `routes/web.php`  
+**Name:** Manufacturing Recipes Read-Only Access
+**Type:** Authorization Rule
+**Location:**
+- `docs/architecture/auth/ManufacturingRecipesReadOnlyAccess.yaml`
+- `app/Providers/AuthServiceProvider.php`
+- `app/Http/Controllers/RecipeController.php`
+- `routes/web.php`
 - `resources/views/layouts/navigation.blade.php`
 
-**Purpose:**  
+**Purpose:**
 Enforce authenticated, gate-backed access to manufacturing recipe read-only pages.
 
-**When to Use:**  
+**When to Use:**
 Restricting recipes index/show routes and navigation visibility.
 
-**When Not to Use:**  
+**When Not to Use:**
 Recipe write or execution flows.
 
-**Public Interface:**  
-- `Gate::authorize('inventory-recipes-view')`  
-- `@can('inventory-recipes-view')`  
+**Public Interface:**
+- `Gate::authorize('inventory-recipes-view')`
+- `@can('inventory-recipes-view')`
 - `manufacturing.recipes.*`
 
-**Example Usage:**  
+**Example Usage:**
 ```php
 Gate::authorize('inventory-recipes-view');
 ```
@@ -2972,24 +2972,24 @@ Gate::authorize('inventory-recipes-view');
 
 ### Role
 
-**Name:** Role  
-**Type:** Eloquent Model  
+**Name:** Role
+**Type:** Eloquent Model
 **Location:** `app/Models/Role.php`
 
-**Purpose:**  
+**Purpose:**
 Represent global roles that group permissions.
 
-**When to Use:**  
+**When to Use:**
 Assigning responsibilities and permissions to users.
 
-**When Not to Use:**  
+**When Not to Use:**
 Per-tenant role definitions.
 
-**Public Interface:**  
-- `users()`  
+**Public Interface:**
+- `users()`
 - `permissions()`
 
-**Example Usage:**  
+**Example Usage:**
 ```php
 $user->roles()->attach($roleId);
 ```
@@ -2998,23 +2998,23 @@ $user->roles()->attach($roleId);
 
 ### Permission
 
-**Name:** Permission  
-**Type:** Eloquent Model  
+**Name:** Permission
+**Type:** Eloquent Model
 **Location:** `app/Models/Permission.php`
 
-**Purpose:**  
+**Purpose:**
 Store canonical permission slugs enforced via Gates.
 
-**When to Use:**  
+**When to Use:**
 Authorization checks and role-permission mappings.
 
-**When Not to Use:**  
+**When Not to Use:**
 UI-only access decisions without backend enforcement.
 
-**Public Interface:**  
+**Public Interface:**
 - `roles()`
 
-**Example Usage:**  
+**Example Usage:**
 ```php
 $permission->roles()->attach($roleId);
 ```
@@ -3023,26 +3023,26 @@ $permission->roles()->attach($roleId);
 
 ### User
 
-**Name:** User  
-**Type:** Eloquent Model  
+**Name:** User
+**Type:** Eloquent Model
 **Location:** `app/Models/User.php`
 
-**Purpose:**  
+**Purpose:**
 Represent authentication identities and role/permission checks.
 
-**When to Use:**  
+**When to Use:**
 Authentication and authorization checks.
 
-**When Not to Use:**  
+**When Not to Use:**
 Tenant-scoped domain queries.
 
-**Public Interface:**  
-- `tenant()`  
-- `roles()`  
-- `hasRole()`  
+**Public Interface:**
+- `tenant()`
+- `roles()`
+- `hasRole()`
 - `hasPermission()`
 
-**Example Usage:**  
+**Example Usage:**
 ```php
 if ($user->hasPermission('inventory-materials-manage')) {
     // ...
@@ -3055,26 +3055,26 @@ if ($user->hasPermission('inventory-materials-manage')) {
 
 ### StockMove
 
-**Name:** StockMove  
-**Type:** Eloquent Model / Domain Rule  
+**Name:** StockMove
+**Type:** Eloquent Model / Domain Rule
 **Location:** `app/Models/StockMove.php`
 
-**Purpose:**  
+**Purpose:**
 Represent append-only inventory movements that form the ledger.
 
-**When to Use:**  
+**When to Use:**
 Any inventory-affecting operation such as receipts, issues, or adjustments.
 
-**When Not to Use:**  
+**When Not to Use:**
 Storing or mutating on-hand totals directly.
 
-**Public Interface:**  
-- `tenant()`  
-- `item()`  
-- `uom()`  
+**Public Interface:**
+- `tenant()`
+- `item()`
+- `uom()`
 - `source()`
 
-**Example Usage:**  
+**Example Usage:**
 ```php
 StockMove::create([
     'tenant_id' => $tenant->id,
@@ -3089,24 +3089,24 @@ StockMove::create([
 
 ### Stock-Move Guarded Delete
 
-**Name:** Stock-Move Guarded Delete  
-**Type:** Architectural Pattern  
+**Name:** Stock-Move Guarded Delete
+**Type:** Architectural Pattern
 **Location:** `app/Http/Controllers/ItemController.php`
 
-**Purpose:**  
+**Purpose:**
 Prevent deleting materials that have stock move history.
 
-**When to Use:**  
+**When to Use:**
 Deleting tenant-owned items tracked in the inventory ledger.
 
-**When Not to Use:**  
+**When Not to Use:**
 Entities without inventory history.
 
-**Public Interface:**  
-- `ItemController::destroy()`  
+**Public Interface:**
+- `ItemController::destroy()`
 - `Item::stockMoves()`
 
-**Example Usage:**  
+**Example Usage:**
 ```http
 DELETE /materials/{item}
 -> 422 { "message": "Material cannot be deleted because stock moves exist." }
@@ -3116,24 +3116,24 @@ DELETE /materials/{item}
 
 ### Decimal Quantity Math
 
-**Name:** Decimal Quantity Math  
-**Type:** Domain Rule  
+**Name:** Decimal Quantity Math
+**Type:** Domain Rule
 **Location:** `docs/CONVENTIONS.md`
 
-**Purpose:**  
+**Purpose:**
 Define canonical rules for quantity math to avoid floating-point errors.
 
-**When to Use:**  
+**When to Use:**
 Any inventory-affecting calculations or unit conversions.
 
-**When Not to Use:**  
+**When Not to Use:**
 Non-quantity calculations.
 
-**Public Interface:**  
-- BCMath functions  
+**Public Interface:**
+- BCMath functions
 - Canonical scale rules in `docs/CONVENTIONS.md`
 
-**Example Usage:**  
+**Example Usage:**
 ```php
 $total = bcadd($a, $b, 6);
 ```
@@ -3142,39 +3142,39 @@ $total = bcadd($a, $b, 6);
 
 ### Inventory Availability Read Model
 
-**Name:** Inventory Availability Read Model  
-**Type:** Read Model / Domain Rule  
-**Location:**  
-- `docs/architecture/inventory/InventoryAvailabilityReadModel.yaml`  
-- `app/Support/Inventory/InventoryAvailabilityIndexReadModel.php`  
-- `app/Support/Inventory/InventoryAvailabilityCalculator.php`  
+**Name:** Inventory Availability Read Model
+**Type:** Read Model / Domain Rule
+**Location:**
+- `docs/architecture/inventory/InventoryAvailabilityReadModel.yaml`
+- `app/Support/Inventory/InventoryAvailabilityIndexReadModel.php`
+- `app/Support/Inventory/InventoryAvailabilityCalculator.php`
 - `app/Http/Controllers/InventoryController.php`
 
-**Purpose:**  
+**Purpose:**
 Provide one tenant-scoped availability contract for the inventory index and single-item availability reads.
 
-**When to Use:**  
+**When to Use:**
 Rendering inventory availability columns or resolving availability for one item.
 
-**When Not to Use:**  
+**When Not to Use:**
 Posting stock moves or mutating operational records.
 
-**Public Interface:**  
-- `InventoryAvailabilityIndexReadModel::rows()`  
-- `InventoryAvailabilityIndexReadModel::rowForItem()`  
+**Public Interface:**
+- `InventoryAvailabilityIndexReadModel::rows()`
+- `InventoryAvailabilityIndexReadModel::rowForItem()`
 - `InventoryAvailabilityCalculator::forItem(Item $item)`
 
-**Rules:**  
-- Availability math remains canonical BCMath at scale 6.  
-- UI-facing inventory quantities must render using the item base UoM `display_precision`.  
-- The read model may expose both canonical quantity fields and backend-formatted display fields for the same row.  
+**Rules:**
+- Availability math remains canonical BCMath at scale 6.
+- UI-facing inventory quantities must render using the item base UoM `display_precision`.
+- The read model may expose both canonical quantity fields and backend-formatted display fields for the same row.
 - Workflow-enabled Purchase Orders count as BUY/open supply while they have an active current purchasing workflow stage and are not cancelled.
 - Purchase Orders without workflow state count as BUY/open supply unless they are completed or cancelled, preserving availability for rows created before workflow initialization.
 - Buy/open purchase-order quantities are calculated as package count × supplier package quantity × resolved package-UoM-to-item-base-UoM conversion, matching UoMs by normalized symbol rather than requiring conversion-row UoM ids to match package/base UoM ids.
 - Buy/open purchase-order conversion precedence is tenant/general, then global, then item-specific fallback; conversion resolution supports direct, reciprocal, and multi-step symbol paths through defined conversion records.
 - Missing required package-UoM conversion excludes that PO line from BUY availability rather than displaying package-UoM quantities as base-UoM quantities.
 
-**Example Usage:**  
+**Example Usage:**
 ```php
 $rows = $indexReadModel->rows($tenantId, 'flour');
 $availability = $calculator->forItem($item);
@@ -3184,28 +3184,28 @@ $availability = $calculator->forItem($item);
 
 ### Item
 
-**Name:** Item  
-**Type:** Eloquent Model  
+**Name:** Item
+**Type:** Eloquent Model
 **Location:** `app/Models/Item.php`
 
-**Purpose:**  
+**Purpose:**
 Represent tenant-owned stock-tracked entities with inventory derived from stock moves.
 
-**When to Use:**  
+**When to Use:**
 Modeling materials or products and computing on-hand quantities.
 
-**When Not to Use:**  
+**When Not to Use:**
 Storing denormalized on-hand quantities.
 
-**Public Interface:**  
-- `baseUom()`  
-- `stockMoves()`  
-- `onHandQuantity()`  
-- `itemUomConversions()`  
-- `recipes()`  
+**Public Interface:**
+- `baseUom()`
+- `stockMoves()`
+- `onHandQuantity()`
+- `itemUomConversions()`
+- `recipes()`
 - `activeRecipe()`
 
-**Example Usage:**  
+**Example Usage:**
 ```php
 $onHand = $item->onHandQuantity();
 ```
@@ -3214,31 +3214,31 @@ $onHand = $item->onHandQuantity();
 
 ### InventoryCount
 
-**Name:** InventoryCount  
-**Type:** Eloquent Model  
+**Name:** InventoryCount
+**Type:** Eloquent Model
 **Location:** `app/Models/InventoryCount.php`
 
-**Purpose:**  
+**Purpose:**
 Represent inventory count sessions whose posted lifecycle remains derived from `posted_at` while draft setup stays outside workflow stages and submitted counts progress through the tenant-configured Inventory workflow.
 
-**When to Use:**  
+**When to Use:**
 Recording inventory count sessions and posting adjustments.
 
-**When Not to Use:**  
+**When Not to Use:**
 Inventory adjustments outside a count context.
 
-**Public Interface:**  
-- `tenant()`  
-- `lines()`  
-- `postedByUser()`  
-- `createdByUser()`  
-- `taskedByUser()`  
-- `assignedToUser()`  
-- `workflowStage()`  
-- `stockMoves()`  
+**Public Interface:**
+- `tenant()`
+- `lines()`
+- `postedByUser()`
+- `createdByUser()`
+- `taskedByUser()`
+- `assignedToUser()`
+- `workflowStage()`
+- `stockMoves()`
 - `getStatusAttribute()`
 
-**Example Usage:**  
+**Example Usage:**
 ```php
 $status = $inventoryCount->status;
 ```
@@ -3280,24 +3280,24 @@ Notes:
 
 ### InventoryCountLine
 
-**Name:** InventoryCountLine  
-**Type:** Eloquent Model  
+**Name:** InventoryCountLine
+**Type:** Eloquent Model
 **Location:** `app/Models/InventoryCountLine.php`
 
-**Purpose:**  
+**Purpose:**
 Represent line items for an inventory count session.
 
-**When to Use:**  
+**When to Use:**
 Recording counted quantities for items.
 
-**When Not to Use:**  
+**When Not to Use:**
 Recording inventory adjustments outside a count.
 
-**Public Interface:**  
-- `inventoryCount()`  
+**Public Interface:**
+- `inventoryCount()`
 - `item()`
 
-**Example Usage:**  
+**Example Usage:**
 ```php
 $line = $count->lines()->create([
     'tenant_id' => $tenant->id,
@@ -3310,23 +3310,23 @@ $line = $count->lines()->create([
 
 ### PostInventoryCountAction
 
-**Name:** PostInventoryCountAction  
-**Type:** Action / Domain Service  
+**Name:** PostInventoryCountAction
+**Type:** Action / Domain Service
 **Location:** `app/Actions/Inventory/PostInventoryCountAction.php`
 
-**Purpose:**  
+**Purpose:**
 Post an inventory count and create ledger adjustments.
 
-**When to Use:**  
+**When to Use:**
 Posting inventory count results to the ledger.
 
-**When Not to Use:**  
+**When Not to Use:**
 Generic inventory adjustments.
 
-**Public Interface:**  
+**Public Interface:**
 - `execute(InventoryCount $inventoryCount, int $postedByUserId): InventoryCount`
 
-**Example Usage:**  
+**Example Usage:**
 ```php
 $action = new PostInventoryCountAction();
 $action->execute($inventoryCount, $userId);
@@ -3338,28 +3338,28 @@ $action->execute($inventoryCount, $userId);
 
 ### Recipe
 
-**Name:** Recipe  
-**Type:** Eloquent Model  
+**Name:** Recipe
+**Type:** Eloquent Model
 **Location:** `app/Models/Recipe.php`
 
-**Purpose:**  
+**Purpose:**
 Represent the stable parent identity for named recipes while delegating execution details to version records.
 
-**When to Use:**  
+**When to Use:**
 Defining recipe parents and parent-level metadata.
 
-**When Not to Use:**  
+**When Not to Use:**
 Non-manufacturing inventory relationships.
 
-**Public Interface:**  
-- `tenant()`  
-- `item()`  
-- `currentVersion()`  
-- `versions()`  
-- `lines()`  
+**Public Interface:**
+- `tenant()`
+- `item()`
+- `currentVersion()`
+- `versions()`
+- `lines()`
 - `stockMoves()`
 
-**Example Usage:**  
+**Example Usage:**
 ```php
 $recipe = Recipe::create([
     'tenant_id' => $tenant->id,
@@ -3373,29 +3373,29 @@ $recipe = Recipe::create([
 
 ### Recipe Versioning Pattern
 
-**Name:** Recipe Versioning Pattern  
-**Type:** Manufacturing Domain Pattern  
-**Location:**  
-- `docs/architecture/manufacturing/RecipeVersioning.yaml`  
-- `app/Models/Recipe.php`  
-- `app/Models/RecipeVersion.php`  
+**Name:** Recipe Versioning Pattern
+**Type:** Manufacturing Domain Pattern
+**Location:**
+- `docs/architecture/manufacturing/RecipeVersioning.yaml`
+- `app/Models/Recipe.php`
+- `app/Models/RecipeVersion.php`
 - `app/Models/RecipeVersionLine.php`
 
-**Purpose:**  
+**Purpose:**
 Separate stable recipe identity from version-owned execution templates and ingredient lines.
 
-**When to Use:**  
+**When to Use:**
 Capturing or changing recipe execution behavior without mutating historical Make Orders.
 
-**When Not to Use:**  
+**When Not to Use:**
 Parent-level display metadata such as the main recipe name or default flag.
 
-**Public Interface:**  
-- `Recipe::currentVersion()`  
-- `Recipe::versions()`  
+**Public Interface:**
+- `Recipe::currentVersion()`
+- `Recipe::versions()`
 - `RecipeVersion::lines()`
 
-**Example Usage:**  
+**Example Usage:**
 ```php
 $recipe->versions()->create([
     'tenant_id' => $recipe->tenant_id,
@@ -3419,20 +3419,20 @@ Notes:
 
 ### Recipe Version Checkout Pattern
 
-**Name:** Recipe Version Checkout Pattern  
-**Type:** Manufacturing Domain Pattern  
-**Location:**  
-- `docs/architecture/manufacturing/RecipeVersionCheckout.yaml`  
-- `app/Models/RecipeVersionCheckout.php`  
+**Name:** Recipe Version Checkout Pattern
+**Type:** Manufacturing Domain Pattern
+**Location:**
+- `docs/architecture/manufacturing/RecipeVersionCheckout.yaml`
+- `app/Models/RecipeVersionCheckout.php`
 - `app/Http/Controllers/RecipeController.php`
 
-**Purpose:**  
+**Purpose:**
 Persist per-user recipe-version editing context without introducing a recipe-wide lock.
 
-**When to Use:**  
+**When to Use:**
 Checking out, checking in, publishing, or resolving the version a user should see on the recipe detail page.
 
-**When Not to Use:**  
+**When Not to Use:**
 Choosing the version for Make Orders or expressing lifecycle status.
 
 Notes:
@@ -3440,30 +3440,30 @@ Notes:
 - Users without an open checkout must see the current published version.
 - Users without an open checkout fall back to the latest non-archived version when no current published version exists yet.
 
-**Public Interface:**  
-- `Recipe::openCheckoutForUser()`  
-- `Recipe::displayVersionForUser()`  
+**Public Interface:**
+- `Recipe::openCheckoutForUser()`
+- `Recipe::displayVersionForUser()`
 - `RecipeVersion::checkouts()`
 
 ---
 
 ### Recipe Ingredients Editing Pattern
 
-**Name:** Recipe Ingredients Editing Pattern  
-**Type:** Manufacturing Domain Pattern  
-**Location:**  
-- `docs/architecture/manufacturing/RecipeIngredientsEditing.yaml`  
-- `app/Models/RecipeVersionLine.php`  
-- `app/Http/Controllers/RecipeController.php`  
+**Name:** Recipe Ingredients Editing Pattern
+**Type:** Manufacturing Domain Pattern
+**Location:**
+- `docs/architecture/manufacturing/RecipeIngredientsEditing.yaml`
+- `app/Models/RecipeVersionLine.php`
+- `app/Http/Controllers/RecipeController.php`
 - `resources/views/manufacturing/recipes/show.blade.php`
 
-**Purpose:**  
+**Purpose:**
 Keep recipe ingredients version-owned and editable only through a checked-out draft context on the recipe detail page.
 
-**When to Use:**  
+**When to Use:**
 Displaying, adding, or editing recipe ingredients in the recipe detail view.
 
-**When Not to Use:**  
+**When Not to Use:**
 Editing parent recipe lines directly or deriving Make Order inputs from live recipe data.
 
 Notes:
@@ -3478,24 +3478,24 @@ Notes:
 
 ### Shared Resource Detail Header Breadcrumb Component
 
-**Name:** Shared Resource Detail Header Breadcrumb Component  
-**Type:** UI Layout Pattern  
-**Location:**  
-- `docs/architecture/ui/ResourceDetailHeaderBreadcrumb.yaml`  
-- `resources/views/components/resource-detail-header-breadcrumb.blade.php`  
-- `resources/views/materials/show.blade.php`  
-- `resources/views/manufacturing/recipes/show.blade.php`  
+**Name:** Shared Resource Detail Header Breadcrumb Component
+**Type:** UI Layout Pattern
+**Location:**
+- `docs/architecture/ui/ResourceDetailHeaderBreadcrumb.yaml`
+- `resources/views/components/resource-detail-header-breadcrumb.blade.php`
+- `resources/views/materials/show.blade.php`
+- `resources/views/manufacturing/recipes/show.blade.php`
 
-**Purpose:**  
+**Purpose:**
 Keep detail-page titles and breadcrumbs aligned through one reusable header contract with the breadcrumb rendered at the bottom of the header.
 
-**When to Use:**  
+**When to Use:**
 Resource detail pages that render a title and breadcrumb trail.
 
-**When Not to Use:**  
+**When Not to Use:**
 Index pages or standalone navigation bars.
 
-**Public Interface:**  
+**Public Interface:**
 - `<x-resource-detail-header-breadcrumb />`
 - `<x-resource-breadcrumbs />`
 
@@ -3531,66 +3531,66 @@ Notes:
 
 ### Starting Inventory Visibility Pattern
 
-**Name:** Starting Inventory Visibility Pattern  
-**Type:** Inventory Domain Pattern  
-**Location:**  
-- `app/Http/Controllers/ItemController.php`  
-- `app/Models/InventoryCount.php`  
-- `app/Models/StockMove.php`  
+**Name:** Starting Inventory Visibility Pattern
+**Type:** Inventory Domain Pattern
+**Location:**
+- `app/Http/Controllers/ItemController.php`
+- `app/Models/InventoryCount.php`
+- `app/Models/StockMove.php`
 
-**Purpose:**  
+**Purpose:**
 Make material starting quantity visible through the user-facing inventory counts surface while preserving stock moves as the canonical append-only inventory ledger.
 
-**When to Use:**  
+**When to Use:**
 Creating a material with a positive starting quantity.
 
-**When Not to Use:**  
+**When Not to Use:**
 General receiving, purchase-order posting, or later stock adjustments.
 
-**Public Interface:**  
-- `ItemController::store()`  
-- `InventoryCount::stockMoves()`  
+**Public Interface:**
+- `ItemController::store()`
+- `InventoryCount::stockMoves()`
 
-**Rules:**  
+**Rules:**
 - Positive starting quantity for a stockable material creates an immediately completed and posted `Initial Stock` inventory count.
 - The opening-balance stock effect should reuse the existing inventory-count posting behavior instead of creating a disconnected one-off inventory mutation.
 - Non-stockable materials must reject starting quantity input instead of silently ignoring it.
 
-**Public Interface:**  
-- `RecipeVersion::lines()`  
-- `RecipeController::storeIngredient()`  
+**Public Interface:**
+- `RecipeVersion::lines()`
+- `RecipeController::storeIngredient()`
 - `RecipeController::updateIngredient()`
 
 ---
 
 ### Make Order Recipe Snapshot Pattern
 
-**Name:** Make Order Recipe Snapshot Pattern  
-**Type:** Manufacturing Domain Pattern  
-**Location:**  
-- `docs/architecture/manufacturing/MakeOrderRecipeSnapshot.yaml`  
-- `app/Models/MakeOrder.php`  
-- `app/Models/MakeOrderLine.php`  
+**Name:** Make Order Recipe Snapshot Pattern
+**Type:** Manufacturing Domain Pattern
+**Location:**
+- `docs/architecture/manufacturing/MakeOrderRecipeSnapshot.yaml`
+- `app/Models/MakeOrder.php`
+- `app/Models/MakeOrderLine.php`
 - `app/Http/Controllers/MakeOrderController.php`
 
-**Purpose:**  
+**Purpose:**
 Snapshot the current published recipe version and its lines onto each Make Order so later recipe changes do not mutate execution history.
 
-**When to Use:**  
+**When to Use:**
 Creating or executing Make Orders.
 
-**When Not to Use:**  
+**When Not to Use:**
 Live recipe planning queries that should resolve the current version directly.
 
 Notes:
 - Make Orders must resolve `recipe_version_id` from `recipes.current_version_id`.
 - User checked-out recipe versions are excluded from Make Order selection.
 
-**Public Interface:**  
-- `MakeOrder::recipeVersion()`  
+**Public Interface:**
+- `MakeOrder::recipeVersion()`
 - `MakeOrder::lines()`
 
-**Example Usage:**  
+**Example Usage:**
 ```php
 $makeOrder->lines()->create([
     'tenant_id' => $makeOrder->tenant_id,
@@ -3604,52 +3604,52 @@ $makeOrder->lines()->create([
 
 ### Breadcrumb/Header Alignment Rule
 
-**Name:** Breadcrumb/Header Alignment Rule  
-**Type:** UI Layout Invariant  
-**Location:**  
-- `docs/architecture/ui/ResourceDetailBreadcrumbAlignment.yaml`  
+**Name:** Breadcrumb/Header Alignment Rule
+**Type:** UI Layout Invariant
+**Location:**
+- `docs/architecture/ui/ResourceDetailBreadcrumbAlignment.yaml`
 - `resources/views/manufacturing/recipes/show.blade.php`
 
-**Purpose:**  
+**Purpose:**
 Keep resource-detail breadcrumbs and titles aligned within one container so the home icon and title share the same left edge.
 
-**When to Use:**  
+**When to Use:**
 Rendering breadcrumbs above a resource detail title.
 
-**When Not to Use:**  
+**When Not to Use:**
 Index pages or standalone navigation regions.
 
 Notes:
 - Breadcrumbs and the header title must share the same layout container.
 - Breadcrumbs must not drift in an independent max-width wrapper.
 
-**Public Interface:**  
-- `resources/views/components/resource-breadcrumbs.blade.php`  
+**Public Interface:**
+- `resources/views/components/resource-breadcrumbs.blade.php`
 - `resources/views/manufacturing/recipes/show.blade.php`
 
 ---
 
 ### RecipeLine
 
-**Name:** RecipeLine  
-**Type:** Eloquent Model  
+**Name:** RecipeLine
+**Type:** Eloquent Model
 **Location:** `app/Models/RecipeLine.php`
 
-**Purpose:**  
+**Purpose:**
 Represent line items for a recipe.
 
-**When to Use:**  
+**When to Use:**
 Capturing input items and quantities for recipes.
 
-**When Not to Use:**  
+**When Not to Use:**
 Inventory movements or adjustments.
 
-**Public Interface:**  
-- `tenant()`  
-- `recipe()`  
+**Public Interface:**
+- `tenant()`
+- `recipe()`
 - `item()`
 
-**Example Usage:**  
+**Example Usage:**
 ```php
 $recipe->lines()->create([
     'tenant_id' => $tenant->id,
@@ -3662,23 +3662,23 @@ $recipe->lines()->create([
 
 ### ExecuteRecipeAction
 
-**Name:** ExecuteRecipeAction  
-**Type:** Action / Domain Service  
+**Name:** ExecuteRecipeAction
+**Type:** Action / Domain Service
 **Location:** `app/Actions/Inventory/ExecuteRecipeAction.php`
 
-**Purpose:**  
+**Purpose:**
 Execute a recipe to issue inputs and receipt outputs as stock moves.
 
-**When to Use:**  
+**When to Use:**
 Manufacturing or make-order execution.
 
-**When Not to Use:**  
+**When Not to Use:**
 Inventory adjustments or corrections.
 
-**Public Interface:**  
+**Public Interface:**
 - `execute(Recipe $recipe, string $runs): array`
 
-**Example Usage:**  
+**Example Usage:**
 ```php
 $action = new ExecuteRecipeAction();
 $action->execute($recipe, '5.000000');
@@ -3688,28 +3688,28 @@ $action->execute($recipe, '5.000000');
 
 ### Recipe Read Model
 
-**Name:** Recipe Read Model  
-**Type:** Read Model / UI Contract  
-**Location:**  
-- `docs/architecture/manufacturing/RecipeReadModel.yaml`  
-- `app/Http/Controllers/RecipeController.php`  
-- `resources/views/manufacturing/recipes/index.blade.php`  
+**Name:** Recipe Read Model
+**Type:** Read Model / UI Contract
+**Location:**
+- `docs/architecture/manufacturing/RecipeReadModel.yaml`
+- `app/Http/Controllers/RecipeController.php`
+- `resources/views/manufacturing/recipes/index.blade.php`
 - `resources/views/manufacturing/recipes/show.blade.php`
 
-**Purpose:**  
+**Purpose:**
 Define the read-only data and display expectations for recipe index and detail pages.
 
-**When to Use:**  
+**When to Use:**
 Rendering manufacturing recipe read-only views.
 
-**When Not to Use:**  
+**When Not to Use:**
 Recipe creation, editing, or execution flows.
 
-**Public Interface:**  
-- `manufacturing.recipes.index`  
+**Public Interface:**
+- `manufacturing.recipes.index`
 - `manufacturing.recipes.show`
 
-**Example Usage:**  
+**Example Usage:**
 ```blade
 <th>{{ __('Recipe Name') }}</th>
 <th>{{ __('Input Item') }}</th>
@@ -3723,31 +3723,31 @@ Recipe creation, editing, or execution flows.
 
 ### QuantityFormatter
 
-**Name:** QuantityFormatter  
-**Type:** Support Utility  
+**Name:** QuantityFormatter
+**Type:** Support Utility
 **Location:** `app/Support/QuantityFormatter.php`
 
-**Purpose:**  
+**Purpose:**
 Centralize UI quantity string formatting using UoM display precision.
 
-**Notes:**  
+**Notes:**
 - Accepts numeric strings, ints, floats, and null.
 - Clamps precision to `0..6`.
 - Preserves trailing zeros to requested precision.
 - Uses string-safe half-up rounding for display output.
 - Uses UoM-driven precision via `display_precision`.
 
-**When to Use:**  
+**When to Use:**
 Rendering quantities for HTML and page payloads.
 
-**When Not to Use:**  
+**When Not to Use:**
 Storage math or domain arithmetic (use BCMath with canonical scale 6).
 
-**Public Interface:**  
-- `QuantityFormatter::format($quantity, $precision)`  
+**Public Interface:**
+- `QuantityFormatter::format($quantity, $precision)`
 - `QuantityFormatter::formatForUom($quantity, $uom, $fallbackPrecision = 6)`
 
-**Example Usage:**  
+**Example Usage:**
 ```php
 $display = QuantityFormatter::formatForUom($line->quantity, $line->item?->baseUom, 1);
 ```
@@ -3756,28 +3756,28 @@ $display = QuantityFormatter::formatForUom($line->quantity, $line->item?->baseUo
 
 ### Blade Quantity Directives
 
-**Name:** Blade Quantity Directives  
-**Type:** Blade Integration Pattern  
+**Name:** Blade Quantity Directives
+**Type:** Blade Integration Pattern
 **Location:** `app/Providers/AppServiceProvider.php`
 
-**Purpose:**  
+**Purpose:**
 Provide a Blade-first wrapper over `QuantityFormatter` so views do not format quantities ad-hoc.
 
-**Notes:**  
+**Notes:**
 - Quantity display in Blade should use directives backed by `QuantityFormatter`.
 - JavaScript must consume backend-provided display strings; it must not reformat quantities.
 
-**When to Use:**  
+**When to Use:**
 Any quantity rendered directly in Blade templates.
 
-**When Not to Use:**  
+**When Not to Use:**
 Currency formatting or non-quantity values.
 
-**Public Interface:**  
-- `@qty($value, $precision)`  
+**Public Interface:**
+- `@qty($value, $precision)`
 - `@qtyForUom($value, $uom, $fallbackPrecision = 6)`
 
-**Example Usage:**  
+**Example Usage:**
 ```blade
 @qtyForUom($item->onHandQuantity(), $item->baseUom, 1)
 ```
@@ -3786,27 +3786,27 @@ Currency formatting or non-quantity values.
 
 ### UomCategory
 
-**Name:** UomCategory  
-**Type:** Eloquent Model  
+**Name:** UomCategory
+**Type:** Eloquent Model
 **Location:** `app/Models/UomCategory.php`
 
-**Purpose:**  
+**Purpose:**
 Group units of measure into categories that define safe conversion boundaries.
 
-**Notes:**  
+**Notes:**
 - Tenant-owned. System defaults use `tenant_id = null`.
 - Names are unique per tenant.
 
-**When to Use:**  
+**When to Use:**
 Defining conversion-safe groupings such as mass or volume.
 
-**When Not to Use:**  
+**When Not to Use:**
 Cross-category conversion logic.
 
-**Public Interface:**  
+**Public Interface:**
 - `uoms()`
 
-**Example Usage:**  
+**Example Usage:**
 ```php
 $category = UomCategory::create([
     'tenant_id' => $tenant->id,
@@ -3818,29 +3818,29 @@ $category = UomCategory::create([
 
 ### Uom
 
-**Name:** Uom  
-**Type:** Eloquent Model  
+**Name:** Uom
+**Type:** Eloquent Model
 **Location:** `app/Models/Uom.php`
 
-**Purpose:**  
+**Purpose:**
 Represent a unit of measure belonging to a single category.
 
-**Notes:**  
+**Notes:**
 - Tenant-owned. System defaults use `tenant_id = null`.
 - `symbol` is unique per tenant; `name` is not unique.
 
-**When to Use:**  
+**When to Use:**
 Assigning units to items and recording quantities.
 
-**When Not to Use:**  
+**When Not to Use:**
 Implicit unit assumptions.
 
-**Public Interface:**  
-- `category()`  
-- `conversionsFrom()`  
+**Public Interface:**
+- `category()`
+- `conversionsFrom()`
 - `conversionsTo()`
 
-**Example Usage:**  
+**Example Usage:**
 ```php
 $uom = Uom::create([
     'tenant_id' => $tenant->id,
@@ -3854,24 +3854,24 @@ $uom = Uom::create([
 
 ### UomConversion
 
-**Name:** UomConversion  
-**Type:** Eloquent Model / Domain Rule  
+**Name:** UomConversion
+**Type:** Eloquent Model / Domain Rule
 **Location:** `app/Models/UomConversion.php`
 
-**Purpose:**  
+**Purpose:**
 Provide safe global conversions within a single UoM category.
 
-**When to Use:**  
+**When to Use:**
 Universal conversions within a category.
 
-**When Not to Use:**  
+**When Not to Use:**
 Cross-category conversions or item-specific conversions.
 
-**Public Interface:**  
-- `fromUom()`  
+**Public Interface:**
+- `fromUom()`
 - `toUom()`
 
-**Example Usage:**  
+**Example Usage:**
 ```php
 UomConversion::create([
     'from_uom_id' => $kg->id,
@@ -3884,33 +3884,33 @@ UomConversion::create([
 
 ### UoM Conversion System
 
-**Name:** UoM Conversion System  
-**Type:** Domain Rule Set / UI + Persistence Pattern  
-**Location:**  
-- `app/Http/Controllers/UomConversionController.php`  
-- `app/Models/UomConversion.php`  
-- `app/Models/ItemUomConversion.php`  
-- `app/Services/Uom/SystemUomCloner.php`  
+**Name:** UoM Conversion System
+**Type:** Domain Rule Set / UI + Persistence Pattern
+**Location:**
+- `app/Http/Controllers/UomConversionController.php`
+- `app/Models/UomConversion.php`
+- `app/Models/ItemUomConversion.php`
+- `app/Services/Uom/SystemUomCloner.php`
 - `resources/views/manufacturing/uom-conversions/index.blade.php`
 
-**Purpose:**  
+**Purpose:**
 Unify global, tenant-managed, and item-specific conversion behavior behind one manufacturing UI and one precedence-aware lookup model.
 
-**When to Use:**  
-- Managing same-category global or tenant conversions  
-- Managing item-specific overrides  
+**When to Use:**
+- Managing same-category global or tenant conversions
+- Managing item-specific overrides
 - Resolving a conversion for operational workflows
 
-**When Not to Use:**  
-- Implicit ad hoc unit math outside the defined conversion system  
+**When Not to Use:**
+- Implicit ad hoc unit math outside the defined conversion system
 - Cross-category general conversions
 
-**Public Interface:**  
-- `manufacturing.uom-conversions.*` routes  
-- `UomConversion`  
+**Public Interface:**
+- `manufacturing.uom-conversions.*` routes
+- `UomConversion`
 - `ItemUomConversion`
 
-**Example Usage:**  
+**Example Usage:**
 ```php
 Gate::authorize('inventory-materials-manage');
 ```
@@ -3919,27 +3919,27 @@ Gate::authorize('inventory-materials-manage');
 
 ### Conversion Precedence Pattern
 
-**Name:** Conversion Precedence Pattern  
-**Type:** Domain Resolution Rule  
-**Location:**  
-- `app/Http/Controllers/UomConversionController.php`  
-- `app/Actions/Inventory/ReceivePurchaseOptionAction.php`  
+**Name:** Conversion Precedence Pattern
+**Type:** Domain Resolution Rule
+**Location:**
+- `app/Http/Controllers/UomConversionController.php`
+- `app/Actions/Inventory/ReceivePurchaseOptionAction.php`
 - `docs/architecture/uom/ConversionPrecedence.yaml`
 
-**Purpose:**  
+**Purpose:**
 Resolve unit conversions deterministically when multiple scopes can define a mapping.
 
-**When to Use:**  
+**When to Use:**
 - Any lookup that must choose between item-specific, tenant, and global conversions
 
-**When Not to Use:**  
+**When Not to Use:**
 - Writes or validations that should target one explicit scope only
 
-**Public Interface:**  
-- `resolve()` behavior  
+**Public Interface:**
+- `resolve()` behavior
 - `item-specific > tenant > global`
 
-**Example Usage:**  
+**Example Usage:**
 ```php
 // Resolution order:
 // 1. item-specific
@@ -3951,25 +3951,25 @@ Resolve unit conversions deterministically when multiple scopes can define a map
 
 ### ItemUomConversion
 
-**Name:** ItemUomConversion  
-**Type:** Eloquent Model / Domain Rule  
+**Name:** ItemUomConversion
+**Type:** Eloquent Model / Domain Rule
 **Location:** `app/Models/ItemUomConversion.php`
 
-**Purpose:**  
+**Purpose:**
 Allow item-specific conversions, including cross-category conversions.
 
-**When to Use:**  
+**When to Use:**
 Conversions that are true only for a specific item.
 
-**When Not to Use:**  
+**When Not to Use:**
 Global conversions shared across items.
 
-**Public Interface:**  
-- `item()`  
-- `fromUom()`  
+**Public Interface:**
+- `item()`
+- `fromUom()`
 - `toUom()`
 
-**Example Usage:**  
+**Example Usage:**
 ```php
 $item->itemUomConversions()->create([
     'tenant_id' => $tenant->id,
@@ -3985,23 +3985,23 @@ $item->itemUomConversions()->create([
 
 ### Supplier
 
-**Name:** Supplier  
-**Type:** Eloquent Model  
+**Name:** Supplier
+**Type:** Eloquent Model
 **Location:** `app/Models/Supplier.php`
 
-**Purpose:**  
+**Purpose:**
 Represent tenant-owned suppliers for purchasing relationships.
 
-**When to Use:**  
+**When to Use:**
 Managing suppliers for purchasing workflows.
 
-**When Not to Use:**  
+**When Not to Use:**
 Materials or inventory entities.
 
-**Public Interface:**  
+**Public Interface:**
 - `tenant()`
 
-**Example Usage:**  
+**Example Usage:**
 ```php
 $supplier = Supplier::create([
     'tenant_id' => $tenant->id,
@@ -4013,26 +4013,26 @@ $supplier = Supplier::create([
 
 ### Supplier Delete Guard
 
-**Name:** Supplier Delete Guard  
-**Type:** Domain Guard / Service Interface  
-**Location:**  
-- `app/Services/Purchasing/SupplierDeleteGuard.php`  
-- `app/Services/Purchasing/DefaultSupplierDeleteGuard.php`  
+**Name:** Supplier Delete Guard
+**Type:** Domain Guard / Service Interface
+**Location:**
+- `app/Services/Purchasing/SupplierDeleteGuard.php`
+- `app/Services/Purchasing/DefaultSupplierDeleteGuard.php`
 - `app/Http/Controllers/SupplierController.php`
 
-**Purpose:**  
+**Purpose:**
 Provide a seam to block supplier deletion when supplier-linked purchasing catalog records exist, without broad schema refactors.
 
-**When to Use:**  
+**When to Use:**
 Deleting suppliers via AJAX endpoints with a supplier catalog link check.
 
-**When Not to Use:**  
+**When Not to Use:**
 Delete guards for non-supplier entities.
 
-**Public Interface:**  
+**Public Interface:**
 - `SupplierDeleteGuard::isLinkedToMaterials(Supplier $supplier): bool`
 
-**Example Usage:**  
+**Example Usage:**
 ```php
 if ($guard->isLinkedToMaterials($supplier)) {
     return response()->json([
@@ -4045,29 +4045,29 @@ if ($guard->isLinkedToMaterials($supplier)) {
 
 ### ItemPurchaseOption
 
-**Name:** ItemPurchaseOption  
-**Type:** Eloquent Model  
+**Name:** ItemPurchaseOption
+**Type:** Eloquent Model
 **Location:** `app/Models/ItemPurchaseOption.php`
 
-**Purpose:**  
+**Purpose:**
 Represent supplier-specific purchasing packs that map into item inventory.
 
-**When to Use:**  
+**When to Use:**
 Receiving inventory in supplier pack quantities.
 
-**When Not to Use:**  
+**When Not to Use:**
 Tracking inventory on-hand directly.
 
-**Public Interface:**  
-- `tenant()`  
-- `item()`  
+**Public Interface:**
+- `tenant()`
+- `item()`
 - `packUom()`
 
 **Notes:**
 - Pack UoM must match the item base UoM or have a resolvable direct, reciprocal, or multi-step path through item-specific, tenant/general, or global conversions before create/update is allowed.
 - Missing conversion responses must include enough item/UOM context for the supplier-package slide-over to open a quick item-conversion modal without navigating away.
 
-**Example Usage:**  
+**Example Usage:**
 ```php
 $option = ItemPurchaseOption::create([
     'tenant_id' => $tenant->id,
@@ -4105,25 +4105,25 @@ Track Purchase Order lifecycle through the shared workflow foundation while mirr
 
 ### Purchase Order Receipt Inventory Impact
 
-**Name:** Purchase Order Receipt Inventory Impact  
-**Type:** Domain Rule  
-**Location:**  
-- `docs/architecture/purchasing/PurchaseOrderReceiptInventoryImpact.yaml`  
-- `app/Services/Purchasing/PurchaseOrderLifecycleService.php`  
+**Name:** Purchase Order Receipt Inventory Impact
+**Type:** Domain Rule
+**Location:**
+- `docs/architecture/purchasing/PurchaseOrderReceiptInventoryImpact.yaml`
+- `app/Services/Purchasing/PurchaseOrderLifecycleService.php`
 - `app/Models/PurchaseOrderReceiptLine.php`
 
-**Purpose:**  
+**Purpose:**
 Ensure purchase order receipt lines are recorded while stockable receipt lines post linked stock moves in item base units.
 
-**When to Use:**  
+**When to Use:**
 Purchase order receiving and receipt-ledger audit checks.
 
-**When Not to Use:**  
+**When Not to Use:**
 Short-close events or non-purchasing inventory adjustments.
 
-**Public Interface:**  
-- `PurchaseOrderLifecycleService::createReceipt()`  
-- `PurchaseOrderReceiptLine::stockMove()`  
+**Public Interface:**
+- `PurchaseOrderLifecycleService::createReceipt()`
+- `PurchaseOrderReceiptLine::stockMove()`
 - `Item::onHandQuantity()`
 
 **Notes:**
@@ -4131,7 +4131,7 @@ Short-close events or non-purchasing inventory adjustments.
 - Conversion precedence is item-specific, tenant/general, then global; missing conversion blocks receiving transactionally.
 - Conversion may resolve through direct, reciprocal, or multi-step paths through defined conversion records.
 
-**Example Usage:**  
+**Example Usage:**
 ```php
 $baseQuantity = bcmul('2.000000', '500.000000', 6);
 // $baseQuantity === '1000.000000'
@@ -4141,24 +4141,24 @@ $baseQuantity = bcmul('2.000000', '500.000000', 6);
 
 ### ReceivePurchaseOptionAction
 
-**Name:** ReceivePurchaseOptionAction  
-**Type:** Action / Domain Service  
+**Name:** ReceivePurchaseOptionAction
+**Type:** Action / Domain Service
 **Location:** `app/Actions/Inventory/ReceivePurchaseOptionAction.php`
 
-**Purpose:**  
+**Purpose:**
 Receive inventory from a purchase option and create a stock move.
 
-**When to Use:**  
+**When to Use:**
 Receiving inventory from supplier pack quantities.
 
-**When Not to Use:**  
+**When Not to Use:**
 Generic inventory adjustments.
 
-**Public Interface:**  
+**Public Interface:**
 - `execute(ItemPurchaseOption $option, string $packCount): StockMove`
 - `baseQuantityFor(ItemPurchaseOption $option, string $packCount): string`
 
-**Example Usage:**  
+**Example Usage:**
 ```php
 $action = new ReceivePurchaseOptionAction();
 $action->execute($option, '2.000000');
@@ -4170,28 +4170,28 @@ $action->execute($option, '2.000000');
 
 ### AJAX CRUD Controller Pattern
 
-**Name:** AJAX CRUD Controller Pattern  
-**Type:** Architectural Pattern  
-**Location:**  
-- `app/Http/Controllers/UomCategoryController.php`  
-- `app/Http/Controllers/UomController.php`  
+**Name:** AJAX CRUD Controller Pattern
+**Type:** Architectural Pattern
+**Location:**
+- `app/Http/Controllers/UomCategoryController.php`
+- `app/Http/Controllers/UomController.php`
 - `app/Http/Controllers/ItemController.php`
 
-**Purpose:**  
+**Purpose:**
 Handle UI-driven CRUD using JSON responses without full page reloads.
 
-**When to Use:**  
+**When to Use:**
 Single-entity CRUD with fetch-based requests.
 
-**When Not to Use:**  
+**When Not to Use:**
 Multi-step workflows or transactional orchestration.
 
-**Public Interface:**  
-- `store()`  
-- `update()`  
+**Public Interface:**
+- `store()`
+- `update()`
 - `destroy()`
 
-**Example Usage:**  
+**Example Usage:**
 ```php
 $response = $this->postJson('/materials', [
     'name' => 'Flour',
@@ -4203,31 +4203,31 @@ $response = $this->postJson('/materials', [
 
 ### Shared Navigation Eligibility State
 
-**Name:** Shared Navigation Eligibility State  
-**Type:** UI Architecture Invariant  
-**Location:**  
-- `docs/architecture/ui/SharedNavigationEligibilityState.yaml`  
-- `app/Navigation/NavigationEligibility.php`  
-- `app/Http/Controllers/NavigationStateController.php`  
-- `resources/views/layouts/navigation.blade.php`  
-- `resources/js/navigation/refresh-navigation-state.js`  
+**Name:** Shared Navigation Eligibility State
+**Type:** UI Architecture Invariant
+**Location:**
+- `docs/architecture/ui/SharedNavigationEligibilityState.yaml`
+- `app/Navigation/NavigationEligibility.php`
+- `app/Http/Controllers/NavigationStateController.php`
+- `resources/views/layouts/navigation.blade.php`
+- `resources/js/navigation/refresh-navigation-state.js`
 
-**Purpose:**  
+**Purpose:**
 Centralize tenant-scoped order-navigation eligibility in backend code while letting AJAX page modules refresh stale nav DOM after successful mutations.
 
-**When to Use:**  
+**When to Use:**
 Rendering or refreshing Sales Orders, Purchase Orders, or Make Orders navigation state.
 
-**When Not to Use:**  
+**When Not to Use:**
 Authorization decisions, route protection, or any client-owned navigation authority.
 
-**Public Interface:**  
-- `NavigationEligibility::forUser()`  
-- `NavigationEligibility::forTenantId()`  
-- `GET /navigation/state`  
-- `navigation.state`  
+**Public Interface:**
+- `NavigationEligibility::forUser()`
+- `NavigationEligibility::forTenantId()`
+- `GET /navigation/state`
+- `navigation.state`
 
-**Example Usage:**  
+**Example Usage:**
 ```php
 $eligibility = app(\App\Navigation\NavigationEligibility::class)->forUser(auth()->user());
 ```
@@ -4236,23 +4236,23 @@ $eligibility = app(\App\Navigation\NavigationEligibility::class)->forUser(auth()
 
 ### Top Navigation Dropdown
 
-**Name:** Top Navigation Dropdown  
-**Type:** UI Pattern  
+**Name:** Top Navigation Dropdown
+**Type:** UI Pattern
 **Location:** `resources/views/layouts/navigation.blade.php`
 
-**Purpose:**  
+**Purpose:**
 Group navigation links under a top-level dropdown.
 
-**When to Use:**  
+**When to Use:**
 A top-level domain owns mandatory supporting subdomains.
 
-**When Not to Use:**  
+**When Not to Use:**
 Unrelated or optional domains.
 
-**Public Interface:**  
+**Public Interface:**
 - Blade markup using `x-dropdown` and `x-dropdown-link`
 
-**Example Usage:**  
+**Example Usage:**
 ```blade
 <x-dropdown align="left">
     <x-slot name="trigger">
@@ -4268,23 +4268,23 @@ Unrelated or optional domains.
 
 ### Slide-Over Form Pattern
 
-**Name:** Slide-Over Form Pattern  
-**Type:** UI Pattern  
+**Name:** Slide-Over Form Pattern
+**Type:** UI Pattern
 **Location:** `resources/views/materials/partials/create-material-slide-over.blade.php`
 
-**Purpose:**  
+**Purpose:**
 Create or edit entities without leaving the current page.
 
-**When to Use:**  
+**When to Use:**
 CRUD forms with multiple fields.
 
-**When Not to Use:**  
+**When Not to Use:**
 Confirmations or single-field actions.
 
-**Public Interface:**  
+**Public Interface:**
 - Blade partial with Alpine state and form markup
 
-**Example Usage:**  
+**Example Usage:**
 ```blade
 <form x-on:submit.prevent="submitCreate()">
     <input type="text" x-model="form.name" />
@@ -4295,53 +4295,53 @@ Confirmations or single-field actions.
 
 ### Import Slide-Over Preview Pattern
 
-**Name:** Import Slide-Over Preview Pattern  
-**Type:** UI Pattern  
-**Location:**  
-- `docs/architecture/ui/ImportSlideOverPreviewPattern.yaml`  
-- `app/Http/Controllers/SalesProductController.php`  
-- `app/Http/Controllers/CustomerController.php`  
-- `resources/views/sales/products/index.blade.php`  
-- `resources/views/sales/customers/index.blade.php`  
-- `resources/js/lib/import-config.js`  
-- `resources/js/lib/import-module.js`  
-- `resources/js/pages/sales-products-index.js`  
-- `resources/js/pages/sales-customers-index.js`  
+**Name:** Import Slide-Over Preview Pattern
+**Type:** UI Pattern
+**Location:**
+- `docs/architecture/ui/ImportSlideOverPreviewPattern.yaml`
+- `app/Http/Controllers/SalesProductController.php`
+- `app/Http/Controllers/CustomerController.php`
+- `resources/js/pages/Sales/Products/Index.vue`
+- `resources/views/sales/customers/index.blade.php`
+- `resources/js/lib/import-config.js`
+- `resources/js/lib/import-module.js`
+- `resources/js/pages/Sales/Products/Index.vue`
+- `resources/js/pages/sales-customers-index.js`
 
-**Purpose:**  
+**Purpose:**
 Provide a reusable config-driven import slide-over component that owns the full import UX and lifecycle, auto-loads previews from the chosen source, keeps bulk options and preview records in accordions, and preserves backend import authority.
 
-**When to Use:**  
+**When to Use:**
 Preview-first import slide-overs that combine source selection, duplicate-aware row visibility, config-driven preview rendering, approved data adapters, and resource-specific endpoints without leaving the current page.
 
-**When Not to Use:**  
+**When Not to Use:**
 One-step uploads with no preview, or workflows that require global JavaScript state or client-owned import authority.
 
-**Public Interface:**  
-- `data-import-config`  
-- `resources/js/lib/import-config.js`  
-- `resources/js/lib/import-module.js`  
-- `createImportModule({ config, adapters, callbacks }).mount(hostComponent)`  
+**Public Interface:**
+- `data-import-config`
+- `resources/js/lib/import-config.js`
+- `resources/js/lib/import-module.js`
+- `createImportModule({ config, adapters, callbacks }).mount(hostComponent)`
 
-**Key Rules:**  
-- The shared import component owns the import slide-over markup rather than relying on resource-specific Blade form markup.  
-- Resource pages may not render import slide-over form markup, import preview cards, import source controls, import bulk controls, or import footer actions directly.  
-- Minimum preview-row height is the UX goal.  
-- Preview rows must render as a single compact horizontal row with a left-truncated primary value and a right-aligned secondary value.  
-- Preview rows must not render a second metadata line.  
-- Preview rows must not render a status badge.  
-- Products: truncated name left, price right only.  
-- Customers: truncated name left, city right only.  
-- Preview loading auto-starts when a connected external source is selected or when a valid local file has been read.  
-- The slide-over must not require a manual Load Preview button.  
-- Bulk options and preview records render as separate accordions, with bulk options default collapsed and preview records default open.  
-- Preview rows render as responsive cards rather than a table.  
-- Duplicate rows are hidden by default.  
-- Preview row selection, search text, duplicate visibility, and row override state are owned by the shared import component rather than the resource page module.  
-- Resource-specific data-shape differences may enter the shared import component only through approved adapters for local-row parsing, preview-row normalization, import-row payload building, submit-body shaping, and import-success callbacks.  
-- Approved adapters may shape data but may not own import markup, control visibility, or override import lifecycle behavior.  
+**Key Rules:**
+- The shared import component owns the import slide-over markup rather than relying on resource-specific Blade form markup.
+- Resource pages may not render import slide-over form markup, import preview cards, import source controls, import bulk controls, or import footer actions directly.
+- Minimum preview-row height is the UX goal.
+- Preview rows must render as a single compact horizontal row with a left-truncated primary value and a right-aligned secondary value.
+- Preview rows must not render a second metadata line.
+- Preview rows must not render a status badge.
+- Products: truncated name left, price right only.
+- Customers: truncated name left, city right only.
+- Preview loading auto-starts when a connected external source is selected or when a valid local file has been read.
+- The slide-over must not require a manual Load Preview button.
+- Bulk options and preview records render as separate accordions, with bulk options default collapsed and preview records default open.
+- Preview rows render as responsive cards rather than a table.
+- Duplicate rows are hidden by default.
+- Preview row selection, search text, duplicate visibility, and row override state are owned by the shared import component rather than the resource page module.
+- Resource-specific data-shape differences may enter the shared import component only through approved adapters for local-row parsing, preview-row normalization, import-row payload building, submit-body shaping, and import-success callbacks.
+- Approved adapters may shape data but may not own import markup, control visibility, or override import lifecycle behavior.
 
-**Example Usage:**  
+**Example Usage:**
 ```js
 const importConfig = parseImportConfig(rootEl);
 const importModule = createImportModule({
@@ -4372,38 +4372,38 @@ Notes:
 
 ### Export Slide-Over Pattern
 
-**Name:** Export Slide-Over Pattern  
-**Type:** UI Pattern  
-**Location:**  
-- `docs/architecture/ui/ExportSlideOverPattern.yaml`  
-- `resources/js/lib/export-module.js`  
-- `resources/js/pages/sales-products-index.js`  
-- `resources/js/pages/sales-customers-index.js`  
-- `resources/views/sales/products/index.blade.php`  
-- `resources/views/sales/customers/index.blade.php`  
+**Name:** Export Slide-Over Pattern
+**Type:** UI Pattern
+**Location:**
+- `docs/architecture/ui/ExportSlideOverPattern.yaml`
+- `resources/js/lib/export-module.js`
+- `resources/js/pages/Sales/Products/Index.vue`
+- `resources/js/pages/sales-customers-index.js`
+- `resources/js/pages/Sales/Products/Index.vue`
+- `resources/views/sales/customers/index.blade.php`
 
-**Purpose:**  
+**Purpose:**
 Provide a reusable config-driven export slide-over component that owns the full export UX and lifecycle, derives export requests from the shared CRUD contract, and preserves backend route authority.
 
-**When to Use:**  
+**When to Use:**
 Shared export slide-overs that need identical structure and lifecycle across multiple CRUD resources while keeping export endpoints and CSV authority on the server.
 
-**When Not to Use:**  
+**When Not to Use:**
 One-click downloads with no scope chooser, or workflows that require global JavaScript state or client-owned export authority.
 
-**Public Interface:**  
-- `data-crud-config`  
-- `resources/js/lib/export-module.js`  
-- `createExportModule({ config }).mount(hostComponent)`  
+**Public Interface:**
+- `data-crud-config`
+- `resources/js/lib/export-module.js`
+- `createExportModule({ config }).mount(hostComponent)`
 
-**Key Rules:**  
-- The shared export component owns the export slide-over markup rather than relying on resource-specific Blade form markup.  
-- Resource pages may not render export slide-over form markup, export scope controls, export footer actions, or export validation/error markup directly.  
-- Resource pages may not own export lifecycle methods such as `openExportPanel`, `closeExportPanel`, `resetExportState`, `buildExportUrl`, or `submitExport` outside the shared export component.  
-- Export scope, descriptive copy, unavailable-message copy, submit/cancel labels, and visibility must come from the server-generated CRUD contract or safe shared defaults.  
-- Export URL construction remains config-driven and must not hardcode resource-specific endpoints in shared JavaScript.  
+**Key Rules:**
+- The shared export component owns the export slide-over markup rather than relying on resource-specific Blade form markup.
+- Resource pages may not render export slide-over form markup, export scope controls, export footer actions, or export validation/error markup directly.
+- Resource pages may not own export lifecycle methods such as `openExportPanel`, `closeExportPanel`, `resetExportState`, `buildExportUrl`, or `submitExport` outside the shared export component.
+- Export scope, descriptive copy, unavailable-message copy, submit/cancel labels, and visibility must come from the server-generated CRUD contract or safe shared defaults.
+- Export URL construction remains config-driven and must not hardcode resource-specific endpoints in shared JavaScript.
 
-**Example Usage:**  
+**Example Usage:**
 ```js
 const crud = createGenericCrud(parseCrudConfig(rootEl));
 const exportModule = createExportModule({ config: crud });
@@ -4419,23 +4419,23 @@ Notes:
 
 ### Row Actions Dropdown Pattern
 
-**Name:** Row Actions Dropdown Pattern  
-**Type:** UI Pattern  
+**Name:** Row Actions Dropdown Pattern
+**Type:** UI Pattern
 **Location:** `resources/views/materials/index.blade.php`
 
-**Purpose:**  
+**Purpose:**
 Provide contextual row-level actions such as edit and delete.
 
-**When to Use:**  
+**When to Use:**
 Tables or lists with multiple row actions.
 
-**When Not to Use:**  
+**When Not to Use:**
 Primary or global actions.
 
-**Public Interface:**  
+**Public Interface:**
 - Dropdown trigger + content for row actions
 
-**Example Usage:**  
+**Example Usage:**
 ```blade
 <button type="button">⋮</button>
 ```
@@ -4444,23 +4444,23 @@ Primary or global actions.
 
 ### Page-Scoped Toast Pattern
 
-**Name:** Page-Scoped Toast Pattern  
-**Type:** UI Pattern  
+**Name:** Page-Scoped Toast Pattern
+**Type:** UI Pattern
 **Location:** `resources/views/materials/index.blade.php`
 
-**Purpose:**  
+**Purpose:**
 Provide non-blocking toast feedback scoped to the current page.
 
-**When to Use:**  
+**When to Use:**
 Non-blocking success or error feedback after AJAX actions.
 
-**When Not to Use:**  
+**When Not to Use:**
 Blocking alerts or full-page loaders.
 
-**Public Interface:**  
+**Public Interface:**
 - Page-level `showToast(type, message)` handler
 
-**Example Usage:**  
+**Example Usage:**
 ```js
 showToast('success', 'Material deleted.');
 ```
@@ -4471,24 +4471,24 @@ showToast('success', 'Material deleted.');
 
 ### Dropdown
 
-**Name:** Dropdown  
-**Type:** Blade Component  
+**Name:** Dropdown
+**Type:** Blade Component
 **Location:** `resources/views/components/dropdown.blade.php`
 
-**Purpose:**  
+**Purpose:**
 Render a dropdown container with trigger and content slots.
 
-**When to Use:**  
+**When to Use:**
 Inline dropdown menus for actions or navigation.
 
-**When Not to Use:**  
+**When Not to Use:**
 Primary actions that should remain visible.
 
-**Public Interface:**  
-- `trigger` slot  
+**Public Interface:**
+- `trigger` slot
 - `content` slot
 
-**Example Usage:**  
+**Example Usage:**
 ```blade
 <x-dropdown>
     <x-slot name="trigger">⋮</x-slot>
@@ -4500,23 +4500,23 @@ Primary actions that should remain visible.
 
 ### Dropdown Link
 
-**Name:** Dropdown Link  
-**Type:** Blade Component  
+**Name:** Dropdown Link
+**Type:** Blade Component
 **Location:** `resources/views/components/dropdown-link.blade.php`
 
-**Purpose:**  
+**Purpose:**
 Provide a styled link within dropdown content.
 
-**When to Use:**  
+**When to Use:**
 Dropdown menus linking to routes.
 
-**When Not to Use:**  
+**When Not to Use:**
 Standalone buttons outside dropdown menus.
 
-**Public Interface:**  
+**Public Interface:**
 - Standard Blade component props
 
-**Example Usage:**  
+**Example Usage:**
 ```blade
 <x-dropdown-link href="/materials">Materials</x-dropdown-link>
 ```
@@ -4525,24 +4525,24 @@ Standalone buttons outside dropdown menus.
 
 ### Modal
 
-**Name:** Modal  
-**Type:** Blade Component  
+**Name:** Modal
+**Type:** Blade Component
 **Location:** `resources/views/components/modal.blade.php`
 
-**Purpose:**  
+**Purpose:**
 Provide a reusable modal container.
 
-**When to Use:**  
+**When to Use:**
 Confirmation dialogs or short forms.
 
-**When Not to Use:**  
+**When Not to Use:**
 Long multi-step flows.
 
-**Public Interface:**  
-- `name` prop  
+**Public Interface:**
+- `name` prop
 - `show` prop
 
-**Example Usage:**  
+**Example Usage:**
 ```blade
 <x-modal name="confirm-delete" :show="true">...</x-modal>
 ```
@@ -4551,24 +4551,24 @@ Long multi-step flows.
 
 ### Nav Link
 
-**Name:** Nav Link  
-**Type:** Blade Component  
+**Name:** Nav Link
+**Type:** Blade Component
 **Location:** `resources/views/components/nav-link.blade.php`
 
-**Purpose:**  
+**Purpose:**
 Render a navigation link with active state styling.
 
-**When to Use:**  
+**When to Use:**
 Top navigation links.
 
-**When Not to Use:**  
+**When Not to Use:**
 Inline links within content.
 
-**Public Interface:**  
-- `href` prop  
+**Public Interface:**
+- `href` prop
 - `active` prop
 
-**Example Usage:**  
+**Example Usage:**
 ```blade
 <x-nav-link href="/materials" :active="request()->routeIs('materials.index')">Materials</x-nav-link>
 ```
@@ -4577,24 +4577,24 @@ Inline links within content.
 
 ### Input Label
 
-**Name:** Input Label  
-**Type:** Blade Component  
+**Name:** Input Label
+**Type:** Blade Component
 **Location:** `resources/views/components/input-label.blade.php`
 
-**Purpose:**  
+**Purpose:**
 Render a label for form inputs.
 
-**When to Use:**  
+**When to Use:**
 Form fields requiring labels.
 
-**When Not to Use:**  
+**When Not to Use:**
 Decorative text without input association.
 
-**Public Interface:**  
-- `for` prop  
+**Public Interface:**
+- `for` prop
 - Slot content
 
-**Example Usage:**  
+**Example Usage:**
 ```blade
 <x-input-label for="name" value="Name" />
 ```
@@ -4603,23 +4603,23 @@ Decorative text without input association.
 
 ### Text Input
 
-**Name:** Text Input  
-**Type:** Blade Component  
+**Name:** Text Input
+**Type:** Blade Component
 **Location:** `resources/views/components/text-input.blade.php`
 
-**Purpose:**  
+**Purpose:**
 Render a styled text input.
 
-**When to Use:**  
+**When to Use:**
 Form inputs using standard text fields.
 
-**When Not to Use:**  
+**When Not to Use:**
 Non-textual inputs like selects or checkboxes.
 
-**Public Interface:**  
+**Public Interface:**
 - Standard input props
 
-**Example Usage:**  
+**Example Usage:**
 ```blade
 <x-text-input id="name" type="text" name="name" />
 ```
@@ -4628,23 +4628,23 @@ Non-textual inputs like selects or checkboxes.
 
 ### Input Error
 
-**Name:** Input Error  
-**Type:** Blade Component  
+**Name:** Input Error
+**Type:** Blade Component
 **Location:** `resources/views/components/input-error.blade.php`
 
-**Purpose:**  
+**Purpose:**
 Display validation errors for a field.
 
-**When to Use:**  
+**When to Use:**
 Form validation error display.
 
-**When Not to Use:**  
+**When Not to Use:**
 Non-form error messaging.
 
-**Public Interface:**  
+**Public Interface:**
 - `messages` prop
 
-**Example Usage:**  
+**Example Usage:**
 ```blade
 <x-input-error :messages="$errors->get('name')" />
 ```
@@ -4653,23 +4653,23 @@ Non-form error messaging.
 
 ### Secondary Button
 
-**Name:** Secondary Button  
-**Type:** Blade Component  
+**Name:** Secondary Button
+**Type:** Blade Component
 **Location:** `resources/views/components/secondary-button.blade.php`
 
-**Purpose:**  
+**Purpose:**
 Render a secondary action button.
 
-**When to Use:**  
+**When to Use:**
 Non-primary actions in forms or dialogs.
 
-**When Not to Use:**  
+**When Not to Use:**
 Primary actions that require emphasis.
 
-**Public Interface:**  
+**Public Interface:**
 - Slot content
 
-**Example Usage:**  
+**Example Usage:**
 ```blade
 <x-secondary-button>Cancel</x-secondary-button>
 ```
@@ -4678,23 +4678,23 @@ Primary actions that require emphasis.
 
 ### Auth Session Status
 
-**Name:** Auth Session Status  
-**Type:** Blade Component  
+**Name:** Auth Session Status
+**Type:** Blade Component
 **Location:** `resources/views/components/auth-session-status.blade.php`
 
-**Purpose:**  
+**Purpose:**
 Render session status messages on auth screens.
 
-**When to Use:**  
+**When to Use:**
 Login and password reset screens.
 
-**When Not to Use:**  
+**When Not to Use:**
 General-purpose alerts outside auth flows.
 
-**Public Interface:**  
+**Public Interface:**
 - `status` prop
 
-**Example Usage:**  
+**Example Usage:**
 ```blade
 <x-auth-session-status :status="session('status')" />
 ```
@@ -4705,24 +4705,24 @@ General-purpose alerts outside auth flows.
 
 ### Alpine + Blade Quoting Rules
 
-**Name:** Alpine + Blade Quoting Rules  
-**Type:** UI Constraint  
+**Name:** Alpine + Blade Quoting Rules
+**Type:** UI Constraint
 **Location:** `docs/UI_DESIGN.md`
 
-**Purpose:**  
+**Purpose:**
 Prevent Alpine parsing failures caused by mixed quoting.
 
-**When to Use:**  
+**When to Use:**
 Any Blade template with Alpine directives.
 
-**When Not to Use:**  
+**When Not to Use:**
 Templates without Alpine usage.
 
-**Public Interface:**  
-- HTML attributes use double quotes  
+**Public Interface:**
+- HTML attributes use double quotes
 - Alpine JS string literals use single quotes
 
-**Example Usage:**  
+**Example Usage:**
 ```blade
 <div x-data="{ open: false }"></div>
 ```
@@ -4731,29 +4731,29 @@ Templates without Alpine usage.
 
 ### Page Module Contract
 
-**Name:** Page Module Contract  
-**Type:** UI Architecture Invariant  
-**Location:**  
+**Name:** Page Module Contract
+**Type:** UI Architecture Invariant
+**Location:**
 - `docs/architecture/ui/PageModuleContract.yaml`
 
-**Purpose:**  
+**Purpose:**
 Define the page-scoped UI module contract for interactive Blade pages.
 
-**When to Use:**  
+**When to Use:**
 Any interactive Blade page using Alpine state or fetch-based CRUD.
 
-**When Not to Use:**  
+**When Not to Use:**
 Static Blade pages with no interactivity.
 
-**Public Interface:**  
-- `docs/architecture/ui/PageModuleContract.yaml`  
-- `docs/UI_DESIGN.md`  
-- `resources/js/app.js`  
+**Public Interface:**
+- `docs/architecture/ui/PageModuleContract.yaml`
+- `docs/UI_DESIGN.md`
+- `resources/js/app.js`
 - `resources/js/pages/**`
 - `data-page`
 - `data-payload`
 
-**Example Usage:**  
+**Example Usage:**
 ```blade
 <script type="application/json" id="materials-index-payload">@json($payload)</script>
 <div data-page="materials-index" data-payload="materials-index-payload" x-data="materialsIndex"></div>
@@ -4763,29 +4763,29 @@ Static Blade pages with no interactivity.
 
 ### Page Module Guardrails
 
-**Name:** Page Module Guardrails  
-**Type:** UI Constraint  
-**Location:**  
-- `docs/architecture/ui/PageModuleGuardrails.yaml`  
-- `scripts/ci/blade-guardrails.sh`  
-- `scripts/ci/js-syntax-guardrails.sh`  
+**Name:** Page Module Guardrails
+**Type:** UI Constraint
+**Location:**
+- `docs/architecture/ui/PageModuleGuardrails.yaml`
+- `scripts/ci/blade-guardrails.sh`
+- `scripts/ci/js-syntax-guardrails.sh`
 - `ci.sh`
 
-**Purpose:**  
+**Purpose:**
 Fail CI when Blade templates include executable scripts or inline handlers, or when JS uses invalid optional-chaining assignments.
 
-**When to Use:**  
+**When to Use:**
 Any interactive Blade view or page module change.
 
-**When Not to Use:**  
+**When Not to Use:**
 Vendor or generated views excluded from repository checks, plus Breeze/shared layouts and components pending migration.
 
-**Public Interface:**  
-- `scripts/ci/blade-guardrails.sh`  
-- `scripts/ci/js-syntax-guardrails.sh`  
+**Public Interface:**
+- `scripts/ci/blade-guardrails.sh`
+- `scripts/ci/js-syntax-guardrails.sh`
 - `./ci.sh`
 
-**Example Usage:**  
+**Example Usage:**
 ```bash
 ./ci.sh
 ```
@@ -4794,78 +4794,78 @@ Vendor or generated views excluded from repository checks, plus Breeze/shared la
 
 ### Configured CRUD Page Module Pattern
 
-**Name:** Configured CRUD Page Module Pattern  
-**Type:** UI Architectural Pattern  
-**Location:**  
-- `docs/architecture/ui/ConfiguredCrudPageModulePattern.yaml`  
-- `resources/js/lib/crud-config.js`  
-- `resources/js/lib/export-module.js`  
-- `resources/js/lib/import-config.js`  
-- `resources/js/lib/import-module.js`  
-- `resources/js/lib/generic-crud.js`  
-- `resources/js/lib/crud-page.js`  
-- `resources/js/pages/sales-products-index.js`  
-- `resources/js/pages/sales-customers-index.js`  
+**Name:** Configured CRUD Page Module Pattern
+**Type:** UI Architectural Pattern
+**Location:**
+- `docs/architecture/ui/ConfiguredCrudPageModulePattern.yaml`
+- `resources/js/lib/crud-config.js`
+- `resources/js/lib/export-module.js`
+- `resources/js/lib/import-config.js`
+- `resources/js/lib/import-module.js`
+- `resources/js/lib/generic-crud.js`
+- `resources/js/lib/crud-page.js`
+- `resources/js/pages/Sales/Products/Index.vue`
+- `resources/js/pages/sales-customers-index.js`
 - `resources/js/pages/purchasing-suppliers-index.js`
-- `resources/views/sales/products/index.blade.php`
+- `resources/js/pages/Sales/Products/Index.vue`
 - `resources/views/sales/customers/index.blade.php`
 - `resources/views/purchasing/suppliers/index.blade.php`
 
-**Purpose:**  
+**Purpose:**
 Centralize a shared config-driven CRUD renderer behind server-generated page contracts while keeping Blade index pages mount-only, moving import UX and lifecycle into a shared import component, and leaving page-specific create/export behavior plus approved data adapters in each page module.
 
-**When to Use:**  
+**When to Use:**
 Interactive Blade CRUD pages that share toolbar, list rendering, sticky layout, action menus, and list/create/import/sort mechanics but need different routes, columns, row display rules, or page-specific callbacks. All future CRUD index pages should use this abstraction unless a separately approved architecture entry says otherwise.
 
-**When Not to Use:**  
+**When Not to Use:**
 Static pages, or domain workflows that exceed generic CRUD concerns.
 
-**Public Interface:**  
-- `docs/architecture/ui/ConfiguredCrudPageModulePattern.yaml`  
-- `data-crud-config`  
-- `data-import-config`  
-- `resources/js/lib/crud-config.js`  
-- `resources/js/lib/export-module.js`  
-- `resources/js/lib/import-config.js`  
+**Public Interface:**
+- `docs/architecture/ui/ConfiguredCrudPageModulePattern.yaml`
+- `data-crud-config`
+- `data-import-config`
+- `resources/js/lib/crud-config.js`
+- `resources/js/lib/export-module.js`
+- `resources/js/lib/import-config.js`
 - `resources/js/lib/import-module.js`
 - `resources/js/lib/generic-crud.js`
 - `resources/js/lib/crud-page.js`
 
-**Current Reference Implementations:**  
-- Sales Products  
+**Current Reference Implementations:**
+- Sales Products
 - Sales Customers
 - Purchasing Suppliers
 - Recipes
 
-**Key Rules:**  
-- Blade index shells remain mount-only for CRUD concerns and must provide a bounded viewport-height container for the shared CRUD module.  
-- CRUD pages that use the shared import abstraction emit a separate `data-import-config` contract instead of embedding import internals into the CRUD config.  
-- `data-crud-root` must fill the available bounded height with `h-full` / `min-h-0`-compatible layout so the shared renderer can size its records pane correctly.  
-- The shared CRUD renderer owns toolbar layout, search input, create/import/export buttons, sticky desktop headers, record table/cards, empty states, and row-level action rendering.  
-- The shared CRUD renderer may render either the default vertical-dots row menu or one direct inline icon button when the CRUD config opts into that row-action mode.  
-- Toolbar and page chrome remain outside the records scroller; the records/results area is the only scrollable region for CRUD list rendering.  
-- Desktop and mobile variants follow the same scroll-containment contract: header/toolbar stays fixed in the component shell while only records scroll.  
-- Shared export helpers own export panel markup, open/close/reset lifecycle, scope selection, validation/error display, config-driven URL building, and export submission wiring without introducing global state.  
-- Shared import helpers own import panel markup, source-switch preview loading, local CSV caching, selection rules, duplicate visibility, preview row rendering, validation display, and import submit wiring without introducing global state.  
-- Shared import preview rows must stay minimum-height and single-line; page modules may not expand them into stacked detail cards.  
-- Shared import preview rows may render only the approved resource-specific left/right compact values from the server-generated import config.  
-- Resource pages may provide export differences only through the server-generated CRUD contract; export-specific copy, endpoint, and visibility must not be hardcoded in page-local Blade or page-local JavaScript.  
-- Resource pages may provide only declarative import config plus approved data adapters such as local-row parsing, preview-row normalization, import-row payload building, submit-body shaping, and import-success callbacks.  
-- Resource pages must not contain export slide-over form markup or page-local export UX overrides.  
-- Resource pages must not contain import slide-over form markup or page-local import UX overrides.  
-- Resource pages must not reintroduce custom preview markup or preview-only view overrides to bypass the shared compact preview-row contract.  
+**Key Rules:**
+- Blade index shells remain mount-only for CRUD concerns and must provide a bounded viewport-height container for the shared CRUD module.
+- CRUD pages that use the shared import abstraction emit a separate `data-import-config` contract instead of embedding import internals into the CRUD config.
+- `data-crud-root` must fill the available bounded height with `h-full` / `min-h-0`-compatible layout so the shared renderer can size its records pane correctly.
+- The shared CRUD renderer owns toolbar layout, search input, create/import/export buttons, sticky desktop headers, record table/cards, empty states, and row-level action rendering.
+- The shared CRUD renderer may render either the default vertical-dots row menu or one direct inline icon button when the CRUD config opts into that row-action mode.
+- Toolbar and page chrome remain outside the records scroller; the records/results area is the only scrollable region for CRUD list rendering.
+- Desktop and mobile variants follow the same scroll-containment contract: header/toolbar stays fixed in the component shell while only records scroll.
+- Shared export helpers own export panel markup, open/close/reset lifecycle, scope selection, validation/error display, config-driven URL building, and export submission wiring without introducing global state.
+- Shared import helpers own import panel markup, source-switch preview loading, local CSV caching, selection rules, duplicate visibility, preview row rendering, validation display, and import submit wiring without introducing global state.
+- Shared import preview rows must stay minimum-height and single-line; page modules may not expand them into stacked detail cards.
+- Shared import preview rows may render only the approved resource-specific left/right compact values from the server-generated import config.
+- Resource pages may provide export differences only through the server-generated CRUD contract; export-specific copy, endpoint, and visibility must not be hardcoded in page-local Blade or page-local JavaScript.
+- Resource pages may provide only declarative import config plus approved data adapters such as local-row parsing, preview-row normalization, import-row payload building, submit-body shaping, and import-success callbacks.
+- Resource pages must not contain export slide-over form markup or page-local export UX overrides.
+- Resource pages must not contain import slide-over form markup or page-local import UX overrides.
+- Resource pages must not reintroduce custom preview markup or preview-only view overrides to bypass the shared compact preview-row contract.
 
 Notes:
 - Sales Products and Sales Customers both mount the shared export component from `resources/js/lib/export-module.js`; neither page keeps export slide-over form markup in Blade.
 - Sales Products and Sales Customers both mount the shared import component from `resources/js/lib/import-module.js`; neither page keeps import slide-over form markup in Blade.
 - Sales Customers now exposes a full export surface through `sales.customers.export`, `endpoints.export`, and shared export-component wiring rather than a no-op export toolbar callback.
 
-**Example Usage:**  
+**Example Usage:**
 ```blade
 <div
     class="flex h-[calc(100vh-8rem)] min-h-0 flex-col overflow-hidden"
-    data-page="sales-products-index"
-    data-payload="sales-products-index-payload"
+    Inertia::render('Sales/Products/Index')
+    payload prop
     data-crud-config='@json($crudConfig)'
     x-data="salesProductsIndex"
 >
@@ -4881,25 +4881,25 @@ Notes:
 
 ### Pest Testing Framework
 
-**Name:** Pest Testing Framework  
-**Type:** Testing Infrastructure  
+**Name:** Pest Testing Framework
+**Type:** Testing Infrastructure
 **Location:** `tests/Pest.php`
 
-**Purpose:**  
+**Purpose:**
 Define Pest as the canonical testing framework.
 
-**When to Use:**  
+**When to Use:**
 All new automated tests.
 
-**When Not to Use:**  
+**When Not to Use:**
 New PHPUnit test classes.
 
-**Public Interface:**  
-- `uses()`  
-- `it()`  
+**Public Interface:**
+- `uses()`
+- `it()`
 - `expect()`
 
-**Example Usage:**  
+**Example Usage:**
 ```php
 it('creates a material', function () {
     expect(true)->toBeTrue();
@@ -5133,8 +5133,8 @@ Do not introduce new enum values without updating this document.
 
 ### Inventory Count Status (Computed)
 
-**Name:** InventoryCount status  
-**Storage location(s):** Computed attribute on `InventoryCount` (no database column)  
+**Name:** InventoryCount status
+**Storage location(s):** Computed attribute on `InventoryCount` (no database column)
 **Allowed values:**
 
 - `draft`
@@ -5156,8 +5156,8 @@ Do not introduce new enum values without updating this document.
 
 ### Recipe Type
 
-**Name:** Recipe type  
-**Storage location(s):** `recipes.recipe_type` (string column)  
+**Name:** Recipe type
+**Storage location(s):** `recipes.recipe_type` (string column)
 **Allowed values:**
 
 - `manufacturing`
@@ -5180,8 +5180,8 @@ Do not introduce new enum values without updating this document.
 
 ### Make Order Status
 
-**Name:** MakeOrder status  
-**Storage location(s):** `make_orders.status` (string column)  
+**Name:** MakeOrder status
+**Storage location(s):** `make_orders.status` (string column)
 **Allowed values:**
 
 - `DRAFT`
@@ -5205,8 +5205,8 @@ Do not introduce new enum values without updating this document.
 
 ### Recipe Version Status
 
-**Name:** RecipeVersion status  
-**Storage location(s):** `recipe_versions.status` (string column)  
+**Name:** RecipeVersion status
+**Storage location(s):** `recipe_versions.status` (string column)
 **Allowed values:**
 
 - `DRAFT`
@@ -5232,8 +5232,8 @@ Do not introduce new enum values without updating this document.
 
 ### Purchase Order Status
 
-**Name:** PurchaseOrder status  
-**Storage location(s):** `purchase_orders.status` (string column)  
+**Name:** PurchaseOrder status
+**Storage location(s):** `purchase_orders.status` (string column)
 **Allowed values:**
 
 - `DRAFT`
@@ -5262,8 +5262,8 @@ Do not introduce new enum values without updating this document.
 
 ### Customer Type
 
-**Name:** Customer type  
-**Storage location(s):** `customers.customer_type` (string column)  
+**Name:** Customer type
+**Storage location(s):** `customers.customer_type` (string column)
 **Allowed values:**
 
 - `business`
@@ -5281,8 +5281,8 @@ Do not introduce new enum values without updating this document.
 
 ### Sales Order Status
 
-**Name:** SalesOrder status  
-**Storage location(s):** `sales_orders.status` (string column)  
+**Name:** SalesOrder status
+**Storage location(s):** `sales_orders.status` (string column)
 **Fixed system values:**
 
 - `DRAFT`
@@ -5331,8 +5331,8 @@ Do not introduce new enum values without updating this document.
 
 ### Sales Order External Status Mapping
 
-**Name:** SalesOrder external status mapping  
-**Storage location(s):** `sales_orders.external_status` (nullable string column), import preview rows, import store rows  
+**Name:** SalesOrder external status mapping
+**Storage location(s):** `sales_orders.external_status` (nullable string column), import preview rows, import store rows
 **Mapped external values:**
 
 - `completed`
@@ -5363,8 +5363,8 @@ Do not introduce new enum values without updating this document.
 
 ### Task Status
 
-**Name:** Task status  
-**Storage location(s):** `tasks.status` (string column)  
+**Name:** Task status
+**Storage location(s):** `tasks.status` (string column)
 **Allowed values:**
 
 - `open`
@@ -5386,8 +5386,8 @@ Do not introduce new enum values without updating this document.
 
 ### Stock Move Type
 
-**Name:** StockMove type  
-**Storage location(s):** `stock_moves.type` (enum column)  
+**Name:** StockMove type
+**Storage location(s):** `stock_moves.type` (enum column)
 **Allowed values:**
 
 - `receipt`
@@ -5411,8 +5411,8 @@ Do not introduce new enum values without updating this document.
 
 ### Stock Move Status
 
-**Name:** StockMove status  
-**Storage location(s):** `stock_moves.status` (string column)  
+**Name:** StockMove status
+**Storage location(s):** `stock_moves.status` (string column)
 **Allowed values:**
 
 - `DRAFT`
@@ -5445,7 +5445,7 @@ No conflicts or ambiguities were found at time of creation based on existing mig
 This document inventories **all database tables and columns** as defined by migrations.
 It exists to bootstrap **accurate, lossless context** for humans and AI.
 
-This file is **descriptive only**.  
+This file is **descriptive only**.
 Migrations remain the **sole source of truth**.
 
 ---
@@ -5508,7 +5508,7 @@ Migrations remain the **sole source of truth**.
 
 ## cache
 
-**Tenant-owned:** No  
+**Tenant-owned:** No
 **Purpose:** Application cache store
 
 ### Columns
@@ -5527,7 +5527,7 @@ Migrations remain the **sole source of truth**.
 
 ## cache_locks
 
-**Tenant-owned:** No  
+**Tenant-owned:** No
 **Purpose:** Distributed cache locking
 
 ### Columns
@@ -5546,7 +5546,7 @@ Migrations remain the **sole source of truth**.
 
 ## customers
 
-**Tenant-owned:** Yes  
+**Tenant-owned:** Yes
 **Purpose:** Sales customer records
 
 ### Columns
@@ -5585,7 +5585,7 @@ Migrations remain the **sole source of truth**.
 
 ## customer_contacts
 
-**Tenant-owned:** Yes  
+**Tenant-owned:** Yes
 **Purpose:** Customer-contact relationship records for the customer detail Contacts section
 
 ### Columns
@@ -5616,7 +5616,7 @@ Migrations remain the **sole source of truth**.
 
 ## external_product_source_connections
 
-**Tenant-owned:** Yes  
+**Tenant-owned:** Yes
 **Purpose:** Minimal prep-only stored connection state for stubbed external product imports
 
 ### Columns
@@ -5642,7 +5642,7 @@ Migrations remain the **sole source of truth**.
 
 ## sales_orders
 
-**Tenant-owned:** Yes  
+**Tenant-owned:** Yes
 **Purpose:** Sales order headers shared by the Sales Orders index, the Sales Order detail page, and grouped external-import identity
 
 ### Columns
@@ -5694,7 +5694,7 @@ Migrations remain the **sole source of truth**.
 
 ## sales_order_lines
 
-**Tenant-owned:** Yes  
+**Tenant-owned:** Yes
 **Purpose:** Sales order line items with immutable price snapshots and optional imported source-line identity for the Sales Order detail page and external CSV import/export
 
 ### Columns
@@ -5735,7 +5735,7 @@ Migrations remain the **sole source of truth**.
 
 ## workflow_domains
 
-**Tenant-owned:** No  
+**Tenant-owned:** No
 **Purpose:** Fixed system-owned workflow-domain records used to scope workflow stages, task templates, and generated tasks
 
 ### Columns
@@ -5758,7 +5758,7 @@ Migrations remain the **sole source of truth**.
 
 ## workflow_stages
 
-**Tenant-owned:** Yes  
+**Tenant-owned:** Yes
 **Purpose:** Tenant-scoped operational workflow stages within a fixed workflow domain
 
 ### Columns
@@ -5792,7 +5792,7 @@ Migrations remain the **sole source of truth**.
 
 ## workflow_task_templates
 
-**Tenant-owned:** Yes  
+**Tenant-owned:** Yes
 **Purpose:** Tenant-scoped task-template configuration for workflow-stage task generation
 
 ### Columns
@@ -5826,7 +5826,7 @@ Migrations remain the **sole source of truth**.
 
 ## tasks
 
-**Tenant-owned:** Yes  
+**Tenant-owned:** Yes
 **Purpose:** Tenant-scoped generated workflow tasks snapshotting task-template data against a domain record
 
 ### Columns
@@ -5867,7 +5867,7 @@ Migrations remain the **sole source of truth**.
 
 ## failed_jobs
 
-**Tenant-owned:** No  
+**Tenant-owned:** No
 **Purpose:** Queue failure tracking
 
 ### Columns
@@ -5891,7 +5891,7 @@ Migrations remain the **sole source of truth**.
 
 ## inventory_counts
 
-**Tenant-owned:** Yes  
+**Tenant-owned:** Yes
 **Purpose:** Inventory count sessions
 
 ### Columns
@@ -5926,7 +5926,7 @@ Migrations remain the **sole source of truth**.
 
 ## inventory_count_lines
 
-**Tenant-owned:** Yes  
+**Tenant-owned:** Yes
 **Purpose:** Line items for inventory counts
 
 ### Columns
@@ -5957,7 +5957,7 @@ Migrations remain the **sole source of truth**.
 
 ## item_purchase_options
 
-**Tenant-owned:** Yes  
+**Tenant-owned:** Yes
 **Purpose:** Purchase pack definitions
 
 ### Columns
@@ -5987,7 +5987,7 @@ Migrations remain the **sole source of truth**.
 
 ## item_purchase_option_prices
 
-**Tenant-owned:** Yes  
+**Tenant-owned:** Yes
 **Purpose:** Purchase option price snapshots
 
 ### Columns
@@ -6019,7 +6019,7 @@ Migrations remain the **sole source of truth**.
 
 ## item_uom_conversions
 
-**Tenant-owned:** Yes  
+**Tenant-owned:** Yes
 **Purpose:** Item-specific cross-category UoM conversions
 
 ### Columns
@@ -6045,7 +6045,7 @@ Migrations remain the **sole source of truth**.
 
 ## items
 
-**Tenant-owned:** Yes  
+**Tenant-owned:** Yes
 **Purpose:** Stock-tracked items
 
 ### Columns
@@ -6080,7 +6080,7 @@ Migrations remain the **sole source of truth**.
 
 ## job_batches
 
-**Tenant-owned:** No  
+**Tenant-owned:** No
 **Purpose:** Queue batch tracking
 
 ### Columns
@@ -6106,7 +6106,7 @@ Migrations remain the **sole source of truth**.
 
 ## jobs
 
-**Tenant-owned:** No  
+**Tenant-owned:** No
 **Purpose:** Queue jobs
 
 ### Columns
@@ -6130,7 +6130,7 @@ Migrations remain the **sole source of truth**.
 
 ## make_orders
 
-**Tenant-owned:** Yes  
+**Tenant-owned:** Yes
 **Purpose:** Persisted make orders with lifecycle
 
 ### Columns
@@ -6192,7 +6192,7 @@ Migrations remain the **sole source of truth**.
 
 ## password_reset_tokens
 
-**Tenant-owned:** No  
+**Tenant-owned:** No
 **Purpose:** Password reset tokens
 
 ### Columns
@@ -6211,7 +6211,7 @@ Migrations remain the **sole source of truth**.
 
 ## permissions
 
-**Tenant-owned:** No  
+**Tenant-owned:** No
 **Purpose:** Permission slugs
 
 ### Columns
@@ -6232,7 +6232,7 @@ Migrations remain the **sole source of truth**.
 
 ## permission_role
 
-**Tenant-owned:** No  
+**Tenant-owned:** No
 **Purpose:** Role-permission mapping
 
 ### Columns
@@ -6256,7 +6256,7 @@ Migrations remain the **sole source of truth**.
 
 ## purchase_order_lines
 
-**Tenant-owned:** Yes  
+**Tenant-owned:** Yes
 **Purpose:** Purchase order line items with price snapshots
 
 ### Columns
@@ -6298,7 +6298,7 @@ Migrations remain the **sole source of truth**.
 
 ## purchase_orders
 
-**Tenant-owned:** Yes  
+**Tenant-owned:** Yes
 **Purpose:** Purchase order headers
 
 ### Columns
@@ -6355,7 +6355,7 @@ Migrations remain the **sole source of truth**.
 
 ## purchase_order_receipts
 
-**Tenant-owned:** Yes  
+**Tenant-owned:** Yes
 **Purpose:** Receipt event headers for purchase orders
 
 ### Columns
@@ -6386,7 +6386,7 @@ Migrations remain the **sole source of truth**.
 
 ## purchase_order_receipt_lines
 
-**Tenant-owned:** Yes  
+**Tenant-owned:** Yes
 **Purpose:** Receipt event line items for purchase orders
 
 ### Columns
@@ -6423,7 +6423,7 @@ Migrations remain the **sole source of truth**.
 
 ## purchase_order_short_closures
 
-**Tenant-owned:** Yes  
+**Tenant-owned:** Yes
 **Purpose:** Short-close event headers for purchase orders
 
 ### Columns
@@ -6454,7 +6454,7 @@ Migrations remain the **sole source of truth**.
 
 ## purchase_order_short_closure_lines
 
-**Tenant-owned:** Yes  
+**Tenant-owned:** Yes
 **Purpose:** Short-close event line items for purchase orders
 
 ### Columns
@@ -6482,7 +6482,7 @@ Migrations remain the **sole source of truth**.
 
 ## recipes
 
-**Tenant-owned:** Yes  
+**Tenant-owned:** Yes
 **Purpose:** Recipe definitions for manufacturing and fulfillment output composition
 
 ### Columns
@@ -6525,7 +6525,7 @@ Migrations remain the **sole source of truth**.
 
 ## recipe_lines
 
-**Tenant-owned:** Yes  
+**Tenant-owned:** Yes
 **Purpose:** Recipe line items
 
 ### Columns
@@ -6561,7 +6561,7 @@ Migrations remain the **sole source of truth**.
 
 ## recipe_versions
 
-**Tenant-owned:** Yes  
+**Tenant-owned:** Yes
 **Purpose:** Versioned execution templates owned by a recipe parent
 
 ### Columns
@@ -6606,7 +6606,7 @@ Migrations remain the **sole source of truth**.
 
 ## recipe_version_lines
 
-**Tenant-owned:** Yes  
+**Tenant-owned:** Yes
 **Purpose:** Version-owned input lines for a recipe execution template
 
 ### Columns
@@ -6639,7 +6639,7 @@ Migrations remain the **sole source of truth**.
 
 ## recipe_version_checkouts
 
-**Tenant-owned:** Yes  
+**Tenant-owned:** Yes
 **Purpose:** Persist the current user editing context for recipe versions
 
 ### Columns
@@ -6678,7 +6678,7 @@ Migrations remain the **sole source of truth**.
 
 ## make_order_lines
 
-**Tenant-owned:** Yes  
+**Tenant-owned:** Yes
 **Purpose:** Snapshotted execution lines owned by a Make Order
 
 ### Columns
@@ -6708,7 +6708,7 @@ Migrations remain the **sole source of truth**.
 
 ## roles
 
-**Tenant-owned:** No  
+**Tenant-owned:** No
 **Purpose:** Global roles
 
 ### Columns
@@ -6729,7 +6729,7 @@ Migrations remain the **sole source of truth**.
 
 ## roles_users
 
-**Tenant-owned:** No  
+**Tenant-owned:** No
 **Purpose:** Role-user mapping
 
 ### Columns
@@ -6753,7 +6753,7 @@ Migrations remain the **sole source of truth**.
 
 ## sessions
 
-**Tenant-owned:** No  
+**Tenant-owned:** No
 **Purpose:** Session storage
 
 ### Columns
@@ -6777,7 +6777,7 @@ Migrations remain the **sole source of truth**.
 
 ## stock_moves
 
-**Tenant-owned:** Yes  
+**Tenant-owned:** Yes
 **Purpose:** Append-only inventory ledger
 
 ### Columns
@@ -6812,7 +6812,7 @@ Migrations remain the **sole source of truth**.
 
 ## suppliers
 
-**Tenant-owned:** Yes  
+**Tenant-owned:** Yes
 **Purpose:** Supplier registry
 
 ### Columns
@@ -6839,7 +6839,7 @@ Migrations remain the **sole source of truth**.
 
 ## tenants
 
-**Tenant-owned:** No  
+**Tenant-owned:** No
 **Purpose:** Tenant registry
 
 ### Columns
@@ -6860,7 +6860,7 @@ Migrations remain the **sole source of truth**.
 
 ## uom_categories
 
-**Tenant-owned:** Yes (system defaults use `tenant_id = NULL`)  
+**Tenant-owned:** Yes (system defaults use `tenant_id = NULL`)
 **Purpose:** Unit-of-measure categories
 
 ### Columns
@@ -6883,7 +6883,7 @@ Migrations remain the **sole source of truth**.
 
 ## uom_conversions
 
-**Tenant-owned:** Mixed (`tenant_id = null` for global/system rows)  
+**Tenant-owned:** Mixed (`tenant_id = null` for global/system rows)
 **Purpose:** Global and tenant-managed UoM conversions
 
 ### Columns
@@ -6910,7 +6910,7 @@ Migrations remain the **sole source of truth**.
 
 ## uoms
 
-**Tenant-owned:** Yes (system defaults use `tenant_id = NULL`)  
+**Tenant-owned:** Yes (system defaults use `tenant_id = NULL`)
 **Purpose:** Units of measure
 
 ### Columns
@@ -6937,7 +6937,7 @@ Migrations remain the **sole source of truth**.
 
 ## users
 
-**Tenant-owned:** No (auth-safe)  
+**Tenant-owned:** No (auth-safe)
 **Purpose:** Authentication identities
 
 ### Columns
@@ -7347,7 +7347,7 @@ Investigate quote violations first when JS appears in rendered UI.
 
 The application uses **process-based top-level navigation**, not entity-based navigation.
 
-Top-level items represent **business functions**.  
+Top-level items represent **business functions**.
 Entities may appear in multiple domains with **domain-specific behavior and attributes**.
 
 ### Top-Level Navigation
@@ -7371,7 +7371,7 @@ Focus: revenue generation and customer fulfillment.
 
 - Orders
 - Customers
-- Products  
+- Products
   _(Items where `is_sellable = true`, with sales-specific attributes such as pricing, taxes, and terms)_
 
 ---
@@ -7397,7 +7397,7 @@ Focus: production execution and operational primitives.
 - Materials
 - Recipes
 
-Manufacturing owns **production execution and recipe-oriented primitives**.  
+Manufacturing owns **production execution and recipe-oriented primitives**.
 Sales, Purchasing, and Stock consume related shared primitives but do not define manufacturing behavior.
 
 ---
@@ -7415,7 +7415,7 @@ Focus: stock visibility, inventory adjustment workflows, and unit-of-measure adm
   - Units of Measure (UoM)
   - UoM Conversions
 
-Stock owns **inventory mechanics and unit semantics**.  
+Stock owns **inventory mechanics and unit semantics**.
 Sales, Purchasing, and Manufacturing consume these primitives but do not define them.
 
 Inventory Count detail uses the visible section label **Materials** for count-line CRUD.

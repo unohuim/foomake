@@ -50,8 +50,8 @@ example_usage: |
   Blade with shared page contracts:
     <script type="application/json" id="sales-products-index-payload">@json($payload)</script>
     <div
-        data-page="sales-products-index"
-        data-payload="sales-products-index-payload"
+        Inertia::render('Sales/Products/Index')
+        payload prop
         data-crud-config='@json($crudConfig)'
         data-import-config='@json($importConfig)'
         x-data="salesProductsIndex"
@@ -67,7 +67,7 @@ example_usage: |
       Alpine.data('materialsIndex', () => ({ /* state + methods */ }));
     }
 
-    // resources/js/pages/sales-products-index.js
+    // resources/js/pages/Sales/Products/Index.vue
     // Compose parseCrudConfig/createGenericCrud with parseImportConfig/createImportModule.
 
     // resources/js/pages/manufacturing-make-orders.js

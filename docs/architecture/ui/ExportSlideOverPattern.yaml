@@ -3,10 +3,10 @@ type: UI Pattern
 location:
   - app/Http/Controllers/SalesProductController.php
   - app/Http/Controllers/CustomerController.php
-  - resources/views/sales/products/index.blade.php
+  - resources/js/pages/Sales/Products/Index.vue
   - resources/views/sales/customers/index.blade.php
   - resources/js/lib/export-module.js
-  - resources/js/pages/sales-products-index.js
+  - resources/js/pages/Sales/Products/Index.vue
   - resources/js/pages/sales-customers-index.js
 purpose: Define a reusable config-driven export slide-over component that owns the full export UX and lifecycle, derives export requests from the shared CRUD contract, and preserves backend route authority.
 when_to_use:
@@ -53,8 +53,8 @@ example_usage: |
 
   Blade page root:
     <div
-        data-page="sales-products-index"
-        data-payload="sales-products-index-payload"
+        Inertia::render('Sales/Products/Index')
+        payload prop
         data-crud-config='@json($crudConfig)'
         x-data="salesProductsIndex"
     ></div>

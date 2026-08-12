@@ -92,6 +92,10 @@ Codex must never self-certify completion.
 - Prefer the smallest possible change.
 - Never refactor unless explicitly requested.
 - No global JavaScript state unless explicitly approved.
+- Codex MUST choose best-practice implementations by default, not merely workable implementations.
+- If Codex notices existing or proposed code in the touched area that violates best practice, Codex MUST flag it immediately before continuing.
+- Codex MUST explain the risk, name the better pattern, and either implement the better pattern within approved scope or request approval to expand scope.
+- Codex MUST NOT knowingly preserve a non-best-practice implementation in touched code just because it is currently working.
 
 ---
 

@@ -3,7 +3,7 @@ Contributors: foomake
 Tags: foomake, woocommerce, manufacturing, mrp
 Requires at least: 6.0
 Requires PHP: 7.4
-Stable tag: 0.2.0
+Stable tag: 0.2.1
 License: GPLv2 or later
 
 Connects WooCommerce stores to FooMake import workflows.
@@ -25,6 +25,9 @@ This early connector package is distributed directly from FooMake and is not sub
 6. In FooMake, open Profile > Connectors to verify plugin status.
 
 == Changelog ==
+
+= 0.2.1 =
+Adds plugin-backed WooCommerce sales order import preview support.
 
 = 0.2.0 =
 Adds plugin-backed WooCommerce customer import preview support.

@@ -12,6 +12,7 @@ use App\Models\Role;
 use App\Models\SalesOrder;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Models\WordPressPluginConnection;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 
@@ -229,6 +230,7 @@ it('5. order import preview accepts a Woo payload fixture and returns normalized
             [
                 'id' => 1001,
                 'status' => 'processing',
+                'currency' => 'CAD',
                 'date_created' => '2026-05-11T10:00:00',
                 'customer_id' => 501,
                 'billing' => [
@@ -260,7 +262,65 @@ it('5. order import preview accepts a Woo payload fixture and returns normalized
         ->assertOk()
         ->assertJsonPath('data.rows.0.external_id', '1001')
         ->assertJsonPath('data.rows.0.external_status', 'processing')
-        ->assertJsonPath('data.rows.0.date', '2026-05-11');
+        ->assertJsonPath('data.rows.0.date', '2026-05-11')
+        ->assertJsonPath('data.rows.0.lines.0.currency_code', 'CAD');
+});
+
+it('5a. order import preview falls back to the connected wordpress plugin', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $siteAccessToken = 'site-access-token';
+    ($this->grantPermissions)($user, ['sales-sales-orders-manage', 'system-users-manage']);
+
+    WordPressPluginConnection::query()->create([
+        'tenant_id' => $tenant->id,
+        'plugin_uuid' => '123e4567-e89b-12d3-a456-426614174000',
+        'site_url' => 'http://wordpress.test/',
+        'site_name' => 'Local Woo',
+        'status' => WordPressPluginConnection::STATUS_CONNECTED,
+        'access_token_hash' => hash('sha256', 'token'),
+        'site_access_token' => $siteAccessToken,
+        'connected_at' => now(),
+        'last_seen_at' => now(),
+    ]);
+
+    Http::fake([
+        'http://wordpress.test/wp-json/foomake/v1/orders' => Http::response([
+            'data' => [
+                [
+                    'external_id' => '1002',
+                    'external_status' => 'processing',
+                    'date' => '2026-05-12',
+                    'customer' => [
+                        'external_id' => '502',
+                        'name' => 'Plugin Buyer',
+                        'email' => 'plugin@example.test',
+                        'city' => 'Toronto',
+                        'country_code' => 'CA',
+                    ],
+                    'lines' => [
+                        [
+                            'external_id' => 'line-1002-1',
+                            'product_external_id' => 'sku-2002',
+                            'name' => 'Plugin Line Product',
+                            'quantity' => '1.000000',
+                            'unit_price_cents' => 2500,
+                            'currency_code' => 'CAD',
+                        ],
+                    ],
+                ],
+            ],
+        ]),
+    ]);
+
+    ($this->previewImport)($user)
+        ->assertOk()
+        ->assertJsonPath('data.is_connected', true)
+        ->assertJsonPath('data.rows.0.external_id', '1002')
+        ->assertJsonPath('data.rows.0.lines.0.currency_code', 'CAD');
+
+    Http::assertSent(fn ($request): bool => $request->hasHeader('X-FooMake-Site-Token', $siteAccessToken)
+        && $request->url() === 'http://wordpress.test/wp-json/foomake/v1/orders');
 });
 
 it('6. import store creates a sales order header', function () {

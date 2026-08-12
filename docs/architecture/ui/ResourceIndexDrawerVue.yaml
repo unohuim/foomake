@@ -17,6 +17,7 @@ rules:
   - ResourceCreateDrawer owns only generic create drawer chrome, submit/cancel actions, error slot, footer slot, and default form content slot.
   - ResourceExportDrawer owns only the export confirmation UX, scope selection, labels, and submit/cancel events.
   - ResourceImportDrawer owns only the import drawer shell, source selector, accordions, preview controls, preview shell states, footer, and slots for resource-specific options and rows.
+  - ResourceImportDrawer must render the bulk options accordion only when the page explicitly sets showBulkOptions true.
   - Drawer components must compose BaseDrawer and inherit its 500ms slide/fade transition behavior.
   - Drawer components must receive state through props and emit user intent through events.
   - Drawer components must not fetch boot data, own domain mutations, build authoritative backend routes, or introduce global JavaScript state.
@@ -33,6 +34,7 @@ public_interface:
   - close
   - submit
   - slots for default content, footer, error, bulk-options, preview rows, and preview states
+  - showBulkOptions
   - toggle-row-selection
   - toggle-visible-selection
 example_usage: |

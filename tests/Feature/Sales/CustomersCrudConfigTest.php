@@ -1081,7 +1081,7 @@ it('29. customers crud config includes the shared renderer contract', function (
 
 it('30. products and customers render identical toolbar and action contracts through the shared card renderer', function () {
     $rendererSource = file_get_contents(base_path('resources/js/lib/crud-card-page.js'));
-    $productsScript = file_get_contents(base_path('resources/js/pages/sales-products-index.js'));
+    $productsScript = file_get_contents(base_path('resources/js/pages/Sales/Products/Index.vue'));
     $customersScript = file_get_contents(base_path('resources/js/pages/sales-customers-index.js'));
 
     expect($rendererSource)->toContain('data-crud-toolbar-import-button')
@@ -1089,7 +1089,7 @@ it('30. products and customers render identical toolbar and action contracts thr
         ->and($rendererSource)->toContain('data-crud-records-scroll')
         ->and($rendererSource)->toContain('role="menu"')
         ->and($rendererSource)->toContain('role="menuitem"')
-        ->and($productsScript)->toContain('mountCrudCardRenderer(')
+        ->and($productsScript)->toContain('ResourceCardGrid')
         ->and($customersScript)->toContain('mountCrudCardRenderer(');
 });
 
@@ -1144,11 +1144,11 @@ it('33. customer import preview errors render through the shared import componen
 });
 
 it('34. import and create buttons still open page specific panels through configured callbacks', function () {
-    $productsScript = file_get_contents(base_path('resources/js/pages/sales-products-index.js'));
+    $productsScript = file_get_contents(base_path('resources/js/pages/Sales/Products/Index.vue'));
     $customersScript = file_get_contents(base_path('resources/js/pages/sales-customers-index.js'));
 
-    expect($productsScript)->toContain("createHandler: 'openCreatePanel()'")
-        ->and($productsScript)->toContain("importHandler: 'openImportPanel()'")
+    expect($productsScript)->toContain('@create="openCreateDrawer"')
+        ->and($productsScript)->toContain('@import="openImportDrawer"')
         ->and($customersScript)->toContain("createHandler: 'openCreatePanel()'")
         ->and($customersScript)->toContain("importHandler: 'openImportPanel()'");
 });

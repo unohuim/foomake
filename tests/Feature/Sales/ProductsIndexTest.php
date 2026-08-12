@@ -11,6 +11,7 @@ use App\Models\UomCategory;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Schema;
+use Inertia\Testing\AssertableInertia as Assert;
 
 uses(RefreshDatabase::class);
 
@@ -97,6 +98,12 @@ beforeEach(function () {
     };
 
     $this->extractPayload = function ($response, string $payloadId): array {
+        $props = $response->viewData('page')['props'] ?? null;
+
+        if ($payloadId === 'sales-products-index-payload' && is_array($props) && isset($props['payload'])) {
+            return $props['payload'];
+        }
+
         preg_match(
             '/<script[^>]+id="' . preg_quote($payloadId, '/') . '"[^>]*>(.*?)<\\/script>/s',
             $response->getContent(),
@@ -192,18 +199,16 @@ it('8. page payload includes the list endpoint and import endpoints', function (
 
     ($this->grantPermissions)($user, ['inventory-products-view', 'inventory-products-manage']);
 
-    $response = $this->actingAs($user)
+    $this->actingAs($user)
         ->get(route('sales.products.index'))
         ->assertOk()
-        ->assertSee('sales-products-index-payload', false);
-
-    $payload = ($this->extractPayload)($response, 'sales-products-index-payload');
-
-    expect($payload['listUrl'] ?? null)->toBe(route('sales.products.list'))
-        ->and($payload['previewUrl'] ?? null)->toBe(route('sales.products.import.preview'))
-        ->and($payload['importUrl'] ?? null)->toBe(route('sales.products.import.store'))
-        ->and($payload['connectUrlBase'] ?? null)->toBe(url('/sales/products/import-sources'))
-        ->and($payload['navigationStateUrl'] ?? null)->toBe(route('navigation.state'));
+        ->assertInertia(fn (Assert $page): Assert => $page
+            ->component('Sales/Products/Index')
+            ->where('payload.listUrl', route('sales.products.list'))
+            ->where('payload.previewUrl', route('sales.products.import.preview'))
+            ->where('payload.importUrl', route('sales.products.import.store'))
+            ->where('payload.connectUrlBase', url('/sales/products/import-sources'))
+            ->where('payload.navigationStateUrl', route('navigation.state')));
 });
 
 it('9. page payload does not embed products records as the source of truth', function () {
@@ -217,11 +222,12 @@ it('9. page payload does not embed products records as the source of truth', fun
         'is_sellable' => true,
     ]);
 
-    $response = $this->actingAs($user)->get(route('sales.products.index'));
-    $payload = ($this->extractPayload)($response, 'sales-products-index-payload');
-
-    expect($payload)->not->toHaveKey('products')
-        ->and($payload['listUrl'] ?? null)->toBeString();
+    $this->actingAs($user)
+        ->get(route('sales.products.index'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page): Assert => $page
+            ->missing('payload.products')
+            ->where('payload.listUrl', route('sales.products.list')));
 });
 
 it('10. page payload still includes WooCommerce as an enabled source', function () {
@@ -230,9 +236,10 @@ it('10. page payload still includes WooCommerce as an enabled source', function 
 
     ($this->grantPermissions)($user, ['inventory-products-view', 'inventory-products-manage']);
 
-    $response = $this->actingAs($user)->get(route('sales.products.index'));
-    $payload = ($this->extractPayload)($response, 'sales-products-index-payload');
-    $wooCommerce = collect($payload['sources'] ?? [])->firstWhere('value', 'woocommerce');
+    $response = $this->actingAs($user)
+        ->get(route('sales.products.index'))
+        ->assertOk();
+    $wooCommerce = collect($response->viewData('page')['props']['payload']['sources'] ?? [])->firstWhere('value', 'woocommerce');
 
     expect($wooCommerce)->not->toBeNull()
         ->and($wooCommerce['enabled'] ?? null)->toBeTrue();
@@ -244,9 +251,10 @@ it('11. page payload may include disabled placeholder sources', function () {
 
     ($this->grantPermissions)($user, ['inventory-products-view', 'inventory-products-manage']);
 
-    $response = $this->actingAs($user)->get(route('sales.products.index'));
-    $payload = ($this->extractPayload)($response, 'sales-products-index-payload');
-    $shopify = collect($payload['sources'] ?? [])->firstWhere('value', 'shopify');
+    $response = $this->actingAs($user)
+        ->get(route('sales.products.index'))
+        ->assertOk();
+    $shopify = collect($response->viewData('page')['props']['payload']['sources'] ?? [])->firstWhere('value', 'shopify');
 
     expect($shopify)->not->toBeNull()
         ->and($shopify['enabled'] ?? null)->toBeFalse();
@@ -261,11 +269,11 @@ it('12. page includes the js mount element', function () {
     $this->actingAs($user)
         ->get(route('sales.products.index'))
         ->assertOk()
-        ->assertSee('data-page="sales-products-index"', false)
-        ->assertSee('data-payload="sales-products-index-payload"', false);
+        ->assertInertia(fn (Assert $page): Assert => $page
+            ->component('Sales/Products/Index'));
 });
 
-it('13. page includes the shared crud mount root contract', function () {
+it('13. page renders the Inertia products index component', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
 
@@ -274,7 +282,8 @@ it('13. page includes the shared crud mount root contract', function () {
     $this->actingAs($user)
         ->get(route('sales.products.index'))
         ->assertOk()
-        ->assertSee('data-crud-root', false);
+        ->assertInertia(fn (Assert $page): Assert => $page
+            ->component('Sales/Products/Index'));
 });
 
 it('14. page does not render old blade owned desktop or mobile containers', function () {
@@ -366,11 +375,7 @@ it('20. crud config enables import actions for users who can manage product impo
         ->get(route('sales.products.index'))
         ->assertOk();
 
-    preg_match("/data-crud-config='([^']+)'/", $response->getContent(), $matches);
-
-    expect($matches)->toHaveKey(1);
-
-    $config = json_decode(html_entity_decode($matches[1], ENT_QUOTES), true);
+    $config = $response->viewData('page')['props']['crudConfig'] ?? [];
 
     expect($config['permissions']['showImport'] ?? null)->toBeTrue()
         ->and($config['labels']['importTitle'] ?? null)->toBe('Import Products');
@@ -386,11 +391,7 @@ it('21. crud config disables import actions for view only users', function () {
         ->get(route('sales.products.index'))
         ->assertOk();
 
-    preg_match("/data-crud-config='([^']+)'/", $response->getContent(), $matches);
-
-    expect($matches)->toHaveKey(1);
-
-    $config = json_decode(html_entity_decode($matches[1], ENT_QUOTES), true);
+    $config = $response->viewData('page')['props']['crudConfig'] ?? [];
 
     expect($config['permissions']['showImport'] ?? null)->toBeFalse();
 });
@@ -404,13 +405,14 @@ it('22. exposes the import config contract without server rendered import markup
     $this->actingAs($user)
         ->get(route('sales.products.index'))
         ->assertOk()
-        ->assertSee('data-import-config=', false)
+        ->assertInertia(fn (Assert $page): Assert => $page
+            ->component('Sales/Products/Index')
+            ->has('importConfig'))
         ->assertDontSee('data-products-import-panel', false)
-        ->assertDontSee('data-shared-import-panel', false)
-        ->assertSee('aria-modal="true"', false);
+        ->assertDontSee('data-shared-import-panel', false);
 });
 
-it('23. products import module includes a preview loading state contract', function () {
+it('23. products import drawer includes a preview loading state contract', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
 
@@ -421,11 +423,11 @@ it('23. products import module includes a preview loading state contract', funct
         ->assertOk()
         ->assertDontSee('data-products-import-preview-loading', false);
 
-    $importModuleSource = file_get_contents(base_path('resources/js/lib/import-module.js'));
+    $importComponentSource = file_get_contents(base_path('resources/js/components/ResourceImportDrawer.vue'));
 
-    expect($importModuleSource)->toContain('isLoadingPreview')
-        ->and($importModuleSource)->toContain('data-shared-import-preview-loading')
-        ->and($importModuleSource)->toContain('previewLoadingMessage');
+    expect($importComponentSource)->toContain('loadingPreview')
+        ->and($importComponentSource)->toContain('preview-loading')
+        ->and($importComponentSource)->toContain('resolvedLabels.loadingPreview');
 });
 
 it('24. imported ecommerce items still appear on manufacturing materials because they are normal items', function () {

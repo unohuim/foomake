@@ -27,7 +27,6 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
-use Illuminate\View\View;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -45,7 +44,6 @@ class CustomerController extends Controller
     {
         Gate::authorize('sales-customers-manage');
 
-        $user = $request->user();
         $customers = Customer::query()
             ->with('primaryContact')
             ->where('status', Customer::STATUS_ACTIVE)
@@ -71,23 +69,7 @@ class CustomerController extends Controller
         ];
 
         return Inertia::render('Sales/Customers/Index', [
-            'shell' => [
-                'logo' => [
-                    'src' => null,
-                    'alt' => config('app.name', 'Factory Manager'),
-                ],
-                'user' => [
-                    'name' => $user->name,
-                    'email' => $user->email,
-                ],
-                'navigation' => [
-                    'dashboardUrl' => route('dashboard', absolute: false),
-                    'profileUrl' => route('profile.edit', absolute: false),
-                    'logoutUrl' => route('logout', absolute: false),
-                    'groups' => $this->navigationGroups($request, $user, $navigationEligibility->forUser($user)),
-                    'accountItems' => $this->accountNavigationItems($request, $user),
-                ],
-            ],
+            'shell' => $this->authShellPayload($request, $navigationEligibility),
             'crudConfig' => $crudConfig,
             'importConfig' => $importConfig,
             'payload' => $payload,
@@ -259,10 +241,37 @@ class CustomerController extends Controller
     /**
      * Display the customer detail page.
      */
-    public function show(Customer $customer): View
+    public function show(Request $request, Customer $customer, NavigationEligibility $navigationEligibility): Response
     {
         Gate::authorize('sales-customers-view');
 
+        return Inertia::render('Sales/Customers/Show', [
+            'shell' => $this->authShellPayload($request, $navigationEligibility),
+            'title' => 'Customer: ' . $customer->name,
+            'payloadUrl' => route('sales.customers.show.payload', $customer),
+            'indexUrl' => route('sales.customers.index', absolute: false),
+        ]);
+    }
+
+    /**
+     * Return the customer detail read model for the Inertia page.
+     */
+    public function showPayload(Customer $customer): JsonResponse
+    {
+        Gate::authorize('sales-customers-view');
+
+        return response()->json([
+            'data' => $this->customerShowPayload($customer),
+        ]);
+    }
+
+    /**
+     * Build the customer detail page read model.
+     *
+     * @return array<string, mixed>
+     */
+    private function customerShowPayload(Customer $customer): array
+    {
         $customer->load('contacts', 'salesOrders.contact', 'salesOrders.customer', 'salesOrders.lines.item');
         $canManage = Gate::allows('sales-customers-manage');
         $canManageOrders = Gate::allows('sales-sales-orders-manage');
@@ -273,7 +282,7 @@ class CustomerController extends Controller
             ? Item::query()->where('is_sellable', true)->orderBy('name')->get()
             : collect();
 
-        $payload = [
+        return [
             'customer' => $this->customerData($customer),
             'contacts' => $customer->contacts
                 ->map(fn (CustomerContact $contact): array => $this->contactData($contact))
@@ -304,14 +313,38 @@ class CustomerController extends Controller
             'statuses' => Customer::statuses(),
             'customerTypes' => Customer::typeLabels(),
             'taskCreate' => [
+                'storeUrl' => route('tasks.store'),
                 'users' => $this->manualTaskAssigneeOptions((int) auth()->user()->tenant_id),
             ],
         ];
+    }
 
-        return view('sales.customers.show', [
-            'customer' => $customer,
-            'payload' => $payload,
-        ]);
+    /**
+     * Build the shared authenticated Inertia shell payload.
+     *
+     * @return array<string, mixed>
+     */
+    private function authShellPayload(Request $request, NavigationEligibility $navigationEligibility): array
+    {
+        $user = $request->user();
+
+        return [
+            'logo' => [
+                'src' => null,
+                'alt' => config('app.name', 'Factory Manager'),
+            ],
+            'user' => [
+                'name' => $user->name,
+                'email' => $user->email,
+            ],
+            'navigation' => [
+                'dashboardUrl' => route('dashboard', absolute: false),
+                'profileUrl' => route('profile.edit', absolute: false),
+                'logoutUrl' => route('logout', absolute: false),
+                'groups' => $this->navigationGroups($request, $user, $navigationEligibility->forUser($user)),
+                'accountItems' => $this->accountNavigationItems($request, $user),
+            ],
+        ];
     }
 
     /**

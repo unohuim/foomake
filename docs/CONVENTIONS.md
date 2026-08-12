@@ -12,8 +12,12 @@ These rules are contractual.
 - Prefer **clarity over cleverness**
 - Prefer **explicit behavior over implicit magic**
 - Prefer **small, reviewable changes**
+- Prefer **best-practice implementations over merely workable implementations**
 - Match **existing patterns** before proposing new ones
 - Architecture and rules are enforced through tests and documentation
+- When touched code violates best practice, contributors must flag the issue before continuing.
+- The flag must name the risk, identify the better pattern, and state whether the fix is in scope or needs approval.
+- Touched code must not knowingly preserve a non-best-practice implementation just because it currently works.
 
 ---
 

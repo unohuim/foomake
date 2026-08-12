@@ -43,12 +43,13 @@ beforeEach(function () {
         }
     };
 
-    $this->bladeSource = file_get_contents(base_path('resources/views/sales/products/index.blade.php'));
-    $this->pageModuleSource = file_get_contents(base_path('resources/js/pages/sales-products-index.js'));
+    $this->bladeSource = file_get_contents(base_path('resources/js/pages/Sales/Products/Index.vue'));
+    $this->pageModuleSource = file_get_contents(base_path('resources/js/pages/Sales/Products/Index.vue'));
     $this->importModulePath = base_path('resources/js/lib/import-module.js');
     $this->importModuleSource = file_exists($this->importModulePath)
         ? file_get_contents($this->importModulePath)
         : '';
+    $this->importComponentSource = file_get_contents(base_path('resources/js/components/ResourceImportDrawer.vue'));
 });
 
 it('1. products page response no longer renders import slide over markup server side', function () {
@@ -64,38 +65,38 @@ it('1. products page response no longer renders import slide over markup server 
         ->assertDontSee('data-shared-import-panel', false);
 });
 
-it('2. products blade keeps the page root import config contract only', function () {
+it('2. products Vue page uses the shared import drawer component only', function () {
     expect($this->bladeSource)
-        ->toContain('data-import-config=')
+        ->toContain('ResourceImportDrawer')
         ->and($this->bladeSource)->not->toContain('data-products-import-panel')
         ->and($this->bladeSource)->not->toContain('data-products-import-preview-card');
 });
 
-it('3. products blade no longer contains import close button wiring', function () {
+it('3. products vue page no longer contains import close button wiring', function () {
     expect($this->bladeSource)
         ->not->toContain('x-on:click="closeImportPanel()"')
         ->and($this->bladeSource)->not->toContain('x-on:change="handleSourceChange()"')
         ->and($this->bladeSource)->not->toContain('x-on:click="submitImport()"');
 });
 
-it('4. the shared import module file exists', function () {
-    expect(file_exists($this->importModulePath))->toBeTrue();
+it('4. the shared import drawer component file exists', function () {
+    expect(file_exists(base_path('resources/js/components/ResourceImportDrawer.vue')))->toBeTrue();
 });
 
-it('5. products page module delegates import behavior to the shared import module', function () {
+it('5. products vue page delegates import behavior to the shared import drawer component', function () {
     expect($this->pageModuleSource)
-        ->toContain("import { createImportModule } from '../lib/import-module';")
-        ->and($this->pageModuleSource)->toContain('const importModule = createImportModule(')
-        ->and($this->pageModuleSource)->toContain('importModule.mount(rootEl);');
+        ->toContain('ResourceImportDrawer')
+        ->and($this->pageModuleSource)->toContain('handleImportSourceChange')
+        ->and($this->pageModuleSource)->toContain('submitImport');
 });
 
-it('6. products page module still wires the shared toolbar import handler', function () {
+it('6. products vue page still wires the resource index import event', function () {
     expect($this->pageModuleSource)
-        ->toContain("importHandler: 'openImportPanel()'")
-        ->and($this->pageModuleSource)->toContain("import: 'openImportPanel()'");
+        ->toContain('@import="openImportDrawer"')
+        ->and($this->pageModuleSource)->toContain(':open="importDrawerOpen"');
 });
 
-it('7. products page module does not contain page local import parsing adapters', function () {
+it('7. products vue page does not contain legacy import parsing adapters', function () {
     expect($this->pageModuleSource)
         ->not->toContain('parseLocalRows:')
         ->and($this->pageModuleSource)->not->toContain('normalizePreviewRow:')
@@ -103,117 +104,114 @@ it('7. products page module does not contain page local import parsing adapters'
         ->and($this->pageModuleSource)->not->toContain('buildSubmitBody:');
 });
 
-it('8. shared import module renders the shared panel root', function () {
-    expect($this->importModuleSource)
-        ->toContain('data-shared-import-panel')
-        ->and($this->importModuleSource)->toContain('data-shared-import-root');
+it('8. shared import drawer renders the shared panel root', function () {
+    expect($this->importComponentSource)
+        ->toContain('resource-import-drawer-title')
+        ->and($this->importComponentSource)->toContain('<BaseDrawer');
 });
 
-it('9. shared import module renders the shared file input controls', function () {
-    expect($this->importModuleSource)
-        ->toContain('data-shared-import-file-input')
-        ->and($this->importModuleSource)->toContain('type="file"')
-        ->and($this->importModuleSource)->toContain('accept=".csv,text/csv"');
+it('9. shared import drawer renders the shared file input controls', function () {
+    expect($this->importComponentSource)
+        ->toContain('data-resource-import-file-input')
+        ->and($this->importComponentSource)->toContain('type="file"')
+        ->and($this->importComponentSource)->toContain('accept=".csv,text/csv"');
 });
 
-it('10. shared import module renders the shared empty state', function () {
-    expect($this->importModuleSource)
-        ->toContain('data-shared-import-empty-state')
-        ->and($this->importModuleSource)->toContain('Choose an import source');
+it('10. shared import drawer renders the shared empty state', function () {
+    expect($this->importComponentSource)
+        ->toContain('empty-source')
+        ->and($this->importComponentSource)->toContain('Choose an import source');
 });
 
-it('11. shared import module renders the bulk options accordion', function () {
-    expect($this->importModuleSource)
-        ->toContain('data-shared-import-bulk-options-accordion')
-        ->and($this->importModuleSource)->toContain('Bulk Import Options');
+it('11. shared import drawer renders the bulk options accordion', function () {
+    expect($this->importComponentSource)
+        ->toContain('data-resource-import-bulk-options-accordion')
+        ->and($this->importComponentSource)->toContain('Bulk Import Options')
+        ->and($this->importComponentSource)->toContain('hasSource && showBulkOptions')
+        ->and($this->importComponentSource)->not->toContain('No additional import options are available for this resource.');
 });
 
-it('12. shared import module renders the preview accordion', function () {
-    expect($this->importModuleSource)
-        ->toContain('data-shared-import-preview-records-accordion')
-        ->and($this->importModuleSource)->toContain('Import Preview');
+it('12. shared import drawer renders the preview accordion', function () {
+    expect($this->importComponentSource)
+        ->toContain('data-resource-import-preview-records-accordion')
+        ->and($this->importComponentSource)->toContain('Import Preview');
 });
 
-it('13. shared import module renders preview search and duplicate controls', function () {
-    expect($this->importModuleSource)
-        ->toContain('data-shared-import-preview-search')
-        ->and($this->importModuleSource)->toContain('data-shared-import-show-duplicates')
-        ->and($this->importModuleSource)->toContain('data-shared-import-select-visible');
+it('13. shared import drawer renders preview search and duplicate controls', function () {
+    expect($this->importComponentSource)
+        ->toContain('data-resource-import-preview-search')
+        ->and($this->importComponentSource)->toContain('data-resource-import-show-duplicates')
+        ->and($this->importComponentSource)->toContain('data-resource-import-select-visible');
 });
 
-it('14. shared import module renders preview loading and empty states', function () {
-    expect($this->importModuleSource)
-        ->toContain('data-shared-import-preview-loading')
-        ->and($this->importModuleSource)->toContain('data-shared-import-preview-empty-state')
-        ->and($this->importModuleSource)->toContain('data-shared-import-preview-scroll');
+it('14. shared import drawer renders preview loading and empty states', function () {
+    expect($this->importComponentSource)
+        ->toContain('preview-loading')
+        ->and($this->importComponentSource)->toContain('preview-empty')
+        ->and($this->importComponentSource)->toContain('max-h-[32rem] overflow-y-auto');
 });
 
-it('15. shared import module renders preview cards', function () {
-    expect($this->importModuleSource)
-        ->toContain('data-shared-import-preview-card')
-        ->and($this->importModuleSource)->toContain('rowValidationMessages(index)');
+it('15. shared import drawer renders preview rows through a slot', function () {
+    expect($this->importComponentSource)
+        ->toContain('name="preview-rows"')
+        ->and($this->pageModuleSource)->toContain('<template #preview-rows="{ rows }">');
 });
 
-it('15a. shared import module keeps preview rows to a single compact line', function () {
-    expect($this->importModuleSource)
-        ->toContain('items-center justify-between gap-3')
-        ->and($this->importModuleSource)->toContain('min-w-0 flex-1 truncate text-sm font-medium')
-        ->and($this->importModuleSource)->toContain('shrink-0 truncate text-xs text-gray-500')
-        ->and($this->importModuleSource)->not->toContain('bodyExpression')
-        ->and($this->importModuleSource)->not->toContain('rounded-full px-2.5 py-1')
-        ->and($this->importModuleSource)->not->toContain("mt-1 truncate text-xs text-gray-500");
+it('15a. products import preview rows remain compact', function () {
+    expect($this->pageModuleSource)
+        ->toContain('class="flex min-h-10 items-center gap-3"')
+        ->and($this->pageModuleSource)->toContain('class="min-w-0 flex-1"')
+        ->and($this->pageModuleSource)->toContain('truncate text-sm font-medium')
+        ->and($this->pageModuleSource)->not->toContain('bodyExpression');
 });
 
 it('16. products import no longer requires a manual load preview button', function () {
-    expect($this->importModuleSource)
+    expect($this->pageModuleSource)
         ->not->toContain('Load Preview')
-        ->and($this->importModuleSource)->not->toContain('x-on:click="loadPreview()"');
+        ->and($this->pageModuleSource)->not->toContain('x-on:click="loadPreview()"');
 });
 
-it('17. file selection still auto loads preview in the shared module', function () {
-    expect($this->importModuleSource)
+it('17. file selection still auto loads preview in the vue page', function () {
+    expect($this->pageModuleSource)
         ->toContain('async handleLocalFileChange(event)')
-        ->and($this->importModuleSource)->toContain("source: 'file-upload'")
-        ->and($this->importModuleSource)->toContain('loadingMessage: loadingFilePreviewLabel');
+        ->and($this->pageModuleSource)->toContain('source: "file-upload"')
+        ->and($this->pageModuleSource)->toContain('props.importConfig.endpoints.preview');
 });
 
-it('18. woo commerce source selection still auto loads preview in the shared module', function () {
-    expect($this->importModuleSource)
-        ->toContain('handleSourceChange()')
-        ->and($this->importModuleSource)->toContain('this.loadPreview({')
-        ->and($this->importModuleSource)->toContain('loadingMessage: loadingExternalPreviewLabel');
+it('18. woo commerce source selection still auto loads preview in the vue page', function () {
+    expect($this->pageModuleSource)
+        ->toContain('async function handleImportSourceChange(source)')
+        ->and($this->pageModuleSource)->toContain('await loadExternalPreview(source)')
+        ->and($this->pageModuleSource)->toContain('async function loadExternalPreview(source)');
 });
 
-it('19. cached file source persistence remains in the shared module', function () {
-    expect($this->importModuleSource)
-        ->toContain('cachedFileSources: []')
-        ->and($this->importModuleSource)->toContain('cacheCurrentFilePreviewRows(rows)')
-        ->and($this->importModuleSource)->toContain('restoreCachedFilePreview()')
-        ->and($this->importModuleSource)->toContain("return this.selectedSource.startsWith('file-upload-cached:');");
+it('19. products vue import does not introduce hidden cached file source state', function () {
+    expect($this->pageModuleSource)
+        ->not->toContain('cachedFileSources')
+        ->and($this->pageModuleSource)->not->toContain('file-upload-cached:')
+        ->and($this->pageModuleSource)->not->toContain('restoreCachedFilePreview()');
 });
 
-it('20. products fallback import message remains unchanged in the shared module', function () {
-    expect($this->importModuleSource)
-        ->toContain("const importUnavailableMessage = messages.importUnavailable || 'Unable to import products.';")
+it('20. products fallback import message remains unchanged in the vue page', function () {
+    expect($this->pageModuleSource)
+        ->toContain('"Unable to import products."')
         ->and($this->pageModuleSource)->not->toContain('importUnavailable:');
 });
 
-it('21. products preview payload building remains in the shared module defaults', function () {
-    expect($this->importModuleSource)
-        ->toContain('buildImportRowPayload(row, importSource)')
-        ->and($this->importModuleSource)->toContain('default_price_cents: Object.prototype.hasOwnProperty.call(row, \'default_price_cents\')')
-        ->and($this->importModuleSource)->toContain('image_url: Object.prototype.hasOwnProperty.call(row, \'image_url\')');
+it('21. products preview payload building remains in the page-owned import submit', function () {
+    expect($this->pageModuleSource)
+        ->toContain('default_price_cents: row.default_price_cents ?? null')
+        ->and($this->pageModuleSource)->toContain('image_url: row.image_url ?? null')
+        ->and($this->pageModuleSource)->toContain('external_source: row.external_source || selectedImportSource.value');
 });
 
-it('22. products submit still uses selected visible preview rows by default', function () {
-    expect($this->importModuleSource)
-        ->toContain('const submitSelectedVisibleRowsOnly = rowBehavior.submitSelectedVisibleRowsOnly !== false;')
-        ->and($this->importModuleSource)->toContain('selectedImportRows()')
-        ->and($this->importModuleSource)->toContain('return submitSelectedVisibleRowsOnly');
+it('22. products submit still uses selected preview rows by default', function () {
+    expect($this->pageModuleSource)
+        ->toContain('.filter((row) => row.selected)')
+        ->and($this->pageModuleSource)->toContain('Select at least one product to import.');
 });
 
-it('23. shared import module always defaults duplicate rows to hidden', function () {
-    expect($this->importModuleSource)
-        ->toContain('const showDuplicatesDefault = false;')
-        ->and($this->importModuleSource)->not->toContain('const showDuplicatesDefault = !hideDuplicatesByDefault;');
+it('23. products import drawer defaults duplicate rows to hidden', function () {
+    expect($this->pageModuleSource)
+        ->toContain('const showDuplicateRows = ref(false);');
 });

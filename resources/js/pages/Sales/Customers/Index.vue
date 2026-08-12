@@ -2,7 +2,7 @@
 import { Head, router } from "@inertiajs/vue3";
 import { computed, reactive, ref } from "vue";
 
-import BaseDropdown from "../../../components/BaseDropdown.vue";
+import ResourceCardGrid from "../../../components/ResourceCardGrid.vue";
 import ResourceCreateDrawer from "../../../components/ResourceCreateDrawer.vue";
 import ResourceExportDrawer from "../../../components/ResourceExportDrawer.vue";
 import ResourceImportDrawer from "../../../components/ResourceImportDrawer.vue";
@@ -198,18 +198,6 @@ function customerCardRows(customer) {
             right: [],
         },
     ];
-}
-
-function badgeToneClasses(badge) {
-    if (badge.tone === "blue") {
-        return "bg-blue-50 text-blue-700";
-    }
-
-    if (badge.tone === "yellow") {
-        return "bg-yellow-50 text-yellow-800";
-    }
-
-    return "bg-gray-100 text-gray-700";
 }
 
 function showToast(message, tone = "success") {
@@ -691,8 +679,8 @@ async function submitImport() {
     <Head title="Customers" />
 
     <AuthShell :shell="shell" title="Customers">
-        <div class="flex h-full min-h-0 px-4 pt-5 sm:px-6 lg:px-8">
-            <div class="relative mx-auto flex min-h-0 w-full max-w-7xl">
+        <div class="flex h-full min-h-0 w-full">
+            <div class="relative flex min-h-0 w-full flex-1">
                 <div
                     v-if="toast"
                     class="fixed right-4 top-4 z-50 rounded-md px-4 py-3 text-sm shadow-lg"
@@ -716,163 +704,21 @@ async function submitImport() {
                     @import="openImportDrawer"
                 >
                     <template #default="{ records }">
-                        <div class="min-h-0">
-                            <div class="h-full min-h-0 md:hidden" data-crud-mobile-cards>
-                                <div class="min-h-0 p-0" data-crud-records-scroll>
-                                    <div class="border-t border-gray-300">
-                                        <div
-                                            v-for="customer in records"
-                                            :key="`mobile-card-${customer.id}`"
-                                            class="relative grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 overflow-visible border-b border-gray-300 bg-white px-4 py-2"
-                                            data-crud-card
-                                        >
-                                            <a class="min-w-0 cursor-pointer" :href="customer.show_url">
-                                                <div class="flex min-w-0 items-center gap-3">
-                                                    <div class="flex min-w-0 flex-1 items-center gap-2">
-                                                        <p class="truncate text-sm font-semibold text-gray-900">
-                                                            {{ customer.name || "-" }}
-                                                        </p>
-                                                        <span
-                                                            v-for="badge in customerTitleBadges(customer)"
-                                                            :key="`mobile-card-${customer.id}-title-badge-${badge.label}`"
-                                                            class="inline-flex shrink-0 items-center rounded-full px-1.5 py-0.5 text-[0.6rem] font-semibold uppercase tracking-wide"
-                                                            :class="badgeToneClasses(badge)"
-                                                            data-crud-mobile-title-badge
-                                                        >
-                                                            {{ badge.label }}
-                                                        </span>
-                                                    </div>
-                                                </div>
-
-                                                <p class="mt-0.5 truncate text-xs text-gray-600">
-                                                    {{ customer.email || "-" }}
-                                                </p>
-
-                                                <div class="mt-2 space-y-1.5" data-crud-card-detail-rows>
-                                                    <div
-                                                        v-for="(row, rowIndex) in customerCardRows(customer)"
-                                                        :key="`mobile-card-${customer.id}-detail-row-${rowIndex}`"
-                                                        class="flex min-w-0 items-baseline justify-between gap-3 text-xs"
-                                                    >
-                                                        <div class="flex min-w-0 flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
-                                                            <span
-                                                                v-for="item in row.left"
-                                                                :key="`mobile-card-${customer.id}-detail-left-${rowIndex}-${item.label}`"
-                                                                class="inline-flex min-w-0 items-baseline gap-1"
-                                                            >
-                                                                <span class="shrink-0 text-[0.65rem] font-medium text-gray-400">{{ item.label }}</span>
-                                                                <span class="min-w-0 truncate text-xs font-medium text-gray-700">{{ item.value }}</span>
-                                                            </span>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </a>
-
-                                            <div class="relative z-10 flex shrink-0 items-center gap-2">
-                                                <BaseDropdown :aria-label="labels.actionsAriaLabel">
-                                                    <template #trigger>
-                                                        <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
-                                                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 6.75a.75.75 0 1 1 0-1.5.75.75 0 0 1 0 1.5ZM12 12.75a.75.75 0 1 1 0-1.5.75.75 0 0 1 0 1.5ZM12 18.75a.75.75 0 1 1 0-1.5.75.75 0 0 1 0 1.5Z" />
-                                                        </svg>
-                                                    </template>
-
-                                                    <template #default="{ close }">
-                                                        <button type="button" class="cursor-pointer flex w-full items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-50" role="menuitem" @click="close(); openEditDrawer(customer)">
-                                                            Edit
-                                                        </button>
-                                                        <button type="button" class="cursor-pointer flex w-full items-center px-4 py-2 text-sm text-red-600 hover:bg-red-50" role="menuitem" @click="close(); archiveCustomer(customer)">
-                                                            Archive
-                                                        </button>
-                                                    </template>
-                                                </BaseDropdown>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="hidden h-full min-h-0 md:block">
-                                <div class="flex h-full min-h-0 flex-col">
-                                    <div class="min-h-0 flex-1 p-6" data-crud-records-scroll>
-                                        <div
-                                            class="customer-card-grid grid gap-4"
-                                            data-crud-card-grid
-                                            :class="loading ? 'opacity-80' : 'opacity-100'"
-                                        >
-                                            <article
-                                                v-for="customer in records"
-                                                :key="`desktop-card-${customer.id}`"
-                                                class="group flex flex-col rounded-lg border border-gray-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-md"
-                                                data-crud-card
-                                            >
-                                                <div class="flex items-start justify-between gap-3">
-                                                    <div class="min-w-0 flex-1">
-                                                        <div class="flex min-w-0 items-center gap-2">
-                                                            <a
-                                                                class="cursor-pointer truncate text-base font-semibold text-gray-900"
-                                                                :href="customer.show_url"
-                                                            >
-                                                                {{ customer.name || "-" }}
-                                                            </a>
-                                                            <span
-                                                                v-for="badge in customerTitleBadges(customer)"
-                                                                :key="`desktop-card-${customer.id}-title-badge-${badge.label}`"
-                                                                class="inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wide"
-                                                                :class="badgeToneClasses(badge)"
-                                                                data-crud-desktop-title-badge
-                                                            >
-                                                                {{ badge.label }}
-                                                            </span>
-                                                        </div>
-                                                        <p class="mt-0.5 truncate text-sm text-gray-500">
-                                                            {{ customer.customer_type_label || "Customer" }}
-                                                        </p>
-                                                    </div>
-
-                                                    <div class="relative flex shrink-0 items-start gap-2">
-                                                        <BaseDropdown :aria-label="labels.actionsAriaLabel">
-                                                            <template #trigger>
-                                                                <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
-                                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 6.75a.75.75 0 1 1 0-1.5.75.75 0 0 1 0 1.5ZM12 12.75a.75.75 0 1 1 0-1.5.75.75 0 0 1 0 1.5ZM12 18.75a.75.75 0 1 1 0-1.5.75.75 0 0 1 0 1.5Z" />
-                                                                </svg>
-                                                            </template>
-
-                                                            <template #default="{ close }">
-                                                                <button type="button" class="cursor-pointer flex w-full items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-50" role="menuitem" @click="close(); openEditDrawer(customer)">
-                                                                    Edit
-                                                                </button>
-                                                                <button type="button" class="cursor-pointer flex w-full items-center px-4 py-2 text-sm text-red-600 hover:bg-red-50" role="menuitem" @click="close(); archiveCustomer(customer)">
-                                                                    Archive
-                                                                </button>
-                                                            </template>
-                                                        </BaseDropdown>
-                                                    </div>
-                                                </div>
-
-                                                <div class="mt-2 space-y-1.5" data-crud-card-detail-rows>
-                                                    <div
-                                                        v-for="(row, rowIndex) in customerCardRows(customer)"
-                                                        :key="`desktop-card-${customer.id}-detail-row-${rowIndex}`"
-                                                        class="flex min-w-0 items-baseline justify-between gap-3 text-xs"
-                                                    >
-                                                        <div class="flex min-w-0 flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
-                                                            <span
-                                                                v-for="item in row.left"
-                                                                :key="`desktop-card-${customer.id}-detail-left-${rowIndex}-${item.label}`"
-                                                                class="inline-flex min-w-0 items-baseline gap-1"
-                                                            >
-                                                                <span class="shrink-0 text-[0.65rem] font-medium text-gray-400">{{ item.label }}</span>
-                                                                <span class="min-w-0 truncate text-xs font-medium text-gray-700">{{ item.value }}</span>
-                                                            </span>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </article>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
+                        <ResourceCardGrid
+                            :records="records"
+                            :labels="labels"
+                            :loading="loading"
+                            :title-badges="customerTitleBadges"
+                            :detail-rows="customerCardRows"
+                            :subtitle="(customer) => customer.customer_type_label || 'Customer'"
+                            :mobile-subtitle="(customer) => customer.email || '-'"
+                            :href="(customer) => customer.show_url"
+                            :actions="[
+                                { id: 'edit', label: 'Edit', tone: 'default' },
+                                { id: 'archive', label: 'Archive', tone: 'warning' },
+                            ]"
+                            @action="({ action, record }) => action.id === 'edit' ? openEditDrawer(record) : archiveCustomer(record)"
+                        />
                     </template>
                 </ResourceIndex>
             </div>
@@ -1078,6 +924,7 @@ async function submitImport() {
             :submitting="importSubmitting"
             :errors="importErrors"
             :duplicate-row-count="duplicateRowCount"
+            :show-bulk-options="selectedImportSource === 'file-upload'"
             @close="closeImportDrawer"
             @source-change="handleImportSourceChange"
             @file-change="handleLocalFileChange"
@@ -1108,7 +955,7 @@ async function submitImport() {
             </template>
 
             <template #bulk-options>
-                <div v-if="selectedImportSource === 'file-upload'" class="rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm text-gray-700">
+                <div class="rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm text-gray-700">
                     <label class="block font-medium text-gray-900">
                         Customer CSV
                         <input
@@ -1122,16 +969,7 @@ async function submitImport() {
                         Required headers: {{ requiredCustomerCsvHeaders.join(", ") }}
                     </p>
                 </div>
-                <div v-else class="rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600">
-                    {{ importLabels.noBulkOptions ?? "No additional import options are available for this resource." }}
-                </div>
             </template>
         </ResourceImportDrawer>
     </AuthShell>
 </template>
-
-<style scoped>
-.customer-card-grid {
-    grid-template-columns: repeat(auto-fill, minmax(min(100%, 18rem), 1fr));
-}
-</style>

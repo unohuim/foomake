@@ -6,7 +6,7 @@ location:
   - app/Http/Controllers/PurchaseOrderController.php
   - app/Http/Controllers/MaterialController.php
   - app/Http/Controllers/Admin/UserManagementController.php
-  - resources/views/sales/products/index.blade.php
+  - resources/js/pages/Sales/Products/Index.vue
   - resources/views/sales/customers/index.blade.php
   - resources/views/purchasing/orders/index.blade.php
   - resources/views/materials/index.blade.php
@@ -19,7 +19,7 @@ location:
   - resources/js/lib/import-module.js
   - resources/js/lib/generic-crud.js
   - resources/js/lib/crud-card-page.js
-  - resources/js/pages/sales-products-index.js
+  - resources/js/pages/Sales/Products/Index.vue
   - resources/js/pages/sales-customers-index.js
   - resources/js/pages/purchasing-orders-index.js
   - resources/js/pages/materials-index.js
@@ -189,8 +189,8 @@ example_usage: |
   Blade:
     <div
         class="flex h-[calc(100vh-8rem)] min-h-0 flex-col overflow-hidden"
-        data-page="sales-products-index"
-        data-payload="sales-products-index-payload"
+        Inertia::render('Sales/Products/Index')
+        payload prop
         data-crud-config='@json($crudConfig)'
         data-import-config='@json($importConfig)'
         x-data="salesProductsIndex"

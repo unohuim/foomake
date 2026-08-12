@@ -202,6 +202,13 @@ beforeEach(function () {
 
         return is_array($payload) ? $payload : [];
     };
+
+    $this->getCustomerShowPayload = function (User $user, int $customerId): array {
+        return $this->actingAs($user)
+            ->getJson(route('sales.customers.show.payload', $customerId))
+            ->assertOk()
+            ->json('data');
+    };
 });
 
 it('1. entering packing after availability checks pass generates tasks from active templates', function () {
@@ -691,8 +698,7 @@ it('19. customer detail orders payload also shows current stage tasks', function
 
     ($this->transitionOrder)($manager, $order, SalesOrder::STATUS_PACKED)->assertOk();
 
-    $response = $this->actingAs($manager)->get(route('sales.customers.show', $order->customer_id))->assertOk();
-    $payload = ($this->extractPayload)($response, 'sales-customers-show-payload');
+    $payload = ($this->getCustomerShowPayload)($manager, $order->customer_id);
     $orderPayload = collect($payload['orders'] ?? [])->firstWhere('id', $order->id);
 
     expect($orderPayload['current_stage_tasks'] ?? [])->toHaveCount(1);

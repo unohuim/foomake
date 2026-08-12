@@ -207,6 +207,13 @@ beforeEach(function () {
         return is_array($payload) ? $payload : [];
     };
 
+    $this->getCustomerShowPayload = function (User $user, int $customerId): array {
+        return $this->actingAs($user)
+            ->getJson(route('sales.customers.show.payload', $customerId))
+            ->assertOk()
+            ->json('data');
+    };
+
     $this->assertStableLineErrors = function ($response): void {
         $response->assertJsonStructure([
             'message',
@@ -949,15 +956,7 @@ it('26b. customer detail create order button is disabled when no sellable items 
     ($this->grantPermission)($user, 'sales-customers-view');
     ($this->grantPermission)($user, 'sales-sales-orders-manage');
 
-    $response = $this->actingAs($user)
-        ->get(route('sales.customers.show', $customer->id))
-        ->assertOk()
-        ->assertSee('data-section="customer-orders"', false)
-        ->assertSee('Add Order')
-        ->assertSee('x-bind:disabled="orderItems.length === 0"', false)
-        ->assertSee('cursor-not-allowed', false);
-
-    $payload = ($this->extractPayload)($response, 'sales-customers-show-payload');
+    $payload = ($this->getCustomerShowPayload)($user, $customer->id);
 
     expect($payload['orderItems'] ?? [])->toBe([]);
 });
@@ -970,13 +969,7 @@ it('26c. customer detail create order form cannot be launched when disabled beca
     ($this->grantPermission)($user, 'sales-customers-view');
     ($this->grantPermission)($user, 'sales-sales-orders-manage');
 
-    $response = $this->actingAs($user)
-        ->get(route('sales.customers.show', $customer->id))
-        ->assertOk()
-        ->assertSee('x-bind:disabled="orderItems.length === 0"', false)
-        ->assertSee("x-bind:class=\"orderItems.length === 0 ? 'opacity-50 cursor-not-allowed' : ''\"", false);
-
-    $payload = ($this->extractPayload)($response, 'sales-customers-show-payload');
+    $payload = ($this->getCustomerShowPayload)($user, $customer->id);
 
     expect($payload['orderItems'] ?? [])->toBe([]);
 });
@@ -991,14 +984,7 @@ it('26d. customer detail create order button is enabled when a sellable item exi
     ($this->grantPermission)($user, 'sales-customers-view');
     ($this->grantPermission)($user, 'sales-sales-orders-manage');
 
-    $response = $this->actingAs($user)
-        ->get(route('sales.customers.show', $customer->id))
-        ->assertOk()
-        ->assertSee('data-section="customer-orders"', false)
-        ->assertSee('Add Order')
-        ->assertSee('x-bind:disabled="orderItems.length === 0"', false);
-
-    $payload = ($this->extractPayload)($response, 'sales-customers-show-payload');
+    $payload = ($this->getCustomerShowPayload)($user, $customer->id);
 
     expect($payload['orderItems'][0]['name'] ?? null)->toBe('Gift Box');
 });
@@ -1052,12 +1038,7 @@ it('28. created lines appear in the customer detail orders mini index payload on
 
     $lineId = (int) $storeResponse->json('data.line.id');
 
-    $showResponse = $this->actingAs($user)
-        ->get(route('sales.customers.show', $customer->id))
-        ->assertOk()
-        ->assertSee('data-section="customer-orders"', false);
-
-    $payload = ($this->extractPayload)($showResponse, 'sales-customers-show-payload');
+    $payload = ($this->getCustomerShowPayload)($user, $customer->id);
     $orderPayload = collect($payload['orders'] ?? [])->firstWhere('id', $order->id);
 
     expect($orderPayload['line_count'] ?? null)->toBe(1)

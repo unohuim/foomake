@@ -8,6 +8,7 @@ use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Inertia\Testing\AssertableInertia as Assert;
 
 uses(RefreshDatabase::class);
 
@@ -81,6 +82,10 @@ beforeEach(function () {
 
     $this->getShow = function (User $user, int $customerId) {
         return $this->actingAs($user)->get(route('sales.customers.show', $customerId));
+    };
+
+    $this->getShowPayload = function (User $user, int $customerId) {
+        return $this->actingAs($user)->getJson(route('sales.customers.show.payload', $customerId));
     };
 
     $this->postStore = function (User $user, array $payload = []) {
@@ -358,11 +363,17 @@ it('12. customer detail page loads for same tenant', function () {
 
     ($this->getShow)($user, $customer->id)
         ->assertOk()
-        ->assertSee('Customers')
-        ->assertSee('Detail Customer')
-        ->assertSee('Business')
-        ->assertSee(route('sales.customers.index'), false)
-        ->assertDontSee('Back to Customers');
+        ->assertInertia(fn (Assert $page): Assert => $page
+            ->component('Sales/Customers/Show')
+            ->where('title', 'Customer: Detail Customer')
+            ->where('indexUrl', route('sales.customers.index', absolute: false))
+            ->where('payloadUrl', route('sales.customers.show.payload', $customer)));
+
+    ($this->getShowPayload)($user, $customer->id)
+        ->assertOk()
+        ->assertJsonPath('data.customer.name', 'Detail Customer')
+        ->assertJsonPath('data.customer.customer_type_label', 'Business')
+        ->assertJsonPath('data.indexUrl', route('sales.customers.index'));
 });
 
 it('13. other-tenant customer detail returns 404', function () {

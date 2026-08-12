@@ -22,7 +22,6 @@ beforeEach(function () {
     $this->makeOrderShowSource = fn (): string => File::get(resource_path('views/manufacturing/make-orders/show.blade.php'));
     $this->recipeShowSource = fn (): string => File::get(resource_path('views/manufacturing/recipes/show.blade.php'));
     $this->salesOrderShowSource = fn (): string => File::get(resource_path('views/sales/orders/show.blade.php'));
-    $this->salesCustomerShowSource = fn (): string => File::get(resource_path('views/sales/customers/show.blade.php'));
 });
 
 it('1. renders a breadcrumb nav with the expected aria label', function () {
@@ -240,16 +239,14 @@ it('21. recipe detail breadcrumb links to Recipes index', function () {
         ->and($source)->toContain('<x-resource-detail-header-breadcrumb');
 });
 
-it('22. sales detail pages use the shared resource detail header breadcrumb component', function () {
-    expect(($this->salesOrderShowSource)())->toContain('<x-resource-detail-header-breadcrumb')
-        ->and(($this->salesCustomerShowSource)())->toContain('<x-resource-detail-header-breadcrumb');
+it('22. Blade sales detail pages use the shared resource detail header breadcrumb component', function () {
+    expect(($this->salesOrderShowSource)())->toContain('<x-resource-detail-header-breadcrumb');
 });
 
 it('23. old scattered breadcrumb component calls are removed from migrated pages', function () {
     $sources = [
         ($this->supplierShowSource)(),
         ($this->salesOrderShowSource)(),
-        ($this->salesCustomerShowSource)(),
         ($this->detailHeaderSource)(),
     ];
 

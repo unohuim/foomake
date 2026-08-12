@@ -58,7 +58,6 @@ The same pattern is repeated often enough that bug fixes will drift.
 - `resources/js/pages/manufacturing-recipes-show.js`
 - `resources/js/pages/manufacturing-make-orders-show.js`
 - `resources/js/pages/materials-show.js`
-- `resources/js/pages/sales-customers-show.js`
 - `resources/js/pages/sales-orders-show.js`
 - `resources/js/pages/purchasing-orders-show.js`
 - `resources/js/pages/admin-workflows-index.js`

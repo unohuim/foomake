@@ -10,6 +10,7 @@ use App\Models\UomCategory;
 use App\Models\User;
 use App\Models\Item;
 use Illuminate\Support\Facades\DB;
+use Inertia\Testing\AssertableInertia as Assert;
 
 beforeEach(function () {
     $this->tenantCounter = 1;
@@ -172,6 +173,12 @@ beforeEach(function () {
     };
 
     $this->extractPayload = function ($response, string $payloadId): array {
+        $props = $response->viewData('page')['props'] ?? null;
+
+        if ($payloadId === 'sales-orders-index-payload' && is_array($props) && isset($props['payload'])) {
+            return $props['payload'];
+        }
+
         $html = $response->getContent();
         $pattern = '/<script type="application\\/json" id="' . preg_quote($payloadId, '/') . '">\\s*(.*?)\\s*<\\/script>/s';
 
@@ -181,6 +188,13 @@ beforeEach(function () {
         $payload = json_decode($json, true);
 
         return is_array($payload) ? $payload : [];
+    };
+
+    $this->getCustomerShowPayload = function (User $user, int $customerId): array {
+        return $this->actingAs($user)
+            ->getJson(route('sales.customers.show.payload', $customerId))
+            ->assertOk()
+            ->json('data');
     };
 
     $this->orderPayloadIds = function (array $payload): array {
@@ -231,8 +245,9 @@ it('3. authorized user can view the sales orders index and receives ajax payload
     $response = $this->actingAs($user)
         ->get(route('sales.orders.index'))
         ->assertOk()
-        ->assertSee('Sales Orders')
-        ->assertSee('sales-orders-index-payload', false);
+        ->assertInertia(fn (Assert $page): Assert => $page
+            ->component('Sales/Orders/Index')
+            ->has('payload'));
 
     $payload = ($this->extractPayload)($response, 'sales-orders-index-payload');
 
@@ -575,12 +590,7 @@ it('14. create from the shared backend endpoint appears on the customer detail o
             'customer_id' => $otherCustomer->id,
         ])->assertCreated();
 
-    $showResponse = $this->actingAs($user)
-        ->get(route('sales.customers.show', $customer->id))
-        ->assertOk()
-        ->assertSee('data-section="customer-orders"', false);
-
-    $payload = ($this->extractPayload)($showResponse, 'sales-customers-show-payload');
+    $payload = ($this->getCustomerShowPayload)($user, $customer->id);
     $orderIds = array_map(
         static fn (array $order): int => (int) ($order['id'] ?? 0),
         $payload['orders'] ?? []
@@ -863,13 +873,7 @@ it('28. customer detail orders mini index returns only that customers orders', f
     ($this->grantPermission)($user, 'sales-customers-view');
     ($this->grantPermission)($user, 'sales-sales-orders-manage');
 
-    $response = $this->actingAs($user)
-        ->get(route('sales.customers.show', $customer->id))
-        ->assertOk()
-        ->assertSee('Orders')
-        ->assertSee('Target Customer');
-
-    $payload = ($this->extractPayload)($response, 'sales-customers-show-payload');
+    $payload = ($this->getCustomerShowPayload)($user, $customer->id);
     $orderIds = array_map(
         static fn (array $order): int => (int) ($order['id'] ?? 0),
         $payload['orders'] ?? []
@@ -886,11 +890,10 @@ it('29. customer detail orders section is hidden without sales sales orders mana
 
     ($this->grantPermission)($user, 'sales-customers-view');
 
-    $this->actingAs($user)
-        ->get(route('sales.customers.show', $customer->id))
-        ->assertOk()
-        ->assertDontSee('data-section="customer-orders"', false)
-        ->assertDontSee('Add Order');
+    $payload = ($this->getCustomerShowPayload)($user, $customer->id);
+
+    expect($payload['canManageOrders'])->toBeFalse()
+        ->and($payload['orders'])->toBe([]);
 });
 
 it('30. customer detail orders section is shown with sales sales orders manage permission', function () {
@@ -901,11 +904,9 @@ it('30. customer detail orders section is shown with sales sales orders manage p
     ($this->grantPermission)($user, 'sales-customers-view');
     ($this->grantPermission)($user, 'sales-sales-orders-manage');
 
-    $this->actingAs($user)
-        ->get(route('sales.customers.show', $customer->id))
-        ->assertOk()
-        ->assertSee('data-section="customer-orders"', false)
-        ->assertSee('Add Order');
+    $payload = ($this->getCustomerShowPayload)($user, $customer->id);
+
+    expect($payload['canManageOrders'])->toBeTrue();
 });
 
 it('31. customer detail orders mini index crud endpoints respect sales sales orders manage permission', function () {
@@ -986,11 +987,7 @@ it('33. customer detail order payload only includes contacts for each selected c
     ($this->grantPermission)($user, 'sales-customers-view');
     ($this->grantPermission)($user, 'sales-sales-orders-manage');
 
-    $response = $this->actingAs($user)
-        ->get(route('sales.customers.show', $customer->id))
-        ->assertOk();
-
-    $payload = ($this->extractPayload)($response, 'sales-customers-show-payload');
+    $payload = ($this->getCustomerShowPayload)($user, $customer->id);
     $customerPayload = collect($payload['orderCustomers'] ?? [])->firstWhere('id', $customer->id);
     $contactNames = array_map(
         static fn (array $contact): string => (string) ($contact['full_name'] ?? ''),
@@ -1025,8 +1022,11 @@ it('35. sales order contact dropdown text does not display the word Primary on t
     ($this->grantPermission)($user, 'sales-customers-view');
     ($this->grantPermission)($user, 'sales-sales-orders-manage');
 
-    $this->actingAs($user)
-        ->get(route('sales.customers.show', $customer->id))
-        ->assertOk()
-        ->assertDontSee('Primary contact / none');
+    $payload = ($this->getCustomerShowPayload)($user, $customer->id);
+    $contactLabels = collect($payload['orderCustomers'] ?? [])
+        ->flatMap(fn (array $customer): array => $customer['contacts'] ?? [])
+        ->pluck('full_name')
+        ->all();
+
+    expect($contactLabels)->not->toContain('Primary contact / none');
 });

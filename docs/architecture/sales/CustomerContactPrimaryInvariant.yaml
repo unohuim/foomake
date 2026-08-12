@@ -4,7 +4,7 @@ location:
   - app/Http/Controllers/CustomerContactController.php
   - app/Models/Customer.php
   - app/Models/CustomerContact.php
-  - resources/views/sales/customers/show.blade.php
+  - resources/js/pages/Sales/Customers/Show.vue
 purpose: Document the customer-contact relationship and enforce the primary-contact invariants for the customer detail Contacts section.
 when_to_use:
   - Managing customer contacts through the customer detail Contacts section

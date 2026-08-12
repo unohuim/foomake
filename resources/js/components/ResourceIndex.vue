@@ -93,12 +93,12 @@ onBeforeUnmount(() => {
 
 <template>
     <section
-        class="resource-index-shell flex min-h-0 flex-col overflow-hidden"
+        class="resource-index-shell flex min-h-0 w-full flex-col overflow-hidden"
         :class="boundedHeightClass"
         data-resource-index
     >
-        <div class="mx-auto flex h-full min-h-0 w-full max-w-7xl flex-1 flex-col overflow-hidden md:px-6 lg:px-8">
-            <div class="flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-white md:rounded-lg md:border md:border-gray-200 md:shadow-sm">
+        <div class="flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden">
+            <div class="flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-white md:border-y md:border-gray-200 md:shadow-sm">
                 <div class="border-b border-gray-100 bg-white px-4 py-3 md:px-6" data-resource-index-toolbar>
                     <div class="flex items-center gap-3">
                         <div class="relative flex-1" data-resource-index-search>

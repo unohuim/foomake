@@ -38,11 +38,7 @@ class ProfileConnectorController extends Controller
             ->where('tenant_id', $user->tenant_id)
             ->where('source', ExternalProductSourceConnection::SOURCE_WOOCOMMERCE)
             ->first();
-        $pluginConnection = WordPressPluginConnection::query()
-            ->where('tenant_id', $user->tenant_id)
-            ->latest('connected_at')
-            ->latest('id')
-            ->first();
+        $pluginConnection = $this->currentWordPressPluginConnection((int) $user->tenant_id);
 
         return Inertia::render('Profile/Connectors/Index', [
             'shell' => [
@@ -314,6 +310,35 @@ class ProfileConnectorController extends Controller
             'connected_at' => $connection?->connected_at?->toAtomString(),
             'revoked_at' => $connection?->revoked_at?->toAtomString(),
         ];
+    }
+
+    /**
+     * Return the current WordPress plugin connection, preferring active pairings.
+     */
+    private function currentWordPressPluginConnection(int $tenantId): ?WordPressPluginConnection
+    {
+        /** @var WordPressPluginConnection|null $connected */
+        $connected = WordPressPluginConnection::query()
+            ->where('tenant_id', $tenantId)
+            ->where('status', WordPressPluginConnection::STATUS_CONNECTED)
+            ->whereNull('revoked_at')
+            ->latest('last_seen_at')
+            ->latest('connected_at')
+            ->latest('id')
+            ->first();
+
+        if ($connected?->isConnected()) {
+            return $connected;
+        }
+
+        /** @var WordPressPluginConnection|null $latest */
+        $latest = WordPressPluginConnection::query()
+            ->where('tenant_id', $tenantId)
+            ->latest('connected_at')
+            ->latest('id')
+            ->first();
+
+        return $latest;
     }
 
     /**

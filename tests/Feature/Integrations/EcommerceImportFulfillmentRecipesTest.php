@@ -128,6 +128,12 @@ beforeEach(function () {
     };
 
     $this->extractPayload = function ($response, string $payloadId): array {
+        $props = $response->viewData('page')['props'] ?? null;
+
+        if ($payloadId === 'sales-products-index-payload' && is_array($props) && isset($props['payload'])) {
+            return $props['payload'];
+        }
+
         $html = $response->getContent();
         $pattern = '/<script type="application\\/json" id="' . preg_quote($payloadId, '/') . '">\\s*(.*?)\\s*<\\/script>/s';
 
@@ -139,6 +145,12 @@ beforeEach(function () {
     };
 
     $this->extractImportConfig = function ($response): array {
+        $props = $response->viewData('page')['props'] ?? null;
+
+        if (is_array($props) && isset($props['importConfig'])) {
+            return $props['importConfig'];
+        }
+
         preg_match("/data-import-config='([^']+)'/", $response->getContent(), $matches);
 
         $config = json_decode(html_entity_decode($matches[1] ?? '{}', ENT_QUOTES), true);

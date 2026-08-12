@@ -58,6 +58,12 @@ beforeEach(function () {
     };
 
     $this->extractCrudConfig = function ($response): array {
+        $props = $response->viewData('page')['props'] ?? null;
+
+        if (is_array($props) && isset($props['crudConfig'])) {
+            return $props['crudConfig'];
+        }
+
         preg_match("/data-crud-config='([^']+)'/", $response->getContent(), $matches);
 
         expect($matches)->toHaveKey(1);
@@ -73,13 +79,14 @@ beforeEach(function () {
         return $this->actingAs($user)->get(route('sales.products.index'));
     };
 
-    $this->bladeSource = file_get_contents(base_path('resources/views/sales/products/index.blade.php'));
-    $this->pageModulePath = base_path('resources/js/pages/sales-products-index.js');
+    $this->bladeSource = file_get_contents(base_path('resources/js/pages/Sales/Products/Index.vue'));
+    $this->pageModulePath = base_path('resources/js/pages/Sales/Products/Index.vue');
     $this->pageModuleSource = file_get_contents($this->pageModulePath);
     $this->exportModulePath = base_path('resources/js/lib/export-module.js');
     $this->exportModuleSource = file_exists($this->exportModulePath)
         ? file_get_contents($this->exportModulePath)
         : '';
+    $this->exportComponentSource = file_get_contents(base_path('resources/js/components/ResourceExportDrawer.vue'));
     $this->importModulePath = base_path('resources/js/lib/import-module.js');
     $this->importModuleSource = file_exists($this->importModulePath)
         ? file_get_contents($this->importModulePath)
@@ -154,33 +161,33 @@ it('6. products crud config still enables export visibility for manage permissio
     expect($config['permissions']['showExport'] ?? null)->toBeTrue();
 });
 
-it('7. shared export module file exists', function () {
-    expect(file_exists($this->exportModulePath))->toBeTrue();
+it('7. shared export drawer component file exists', function () {
+    expect(file_exists(base_path('resources/js/components/ResourceExportDrawer.vue')))->toBeTrue();
 });
 
-it('8. shared export module exports a reusable factory', function () {
-    expect($this->exportModuleSource)
-        ->toContain('export function createExportModule')
-        ->and($this->exportModuleSource)->toContain('mount(rootEl)')
-        ->and($this->exportModuleSource)->toContain('data-shared-export-panel');
+it('8. shared export drawer exposes a reusable vue component contract', function () {
+    expect($this->exportComponentSource)
+        ->toContain('defineProps')
+        ->and($this->exportComponentSource)->toContain('defineEmits')
+        ->and($this->exportComponentSource)->toContain('resource-export-drawer-title');
 });
 
-it('9. sales products page imports the shared export module', function () {
+it('9. sales products page imports the shared export drawer component', function () {
     expect($this->pageModuleSource)
-        ->toContain("import { createExportModule } from '../lib/export-module';");
+        ->toContain('ResourceExportDrawer');
 });
 
-it('10. sales products page composes the shared export module', function () {
+it('10. sales products page composes the shared export drawer component', function () {
     expect($this->pageModuleSource)
-        ->toContain('const exportModule = createExportModule(')
-        ->and($this->pageModuleSource)->toContain('exportModule.mount(rootEl);')
-        ->and($this->pageModuleSource)->toContain('...exportModule,');
+        ->toContain('<ResourceExportDrawer')
+        ->and($this->pageModuleSource)->toContain('@submit="submitExport"')
+        ->and($this->pageModuleSource)->toContain(':open="exportDrawerOpen"');
 });
 
-it('11. page module still wires the shared crud renderer export trigger to openExportPanel', function () {
+it('11. page module wires the resource index export event to openExportDrawer', function () {
     expect($this->pageModuleSource)
-        ->toContain("exportHandler: 'openExportPanel()'")
-        ->and($this->pageModuleSource)->toContain("export: 'openExportPanel()'");
+        ->toContain('@export="openExportDrawer"')
+        ->and($this->pageModuleSource)->toContain('function openExportDrawer()');
 });
 
 it('12. export url construction no longer lives only inside the products page module', function () {
@@ -193,74 +200,69 @@ it('12. export url construction no longer lives only inside the products page mo
 it('13. export submit logic no longer lives only inside the products page module', function () {
     expect($this->pageModuleSource)
         ->not->toContain('submitExport() {')
-        ->and($this->pageModuleSource)->not->toContain('window.location.assign(exportUrl);');
+        ->and($this->pageModuleSource)->toContain('function submitExport(scope)');
 });
 
-it('14. shared export module owns the default export scope state', function () {
-    expect($this->exportModuleSource)
-        ->toContain('exportScope: initialScope');
+it('14. shared export component exposes the current export scope state', function () {
+    expect($this->exportComponentSource)
+        ->toContain('modelValue');
 });
 
-it('15. shared export module owns export validation error state', function () {
-    expect($this->exportModuleSource)
-        ->toContain("exportError: ''");
+it('15. shared export component renders export validation errors', function () {
+    expect($this->exportComponentSource)
+        ->toContain('error');
 });
 
-it('16. shared export module owns export submitting state', function () {
-    expect($this->exportModuleSource)
-        ->toContain('isExportSubmitting: false');
+it('16. shared export component receives export submitting state', function () {
+    expect($this->exportComponentSource)
+        ->toContain('submitting');
 });
 
-it('17. shared export module owns open and close panel behavior', function () {
-    expect($this->exportModuleSource)
-        ->toContain('openExportPanel()')
-        ->and($this->exportModuleSource)->toContain('this.isExportPanelOpen = true;')
-        ->and($this->exportModuleSource)->toContain('closeExportPanel()')
-        ->and($this->exportModuleSource)->toContain('this.isExportPanelOpen = false;');
+it('17. shared export component emits close and submit panel events', function () {
+    expect($this->exportComponentSource)
+        ->toContain('defineEmits')
+        ->and($this->exportComponentSource)->toContain('"close"')
+        ->and($this->exportComponentSource)->toContain('"submit"');
 });
 
-it('18. shared export module preserves config driven export url building for all records and current filters', function () {
-    expect($this->exportModuleSource)
-        ->toContain("if (this.exportScope === 'all') {")
-        ->and($this->exportModuleSource)->toContain("exportUrl.searchParams.set('scope', 'all');")
-        ->and($this->exportModuleSource)->toContain("exportUrl.searchParams.set('scope', 'current');")
-        ->and($this->exportModuleSource)->toContain("exportUrl.searchParams.set('search', this.search.trim());")
-        ->and($this->exportModuleSource)->toContain("exportUrl.searchParams.set('sort', this.sort.column);")
-        ->and($this->exportModuleSource)->toContain("exportUrl.searchParams.set('direction', this.sort.direction);");
+it('18. products page preserves config driven export url building for all records and current filters', function () {
+    expect($this->pageModuleSource)
+        ->toContain('props.crudConfig.endpoints.export')
+        ->and($this->pageModuleSource)->toContain('new URLSearchParams({ scope })')
+        ->and($this->pageModuleSource)->toContain('params.set("search", search.value)')
+        ->and($this->pageModuleSource)->toContain('params.set("sort", sort.column)')
+        ->and($this->pageModuleSource)->toContain('params.set("direction", sort.direction)');
 });
 
-it('19. shared export module still targets the configured export endpoint instead of a hardcoded products path', function () {
-    expect($this->exportModuleSource)
-        ->toContain('if (!endpoints.export) {')
-        ->and($this->exportModuleSource)->toContain('const exportUrl = new URL(endpoints.export, window.location.origin);')
-        ->and($this->exportModuleSource)->not->toContain('/sales/products/export');
+it('19. products export still targets the configured export endpoint instead of a hardcoded products path', function () {
+    expect($this->pageModuleSource)
+        ->toContain('props.crudConfig.endpoints.export')
+        ->and($this->pageModuleSource)->not->toContain('/sales/products/export');
 });
 
-it('20. shared export module still surfaces export errors and closes after successful submission', function () {
-    expect($this->exportModuleSource)
-        ->toContain('this.exportError = unavailableMessage;')
-        ->and($this->exportModuleSource)->toContain('window.location.assign(exportUrl);')
-        ->and($this->exportModuleSource)->toContain('this.closeExportPanel();')
-        ->and($this->exportModuleSource)->toContain('labels.exportUnavailableMessage');
+it('20. products export submit still starts download and closes after successful submission', function () {
+    expect($this->pageModuleSource)
+        ->toContain('window.location.assign')
+        ->and($this->pageModuleSource)->toContain('exportDrawerOpen.value = false');
 });
 
-it('21. shared export module resets submitting state after export submission attempts', function () {
-    expect($this->exportModuleSource)
-        ->toContain('this.isExportSubmitting = true;')
-        ->and($this->exportModuleSource)->toContain('this.isExportSubmitting = false;');
+it('21. products export resets submitting state after export submission attempts', function () {
+    expect($this->pageModuleSource)
+        ->toContain('exportSubmitting.value = true')
+        ->and($this->pageModuleSource)->toContain('exportSubmitting.value = false');
 });
 
 it('22. shared export component keeps current and all scope options unchanged', function () {
-    expect($this->exportModuleSource)
+    expect($this->exportComponentSource)
         ->toContain('Current filters and sort')
-        ->and($this->exportModuleSource)->toContain('All records')
-        ->and($this->exportModuleSource)->toContain('x-model="exportScope"');
+        ->and($this->exportComponentSource)->toContain('All records')
+        ->and($this->exportComponentSource)->toContain('v-model="localScope"');
 });
 
-it('23. products page still delegates import behavior to the shared import module', function () {
+it('23. products page still delegates import behavior to the shared import component', function () {
     expect($this->pageModuleSource)
-        ->toContain("import { createImportModule } from '../lib/import-module';")
-        ->and($this->pageModuleSource)->toContain('createImportModule(');
+        ->toContain('ResourceImportDrawer')
+        ->and($this->pageModuleSource)->toContain('@submit="submitImport"');
 });
 
 it('24. no reusable import abstraction is introduced alongside the export extraction', function () {

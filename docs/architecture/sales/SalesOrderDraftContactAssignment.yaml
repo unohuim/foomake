@@ -5,7 +5,7 @@ location:
   - app/Http/Requests/Sales/StoreSalesOrderRequest.php
   - app/Http/Requests/Sales/UpdateSalesOrderRequest.php
   - app/Models/SalesOrder.php
-  - resources/views/sales/orders/index.blade.php
+  - resources/js/pages/Sales/Orders/Index.vue
   - resources/views/sales/orders/show.blade.php
 purpose: Document the sales-order customer/contact assignment rules used by editable Sales Order header flows on the shared Orders index shell and the Sales Order detail page.
 when_to_use:

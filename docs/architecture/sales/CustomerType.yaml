@@ -4,9 +4,9 @@ location:
   - app/Models/Customer.php
   - app/Http/Controllers/CustomerController.php
   - database/migrations/2026_05_21_000002_add_customer_type_to_customers_table.php
-  - resources/js/pages/sales-customers-index.js
+  - resources/js/pages/Sales/Customers/Index.vue
+  - resources/js/pages/Sales/Customers/Show.vue
   - resources/views/sales/customers/index.blade.php
-  - resources/views/sales/customers/show.blade.php
 purpose: Define the tenant-scoped customer classification used by customer CRUD flows and default imported-customer creation.
 when_to_use:
   - Creating or updating customer records

@@ -111,6 +111,10 @@ beforeEach(function () {
         return $this->actingAs($user)->get(route('sales.customers.show', $customerId));
     };
 
+    $this->getShowPayload = function (User $user, int $customerId) {
+        return $this->actingAs($user)->getJson(route('sales.customers.show.payload', $customerId));
+    };
+
     $this->getIndex = function (User $user) {
         return $this->actingAs($user)->get(route('sales.customers.index'));
     };
@@ -508,14 +512,14 @@ it('18. detail view displays address fields', function () {
         'name' => 'Readable Address Customer',
     ], ($this->addressPayload)()));
 
-    ($this->getShow)($user, $customer->id)
+    ($this->getShowPayload)($user, $customer->id)
         ->assertOk()
-        ->assertSee('123 King Street West')
-        ->assertSee('Suite 400')
-        ->assertSee('Toronto')
-        ->assertSee('ON')
-        ->assertSee('M5V 1J2')
-        ->assertSee('CA');
+        ->assertJsonPath('data.customer.address_line_1', '123 King Street West')
+        ->assertJsonPath('data.customer.address_line_2', 'Suite 400')
+        ->assertJsonPath('data.customer.city', 'Toronto')
+        ->assertJsonPath('data.customer.region', 'ON')
+        ->assertJsonPath('data.customer.postal_code', 'M5V 1J2')
+        ->assertJsonPath('data.customer.country_code', 'CA');
 });
 
 it('19. index payload includes address summary when customer has an address', function () {

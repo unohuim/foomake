@@ -7,6 +7,7 @@ use App\Models\Role;
 use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Inertia\Testing\AssertableInertia as Assert;
 
 uses(RefreshDatabase::class);
 
@@ -43,9 +44,9 @@ beforeEach(function () {
         }
     };
 
-    $this->bladeSource = file_get_contents(base_path('resources/views/sales/products/index.blade.php'));
+    $this->bladeSource = file_get_contents(base_path('resources/js/pages/Sales/Products/Index.vue'));
     $this->rendererSource = file_get_contents(base_path('resources/js/lib/crud-card-page.js'));
-    $this->pageModuleSource = file_get_contents(base_path('resources/js/pages/sales-products-index.js'));
+    $this->pageModuleSource = file_get_contents(base_path('resources/js/pages/Sales/Products/Index.vue'));
 });
 
 it('1. products page still renders the shared crud root', function () {
@@ -57,34 +58,37 @@ it('1. products page still renders the shared crud root', function () {
     $this->actingAs($user)
         ->get(route('sales.products.index'))
         ->assertOk()
-        ->assertSee('data-crud-root', false)
-        ->assertSee('data-crud-config=', false);
+        ->assertInertia(fn (Assert $page): Assert => $page
+            ->component('Sales/Products/Index')
+            ->has('crudConfig'));
 });
 
 it('2. products page shell uses a bounded viewport layout', function () {
     expect($this->bladeSource)
-        ->toContain('class="flex h-[calc(100vh-8rem)] min-h-0 flex-col overflow-hidden"')
-        ->and($this->bladeSource)->toContain('data-page="sales-products-index"');
+        ->toContain('bounded-height-class="h-full"')
+        ->and($this->bladeSource)->toContain('<ResourceIndex');
 });
 
 it('3. the old loose py-12 wrapper is absent from the products page shell', function () {
     expect($this->bladeSource)->not->toContain('class="py-12"');
 });
 
-it('4. the max width products shell fills the available bounded height', function () {
+it('4. the products vue shell fills the available bounded height', function () {
     expect($this->bladeSource)
-        ->toContain('class="mx-auto flex h-full min-h-0 w-full max-w-7xl flex-1 flex-col overflow-hidden sm:px-6 lg:px-8"');
+        ->toContain('class="flex h-full min-h-0 w-full"');
 });
 
-it('5. data crud root fills the available height', function () {
+it('5. resource index fills the available height', function () {
     expect($this->bladeSource)
-        ->toContain('class="flex h-full min-h-0 flex-1 flex-col" data-crud-root');
+        ->toContain('bounded-height-class="h-full"');
 });
 
-it('6. the shared crud renderer fills the bounded page area', function () {
-    expect($this->rendererSource)
-        ->toContain('class="flex h-full min-h-0 flex-col overflow-hidden bg-white" data-crud-card-renderer')
-        ->not->toContain('rounded-lg border border-gray-100 bg-white shadow-sm" data-crud-renderer');
+it('6. the shared resource index fills the bounded page area', function () {
+    $resourceIndexSource = file_get_contents(base_path('resources/js/components/ResourceIndex.vue'));
+
+    expect($resourceIndexSource)
+        ->toContain('class="resource-index-shell flex min-h-0 w-full flex-col overflow-hidden"')
+        ->and($resourceIndexSource)->toContain('data-resource-index-records-scroll');
 });
 
 it('7. the shared crud renderer no longer hardcodes a fixed 36rem shell height', function () {
@@ -184,8 +188,8 @@ it('19. the gray gap wrapper between header and toolbar does not return', functi
         ->and($this->rendererSource)->not->toContain('space-y-6');
 });
 
-it('20. the products page module still mounts the shared crud card renderer', function () {
+it('20. the products vue page uses the shared resource index and card grid', function () {
     expect($this->pageModuleSource)
-        ->toContain("import { mountCrudCardRenderer } from '../lib/crud-card-page';")
-        ->and($this->pageModuleSource)->toContain('mountCrudCardRenderer(crudRootEl, rendererConfig);');
+        ->toContain('ResourceIndex')
+        ->and($this->pageModuleSource)->toContain('ResourceCardGrid');
 });

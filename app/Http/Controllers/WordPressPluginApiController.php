@@ -93,6 +93,19 @@ class WordPressPluginApiController extends Controller
         $siteAccessToken = Str::random(80);
 
         $connection = DB::transaction(function () use ($pairing, $tokenHash, $siteAccessToken): WordPressPluginConnection {
+            WordPressPluginConnection::withoutGlobalScopes()
+                ->where('tenant_id', $pairing->tenant_id)
+                ->where('plugin_uuid', '!=', $pairing->plugin_uuid)
+                ->where('status', WordPressPluginConnection::STATUS_CONNECTED)
+                ->whereNull('revoked_at')
+                ->update([
+                    'status' => WordPressPluginConnection::STATUS_REVOKED,
+                    'access_token_hash' => null,
+                    'site_access_token' => null,
+                    'revoked_at' => now(),
+                    'updated_at' => now(),
+                ]);
+
             /** @var WordPressPluginConnection $connection */
             $connection = WordPressPluginConnection::withoutGlobalScopes()->updateOrCreate(
                 [

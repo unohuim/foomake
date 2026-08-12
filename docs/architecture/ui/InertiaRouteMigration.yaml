@@ -30,7 +30,8 @@ rules:
   - AuthShell and GuestShell are top-level Vue layout concepts; desktop and mobile variants should be internal components rather than separate shells.
   - GuestShell owns public page chrome and shared guest auth drawer behavior.
   - AuthShell owns authenticated page chrome only for authenticated routes that have been explicitly migrated to Inertia.
-  - The public home route, authenticated dashboard route, sales customers index route, and profile connectors route are approved Inertia migrations.
+  - The public home route, authenticated dashboard route, sales customers index/detail routes, sales products index route, sales orders index route, and profile connectors route are approved Inertia migrations.
+  - Migrated detail routes that need mutable read models may expose a dedicated JSON payload endpoint owned by the same authorized controller.
 public_interface:
   - Inertia::render()
   - resources/views/inertia.blade.php
@@ -39,6 +40,9 @@ public_interface:
   - resources/js/pages/Dashboard.vue
   - resources/js/pages/Profile/Connectors/Index.vue
   - resources/js/pages/Profile/Connectors/WordPressPair.vue
+  - resources/js/pages/Sales/Customers/Show.vue
+  - resources/js/pages/Sales/Products/Index.vue
+  - resources/js/pages/Sales/Orders/Index.vue
   - resources/js/layouts/GuestShell.vue
   - resources/js/layouts/AuthShell.vue
   - resources/js/components/BaseDrawer.vue
@@ -47,6 +51,8 @@ public_interface:
   - resources/js/components/NavIcon.vue
   - resources/js/components/InfiniteHorizontalNavRail.vue
   - resources/js/components/ResourceIndex.vue
+  - resources/js/components/ResourceDetailHeaderBreadcrumb.vue
+  - resources/js/components/ResourceCardGrid.vue
   - resources/js/components/ResourceCreateDrawer.vue
   - resources/js/components/ResourceExportDrawer.vue
   - resources/js/components/ResourceImportDrawer.vue

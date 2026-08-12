@@ -38,6 +38,10 @@ AI must never self-certify completion.
 - Prefer the smallest possible change.
 - Never refactor unless explicitly requested.
 - No global JavaScript state unless explicitly approved.
+- AI must choose best-practice implementations by default, not merely workable implementations.
+- If AI notices existing or proposed code in the touched area that violates best practice, AI must flag it immediately before continuing.
+- AI must explain the risk, name the better pattern, and either implement the better pattern within approved scope or request approval to expand scope.
+- AI must not knowingly preserve a non-best-practice implementation in touched code just because it is currently working.
 
 ---
 

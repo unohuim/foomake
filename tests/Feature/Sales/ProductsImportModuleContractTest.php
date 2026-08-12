@@ -8,6 +8,7 @@ use App\Models\Role;
 use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Inertia\Testing\AssertableInertia as Assert;
 
 uses(RefreshDatabase::class);
 
@@ -78,6 +79,12 @@ beforeEach(function () {
     };
 
     $this->extractImportConfig = function ($response): array {
+        $props = $response->viewData('page')['props'] ?? null;
+
+        if (is_array($props) && isset($props['importConfig'])) {
+            return $props['importConfig'];
+        }
+
         preg_match("/data-import-config='([^']+)'/", $response->getContent(), $matches);
 
         expect($matches)->toHaveKey(1);
@@ -95,7 +102,7 @@ beforeEach(function () {
 
     $this->importConfigPath = base_path('resources/js/lib/import-config.js');
     $this->importModulePath = base_path('resources/js/lib/import-module.js');
-    $this->pageModulePath = base_path('resources/js/pages/sales-products-index.js');
+    $this->pageModulePath = base_path('resources/js/pages/Sales/Products/Index.vue');
     $this->importConfigSource = file_exists($this->importConfigPath)
         ? file_get_contents($this->importConfigPath)
         : '';
@@ -113,7 +120,9 @@ it('1. products page exposes import config on the page root', function () {
 
     ($this->getProductsIndex)($user)
         ->assertOk()
-        ->assertSee('data-import-config=', false);
+        ->assertInertia(fn (Assert $page): Assert => $page
+            ->component('Sales/Products/Index')
+            ->has('importConfig'));
 });
 
 it('2. import config json decodes successfully', function () {
@@ -345,22 +354,23 @@ it('20. import config includes duplicate row metadata field names for the shared
         ->and($config['rowBehavior']['selectionField'] ?? null)->toBe('selected');
 });
 
-it('21. products page module imports the shared import config parser', function () {
+it('21. products vue page receives import config as an inertia prop', function () {
     expect($this->pageModuleSource)
-        ->toContain("import { parseImportConfig } from '../lib/import-config';");
+        ->toContain('importConfig')
+        ->and($this->pageModuleSource)->toContain('required: true');
 });
 
-it('22. products page module imports the shared import module factory', function () {
+it('22. products vue page imports the shared import drawer component', function () {
     expect($this->pageModuleSource)
-        ->toContain("import { createImportModule } from '../lib/import-module';");
+        ->toContain('ResourceImportDrawer');
 });
 
 it('23. shared import config parser file exists', function () {
     expect(file_exists($this->importConfigPath))->toBeTrue();
 });
 
-it('24. shared import module factory file exists', function () {
-    expect(file_exists($this->importModulePath))->toBeTrue();
+it('24. shared import drawer component file exists', function () {
+    expect(file_exists(base_path('resources/js/components/ResourceImportDrawer.vue')))->toBeTrue();
 });
 
 it('25. shared import config parser safely handles missing or invalid config', function () {

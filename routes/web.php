@@ -385,6 +385,8 @@ Route::middleware(['auth', EnsureEmailVerifiedOrInGracePeriod::class, EnsureTena
         ->name('sales.customers.import.preview');
     Route::post('/sales/customers/imports', [CustomerController::class, 'storeImport'])
         ->name('sales.customers.import.store');
+    Route::get('/sales/customers/{customer}/payload', [CustomerController::class, 'showPayload'])
+        ->name('sales.customers.show.payload');
     Route::get('/sales/customers/{customer}', [CustomerController::class, 'show'])
         ->name('sales.customers.show');
     Route::post('/sales/customers', [CustomerController::class, 'store'])

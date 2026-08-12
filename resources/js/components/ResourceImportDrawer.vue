@@ -48,6 +48,10 @@ const props = defineProps({
         type: Number,
         default: 0,
     },
+    showBulkOptions: {
+        type: Boolean,
+        default: false,
+    },
 });
 
 const emit = defineEmits([
@@ -224,7 +228,7 @@ watch(
                         </div>
                     </slot>
 
-                    <div v-if="hasSource" class="rounded-lg border border-gray-200 bg-white">
+                    <div v-if="hasSource && showBulkOptions" class="rounded-lg border border-gray-200 bg-white">
                         <button
                             type="button"
                             class="cursor-pointer flex w-full items-center justify-between px-4 py-4 text-left"
@@ -237,11 +241,7 @@ watch(
                             </svg>
                         </button>
                         <div v-show="bulkOptionsOpen" class="border-t border-gray-100 px-4 py-4">
-                            <slot name="bulk-options">
-                                <div class="rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600">
-                                    No additional import options are available for this resource.
-                                </div>
-                            </slot>
+                            <slot name="bulk-options" />
                         </div>
                     </div>
 
