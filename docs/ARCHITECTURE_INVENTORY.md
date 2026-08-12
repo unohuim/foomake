@@ -500,6 +500,7 @@ Laravel remains authoritative for tenant connector credential storage, plugin pa
 - `admin_post_foomake_connector_start_pairing`
 - `admin_post_foomake_connector_complete_pairing`
 - `GET /wp-json/foomake/v1/customers`
+- `GET /wp-json/foomake/v1/products`
 - `GET /wp-json/foomake/v1/orders`
 
 **Example Usage:**
@@ -1447,12 +1448,15 @@ Notes:
 - `docs/architecture/inventory/Item.yaml`
 - `app/Http/Controllers/SalesProductController.php`
 - `app/Http/Requests/Sales/ImportExternalProductsRequest.php`
+- `app/Services/WordPressPluginProductPreviewService.php`
+- `integrations/wordpress/foomake-connector/foomake-connector.php`
 
 **Purpose:**
 Define how imported products use tenant-scoped external identity for duplicate preview, existing-item matching, and fulfillment-safe ecommerce imports.
 
 **When to Use:**
 Sales product preview/import flows that read or write `external_source` and `external_id`.
+WooCommerce product preview may use stored API credentials or a paired WordPress plugin connection.
 
 **When Not to Use:**
 Internal items without an external identity, or generic item CRUD unrelated to import behavior.
@@ -1460,6 +1464,7 @@ Internal items without an external identity, or generic item CRUD unrelated to i
 **Public Interface:**
 - `external_source`
 - `external_id`
+- `default_price_currency_code`
 - preview duplicate metadata on import rows
 - fulfillment import summary field `fulfillment_recipes_not_attempted_existing_item`
 
@@ -1476,6 +1481,7 @@ Notes:
 - Duplicate identity is tenant-scoped normalized `external_source` plus exact trimmed `external_id`.
 - Preview rows may be marked duplicate and excluded from default selection before import.
 - Ecommerce imports may update an existing matched item and still return the existing fulfillment import summary contract rather than failing the whole request.
+- Priced external rows should preserve source-provided `default_price_currency_code`; rows without currency fall back to the tenant/app currency.
 
 ---
 

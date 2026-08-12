@@ -30,6 +30,8 @@ rules:
   - Product import duplicate identity is tenant-scoped and based on normalized external_source plus exact trimmed external_id when both are present.
   - Product import preview may annotate rows as duplicates before import, and duplicate preview rows are intended to be excluded from default selection.
   - Ecommerce product imports may match an existing item by tenant-scoped normalized external_source plus external_id and update that item instead of creating a duplicate.
+  - Priced ecommerce product imports should preserve a source-provided default_price_currency_code and fall back to the tenant/app currency only when the source omits currency.
+  - WooCommerce product preview may use stored API credentials or a paired WordPress plugin connection when the plugin can serve imports.
   - Existing-item ecommerce imports must preserve the import summary contract used by fulfillment-recipe creation flows and must not create duplicate items or duplicate fulfillment recipes.
 public_interface:
   - stockMoves()

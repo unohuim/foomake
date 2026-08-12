@@ -10,6 +10,7 @@ use App\Models\Tenant;
 use App\Models\Uom;
 use App\Models\UomCategory;
 use App\Models\User;
+use App\Models\WordPressPluginConnection;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
@@ -134,6 +135,7 @@ beforeEach(function () {
                     'price' => '34.95',
                     'prices' => [
                         'price' => '3495',
+                        'currency_code' => 'CAD',
                     ],
                     'attributes' => [
                         ['name' => 'Color', 'option' => 'Black'],
@@ -150,6 +152,7 @@ beforeEach(function () {
                     'price' => '35.95',
                     'prices' => [
                         'price' => '3595',
+                        'currency_code' => 'CAD',
                     ],
                     'attributes' => [
                         ['name' => 'Color', 'option' => 'Black'],
@@ -168,6 +171,7 @@ beforeEach(function () {
                     'price' => '12.50',
                     'prices' => [
                         'price' => '1250',
+                        'currency_code' => 'CAD',
                     ],
                     'images' => [
                         ['src' => 'https://cdn.example.test/products/simple-tee-primary.jpg'],
@@ -183,6 +187,7 @@ beforeEach(function () {
                     'price' => '',
                     'prices' => [
                         'price' => '',
+                        'currency_code' => 'CAD',
                     ],
                     'images' => [],
                 ],
@@ -195,6 +200,7 @@ beforeEach(function () {
                     'price' => '8.00',
                     'prices' => [
                         'price' => '800',
+                        'currency_code' => 'CAD',
                     ],
                 ],
             ], 200),
@@ -270,6 +276,53 @@ it('5. preview without a connection returns a clear JSON error', function () {
     ($this->previewWoo)($user)
         ->assertUnprocessable()
         ->assertJsonPath('meta.connect_required', true);
+});
+
+it('5a. product import preview falls back to the connected wordpress plugin', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    $siteAccessToken = 'site-access-token';
+
+    ($this->grantPermission)($user, 'inventory-products-manage');
+
+    WordPressPluginConnection::query()->create([
+        'tenant_id' => $tenant->id,
+        'plugin_uuid' => '123e4567-e89b-12d3-a456-426614174000',
+        'site_url' => 'http://wordpress.test/',
+        'site_name' => 'Local Woo',
+        'status' => WordPressPluginConnection::STATUS_CONNECTED,
+        'access_token_hash' => hash('sha256', 'token'),
+        'site_access_token' => $siteAccessToken,
+        'connected_at' => now(),
+        'last_seen_at' => now(),
+    ]);
+
+    Http::fake([
+        'http://wordpress.test/wp-json/foomake/v1/products' => Http::response([
+            'data' => [
+                [
+                    'external_id' => '701',
+                    'sku' => 'PLUGIN-701',
+                    'name' => 'Plugin Product',
+                    'price' => '12.50',
+                    'default_price_cents' => 1250,
+                    'default_price_currency_code' => 'CAD',
+                    'image_url' => '',
+                    'is_active' => true,
+                    'product_type' => 'simple',
+                ],
+            ],
+        ]),
+    ]);
+
+    ($this->previewWoo)($user)
+        ->assertOk()
+        ->assertJsonPath('data.is_connected', true)
+        ->assertJsonPath('data.rows.0.external_id', '701')
+        ->assertJsonPath('data.rows.0.default_price_currency_code', 'CAD');
+
+    Http::assertSent(fn ($request): bool => $request->hasHeader('X-FooMake-Site-Token', $siteAccessToken)
+        && $request->url() === 'http://wordpress.test/wp-json/foomake/v1/products');
 });
 
 it('6. preview with a disconnected connection returns a clear JSON error', function () {
@@ -798,10 +851,13 @@ it('29. importing preview rows creates normal items', function () {
             'sku' => $simple['sku'],
             'base_uom_id' => $uom->id,
             'is_active' => $simple['is_active'],
+            'default_price_cents' => $simple['default_price_cents'],
+            'default_price_currency_code' => $simple['default_price_currency_code'],
         ]],
     ])->assertCreated();
 
-    expect(Item::query()->where('external_source', 'woocommerce')->exists())->toBeTrue();
+    expect(Item::query()->where('external_source', 'woocommerce')->exists())->toBeTrue()
+        ->and(Item::query()->where('external_id', '101')->value('default_price_currency_code'))->toBe('CAD');
 });
 
 it('30. imported preview rows always set is sellable to true', function () {

@@ -450,6 +450,7 @@ function parseProductCsv(text) {
             is_purchasable: csvBoolean(record.is_purchasable, false),
             is_manufacturable: csvBoolean(record.is_manufacturable, false),
             default_price_cents: amountToCents(record.default_price_amount),
+            default_price_currency_code: String(record.default_price_currency_code ?? "").trim(),
             is_duplicate: false,
             selected: true,
         };
@@ -599,6 +600,7 @@ async function submitImport() {
             is_purchasable: row.is_purchasable,
             is_manufacturable: row.is_manufacturable,
             default_price_cents: row.default_price_cents ?? null,
+            default_price_currency_code: row.default_price_currency_code ?? null,
             image_url: row.image_url ?? null,
         }));
 

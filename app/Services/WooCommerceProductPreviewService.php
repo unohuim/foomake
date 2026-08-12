@@ -90,6 +90,7 @@ class WooCommerceProductPreviewService
             'name' => (string) $product['name'],
             'price' => (string) ($product['price'] ?? ''),
             'default_price_cents' => $this->resolvePriceCents($product),
+            'default_price_currency_code' => $this->resolveCurrencyCode($product),
             'image_url' => $this->resolvePrimaryImageUrl($product['images'] ?? null),
             'is_active' => $this->isPublished($product['status'] ?? null),
             'is_sellable' => true,
@@ -135,6 +136,7 @@ class WooCommerceProductPreviewService
             'name' => $name,
             'price' => (string) ($variation['price'] ?? ''),
             'default_price_cents' => $this->resolvePriceCents($variation),
+            'default_price_currency_code' => $this->resolveCurrencyCode($variation),
             'image_url' => $this->resolveVariationImageUrl($variation),
             'is_active' => $this->isPublished($variation['status'] ?? null),
             'is_sellable' => true,
@@ -158,6 +160,7 @@ class WooCommerceProductPreviewService
         return [
             'price' => '',
             'default_price_cents' => null,
+            'default_price_currency_code' => '',
             'image_url' => null,
         ];
     }
@@ -182,6 +185,17 @@ class WooCommerceProductPreviewService
         }
 
         return $this->normalizeDecimalPriceToCents($product['price'] ?? null);
+    }
+
+    /**
+     * Resolve a WooCommerce currency code when the source payload provides one.
+     */
+    private function resolveCurrencyCode(array $product): string
+    {
+        $prices = $product['prices'] ?? null;
+        $currencyCode = is_array($prices) ? trim((string) ($prices['currency_code'] ?? '')) : '';
+
+        return $currencyCode === '' ? '' : strtoupper($currencyCode);
     }
 
     /**

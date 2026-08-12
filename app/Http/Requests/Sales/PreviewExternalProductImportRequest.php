@@ -64,6 +64,11 @@ class PreviewExternalProductImportRequest extends FormRequest
                 'integer',
                 'min:0',
             ],
+            'rows.*.default_price_currency_code' => [
+                'nullable',
+                'string',
+                'size:3',
+            ],
             'rows.*.image_url' => [
                 'nullable',
                 'string',

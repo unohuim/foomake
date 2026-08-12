@@ -12,8 +12,10 @@ use App\Models\ExternalProductSourceConnection;
 use App\Models\Item;
 use App\Models\Uom;
 use App\Models\User;
+use App\Models\WordPressPluginConnection;
 use App\Navigation\NavigationEligibility;
 use App\Services\WooCommerceProductPreviewService;
+use App\Services\WordPressPluginProductPreviewService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -204,7 +206,8 @@ class SalesProductController extends Controller
      */
     public function preview(
         PreviewExternalProductImportRequest $request,
-        WooCommerceProductPreviewService $previewService
+        WooCommerceProductPreviewService $previewService,
+        WordPressPluginProductPreviewService $pluginPreviewService
     ): JsonResponse {
         Gate::authorize('inventory-products-manage');
 
@@ -226,14 +229,19 @@ class SalesProductController extends Controller
         }
 
         $connection = $this->connectedSourceForTenant($tenantId, $source);
+        $pluginConnection = $source === ExternalProductSourceConnection::SOURCE_WOOCOMMERCE && ! $connection
+            ? $this->connectedWordPressPluginForTenant($tenantId)
+            : null;
 
-        if (! $connection) {
+        if (! $connection && ! $pluginConnection) {
             return $this->notConnectedResponse();
         }
 
         try {
             $rows = match ($source) {
-                ExternalProductSourceConnection::SOURCE_WOOCOMMERCE => $previewService->previewRows($connection),
+                ExternalProductSourceConnection::SOURCE_WOOCOMMERCE => $pluginConnection
+                    ? $pluginPreviewService->previewRows($pluginConnection)
+                    : $previewService->previewRows($connection),
                 default => throw new WooCommerceException('The selected source is not supported.'),
             };
         } catch (WooCommerceException $exception) {
@@ -266,7 +274,7 @@ class SalesProductController extends Controller
         $source = $request->validated('source');
         $isLocalFileImport = $request->boolean('is_local_file_import');
 
-        if (! $isLocalFileImport && ! $this->connectedSourceForTenant((int) $request->user()->tenant_id, (string) $source)) {
+        if (! $isLocalFileImport && ! $this->hasConnectedImportSourceForTenant((int) $request->user()->tenant_id, (string) $source)) {
             return $this->notConnectedResponse();
         }
 
@@ -382,7 +390,7 @@ class SalesProductController extends Controller
             $item->default_price_cents = $defaultPriceCents;
             $item->default_price_currency_code = $defaultPriceCents === null
                 ? null
-                : $this->tenantCurrencyCodeForUser($request->user());
+                : $this->resolvedImportedDefaultPriceCurrencyCode($row, $request->user());
         }
 
         if (array_key_exists('image_url', $row)) {
@@ -1061,15 +1069,19 @@ class SalesProductController extends Controller
             ->keyBy('source');
 
         $wooCommerce = $connections->get(ExternalProductSourceConnection::SOURCE_WOOCOMMERCE);
+        $wordPressPlugin = $this->connectedWordPressPluginForTenant($tenantId);
+        $wooCommerceConnected = ($wooCommerce?->isConnected() ?? false) || $wordPressPlugin !== null;
 
         return [
             [
                 'value' => ExternalProductSourceConnection::SOURCE_WOOCOMMERCE,
                 'label' => 'WooCommerce',
                 'enabled' => true,
-                'connected' => $wooCommerce?->isConnected() ?? false,
-                'status' => $wooCommerce?->status ?? ExternalProductSourceConnection::STATUS_DISCONNECTED,
-                'status_label' => ($wooCommerce?->isConnected() ?? false) ? 'Connected' : 'Disconnected',
+                'connected' => $wooCommerceConnected,
+                'status' => $wooCommerceConnected
+                    ? ExternalProductSourceConnection::STATUS_CONNECTED
+                    : ExternalProductSourceConnection::STATUS_DISCONNECTED,
+                'status_label' => $wooCommerceConnected ? 'Connected' : 'Disconnected',
             ],
             [
                 'value' => 'shopify',
@@ -1097,6 +1109,34 @@ class SalesProductController extends Controller
         }
 
         return $connection;
+    }
+
+    /**
+     * Determine whether the tenant has a connected import source.
+     */
+    private function hasConnectedImportSourceForTenant(int $tenantId, string $source): bool
+    {
+        return $this->connectedSourceForTenant($tenantId, $source) !== null
+            || ($source === ExternalProductSourceConnection::SOURCE_WOOCOMMERCE
+                && $this->connectedWordPressPluginForTenant($tenantId) !== null);
+    }
+
+    /**
+     * Return the connected WordPress plugin when it can serve WooCommerce imports.
+     */
+    private function connectedWordPressPluginForTenant(int $tenantId): ?WordPressPluginConnection
+    {
+        /** @var WordPressPluginConnection|null $connection */
+        $connection = WordPressPluginConnection::query()
+            ->where('tenant_id', $tenantId)
+            ->where('status', WordPressPluginConnection::STATUS_CONNECTED)
+            ->whereNull('revoked_at')
+            ->latest('last_seen_at')
+            ->latest('connected_at')
+            ->latest('id')
+            ->first();
+
+        return $connection?->canServeImports() ? $connection : null;
     }
 
     /**
@@ -1162,6 +1202,20 @@ class SalesProductController extends Controller
     private function tenantCurrencyCodeForUser(?\App\Models\User $user): string
     {
         return Str::upper((string) ($user?->tenant?->currency_code ?: config('app.currency_code', 'USD')));
+    }
+
+    /**
+     * Resolve the imported default price currency from a row payload.
+     *
+     * @param  array<string, mixed>  $row
+     */
+    private function resolvedImportedDefaultPriceCurrencyCode(array $row, ?\App\Models\User $user): string
+    {
+        $currencyCode = trim((string) ($row['default_price_currency_code'] ?? ''));
+
+        return $currencyCode === ''
+            ? $this->tenantCurrencyCodeForUser($user)
+            : Str::upper($currencyCode);
     }
 
     /**

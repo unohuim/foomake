@@ -3,7 +3,7 @@
  * Plugin Name: FooMake Connector
  * Plugin URI: https://foomake.com/
  * Description: Connects WooCommerce stores to FooMake for customer, product, and sales order import workflows.
- * Version: 0.2.1
+ * Version: 0.2.2
  * Author: FooMake
  * Author URI: https://foomake.com/
  * Requires at least: 6.0
@@ -16,7 +16,7 @@ if (! defined('ABSPATH')) {
     exit;
 }
 
-define('FOOMAKE_CONNECTOR_VERSION', '0.2.1');
+define('FOOMAKE_CONNECTOR_VERSION', '0.2.2');
 define('FOOMAKE_CONNECTOR_FILE', __FILE__);
 define('FOOMAKE_CONNECTOR_OPTION_BASE_URL', 'foomake_connector_base_url');
 define('FOOMAKE_CONNECTOR_OPTION_PLUGIN_UUID', 'foomake_connector_plugin_uuid');
@@ -357,6 +357,12 @@ function foomake_connector_register_rest_routes()
         'permission_callback' => 'foomake_connector_rest_can_serve',
     ]);
 
+    register_rest_route('foomake/v1', '/products', [
+        'methods' => 'GET',
+        'callback' => 'foomake_connector_rest_products',
+        'permission_callback' => 'foomake_connector_rest_can_serve',
+    ]);
+
     register_rest_route('foomake/v1', '/orders', [
         'methods' => 'GET',
         'callback' => 'foomake_connector_rest_orders',
@@ -458,6 +464,154 @@ function foomake_connector_normalize_customer($customer)
         'postal_code' => method_exists($customer, 'get_billing_postcode') ? (string) $customer->get_billing_postcode() : '',
         'country_code' => method_exists($customer, 'get_billing_country') ? (string) $customer->get_billing_country() : '',
     ];
+}
+
+/**
+ * Return normalized WooCommerce product rows for FooMake import preview.
+ */
+function foomake_connector_rest_products()
+{
+    if (! class_exists('WooCommerce') || ! function_exists('wc_get_products')) {
+        return new WP_Error(
+            'foomake_woocommerce_unavailable',
+            __('WooCommerce is not available.', 'foomake-connector'),
+            ['status' => 503]
+        );
+    }
+
+    $products = wc_get_products([
+        'limit' => 100,
+        'orderby' => 'ID',
+        'order' => 'ASC',
+        'status' => ['publish', 'private', 'draft', 'pending'],
+    ]);
+
+    $rows = [];
+
+    foreach ($products as $product) {
+        if (! is_object($product) || ! method_exists($product, 'get_id')) {
+            continue;
+        }
+
+        if (method_exists($product, 'is_type') && $product->is_type('variable')) {
+            foreach ($product->get_children() as $variation_id) {
+                $variation = function_exists('wc_get_product') ? wc_get_product($variation_id) : null;
+
+                if (is_object($variation) && method_exists($variation, 'get_id')) {
+                    $rows[] = foomake_connector_normalize_product($variation, $product);
+                }
+            }
+
+            continue;
+        }
+
+        $rows[] = foomake_connector_normalize_product($product, null);
+    }
+
+    return rest_ensure_response([
+        'data' => $rows,
+    ]);
+}
+
+/**
+ * Normalize one WooCommerce product object for FooMake import preview.
+ *
+ * @param object $product
+ * @param object|null $parent
+ * @return array<string, mixed>
+ */
+function foomake_connector_normalize_product($product, $parent)
+{
+    $price = method_exists($product, 'get_price') ? (string) $product->get_price() : '';
+    $parent_name = is_object($parent) && method_exists($parent, 'get_name') ? (string) $parent->get_name() : '';
+    $name = method_exists($product, 'get_name') ? (string) $product->get_name() : '';
+
+    if ($parent_name !== '' && $name !== '' && $name === $parent_name && method_exists($product, 'get_attributes')) {
+        $attributes = foomake_connector_product_variation_attributes($product);
+        $suffix = implode(' / ', array_map(
+            static fn ($attribute) => (string) ($attribute['name'] ?? '') . ': ' . (string) ($attribute['option'] ?? ''),
+            $attributes
+        ));
+
+        if ($suffix !== '') {
+            $name .= ' - ' . $suffix;
+        }
+    }
+
+    return [
+        'external_id' => (string) $product->get_id(),
+        'external_source' => 'woocommerce',
+        'sku' => method_exists($product, 'get_sku') ? (string) $product->get_sku() : '',
+        'name' => $name,
+        'price' => $price,
+        'default_price_cents' => foomake_connector_product_price_cents($price),
+        'default_price_currency_code' => function_exists('get_woocommerce_currency') ? (string) get_woocommerce_currency() : '',
+        'image_url' => foomake_connector_product_image_url($product),
+        'is_active' => method_exists($product, 'get_status') ? (string) $product->get_status() === 'publish' : true,
+        'is_sellable' => true,
+        'is_manufacturable' => false,
+        'is_purchasable' => false,
+        'product_type' => is_object($parent) ? 'variation' : 'simple',
+        'parent_external_id' => is_object($parent) && method_exists($parent, 'get_id') ? (string) $parent->get_id() : '',
+        'parent_name' => $parent_name,
+        'variation_attributes' => foomake_connector_product_variation_attributes($product),
+    ];
+}
+
+/**
+ * Convert a product price into cents while preserving blank prices as null.
+ */
+function foomake_connector_product_price_cents(string $price)
+{
+    return trim($price) === '' ? null : foomake_connector_decimal_to_scaled_int($price, 2);
+}
+
+/**
+ * Resolve a product image URL.
+ *
+ * @param object $product
+ */
+function foomake_connector_product_image_url($product)
+{
+    $image_id = method_exists($product, 'get_image_id') ? (int) $product->get_image_id() : 0;
+
+    if ($image_id <= 0 || ! function_exists('wp_get_attachment_url')) {
+        return '';
+    }
+
+    $url = wp_get_attachment_url($image_id);
+
+    return is_string($url) ? $url : '';
+}
+
+/**
+ * Normalize variation attributes for FooMake preview rows.
+ *
+ * @param object $product
+ * @return array<int, array{name: string, option: string}>
+ */
+function foomake_connector_product_variation_attributes($product)
+{
+    if (! method_exists($product, 'get_attributes')) {
+        return [];
+    }
+
+    $attributes = [];
+
+    foreach ((array) $product->get_attributes() as $name => $option) {
+        $option = is_array($option) ? implode(', ', $option) : (string) $option;
+
+        if ((string) $name === '' || $option === '') {
+            continue;
+        }
+
+        $attributes[] = [
+            'name' => (string) $name,
+            'option' => $option,
+        ];
+    }
+
+    return $attributes;
 }
 
 /**
