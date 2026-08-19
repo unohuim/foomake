@@ -244,7 +244,7 @@ beforeEach(function () {
 
 it('1. products export route requires authentication', function () {
     ($this->exportProducts)()
-        ->assertRedirect(route('login'));
+        ->assertRedirect('/?auth=login');
 });
 
 it('2. products export route denies authenticated users without product permissions', function () {

@@ -173,9 +173,9 @@ it('21. marketing pages do not require authentication', function (): void {
         ->assertOk();
 });
 
-it('22. marketing routes do not break login', function (): void {
+it('22. marketing routes do not break login drawer redirect', function (): void {
     $this->get('/login')
-        ->assertOk();
+        ->assertRedirect('/?auth=login');
 });
 
 it('23. marketing routes do not break register', function (): void {
@@ -185,7 +185,7 @@ it('23. marketing routes do not break register', function (): void {
 
 it('24. marketing routes do not break protected dashboard route', function (): void {
     $this->get('/dashboard')
-        ->assertRedirect('/login');
+        ->assertRedirect('/?auth=login');
 });
 
 it('25. homepage includes links to marketing pages', function (): void {
@@ -262,12 +262,12 @@ it('31. guest invitation acceptance routes exist', function (): void {
 
 it('32. admin invitation routes remain authenticated', function (): void {
     $this->get('/admin/users/invitations/1')
-        ->assertRedirect('/login');
+        ->assertRedirect('/?auth=login');
 });
 
 it('33. public marketing route namespace avoids root route shadowing', function (): void {
     $this->get('/materials')
-        ->assertRedirect('/login');
+        ->assertRedirect('/?auth=login');
 
     $this->get('/learn/materials')
         ->assertNotFound();

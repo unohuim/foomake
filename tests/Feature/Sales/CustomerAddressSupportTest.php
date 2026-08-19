@@ -685,7 +685,7 @@ it('25. guest cannot view customer detail with address data', function () {
     ], ($this->addressPayload)()));
 
     $this->get(route('sales.customers.show', $customer->id))
-        ->assertRedirect(route('login'));
+        ->assertRedirect('/?auth=login');
 });
 
 it('26. user without permission is denied customer detail with address data', function () {

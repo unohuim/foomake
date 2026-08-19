@@ -3,6 +3,7 @@ type: UI Layout Pattern
 location:
   - resources/views/components/resource-detail-header-breadcrumb.blade.php
   - resources/views/components/ui/breadcrumbs.blade.php
+  - resources/js/components/ResourceDetailHeaderBreadcrumb.vue
   - resources/views/materials/show.blade.php
   - resources/views/manufacturing/recipes/show.blade.php
   - resources/views/manufacturing/make-orders/show.blade.php
@@ -15,10 +16,12 @@ when_not_to_use:
   - Standalone navigation bars unrelated to a resource detail view
 rules:
   - Resource detail pages must use one shared header and breadcrumb component or match its exact contract.
-  - Resource detail header breadcrumbs must render through the shared <x-ui.breadcrumbs> component.
+  - Resource detail header breadcrumbs must render through the shared <x-ui.breadcrumbs> component or the Vue ResourceDetailHeaderBreadcrumb counterpart on migrated Inertia routes.
   - The breadcrumb must sit at the bottom of the resource detail header.
   - The breadcrumb container and title container must share the same max-width and horizontal padding contract.
   - The breadcrumb home icon left edge must align horizontally with the resource title left edge.
+  - Vue detail breadcrumbs inside AuthShell must span the content pane, not the full viewport, so they do not render beneath sidebar navigation.
+  - The breadcrumb Home segment and first resource segment must remain visible as viewport width tightens; trailing record crumbs may truncate or collapse first.
   - Connected chevron or arrow separators with visible horizontal border lines are part of the shared breadcrumb contract.
   - Header metadata must render through the shared component metadata slot rather than page-local breadcrumb wrappers.
   - The shared component must support grouped metadata rows for compact resource headers.
@@ -39,6 +42,10 @@ rules:
   - Version-identity-driven detail pages must not keep a stale left-side version chip when the authoritative version identity is already rendered in the right-side header action cluster.
   - Header select-button or action menus should use shared dropdown or button-menu contracts rather than page-local bespoke menu systems.
   - Header meta chips, icon chips, and optional actions must render inside the shared header component instead of page-local breadcrumb wrappers.
+  - Migrated Vue detail pages may replace the default title header through the ResourceDetailHeaderBreadcrumb header slot when a domain-specific visual header is required.
+  - Domain-specific Vue headers must render in the header slot above the breadcrumb, not as a separate body section below the breadcrumb.
+  - Domain-specific Vue headers are page headers, not cards; they must span the header width with square outer edges unless a referenced design explicitly says otherwise.
+  - Domain-specific Vue headers must fit the established resource header height and must not introduce extra vertical gaps before the breadcrumb.
   - Materials, Recipes, and Make Orders must conform to this shared contract.
   - Inventory Counts must use the same shared header contract even when preserving their existing visual button treatment.
   - Resource breadcrumbs should use the Home / resource / record label pattern when a detail record label is available.
@@ -48,6 +55,8 @@ rules:
 public_interface:
   - resources/views/components/resource-detail-header-breadcrumb.blade.php
   - resources/views/components/ui/breadcrumbs.blade.php
+  - resources/js/components/ResourceDetailHeaderBreadcrumb.vue
+  - ResourceDetailHeaderBreadcrumb.vue header slot
 example_usage: |
   <x-resource-detail-header-breadcrumb :items="$breadcrumbItems" :title="$makeOrder->title">
       <x-slot name="metadata">

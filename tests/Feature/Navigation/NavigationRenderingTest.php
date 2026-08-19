@@ -117,7 +117,7 @@ it('renders the authenticated layout navigation for a verified user', function (
 
 it('redirects guests away from dashboard', function () {
     $this->get(route('dashboard'))
-        ->assertRedirect(route('login'));
+        ->assertRedirect('/?auth=login');
 });
 
 it('shows the manufacturing group only when at least one manufacturing route is permitted', function () {

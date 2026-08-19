@@ -30,7 +30,6 @@ use App\Models\WorkflowStage;
 use App\Support\Workflows\WorkflowAssignmentPermissions;
 use App\Services\WooCommerceOrderPreviewService;
 use App\Services\WordPressPluginOrderPreviewService;
-use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
@@ -93,19 +92,37 @@ class SalesOrderController extends Controller
     /**
      * Display the sales order detail page.
      */
-    public function show(Request $request, SalesOrder $salesOrder): View
+    public function show(Request $request, SalesOrder $salesOrder, NavigationEligibility $navigationEligibility): Response
     {
-        abort_unless((int) $salesOrder->tenant_id === (int) $request->user()->tenant_id, 404);
-        abort_unless(
-            Gate::allows('sales-sales-orders-manage')
-                || app(CanViewAssignedWorkflowResourceAction::class)->execute(
-                    $request->user(),
-                    $salesOrder,
-                    'sales'
-                ),
-            403
-        );
+        $this->authorizeViewSalesOrder($request, $salesOrder);
 
+        return Inertia::render('Sales/Orders/Show', [
+            'shell' => $this->authShellPayload($request, $navigationEligibility),
+            'title' => 'Sales Order #' . $salesOrder->id,
+            'payloadUrl' => route('sales.orders.show.payload', $salesOrder),
+            'indexUrl' => route('sales.orders.index', absolute: false),
+        ]);
+    }
+
+    /**
+     * Return the sales order detail read model for the Inertia page.
+     */
+    public function showPayload(Request $request, SalesOrder $salesOrder): JsonResponse
+    {
+        $this->authorizeViewSalesOrder($request, $salesOrder);
+
+        return response()->json([
+            'data' => $this->salesOrderShowPayload($request, $salesOrder),
+        ]);
+    }
+
+    /**
+     * Build the sales order detail page read model.
+     *
+     * @return array<string, mixed>
+     */
+    private function salesOrderShowPayload(Request $request, SalesOrder $salesOrder): array
+    {
         $salesOrder->load(['customer.contacts', 'contact', 'lines.item']);
         $customers = Customer::query()
             ->with('contacts')
@@ -126,7 +143,7 @@ class SalesOrderController extends Controller
             ? null
             : $workflowResolver->currentStageForStatus($salesOrder);
 
-        $payload = [
+        return [
             'order' => $this->orderData($salesOrder, $displayStage),
             'workflow' => $this->salesWorkflowPayload($salesOrder),
             'workflowProgressSteps' => app(BuildWorkflowProgressStepsAction::class)->execute(
@@ -146,6 +163,7 @@ class SalesOrderController extends Controller
             'deleteUrl' => route('sales.orders.destroy', $salesOrder),
             'lineStoreUrlBase' => url('/sales/orders'),
             'taskCreate' => [
+                'storeUrl' => route('tasks.store'),
                 'users' => $this->manualTaskAssigneeOptions((int) $request->user()->tenant_id),
             ],
             'notesFeed' => app(BuildNotesFeedPayloadAction::class)->execute(
@@ -156,11 +174,23 @@ class SalesOrderController extends Controller
             'indexUrl' => route('sales.orders.index'),
             'csrfToken' => csrf_token(),
         ];
+    }
 
-        return view('sales.orders.show', [
-            'salesOrder' => $salesOrder,
-            'payload' => $payload,
-        ]);
+    /**
+     * Authorize viewing a sales order detail route.
+     */
+    private function authorizeViewSalesOrder(Request $request, SalesOrder $salesOrder): void
+    {
+        abort_unless((int) $salesOrder->tenant_id === (int) $request->user()->tenant_id, 404);
+        abort_unless(
+            Gate::allows('sales-sales-orders-manage')
+                || app(CanViewAssignedWorkflowResourceAction::class)->execute(
+                    $request->user(),
+                    $salesOrder,
+                    'sales'
+                ),
+            403
+        );
     }
 
     /**

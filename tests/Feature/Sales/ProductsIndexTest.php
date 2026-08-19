@@ -124,7 +124,7 @@ beforeEach(function () {
 
 it('1. redirects unauthenticated users away from the products index', function () {
     $this->get(route('sales.products.index'))
-        ->assertRedirect(route('login'));
+        ->assertRedirect('/?auth=login');
 });
 
 it('2. forbids authenticated users without product permissions from the products index', function () {

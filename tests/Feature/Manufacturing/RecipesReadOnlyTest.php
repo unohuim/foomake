@@ -161,10 +161,10 @@ test('guests are redirected to login for recipes index and detail', function () 
     $recipe = ($this->makeRecipe)($tenant, $output, true);
 
     $this->get(route('manufacturing.recipes.index'))
-        ->assertRedirect(route('login'));
+        ->assertRedirect('/?auth=login');
 
     $this->get(route('manufacturing.recipes.show', $recipe))
-        ->assertRedirect(route('login'));
+        ->assertRedirect('/?auth=login');
 });
 
 test('forbids users without inventory-recipes-view permission', function () {

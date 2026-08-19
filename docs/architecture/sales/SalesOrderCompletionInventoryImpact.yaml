@@ -7,7 +7,7 @@ location:
   - app/Models/SalesOrderLine.php
   - app/Models/StockMove.php
   - app/Services/Workflows/SalesOrderWorkflow.php
-  - resources/views/sales/orders/show.blade.php
+  - resources/js/pages/Sales/Orders/Show.vue
 purpose: Document the inventory-ledger effects of the sales inventory-effect workflow stage and the safeguards around availability checks, issue posting, and reversal moves.
 when_to_use:
   - Moving an OPEN sales order into the first active operational sales workflow stage when that stage is the seeded packing stage

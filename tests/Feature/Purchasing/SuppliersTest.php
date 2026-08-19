@@ -135,7 +135,7 @@ beforeEach(function () {
 });
 
 it('requires authentication for supplier index', function () {
-    $this->get('/purchasing/suppliers')->assertRedirect('/login');
+    $this->get('/purchasing/suppliers')->assertRedirect('/?auth=login');
 });
 
 it('denies supplier index without view permission', function () {

@@ -149,7 +149,7 @@ beforeEach(function (): void {
 
 it('1. redirects guests away from the inventory counts index', function (): void {
     $this->get(route('inventory.counts.index'))
-        ->assertRedirect(route('login'));
+        ->assertRedirect('/?auth=login');
 });
 
 it('2. redirects guests away from the inventory counts list endpoint', function (): void {

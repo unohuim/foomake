@@ -163,7 +163,7 @@ beforeEach(function (): void {
 
 it('1. redirects guests away from the materials index', function (): void {
     ($this->getIndex)()
-        ->assertRedirect(route('login'));
+        ->assertRedirect('/?auth=login');
 });
 
 it('2. forbids authenticated users without the materials view permission', function (): void {

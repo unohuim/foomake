@@ -80,38 +80,38 @@ test('guests cannot access inventory count routes', function () {
     $line = ($this->makeLine)($count, $this->item);
 
     $this->get(route('inventory.counts.index'))
-        ->assertRedirect(route('login'));
+        ->assertRedirect('/?auth=login');
 
     $this->get(route('inventory.counts.show', $count))
-        ->assertRedirect(route('login'));
+        ->assertRedirect('/?auth=login');
 
     $this->post(route('inventory.counts.store'), [
         'name' => 'Guest blocked count',
         'counted_at' => now()->format('Y-m-d H:i'),
-    ])->assertRedirect(route('login'));
+    ])->assertRedirect('/?auth=login');
 
     $this->patch(route('inventory.counts.update', $count), [
         'counted_at' => now()->format('Y-m-d H:i'),
-    ])->assertRedirect(route('login'));
+    ])->assertRedirect('/?auth=login');
 
     $this->delete(route('inventory.counts.destroy', $count))
-        ->assertRedirect(route('login'));
+        ->assertRedirect('/?auth=login');
 
     $this->post(route('inventory.counts.post', $count))
-        ->assertRedirect(route('login'));
+        ->assertRedirect('/?auth=login');
 
     $this->post(route('inventory.counts.lines.store', $count), [
         'item_id' => $this->item->id,
         'counted_quantity' => '5.000000',
-    ])->assertRedirect(route('login'));
+    ])->assertRedirect('/?auth=login');
 
     $this->patch(route('inventory.counts.lines.update', [$count, $line]), [
         'item_id' => $this->item->id,
         'counted_quantity' => '6.000000',
-    ])->assertRedirect(route('login'));
+    ])->assertRedirect('/?auth=login');
 
     $this->delete(route('inventory.counts.lines.destroy', [$count, $line]))
-        ->assertRedirect(route('login'));
+        ->assertRedirect('/?auth=login');
 });
 
 test('users without view permission cannot see counts', function () {

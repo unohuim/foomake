@@ -152,12 +152,12 @@ beforeEach(function () {
 
 it('redirects guests from index', function () {
     $this->get('/purchasing/orders')
-        ->assertRedirect(route('login'));
+        ->assertRedirect('/?auth=login');
 });
 
 it('redirects guests from show', function () {
     $this->get('/purchasing/orders/1')
-        ->assertRedirect(route('login'));
+        ->assertRedirect('/?auth=login');
 });
 
 it('returns unauthorized for guests requesting json on index', function () {

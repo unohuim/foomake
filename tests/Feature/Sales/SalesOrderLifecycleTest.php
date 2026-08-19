@@ -177,6 +177,14 @@ beforeEach(function () {
             return $props['payload'];
         }
 
+        if ($payloadId === 'sales-orders-show-payload' && is_array($props) && isset($props['payloadUrl'])) {
+            $payload = $this->getJson($props['payloadUrl'])
+                ->assertOk()
+                ->json('data');
+
+            return is_array($payload) ? $payload : [];
+        }
+
         $html = $response->getContent();
         $pattern = '/<script type="application\\/json" id="' . preg_quote($payloadId, '/') . '">\\s*(.*?)\\s*<\\/script>/s';
 
@@ -633,7 +641,7 @@ it('59. future quantity display is not introduced', function () {
 });
 
 it('60. task checklist system is introduced on the sales orders page', function () {
-    $detailSource = file_get_contents(base_path('resources/views/sales/orders/show.blade.php'));
+    $detailSource = file_get_contents(base_path('resources/js/pages/Sales/Orders/Show.vue'));
     $indexSource = file_get_contents(base_path('resources/js/pages/Sales/Orders/Index.vue'));
 
     expect($detailSource)->toContain('Checklist')

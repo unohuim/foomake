@@ -166,7 +166,7 @@ beforeEach(function () {
 
 it('1. customers export route requires authentication', function () {
     ($this->exportCustomers)()
-        ->assertRedirect(route('login'));
+        ->assertRedirect('/?auth=login');
 });
 
 it('2. customers export route denies authenticated users without customers manage permission', function () {

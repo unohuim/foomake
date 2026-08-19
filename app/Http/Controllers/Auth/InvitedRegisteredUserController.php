@@ -28,7 +28,7 @@ class InvitedRegisteredUserController extends Controller
         $existingUser = User::query()->where('email', $invitation->email)->first();
 
         if ($existingUser?->hasVerifiedEmail() && ! Auth::check()) {
-            return redirect()->guest(route('login'));
+            return redirect()->guest('/?auth=login');
         }
 
         return view('auth.invited-register', [
@@ -49,7 +49,7 @@ class InvitedRegisteredUserController extends Controller
         $existingUser = User::query()->where('email', $invitation->email)->first();
 
         if ($existingUser?->hasVerifiedEmail() && ! Auth::check()) {
-            return redirect()->guest(route('login'));
+            return redirect()->guest('/?auth=login');
         }
 
         $rules = [];

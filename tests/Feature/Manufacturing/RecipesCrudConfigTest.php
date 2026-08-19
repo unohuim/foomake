@@ -130,7 +130,7 @@ beforeEach(function (): void {
 
 it('1. redirects guests from recipes index', function (): void {
     $this->get(route('manufacturing.recipes.index'))
-        ->assertRedirect(route('login'));
+        ->assertRedirect('/?auth=login');
 });
 
 it('2. forbids authenticated users without inventory recipes view permission', function (): void {

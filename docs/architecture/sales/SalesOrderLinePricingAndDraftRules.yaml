@@ -8,7 +8,7 @@ location:
   - app/Models/SalesOrderLine.php
   - database/migrations/2026_05_04_000010_create_sales_order_lines_table.php
   - database/migrations/2026_05_14_130000_add_external_id_to_sales_order_lines_table.php
-  - resources/views/sales/orders/show.blade.php
+  - resources/js/pages/Sales/Orders/Show.vue
 purpose: Document the editable sales-order line mutation rules, immutable unit-price snapshots, canonical quantity math, and optional source-line identity used on the Sales Order detail page.
 when_to_use:
   - Adding lines to editable sales orders from the Sales Order detail page

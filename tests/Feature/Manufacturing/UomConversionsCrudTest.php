@@ -417,7 +417,7 @@ it('24. conversion index separates global read-only from tenant editable', funct
 
 it('35. unauthorized users cannot access conversion page', function (): void {
     $this->get($this->indexUrl)
-        ->assertRedirect(route('login'));
+        ->assertRedirect('/?auth=login');
 });
 
 it('36. unauthorized users cannot mutate conversions', function (): void {

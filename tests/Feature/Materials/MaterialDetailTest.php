@@ -65,7 +65,7 @@ it('redirects guests to login for the material detail page', function () {
     [$item] = ($this->makeItem)($tenant);
 
     $this->get(route('materials.show', $item))
-        ->assertRedirect(route('login'));
+        ->assertRedirect('/?auth=login');
 });
 
 it('forbids authenticated users without inventory-materials-view permission', function () {

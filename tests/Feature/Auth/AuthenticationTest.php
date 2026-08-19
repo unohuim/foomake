@@ -2,10 +2,10 @@
 
 use App\Models\User;
 
-test('login screen can be rendered', function () {
+test('login route redirects to the home login drawer', function () {
     $response = $this->get('/login');
 
-    $response->assertStatus(200);
+    $response->assertRedirect('/?auth=login');
 });
 
 test('users can authenticate using the login screen', function () {

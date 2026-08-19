@@ -171,7 +171,7 @@ beforeEach(function () {
 
 it('redirects guests from show', function () {
     $this->get('/purchasing/orders/1')
-        ->assertRedirect(route('login'));
+        ->assertRedirect('/?auth=login');
 });
 
 it('forbids show without permission', function () {

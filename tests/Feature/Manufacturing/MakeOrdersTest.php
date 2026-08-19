@@ -288,19 +288,19 @@ beforeEach(function () {
 
 test('guests are redirected to login for make orders routes', function () {
     $this->get(route('manufacturing.make-orders.index'))
-        ->assertRedirect(route('login'));
+        ->assertRedirect('/?auth=login');
 
     $this->post(route('manufacturing.make-orders.store'))
-        ->assertRedirect(route('login'));
+        ->assertRedirect('/?auth=login');
 
     $this->post(route('manufacturing.make-orders.schedule', 1))
-        ->assertRedirect(route('login'));
+        ->assertRedirect('/?auth=login');
 
     $this->post(route('manufacturing.make-orders.make', 1))
-        ->assertRedirect(route('login'));
+        ->assertRedirect('/?auth=login');
 
     $this->patch(route('manufacturing.make-orders.assignment.update', 1))
-        ->assertRedirect(route('login'));
+        ->assertRedirect('/?auth=login');
 });
 
 test('make orders schema includes nullable workflow_stage_id after migrations', function () {

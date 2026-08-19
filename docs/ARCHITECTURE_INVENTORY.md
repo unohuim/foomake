@@ -553,6 +553,52 @@ Each tenant may have only one current active WooCommerce WordPress plugin connec
 WordPress plugin starts pairing, FooMake tenant admin approves, plugin exchanges the approved code for a bearer token.
 ```
 
+### Google Search Console OAuth
+
+**Name:** Google Search Console OAuth
+**Type:** Integration Trust Boundary
+**Location:**
+- `docs/architecture/integrations/GoogleSearchConsoleOAuth.yaml`
+- `config/apiurls.php`
+- `config/services.php`
+- `app/Http/Controllers/ProfileConnectorController.php`
+- `app/Integrations/GoogleSearchConsole/GoogleSearchConsoleAdapter.php`
+- `app/Models/GoogleSearchConsoleConnection.php`
+- `app/Services/GoogleSearchConsoleReportService.php`
+- `resources/js/components/connectors/GoogleSearchConsoleConnectorCard.vue`
+- `routes/console.php`
+
+**Purpose:**
+Provide tenant-scoped, readonly Google Search Console OAuth access for search performance retrieval.
+
+**When to Use:**
+Connecting Search Console, refreshing Google OAuth tokens, or fetching FooMake search performance rows.
+
+**When Not to Use:**
+Google Docs/Drive generation, Google Analytics reporting, or public marketing tracking.
+
+**Public Interface:**
+- `profile.connectors.google-search-console.connect`
+- `profile.connectors.google-search-console.callback`
+- `profile.connectors.google-search-console.destroy`
+- `profile.connectors.google-search-console.performance`
+- `profile.connectors.google-search-console.report`
+- `GoogleSearchConsoleAdapter`
+- `GoogleSearchConsoleReportService`
+- `GoogleSearchConsoleConnection`
+- `search-console:report`
+
+**Example Usage:**
+```php
+$rows = $client->searchAnalytics($connection, now()->subDays(28), now()->subDay(), ['query'], 10);
+```
+
+```bash
+php artisan search-console:report
+```
+
+Browser downloads should use `GET /profile/connectors/google-search-console/report` so the markdown file lands on the user's machine instead of the server filesystem.
+
 ## Inertia / Vue
 
 ### Inertia Route Migration
@@ -575,6 +621,8 @@ Sales customer detail is an approved Inertia route migration. The Inertia page o
 
 Sales products index is an approved Inertia route migration. The page owns products-specific list/create/import/export orchestration and renders records through shared Vue index/card components.
 
+Sales orders detail is an approved Inertia route migration. The Inertia page owns detail orchestration and retrieves its mutable read model from `sales.orders.show.payload`.
+
 **When to Use:**
 Migrating a route to Inertia/Vue, creating new Vue-backed public pages, or building shared Vue guest/auth shells.
 
@@ -591,6 +639,8 @@ Unmigrated Blade routes, backend domain behavior, authorization, validation, ten
 - `resources/js/pages/Profile/Connectors/WordPressPair.vue`
 - `resources/js/pages/Sales/Customers/Show.vue`
 - `resources/js/pages/Sales/Products/Index.vue`
+- `resources/js/pages/Sales/Orders/Index.vue`
+- `resources/js/pages/Sales/Orders/Show.vue`
 - `resources/js/layouts/GuestShell.vue`
 - `resources/js/layouts/AuthShell.vue`
 - `resources/js/components/AuthDrawer.vue`
@@ -1517,7 +1567,7 @@ $users = $tenant->users;
 
 **Name:** Domain Authorization Layer
 **Type:** Authorization Pattern (Laravel Gates)
-**Location:** `app/Providers/AuthServiceProvider.php`
+**Location:** `app/Providers/AuthServiceProvider.php`, `bootstrap/app.php`, `app/Http/Controllers/Auth/AuthenticatedSessionController.php`, `resources/js/pages/Home.vue`
 
 **Purpose:**
 Centralize authorization using permission slugs and Laravel Gates.
@@ -1531,6 +1581,11 @@ UI-only visibility decisions without backend enforcement.
 **Public Interface:**
 - `Gate::allows()`
 - `Gate::authorize()`
+- `/?auth=login`
+
+Notes:
+- Browser unauthenticated and expired-session reauth redirects open the public home login drawer instead of sending users to `/login`.
+- JSON/API callers keep JSON unauthenticated or expired-session responses.
 
 **Example Usage:**
 ```php
@@ -2859,6 +2914,7 @@ Passive page initialization, background polling, or non-blocking status indicato
 - `docs/architecture/ui/ResourceDetailHeaderBreadcrumb.yaml`
 - `resources/views/components/ui/breadcrumbs.blade.php`
 - `resources/views/components/resource-detail-header-breadcrumb.blade.php`
+- `resources/js/components/ResourceDetailHeaderBreadcrumb.vue`
 - `resources/views/materials/show.blade.php`
 - `resources/views/manufacturing/recipes/show.blade.php`
 
@@ -2874,10 +2930,16 @@ Index pages or standalone navigation bars.
 **Public Interface:**
 - `<x-resource-detail-header-breadcrumb />`
 - `<x-ui.breadcrumbs />`
+- `resources/js/components/ResourceDetailHeaderBreadcrumb.vue`
 
 Notes:
 - Recipes and Materials must not hand-roll their own resource header or breadcrumb wrappers.
 - Connected chevron separators and the horizontal border lines above and below the breadcrumb trail are part of the component contract.
+- Vue detail breadcrumbs inside AuthShell span the content pane, not the full viewport, so they do not render beneath sidebar navigation.
+- Breadcrumb Home and first resource segments stay visible as width tightens; trailing record crumbs truncate first.
+- Migrated Vue detail pages may use the ResourceDetailHeaderBreadcrumb header slot for a domain-specific visual header, but it must replace the default header above the breadcrumb rather than render as a separate body section.
+- Domain-specific Vue headers are page headers, not cards; they must span the header width with square outer edges unless a referenced design explicitly says otherwise.
+- Domain-specific Vue headers must fit the established resource header height and must not introduce extra vertical gaps before the breadcrumb.
 
 ### Recipe Detail Make Orders Section
 

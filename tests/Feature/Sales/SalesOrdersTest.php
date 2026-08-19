@@ -224,7 +224,7 @@ beforeEach(function () {
 
 it('1. guest cannot view the sales orders index', function () {
     $this->get(route('sales.orders.index'))
-        ->assertRedirect(route('login'));
+        ->assertRedirect('/?auth=login');
 });
 
 it('2. user without sales order permission cannot view the sales orders index', function () {

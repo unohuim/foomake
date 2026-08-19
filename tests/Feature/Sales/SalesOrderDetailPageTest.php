@@ -184,6 +184,16 @@ beforeEach(function () {
     };
 
     $this->extractPayload = function ($response, string $payloadId): array {
+        $props = $response->viewData('page')['props'] ?? null;
+
+        if ($payloadId === 'sales-orders-show-payload' && is_array($props) && isset($props['payloadUrl'])) {
+            $payload = $this->getJson($props['payloadUrl'])
+                ->assertOk()
+                ->json('data');
+
+            return is_array($payload) ? $payload : [];
+        }
+
         preg_match(
             '/<script[^>]+id="' . preg_quote($payloadId, '/') . '"[^>]*>(.*?)<\\/script>/s',
             $response->getContent(),
@@ -204,7 +214,7 @@ it('1. sales order detail route requires authentication', function () {
     $order = ($this->makeOrder)($tenant, $customer);
 
     $this->get(route('sales.orders.show', $order))
-        ->assertRedirect(route('login'));
+        ->assertRedirect('/?auth=login');
 });
 
 it('2. sales order detail route denies authenticated users without sales order permission', function () {
@@ -225,16 +235,18 @@ it('3. sales order detail route exists and responds for authorized users', funct
     $order = ($this->makeOrder)($tenant, $customer);
     ($this->grantPermissions)($user, ['sales-sales-orders-manage']);
 
-    $this->actingAs($user)
+    $response = $this->actingAs($user)
         ->get(route('sales.orders.show', $order))
         ->assertOk()
-        ->assertSee('Sales Orders')
-        ->assertSee('ID #' . $order->id)
-        ->assertSee(route('sales.orders.index'), false)
         ->assertDontSee('Back to orders')
-        ->assertDontSee('Back to Sales Orders')
-        ->assertSee('data-page="sales-orders-show"', false)
-        ->assertSee('sales-orders-show-payload', false);
+        ->assertDontSee('Back to Sales Orders');
+
+    $page = $response->viewData('page');
+
+    expect($page['component'] ?? null)->toBe('Sales/Orders/Show')
+        ->and($page['props']['title'] ?? null)->toBe('Sales Order #' . $order->id)
+        ->and($page['props']['payloadUrl'] ?? null)->toBe(route('sales.orders.show.payload', $order))
+        ->and($page['props']['indexUrl'] ?? null)->toBe(route('sales.orders.index', absolute: false));
 });
 
 it('4. detail route is tenant scoped and blocks cross tenant access', function () {

@@ -125,6 +125,13 @@ const submitRegister = () => {
 };
 
 onMounted(() => {
+    const authMode = new URLSearchParams(window.location.search).get("auth");
+
+    if (authMode === "register" || authMode === "login") {
+        openAuthAfterInitialPaint(authMode);
+        return;
+    }
+
     if (window.location.hash === "#register") {
         openAuthAfterInitialPaint("register");
         return;

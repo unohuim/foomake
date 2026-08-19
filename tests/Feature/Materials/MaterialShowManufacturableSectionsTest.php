@@ -398,7 +398,7 @@ it('1. redirects guests to login for the material detail page', function (): voi
     $uom = ($this->makeUom)($tenant);
     $item = ($this->makeItem)($tenant, $uom, ['is_manufacturable' => true]);
 
-    ($this->getShow)(null, $item)->assertRedirect(route('login'));
+    ($this->getShow)(null, $item)->assertRedirect('/?auth=login');
 });
 
 it('2. forbids material detail access without inventory materials view permission', function (): void {

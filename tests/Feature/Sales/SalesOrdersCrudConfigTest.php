@@ -224,7 +224,7 @@ beforeEach(function () {
 
 it('1. sales orders index requires authentication', function () {
     $this->get(route('sales.orders.index'))
-        ->assertRedirect(route('login'));
+        ->assertRedirect('/?auth=login');
 });
 
 it('2. sales orders index denies authenticated users without permission', function () {
@@ -432,7 +432,7 @@ it('18. index row view action points to the detail route', function () {
 
 it('19. export endpoint requires authentication', function () {
     ($this->exportOrders)()
-        ->assertRedirect(route('login'));
+        ->assertRedirect('/?auth=login');
 });
 
 it('20. export endpoint denies authenticated users without permission', function () {

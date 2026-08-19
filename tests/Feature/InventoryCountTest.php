@@ -236,8 +236,8 @@ beforeEach(function () {
 });
 
 it('redirects/blocks guests for inventory count routes', function () {
-    $this->get('/inventory/counts')->assertRedirect(route('login'));
-    $this->get('/inventory/counts/1')->assertRedirect(route('login'));
+    $this->get('/inventory/counts')->assertRedirect('/?auth=login');
+    $this->get('/inventory/counts/1')->assertRedirect('/?auth=login');
 
     $this->postJson('/inventory/counts', ['counted_at' => now()->toISOString()])->assertUnauthorized();
     $this->patchJson('/inventory/counts/1', ['counted_at' => now()->toISOString(), 'notes' => 'x'])->assertUnauthorized();

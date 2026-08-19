@@ -249,7 +249,7 @@ it('redirects guests to login for the supplier detail page', function () {
     $supplier = ($this->makeSupplier)($tenant);
 
     $this->get(route('purchasing.suppliers.show', $supplier))
-        ->assertRedirect(route('login'));
+        ->assertRedirect('/?auth=login');
 });
 
 it('forbids supplier show without view permission and does not mutate supplier', function () {

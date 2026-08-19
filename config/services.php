@@ -41,4 +41,11 @@ return [
         'subscription_price_id' => env('STRIPE_SUBSCRIPTION_PRICE_ID'),
     ],
 
+    'google_search_console' => [
+        'client_id' => env('GOOGLE_SEARCH_CONSOLE_CLIENT_ID'),
+        'client_secret' => env('GOOGLE_SEARCH_CONSOLE_CLIENT_SECRET'),
+        'redirect_uri' => env('GOOGLE_SEARCH_CONSOLE_REDIRECT_URI'),
+        'site_url' => env('GOOGLE_SEARCH_CONSOLE_SITE_URL'),
+    ],
+
 ];

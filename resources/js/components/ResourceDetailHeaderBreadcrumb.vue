@@ -20,11 +20,29 @@ defineProps({
 </script>
 
 <template>
-    <div class="space-y-0 sm:space-y-4" data-resource-detail-header>
-        <div class="order-first w-full" data-resource-detail-breadcrumb>
-            <nav class="relative left-1/2 right-1/2 flex w-screen -translate-x-1/2 border-y border-gray-200 bg-white" aria-label="Breadcrumb">
-                <ol role="list" class="mx-auto flex w-full max-w-7xl items-stretch space-x-4 px-4 sm:px-6 lg:px-8">
-                    <li class="flex self-stretch">
+    <div class="space-y-0" data-resource-detail-header>
+        <div v-if="$slots.header" data-resource-detail-header-body>
+            <slot name="header" />
+        </div>
+
+        <div v-else class="max-w-5xl px-4 pb-4 pt-4 sm:px-6 sm:pb-6 sm:pt-6 lg:px-8" data-resource-detail-header-body>
+            <div class="flex items-center justify-between gap-3 sm:items-center">
+                <div class="min-w-0 flex-1">
+                    <div class="flex flex-wrap items-center gap-6 sm:gap-8" data-resource-detail-header-title-row>
+                        <h1 :class="titleClass" data-resource-detail-header-title>{{ title }}</h1>
+                        <slot name="titleSuffix" />
+                    </div>
+                </div>
+                <div v-if="$slots.actions" class="flex shrink-0 items-center justify-end sm:items-start">
+                    <slot name="actions" />
+                </div>
+            </div>
+        </div>
+
+        <div class="w-full" data-resource-detail-breadcrumb>
+            <nav class="flex w-full border-y border-gray-200 bg-white" aria-label="Breadcrumb">
+                <ol role="list" class="flex w-full min-w-0 items-stretch overflow-hidden px-4 sm:px-6 lg:px-8">
+                    <li class="flex shrink-0 self-stretch">
                         <div class="flex items-center">
                             <a :href="homeUrl" class="cursor-pointer py-2 text-gray-500 transition hover:text-gray-700">
                                 <span class="sr-only">Home</span>
@@ -35,35 +53,30 @@ defineProps({
                         </div>
                     </li>
 
-                    <li v-for="(item, index) in items" :key="`${item.label}-${index}`" class="flex self-stretch">
-                        <div class="flex items-center">
+                    <li
+                        v-for="(item, index) in items"
+                        :key="`${item.label}-${index}`"
+                        class="flex self-stretch"
+                        :class="index === 0 ? 'shrink-0' : 'min-w-0 flex-1'"
+                    >
+                        <div class="flex min-w-0 items-center">
                             <svg class="h-full w-4 shrink-0 text-gray-300" viewBox="0 0 24 44" preserveAspectRatio="none" fill="currentColor" aria-hidden="true">
                                 <path d="M.293 0l22 22-22 22h1.414l22-22-22-22H.293z" />
                             </svg>
 
-                            <a v-if="item.url && !item.current" :href="item.url" class="cursor-pointer ml-4 py-2 text-xs font-medium text-gray-500 transition hover:text-gray-700">
+                            <a v-if="item.url && !item.current" :href="item.url" class="ml-4 min-w-0 cursor-pointer truncate py-2 text-xs font-medium text-gray-500 transition hover:text-gray-700">
                                 {{ item.label }}
                             </a>
-                            <a v-else-if="item.url && item.current" :href="item.url" aria-current="page" class="cursor-pointer ml-4 py-2 text-xs font-medium text-gray-700 transition hover:text-gray-900">
+                            <a v-else-if="item.url && item.current" :href="item.url" aria-current="page" class="ml-4 min-w-0 cursor-pointer truncate py-2 text-xs font-medium text-gray-700 transition hover:text-gray-900">
                                 {{ item.label }}
                             </a>
-                            <span v-else class="ml-4 py-2 text-xs font-medium" :class="item.current ? 'text-gray-700' : 'text-gray-500'" :aria-current="item.current ? 'page' : null">
+                            <span v-else class="ml-4 min-w-0 truncate py-2 text-xs font-medium" :class="item.current ? 'text-gray-700' : 'text-gray-500'" :aria-current="item.current ? 'page' : null">
                                 {{ item.label }}
                             </span>
                         </div>
                     </li>
                 </ol>
             </nav>
-        </div>
-
-        <div class="max-w-5xl px-4 pb-4 pt-4 sm:px-6 sm:pb-6 sm:pt-6 lg:px-8" data-resource-detail-header-body>
-            <div class="flex items-center justify-between gap-3 sm:items-center">
-                <div class="min-w-0 flex-1">
-                    <div class="flex flex-wrap items-center gap-6 sm:gap-8" data-resource-detail-header-title-row>
-                        <h1 :class="titleClass" data-resource-detail-header-title>{{ title }}</h1>
-                    </div>
-                </div>
-            </div>
         </div>
     </div>
 </template>

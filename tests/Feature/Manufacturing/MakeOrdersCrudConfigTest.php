@@ -148,7 +148,7 @@ beforeEach(function (): void {
 
 it('1. redirects guests away from the make orders index', function (): void {
     ($this->getIndex)()
-        ->assertRedirect(route('login'));
+        ->assertRedirect('/?auth=login');
 });
 
 it('2. forbids authenticated users without make order view permission', function (): void {

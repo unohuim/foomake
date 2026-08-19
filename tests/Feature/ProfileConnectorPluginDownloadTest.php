@@ -76,7 +76,7 @@ beforeEach(function (): void {
 
 it('redirects guests away from the connectors page', function (): void {
     $this->get(route('profile.connectors.index'))
-        ->assertRedirect(route('login'));
+        ->assertRedirect('/?auth=login');
 });
 
 it('blocks connector page access without connector management permission', function (): void {
@@ -116,7 +116,7 @@ it('includes the connectors account navigation item in the inertia shell', funct
 
 it('redirects guests away from the plugin download route', function (): void {
     $this->get(route('profile.connectors.woocommerce.plugin.download'))
-        ->assertRedirect(route('login'));
+        ->assertRedirect('/?auth=login');
 });
 
 it('blocks plugin downloads without connector management permission', function (): void {
@@ -229,7 +229,7 @@ it('redirects guests away from the wordpress pairing approval page', function ()
     ($this->createPairing)('guest-code');
 
     $this->get(route('profile.connectors.wordpress.pair', ['code' => 'guest-code']))
-        ->assertRedirect(route('login'));
+        ->assertRedirect('/?auth=login');
 });
 
 it('blocks wordpress pairing approval page access without connector management permission', function (): void {

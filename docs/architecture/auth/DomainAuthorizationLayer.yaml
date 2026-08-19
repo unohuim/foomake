@@ -2,6 +2,9 @@ name: Domain Authorization Layer
 type: Authorization Pattern
 location:
   - app/Providers/AuthServiceProvider.php
+  - bootstrap/app.php
+  - app/Http/Controllers/Auth/AuthenticatedSessionController.php
+  - resources/js/pages/Home.vue
 purpose: Centralize authorization using global roles, permission slugs, and Laravel Gates.
 when_to_use:
   - Any access control decision
@@ -10,9 +13,12 @@ when_not_to_use:
   - UI-only visibility decisions without backend enforcement
 rules:
   - super-admin bypasses checks via Gate::before.
+  - Browser unauthenticated redirects must send users to /?auth=login so the public home page opens the login drawer instead of rendering /login.
+  - Session-expired browser responses may redirect to /?auth=login; JSON/API callers must keep JSON unauthenticated or expired-session responses.
 public_interface:
   - Gate::allows
   - Gate::authorize
+  - /?auth=login
   - Permission slugs defined in docs/PERMISSIONS_MATRIX.md
 example_usage: |
   Gate::authorize('inventory-materials-manage');

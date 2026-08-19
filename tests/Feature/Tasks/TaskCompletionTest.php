@@ -122,6 +122,16 @@ beforeEach(function () {
     $this->completeTask = fn (User $user, Task $task) => $this->actingAs($user)->patchJson(route('tasks.complete', $task));
 
     $this->extractPayload = function ($response, string $payloadId): array {
+        $props = $response->viewData('page')['props'] ?? null;
+
+        if ($payloadId === 'sales-orders-show-payload' && is_array($props) && isset($props['payloadUrl'])) {
+            $payload = $this->getJson($props['payloadUrl'])
+                ->assertOk()
+                ->json('data');
+
+            return is_array($payload) ? $payload : [];
+        }
+
         $html = $response->getContent();
         $pattern = '/<script type="application\\/json" id="' . preg_quote($payloadId, '/') . '">\\s*(.*?)\\s*<\\/script>/s';
 

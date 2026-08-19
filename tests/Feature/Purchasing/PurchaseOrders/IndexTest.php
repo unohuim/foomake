@@ -163,7 +163,7 @@ beforeEach(function () {
 
 it('redirects guests from index', function () {
     $this->get('/purchasing/orders')
-        ->assertRedirect(route('login'));
+        ->assertRedirect('/?auth=login');
 });
 
 it('forbids index without permission', function () {

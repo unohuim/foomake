@@ -72,7 +72,7 @@ test('1. guests are redirected to login when posting materials with starting qua
         'name' => 'Flour',
         'base_uom_id' => $uom->id,
         'starting_quantity' => '5.000000',
-    ])->assertRedirect(route('login'));
+    ])->assertRedirect('/?auth=login');
 });
 
 test('2. material store forbids authenticated users without inventory materials manage permission', function (): void {

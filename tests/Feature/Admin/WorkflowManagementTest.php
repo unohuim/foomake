@@ -264,7 +264,7 @@ it('9. admins receive workflow manage by default from seeding', function () {
 
 it('10. guest cannot access admin workflows page', function () {
     $this->get(route('admin.workflows.index'))
-        ->assertRedirect(route('login'));
+        ->assertRedirect('/?auth=login');
 });
 
 it('11. user without workflow manage cannot access admin workflows page', function () {

@@ -148,7 +148,7 @@ test('1. guests are redirected from recipe detail', function (): void {
     ]);
 
     $this->get(route('manufacturing.recipes.show', $recipe))
-        ->assertRedirect(route('login'));
+        ->assertRedirect('/?auth=login');
 });
 
 test('2. recipe detail requires inventory recipes view permission', function (): void {

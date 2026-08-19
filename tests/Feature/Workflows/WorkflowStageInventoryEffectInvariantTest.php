@@ -107,7 +107,7 @@ beforeEach(function (): void {
 
 it('1. guest cannot access workflow management', function (): void {
     $this->get(route('admin.workflows.index'))
-        ->assertRedirect(route('login'));
+        ->assertRedirect('/?auth=login');
 });
 
 it('1a. sales workflow status resolution uses database grammar safe column wrapping', function (): void {

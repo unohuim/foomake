@@ -3,12 +3,16 @@
 declare(strict_types=1);
 
 use App\Models\Permission;
+use App\Models\GoogleSearchConsoleConnection;
 use App\Models\Role;
 use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Http;
+use Inertia\Testing\AssertableInertia as Assert;
 
 uses(RefreshDatabase::class);
 
@@ -127,7 +131,7 @@ it('2. non admin cannot view the connector page', function () {
 
 it('3. unauthenticated users cannot access the connector page', function () {
     $this->get(route('profile.connectors.index'))
-        ->assertRedirect(route('login'));
+        ->assertRedirect('/?auth=login');
 });
 
 it('4. profile dropdown shows Connectors only for admin', function () {
@@ -529,4 +533,691 @@ it('28. credentials and secrets are never rendered back into blade', function ()
     expect($response->getContent())->not->toContain('ck_valid_readonly_key')
         ->and($response->getContent())->not->toContain('cs_valid_readonly_secret')
         ->and($response->getContent())->not->toContain('https://store.example.test');
+});
+
+it('29. connector page includes Google Search Console state for admins', function () {
+    $this->withoutVite();
+
+    $tenant = ($this->makeTenant)();
+    $admin = ($this->makeUser)($tenant);
+
+    ($this->grantPermission)($admin, 'system-users-manage');
+
+    $this->actingAs($admin)
+        ->get(route('profile.connectors.index'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page): Assert => $page
+            ->component('Profile/Connectors/Index')
+            ->where('connectors.googleSearchConsole.connected', false)
+            ->where('connectors.googleSearchConsoleConnectUrl', route('profile.connectors.google-search-console.connect'))
+            ->where('connectors.googleSearchConsoleReportUrl', route('profile.connectors.google-search-console.report'))
+        );
+});
+
+it('30. unauthenticated users cannot start Google Search Console OAuth', function () {
+    $this->get(route('profile.connectors.google-search-console.connect'))
+        ->assertRedirect('/?auth=login');
+});
+
+it('31. non admins cannot start Google Search Console OAuth', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermission)($user, 'inventory-products-manage');
+
+    $this->actingAs($user)
+        ->get(route('profile.connectors.google-search-console.connect'))
+        ->assertForbidden();
+});
+
+it('32. Google Search Console connect redirects to Google with readonly offline scope', function () {
+    config([
+        'services.google_search_console.client_id' => 'google-client-id',
+        'services.google_search_console.client_secret' => 'google-client-secret',
+        'services.google_search_console.redirect_uri' => 'http://localhost:8000/integrations/google/search-console/callback',
+    ]);
+
+    $tenant = ($this->makeTenant)();
+    $admin = ($this->makeUser)($tenant);
+
+    ($this->grantPermission)($admin, 'system-users-manage');
+
+    $response = $this->actingAs($admin)
+        ->get(route('profile.connectors.google-search-console.connect'))
+        ->assertRedirect();
+
+    $location = (string) $response->headers->get('Location');
+
+    expect($location)->toContain('https://accounts.google.com/AccountChooser')
+        ->and(urldecode($location))->toContain('https://accounts.google.com/o/oauth2/v2/auth')
+        ->and(urldecode($location))->toContain('client_id=google-client-id')
+        ->and(urldecode($location))->toContain('access_type=offline')
+        ->and(urldecode($location))->toContain('prompt=consent')
+        ->and(urldecode($location))->toContain('https://www.googleapis.com/auth/webmasters.readonly')
+        ->and(urldecode($location))->toContain('http://localhost:8000/integrations/google/search-console/callback');
+});
+
+it('32b. Google Search Console local connect uses localhost callback when redirect is not configured', function () {
+    config([
+        'app.env' => 'local',
+        'services.google_search_console.client_id' => 'google-client-id',
+        'services.google_search_console.client_secret' => 'google-client-secret',
+        'services.google_search_console.redirect_uri' => null,
+    ]);
+
+    $tenant = ($this->makeTenant)();
+    $admin = ($this->makeUser)($tenant);
+
+    ($this->grantPermission)($admin, 'system-users-manage');
+
+    $response = $this->actingAs($admin)
+        ->get(route('profile.connectors.google-search-console.connect'))
+        ->assertRedirect();
+
+    expect(urldecode((string) $response->headers->get('Location')))
+        ->toContain('http://localhost:8000/integrations/google/search-console/callback');
+});
+
+it('32c. Google Search Console production connect requires configured redirect or generated public route', function () {
+    config([
+        'app.env' => 'production',
+        'services.google_search_console.client_id' => 'google-client-id',
+        'services.google_search_console.client_secret' => 'google-client-secret',
+        'services.google_search_console.redirect_uri' => null,
+    ]);
+
+    $tenant = ($this->makeTenant)();
+    $admin = ($this->makeUser)($tenant);
+
+    ($this->grantPermission)($admin, 'system-users-manage');
+
+    $response = $this->actingAs($admin)
+        ->get(route('profile.connectors.google-search-console.connect'))
+        ->assertRedirect();
+
+    expect(urldecode((string) $response->headers->get('Location')))
+        ->toContain(route('profile.connectors.google-search-console.callback'));
+});
+
+
+it('33. Google Search Console callback rejects invalid state', function () {
+    $tenant = ($this->makeTenant)();
+    $admin = ($this->makeUser)($tenant);
+
+    ($this->grantPermission)($admin, 'system-users-manage');
+
+    $this->actingAs($admin)
+        ->withSession([
+            'google_search_console_oauth_state' => [
+                'state' => 'expected-state',
+                'tenant_id' => $tenant->id,
+            ],
+        ])
+        ->get(route('profile.connectors.google-search-console.callback', [
+            'state' => 'wrong-state',
+            'code' => 'valid-code',
+        ]))
+        ->assertRedirect(route('profile.connectors.index'));
+
+    expect(GoogleSearchConsoleConnection::query()->where('tenant_id', $tenant->id)->exists())->toBeFalse();
+});
+
+it('34. Google Search Console callback stores encrypted offline tokens', function () {
+    config([
+        'services.google_search_console.client_id' => 'google-client-id',
+        'services.google_search_console.client_secret' => 'google-client-secret',
+        'services.google_search_console.redirect_uri' => 'http://localhost:8000/integrations/google/search-console/callback',
+        'services.google_search_console.site_url' => 'sc-domain:foomake.com',
+    ]);
+    Http::fake([
+        'https://oauth2.googleapis.com/token' => Http::response([
+            'access_token' => 'access-token',
+            'refresh_token' => 'refresh-token',
+            'expires_in' => 3600,
+            'scope' => 'https://www.googleapis.com/auth/webmasters.readonly',
+        ], 200),
+        'https://www.googleapis.com/webmasters/v3/sites' => Http::response([
+            'siteEntry' => [
+                ['siteUrl' => 'sc-domain:foomake.com', 'permissionLevel' => 'siteOwner'],
+            ],
+        ], 200),
+    ]);
+
+    $tenant = ($this->makeTenant)();
+    $admin = ($this->makeUser)($tenant);
+
+    ($this->grantPermission)($admin, 'system-users-manage');
+
+    $this->actingAs($admin)
+        ->withSession([
+            'google_search_console_oauth_state' => [
+                'state' => 'expected-state',
+                'tenant_id' => $tenant->id,
+            ],
+        ])
+        ->get(route('profile.connectors.google-search-console.callback', [
+            'state' => 'expected-state',
+            'code' => 'valid-code',
+        ]))
+        ->assertRedirect(route('profile.connectors.index'));
+
+    $raw = DB::table('google_search_console_connections')
+        ->where('tenant_id', $tenant->id)
+        ->first();
+    $connection = GoogleSearchConsoleConnection::query()
+        ->where('tenant_id', $tenant->id)
+        ->firstOrFail();
+
+    expect((string) $raw->access_token)->not->toBe('access-token')
+        ->and((string) $raw->refresh_token)->not->toBe('refresh-token')
+        ->and($connection->access_token)->toBe('access-token')
+        ->and($connection->refresh_token)->toBe('refresh-token')
+        ->and($connection->site_url)->toBe('sc-domain:foomake.com')
+        ->and($connection->status)->toBe(GoogleSearchConsoleConnection::STATUS_CONNECTED);
+});
+
+it('35. Google Search Console reconnect upserts one tenant row', function () {
+    config([
+        'services.google_search_console.client_id' => 'google-client-id',
+        'services.google_search_console.client_secret' => 'google-client-secret',
+        'services.google_search_console.redirect_uri' => 'http://localhost:8000/integrations/google/search-console/callback',
+    ]);
+    Http::fake([
+        'https://oauth2.googleapis.com/token' => Http::sequence()
+            ->push([
+                'access_token' => 'first-access-token',
+                'refresh_token' => 'first-refresh-token',
+                'expires_in' => 3600,
+            ])
+            ->push([
+                'access_token' => 'second-access-token',
+                'refresh_token' => 'second-refresh-token',
+                'expires_in' => 3600,
+            ]),
+        'https://www.googleapis.com/webmasters/v3/sites' => Http::response([
+            'siteEntry' => [
+                ['siteUrl' => 'https://foomake.com/', 'permissionLevel' => 'siteOwner'],
+            ],
+        ], 200),
+    ]);
+
+    $tenant = ($this->makeTenant)();
+    $admin = ($this->makeUser)($tenant);
+
+    ($this->grantPermission)($admin, 'system-users-manage');
+
+    foreach (['first-state', 'second-state'] as $state) {
+        $this->actingAs($admin)
+            ->withSession([
+                'google_search_console_oauth_state' => [
+                    'state' => $state,
+                    'tenant_id' => $tenant->id,
+                ],
+            ])
+            ->get(route('profile.connectors.google-search-console.callback', [
+                'state' => $state,
+                'code' => 'valid-code',
+            ]))
+            ->assertRedirect(route('profile.connectors.index'));
+    }
+
+    $connection = GoogleSearchConsoleConnection::query()
+        ->where('tenant_id', $tenant->id)
+        ->firstOrFail();
+
+    expect(GoogleSearchConsoleConnection::query()->where('tenant_id', $tenant->id)->count())->toBe(1)
+        ->and($connection->refresh_token)->toBe('second-refresh-token');
+});
+
+it('36. Google Search Console reconnect preserves existing refresh token when Google omits one', function () {
+    config([
+        'services.google_search_console.client_id' => 'google-client-id',
+        'services.google_search_console.client_secret' => 'google-client-secret',
+        'services.google_search_console.redirect_uri' => 'http://localhost:8000/integrations/google/search-console/callback',
+    ]);
+
+    $tenant = ($this->makeTenant)();
+    $admin = ($this->makeUser)($tenant);
+    GoogleSearchConsoleConnection::query()->create([
+        'tenant_id' => $tenant->id,
+        'site_url' => 'https://foomake.com/',
+        'scopes' => ['https://www.googleapis.com/auth/webmasters.readonly'],
+        'refresh_token' => 'existing-refresh-token',
+        'status' => GoogleSearchConsoleConnection::STATUS_CONNECTED,
+        'connected_at' => now(),
+    ]);
+
+    ($this->grantPermission)($admin, 'system-users-manage');
+    Http::fake([
+        'https://oauth2.googleapis.com/token' => Http::response([
+            'access_token' => 'new-access-token',
+            'expires_in' => 3600,
+        ], 200),
+        'https://www.googleapis.com/webmasters/v3/sites' => Http::response([
+            'siteEntry' => [
+                ['siteUrl' => 'https://foomake.com/', 'permissionLevel' => 'siteOwner'],
+            ],
+        ], 200),
+    ]);
+
+    $this->actingAs($admin)
+        ->withSession([
+            'google_search_console_oauth_state' => [
+                'state' => 'expected-state',
+                'tenant_id' => $tenant->id,
+            ],
+        ])
+        ->get(route('profile.connectors.google-search-console.callback', [
+            'state' => 'expected-state',
+            'code' => 'valid-code',
+        ]))
+        ->assertRedirect(route('profile.connectors.index'));
+
+    expect(GoogleSearchConsoleConnection::query()->where('tenant_id', $tenant->id)->firstOrFail()->refresh_token)
+        ->toBe('existing-refresh-token');
+});
+
+it('37. Google Search Console callback stores first verified site when no property is configured', function () {
+    config([
+        'services.google_search_console.client_id' => 'google-client-id',
+        'services.google_search_console.client_secret' => 'google-client-secret',
+        'services.google_search_console.redirect_uri' => 'http://localhost:8000/integrations/google/search-console/callback',
+        'services.google_search_console.site_url' => null,
+    ]);
+    Http::fake([
+        'https://oauth2.googleapis.com/token' => Http::response([
+            'access_token' => 'access-token',
+            'refresh_token' => 'refresh-token',
+            'expires_in' => 3600,
+        ], 200),
+        'https://www.googleapis.com/webmasters/v3/sites' => Http::response([
+            'siteEntry' => [
+                ['siteUrl' => 'https://unverified.example.com/', 'permissionLevel' => 'siteUnverifiedUser'],
+                ['siteUrl' => 'sc-domain:foomake.com', 'permissionLevel' => 'siteOwner'],
+            ],
+        ], 200),
+    ]);
+
+    $tenant = ($this->makeTenant)();
+    $admin = ($this->makeUser)($tenant);
+
+    ($this->grantPermission)($admin, 'system-users-manage');
+
+    $this->actingAs($admin)
+        ->withSession([
+            'google_search_console_oauth_state' => [
+                'state' => 'expected-state',
+                'tenant_id' => $tenant->id,
+            ],
+        ])
+        ->get(route('profile.connectors.google-search-console.callback', [
+            'state' => 'expected-state',
+            'code' => 'valid-code',
+        ]));
+
+    expect(GoogleSearchConsoleConnection::query()->where('tenant_id', $tenant->id)->firstOrFail()->site_url)
+        ->toBe('sc-domain:foomake.com');
+});
+
+it('38. Google Search Console disconnect clears stored tokens', function () {
+    $tenant = ($this->makeTenant)();
+    $admin = ($this->makeUser)($tenant);
+    GoogleSearchConsoleConnection::query()->create([
+        'tenant_id' => $tenant->id,
+        'site_url' => 'sc-domain:foomake.com',
+        'scopes' => ['https://www.googleapis.com/auth/webmasters.readonly'],
+        'access_token' => 'access-token',
+        'refresh_token' => 'refresh-token',
+        'status' => GoogleSearchConsoleConnection::STATUS_CONNECTED,
+        'connected_at' => now(),
+    ]);
+
+    ($this->grantPermission)($admin, 'system-users-manage');
+
+    $this->actingAs($admin)
+        ->deleteJson(route('profile.connectors.google-search-console.destroy'))
+        ->assertOk()
+        ->assertJsonPath('data.connected', false);
+
+    $connection = GoogleSearchConsoleConnection::query()
+        ->where('tenant_id', $tenant->id)
+        ->firstOrFail();
+
+    expect($connection->access_token)->toBeNull()
+        ->and($connection->refresh_token)->toBeNull()
+        ->and($connection->status)->toBe(GoogleSearchConsoleConnection::STATUS_DISCONNECTED);
+});
+
+it('39. Google Search Console performance requires a connected tenant row', function () {
+    $tenant = ($this->makeTenant)();
+    $admin = ($this->makeUser)($tenant);
+
+    ($this->grantPermission)($admin, 'system-users-manage');
+
+    $this->actingAs($admin)
+        ->getJson(route('profile.connectors.google-search-console.performance'))
+        ->assertStatus(409)
+        ->assertJsonPath('message', 'Google Search Console is not connected.');
+});
+
+it('40. Google Search Console performance refreshes token and returns top query rows', function () {
+    config([
+        'services.google_search_console.client_id' => 'google-client-id',
+        'services.google_search_console.client_secret' => 'google-client-secret',
+    ]);
+
+    $tenant = ($this->makeTenant)();
+    $admin = ($this->makeUser)($tenant);
+    GoogleSearchConsoleConnection::query()->create([
+        'tenant_id' => $tenant->id,
+        'site_url' => 'sc-domain:foomake.com',
+        'scopes' => ['https://www.googleapis.com/auth/webmasters.readonly'],
+        'access_token' => 'expired-access-token',
+        'refresh_token' => 'refresh-token',
+        'token_expires_at' => now()->subMinute(),
+        'status' => GoogleSearchConsoleConnection::STATUS_CONNECTED,
+        'connected_at' => now(),
+    ]);
+
+    ($this->grantPermission)($admin, 'system-users-manage');
+    Http::fake([
+        'https://oauth2.googleapis.com/token' => Http::response([
+            'access_token' => 'fresh-access-token',
+            'expires_in' => 3600,
+        ], 200),
+        'https://www.googleapis.com/webmasters/v3/sites/sc-domain%3Afoomake.com/searchAnalytics/query' => Http::response([
+            'rows' => [
+                [
+                    'keys' => ['recipe management software'],
+                    'clicks' => 1,
+                    'impressions' => 107,
+                    'ctr' => 0.0093,
+                    'position' => 18.2,
+                ],
+            ],
+        ], 200),
+    ]);
+
+    $this->actingAs($admin)
+        ->getJson(route('profile.connectors.google-search-console.performance', ['days' => 28]))
+        ->assertOk()
+        ->assertJsonPath('data.rows.0.query', 'recipe management software')
+        ->assertJsonPath('data.rows.0.clicks', 1)
+        ->assertJsonPath('data.rows.0.impressions', 107);
+
+    expect(GoogleSearchConsoleConnection::query()->where('tenant_id', $tenant->id)->firstOrFail()->access_token)
+        ->toBe('fresh-access-token');
+});
+
+it('41. Google Search Console performance stores safe API errors', function () {
+    config([
+        'services.google_search_console.client_id' => 'google-client-id',
+        'services.google_search_console.client_secret' => 'google-client-secret',
+    ]);
+
+    $tenant = ($this->makeTenant)();
+    $admin = ($this->makeUser)($tenant);
+    GoogleSearchConsoleConnection::query()->create([
+        'tenant_id' => $tenant->id,
+        'site_url' => 'sc-domain:foomake.com',
+        'scopes' => ['https://www.googleapis.com/auth/webmasters.readonly'],
+        'access_token' => 'valid-access-token',
+        'refresh_token' => 'refresh-token',
+        'token_expires_at' => now()->addHour(),
+        'status' => GoogleSearchConsoleConnection::STATUS_CONNECTED,
+        'connected_at' => now(),
+    ]);
+
+    ($this->grantPermission)($admin, 'system-users-manage');
+    Http::fake([
+        'https://www.googleapis.com/webmasters/v3/sites/sc-domain%3Afoomake.com/searchAnalytics/query' => Http::response([
+            'error' => [
+                'message' => 'User does not have sufficient permission for site.',
+            ],
+        ], 403),
+    ]);
+
+    $this->actingAs($admin)
+        ->getJson(route('profile.connectors.google-search-console.performance'))
+        ->assertUnprocessable()
+        ->assertJsonPath('message', 'User does not have sufficient permission for site.');
+
+    expect(GoogleSearchConsoleConnection::query()->where('tenant_id', $tenant->id)->firstOrFail()->last_error)
+        ->toBe('User does not have sufficient permission for site.');
+});
+
+it('42. Google Search Console JSON responses never expose OAuth tokens', function () {
+    $this->withoutVite();
+
+    $tenant = ($this->makeTenant)();
+    $admin = ($this->makeUser)($tenant);
+    GoogleSearchConsoleConnection::query()->create([
+        'tenant_id' => $tenant->id,
+        'site_url' => 'sc-domain:foomake.com',
+        'scopes' => ['https://www.googleapis.com/auth/webmasters.readonly'],
+        'access_token' => 'secret-access-token',
+        'refresh_token' => 'secret-refresh-token',
+        'status' => GoogleSearchConsoleConnection::STATUS_CONNECTED,
+        'connected_at' => now(),
+    ]);
+
+    ($this->grantPermission)($admin, 'system-users-manage');
+
+    $this->actingAs($admin)
+        ->get(route('profile.connectors.index'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page): Assert => $page
+            ->where('connectors.googleSearchConsole.connected', true)
+            ->missing('connectors.googleSearchConsole.access_token')
+            ->missing('connectors.googleSearchConsole.refresh_token')
+        );
+});
+
+it('43. Google Search Console connect handles missing client configuration', function () {
+    config([
+        'services.google_search_console.client_id' => null,
+        'services.google_search_console.client_secret' => null,
+    ]);
+
+    $tenant = ($this->makeTenant)();
+    $admin = ($this->makeUser)($tenant);
+
+    ($this->grantPermission)($admin, 'system-users-manage');
+
+    $this->actingAs($admin)
+        ->get(route('profile.connectors.google-search-console.connect'))
+        ->assertRedirect(route('profile.connectors.index'));
+
+    expect(session('errors')->get('google_search_console')[0])
+        ->toBe('Google Search Console client ID is not configured.');
+});
+
+it('44. Google Search Console report command writes markdown report', function () {
+    config([
+        'services.google_search_console.client_id' => 'google-client-id',
+        'services.google_search_console.client_secret' => 'google-client-secret',
+    ]);
+
+    $tenant = ($this->makeTenant)();
+    GoogleSearchConsoleConnection::query()->create([
+        'tenant_id' => $tenant->id,
+        'site_url' => 'sc-domain:foomake.com',
+        'scopes' => ['https://www.googleapis.com/auth/webmasters.readonly'],
+        'access_token' => 'expired-access-token',
+        'refresh_token' => 'refresh-token',
+        'token_expires_at' => now()->subMinute(),
+        'status' => GoogleSearchConsoleConnection::STATUS_CONNECTED,
+        'connected_at' => now(),
+    ]);
+
+    $path = sys_get_temp_dir() . '/foomake-search-console-report.md';
+    File::delete($path);
+
+    Http::fake([
+        'https://oauth2.googleapis.com/token' => Http::response([
+            'access_token' => 'fresh-access-token',
+            'expires_in' => 3600,
+        ], 200),
+        'https://www.googleapis.com/webmasters/v3/sites/sc-domain%3Afoomake.com/searchAnalytics/query' => Http::sequence()
+            ->push([
+                'rows' => [
+                    [
+                        'keys' => ['recipe management software'],
+                        'clicks' => 1,
+                        'impressions' => 121,
+                        'ctr' => 0.0083,
+                        'position' => 16.4,
+                    ],
+                ],
+            ], 200)
+            ->push([
+                'rows' => [
+                    [
+                        'keys' => ['recipe management software'],
+                        'clicks' => 1,
+                        'impressions' => 107,
+                        'ctr' => 0.0093,
+                        'position' => 15.2,
+                    ],
+                    [
+                        'keys' => ['food production software'],
+                        'clicks' => 0,
+                        'impressions' => 26,
+                        'ctr' => 0.0,
+                        'position' => 22.1,
+                    ],
+                ],
+            ], 200)
+            ->push([
+                'rows' => [
+                    [
+                        'keys' => ['recipe management software'],
+                        'clicks' => 0,
+                        'impressions' => 13,
+                        'ctr' => 0.0,
+                        'position' => 18.2,
+                    ],
+                ],
+            ], 200),
+    ]);
+
+    $exitCode = Artisan::call('search-console:report', [
+        '--path' => $path,
+    ]);
+
+    expect($exitCode)->toBe(0)
+        ->and(File::get($path))
+        ->toContain('# Google Search Console Report')
+        ->toContain('Last 28 Days')
+        ->toContain('Last 7 Days')
+        ->toContain('Last 24 Hours')
+        ->toContain('recipe management software')
+        ->toContain('Next-Step Recommendations');
+
+    File::delete($path);
+});
+
+it('45. Google Search Console report command fails without a connected row', function () {
+    $path = sys_get_temp_dir() . '/foomake-search-console-empty-report.md';
+    File::delete($path);
+
+    $exitCode = Artisan::call('search-console:report', [
+        '--path' => $path,
+    ]);
+
+    expect($exitCode)->toBe(1)
+        ->and(Artisan::output())->toContain('No connected FooMake Google Search Console connection found.')
+        ->and(File::exists($path))->toBeFalse();
+});
+
+it('46. Google Search Console report command uses the configured site when multiple connections exist', function () {
+    config([
+        'services.google_search_console.client_id' => 'google-client-id',
+        'services.google_search_console.client_secret' => 'google-client-secret',
+        'services.google_search_console.site_url' => 'sc-domain:foomake.com',
+    ]);
+
+    $firstTenant = ($this->makeTenant)('First Tenant');
+    $secondTenant = ($this->makeTenant)('Second Tenant');
+
+    foreach ([$firstTenant, $secondTenant] as $index => $tenant) {
+        GoogleSearchConsoleConnection::query()->create([
+            'tenant_id' => $tenant->id,
+            'site_url' => $index === 0 ? 'sc-domain:foomake.com' : 'sc-domain:example.com',
+            'scopes' => ['https://www.googleapis.com/auth/webmasters.readonly'],
+            'refresh_token' => 'refresh-token-' . $tenant->id,
+            'status' => GoogleSearchConsoleConnection::STATUS_CONNECTED,
+            'connected_at' => now(),
+        ]);
+    }
+
+    $path = sys_get_temp_dir() . '/foomake-search-console-configured-site-report.md';
+    File::delete($path);
+
+    Http::fake([
+        'https://oauth2.googleapis.com/token' => Http::response([
+            'access_token' => 'fresh-access-token',
+            'expires_in' => 3600,
+        ], 200),
+        'https://www.googleapis.com/webmasters/v3/sites/sc-domain%3Afoomake.com/searchAnalytics/query' => Http::sequence()
+            ->push(['rows' => []], 200)
+            ->push(['rows' => []], 200)
+            ->push(['rows' => []], 200),
+    ]);
+
+    $exitCode = Artisan::call('search-console:report', [
+        '--path' => $path,
+    ]);
+
+    expect($exitCode)->toBe(0)
+        ->and(File::get($path))->toContain('sc-domain:foomake.com');
+
+    File::delete($path);
+});
+
+it('47. Google Search Console report downloads as markdown from the connector page', function () {
+    config([
+        'services.google_search_console.client_id' => 'google-client-id',
+        'services.google_search_console.client_secret' => 'google-client-secret',
+    ]);
+
+    $tenant = ($this->makeTenant)();
+    $admin = ($this->makeUser)($tenant);
+    GoogleSearchConsoleConnection::query()->create([
+        'tenant_id' => $tenant->id,
+        'site_url' => 'sc-domain:foomake.com',
+        'scopes' => ['https://www.googleapis.com/auth/webmasters.readonly'],
+        'access_token' => 'valid-access-token',
+        'refresh_token' => 'refresh-token',
+        'token_expires_at' => now()->addHour(),
+        'status' => GoogleSearchConsoleConnection::STATUS_CONNECTED,
+        'connected_at' => now(),
+    ]);
+
+    ($this->grantPermission)($admin, 'system-users-manage');
+
+    Http::fake([
+        'https://www.googleapis.com/webmasters/v3/sites/sc-domain%3Afoomake.com/searchAnalytics/query' => Http::sequence()
+            ->push(['rows' => []], 200)
+            ->push(['rows' => []], 200)
+            ->push(['rows' => []], 200),
+    ]);
+
+    $this->actingAs($admin)
+        ->get(route('profile.connectors.google-search-console.report'))
+        ->assertOk()
+        ->assertHeader('Content-Type', 'text/markdown; charset=UTF-8')
+        ->assertHeader('Content-Disposition', 'attachment; filename="search_console_report.md"')
+        ->assertSee('# Google Search Console Report', false);
+});
+
+it('48. Google Search Console report download requires a connection', function () {
+    $tenant = ($this->makeTenant)();
+    $admin = ($this->makeUser)($tenant);
+
+    ($this->grantPermission)($admin, 'system-users-manage');
+
+    $this->actingAs($admin)
+        ->get(route('profile.connectors.google-search-console.report'))
+        ->assertStatus(409);
 });

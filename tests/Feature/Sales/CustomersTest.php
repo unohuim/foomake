@@ -112,7 +112,7 @@ it('1. authenticated user can view customers index', function () {
 
 it('2. guest cannot view customers index', function () {
     $this->get(route('sales.customers.index'))
-        ->assertRedirect(route('login'));
+        ->assertRedirect('/?auth=login');
 });
 
 it('3. user without permission is denied index', function () {

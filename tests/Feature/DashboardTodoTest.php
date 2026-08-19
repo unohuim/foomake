@@ -260,7 +260,7 @@ it('1. authenticated user can see the Todo section on the dashboard', function (
 
 it('2. unauthenticated user cannot access the dashboard', function (): void {
     $this->get(route('dashboard'))
-        ->assertRedirect(route('login'));
+        ->assertRedirect('/?auth=login');
 });
 
 it('3. Todo section renders as a detail-section accordion', function (): void {

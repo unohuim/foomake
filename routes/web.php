@@ -418,6 +418,8 @@ Route::middleware(['auth', EnsureEmailVerifiedOrInGracePeriod::class, EnsureTena
         ->name('sales.orders.store');
     Route::get('/sales/orders/{salesOrder}', [SalesOrderController::class, 'show'])
         ->name('sales.orders.show');
+    Route::get('/sales/orders/{salesOrder}/payload', [SalesOrderController::class, 'showPayload'])
+        ->name('sales.orders.show.payload');
     Route::patch('/sales/orders/{salesOrder}', [SalesOrderController::class, 'update'])
         ->name('sales.orders.update');
     Route::patch('/sales/orders/{salesOrder}/status', [SalesOrderStatusController::class, 'update'])
@@ -499,6 +501,16 @@ Route::middleware(['auth', EnsureEmailVerifiedOrInGracePeriod::class, EnsureTena
         ->name('profile.connectors.woocommerce.plugin.download');
     Route::delete('/profile/connectors/wordpress-plugin', [ProfileConnectorController::class, 'destroyWordPressPluginConnection'])
         ->name('profile.connectors.wordpress-plugin.destroy');
+    Route::get('/integrations/google/search-console/connect', [ProfileConnectorController::class, 'connectGoogleSearchConsole'])
+        ->name('profile.connectors.google-search-console.connect');
+    Route::get('/integrations/google/search-console/callback', [ProfileConnectorController::class, 'callbackGoogleSearchConsole'])
+        ->name('profile.connectors.google-search-console.callback');
+    Route::delete('/profile/connectors/google-search-console', [ProfileConnectorController::class, 'destroyGoogleSearchConsole'])
+        ->name('profile.connectors.google-search-console.destroy');
+    Route::get('/profile/connectors/google-search-console/performance', [ProfileConnectorController::class, 'googleSearchConsolePerformance'])
+        ->name('profile.connectors.google-search-console.performance');
+    Route::get('/profile/connectors/google-search-console/report', [ProfileConnectorController::class, 'downloadGoogleSearchConsoleReport'])
+        ->name('profile.connectors.google-search-console.report');
     Route::post('/sales/products/import-sources/{source}/connect', [ProfileConnectorController::class, 'storeWooCommerce'])
         ->name('sales.products.import.connect');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');

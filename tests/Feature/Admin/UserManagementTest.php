@@ -134,7 +134,7 @@ it('non-admin cannot view user management', function () {
 
 it('unauthenticated user cannot view user management', function () {
     $this->get(route('admin.users.index'))
-        ->assertRedirect(route('login'));
+        ->assertRedirect('/?auth=login');
 });
 
 it('guests cannot access admin invitation management routes', function () {
@@ -899,7 +899,7 @@ it('verified existing user must authenticate before accepting invite', function 
         'email' => 'verified.existing@example.com',
         'password' => 'password',
         'password_confirmation' => 'password',
-    ])->assertRedirect(route('login'));
+    ])->assertRedirect('/?auth=login');
 });
 
 it('authenticated user cannot accept invite for a different email', function () {

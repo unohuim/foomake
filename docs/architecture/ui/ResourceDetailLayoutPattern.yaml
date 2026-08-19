@@ -9,7 +9,7 @@ location:
   - resources/views/manufacturing/make-orders/show.blade.php
   - resources/views/purchasing/orders/show.blade.php
   - resources/views/purchasing/suppliers/show.blade.php
-  - resources/views/sales/orders/show.blade.php
+  - resources/js/pages/Sales/Orders/Show.vue
   - resources/views/inventory/counts/show.blade.php
 purpose: Define a shared resource-detail page shell where top navigation and the page header remain sticky while only the detail content pane scrolls.
 when_to_use:

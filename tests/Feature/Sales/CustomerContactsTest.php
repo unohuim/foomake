@@ -263,7 +263,7 @@ it('4a. guest cannot view customer detail page', function () {
     $customer = ($this->createCustomer)($tenant);
 
     $this->get(route('sales.customers.show', $customer->id))
-        ->assertRedirect(route('login'));
+        ->assertRedirect('/?auth=login');
 });
 
 it('4b. user without customer view permission cannot view customer detail page', function () {
