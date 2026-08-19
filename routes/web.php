@@ -507,6 +507,8 @@ Route::middleware(['auth', EnsureEmailVerifiedOrInGracePeriod::class, EnsureTena
         ->name('profile.connectors.google-search-console.callback');
     Route::delete('/profile/connectors/google-search-console', [ProfileConnectorController::class, 'destroyGoogleSearchConsole'])
         ->name('profile.connectors.google-search-console.destroy');
+    Route::patch('/profile/connectors/google-search-console/refresh', [ProfileConnectorController::class, 'refreshGoogleSearchConsole'])
+        ->name('profile.connectors.google-search-console.refresh');
     Route::get('/profile/connectors/google-search-console/performance', [ProfileConnectorController::class, 'googleSearchConsolePerformance'])
         ->name('profile.connectors.google-search-console.performance');
     Route::get('/profile/connectors/google-search-console/report', [ProfileConnectorController::class, 'downloadGoogleSearchConsoleReport'])

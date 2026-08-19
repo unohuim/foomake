@@ -44,6 +44,7 @@ const googleSearchConsoleError = computed(() => page.props.errors?.google_search
                     :connect-url="connectors.googleSearchConsoleConnectUrl"
                     :disconnect-url="connectors.googleSearchConsoleDisconnectUrl"
                     :performance-url="connectors.googleSearchConsolePerformanceUrl"
+                    :refresh-url="connectors.googleSearchConsoleRefreshUrl"
                     :report-url="connectors.googleSearchConsoleReportUrl"
                     :csrf-token="connectors.csrfToken"
                 />

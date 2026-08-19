@@ -20,6 +20,10 @@ const props = defineProps({
         type: String,
         required: true,
     },
+    refreshUrl: {
+        type: String,
+        required: true,
+    },
     reportUrl: {
         type: String,
         required: true,
@@ -35,6 +39,7 @@ const siteUrl = ref(props.connector.site_url || "");
 const lastVerifiedAt = ref(props.connector.last_verified_at || "");
 const lastError = ref(props.connector.last_error || "");
 const disconnecting = ref(false);
+const refreshing = ref(false);
 const loadingPerformance = ref(false);
 const message = ref("");
 const rows = ref([]);
@@ -52,6 +57,33 @@ const applyConnection = (connection) => {
     siteUrl.value = connection?.site_url || "";
     lastVerifiedAt.value = connection?.last_verified_at || "";
     lastError.value = connection?.last_error || "";
+};
+
+const refresh = async () => {
+    message.value = "";
+    refreshing.value = true;
+
+    try {
+        const response = await fetch(props.refreshUrl, {
+            method: "PATCH",
+            headers: {
+                Accept: "application/json",
+                "X-CSRF-TOKEN": props.csrfToken,
+            },
+        });
+        const data = await response.json();
+
+        if (!response.ok) {
+            message.value = data.message || "Unable to refresh Search Console.";
+            return;
+        }
+
+        applyConnection(data.data);
+    } catch (error) {
+        message.value = "Unable to refresh Search Console.";
+    } finally {
+        refreshing.value = false;
+    }
 };
 
 const disconnect = async () => {
@@ -148,6 +180,15 @@ const loadPerformance = async () => {
                     >
                         Connect Google
                     </a>
+                    <button
+                        v-if="connected"
+                        type="button"
+                        class="inline-flex cursor-pointer items-center justify-center rounded-md border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                        :disabled="refreshing"
+                        @click="refresh"
+                    >
+                        {{ refreshing ? "Refreshing..." : "Refresh" }}
+                    </button>
                     <button
                         v-if="connected"
                         type="button"

@@ -550,6 +550,7 @@ it('29. connector page includes Google Search Console state for admins', functio
             ->component('Profile/Connectors/Index')
             ->where('connectors.googleSearchConsole.connected', false)
             ->where('connectors.googleSearchConsoleConnectUrl', route('profile.connectors.google-search-console.connect'))
+            ->where('connectors.googleSearchConsoleRefreshUrl', route('profile.connectors.google-search-console.refresh'))
             ->where('connectors.googleSearchConsoleReportUrl', route('profile.connectors.google-search-console.report'))
         );
 });
@@ -817,6 +818,50 @@ it('36. Google Search Console reconnect preserves existing refresh token when Go
         ->toBe('existing-refresh-token');
 });
 
+it('36b. Google Search Console reconnect prefers configured property over existing site url', function () {
+    config([
+        'services.google_search_console.client_id' => 'google-client-id',
+        'services.google_search_console.client_secret' => 'google-client-secret',
+        'services.google_search_console.redirect_uri' => 'http://localhost:8000/integrations/google/search-console/callback',
+        'services.google_search_console.site_url' => 'sc-domain:foomake.com',
+    ]);
+
+    $tenant = ($this->makeTenant)();
+    $admin = ($this->makeUser)($tenant);
+    GoogleSearchConsoleConnection::query()->create([
+        'tenant_id' => $tenant->id,
+        'site_url' => 'https://farmlycanine.ca/',
+        'scopes' => ['https://www.googleapis.com/auth/webmasters.readonly'],
+        'refresh_token' => 'existing-refresh-token',
+        'status' => GoogleSearchConsoleConnection::STATUS_CONNECTED,
+        'connected_at' => now(),
+    ]);
+
+    ($this->grantPermission)($admin, 'system-users-manage');
+    Http::fake([
+        'https://oauth2.googleapis.com/token' => Http::response([
+            'access_token' => 'new-access-token',
+            'expires_in' => 3600,
+        ], 200),
+    ]);
+
+    $this->actingAs($admin)
+        ->withSession([
+            'google_search_console_oauth_state' => [
+                'state' => 'expected-state',
+                'tenant_id' => $tenant->id,
+            ],
+        ])
+        ->get(route('profile.connectors.google-search-console.callback', [
+            'state' => 'expected-state',
+            'code' => 'valid-code',
+        ]))
+        ->assertRedirect(route('profile.connectors.index'));
+
+    expect(GoogleSearchConsoleConnection::query()->where('tenant_id', $tenant->id)->firstOrFail()->site_url)
+        ->toBe('sc-domain:foomake.com');
+});
+
 it('37. Google Search Console callback stores first verified site when no property is configured', function () {
     config([
         'services.google_search_console.client_id' => 'google-client-id',
@@ -896,6 +941,46 @@ it('39. Google Search Console performance requires a connected tenant row', func
 
     $this->actingAs($admin)
         ->getJson(route('profile.connectors.google-search-console.performance'))
+        ->assertStatus(409)
+        ->assertJsonPath('message', 'Google Search Console is not connected.');
+});
+
+it('39b. Google Search Console refresh switches to configured property', function () {
+    config([
+        'services.google_search_console.site_url' => 'sc-domain:foomake.com',
+    ]);
+
+    $tenant = ($this->makeTenant)();
+    $admin = ($this->makeUser)($tenant);
+    GoogleSearchConsoleConnection::query()->create([
+        'tenant_id' => $tenant->id,
+        'site_url' => 'https://farmlycanine.ca/',
+        'scopes' => ['https://www.googleapis.com/auth/webmasters.readonly'],
+        'refresh_token' => 'refresh-token',
+        'status' => GoogleSearchConsoleConnection::STATUS_CONNECTED,
+        'connected_at' => now(),
+    ]);
+
+    ($this->grantPermission)($admin, 'system-users-manage');
+
+    $this->actingAs($admin)
+        ->patchJson(route('profile.connectors.google-search-console.refresh'))
+        ->assertOk()
+        ->assertJsonPath('data.site_url', 'sc-domain:foomake.com')
+        ->assertJsonPath('data.connected', true);
+
+    expect(GoogleSearchConsoleConnection::query()->where('tenant_id', $tenant->id)->firstOrFail()->site_url)
+        ->toBe('sc-domain:foomake.com');
+});
+
+it('39c. Google Search Console refresh requires a connected tenant row', function () {
+    $tenant = ($this->makeTenant)();
+    $admin = ($this->makeUser)($tenant);
+
+    ($this->grantPermission)($admin, 'system-users-manage');
+
+    $this->actingAs($admin)
+        ->patchJson(route('profile.connectors.google-search-console.refresh'))
         ->assertStatus(409)
         ->assertJsonPath('message', 'Google Search Console is not connected.');
 });

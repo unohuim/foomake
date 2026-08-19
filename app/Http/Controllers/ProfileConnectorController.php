@@ -78,6 +78,7 @@ class ProfileConnectorController extends Controller
                 'googleSearchConsoleConnectUrl' => route('profile.connectors.google-search-console.connect'),
                 'googleSearchConsoleDisconnectUrl' => route('profile.connectors.google-search-console.destroy'),
                 'googleSearchConsolePerformanceUrl' => route('profile.connectors.google-search-console.performance'),
+                'googleSearchConsoleRefreshUrl' => route('profile.connectors.google-search-console.refresh'),
                 'googleSearchConsoleReportUrl' => route('profile.connectors.google-search-console.report'),
                 'csrfToken' => csrf_token(),
             ],
@@ -298,7 +299,7 @@ class ProfileConnectorController extends Controller
         $connection = GoogleSearchConsoleConnection::query()->updateOrCreate(
             ['tenant_id' => $user->tenant_id],
             [
-                'site_url' => $existing?->site_url ?: config('services.google_search_console.site_url'),
+                'site_url' => $this->configuredGoogleSearchConsoleSiteUrl() ?: $existing?->site_url,
                 'scopes' => $this->googleSearchConsoleScopes($tokens),
                 'access_token' => $tokens['access_token'] ?? null,
                 'refresh_token' => $refreshToken,
@@ -327,6 +328,51 @@ class ProfileConnectorController extends Controller
         }
 
         return redirect()->route('profile.connectors.index');
+    }
+
+    /**
+     * Refresh the connected Search Console property from configured FooMake settings.
+     */
+    public function refreshGoogleSearchConsole(Request $request, GoogleSearchConsoleAdapter $client): JsonResponse
+    {
+        Gate::authorize('system-users-manage');
+
+        /** @var \App\Models\User $user */
+        $user = $request->user();
+        $connection = GoogleSearchConsoleConnection::query()
+            ->where('tenant_id', $user->tenant_id)
+            ->first();
+
+        if (! $connection?->isConnected()) {
+            return response()->json([
+                'message' => 'Google Search Console is not connected.',
+            ], 409);
+        }
+
+        try {
+            $siteUrl = $this->configuredGoogleSearchConsoleSiteUrl()
+                ?: $this->selectGoogleSearchConsoleSite($client->sites($connection));
+
+            if ($siteUrl !== null) {
+                $connection->forceFill([
+                    'site_url' => $siteUrl,
+                    'last_verified_at' => now(),
+                    'last_error' => null,
+                ])->save();
+            }
+        } catch (GoogleSearchConsoleException $exception) {
+            $connection->forceFill([
+                'last_error' => $exception->getMessage(),
+            ])->save();
+
+            return response()->json([
+                'message' => $exception->getMessage(),
+            ], 422);
+        }
+
+        return response()->json([
+            'data' => $this->googleSearchConsoleConnectionData($connection->fresh()),
+        ]);
     }
 
     /**
@@ -611,6 +657,18 @@ class ProfileConnectorController extends Controller
         }
 
         return route('profile.connectors.google-search-console.callback');
+    }
+
+    /**
+     * Return the configured Search Console property, when one is set.
+     */
+    private function configuredGoogleSearchConsoleSiteUrl(): ?string
+    {
+        $siteUrl = config('services.google_search_console.site_url');
+
+        return is_string($siteUrl) && $siteUrl !== ''
+            ? $siteUrl
+            : null;
     }
 
     /**

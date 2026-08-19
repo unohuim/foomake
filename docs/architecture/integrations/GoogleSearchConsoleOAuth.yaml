@@ -32,11 +32,13 @@ rules:
   - Search Console API endpoint URLs belong in config/apiurls.php, while credentials belong in config/services.php.
   - OAuth authorization must route through Google's account chooser before consent so the browser's active Google profile is not silently reused.
   - The OAuth redirect URI must be configurable; local development must use a Google-approved localhost callback instead of .test domains.
+  - A configured GOOGLE_SEARCH_CONSOLE_SITE_URL must override any previously stored Search Console site URL on reconnect or refresh.
   - Search Console markdown reports must be generated server-side for the configured FooMake property and must not expose OAuth tokens.
 public_interface:
   - profile.connectors.google-search-console.connect
   - profile.connectors.google-search-console.callback
   - profile.connectors.google-search-console.destroy
+  - profile.connectors.google-search-console.refresh
   - profile.connectors.google-search-console.performance
   - profile.connectors.google-search-console.report
   - GoogleSearchConsoleAdapter::authorizationUrl()

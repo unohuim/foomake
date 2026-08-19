@@ -581,6 +581,7 @@ Google Docs/Drive generation, Google Analytics reporting, or public marketing tr
 - `profile.connectors.google-search-console.connect`
 - `profile.connectors.google-search-console.callback`
 - `profile.connectors.google-search-console.destroy`
+- `profile.connectors.google-search-console.refresh`
 - `profile.connectors.google-search-console.performance`
 - `profile.connectors.google-search-console.report`
 - `GoogleSearchConsoleAdapter`
