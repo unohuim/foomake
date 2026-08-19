@@ -624,6 +624,8 @@ Sales products index is an approved Inertia route migration. The page owns produ
 
 Sales orders detail is an approved Inertia route migration. The Inertia page owns detail orchestration and retrieves its mutable read model from `sales.orders.show.payload`.
 
+Admin marketing is an approved Inertia route migration. The page is super-admin-only and starts with Search Console connection status plus available performance views.
+
 **When to Use:**
 Migrating a route to Inertia/Vue, creating new Vue-backed public pages, or building shared Vue guest/auth shells.
 
@@ -636,6 +638,7 @@ Unmigrated Blade routes, backend domain behavior, authorization, validation, ten
 - `resources/js/inertia-app.js`
 - `resources/js/pages/Home.vue`
 - `resources/js/pages/Dashboard.vue`
+- `resources/js/pages/Admin/Marketing.vue`
 - `resources/js/pages/Profile/Connectors/Index.vue`
 - `resources/js/pages/Profile/Connectors/WordPressPair.vue`
 - `resources/js/pages/Sales/Customers/Show.vue`

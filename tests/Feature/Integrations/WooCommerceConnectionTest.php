@@ -1306,3 +1306,43 @@ it('48. Google Search Console report download requires a connection', function (
         ->get(route('profile.connectors.google-search-console.report'))
         ->assertStatus(409);
 });
+
+it('49. super admins can view the marketing page with Search Console options', function () {
+    $this->withoutVite();
+
+    $tenant = ($this->makeTenant)();
+    $superAdmin = ($this->makeUser)($tenant);
+    $role = Role::query()->create(['name' => 'super-admin']);
+    $superAdmin->roles()->syncWithoutDetaching([$role->id]);
+    GoogleSearchConsoleConnection::query()->create([
+        'tenant_id' => $tenant->id,
+        'site_url' => 'sc-domain:foomake.com',
+        'scopes' => ['https://www.googleapis.com/auth/webmasters.readonly'],
+        'refresh_token' => 'refresh-token',
+        'status' => GoogleSearchConsoleConnection::STATUS_CONNECTED,
+        'connected_at' => now(),
+        'last_verified_at' => now(),
+    ]);
+
+    $this->actingAs($superAdmin)
+        ->get(route('admin.marketing.index'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page): Assert => $page
+            ->component('Admin/Marketing')
+            ->where('searchConsole.connected', true)
+            ->where('searchConsole.siteUrl', 'sc-domain:foomake.com')
+            ->where('searchConsole.reportUrl', route('profile.connectors.google-search-console.report', absolute: false))
+            ->where('searchConsole.views.0.label', 'Query Performance')
+        );
+});
+
+it('50. non super admins cannot view the marketing page', function () {
+    $tenant = ($this->makeTenant)();
+    $admin = ($this->makeUser)($tenant);
+
+    ($this->grantPermission)($admin, 'system-users-manage');
+
+    $this->actingAs($admin)
+        ->get(route('admin.marketing.index'))
+        ->assertForbidden();
+});

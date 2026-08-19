@@ -160,7 +160,35 @@ const loadPerformance = async () => {
 
             <div class="md:text-right">
                 <p class="mb-2 text-[10px] font-semibold uppercase tracking-widest text-slate-500">Connection Status</p>
-                <ConnectorStatusBadge :connected="connected" />
+                <div class="inline-flex items-center gap-2">
+                    <button
+                        v-if="connected"
+                        type="button"
+                        class="inline-flex h-6 w-6 cursor-pointer items-center justify-center rounded-md border border-slate-300 text-slate-600 transition hover:bg-slate-50 hover:text-[#111b31] disabled:cursor-not-allowed disabled:opacity-60"
+                        :disabled="refreshing"
+                        title="Refresh Search Console connection"
+                        @click="refresh"
+                    >
+                        <span class="sr-only">Refresh Search Console connection</span>
+                        <svg
+                            aria-hidden="true"
+                            class="h-3.5 w-3.5"
+                            :class="{ 'animate-spin': refreshing }"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                        >
+                            <path d="M21 12a9 9 0 0 0-15.5-6.3L3 8" />
+                            <path d="M3 3v5h5" />
+                            <path d="M3 12a9 9 0 0 0 15.5 6.3L21 16" />
+                            <path d="M16 16h5v5" />
+                        </svg>
+                    </button>
+                    <ConnectorStatusBadge :connected="connected" />
+                </div>
                 <p v-if="lastError" class="mt-2 text-xs text-red-600">{{ lastError }}</p>
             </div>
         </div>
@@ -180,15 +208,6 @@ const loadPerformance = async () => {
                     >
                         Connect Google
                     </a>
-                    <button
-                        v-if="connected"
-                        type="button"
-                        class="inline-flex cursor-pointer items-center justify-center rounded-md border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
-                        :disabled="refreshing"
-                        @click="refresh"
-                    >
-                        {{ refreshing ? "Refreshing..." : "Refresh" }}
-                    </button>
                     <button
                         v-if="connected"
                         type="button"

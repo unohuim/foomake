@@ -617,6 +617,12 @@ class CustomerController extends Controller
                 'active' => $request->routeIs('profile.connectors.*'),
                 'enabled' => true,
             ] : null,
+            $user->hasRole('super-admin') ? [
+                'label' => 'Marketing',
+                'url' => route('admin.marketing.index', absolute: false),
+                'active' => $request->routeIs('admin.marketing.*'),
+                'enabled' => true,
+            ] : null,
             $user->can('workflow-manage') ? [
                 'label' => 'Workflows',
                 'url' => route('admin.workflows.index', absolute: false),

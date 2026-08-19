@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Admin\UserManagementController;
+use App\Http\Controllers\Admin\MarketingController;
 use App\Http\Controllers\Auth\EmailVerificationGraceBannerController;
 use App\Http\Controllers\BillingCheckoutController;
 use App\Http\Controllers\BillingController;
@@ -475,6 +476,8 @@ Route::middleware(['auth', EnsureEmailVerifiedOrInGracePeriod::class, EnsureTena
 
     Route::get('/admin/users', [UserManagementController::class, 'index'])
         ->name('admin.users.index');
+    Route::get('/admin/marketing', MarketingController::class)
+        ->name('admin.marketing.index');
     Route::get('/admin/users/list', [UserManagementController::class, 'list'])
         ->name('admin.users.list');
     Route::post('/admin/users/invitations', [UserManagementController::class, 'storeInvitation'])
