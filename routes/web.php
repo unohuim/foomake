@@ -478,6 +478,8 @@ Route::middleware(['auth', EnsureEmailVerifiedOrInGracePeriod::class, EnsureTena
         ->name('admin.users.index');
     Route::get('/admin/marketing', MarketingController::class)
         ->name('admin.marketing.index');
+    Route::get('/admin/marketing/search-console', [MarketingController::class, 'searchConsoleData'])
+        ->name('admin.marketing.search-console.data');
     Route::get('/admin/users/list', [UserManagementController::class, 'list'])
         ->name('admin.users.list');
     Route::post('/admin/users/invitations', [UserManagementController::class, 'storeInvitation'])

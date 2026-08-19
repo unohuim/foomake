@@ -1332,11 +1332,56 @@ it('49. super admins can view the marketing page with Search Console options', f
             ->where('searchConsole.connected', true)
             ->where('searchConsole.siteUrl', 'sc-domain:foomake.com')
             ->where('searchConsole.reportUrl', route('profile.connectors.google-search-console.report', absolute: false))
+            ->where('searchConsole.dataUrl', route('admin.marketing.search-console.data', absolute: false))
+            ->where('searchConsole.views.0.key', 'query')
             ->where('searchConsole.views.0.label', 'Query Performance')
         );
 });
 
-it('50. non super admins cannot view the marketing page', function () {
+it('50. super admins can load marketing Search Console data', function () {
+    config([
+        'services.google_search_console.client_id' => 'google-client-id',
+        'services.google_search_console.client_secret' => 'google-client-secret',
+    ]);
+
+    $tenant = ($this->makeTenant)();
+    $superAdmin = ($this->makeUser)($tenant);
+    $role = Role::query()->create(['name' => 'super-admin']);
+    $superAdmin->roles()->syncWithoutDetaching([$role->id]);
+    GoogleSearchConsoleConnection::query()->create([
+        'tenant_id' => $tenant->id,
+        'site_url' => 'sc-domain:foomake.com',
+        'scopes' => ['https://www.googleapis.com/auth/webmasters.readonly'],
+        'access_token' => 'valid-access-token',
+        'refresh_token' => 'refresh-token',
+        'token_expires_at' => now()->addHour(),
+        'status' => GoogleSearchConsoleConnection::STATUS_CONNECTED,
+        'connected_at' => now(),
+    ]);
+
+    Http::fake([
+        'https://www.googleapis.com/webmasters/v3/sites/sc-domain%3Afoomake.com/searchAnalytics/query' => Http::response([
+            'rows' => [
+                [
+                    'keys' => ['recipe management software'],
+                    'clicks' => 1,
+                    'impressions' => 88,
+                    'ctr' => 0.0114,
+                    'position' => 57.38,
+                ],
+            ],
+        ], 200),
+    ]);
+
+    $this->actingAs($superAdmin)
+        ->getJson(route('admin.marketing.search-console.data', ['view' => 'query']))
+        ->assertOk()
+        ->assertJsonPath('data.view', 'query')
+        ->assertJsonPath('data.rows.0.query', 'recipe management software')
+        ->assertJsonPath('data.rows.0.impressions', 88);
+});
+
+it('51. non super admins cannot view the marketing page', function () {
     $tenant = ($this->makeTenant)();
     $admin = ($this->makeUser)($tenant);
 

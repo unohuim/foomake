@@ -1,9 +1,10 @@
 <script setup>
 import { Head } from "@inertiajs/vue3";
+import { computed, onMounted, ref } from "vue";
 
 import AuthShell from "../../layouts/AuthShell.vue";
 
-defineProps({
+const props = defineProps({
     shell: {
         type: Object,
         required: true,
@@ -12,6 +13,128 @@ defineProps({
         type: Object,
         required: true,
     },
+});
+
+const selectedView = ref("query");
+const loading = ref(false);
+const error = ref("");
+const payload = ref(null);
+
+const activeView = computed(() => props.searchConsole.views.find((view) => view.key === selectedView.value));
+
+const rows = computed(() => payload.value?.rows || []);
+
+const columns = computed(() => {
+    if (selectedView.value === "page") {
+        return [
+            { key: "page", label: "Page", align: "left" },
+            { key: "clicks", label: "Clicks", align: "right" },
+            { key: "impressions", label: "Impressions", align: "right" },
+            { key: "ctr", label: "CTR", align: "right", format: "percent" },
+            { key: "position", label: "Position", align: "right", format: "number" },
+        ];
+    }
+
+    if (selectedView.value === "query_by_page") {
+        return [
+            { key: "page", label: "Page", align: "left" },
+            { key: "query", label: "Query", align: "left" },
+            { key: "clicks", label: "Clicks", align: "right" },
+            { key: "impressions", label: "Impressions", align: "right" },
+            { key: "ctr", label: "CTR", align: "right", format: "percent" },
+            { key: "position", label: "Position", align: "right", format: "number" },
+        ];
+    }
+
+    if (selectedView.value === "comparison") {
+        return [
+            { key: "query", label: "Query", align: "left" },
+            { key: "impressions", label: "7d Impr.", align: "right" },
+            { key: "priorImpressions", label: "Prior Impr.", align: "right" },
+            { key: "impressionDelta", label: "Delta", align: "right", format: "signed" },
+            { key: "clicks", label: "7d Clicks", align: "right" },
+            { key: "priorClicks", label: "Prior Clicks", align: "right" },
+            { key: "clickDelta", label: "Delta", align: "right", format: "signed" },
+        ];
+    }
+
+    return [
+        { key: "query", label: "Query", align: "left" },
+        { key: "clicks", label: "Clicks", align: "right" },
+        { key: "impressions", label: "Impressions", align: "right" },
+        { key: "ctr", label: "CTR", align: "right", format: "percent" },
+        { key: "position", label: "Position", align: "right", format: "number" },
+    ];
+});
+
+const dateRangeLabel = computed(() => {
+    const range = payload.value?.dateRange;
+
+    if (!range) {
+        return "";
+    }
+
+    if (selectedView.value === "comparison") {
+        return `${range.current.start} to ${range.current.end} vs ${range.prior.start} to ${range.prior.end}`;
+    }
+
+    return `${range.start} to ${range.end}`;
+});
+
+const formatValue = (value, format) => {
+    if (format === "percent") {
+        return `${((Number(value) || 0) * 100).toFixed(2)}%`;
+    }
+
+    if (format === "number") {
+        return (Number(value) || 0).toFixed(2);
+    }
+
+    if (format === "signed") {
+        const number = Number(value) || 0;
+
+        return number > 0 ? `+${number}` : `${number}`;
+    }
+
+    return value || "-";
+};
+
+const selectView = async (view) => {
+    selectedView.value = view.key;
+    error.value = "";
+
+    if (view.key === "report") {
+        payload.value = null;
+        return;
+    }
+
+    loading.value = true;
+
+    try {
+        const response = await fetch(`${props.searchConsole.dataUrl}?view=${view.key}`, {
+            headers: {
+                Accept: "application/json",
+            },
+        });
+        const data = await response.json();
+
+        if (!response.ok) {
+            error.value = data.message || "Unable to load Search Console data.";
+            return;
+        }
+
+        payload.value = data.data;
+    } catch (requestError) {
+        error.value = "Unable to load Search Console data.";
+    } finally {
+        loading.value = false;
+    }
+};
+
+onMounted(() => {
+    if (props.searchConsole.connected) {
+        selectView(props.searchConsole.views.find((view) => view.key === "query") || props.searchConsole.views[0]);
+    }
 });
 </script>
 
@@ -63,14 +186,17 @@ defineProps({
                 </section>
 
                 <section v-if="searchConsole.connected" class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                    <article
+                    <button
                         v-for="view in searchConsole.views"
                         :key="view.label"
-                        class="border border-slate-200 bg-white p-4 shadow-sm"
+                        type="button"
+                        class="cursor-pointer border bg-white p-4 text-left shadow-sm transition hover:border-[#111b31] hover:shadow-md"
+                        :class="selectedView === view.key ? 'border-[#111b31] ring-1 ring-[#111b31]' : 'border-slate-200'"
+                        @click="selectView(view)"
                     >
                         <h2 class="text-sm font-semibold text-[#111b31]">{{ view.label }}</h2>
                         <p class="mt-1 text-xs leading-5 text-slate-600">{{ view.description }}</p>
-                    </article>
+                    </button>
                 </section>
 
                 <section v-if="searchConsole.connected" class="flex flex-wrap gap-2">
@@ -80,12 +206,60 @@ defineProps({
                     >
                         Download Report
                     </a>
-                    <a
-                        :href="`${searchConsole.performanceUrl}?days=28`"
-                        class="inline-flex cursor-pointer items-center justify-center rounded-md border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
-                    >
-                        View Query JSON
-                    </a>
+                </section>
+
+                <section v-if="searchConsole.connected" class="border border-slate-200 bg-white shadow-sm">
+                    <div class="border-b border-slate-200 px-4 py-3">
+                        <h2 class="text-sm font-semibold text-[#111b31]">{{ activeView?.label || "Search Console Data" }}</h2>
+                        <p class="mt-1 text-xs text-slate-500">
+                            {{ selectedView === "report" ? "Download the markdown report above." : dateRangeLabel || "Select a view to load data." }}
+                        </p>
+                    </div>
+
+                    <div v-if="loading" class="px-4 py-6 text-sm text-slate-500">
+                        Loading Search Console data...
+                    </div>
+
+                    <div v-else-if="error" class="px-4 py-4 text-sm text-red-600">
+                        {{ error }}
+                    </div>
+
+                    <div v-else-if="selectedView === 'report'" class="px-4 py-4 text-sm text-slate-600">
+                        The report download includes summary, analysis, recommendations, and query detail.
+                    </div>
+
+                    <div v-else-if="rows.length === 0" class="px-4 py-6 text-sm text-slate-500">
+                        Select a view to load rows.
+                    </div>
+
+                    <div v-else class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-slate-200 text-xs">
+                            <thead class="bg-slate-50 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                                <tr>
+                                    <th
+                                        v-for="column in columns"
+                                        :key="column.key"
+                                        class="px-3 py-2"
+                                        :class="column.align === 'right' ? 'text-right' : 'text-left'"
+                                    >
+                                        {{ column.label }}
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100 text-slate-700">
+                                <tr v-for="(row, index) in rows" :key="`${selectedView}-${index}`">
+                                    <td
+                                        v-for="column in columns"
+                                        :key="`${index}-${column.key}`"
+                                        class="max-w-[22rem] px-3 py-2"
+                                        :class="column.align === 'right' ? 'text-right tabular-nums' : 'truncate text-left'"
+                                    >
+                                        {{ formatValue(row[column.key], column.format) }}
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
                 </section>
             </div>
         </div>

@@ -3,9 +3,12 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Integrations\GoogleSearchConsole\GoogleSearchConsoleAdapter;
+use App\Integrations\GoogleSearchConsole\GoogleSearchConsoleException;
 use App\Models\GoogleSearchConsoleConnection;
 use App\Models\User;
 use App\Navigation\NavigationEligibility;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -54,10 +57,58 @@ class MarketingController extends Controller
                 'lastError' => $connection?->last_error,
                 'connectorsUrl' => route('profile.connectors.index', absolute: false),
                 'reportUrl' => route('profile.connectors.google-search-console.report', absolute: false),
-                'performanceUrl' => route('profile.connectors.google-search-console.performance', absolute: false),
+                'dataUrl' => route('admin.marketing.search-console.data', absolute: false),
                 'views' => $this->searchConsoleViews(),
             ],
         ]);
+    }
+
+    /**
+     * Return Search Console rows for the selected marketing view.
+     */
+    public function searchConsoleData(Request $request, GoogleSearchConsoleAdapter $client): JsonResponse
+    {
+        /** @var User $user */
+        $user = $request->user();
+
+        abort_unless($user->hasRole('super-admin'), 403);
+
+        $connection = GoogleSearchConsoleConnection::query()
+            ->where('tenant_id', $user->tenant_id)
+            ->first();
+
+        if (! $connection?->isConnected()) {
+            return response()->json([
+                'message' => 'Google Search Console is not connected.',
+            ], 409);
+        }
+
+        $view = (string) $request->query('view', 'query');
+
+        try {
+            return match ($view) {
+                'page' => response()->json([
+                    'data' => $this->performancePayload($client, $connection, ['page'], 'page'),
+                ]),
+                'query_by_page' => response()->json([
+                    'data' => $this->performancePayload($client, $connection, ['page', 'query'], 'query_by_page'),
+                ]),
+                'comparison' => response()->json([
+                    'data' => $this->comparisonPayload($client, $connection),
+                ]),
+                default => response()->json([
+                    'data' => $this->performancePayload($client, $connection, ['query'], 'query'),
+                ]),
+            };
+        } catch (GoogleSearchConsoleException $exception) {
+            $connection->forceFill([
+                'last_error' => $exception->getMessage(),
+            ])->save();
+
+            return response()->json([
+                'message' => $exception->getMessage(),
+            ], 422);
+        }
     }
 
     /**
@@ -278,25 +329,133 @@ class MarketingController extends Controller
     {
         return [
             [
+                'key' => 'query',
                 'label' => 'Query Performance',
                 'description' => 'Top search queries by clicks, impressions, CTR, and average position.',
             ],
             [
+                'key' => 'page',
                 'label' => 'Page Performance',
                 'description' => 'Landing pages receiving organic search impressions and clicks.',
             ],
             [
+                'key' => 'query_by_page',
                 'label' => 'Query By Page',
                 'description' => 'Which queries are driving impressions to each marketing URL.',
             ],
             [
+                'key' => 'comparison',
                 'label' => 'Period Comparison',
                 'description' => 'Compare last 7 days against 28-day pace and recent 24-hour movement.',
             ],
             [
+                'key' => 'report',
                 'label' => 'Markdown Report',
                 'description' => 'Download the current Search Console analysis and recommendations.',
             ],
         ];
+    }
+
+    /**
+     * Build a normalized Search Console performance payload.
+     *
+     * @param array<int, string> $dimensions
+     * @return array<string, mixed>
+     */
+    private function performancePayload(
+        GoogleSearchConsoleAdapter $client,
+        GoogleSearchConsoleConnection $connection,
+        array $dimensions,
+        string $view
+    ): array {
+        $startDate = now()->subDays(28);
+        $endDate = now()->subDay();
+        $performance = $client->searchAnalytics($connection, $startDate, $endDate, $dimensions, 50);
+
+        return [
+            'view' => $view,
+            'dateRange' => [
+                'start' => $startDate->toDateString(),
+                'end' => $endDate->toDateString(),
+            ],
+            'rows' => collect($performance['rows'] ?? [])
+                ->map(fn (array $row): array => $this->searchConsoleRow($row, $dimensions))
+                ->values()
+                ->all(),
+        ];
+    }
+
+    /**
+     * Build a current-period comparison payload.
+     *
+     * @return array<string, mixed>
+     */
+    private function comparisonPayload(
+        GoogleSearchConsoleAdapter $client,
+        GoogleSearchConsoleConnection $connection
+    ): array {
+        $currentStart = now()->subDays(7);
+        $currentEnd = now()->subDay();
+        $priorStart = now()->subDays(14);
+        $priorEnd = now()->subDays(8);
+        $current = $client->searchAnalytics($connection, $currentStart, $currentEnd, ['query'], 50);
+        $prior = $client->searchAnalytics($connection, $priorStart, $priorEnd, ['query'], 50);
+        $priorByQuery = collect($prior['rows'] ?? [])->keyBy(fn (array $row): string => (string) data_get($row, 'keys.0', ''));
+
+        return [
+            'view' => 'comparison',
+            'dateRange' => [
+                'current' => [
+                    'start' => $currentStart->toDateString(),
+                    'end' => $currentEnd->toDateString(),
+                ],
+                'prior' => [
+                    'start' => $priorStart->toDateString(),
+                    'end' => $priorEnd->toDateString(),
+                ],
+            ],
+            'rows' => collect($current['rows'] ?? [])
+                ->map(function (array $row) use ($priorByQuery): array {
+                    $query = (string) data_get($row, 'keys.0', '');
+                    $priorRow = $priorByQuery->get($query, []);
+
+                    return [
+                        'query' => $query,
+                        'clicks' => (int) ($row['clicks'] ?? 0),
+                        'priorClicks' => (int) ($priorRow['clicks'] ?? 0),
+                        'clickDelta' => (int) ($row['clicks'] ?? 0) - (int) ($priorRow['clicks'] ?? 0),
+                        'impressions' => (int) ($row['impressions'] ?? 0),
+                        'priorImpressions' => (int) ($priorRow['impressions'] ?? 0),
+                        'impressionDelta' => (int) ($row['impressions'] ?? 0) - (int) ($priorRow['impressions'] ?? 0),
+                        'ctr' => (float) ($row['ctr'] ?? 0),
+                        'position' => (float) ($row['position'] ?? 0),
+                    ];
+                })
+                ->values()
+                ->all(),
+        ];
+    }
+
+    /**
+     * Normalize a Search Console row for UI rendering.
+     *
+     * @param array<string, mixed> $row
+     * @param array<int, string> $dimensions
+     * @return array<string, mixed>
+     */
+    private function searchConsoleRow(array $row, array $dimensions): array
+    {
+        $normalized = [
+            'clicks' => (int) ($row['clicks'] ?? 0),
+            'impressions' => (int) ($row['impressions'] ?? 0),
+            'ctr' => (float) ($row['ctr'] ?? 0),
+            'position' => (float) ($row['position'] ?? 0),
+        ];
+
+        foreach ($dimensions as $index => $dimension) {
+            $normalized[$dimension] = (string) data_get($row, 'keys.' . $index, '');
+        }
+
+        return $normalized;
     }
 }

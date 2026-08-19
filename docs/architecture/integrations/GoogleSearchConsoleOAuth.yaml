@@ -41,6 +41,7 @@ public_interface:
   - profile.connectors.google-search-console.refresh
   - profile.connectors.google-search-console.performance
   - profile.connectors.google-search-console.report
+  - admin.marketing.search-console.data
   - GoogleSearchConsoleAdapter::authorizationUrl()
   - GoogleSearchConsoleAdapter::exchangeCode()
   - GoogleSearchConsoleAdapter::sites()
