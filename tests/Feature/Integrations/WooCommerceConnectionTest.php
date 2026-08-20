@@ -1335,6 +1335,8 @@ it('49. super admins can view the marketing page with Search Console options', f
             ->where('searchConsole.dataUrl', route('admin.marketing.search-console.data', absolute: false))
             ->where('searchConsole.views.0.key', 'query')
             ->where('searchConsole.views.0.label', 'Query Performance')
+            ->where('searchConsole.timeframes.0.key', '24h')
+            ->where('searchConsole.timeframes.2.key', '28d')
         );
 });
 
@@ -1374,9 +1376,10 @@ it('50. super admins can load marketing Search Console data', function () {
     ]);
 
     $this->actingAs($superAdmin)
-        ->getJson(route('admin.marketing.search-console.data', ['view' => 'query']))
+        ->getJson(route('admin.marketing.search-console.data', ['view' => 'query', 'timeframe' => '7d']))
         ->assertOk()
         ->assertJsonPath('data.view', 'query')
+        ->assertJsonPath('data.timeframe.key', '7d')
         ->assertJsonPath('data.rows.0.query', 'recipe management software')
         ->assertJsonPath('data.rows.0.impressions', 88);
 });

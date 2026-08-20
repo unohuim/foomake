@@ -59,6 +59,7 @@ class MarketingController extends Controller
                 'reportUrl' => route('profile.connectors.google-search-console.report', absolute: false),
                 'dataUrl' => route('admin.marketing.search-console.data', absolute: false),
                 'views' => $this->searchConsoleViews(),
+                'timeframes' => $this->searchConsoleTimeframes(),
             ],
         ]);
     }
@@ -84,20 +85,21 @@ class MarketingController extends Controller
         }
 
         $view = (string) $request->query('view', 'query');
+        $timeframe = $this->searchConsoleTimeframe((string) $request->query('timeframe', '28d'));
 
         try {
             return match ($view) {
                 'page' => response()->json([
-                    'data' => $this->performancePayload($client, $connection, ['page'], 'page'),
+                    'data' => $this->performancePayload($client, $connection, ['page'], 'page', $timeframe),
                 ]),
                 'query_by_page' => response()->json([
-                    'data' => $this->performancePayload($client, $connection, ['page', 'query'], 'query_by_page'),
+                    'data' => $this->performancePayload($client, $connection, ['page', 'query'], 'query_by_page', $timeframe),
                 ]),
                 'comparison' => response()->json([
-                    'data' => $this->comparisonPayload($client, $connection),
+                    'data' => $this->comparisonPayload($client, $connection, $timeframe),
                 ]),
                 default => response()->json([
-                    'data' => $this->performancePayload($client, $connection, ['query'], 'query'),
+                    'data' => $this->performancePayload($client, $connection, ['query'], 'query', $timeframe),
                 ]),
             };
         } catch (GoogleSearchConsoleException $exception) {
@@ -366,14 +368,18 @@ class MarketingController extends Controller
         GoogleSearchConsoleAdapter $client,
         GoogleSearchConsoleConnection $connection,
         array $dimensions,
-        string $view
+        string $view,
+        array $timeframe
     ): array {
-        $startDate = now()->subDays(28);
-        $endDate = now()->subDay();
+        $startDate = now()->subDays((int) $timeframe['days']);
+        $endDate = $timeframe['key'] === '24h'
+            ? now()
+            : now()->subDay();
         $performance = $client->searchAnalytics($connection, $startDate, $endDate, $dimensions, 50);
 
         return [
             'view' => $view,
+            'timeframe' => $timeframe,
             'dateRange' => [
                 'start' => $startDate->toDateString(),
                 'end' => $endDate->toDateString(),
@@ -392,18 +398,25 @@ class MarketingController extends Controller
      */
     private function comparisonPayload(
         GoogleSearchConsoleAdapter $client,
-        GoogleSearchConsoleConnection $connection
+        GoogleSearchConsoleConnection $connection,
+        array $timeframe
     ): array {
-        $currentStart = now()->subDays(7);
-        $currentEnd = now()->subDay();
-        $priorStart = now()->subDays(14);
-        $priorEnd = now()->subDays(8);
+        $days = (int) $timeframe['days'];
+        $currentStart = now()->subDays($days);
+        $currentEnd = $timeframe['key'] === '24h'
+            ? now()
+            : now()->subDay();
+        $priorStart = now()->subDays($days * 2);
+        $priorEnd = $timeframe['key'] === '24h'
+            ? now()->subDay()
+            : now()->subDays($days + 1);
         $current = $client->searchAnalytics($connection, $currentStart, $currentEnd, ['query'], 50);
         $prior = $client->searchAnalytics($connection, $priorStart, $priorEnd, ['query'], 50);
         $priorByQuery = collect($prior['rows'] ?? [])->keyBy(fn (array $row): string => (string) data_get($row, 'keys.0', ''));
 
         return [
             'view' => 'comparison',
+            'timeframe' => $timeframe,
             'dateRange' => [
                 'current' => [
                     'start' => $currentStart->toDateString(),
@@ -457,5 +470,56 @@ class MarketingController extends Controller
         }
 
         return $normalized;
+    }
+
+    /**
+     * Return available Search Console timeframes.
+     *
+     * @return array<int, array<string, int|string>>
+     */
+    private function searchConsoleTimeframes(): array
+    {
+        return [
+            [
+                'key' => '24h',
+                'label' => '24 Hours',
+                'days' => 1,
+            ],
+            [
+                'key' => '7d',
+                'label' => '7 Days',
+                'days' => 7,
+            ],
+            [
+                'key' => '28d',
+                'label' => '28 Days',
+                'days' => 28,
+            ],
+            [
+                'key' => '90d',
+                'label' => '90 Days',
+                'days' => 90,
+            ],
+        ];
+    }
+
+    /**
+     * Return a safe Search Console timeframe from request input.
+     *
+     * @return array<string, int|string>
+     */
+    private function searchConsoleTimeframe(string $key): array
+    {
+        foreach ($this->searchConsoleTimeframes() as $timeframe) {
+            if ($timeframe['key'] === $key) {
+                return $timeframe;
+            }
+        }
+
+        return [
+            'key' => '28d',
+            'label' => '28 Days',
+            'days' => 28,
+        ];
     }
 }

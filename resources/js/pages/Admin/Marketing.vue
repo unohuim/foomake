@@ -17,6 +17,7 @@ const props = defineProps({
 });
 
 const selectedView = ref("query");
+const selectedTimeframe = ref("28d");
 const loading = ref(false);
 const error = ref("");
 const payload = ref(null);
@@ -107,7 +108,13 @@ const formatValue = (value, format) => {
     return value || "-";
 };
 
-const selectView = async (view) => {
+const loadSelectedView = async () => {
+    const view = activeView.value;
+
+    if (!view) {
+        return;
+    }
+
     selectedView.value = view.key;
     error.value = "";
 
@@ -119,7 +126,11 @@ const selectView = async (view) => {
     loading.value = true;
 
     try {
-        const response = await fetch(`${props.searchConsole.dataUrl}?view=${view.key}`, {
+        const params = new URLSearchParams({
+            view: view.key,
+            timeframe: selectedTimeframe.value,
+        });
+        const response = await fetch(`${props.searchConsole.dataUrl}?${params.toString()}`, {
             headers: {
                 Accept: "application/json",
             },
@@ -139,9 +150,20 @@ const selectView = async (view) => {
     }
 };
 
+const selectView = (view) => {
+    selectedView.value = view.key;
+    loadSelectedView();
+};
+
+const selectTimeframe = (event) => {
+    selectedTimeframe.value = event.target.value;
+    loadSelectedView();
+};
+
 onMounted(() => {
     if (props.searchConsole.connected) {
-        selectView(props.searchConsole.views.find((view) => view.key === "query") || props.searchConsole.views[0]);
+        selectedView.value = (props.searchConsole.views.find((view) => view.key === "query") || props.searchConsole.views[0]).key;
+        loadSelectedView();
     }
 });
 </script>
@@ -201,6 +223,21 @@ onMounted(() => {
                         </div>
 
                         <div class="flex shrink-0 items-center gap-2">
+                            <label class="sr-only" for="marketing-timeframe">Timeframe</label>
+                            <select
+                                id="marketing-timeframe"
+                                class="h-10 cursor-pointer border border-slate-300 bg-white px-3 text-sm font-semibold text-[#111b31] shadow-sm transition hover:border-[#111b31]"
+                                :value="selectedTimeframe"
+                                @change="selectTimeframe"
+                            >
+                                <option
+                                    v-for="timeframe in searchConsole.timeframes"
+                                    :key="timeframe.key"
+                                    :value="timeframe.key"
+                                >
+                                    {{ timeframe.label }}
+                                </option>
+                            </select>
                             <MarketingViewDropdown
                                 v-model="selectedView"
                                 :views="searchConsole.views"
