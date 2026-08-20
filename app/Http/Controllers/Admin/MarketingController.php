@@ -371,10 +371,10 @@ class MarketingController extends Controller
         string $view,
         array $timeframe
     ): array {
-        $startDate = $timeframe['key'] === '24h'
-            ? now()->subDay()
-            : now()->subDays((int) $timeframe['days']);
-        $endDate = now()->subDay();
+        $startDate = now()->subDays((int) $timeframe['days']);
+        $endDate = $timeframe['key'] === '24h'
+            ? now()
+            : now()->subDay();
         $performance = $client->searchAnalytics($connection, $startDate, $endDate, $dimensions, 50);
 
         return [
@@ -402,12 +402,14 @@ class MarketingController extends Controller
         array $timeframe
     ): array {
         $days = (int) $timeframe['days'];
-        $currentStart = $timeframe['key'] === '24h'
-            ? now()->subDay()
-            : now()->subDays($days);
-        $currentEnd = now()->subDay();
+        $currentStart = now()->subDays($days);
+        $currentEnd = $timeframe['key'] === '24h'
+            ? now()
+            : now()->subDay();
         $priorStart = now()->subDays($days * 2);
-        $priorEnd = now()->subDays($days + 1);
+        $priorEnd = $timeframe['key'] === '24h'
+            ? now()->subDay()
+            : now()->subDays($days + 1);
         $current = $client->searchAnalytics($connection, $currentStart, $currentEnd, ['query'], 50);
         $prior = $client->searchAnalytics($connection, $priorStart, $priorEnd, ['query'], 50);
         $priorByQuery = collect($prior['rows'] ?? [])->keyBy(fn (array $row): string => (string) data_get($row, 'keys.0', ''));
