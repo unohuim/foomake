@@ -3,6 +3,7 @@ import { Head } from "@inertiajs/vue3";
 import { computed, onMounted, ref } from "vue";
 
 import AuthShell from "../../layouts/AuthShell.vue";
+import MarketingViewDropdown from "../../components/MarketingViewDropdown.vue";
 
 const props = defineProps({
     shell: {
@@ -23,6 +24,13 @@ const payload = ref(null);
 const activeView = computed(() => props.searchConsole.views.find((view) => view.key === selectedView.value));
 
 const rows = computed(() => payload.value?.rows || []);
+const tableStatusText = computed(() => {
+    if (selectedView.value === "report") {
+        return "The markdown report includes summary, analysis, recommendations, and query detail.";
+    }
+
+    return dateRangeLabel.value || "Select a view to load data.";
+});
 
 const columns = computed(() => {
     if (selectedView.value === "page") {
@@ -142,14 +150,14 @@ onMounted(() => {
     <Head title="Marketing" />
 
     <AuthShell :shell="shell" title="Marketing">
-        <div class="px-0 pb-10 pt-3 md:px-4 lg:px-8">
-            <div class="mx-auto w-full max-w-6xl space-y-5 px-4 sm:px-5 md:px-0">
-                <section class="border-b border-slate-200 pb-4">
-                    <div class="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+        <div class="flex h-[calc(100vh-4rem)] flex-col px-0 pt-3 md:px-4 lg:px-8">
+            <div class="mx-auto flex min-h-0 w-full max-w-6xl flex-1 flex-col gap-3 px-4 sm:px-5 md:px-0">
+                <section class="shrink-0 border-b border-slate-200 pb-3">
+                    <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                         <div>
                             <p class="text-[11px] font-semibold uppercase tracking-widest text-slate-500">Admin</p>
-                            <h1 class="mt-1 text-2xl font-semibold text-[#111b31]">Marketing</h1>
-                            <p class="mt-1 max-w-2xl text-sm text-slate-600">
+                            <h1 class="mt-1 text-xl font-semibold text-[#111b31]">Marketing</h1>
+                            <p class="mt-1 max-w-2xl text-xs text-slate-600">
                                 Search visibility, keyword demand, and content opportunities for FooMake.
                             </p>
                         </div>
@@ -163,7 +171,7 @@ onMounted(() => {
                     </div>
                 </section>
 
-                <section class="grid gap-3 md:grid-cols-[1fr,auto] md:items-center">
+                <section class="grid shrink-0 gap-3 md:grid-cols-[1fr,auto] md:items-center">
                     <div>
                         <p class="text-xs font-semibold uppercase tracking-widest text-slate-500">Google Search Console</p>
                         <p class="mt-1 text-sm font-semibold text-[#111b31]">
@@ -185,35 +193,41 @@ onMounted(() => {
                     </div>
                 </section>
 
-                <section v-if="searchConsole.connected" class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                    <button
-                        v-for="view in searchConsole.views"
-                        :key="view.label"
-                        type="button"
-                        class="cursor-pointer border bg-white p-4 text-left shadow-sm transition hover:border-[#111b31] hover:shadow-md"
-                        :class="selectedView === view.key ? 'border-[#111b31] ring-1 ring-[#111b31]' : 'border-slate-200'"
-                        @click="selectView(view)"
-                    >
-                        <h2 class="text-sm font-semibold text-[#111b31]">{{ view.label }}</h2>
-                        <p class="mt-1 text-xs leading-5 text-slate-600">{{ view.description }}</p>
-                    </button>
-                </section>
+                <section v-if="searchConsole.connected" class="flex min-h-0 flex-1 flex-col border border-slate-200 bg-white shadow-sm">
+                    <div class="z-20 flex shrink-0 flex-col gap-3 border-b border-slate-200 bg-white px-3 py-3 md:flex-row md:items-center md:justify-between">
+                        <div class="min-w-0">
+                            <h2 class="text-sm font-semibold text-[#111b31]">{{ activeView?.label || "Search Console Data" }}</h2>
+                            <p class="mt-1 truncate text-xs text-slate-500">{{ tableStatusText }}</p>
+                        </div>
 
-                <section v-if="searchConsole.connected" class="flex flex-wrap gap-2">
-                    <a
-                        :href="searchConsole.reportUrl"
-                        class="inline-flex cursor-pointer items-center justify-center rounded-md bg-[#111b31] px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-[#1d2a47]"
-                    >
-                        Download Report
-                    </a>
-                </section>
-
-                <section v-if="searchConsole.connected" class="border border-slate-200 bg-white shadow-sm">
-                    <div class="border-b border-slate-200 px-4 py-3">
-                        <h2 class="text-sm font-semibold text-[#111b31]">{{ activeView?.label || "Search Console Data" }}</h2>
-                        <p class="mt-1 text-xs text-slate-500">
-                            {{ selectedView === "report" ? "Download the markdown report above." : dateRangeLabel || "Select a view to load data." }}
-                        </p>
+                        <div class="flex shrink-0 items-center gap-2">
+                            <MarketingViewDropdown
+                                v-model="selectedView"
+                                :views="searchConsole.views"
+                                @select="selectView"
+                            />
+                            <a
+                                :href="searchConsole.reportUrl"
+                                class="inline-flex h-10 w-10 cursor-pointer items-center justify-center border border-slate-300 bg-white text-slate-700 transition hover:border-[#111b31] hover:text-[#111b31]"
+                                title="Download markdown report"
+                            >
+                                <span class="sr-only">Download markdown report</span>
+                                <svg
+                                    class="h-4 w-4"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    stroke-width="2"
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                    aria-hidden="true"
+                                >
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                    <path d="M7 10l5 5 5-5" />
+                                    <path d="M12 15V3" />
+                                </svg>
+                            </a>
+                        </div>
                     </div>
 
                     <div v-if="loading" class="px-4 py-6 text-sm text-slate-500">
@@ -225,16 +239,16 @@ onMounted(() => {
                     </div>
 
                     <div v-else-if="selectedView === 'report'" class="px-4 py-4 text-sm text-slate-600">
-                        The report download includes summary, analysis, recommendations, and query detail.
+                        Use the download icon in the table header to save the markdown report.
                     </div>
 
                     <div v-else-if="rows.length === 0" class="px-4 py-6 text-sm text-slate-500">
                         Select a view to load rows.
                     </div>
 
-                    <div v-else class="overflow-x-auto">
+                    <div v-else class="min-h-0 flex-1 overflow-auto">
                         <table class="min-w-full divide-y divide-slate-200 text-xs">
-                            <thead class="bg-slate-50 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                            <thead class="sticky top-0 z-10 bg-slate-50 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
                                 <tr>
                                     <th
                                         v-for="column in columns"

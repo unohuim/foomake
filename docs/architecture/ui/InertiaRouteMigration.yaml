@@ -60,6 +60,7 @@ public_interface:
   - resources/js/components/ResourceImportDrawer.vue
   - resources/js/components/DesktopSidebar.vue
   - resources/js/components/MobileBottomNav.vue
+  - resources/js/components/MarketingViewDropdown.vue
   - resources/js/components/DashboardTodo.vue
   - resources/js/components/connectors/WooCommerceConnectorCard.vue
   - resources/js/components/connectors/GoogleSearchConsoleConnectorCard.vue

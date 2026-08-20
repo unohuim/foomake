@@ -652,6 +652,7 @@ Unmigrated Blade routes, backend domain behavior, authorization, validation, ten
 - `resources/js/components/BaseSlideUpDrawer.vue`
 - `resources/js/components/DesktopSidebar.vue`
 - `resources/js/components/InfiniteHorizontalNavRail.vue`
+- `resources/js/components/MarketingViewDropdown.vue`
 - `resources/js/components/MobileBottomNav.vue`
 - `resources/js/components/NavIcon.vue`
 - `resources/js/components/ResourceIndex.vue`
