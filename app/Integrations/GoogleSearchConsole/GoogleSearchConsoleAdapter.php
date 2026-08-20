@@ -82,7 +82,8 @@ class GoogleSearchConsoleAdapter
         CarbonInterface $endDate,
         array $dimensions = ['query'],
         int $rowLimit = 25,
-        ?string $siteUrl = null
+        ?string $siteUrl = null,
+        ?string $dataState = null
     ): array {
         $propertyUrl = $siteUrl ?: $connection->site_url ?: config('services.google_search_console.site_url');
 
@@ -90,14 +91,20 @@ class GoogleSearchConsoleAdapter
             throw new GoogleSearchConsoleException('Set a Search Console property URL before fetching performance data.');
         }
 
+        $payload = [
+            'startDate' => $startDate->toDateString(),
+            'endDate' => $endDate->toDateString(),
+            'dimensions' => array_values($dimensions),
+            'rowLimit' => $rowLimit,
+        ];
+
+        if ($dataState !== null) {
+            $payload['dataState'] = $dataState;
+        }
+
         $response = Http::withToken($this->accessToken($connection))
             ->acceptJson()
-            ->post($this->baseUrl() . '/sites/' . rawurlencode($propertyUrl) . '/searchAnalytics/query', [
-                'startDate' => $startDate->toDateString(),
-                'endDate' => $endDate->toDateString(),
-                'dimensions' => array_values($dimensions),
-                'rowLimit' => $rowLimit,
-            ]);
+            ->post($this->baseUrl() . '/sites/' . rawurlencode($propertyUrl) . '/searchAnalytics/query', $payload);
 
         if (! $response->successful()) {
             throw new GoogleSearchConsoleException($this->errorMessage($response->json(), 'Unable to fetch Search Console performance.'));

@@ -1384,6 +1384,55 @@ it('50. super admins can load marketing Search Console data', function () {
         ->assertJsonPath('data.rows.0.impressions', 88);
 });
 
+it('50b. marketing 24 hour Search Console data uses hourly API state', function () {
+    config([
+        'services.google_search_console.client_id' => 'google-client-id',
+        'services.google_search_console.client_secret' => 'google-client-secret',
+    ]);
+
+    $tenant = ($this->makeTenant)();
+    $superAdmin = ($this->makeUser)($tenant);
+    $role = Role::query()->create(['name' => 'super-admin']);
+    $superAdmin->roles()->syncWithoutDetaching([$role->id]);
+    GoogleSearchConsoleConnection::query()->create([
+        'tenant_id' => $tenant->id,
+        'site_url' => 'sc-domain:foomake.com',
+        'scopes' => ['https://www.googleapis.com/auth/webmasters.readonly'],
+        'access_token' => 'valid-access-token',
+        'refresh_token' => 'refresh-token',
+        'token_expires_at' => now()->addHour(),
+        'status' => GoogleSearchConsoleConnection::STATUS_CONNECTED,
+        'connected_at' => now(),
+    ]);
+
+    Http::fake([
+        'https://www.googleapis.com/webmasters/v3/sites/sc-domain%3Afoomake.com/searchAnalytics/query' => Http::response([
+            'rows' => [
+                [
+                    'keys' => ['2026-08-20T08:00:00-07:00', 'recipe management software'],
+                    'clicks' => 1,
+                    'impressions' => 8,
+                    'ctr' => 0.125,
+                    'position' => 51.2,
+                ],
+            ],
+        ], 200),
+    ]);
+
+    $this->actingAs($superAdmin)
+        ->getJson(route('admin.marketing.search-console.data', ['view' => 'query', 'timeframe' => '24h']))
+        ->assertOk()
+        ->assertJsonPath('data.timeframe.key', '24h')
+        ->assertJsonPath('data.rows.0.hour', '2026-08-20T08:00:00-07:00')
+        ->assertJsonPath('data.rows.0.query', 'recipe management software');
+
+    Http::assertSent(function ($request): bool {
+        return $request->url() === 'https://www.googleapis.com/webmasters/v3/sites/sc-domain%3Afoomake.com/searchAnalytics/query'
+            && $request->data()['dataState'] === 'hourly_all'
+            && $request->data()['dimensions'] === ['hour', 'query'];
+    });
+});
+
 it('51. non super admins cannot view the marketing page', function () {
     $tenant = ($this->makeTenant)();
     $admin = ($this->makeUser)($tenant);

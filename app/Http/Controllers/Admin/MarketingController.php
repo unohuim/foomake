@@ -375,7 +375,15 @@ class MarketingController extends Controller
         $endDate = $timeframe['key'] === '24h'
             ? now()
             : now()->subDay();
-        $performance = $client->searchAnalytics($connection, $startDate, $endDate, $dimensions, 50);
+        $requestDimensions = $this->searchConsoleDimensions($dimensions, $timeframe);
+        $performance = $client->searchAnalytics(
+            $connection,
+            $startDate,
+            $endDate,
+            $requestDimensions,
+            250,
+            dataState: $this->searchConsoleDataState($timeframe)
+        );
 
         return [
             'view' => $view,
@@ -385,9 +393,10 @@ class MarketingController extends Controller
                 'end' => $endDate->toDateString(),
             ],
             'rows' => collect($performance['rows'] ?? [])
-                ->map(fn (array $row): array => $this->searchConsoleRow($row, $dimensions))
+                ->map(fn (array $row): array => $this->searchConsoleRow($row, $requestDimensions))
                 ->values()
                 ->all(),
+            'metadata' => $performance['metadata'] ?? [],
         ];
     }
 
@@ -410,9 +419,26 @@ class MarketingController extends Controller
         $priorEnd = $timeframe['key'] === '24h'
             ? now()->subDay()
             : now()->subDays($days + 1);
-        $current = $client->searchAnalytics($connection, $currentStart, $currentEnd, ['query'], 50);
-        $prior = $client->searchAnalytics($connection, $priorStart, $priorEnd, ['query'], 50);
-        $priorByQuery = collect($prior['rows'] ?? [])->keyBy(fn (array $row): string => (string) data_get($row, 'keys.0', ''));
+        $dimensions = $this->searchConsoleDimensions(['query'], $timeframe);
+        $current = $client->searchAnalytics(
+            $connection,
+            $currentStart,
+            $currentEnd,
+            $dimensions,
+            250,
+            dataState: $this->searchConsoleDataState($timeframe)
+        );
+        $prior = $client->searchAnalytics(
+            $connection,
+            $priorStart,
+            $priorEnd,
+            $dimensions,
+            250,
+            dataState: $this->searchConsoleDataState($timeframe)
+        );
+        $priorByQuery = collect($prior['rows'] ?? [])
+            ->map(fn (array $row): array => $this->searchConsoleRow($row, $dimensions))
+            ->keyBy(fn (array $row): string => (string) ($row['query'] ?? ''));
 
         return [
             'view' => 'comparison',
@@ -428,8 +454,9 @@ class MarketingController extends Controller
                 ],
             ],
             'rows' => collect($current['rows'] ?? [])
+                ->map(fn (array $row): array => $this->searchConsoleRow($row, $dimensions))
                 ->map(function (array $row) use ($priorByQuery): array {
-                    $query = (string) data_get($row, 'keys.0', '');
+                    $query = (string) ($row['query'] ?? '');
                     $priorRow = $priorByQuery->get($query, []);
 
                     return [
@@ -470,6 +497,34 @@ class MarketingController extends Controller
         }
 
         return $normalized;
+    }
+
+    /**
+     * Return request dimensions, including hour for partial hourly data.
+     *
+     * @param array<int, string> $dimensions
+     * @param array<string, int|string> $timeframe
+     * @return array<int, string>
+     */
+    private function searchConsoleDimensions(array $dimensions, array $timeframe): array
+    {
+        if ($timeframe['key'] !== '24h') {
+            return $dimensions;
+        }
+
+        return array_values(array_unique(array_merge(['hour'], $dimensions)));
+    }
+
+    /**
+     * Return the Search Console data state for the selected timeframe.
+     *
+     * @param array<string, int|string> $timeframe
+     */
+    private function searchConsoleDataState(array $timeframe): ?string
+    {
+        return $timeframe['key'] === '24h'
+            ? 'hourly_all'
+            : null;
     }
 
     /**
