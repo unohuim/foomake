@@ -21,10 +21,32 @@ const selectedTimeframe = ref("28d");
 const loading = ref(false);
 const error = ref("");
 const payload = ref(null);
+const sortKey = ref("");
+const sortDirection = ref("desc");
 
 const activeView = computed(() => props.searchConsole.views.find((view) => view.key === selectedView.value));
 
-const rows = computed(() => payload.value?.rows || []);
+const rows = computed(() => {
+    const baseRows = payload.value?.rows || [];
+
+    if (!sortKey.value) {
+        return baseRows;
+    }
+
+    return [...baseRows].sort((first, second) => {
+        const firstValue = first[sortKey.value];
+        const secondValue = second[sortKey.value];
+        const firstNumber = Number(firstValue);
+        const secondNumber = Number(secondValue);
+        const direction = sortDirection.value === "asc" ? 1 : -1;
+
+        if (!Number.isNaN(firstNumber) && !Number.isNaN(secondNumber)) {
+            return (firstNumber - secondNumber) * direction;
+        }
+
+        return String(firstValue || "").localeCompare(String(secondValue || "")) * direction;
+    });
+});
 const tableStatusText = computed(() => {
     if (selectedView.value === "report") {
         return "The markdown report includes summary, analysis, recommendations, and query detail.";
@@ -108,6 +130,16 @@ const formatValue = (value, format) => {
     return value || "-";
 };
 
+const sortBy = (column) => {
+    if (sortKey.value === column.key) {
+        sortDirection.value = sortDirection.value === "desc" ? "asc" : "desc";
+        return;
+    }
+
+    sortKey.value = column.key;
+    sortDirection.value = "desc";
+};
+
 const loadSelectedView = async () => {
     const view = activeView.value;
 
@@ -143,6 +175,8 @@ const loadSelectedView = async () => {
         }
 
         payload.value = data.data;
+        sortKey.value = selectedView.value === "comparison" ? "impressionDelta" : "impressions";
+        sortDirection.value = "desc";
     } catch (requestError) {
         error.value = "Unable to load Search Console data.";
     } finally {
@@ -293,7 +327,18 @@ onMounted(() => {
                                         class="px-3 py-2"
                                         :class="column.align === 'right' ? 'text-right' : 'text-left'"
                                     >
-                                        {{ column.label }}
+                                        <button
+                                            type="button"
+                                            class="inline-flex cursor-pointer items-center gap-1 font-semibold uppercase tracking-wide transition hover:text-[#111b31]"
+                                            :class="column.align === 'right' ? 'justify-end' : 'justify-start'"
+                                            @click="sortBy(column)"
+                                        >
+                                            <span>{{ column.label }}</span>
+                                            <span class="inline-flex h-3 w-3 items-center justify-center text-[10px]">
+                                                <span v-if="sortKey === column.key">{{ sortDirection === "desc" ? "↓" : "↑" }}</span>
+                                                <span v-else class="text-slate-300">↕</span>
+                                            </span>
+                                        </button>
                                     </th>
                                 </tr>
                             </thead>
