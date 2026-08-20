@@ -1415,6 +1415,13 @@ it('50b. marketing 24 hour Search Console data uses hourly API state', function 
                     'ctr' => 0.125,
                     'position' => 51.2,
                 ],
+                [
+                    'keys' => ['2026-08-20T09:00:00-07:00', 'recipe management software'],
+                    'clicks' => 0,
+                    'impressions' => 3,
+                    'ctr' => 0.0,
+                    'position' => 60.0,
+                ],
             ],
         ], 200),
     ]);
@@ -1423,8 +1430,8 @@ it('50b. marketing 24 hour Search Console data uses hourly API state', function 
         ->getJson(route('admin.marketing.search-console.data', ['view' => 'query', 'timeframe' => '24h']))
         ->assertOk()
         ->assertJsonPath('data.timeframe.key', '24h')
-        ->assertJsonPath('data.rows.0.hour', '2026-08-20T08:00:00-07:00')
-        ->assertJsonPath('data.rows.0.query', 'recipe management software');
+        ->assertJsonPath('data.rows.0.query', 'recipe management software')
+        ->assertJsonPath('data.rows.0.impressions', 11);
 
     Http::assertSent(function ($request): bool {
         return $request->url() === 'https://www.googleapis.com/webmasters/v3/sites/sc-domain%3Afoomake.com/searchAnalytics/query'

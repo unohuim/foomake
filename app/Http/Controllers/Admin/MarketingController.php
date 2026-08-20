@@ -392,10 +392,7 @@ class MarketingController extends Controller
                 'start' => $startDate->toDateString(),
                 'end' => $endDate->toDateString(),
             ],
-            'rows' => collect($performance['rows'] ?? [])
-                ->map(fn (array $row): array => $this->searchConsoleRow($row, $requestDimensions))
-                ->values()
-                ->all(),
+            'rows' => $this->aggregateSearchConsoleRows($performance['rows'] ?? [], $requestDimensions, $dimensions),
             'metadata' => $performance['metadata'] ?? [],
         ];
     }
@@ -436,8 +433,7 @@ class MarketingController extends Controller
             250,
             dataState: $this->searchConsoleDataState($timeframe)
         );
-        $priorByQuery = collect($prior['rows'] ?? [])
-            ->map(fn (array $row): array => $this->searchConsoleRow($row, $dimensions))
+        $priorByQuery = collect($this->aggregateSearchConsoleRows($prior['rows'] ?? [], $dimensions, ['query']))
             ->keyBy(fn (array $row): string => (string) ($row['query'] ?? ''));
 
         return [
@@ -453,8 +449,7 @@ class MarketingController extends Controller
                     'end' => $priorEnd->toDateString(),
                 ],
             ],
-            'rows' => collect($current['rows'] ?? [])
-                ->map(fn (array $row): array => $this->searchConsoleRow($row, $dimensions))
+            'rows' => collect($this->aggregateSearchConsoleRows($current['rows'] ?? [], $dimensions, ['query']))
                 ->map(function (array $row) use ($priorByQuery): array {
                     $query = (string) ($row['query'] ?? '');
                     $priorRow = $priorByQuery->get($query, []);
@@ -497,6 +492,48 @@ class MarketingController extends Controller
         }
 
         return $normalized;
+    }
+
+    /**
+     * Aggregate Search Console rows back to visible dimensions.
+     *
+     * @param array<int, array<string, mixed>> $rows
+     * @param array<int, string> $requestDimensions
+     * @param array<int, string> $displayDimensions
+     * @return array<int, array<string, mixed>>
+     */
+    private function aggregateSearchConsoleRows(array $rows, array $requestDimensions, array $displayDimensions): array
+    {
+        return collect($rows)
+            ->map(fn (array $row): array => $this->searchConsoleRow($row, $requestDimensions))
+            ->groupBy(function (array $row) use ($displayDimensions): string {
+                return collect($displayDimensions)
+                    ->map(fn (string $dimension): string => (string) ($row[$dimension] ?? ''))
+                    ->implode("\n");
+            })
+            ->map(function ($group) use ($displayDimensions): array {
+                $first = $group->first();
+                $clicks = (int) $group->sum('clicks');
+                $impressions = (int) $group->sum('impressions');
+                $weightedPosition = (float) $group->sum(
+                    fn (array $row): float => ((float) ($row['position'] ?? 0)) * ((int) ($row['impressions'] ?? 0))
+                );
+                $row = [
+                    'clicks' => $clicks,
+                    'impressions' => $impressions,
+                    'ctr' => $impressions > 0 ? $clicks / $impressions : 0.0,
+                    'position' => $impressions > 0 ? $weightedPosition / $impressions : 0.0,
+                ];
+
+                foreach ($displayDimensions as $dimension) {
+                    $row[$dimension] = (string) ($first[$dimension] ?? '');
+                }
+
+                return $row;
+            })
+            ->sortByDesc('impressions')
+            ->values()
+            ->all();
     }
 
     /**

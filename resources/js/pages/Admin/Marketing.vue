@@ -56,13 +56,8 @@ const tableStatusText = computed(() => {
 });
 
 const columns = computed(() => {
-    const hourlyColumns = selectedTimeframe.value === "24h"
-        ? [{ key: "hour", label: "Hour", align: "left" }]
-        : [];
-
     if (selectedView.value === "page") {
         return [
-            ...hourlyColumns,
             { key: "page", label: "Page", align: "left" },
             { key: "clicks", label: "Clicks", align: "right" },
             { key: "impressions", label: "Impressions", align: "right" },
@@ -73,7 +68,6 @@ const columns = computed(() => {
 
     if (selectedView.value === "query_by_page") {
         return [
-            ...hourlyColumns,
             { key: "page", label: "Page", align: "left" },
             { key: "query", label: "Query", align: "left" },
             { key: "clicks", label: "Clicks", align: "right" },
@@ -85,7 +79,6 @@ const columns = computed(() => {
 
     if (selectedView.value === "comparison") {
         return [
-            ...hourlyColumns,
             { key: "query", label: "Query", align: "left" },
             { key: "impressions", label: "7d Impr.", align: "right" },
             { key: "priorImpressions", label: "Prior Impr.", align: "right" },
@@ -97,7 +90,6 @@ const columns = computed(() => {
     }
 
     return [
-        ...hourlyColumns,
         { key: "query", label: "Query", align: "left" },
         { key: "clicks", label: "Clicks", align: "right" },
         { key: "impressions", label: "Impressions", align: "right" },
