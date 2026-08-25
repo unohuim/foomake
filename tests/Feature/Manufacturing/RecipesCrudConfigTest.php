@@ -15,6 +15,7 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
+use Inertia\Testing\AssertableInertia as Assert;
 
 use function Pest\Laravel\actingAs;
 
@@ -92,6 +93,15 @@ beforeEach(function (): void {
     };
 
     $this->extractPayload = function ($response, string $payloadId): array {
+        $page = $response->viewData('page');
+
+        if (is_array($page) && ($page['component'] ?? null) === 'Manufacturing/Recipes/Index') {
+            return [
+                'crudConfig' => $page['props']['crudConfig'] ?? [],
+                ...($page['props']['payload'] ?? []),
+            ];
+        }
+
         $html = $response->getContent();
         $pattern = '/<script type="application\\/json" id="' . preg_quote($payloadId, '/') . '">\\s*(.*?)\\s*<\\/script>/s';
 
@@ -141,16 +151,19 @@ it('2. forbids authenticated users without inventory recipes view permission', f
         ->assertForbidden();
 });
 
-it('3. recipes index renders the shared crud page mount contract', function (): void {
+it('3. recipes index renders the shared Inertia resource index contract', function (): void {
     $tenant = ($this->makeTenant)('Tenant A');
     $user = ($this->makeUser)($tenant);
     ($this->grantPermission)($user, 'inventory-recipes-view');
 
     $response = actingAs($user)->get(route('manufacturing.recipes.index'))->assertOk();
 
-    $response->assertSee('data-page="manufacturing-recipes-index"', false)
-        ->assertSee('data-crud-root', false)
-        ->assertSee('data-crud-config=', false);
+    $response->assertInertia(fn (Assert $page): Assert => $page
+        ->component('Manufacturing/Recipes/Index')
+        ->has('shell')
+        ->has('crudConfig')
+        ->has('payload.initial_rows')
+        ->has('payload.manufacturable_items'));
 });
 
 it('4. recipes crud config uses the recipes resource name', function (): void {
@@ -238,28 +251,29 @@ it('9. recipes crud config exposes make order edit and archive actions in order'
         ->toBe(['Make Order', 'Edit', 'Archive']);
 });
 
-it('10. recipes index blade still includes the create recipe slide over partial', function (): void {
-    $source = File::get(resource_path('views/manufacturing/recipes/index.blade.php'));
+it('10. recipes index Vue page still includes the create recipe drawer', function (): void {
+    $source = File::get(resource_path('js/pages/Manufacturing/Recipes/Index.vue'));
 
-    expect($source)->toContain('create-recipe-slide-over');
+    expect($source)->toContain('Create Recipe')
+        ->and($source)->toContain('ResourceCreateDrawer');
 });
 
-it('11. recipes index page module mounts the shared crud card renderer', function (): void {
-    $source = File::get(resource_path('js/pages/manufacturing-recipes-index.js'));
+it('11. recipes index page module mounts the shared Vue resource card renderer', function (): void {
+    $source = File::get(resource_path('js/pages/Manufacturing/Recipes/Index.vue'));
 
-    expect($source)->toContain('mountCrudCardRenderer')
-        ->and($source)->toContain('createGenericCrud')
-        ->and($source)->toContain('parseCrudConfig');
+    expect($source)->toContain('ResourceIndex')
+        ->and($source)->toContain('ResourceCardGrid')
+        ->and($source)->toContain('recipeDetailRows');
 });
 
 it('12. recipes index page module formats current version numbers in x.xx form', function (): void {
-    $source = File::get(resource_path('js/pages/manufacturing-recipes-index.js'));
+    $source = File::get(resource_path('js/pages/Manufacturing/Recipes/Index.vue'));
 
     expect($source)->toContain('current_version_number_display');
 });
 
 it('13. recipes index page module does not reference approved status labels', function (): void {
-    $source = File::get(resource_path('js/pages/manufacturing-recipes-index.js'));
+    $source = File::get(resource_path('js/pages/Manufacturing/Recipes/Index.vue'));
 
     expect($source)->not->toContain('APPROVED')
         ->and($source)->not->toContain('Approved');
@@ -344,12 +358,11 @@ it('17. recipes list payload includes make only when recipe has a current publis
 });
 
 it('17a. recipes index make action refreshes the list without redirecting to the make order detail', function (): void {
-    $pageSource = file_get_contents(resource_path('js/pages/manufacturing-recipes-index.js'));
+    $pageSource = file_get_contents(resource_path('js/pages/Manufacturing/Recipes/Index.vue'));
 
-    expect($pageSource)->toContain('async make(record)')
-        ->and($pageSource)->toContain('await this.fetchRecipes();')
-        ->and($pageSource)->toContain('await refreshNavigationState(this.navigationStateUrl);')
-        ->and($pageSource)->toContain("this.showToast('success', 'Make order created.');")
+    expect($pageSource)->toContain('async function makeOrder(record)')
+        ->and($pageSource)->toContain('await fetchRecipes();')
+        ->and($pageSource)->toContain('showToast("Make order created.");')
         ->and($pageSource)->not->toContain('window.location.assign(data.data.show_url);');
 });
 

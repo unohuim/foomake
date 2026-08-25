@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\Purchasing\SupplierUpdateRequest;
 use App\Models\Supplier;
+use App\Support\Inertia\AuthShellPayloadBuilder;
 use App\Services\Purchasing\SupplierDeleteGuard;
 use App\Support\Purchasing\SupplierPackageFormConfig;
 use Illuminate\Database\Eloquent\Builder;
@@ -12,7 +13,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Validation\Rule;
-use Illuminate\View\View;
+use Inertia\Inertia;
+use Inertia\Response;
 
 /**
  * Handle supplier index and creation.
@@ -22,7 +24,7 @@ class SupplierController extends Controller
     /**
      * Display the suppliers index.
      */
-    public function index(Request $request): View
+    public function index(Request $request, AuthShellPayloadBuilder $authShellPayloadBuilder): Response
     {
         Gate::authorize('purchasing-suppliers-view');
 
@@ -30,7 +32,8 @@ class SupplierController extends Controller
         $defaultCurrency = $tenantCurrency ?: (string) config('app.currency_code', 'USD');
         $crudConfig = $this->suppliersCrudConfig();
 
-        return view('purchasing.suppliers.index', [
+        return Inertia::render('Purchasing/Suppliers/Index', [
+            'shell' => $authShellPayloadBuilder->build($request),
             'crudConfig' => $crudConfig,
             'payload' => [
                 'suppliers' => [],
@@ -43,6 +46,7 @@ class SupplierController extends Controller
             ],
         ]);
     }
+
 
     /**
      * Return the suppliers list read model for the page module.
@@ -83,15 +87,43 @@ class SupplierController extends Controller
     /**
      * Display a supplier detail page with pricing.
      */
-    public function show(Request $request, Supplier $supplier): View
+    public function show(Request $request, Supplier $supplier, AuthShellPayloadBuilder $authShellPayloadBuilder): Response
     {
         Gate::authorize('purchasing-suppliers-view');
         $this->abortIfWrongTenant($request, $supplier);
 
+        return Inertia::render('Purchasing/Suppliers/Show', [
+            'shell' => $authShellPayloadBuilder->build($request),
+            'title' => 'Supplier: ' . $supplier->company_name,
+            'payloadUrl' => route('purchasing.suppliers.show.payload', $supplier),
+            'indexUrl' => route('purchasing.suppliers.index', absolute: false),
+        ]);
+    }
+
+    /**
+     * Return the supplier detail read model for the Inertia page.
+     */
+    public function showPayload(Request $request, Supplier $supplier): JsonResponse
+    {
+        Gate::authorize('purchasing-suppliers-view');
+        $this->abortIfWrongTenant($request, $supplier);
+
+        return response()->json([
+            'data' => $this->supplierShowPayload($request, $supplier),
+        ]);
+    }
+
+    /**
+     * Build the supplier detail page read model.
+     *
+     * @return array<string, mixed>
+     */
+    private function supplierShowPayload(Request $request, Supplier $supplier): array
+    {
         $tenantCurrency = strtoupper((string) ($request->user()?->tenant?->currency_code ?: config('app.currency_code', 'USD')));
         $canManageSuppliers = Gate::allows('purchasing-suppliers-manage');
 
-        $payload = [
+        return [
             'supplier' => [
                 'id' => $supplier->id,
                 'company_name' => $supplier->company_name,
@@ -113,11 +145,6 @@ class SupplierController extends Controller
                 ? $this->purchaseOrderCreatePayload($supplier)
                 : null,
         ];
-
-        return view('purchasing.suppliers.show', [
-            'supplier' => $supplier,
-            'payload' => $payload,
-        ]);
     }
 
     /**

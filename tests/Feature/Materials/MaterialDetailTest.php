@@ -10,6 +10,7 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Str;
+use Inertia\Testing\AssertableInertia as Assert;
 
 uses(RefreshDatabase::class);
 
@@ -92,15 +93,17 @@ it('allows users with inventory-materials-view permission to view the material d
     $this->actingAs($user)
         ->get(route('materials.show', $item))
         ->assertOk()
-        ->assertSee($item->name)
-        ->assertSee($uom->name)
-        ->assertSee('Materials')
-        ->assertSee('data-material-type-toggles', false)
-        ->assertSee('shopping-cart', false)
-        ->assertSee('credit-card', false)
-        ->assertSee('cog', false)
-        ->assertDontSee('Back to Materials')
-        ->assertSee(route('materials.index'), false);
+        ->assertInertia(fn (Assert $page): Assert => $page
+            ->component('Materials/Show')
+            ->where('title', $item->name)
+            ->where('indexUrl', route('materials.index', absolute: false))
+            ->where('payload.item.name', $item->name)
+            ->where('payload.item.base_uom_name', $uom->name)
+            ->where('payload.item.is_sellable', true)
+            ->where('payload.item.is_purchasable', true)
+            ->where('payload.item.is_manufacturable', true)
+            ->has('shell')
+            ->has('payloadUrl'));
 });
 
 it('returns 404 for cross-tenant material access (tenant scope hides other-tenant items)', function () {

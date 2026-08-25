@@ -8,6 +8,7 @@ use App\Models\RecipeLine;
 use App\Models\RecipeVersion;
 use App\Models\RecipeVersionCheckout;
 use App\Models\RecipeVersionLine;
+use App\Support\Inertia\AuthShellPayloadBuilder;
 use App\Support\QuantityFormatter;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\JsonResponse;
@@ -17,6 +18,8 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Validation\Rule;
+use Inertia\Inertia;
+use Inertia\Response as InertiaResponse;
 use InvalidArgumentException;
 
 /**
@@ -29,27 +32,28 @@ class RecipeController extends Controller
     /**
      * Display the recipes index.
      */
-    public function index(Request $request): View
+    public function index(Request $request, AuthShellPayloadBuilder $authShellPayloadBuilder): InertiaResponse
     {
         Gate::authorize('inventory-recipes-view');
 
         $canManage = Gate::allows('inventory-make-orders-manage');
         $canExecute = Gate::allows('inventory-make-orders-execute');
 
-        $payload = [
-            'crudConfig' => $this->crudConfig($canManage, $canExecute),
-            'manufacturable_items' => $this->manufacturableItemsPayload((int) $request->user()->tenant_id),
-            'store_url' => route('manufacturing.recipes.store'),
-            'version_store_url_base' => url('/manufacturing/recipes'),
-            'csrf_token' => $request->session()->token(),
-            'can_manage' => $canManage,
-            'prefill_create' => $this->prefillCreatePayload($request),
-            'initial_rows' => $this->recipeListRows((int) $request->user()->tenant_id, '', 'updated_at', 'desc', $canManage, $canExecute),
-        ];
+        $crudConfig = $this->crudConfig($canManage, $canExecute);
 
-        return view('manufacturing.recipes.index', [
-            'payload' => $payload,
-            'crudConfig' => $payload['crudConfig'],
+        return Inertia::render('Manufacturing/Recipes/Index', [
+            'shell' => $authShellPayloadBuilder->build($request),
+            'crudConfig' => $crudConfig,
+            'payload' => [
+                'manufacturable_items' => $this->manufacturableItemsPayload((int) $request->user()->tenant_id),
+                'store_url' => route('manufacturing.recipes.store'),
+                'version_store_url_base' => url('/manufacturing/recipes'),
+                'csrf_token' => $request->session()->token(),
+                'csrfToken' => $request->session()->token(),
+                'can_manage' => $canManage,
+                'prefill_create' => $this->prefillCreatePayload($request),
+                'initial_rows' => $this->recipeListRows((int) $request->user()->tenant_id, '', 'updated_at', 'desc', $canManage, $canExecute),
+            ],
         ]);
     }
 

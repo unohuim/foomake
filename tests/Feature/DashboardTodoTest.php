@@ -255,6 +255,13 @@ it('1. authenticated user can see the Todo section on the dashboard', function (
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
             ->component('Dashboard')
+            ->where('shell.user.name', $user->name)
+            ->where('shell.user.email', $user->email)
+            ->where('shell.navigation.dashboardUrl', route('dashboard', absolute: false))
+            ->where('shell.navigation.profileUrl', route('profile.edit', absolute: false))
+            ->where('shell.navigation.logoutUrl', route('logout', absolute: false))
+            ->has('shell.navigation.groups')
+            ->has('shell.navigation.accountItems')
             ->where('todo.heading', 'Todo'));
 });
 

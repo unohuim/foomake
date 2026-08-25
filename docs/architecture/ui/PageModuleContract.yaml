@@ -44,8 +44,8 @@ public_interface:
   - data-payload
 example_usage: |
   Blade:
-    <script type="application/json" id="materials-index-payload">@json($payload)</script>
-    <div data-page="materials-index" data-payload="materials-index-payload" x-data="materialsIndex"></div>
+    <script type="application/json" id="manufacturing-make-orders-payload">@json($payload)</script>
+    <div data-page="manufacturing-make-orders" data-payload="manufacturing-make-orders-payload" x-data="manufacturingMakeOrders"></div>
 
   Blade with shared page contracts:
     <script type="application/json" id="sales-products-index-payload">@json($payload)</script>
@@ -62,9 +62,9 @@ example_usage: |
     <div data-page="manufacturing-make-orders" data-payload="manufacturing-make-orders-payload" x-data="manufacturingMakeOrders"></div>
 
   Page module:
-    // resources/js/pages/materials-index.js
+    // resources/js/pages/manufacturing-make-orders.js
     export function mount(rootEl, payload) {
-      Alpine.data('materialsIndex', () => ({ /* state + methods */ }));
+      Alpine.data('manufacturingMakeOrders', () => ({ /* state + methods */ }));
     }
 
     // resources/js/pages/Sales/Products/Index.vue

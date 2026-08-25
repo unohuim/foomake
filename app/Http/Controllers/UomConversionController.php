@@ -6,6 +6,7 @@ use App\Models\Item;
 use App\Models\ItemUomConversion;
 use App\Models\Uom;
 use App\Models\UomConversion;
+use App\Support\Inertia\AuthShellPayloadBuilder;
 use App\Support\QuantityFormatter;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -13,7 +14,8 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
-use Illuminate\View\View;
+use Inertia\Inertia;
+use Inertia\Response as InertiaResponse;
 
 class UomConversionController extends Controller
 {
@@ -22,7 +24,7 @@ class UomConversionController extends Controller
     /**
      * Display the conversions page.
      */
-    public function index(Request $request): View
+    public function index(Request $request, AuthShellPayloadBuilder $authShellPayloadBuilder): InertiaResponse
     {
         Gate::authorize('inventory-materials-manage');
 
@@ -61,20 +63,30 @@ class UomConversionController extends Controller
                 ->values()
                 ->all(),
             'uomOptions' => $this->uomOptionsPayload($tenantId),
-            'storeUrl' => route('manufacturing.uom-conversions.store'),
-            'updateUrlTemplate' => route('manufacturing.uom-conversions.update', ['conversion' => '__ID__']),
-            'deleteUrlTemplate' => route('manufacturing.uom-conversions.destroy', ['conversion' => '__ID__']),
-            'itemStoreUrl' => route('manufacturing.uom-conversions.items.store'),
-            'itemUpdateUrlTemplate' => route('manufacturing.uom-conversions.items.update', ['itemConversion' => '__ID__']),
-            'itemDeleteUrlTemplate' => route('manufacturing.uom-conversions.items.destroy', ['itemConversion' => '__ID__']),
-            'resolveUrl' => route('manufacturing.uom-conversions.resolve'),
+            'storeUrl' => route('manufacturing.uom-conversions.store', absolute: false),
+            'updateUrlTemplate' => route('manufacturing.uom-conversions.update', ['conversion' => '__ID__'], false),
+            'deleteUrlTemplate' => route('manufacturing.uom-conversions.destroy', ['conversion' => '__ID__'], false),
+            'itemStoreUrl' => route('manufacturing.uom-conversions.items.store', absolute: false),
+            'itemUpdateUrlTemplate' => route(
+                'manufacturing.uom-conversions.items.update',
+                ['itemConversion' => '__ID__'],
+                false
+            ),
+            'itemDeleteUrlTemplate' => route(
+                'manufacturing.uom-conversions.items.destroy',
+                ['itemConversion' => '__ID__'],
+                false
+            ),
+            'resolveUrl' => route('manufacturing.uom-conversions.resolve', absolute: false),
             'csrfToken' => csrf_token(),
         ];
 
-        return view('manufacturing.uom-conversions.index', [
+        return Inertia::render('Manufacturing/UomConversions/Index', [
+            'shell' => $authShellPayloadBuilder->build($request),
             'payload' => $payload,
         ]);
     }
+
 
     /**
      * Store a tenant-managed general conversion.

@@ -18,6 +18,7 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Str;
+use Inertia\Testing\AssertableInertia as Assert;
 
 uses(RefreshDatabase::class);
 
@@ -125,6 +126,12 @@ beforeEach(function (): void {
     };
 
     $this->extractPayload = function ($response, string $payloadId): array {
+        $props = $response->viewData('page')['props'] ?? null;
+
+        if ($payloadId === 'materials-index-payload' && is_array($props) && isset($props['payload'])) {
+            return is_array($props['payload']) ? $props['payload'] : [];
+        }
+
         preg_match(
             '/<script[^>]+id="' . preg_quote($payloadId, '/') . '"[^>]*>(.*?)<\/script>/s',
             $response->getContent(),
@@ -139,6 +146,12 @@ beforeEach(function (): void {
     };
 
     $this->extractCrudConfig = function ($response): array {
+        $props = $response->viewData('page')['props'] ?? null;
+
+        if (is_array($props) && isset($props['crudConfig'])) {
+            return is_array($props['crudConfig']) ? $props['crudConfig'] : [];
+        }
+
         preg_match("/data-crud-config='([^']+)'/", $response->getContent(), $matches);
 
         expect($matches)->toHaveKey(1);
@@ -196,7 +209,7 @@ it('3a. allows users with inventory-stock-view to access the materials availabil
         ->assertSee('Materials');
 });
 
-it('4. renders the materials page mount contracts for the shared crud module', function (): void {
+it('4. renders the materials Inertia component with the shared resource index payload', function (): void {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
 
@@ -204,10 +217,12 @@ it('4. renders the materials page mount contracts for the shared crud module', f
 
     ($this->getIndex)($user)
         ->assertOk()
-        ->assertSee('data-page="materials-index"', false)
-        ->assertSee('data-payload="materials-index-payload"', false)
-        ->assertSee('data-crud-config=', false)
-        ->assertSee('data-crud-root', false);
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('Materials/Index')
+            ->where('crudConfig.resource', 'materials')
+            ->where('payload.storeUrl', route('materials.store'))
+            ->has('shell.navigation.groups')
+        );
 });
 
 it('5. payload exposes urls and page data needed by the materials page module without embedding records', function (): void {
@@ -220,8 +235,7 @@ it('5. payload exposes urls and page data needed by the materials page module wi
     ($this->grantPermissions)($user, ['inventory-materials-view', 'inventory-materials-manage']);
 
     $response = ($this->getIndex)($user)
-        ->assertOk()
-        ->assertSee('materials-index-payload', false);
+        ->assertOk();
 
     $payload = ($this->extractPayload)($response, 'materials-index-payload');
 
@@ -630,24 +644,28 @@ it('20. list endpoint returns allowed sortable columns metadata', function (): v
     expect($response->json('meta.allowed_sort_columns'))->toBe(['item']);
 });
 
-it('21. materials blade shell no longer contains page local list table or row action markup', function (): void {
-    $viewSource = file_get_contents(resource_path('views/materials/index.blade.php'));
+it('21. materials Inertia page owns the resource index without Blade or Alpine page state', function (): void {
+    $pageSource = file_get_contents(resource_path('js/pages/Materials/Index.vue'));
 
-    expect($viewSource)->toContain('data-crud-root')
-        ->and($viewSource)->not->toContain('<table class="min-w-full divide-y divide-gray-100">')
-        ->and($viewSource)->not->toContain('x-for="item in items"')
-        ->and($viewSource)->not->toContain('toggleActionMenu($event, item.id)');
+    expect($pageSource)->toContain('<ResourceIndex')
+        ->and($pageSource)->toContain('<ResourceCreateDrawer')
+        ->and($pageSource)->toContain('<AuthShell')
+        ->and($pageSource)->toContain('<UiToast')
+        ->and($pageSource)->not->toContain('x-data')
+        ->and($pageSource)->not->toContain('data-crud-root');
 });
 
-it('22. materials page module uses the shared crud renderer and configured crud helper', function (): void {
-    $pageSource = file_get_contents(resource_path('js/pages/materials-index.js'));
-    $createSource = file_get_contents(resource_path('views/materials/partials/create-material-slide-over.blade.php'));
+it('22. materials Vue page fetches list data and keeps the material create fields', function (): void {
+    $pageSource = file_get_contents(resource_path('js/pages/Materials/Index.vue'));
 
-    expect($pageSource)->toContain('createGenericCrud(parseCrudConfig(rootEl))')
-        ->and($pageSource)->toContain('mountCrudCardRenderer(crudRootEl, rendererConfig);')
-        ->and($pageSource)->toContain('this.crud.fetchList({')
+    expect($pageSource)->toContain('async function fetchMaterials')
+        ->and($pageSource)->toContain('props.crudConfig.endpoints?.list')
+        ->and($pageSource)->toContain('async function submitCreate')
         ->and($pageSource)->toContain('is_stockable')
-        ->and($createSource)->toContain('x-model="form.is_stockable"');
+        ->and($pageSource)->toContain('starting_quantity')
+        ->and($pageSource)->toContain('function optionalString(value)')
+        ->and($pageSource)->toContain('starting_quantity: optionalString(form.starting_quantity)')
+        ->and($pageSource)->toContain('default_price_amount: optionalString(form.default_price_amount)');
 });
 
 it('22a. materials mobile crud config renders clickable rows with badges and an active toggle', function (): void {
@@ -660,7 +678,6 @@ it('22a. materials mobile crud config renders clickable rows with badges and an 
 
     expect($config['mobileCard']['urlExpression'] ?? null)->toBe('record.show_url')
         ->and($config['actions'] ?? null)->toBe([])
-        ->and($config['mobileCard']['titleAsideExpression'] ?? null)->toBe('materialCardUomLabel(record)')
         ->and($config['mobileCard']['layout'] ?? null)->toBe('flush-stacked')
         ->and($config['mobileCard']['badgesExpression'] ?? null)->toBe('')
         ->and($config['mobileCard']['iconBadgesExpression'] ?? null)->toBe('materialFlagIcons(record)')
@@ -672,78 +689,74 @@ it('22a. materials mobile crud config renders clickable rows with badges and an 
         ->and($config['mobileCard']['toggle']['disabledExpression'] ?? null)->toBe('!canManageMaterials()');
 });
 
-it('22b. shared crud card mobile renderer emits row toggle events and uses lime active styling', function (): void {
-    $rendererSource = file_get_contents(resource_path('js/lib/crud-card-page.js'));
-    $configSource = file_get_contents(resource_path('js/lib/crud-config.js'));
-    $toggleSource = file_get_contents(resource_path('js/components/toggle.js'));
-    $componentSource = file_get_contents(resource_path('views/components/ui/toggle.blade.php'));
+it('22b. materials Vue cards keep flush mobile rows and lime active toggles', function (): void {
+    $pageSource = file_get_contents(resource_path('js/pages/Materials/Index.vue'));
+    $cardGridSource = file_get_contents(resource_path('js/components/ResourceCardGrid.vue'));
+    $toggleSource = file_get_contents(resource_path('js/components/UiToggle.vue'));
 
-    expect($rendererSource)->toContain("from '../components/toggle'")
-        ->and($rendererSource)->toContain('renderToggle')
-        ->and($rendererSource)->toContain('rowToggle')
-        ->and($rendererSource)->toContain('const toggleConfig = config.rowToggle.name')
-        ->and($rendererSource)->toContain('data-crud-mobile-cards')
-        ->and($rendererSource)->toContain('data-crud-card')
-        ->and($rendererSource)->toContain(':href="${escapeAttributeExpression(card.urlExpression)}"')
-        ->and($rendererSource)->toContain('iconBadgesExpression')
-        ->and($rendererSource)->toContain("badge.icon === 'rectangle-group'")
-        ->and($rendererSource)->toContain("badge.icon === 'credit-card'")
-        ->and($rendererSource)->toContain("badge.icon === 'shopping-cart'")
-        ->and($rendererSource)->toContain("badge.icon === 'cog'")
-        ->and($rendererSource)->toContain('overflow-y-auto p-0')
-        ->and($rendererSource)->toContain('border-t border-gray-300')
-        ->and($rendererSource)->toContain('border-b border-gray-300')
-        ->and($rendererSource)->toContain('px-4 py-2')
-        ->and($rendererSource)->not->toContain('rounded-lg border border-gray-100 bg-white p-4')
-        ->and($rendererSource)->not->toContain('hover:border-gray-200')
-        ->and($configSource)->toContain('layout: sanitizeLabel(rawMobileCard.layout)')
-        ->and($configSource)->toContain('iconBadgesExpression: sanitizeLabel(rawMobileCard.iconBadgesExpression)')
-        ->and($configSource)->toContain('rowToggle: {')
-        ->and($configSource)->toContain('label: sanitizeLabel(rawRowToggle.label)')
-        ->and($configSource)->toContain('titleAsideExpression: sanitizeLabel(rawMobileCard.titleAsideExpression)')
-        ->and($configSource)->toContain('badgesExpression: sanitizeLabel(rawMobileCard.badgesExpression)')
-        ->and($configSource)->toContain('urlExpression: sanitizeLabel(rawMobileCard.urlExpression,')
-        ->and($configSource)->toContain('showActions: rawMobileCard.showActions !== false')
-        ->and($configSource)->toContain('toggle: {')
-        ->and($configSource)->toContain('const rawDesktopCard = sanitizeRecord(config.desktopCard)')
-        ->and($configSource)->toContain('desktopCard: {')
-        ->and($configSource)->toContain('statsExpression: sanitizeLabel(rawDesktopCard.statsExpression)')
-        ->and($configSource)->toContain('iconBadgesExpression: sanitizeLabel(rawDesktopCard.iconBadgesExpression)')
-        ->and($toggleSource)->toContain("role=\"switch\"")
-        ->and($toggleSource)->toContain('bg-lime-500')
-        ->and($toggleSource)->toContain("\$dispatch")
-        ->and($toggleSource)->toContain('toggleDetail')
-        ->and($toggleSource)->toContain('record')
-        ->and($toggleSource)->toContain('id')
-        ->and($componentSource)->toContain('role="switch"')
-        ->and($componentSource)->toContain('bg-lime-500')
-        ->and($componentSource)->toContain("\$dispatch");
+    expect($pageSource)->toContain('<ResourceCardGrid')
+        ->and($pageSource)->toContain('<UiToggle')
+        ->and($pageSource)->toContain('@change="toggleMaterialActive($event.record, $event.checked)"')
+        ->and($cardGridSource)->toContain('data-crud-mobile-cards')
+        ->and($cardGridSource)->toContain('data-crud-card')
+        ->and($cardGridSource)->toContain('border-t border-gray-300')
+        ->and($cardGridSource)->toContain('border-b border-gray-300')
+        ->and($cardGridSource)->toContain('px-4 py-2')
+        ->and($toggleSource)->toContain('role="switch"')
+        ->and($toggleSource)->toContain('rounded-full transition-colors duration-200 ease-in-out')
+        ->and($toggleSource)->toContain("checked ? 'bg-lime-500' : 'bg-gray-200'")
+        ->and($toggleSource)->toContain('rounded-full bg-white shadow ring-0')
+        ->and($toggleSource)->toContain('emit("update:checked", nextChecked)')
+        ->and($toggleSource)->toContain('emit("change", detail)');
 });
 
 it('22c. materials page module persists mobile active toggle changes through the existing update endpoint', function (): void {
-    $pageSource = file_get_contents(resource_path('js/pages/materials-index.js'));
+    $pageSource = file_get_contents(resource_path('js/pages/Materials/Index.vue'));
 
-    expect($pageSource)->toContain('materialCardUomLabel(record)')
+    expect($pageSource)->toContain('function materialCardUomLabel(record)')
         ->and($pageSource)->toContain('materialFlagIcons(record)')
         ->and($pageSource)->toContain('canManageMaterials()')
-        ->and($pageSource)->toContain('async toggleMaterialActive(toggleDetail)')
-        ->and($pageSource)->toContain('is_active: nextValue')
-        ->and($pageSource)->toContain('${record.item || \'Material\'} ${record.is_active ? \'Active\' : \'Inactive\'}')
-        ->and($pageSource)->toContain('record.update_url || buildItemEndpoint(this.endpoints.update, record.id)');
+        ->and($pageSource)->toContain('async function toggleMaterialActive(record, checked)')
+        ->and($pageSource)->toContain('is_active: checked')
+        ->and($pageSource)->toContain('`${record.item || "Material"} ${record.is_active ? "Active" : "Inactive"}`')
+        ->and($pageSource)->toContain('record.update_url || buildItemEndpoint(props.crudConfig.endpoints?.update, record.id)');
 });
 
-it('22d. materials desktop card icons render as standalone icons without circle rings', function (): void {
-    $rendererSource = file_get_contents(resource_path('js/lib/crud-card-page.js'));
+it('22d. materials desktop card icons render as blade-matching icon rings', function (): void {
+    $pageSource = file_get_contents(resource_path('js/pages/Materials/Index.vue'));
+    $cardGridSource = file_get_contents(resource_path('js/components/ResourceCardGrid.vue'));
 
-    expect($rendererSource)->toContain('data-crud-card-icon-badges')
-        ->and($rendererSource)->toContain('class="h-7 w-7"')
-        ->and($rendererSource)->toContain("badge.active ? 'text-blue-600' : 'text-gray-300'")
-        ->and($rendererSource)->not->toContain('rounded-full border-2 bg-white')
-        ->and($rendererSource)->not->toContain("badge.active ? 'border-blue-600 text-blue-600' : 'border-gray-300 text-gray-300'");
+    expect($pageSource)->toContain(':icon-badges="materialFlagIcons"')
+        ->and($pageSource)->toContain('icon: "shopping-cart"')
+        ->and($pageSource)->toContain('icon: "credit-card"')
+        ->and($pageSource)->toContain('icon: "cog"')
+        ->and($pageSource)->toContain('icon: "rectangle-group"')
+        ->and($cardGridSource)->toContain('data-crud-card-icon-badges')
+        ->and($cardGridSource)->toContain('h-5 w-5')
+        ->and($cardGridSource)->toContain('h-3.5 w-3.5')
+        ->and($cardGridSource)->toContain('rounded-full border bg-white')
+        ->and($cardGridSource)->toContain('"border-blue-600 text-blue-600"')
+        ->and($cardGridSource)->toContain('"border-gray-300 text-gray-300"')
+        ->and($cardGridSource)->toContain('sr-only');
+});
+
+it('22e. materials index uses the shared resource card grid instead of page-local cards', function (): void {
+    $pageSource = file_get_contents(resource_path('js/pages/Materials/Index.vue'));
+    $cardGridSource = file_get_contents(resource_path('js/components/ResourceCardGrid.vue'));
+
+    expect($pageSource)->toContain('import ResourceCardGrid')
+        ->and($pageSource)->toContain('<ResourceCardGrid')
+        ->and($pageSource)->toContain(':detail-rows="materialCardDetailRows"')
+        ->and($pageSource)->toContain('template #mobile-aside')
+        ->and($pageSource)->toContain('template #desktop-aside')
+        ->and($pageSource)->not->toContain('material-card-grid')
+        ->and($pageSource)->not->toContain('desktop-material')
+        ->and($pageSource)->not->toContain('mobile-material')
+        ->and($cardGridSource)->toContain('grid-template-columns: repeat(auto-fill, minmax(min(100%, 20rem), 22rem));');
 });
 
 it('23. materials page module removes duplicate page local action menu state and methods', function (): void {
-    $pageSource = file_get_contents(resource_path('js/pages/materials-index.js'));
+    $pageSource = file_get_contents(resource_path('js/pages/Materials/Index.vue'));
 
     expect($pageSource)->not->toContain('actionMenuOpen')
         ->and($pageSource)->not->toContain('toggleActionMenu(')
@@ -761,39 +774,27 @@ it('24. shared crud helper source supports optional detail redirects using an id
 });
 
 it('25. materials page module refreshes the list after create without redirecting to detail', function (): void {
-    $pageSource = file_get_contents(resource_path('js/pages/materials-index.js'));
+    $pageSource = file_get_contents(resource_path('js/pages/Materials/Index.vue'));
 
-    expect($pageSource)->toContain('await this.fetchMaterials();')
-        ->and($pageSource)->toContain('this.closeCreate();')
-        ->and($pageSource)->toContain("this.showToast('success', 'Material created.');")
-        ->and($pageSource)->not->toContain('this.crud.buildDetailUrl(data?.data)')
+    expect($pageSource)->toContain('await fetchMaterials();')
+        ->and($pageSource)->toContain('createDrawerOpen.value = false;')
+        ->and($pageSource)->toContain('showToast("Material created.");')
+        ->and($pageSource)->not->toContain('buildDetailUrl')
         ->and($pageSource)->not->toContain('window.location.assign(redirectUrl);');
 });
 
 it('26. materials create validation handling does not redirect before success', function (): void {
-    $pageSource = file_get_contents(resource_path('js/pages/materials-index.js'));
-    $validationBlockStart = strpos($pageSource, 'onValidationError:');
-    $successBlockStart = strpos($pageSource, 'onSuccess: async () => {');
+    $pageSource = file_get_contents(resource_path('js/pages/Materials/Index.vue'));
 
-    expect($validationBlockStart)->not->toBeFalse()
-        ->and($successBlockStart)->not->toBeFalse();
-
-    $validationBlock = substr($pageSource, $validationBlockStart, $successBlockStart - $validationBlockStart);
-
-    expect($validationBlock)->not->toContain('window.location.assign');
+    expect($pageSource)->toContain('createErrors.value = normalizeErrors(error.payload?.errors);')
+        ->and($pageSource)->not->toContain('window.location.assign');
 });
 
 it('27. materials create generic error handling does not redirect before success', function (): void {
-    $pageSource = file_get_contents(resource_path('js/pages/materials-index.js'));
-    $errorBlockStart = strpos($pageSource, 'onError: () => {');
-    $successBlockStart = strpos($pageSource, 'onSuccess: async () => {');
+    $pageSource = file_get_contents(resource_path('js/pages/Materials/Index.vue'));
 
-    expect($errorBlockStart)->not->toBeFalse()
-        ->and($successBlockStart)->not->toBeFalse();
-
-    $errorBlock = substr($pageSource, $errorBlockStart, $successBlockStart - $errorBlockStart);
-
-    expect($errorBlock)->not->toContain('window.location.assign');
+    expect($pageSource)->toContain('createError.value = error.payload?.message')
+        ->and($pageSource)->not->toContain('window.location.assign');
 });
 
 it('28. existing permission slugs used by the materials routes remain unchanged', function (): void {

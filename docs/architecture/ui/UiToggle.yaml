@@ -1,0 +1,40 @@
+name: UI Toggle
+type: UI Architecture Invariant
+location:
+  - resources/js/components/UiToggle.vue
+  - resources/views/components/ui/toggle.blade.php
+  - resources/js/components/toggle.js
+purpose: Provide the standard toggle-switch contract for Vue Inertia pages while preserving the existing Blade and Alpine toggle behavior.
+when_to_use:
+  - Rendering boolean state switches in Vue Inertia pages
+  - Migrating Blade or Alpine toggle controls to Vue
+  - Emitting row-aware toggle changes from reusable Vue components
+when_not_to_use:
+  - Non-boolean multi-option controls
+  - Backend authorization or validation
+  - Static status badges that do not mutate state
+rules:
+  - Vue Inertia boolean switches must use UiToggle instead of page-local switch markup.
+  - UiToggle must preserve the visual contract of the existing Blade and Alpine toggle: rounded track, rounded knob, gray inactive state, lime active state, and disabled opacity.
+  - UiToggle emits update:checked for local two-way state patterns.
+  - UiToggle emits change with name, checked, value, row, record, and id so page components can handle row-aware persistence.
+  - Page components own persistence and rollback behavior after receiving toggle events.
+  - UI toggle state is presentation state only; backend routes, authorization, and validation remain authoritative.
+public_interface:
+  - resources/js/components/UiToggle.vue
+  - checked
+  - disabled
+  - name
+  - record
+  - ariaLabel
+  - update:checked
+  - change
+example_usage: |
+  <UiToggle
+      name="is_active"
+      :checked="Boolean(record.is_active)"
+      :disabled="savingIds.includes(record.id)"
+      :record="record"
+      :aria-label="`Toggle ${record.name} active state`"
+      @change="toggleRecordActive($event.record, $event.checked)"
+  />

@@ -25,12 +25,16 @@ rules:
   - Child Vue components must receive data through props and communicate through emitted events.
   - Child Vue components must not depend on sibling component state.
   - Child Vue components must not fetch boot data unless an architecture entry explicitly approves that exception.
+  - Vue Inertia boolean switches must use UiToggle instead of page-local switch markup.
+  - Vue Inertia page toasts must use UiToast instead of page-local toast markup.
+  - Material detail quantity summaries must use MaterialQuantityBar instead of page-local stats markup.
   - Shared Vue composables may own request helpers or local form mechanics but must not introduce global application state.
   - Server-side Laravel routes, controllers, requests, gates, policies, tenancy scopes, and validation remain authoritative.
   - AuthShell and GuestShell are top-level Vue layout concepts; desktop and mobile variants should be internal components rather than separate shells.
   - GuestShell owns public page chrome and shared guest auth drawer behavior.
   - AuthShell owns authenticated page chrome only for authenticated routes that have been explicitly migrated to Inertia.
-  - The public home route, authenticated dashboard route, sales customers index/detail routes, sales products index route, sales orders index/detail routes, profile connectors route, and admin marketing route are approved Inertia migrations.
+  - Authenticated Inertia route controllers must use AuthShellPayloadBuilder for the shell prop instead of duplicating shell payload helpers.
+  - The public home route, authenticated dashboard route, sales customers index/detail routes, sales products index route, sales orders index/detail routes, purchasing suppliers index/detail routes, purchasing orders index/detail routes, materials index/detail routes, inventory counts index/detail routes, materials UoM categories index route, manufacturing recipes index route, manufacturing make orders index/detail routes, manufacturing units of measure index route, manufacturing UoM conversions index route, profile connectors route, and admin marketing route are approved Inertia migrations.
   - Migrated detail routes that need mutable read models may expose a dedicated JSON payload endpoint owned by the same authorized controller.
 public_interface:
   - Inertia::render()
@@ -45,6 +49,21 @@ public_interface:
   - resources/js/pages/Sales/Products/Index.vue
   - resources/js/pages/Sales/Orders/Index.vue
   - resources/js/pages/Sales/Orders/Show.vue
+  - resources/js/pages/Purchasing/Suppliers/Index.vue
+  - resources/js/pages/Purchasing/Suppliers/Show.vue
+  - resources/js/pages/Purchasing/Orders/Index.vue
+  - resources/js/pages/Purchasing/Orders/Show.vue
+  - resources/js/pages/Materials/Index.vue
+  - resources/js/pages/Materials/Show.vue
+  - resources/js/pages/Inventory/Counts/Index.vue
+  - resources/js/pages/Inventory/Counts/Show.vue
+  - resources/js/pages/Manufacturing/Recipes/Index.vue
+  - resources/js/pages/Manufacturing/MakeOrders/Index.vue
+  - resources/js/pages/Manufacturing/MakeOrders/Show.vue
+  - resources/js/pages/Materials/UomCategories/Index.vue
+  - resources/js/pages/Manufacturing/Uoms/Index.vue
+  - resources/js/pages/Manufacturing/UomConversions/Index.vue
+  - app/Support/Inertia/AuthShellPayloadBuilder.php
   - resources/js/layouts/GuestShell.vue
   - resources/js/layouts/AuthShell.vue
   - resources/js/components/BaseDrawer.vue
@@ -54,10 +73,14 @@ public_interface:
   - resources/js/components/InfiniteHorizontalNavRail.vue
   - resources/js/components/ResourceIndex.vue
   - resources/js/components/ResourceDetailHeaderBreadcrumb.vue
+  - resources/js/components/ResourceDetailSection.vue
   - resources/js/components/ResourceCardGrid.vue
   - resources/js/components/ResourceCreateDrawer.vue
   - resources/js/components/ResourceExportDrawer.vue
   - resources/js/components/ResourceImportDrawer.vue
+  - resources/js/components/MaterialQuantityBar.vue
+  - resources/js/components/UiToggle.vue
+  - resources/js/components/UiToast.vue
   - resources/js/components/DesktopSidebar.vue
   - resources/js/components/MobileBottomNav.vue
   - resources/js/components/MarketingViewDropdown.vue

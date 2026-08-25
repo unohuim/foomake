@@ -13,10 +13,10 @@ use App\Models\User;
 use App\Models\WorkflowDomain;
 use App\Models\WorkflowStage;
 use App\Services\Workflows\InventoryCountWorkflow;
+use App\Support\Inertia\AuthShellPayloadBuilder;
 use App\Support\QuantityFormatter;
 use App\Support\Workflows\WorkflowAssignmentPermissions;
 use DomainException;
-use Illuminate\Contracts\View\View;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -26,13 +26,15 @@ use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
 use Illuminate\Support\Str;
+use Inertia\Inertia;
+use Inertia\Response as InertiaResponse;
 
 class InventoryCountController extends Controller
 {
     /**
      * Display a listing of inventory counts.
      */
-    public function index(Request $request): View
+    public function index(Request $request, AuthShellPayloadBuilder $authShellPayloadBuilder): InertiaResponse
     {
         $this->authorizeInventoryCountsIndex();
 
@@ -42,7 +44,8 @@ class InventoryCountController extends Controller
             ->orderBy('id')
             ->get();
 
-        return view('inventory.counts.index', [
+        return Inertia::render('Inventory/Counts/Index', [
+            'shell' => $authShellPayloadBuilder->build($request),
             'crudConfig' => $this->countsCrudConfig(),
             'payload' => [
                 'csrfToken' => csrf_token(),
@@ -55,7 +58,6 @@ class InventoryCountController extends Controller
                     ->values()
                     ->all(),
             ],
-            'users' => $users,
         ]);
     }
 
@@ -100,7 +102,11 @@ class InventoryCountController extends Controller
     /**
      * Show a specific inventory count.
      */
-    public function show(Request $request, int $inventoryCount): View
+    public function show(
+        Request $request,
+        int $inventoryCount,
+        AuthShellPayloadBuilder $authShellPayloadBuilder
+    ): InertiaResponse
     {
         $count = $this->findInventoryCount($request, $inventoryCount);
         $this->authorizeInventoryCountView($request, $count);
@@ -108,32 +114,19 @@ class InventoryCountController extends Controller
         $count->load(['workflowStage', 'lines.item.baseUom', 'lines.uom']);
         $count->loadCount('lines');
 
-        $items = $this->userCanMutateInventoryCountLines($request->user(), $count)
-            ? $this->countLineSelectableItems($request, $count)
-            : collect();
-
-        $previousStage = $this->previousWorkflowActionStage($count);
-        $nextStage = $this->nextWorkflowActionStage($count);
-        $canSubmitWorkflow = $this->userCanSubmitInventoryCountWorkflow($request->user(), $count);
-        $canOperateWorkflow = $this->userCanOperateInventoryWorkflow($request->user());
-
-        return view('inventory.counts.show', [
-            'inventoryCount' => $count,
-            'items' => $items,
-            'notesFeed' => app(BuildNotesFeedPayloadAction::class)->execute(
-                $count,
-                route('inventory.counts.notes.index', $count),
-                route('inventory.counts.notes.store', $count)
-            ),
-            'previousWorkflowActionLabel' => $canOperateWorkflow ? $this->workflowActionButtonText($previousStage) : null,
-            'previousWorkflowActionEvent' => $canOperateWorkflow ? $this->previousWorkflowActionEvent($count, $previousStage) : null,
-            'nextWorkflowActionLabel' => $this->canShowNextWorkflowAction($count, $canSubmitWorkflow, $canOperateWorkflow)
-                ? $this->workflowActionButtonText($nextStage, $count)
-                : null,
-            'nextWorkflowActionEvent' => $this->canShowNextWorkflowAction($count, $canSubmitWorkflow, $canOperateWorkflow)
-                ? $this->nextWorkflowActionEvent($count, $nextStage)
-                : null,
-            'payload' => $this->inventoryDetailPayload($request, $count),
+        return Inertia::render('Inventory/Counts/Show', [
+            'shell' => $authShellPayloadBuilder->build($request),
+            'title' => $count->name,
+            'indexUrl' => route('inventory.counts.index', absolute: false),
+            'payload' => [
+                ...$this->inventoryDetailPayload($request, $count),
+                'csrfToken' => csrf_token(),
+                'notesFeed' => app(BuildNotesFeedPayloadAction::class)->execute(
+                    $count,
+                    route('inventory.counts.notes.index', $count),
+                    route('inventory.counts.notes.store', $count)
+                ),
+            ],
         ]);
     }
 
@@ -1018,6 +1011,7 @@ class InventoryCountController extends Controller
             'taskCreate' => [
                 'users' => $this->manualTaskAssigneeOptions((int) $request->user()->tenant_id),
                 'workflowDomainId' => $this->workflowDomainId('inventory'),
+                'storeUrl' => route('tasks.store'),
             ],
         ];
     }

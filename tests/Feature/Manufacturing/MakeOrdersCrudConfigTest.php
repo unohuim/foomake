@@ -13,6 +13,7 @@ use App\Models\UomCategory;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
+use Inertia\Testing\AssertableInertia as Assert;
 
 uses(RefreshDatabase::class);
 
@@ -116,6 +117,12 @@ beforeEach(function (): void {
     };
 
     $this->extractPayload = function ($response, string $payloadId): array {
+        $page = $response->viewData('page');
+
+        if (is_array($page) && ($page['component'] ?? null) === 'Manufacturing/MakeOrders/Index') {
+            return $page['props']['payload'] ?? [];
+        }
+
         preg_match(
             '/<script[^>]+id="' . preg_quote($payloadId, '/') . '"[^>]*>(.*?)<\/script>/s',
             $response->getContent(),
@@ -130,6 +137,12 @@ beforeEach(function (): void {
     };
 
     $this->extractCrudConfig = function ($response): array {
+        $page = $response->viewData('page');
+
+        if (is_array($page) && ($page['component'] ?? null) === 'Manufacturing/MakeOrders/Index') {
+            return $page['props']['crudConfig'] ?? [];
+        }
+
         preg_match("/data-crud-config='([^']+)'/", $response->getContent(), $matches);
 
         expect($matches)->toHaveKey(1);
@@ -169,7 +182,7 @@ it('3. allows users with inventory make orders view permission to access the ind
         ->assertSee('Make Orders');
 });
 
-it('4. renders the shared crud page mount contract on the index', function (): void {
+it('4. renders the shared Inertia resource index contract on the index', function (): void {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
 
@@ -177,10 +190,12 @@ it('4. renders the shared crud page mount contract on the index', function (): v
 
     ($this->getIndex)($user)
         ->assertOk()
-        ->assertSee('data-page="manufacturing-make-orders"', false)
-        ->assertSee('data-payload="manufacturing-make-orders-payload"', false)
-        ->assertSee('data-crud-config=', false)
-        ->assertSee('data-crud-root', false);
+        ->assertInertia(fn (Assert $page): Assert => $page
+            ->component('Manufacturing/MakeOrders/Index')
+            ->has('shell')
+            ->has('crudConfig')
+            ->has('payload.recipes')
+            ->has('payload.storeUrl'));
 });
 
 it('5. payload keeps page module data and recipe options without embedding list rows', function (): void {
@@ -384,30 +399,28 @@ it('17. crud actions expose archive as the direct row action for active make ord
         ]);
 });
 
-it('18. page blade does not render bespoke toolbar or table markup anymore', function (): void {
-    $source = file_get_contents(resource_path('views/manufacturing/make-orders/index.blade.php'));
+it('18. page Vue component does not render bespoke table markup anymore', function (): void {
+    $source = file_get_contents(resource_path('js/pages/Manufacturing/MakeOrders/Index.vue'));
 
     expect($source)->not->toContain('No make orders yet')
         ->and($source)->not->toContain('<table class="min-w-full text-sm">')
-        ->and($source)->not->toContain('Create a draft make order from an active recipe.');
+        ->and($source)->toContain('ResourceIndex');
 });
 
-it('19. page module mounts the shared crud card renderer', function (): void {
-    $source = file_get_contents(resource_path('js/pages/manufacturing-make-orders.js'));
+it('19. page module mounts the shared Vue resource card renderer', function (): void {
+    $source = file_get_contents(resource_path('js/pages/Manufacturing/MakeOrders/Index.vue'));
 
-    expect($source)->toContain("import { parseCrudConfig } from '../lib/crud-config';")
-        ->and($source)->toContain("import { mountCrudCardRenderer } from '../lib/crud-card-page';")
-        ->and($source)->toContain("import { createGenericCrud } from '../lib/generic-crud';")
-        ->and($source)->toContain('mountCrudCardRenderer(');
+    expect($source)->toContain('ResourceIndex')
+        ->and($source)->toContain('ResourceCardGrid')
+        ->and($source)->toContain('makeOrderCardRows');
 });
 
 it('20. page module maps the direct row action to the archive handler', function (): void {
-    $source = file_get_contents(resource_path('js/pages/manufacturing-make-orders.js'));
+    $source = file_get_contents(resource_path('js/pages/Manufacturing/MakeOrders/Index.vue'));
 
-    expect($source)->toContain("action.id === 'archive'")
-        ->and($source)->toContain('archive(record)')
-        ->and($source)->not->toContain("action.id === 'view'")
-        ->and($source)->not->toContain("action.id === 'edit'");
+    expect($source)->toContain('archiveMakeOrder(record)')
+        ->and($source)->toContain('aria-label="Archive make order"')
+        ->and($source)->not->toContain("action.id === 'view'");
 });
 
 it('21. shared card renderer remains the owner of search create and row action markup', function (): void {
@@ -424,16 +437,17 @@ it('21. shared card renderer remains the owner of search create and row action m
 });
 
 it('21b. archive handler removes the local row without reloading the page and only shows errors on failure', function (): void {
-    $source = file_get_contents(resource_path('js/pages/manufacturing-make-orders.js'));
+    $source = file_get_contents(resource_path('js/pages/Manufacturing/MakeOrders/Index.vue'));
 
     expect($source)->toContain('const removedId = data?.removed_id ?? record?.id;')
-        ->and($source)->toContain('this.makeOrders = this.makeOrders.filter((entry) => entry.id !== removedId);')
-        ->and($source)->toContain("this.showToast('error', 'Unable to archive make order.');")
-        ->and($source)->not->toContain("this.showToast('success', 'Make order archived.');");
+        ->and($source)->toContain('makeOrders.value = makeOrders.value.filter((entry) => Number(entry.id) !== Number(removedId));')
+        ->and($source)->toContain('showToast(error.payload?.message ?? "Unable to archive make order.", "error");')
+        ->and($source)->not->toContain('showToast("Make order archived.");');
 });
 
-it('22. index view still includes the existing make order slide over partial', function (): void {
-    $source = file_get_contents(resource_path('views/manufacturing/make-orders/index.blade.php'));
+it('22. index view still includes the make order create drawer', function (): void {
+    $source = file_get_contents(resource_path('js/pages/Manufacturing/MakeOrders/Index.vue'));
 
-    expect($source)->toContain("@include('manufacturing.make-orders.partials.create-make-order-slide-over')");
+    expect($source)->toContain('Create Make Order')
+        ->and($source)->toContain('ResourceCreateDrawer');
 });

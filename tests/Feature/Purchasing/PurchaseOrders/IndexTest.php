@@ -13,6 +13,7 @@ use App\Models\UomCategory;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Inertia\Testing\AssertableInertia as Assert;
 
 uses(RefreshDatabase::class);
 
@@ -140,24 +141,18 @@ beforeEach(function () {
         return $this->actingAs($user)->getJson('/purchasing/orders/list?' . http_build_query($query));
     };
 
-    $this->extractPayload = function ($response, string $payloadId): array {
-        $html = $response->getContent();
-        $pattern = '/<script type="application\\/json" id="' . preg_quote($payloadId, '/') . '">\s*(.*?)\s*<\\/script>/s';
+    $this->extractPayload = function ($response, string $payloadId = 'purchasing-orders-index-payload'): array {
+        $props = $response->viewData('page')['props'] ?? null;
 
-        preg_match($pattern, $html, $matches);
+        if ($payloadId === 'purchasing-orders-index-payload' && is_array($props) && isset($props['payload'])) {
+            return $props['payload'];
+        }
 
-        $json = $matches[1] ?? '';
-        $payload = json_decode($json, true);
-
-        return is_array($payload) ? $payload : [];
+        return [];
     };
 
     $this->extractCrudConfig = function ($response): array {
-        preg_match("/data-crud-config='([^']+)'/", $response->getContent(), $matches);
-
-        $config = json_decode(html_entity_decode($matches[1] ?? ''), true);
-
-        return is_array($config) ? $config : [];
+        return $response->viewData('page')['props']['crudConfig'] ?? [];
     };
 });
 
@@ -175,7 +170,7 @@ it('forbids index without permission', function () {
         ->assertForbidden();
 });
 
-it('renders purchase orders index through the configured crud page module shell', function () {
+it('renders purchase orders index through the configured Inertia resource shell', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
 
@@ -184,11 +179,12 @@ it('renders purchase orders index through the configured crud page module shell'
     $this->actingAs($user)
         ->get('/purchasing/orders')
         ->assertOk()
-        ->assertSee('data-page="purchasing-orders-index"', false)
-        ->assertSee('data-payload="purchasing-orders-index-payload"', false)
-        ->assertSee('data-crud-config=', false)
-        ->assertSee('data-crud-root', false)
-        ->assertSee('purchasing-orders-index-payload', false);
+        ->assertInertia(fn (Assert $page): Assert => $page
+            ->component('Purchasing/Orders/Index')
+            ->where('crudConfig.resource', 'purchase-orders')
+            ->where('payload.storeUrl', route('purchasing.orders.store'))
+            ->where('payload.tenantCurrency', 'USD')
+            ->has('shell.navigation.groups'));
 });
 
 it('index includes orders created via endpoint', function () {
@@ -273,15 +269,17 @@ it('index crud config does not expose row actions', function () {
         ->and($config['headers'] ?? [])->not->toHaveKey('actions');
 });
 
-it('index blade does not hardcode purchase order table action markup', function () {
-    $view = file_get_contents(resource_path('views/purchasing/orders/index.blade.php'));
+it('purchase orders Vue index does not hardcode table action markup', function () {
+    $source = file_get_contents(resource_path('js/pages/Purchasing/Orders/Index.vue'));
 
-    expect($view)->not->toContain('<table')
-        ->and($view)->not->toContain('>Actions<')
-        ->and($view)->not->toContain('Order actions')
-        ->and($view)->not->toContain('toggleActionMenu')
-        ->and($view)->not->toContain('Receive Purchase Order')
-        ->and($view)->not->toContain('submitReceive');
+    expect($source)->toContain('ResourceIndex')
+        ->and($source)->toContain('ResourceCardGrid')
+        ->and($source)->not->toContain('<table')
+        ->and($source)->not->toContain('>Actions<')
+        ->and($source)->not->toContain('Order actions')
+        ->and($source)->not->toContain('toggleActionMenu')
+        ->and($source)->not->toContain('Receive Purchase Order')
+        ->and($source)->not->toContain('submitReceive');
 });
 
 it('index is tenant scoped', function () {
@@ -307,11 +305,13 @@ it('index is tenant scoped', function () {
         'order_date' => '2026-02-06',
     ])->assertCreated();
 
-    $this->actingAs($userA)
-        ->get('/purchasing/orders')
-        ->assertOk()
-        ->assertSee('Tenant A Supplier')
-        ->assertDontSee('Tenant B Supplier');
+    $response = $this->actingAs($userA)->get('/purchasing/orders')->assertOk();
+    $payload = ($this->extractPayload)($response, 'purchasing-orders-index-payload');
+    $supplierNames = collect($payload['orders'] ?? [])->pluck('supplier_name')->all();
+
+    expect($supplierNames)
+        ->toContain('Tenant A Supplier')
+        ->not->toContain('Tenant B Supplier');
 });
 
 it('index supports multiple orders', function () {
@@ -591,10 +591,11 @@ it('index shows supplier name when supplier is set', function () {
         'order_date' => '2026-02-18',
     ])->assertCreated();
 
-    $this->actingAs($user)
-        ->get('/purchasing/orders')
-        ->assertOk()
-        ->assertSee('Name Check');
+    $response = $this->actingAs($user)->get('/purchasing/orders')->assertOk();
+    $payload = ($this->extractPayload)($response, 'purchasing-orders-index-payload');
+
+    expect(collect($payload['orders'] ?? [])->pluck('supplier_name')->all())
+        ->toContain('Name Check');
 });
 
 it('index includes order with po_number', function () {
@@ -721,23 +722,15 @@ it('index reflects short-closed status after short-close event', function () {
     expect($orderData['status'] ?? null)->toBe('RECEIVED');
 });
 
-it('purchase orders page module mounts the shared crud card renderer without row actions', function () {
-    $source = file_get_contents(resource_path('views/purchasing/orders/index.blade.php'));
-    $pageModule = file_get_contents(resource_path('js/pages/purchasing-orders-index.js'));
+it('purchase orders Vue page uses the shared resource index and card grid without row actions', function () {
+    $source = file_get_contents(resource_path('js/pages/Purchasing/Orders/Index.vue'));
 
-    expect($source)->toContain('data-crud-root')
-        ->and($source)->toContain('data-crud-config')
-        ->and($source)->not->toContain('Receive Purchase Order')
+    expect($source)->toContain('import ResourceIndex')
+        ->and($source)->toContain('import ResourceCardGrid')
+        ->and($source)->toContain(':records="orders"')
         ->and($source)->not->toContain('toggleActionMenu')
-        ->and($pageModule)->toContain("import { parseCrudConfig } from '../lib/crud-config';")
-        ->and($pageModule)->toContain("import { mountCrudCardRenderer } from '../lib/crud-card-page';")
-        ->and($pageModule)->toContain("import { createGenericCrud } from '../lib/generic-crud';")
-        ->and($pageModule)->toContain('const crud = createGenericCrud(parseCrudConfig(rootEl));')
-        ->and($pageModule)->toContain('mountCrudCardRenderer(crudRootEl, {')
-        ->and($pageModule)->toContain('actions: [],')
-        ->and($pageModule)->not->toContain('toggleActionMenu')
-        ->and($pageModule)->not->toContain('openReceive')
-        ->and($pageModule)->not->toContain('submitReceive');
+        ->and($source)->not->toContain('openReceive')
+        ->and($source)->not->toContain('submitReceive');
 });
 
 it('index crud config links purchase order rows to the detail page', function () {
@@ -751,6 +744,17 @@ it('index crud config links purchase order rows to the detail page', function ()
     expect($config['detailUrlTemplate'] ?? null)->toBe(url('/purchasing/orders/{id}'))
         ->and($config['rowDisplay']['columns']['order']['kind'] ?? null)->toBe('stacked-text')
         ->and($config['rowDisplay']['columns']['order']['urlExpression'] ?? null)->toBe('record.show_url');
+});
+
+it('index crud config allows the Vue default sort column', function () {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+
+    ($this->grantPermission)($user, 'purchasing-purchase-orders-create');
+
+    $config = ($this->extractCrudConfig)($this->actingAs($user)->get('/purchasing/orders')->assertOk());
+
+    expect($config['sortable'] ?? [])->toContain('created_at');
 });
 
 it('list endpoint requires authentication', function () {

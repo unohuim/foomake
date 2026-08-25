@@ -9,6 +9,7 @@ use App\Models\Tenant;
 use App\Models\User;
 use App\Services\Purchasing\SupplierDeleteGuard;
 use Illuminate\Support\Facades\Route;
+use Inertia\Testing\AssertableInertia as Assert;
 
 beforeEach(function () {
     $this->makeTenant = function (array $attributes = []) {
@@ -95,24 +96,12 @@ beforeEach(function () {
         return $this->actingAs($user)->getJson(route('purchasing.suppliers.list', $query));
     };
 
-    $this->extractPayload = function ($response, string $payloadId): array {
-        preg_match(
-            '/<script[^>]+id="' . preg_quote($payloadId, '/') . '"[^>]*>(.*?)<\\/script>/s',
-            $response->getContent(),
-            $matches
-        );
-
-        expect($matches)->toHaveKey(1);
-
-        return json_decode(html_entity_decode($matches[1], ENT_QUOTES), true, 512, JSON_THROW_ON_ERROR);
+    $this->extractCrudConfig = function ($response): array {
+        return $response->viewData('page')['props']['crudConfig'] ?? [];
     };
 
-    $this->extractCrudConfig = function ($response): array {
-        preg_match("/data-crud-config=(['\"])(.*?)\\1/s", $response->getContent(), $matches);
-
-        expect($matches)->toHaveKey(2);
-
-        return json_decode(html_entity_decode($matches[2], ENT_QUOTES), true, 512, JSON_THROW_ON_ERROR);
+    $this->extractPayload = function ($response): array {
+        return $response->viewData('page')['props']['payload'] ?? [];
     };
 
     $this->assertStableUpdateErrors = function ($response) {
@@ -162,13 +151,14 @@ it('renders the suppliers index as a configured crud page module shell', functio
 
     ($this->getSuppliersIndex)($user)
         ->assertOk()
-        ->assertSee('data-page="purchasing-suppliers-index"', false)
-        ->assertSee('data-payload="purchasing-suppliers-index-payload"', false)
-        ->assertSee('data-crud-config=', false)
-        ->assertSee('data-crud-root', false);
+        ->assertInertia(fn (Assert $page): Assert => $page
+            ->component('Purchasing/Suppliers/Index')
+            ->where('crudConfig.resource', 'suppliers')
+            ->where('payload.storeUrl', route('purchasing.suppliers.store'))
+            ->where('payload.updateUrlBase', url('/purchasing/suppliers')));
 });
 
-it('does not hardcode suppliers toolbar or empty-state markup in blade', function () {
+it('does not render the old suppliers blade module shell', function () {
     $view = file_get_contents(resource_path('views/purchasing/suppliers/index.blade.php'));
 
     expect($view)->not->toContain('data-crud-toolbar')
@@ -599,11 +589,9 @@ it('includes the shared navigation state refresh url in the suppliers index payl
     ($this->grantPermission)($user, 'purchasing-suppliers-view');
     ($this->grantPermission)($user, 'purchasing-suppliers-manage');
 
-    $response = ($this->getSuppliersIndex)($user)
-        ->assertOk()
-        ->assertSee('purchasing-suppliers-index-payload', false);
+    $response = ($this->getSuppliersIndex)($user)->assertOk();
 
-    $payload = ($this->extractPayload)($response, 'purchasing-suppliers-index-payload');
+    $payload = ($this->extractPayload)($response);
 
     expect($payload['navigationStateUrl'] ?? null)->toBe(url('/navigation/state'));
 });

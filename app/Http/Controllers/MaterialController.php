@@ -3,12 +3,14 @@
 namespace App\Http\Controllers;
 
 use App\Models\Uom;
+use App\Support\Inertia\AuthShellPayloadBuilder;
 use App\Support\Inventory\InventoryAvailabilityIndexReadModel;
-use Illuminate\Contracts\View\View;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
+use Inertia\Inertia;
+use Inertia\Response as InertiaResponse;
 
 /**
  * Handle the materials availability index and shared CRUD list contract.
@@ -18,12 +20,12 @@ class MaterialController extends Controller
     /**
      * Display the materials index shell.
      */
-    public function index(): View
+    public function index(Request $request, AuthShellPayloadBuilder $authShellPayloadBuilder): InertiaResponse
     {
         $this->authorizeMaterialAvailabilityView();
 
         /** @var \App\Models\User $user */
-        $user = auth()->user();
+        $user = $request->user();
         $uoms = Uom::query()->orderBy('name')->get();
         $crudConfig = $this->materialsCrudConfig();
         $tenantCurrency = $user?->tenant?->currency_code ?: (string) config('app.currency_code', 'USD');
@@ -40,12 +42,13 @@ class MaterialController extends Controller
             'tenantCurrency' => Str::upper((string) $tenantCurrency),
         ];
 
-        return view('materials.index', [
+        return Inertia::render('Materials/Index', [
+            'shell' => $authShellPayloadBuilder->build($request),
             'crudConfig' => $crudConfig,
             'payload' => $payload,
-            'uoms' => $uoms,
         ]);
     }
+
 
     /**
      * Return the materials availability list read model for the shared CRUD page module.

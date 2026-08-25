@@ -15,9 +15,8 @@ use App\Models\Item;
 use App\Models\SalesOrder;
 use App\Models\SalesOrderLine;
 use App\Models\Task;
-use App\Models\User;
 use App\Models\WordPressPluginConnection;
-use App\Navigation\NavigationEligibility;
+use App\Support\Inertia\AuthShellPayloadBuilder;
 use App\Services\WooCommerceCustomerPreviewService;
 use App\Services\WordPressPluginCustomerPreviewService;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -40,7 +39,7 @@ class CustomerController extends Controller
     /**
      * Display the customers index.
      */
-    public function index(Request $request, NavigationEligibility $navigationEligibility): Response
+    public function index(Request $request, AuthShellPayloadBuilder $authShellPayloadBuilder): Response
     {
         Gate::authorize('sales-customers-manage');
 
@@ -69,7 +68,7 @@ class CustomerController extends Controller
         ];
 
         return Inertia::render('Sales/Customers/Index', [
-            'shell' => $this->authShellPayload($request, $navigationEligibility),
+            'shell' => $authShellPayloadBuilder->build($request),
             'crudConfig' => $crudConfig,
             'importConfig' => $importConfig,
             'payload' => $payload,
@@ -241,12 +240,12 @@ class CustomerController extends Controller
     /**
      * Display the customer detail page.
      */
-    public function show(Request $request, Customer $customer, NavigationEligibility $navigationEligibility): Response
+    public function show(Request $request, Customer $customer, AuthShellPayloadBuilder $authShellPayloadBuilder): Response
     {
         Gate::authorize('sales-customers-view');
 
         return Inertia::render('Sales/Customers/Show', [
-            'shell' => $this->authShellPayload($request, $navigationEligibility),
+            'shell' => $authShellPayloadBuilder->build($request),
             'title' => 'Customer: ' . $customer->name,
             'payloadUrl' => route('sales.customers.show.payload', $customer),
             'indexUrl' => route('sales.customers.index', absolute: false),
@@ -319,324 +318,6 @@ class CustomerController extends Controller
         ];
     }
 
-    /**
-     * Build the shared authenticated Inertia shell payload.
-     *
-     * @return array<string, mixed>
-     */
-    private function authShellPayload(Request $request, NavigationEligibility $navigationEligibility): array
-    {
-        $user = $request->user();
-
-        return [
-            'logo' => [
-                'src' => null,
-                'alt' => config('app.name', 'Factory Manager'),
-            ],
-            'user' => [
-                'name' => $user->name,
-                'email' => $user->email,
-            ],
-            'navigation' => [
-                'dashboardUrl' => route('dashboard', absolute: false),
-                'profileUrl' => route('profile.edit', absolute: false),
-                'logoutUrl' => route('logout', absolute: false),
-                'groups' => $this->navigationGroups($request, $user, $navigationEligibility->forUser($user)),
-                'accountItems' => $this->accountNavigationItems($request, $user),
-            ],
-        ];
-    }
-
-    /**
-     * Build tenant user options for manual task assignment.
-     *
-     * @return array<int, array{id: int, name: string}>
-     */
-    private function manualTaskAssigneeOptions(int $tenantId): array
-    {
-        return User::query()
-            ->where('tenant_id', $tenantId)
-            ->orderBy('name')
-            ->orderBy('id')
-            ->get()
-            ->map(fn (User $user): array => [
-                'id' => (int) $user->id,
-                'name' => $user->name,
-            ])
-            ->values()
-            ->all();
-    }
-
-    /**
-     * Store a new customer.
-     */
-    public function store(Request $request): JsonResponse
-    {
-        Gate::authorize('sales-customers-manage');
-
-        $validated = $request->validate($this->storeRules());
-
-        $customer = Customer::query()->create(array_merge($this->addressAttributes($validated), [
-            'tenant_id' => $request->user()->tenant_id,
-            'name' => $validated['name'],
-            'status' => $validated['status'] ?? Customer::STATUS_ACTIVE,
-            'customer_type' => $validated['customer_type'] ?? Customer::TYPE_BUSINESS,
-            'currency_code' => $this->normalizeCurrencyCode($validated['currency_code'] ?? null),
-            'notes' => $validated['notes'] ?? null,
-        ]));
-
-        return response()->json([
-            'data' => $this->customerData($customer),
-        ], 201);
-    }
-
-    /**
-     * Update an existing customer.
-     */
-    public function update(Request $request, Customer $customer): JsonResponse
-    {
-        Gate::authorize('sales-customers-manage');
-
-        $validated = $request->validate($this->updateRules());
-
-        $customer->update(array_merge($this->addressAttributes($validated), [
-            'name' => $validated['name'],
-            'status' => $validated['status'],
-            'customer_type' => $validated['customer_type'] ?? $customer->customer_type,
-            'currency_code' => $this->normalizeCurrencyCode($validated['currency_code'] ?? null),
-            'notes' => $validated['notes'] ?? null,
-        ]));
-
-        return response()->json([
-            'data' => $this->customerData($customer->fresh()),
-        ]);
-    }
-
-    /**
-     * Archive the customer.
-     */
-    public function destroy(Customer $customer): JsonResponse
-    {
-        Gate::authorize('sales-customers-manage');
-
-        $customer->update([
-            'status' => Customer::STATUS_ARCHIVED,
-        ]);
-
-        return response()->json([
-            'data' => $this->customerData($customer->fresh()),
-            'message' => 'Archived.',
-        ]);
-    }
-
-    /**
-     * Build the authenticated navigation groups for the Inertia auth shell.
-     *
-     * @param array<string, bool> $navigationEligibility
-     * @return array<int, array<string, mixed>>
-     */
-    private function navigationGroups(Request $request, User $user, array $navigationEligibility): array
-    {
-        $groups = [
-            [
-                'key' => 'dashboard',
-                'label' => 'Dashboard',
-                'active' => $request->routeIs('dashboard'),
-                'items' => [
-                    [
-                        'label' => 'Dashboard',
-                        'url' => route('dashboard', absolute: false),
-                        'active' => $request->routeIs('dashboard'),
-                        'enabled' => true,
-                    ],
-                ],
-            ],
-        ];
-
-        $salesItems = array_values(array_filter([
-            $user->can('sales-customers-manage') ? [
-                'label' => 'Customers',
-                'url' => route('sales.customers.index', absolute: false),
-                'active' => $request->routeIs('sales.customers.*'),
-                'enabled' => true,
-            ] : null,
-            ($user->can('inventory-products-view') || $user->can('inventory-products-manage')) ? [
-                'label' => 'Products',
-                'url' => route('sales.products.index', absolute: false),
-                'active' => $request->routeIs('sales.products.*'),
-                'enabled' => true,
-            ] : null,
-            $user->can('sales-sales-orders-manage') ? [
-                'label' => 'Orders',
-                'url' => route('sales.orders.index', absolute: false),
-                'active' => $request->routeIs('sales.orders.*'),
-                'enabled' => $navigationEligibility['salesOrdersEnabled'] ?? false,
-                'disabledReason' => 'Add a customer and sellable product first.',
-            ] : null,
-        ]));
-
-        if ($salesItems !== []) {
-            $groups[] = [
-                'key' => 'sales',
-                'label' => 'Sales',
-                'active' => $request->routeIs('sales.*'),
-                'items' => $salesItems,
-            ];
-        }
-
-        $purchasingItems = array_values(array_filter([
-            $user->can('purchasing-purchase-orders-create') ? [
-                'label' => 'Orders',
-                'url' => route('purchasing.orders.index', absolute: false),
-                'active' => $request->routeIs('purchasing.orders.*'),
-                'enabled' => $navigationEligibility['purchaseOrdersEnabled'] ?? false,
-                'disabledReason' => 'Add a supplier and purchasable material first.',
-            ] : null,
-            $user->can('purchasing-suppliers-view') ? [
-                'label' => 'Suppliers',
-                'url' => route('purchasing.suppliers.index', absolute: false),
-                'active' => $request->routeIs('purchasing.suppliers.*'),
-                'enabled' => true,
-            ] : null,
-        ]));
-
-        if ($purchasingItems !== []) {
-            $groups[] = [
-                'key' => 'purchasing',
-                'label' => 'Purchasing',
-                'active' => $request->routeIs('purchasing.*'),
-                'items' => $purchasingItems,
-            ];
-        }
-
-        $manufacturingItems = array_values(array_filter([
-            $user->can('inventory-make-orders-view') ? [
-                'label' => 'Make Orders',
-                'url' => route('manufacturing.make-orders.index', absolute: false),
-                'active' => $request->routeIs('manufacturing.make-orders.*'),
-                'enabled' => $navigationEligibility['makeOrdersEnabled'] ?? false,
-                'disabledReason' => 'Add a manufacturable item and active recipe first.',
-            ] : null,
-            $user->can('inventory-recipes-view') ? [
-                'label' => 'Recipes',
-                'url' => route('manufacturing.recipes.index', absolute: false),
-                'active' => $request->routeIs('manufacturing.recipes.*'),
-                'enabled' => true,
-            ] : null,
-        ]));
-
-        if ($manufacturingItems !== []) {
-            $groups[] = [
-                'key' => 'manufacturing',
-                'label' => 'Manufacturing',
-                'active' => $request->routeIs('manufacturing.make-orders.*') || $request->routeIs('manufacturing.recipes.*'),
-                'items' => $manufacturingItems,
-            ];
-        }
-
-        $stockItems = array_values(array_filter([
-            ($user->can('inventory-adjustments-view') || $user->can('inventory-adjustments-execute')) ? [
-                'label' => 'Inventory Counts',
-                'url' => route('inventory.counts.index', absolute: false),
-                'active' => $request->routeIs('inventory.counts.*'),
-                'enabled' => true,
-            ] : null,
-            ($user->can('inventory-stock-view') || $user->can('inventory-materials-view') || $user->can('inventory-materials-manage')) ? [
-                'label' => 'Materials',
-                'url' => route('materials.index', absolute: false),
-                'active' => $request->routeIs('materials.*') && ! $request->routeIs('materials.uom-categories.*'),
-                'enabled' => true,
-            ] : null,
-            $user->can('inventory-materials-manage') ? [
-                'label' => 'UoM',
-                'active' => $request->routeIs('materials.uom-categories.*')
-                    || $request->routeIs('manufacturing.uoms.*')
-                    || $request->routeIs('manufacturing.uom-conversions.*'),
-                'enabled' => true,
-                'children' => [
-                    [
-                        'label' => 'UoM Categories',
-                        'url' => route('materials.uom-categories.index', absolute: false),
-                        'active' => $request->routeIs('materials.uom-categories.*'),
-                        'enabled' => true,
-                    ],
-                    [
-                        'label' => 'Units of Measure',
-                        'url' => route('manufacturing.uoms.index', absolute: false),
-                        'active' => $request->routeIs('manufacturing.uoms.*'),
-                        'enabled' => true,
-                    ],
-                    [
-                        'label' => 'UoM Conversions',
-                        'url' => route('manufacturing.uom-conversions.index', absolute: false),
-                        'active' => $request->routeIs('manufacturing.uom-conversions.*'),
-                        'enabled' => true,
-                    ],
-                ],
-            ] : null,
-        ]));
-
-        if ($stockItems !== []) {
-            $groups[] = [
-                'key' => 'stock',
-                'label' => 'Stock',
-                'active' => $request->routeIs('inventory.counts.*')
-                    || $request->routeIs('materials.*')
-                    || $request->routeIs('manufacturing.uoms.*')
-                    || $request->routeIs('manufacturing.uom-conversions.*'),
-                'items' => $stockItems,
-            ];
-        }
-
-        return $groups;
-    }
-
-    /**
-     * Build account links for the authenticated user menu.
-     *
-     * @return array<int, array<string, mixed>>
-     */
-    private function accountNavigationItems(Request $request, User $user): array
-    {
-        return array_values(array_filter([
-            [
-                'label' => 'Profile',
-                'url' => route('profile.edit', absolute: false),
-                'active' => $request->routeIs('profile.edit'),
-                'enabled' => true,
-            ],
-            $user->can('billing-subscription-manage') ? [
-                'label' => 'Billing',
-                'url' => route('billing.index', absolute: false),
-                'active' => $request->routeIs('billing.*'),
-                'enabled' => true,
-            ] : null,
-            $user->can('system-users-manage') ? [
-                'label' => 'Connectors',
-                'url' => route('profile.connectors.index', absolute: false),
-                'active' => $request->routeIs('profile.connectors.*'),
-                'enabled' => true,
-            ] : null,
-            $user->hasRole('super-admin') ? [
-                'label' => 'Marketing',
-                'url' => route('admin.marketing.index', absolute: false),
-                'active' => $request->routeIs('admin.marketing.*'),
-                'enabled' => true,
-            ] : null,
-            $user->can('workflow-manage') ? [
-                'label' => 'Workflows',
-                'url' => route('admin.workflows.index', absolute: false),
-                'active' => $request->routeIs('admin.workflows.*'),
-                'enabled' => true,
-            ] : null,
-            $user->can('admin-users-view') ? [
-                'label' => 'Users',
-                'url' => route('admin.users.index', absolute: false),
-                'active' => $request->routeIs('admin.users.*'),
-                'enabled' => true,
-            ] : null,
-        ]));
-    }
 
     /**
      * Build the customer response payload.

@@ -4,16 +4,20 @@ location:
   - resources/views/components/detail-section-card.blade.php
   - resources/views/components/ingredients-detail-section.blade.php
   - resources/js/lib/js-crud-section.js
+  - resources/js/components/ResourceDetailSection.vue
+  - resources/js/pages/Materials/Show.vue
 purpose: Provide a shared collapsible detail section shell with consistent header actions, dropdown-safe overflow behavior, and reusable child-content patterns.
 when_to_use:
   - Rendering resource detail subsections with collapsible content
   - Rendering section header create actions such as plus buttons
   - Rendering detail subsections that contain comboboxes or row-action menus
+  - Rendering static page-owned Vue detail subsection content inside the shared section shell
 when_not_to_use:
   - Page headers or top-level resource breadcrumbs
   - CRUD index pages already handled by the shared CRUD page renderer
 rules:
   - Detail subsections must use the shared detail-section shell or match its exact contract.
+  - Vue detail sections with static page-owned content must render that content through the default slot and must not trigger section list fetches.
   - Section header actions must align to the right through the shared create-wrapper contract.
   - Section-level add/create buttons must live in the shared header/action area rather than inside empty-state boxes.
   - Section action eligibility may update reactively after related row actions when the page module refreshes the shared section config.
@@ -59,6 +63,7 @@ rules:
 public_interface:
   - resources/views/components/detail-section-card.blade.php
   - resources/views/components/ingredients-detail-section.blade.php
+  - resources/js/components/ResourceDetailSection.vue
   - data-js-crud-section-create-wrapper
   - data-detail-section-add-row
   - data-detail-section-add-row-left

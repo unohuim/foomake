@@ -19,6 +19,7 @@ use App\Actions\Workflows\EnsureWorkflowDomainsSeededAction;
 use App\Actions\Workflows\SeedDefaultWorkflowStagesForTenantAction;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
+use Inertia\Testing\AssertableInertia as Assert;
 
 uses(RefreshDatabase::class);
 
@@ -102,6 +103,12 @@ beforeEach(function (): void {
     };
 
     $this->extractPayload = function ($response, string $payloadId): array {
+        $page = $response->viewData('page') ?? null;
+
+        if (is_array($page) && isset($page['props']['payload']) && is_array($page['props']['payload'])) {
+            return $page['props']['payload'];
+        }
+
         preg_match(
             '/<script[^>]+id="' . preg_quote($payloadId, '/') . '"[^>]*>(.*?)<\/script>/s',
             $response->getContent(),
@@ -116,6 +123,12 @@ beforeEach(function (): void {
     };
 
     $this->extractCrudConfig = function ($response): array {
+        $page = $response->viewData('page') ?? null;
+
+        if (is_array($page) && isset($page['props']['crudConfig']) && is_array($page['props']['crudConfig'])) {
+            return $page['props']['crudConfig'];
+        }
+
         preg_match("/data-crud-config='([^']+)'/", $response->getContent(), $matches);
 
         expect($matches)->toHaveKey(1);
@@ -180,8 +193,11 @@ it('4a. allows assigned workflow users to access the inventory counts index', fu
     $this->actingAs($this->user)
         ->get(route('inventory.counts.index'))
         ->assertOk()
-        ->assertSee('Inventory Counts')
-        ->assertSee('data-page="inventory-counts-index"', false);
+        ->assertInertia(fn (Assert $page): Assert => $page
+            ->component('Inventory/Counts/Index')
+            ->has('shell')
+            ->has('crudConfig')
+            ->has('payload'));
 });
 
 it('4b. assigned workflow users see only directly assigned counts in the list endpoint', function (): void {
@@ -284,16 +300,18 @@ it('5. allows users with the inventory count view permission to access the index
         ->assertSee('Inventory Counts');
 });
 
-it('6. renders the inventory counts page mount contract for the shared crud module', function (): void {
+it('6. renders the inventory counts Inertia page contract for the shared Vue resource index', function (): void {
     ($this->grantPermission)($this->user, 'inventory-adjustments-view');
 
     $this->actingAs($this->user)
         ->get(route('inventory.counts.index'))
         ->assertOk()
-        ->assertSee('data-page="inventory-counts-index"', false)
-        ->assertSee('data-payload="inventory-counts-index-payload"', false)
-        ->assertSee('data-crud-config=', false)
-        ->assertSee('data-crud-root', false);
+        ->assertInertia(fn (Assert $page): Assert => $page
+            ->component('Inventory/Counts/Index')
+            ->where('crudConfig.resource', 'inventory-counts')
+            ->has('payload.csrfToken')
+            ->has('payload.users')
+            ->has('shell'));
 });
 
 it('7. the index payload provides csrf context without embedding old count collection payloads', function (): void {
@@ -365,9 +383,10 @@ it('11. the crud config hides create in the shared toolbar contract for view-onl
 });
 
 it('12. the old blade rendered inventory counts table is no longer the primary index markup', function (): void {
-    $source = file_get_contents(resource_path('views/inventory/counts/index.blade.php'));
+    $source = file_get_contents(resource_path('js/pages/Inventory/Counts/Index.vue'));
 
-    expect($source)->toContain('data-crud-root')
+    expect($source)->toContain('<ResourceIndex')
+        ->and($source)->toContain('<ResourceCardGrid')
         ->and($source)->not->toContain('<table class="min-w-full text-sm">')
         ->and($source)->not->toContain('No inventory counts yet.');
 });
@@ -387,23 +406,19 @@ it('13. the blue create count button text and markup are removed from the index 
         ->and($response->getContent())->not->toContain('setCreateHash()');
 });
 
-it('14. the inventory counts page module mounts the shared crud card renderer', function (): void {
-    $source = file_get_contents(resource_path('js/pages/inventory-counts-index.js'));
+it('14. the inventory counts page module uses shared Vue index and card components', function (): void {
+    $source = file_get_contents(resource_path('js/pages/Inventory/Counts/Index.vue'));
 
-    expect($source)->toContain("import { mountCrudCardRenderer } from '../lib/crud-card-page';")
-        ->and($source)->toContain("import { createGenericCrud } from '../lib/generic-crud';")
-        ->and($source)->toContain('const crud = createGenericCrud(parseCrudConfig(rootEl));')
-        ->and($source)->toContain('mountCrudCardRenderer(crudRootEl, rendererConfig);')
-        ->and($source)->toContain('desktopCard: {')
-        ->and($source)->toContain('inventoryCountCardStats(record)')
+    expect($source)->toContain('import ResourceIndex')
+        ->and($source)->toContain('import ResourceCardGrid')
+        ->and($source)->toContain('async function fetchCounts')
+        ->and($source)->toContain('async function submitCreate')
+        ->and($source)->toContain('inventoryCountStatusBadges(record)')
+        ->and($source)->toContain('inventoryCountDetailRows')
         ->and($source)->toContain('assigned_to_user_id')
-        ->and($source)->toContain('await this.fetchCounts();')
-        ->and($source)->toContain('this.closeCountForm();')
-        ->and($source)->not->toContain('this.crud.buildDetailUrl(data?.count)')
-        ->and($source)->not->toContain('window.location.assign(detailUrl)')
-        ->and($source)->toContain("if (column === 'counter')")
-        ->and($source)->toContain('truncateCounterEmail(record)')
-        ->and($source)->toContain('slice(0, 20)');
+        ->and($source)->toContain('await fetchCounts();')
+        ->and($source)->toContain('closeCreateDrawer')
+        ->and($source)->not->toContain('window.location.assign');
 });
 
 it('15. the inventory counts list endpoint returns only tenant scoped count records', function (): void {
@@ -681,26 +696,30 @@ it('22. the inventory count show route still works and renders existing count in
     $this->actingAs($this->user)
         ->get(route('inventory.counts.show', $count))
         ->assertOk()
-        ->assertSee('Inventory Count')
-        ->assertSee($count->counted_at->format('F j, Y'))
-        ->assertSee('Detail notes')
-        ->assertSee('Materials')
-        ->assertDontSee('Count Lines')
-        ->assertSee('Tasks')
-        ->assertSee('data-js-crud-section-root', false);
+        ->assertInertia(fn (Assert $page): Assert => $page
+            ->component('Inventory/Counts/Show')
+            ->where('title', $count->name)
+            ->where('payload.count.id', $count->id)
+            ->where('payload.count.counted_at_iso', $count->counted_at->format('Y-m-d'))
+            ->where('payload.count.notes', 'Detail notes')
+            ->has('payload.sections.countLines')
+            ->has('payload.sections.tasks')
+            ->has('payload.notesFeed'));
 });
 
-it('23. the show route remains the dedicated detail page and is not replaced by the crud index renderer', function (): void {
+it('23. the show route remains the dedicated Inertia detail page and is not replaced by the crud index renderer', function (): void {
     ($this->grantPermission)($this->user, 'inventory-adjustments-view');
     $count = ($this->makeCount)();
 
     $response = $this->actingAs($this->user)
         ->get(route('inventory.counts.show', $count))
-        ->assertOk()
-        ->assertSee('data-page="inventory-count-show"', false);
+        ->assertOk();
 
-    expect($response->getContent())->not->toContain('data-crud-config=')
-        ->and($response->getContent())->not->toContain('data-page="inventory-counts-index"');
+    $response->assertInertia(fn (Assert $page): Assert => $page
+        ->component('Inventory/Counts/Show')
+        ->where('payload.count.id', $count->id));
+
+    expect($response->getContent())->not->toContain('data-page="inventory-counts-index"');
 });
 
 it('24. count line behavior remains reachable through the existing line endpoint', function (): void {
@@ -767,37 +786,35 @@ it('28. the create slide over renders the assigned user field for workflow task 
         ->get(route('inventory.counts.index'))
         ->assertOk();
 
-    expect($response->getContent())->toContain('Name')
-        ->and($response->getContent())->toContain('inventory_count_name')
-        ->and($response->getContent())->toContain('x-model="form.name"')
-        ->and($response->getContent())->toContain('Assigned User')
-        ->and($response->getContent())->toContain('assigned_to_user_id')
-        ->and($response->getContent())->toContain('Select a user');
+    $source = file_get_contents(resource_path('js/pages/Inventory/Counts/Index.vue'));
+
+    $response->assertInertia(fn (Assert $page): Assert => $page
+        ->component('Inventory/Counts/Index')
+        ->has('payload.users'));
+
+    expect($source)->toContain('Name')
+        ->and($source)->toContain('v-model="form.name"')
+        ->and($source)->toContain('Assigned To')
+        ->and($source)->toContain('assigned_to_user_id')
+        ->and($source)->toContain('Unassigned');
 });
 
 it('28a. the inventory counts index owns the standard open create event contract for the shared slide over', function (): void {
-    $source = file_get_contents(resource_path('views/inventory/counts/index.blade.php'));
-    $pageSource = file_get_contents(resource_path('js/pages/inventory-counts-index.js'));
+    $pageSource = file_get_contents(resource_path('js/pages/Inventory/Counts/Index.vue'));
 
-    expect($source)->toContain('@open-create-inventory-count.window="openCreate()"')
-        ->and($pageSource)->toContain('openCreate()')
-        ->and($pageSource)->toContain("action: this.endpoints.create || ''")
+    expect($pageSource)->toContain('window.addEventListener("open-create-inventory-count", handleOpenCreateEvent)')
+        ->and($pageSource)->toContain('function openCreateDrawer()')
+        ->and($pageSource)->toContain('props.crudConfig.endpoints?.create')
         ->and($pageSource)->not->toContain('counted_quantity:');
 });
 
 it('29. the counted at field source auto collapses the native picker after date selection without clearing the bound value', function (): void {
-    $source = file_get_contents(resource_path('views/inventory/counts/partials/count-form.blade.php'));
-    $pageSource = file_get_contents(resource_path('js/pages/inventory-counts-index.js'));
+    $source = file_get_contents(resource_path('js/pages/Inventory/Counts/Index.vue'));
 
-    expect($source)->toContain('type="datetime-local"')
-        ->and($source)->toContain('x-on:click="$el.showPicker?.()"')
-        ->and($source)->toContain('x-on:change="handleCountedAtChange($event)"')
-        ->and($source)->toContain('x-on:input="handleCountedAtChange($event)"')
-        ->and($pageSource)->toContain('handleCountedAtChange(event)')
-        ->and($pageSource)->toContain('this.form.counted_at = event.target.value')
-        ->and($pageSource)->toContain('requestAnimationFrame(() => {')
-        ->and($pageSource)->toContain('event.target.blur()')
-        ->and($pageSource)->toContain("this.focusCountedAtNextField('notes')");
+    expect($source)->toContain('v-model="form.counted_at"')
+        ->and($source)->toContain('type="date"')
+        ->and($source)->not->toContain('handleCountedAtChange')
+        ->and($source)->not->toContain('showPicker');
 });
 
 it('30. the shared crud config exposes a Counter column and the mobile card summary includes the truncated counter email', function (): void {
@@ -827,33 +844,24 @@ it('30. the shared crud config exposes a Counter column and the mobile card summ
 });
 
 it('31. shared crud mobile renderer supports title badges beside the mobile title', function (): void {
-    $configSource = file_get_contents(resource_path('js/lib/crud-config.js'));
-    $rendererSource = file_get_contents(resource_path('js/lib/crud-card-page.js'));
-    $pageSource = file_get_contents(resource_path('js/pages/inventory-counts-index.js'));
+    $rendererSource = file_get_contents(resource_path('js/components/ResourceCardGrid.vue'));
+    $pageSource = file_get_contents(resource_path('js/pages/Inventory/Counts/Index.vue'));
 
-    expect($configSource)->toContain('titleBadgesExpression: sanitizeLabel(rawMobileCard.titleBadgesExpression)')
-        ->and($configSource)->toContain('titleAsidePlacement: sanitizeLabel(rawMobileCard.titleAsidePlacement)')
-        ->and($rendererSource)->toContain('titleBadgesExpression: sanitizeExpression(mobileCard.titleBadgesExpression)')
-        ->and($rendererSource)->toContain('titleAsidePlacement: sanitizeExpression(mobileCard.titleAsidePlacement)')
-        ->and($rendererSource)->toContain('const titleBadgesMarkup = card.titleBadgesExpression')
-        ->and($rendererSource)->toContain('mobile-title-badge')
-        ->and($rendererSource)->toContain('data-crud-mobile-title-aside')
-        ->and($rendererSource)->toContain("card.titleAsidePlacement === 'top-right'")
-        ->and($rendererSource)->toContain('max-w-28 shrink-0 truncate text-right text-[0.7rem]')
-        ->and($rendererSource)->toContain('grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-start gap-3')
+    expect($rendererSource)->toContain('data-crud-mobile-title-badge')
+        ->and($rendererSource)->toContain('titleBadges(record)')
+        ->and($rendererSource)->toContain('grid-cols-[minmax(0,1fr)_auto]')
         ->and($rendererSource)->toContain('border-b border-gray-300')
-        ->and($rendererSource)->toContain("stat.span === 6 ? 'col-span-6'")
         ->and($rendererSource)->toContain('text-[0.6rem] font-semibold uppercase')
         ->and($rendererSource)->toContain('mt-0.5 truncate text-xs text-gray-600')
         ->and($pageSource)->toContain('inventoryCountStatusBadges(record)');
 });
 
 it('32. inventory count mobile summary omits labels for compact row display', function (): void {
-    $pageSource = file_get_contents(resource_path('js/pages/inventory-counts-index.js'));
+    $pageSource = file_get_contents(resource_path('js/pages/Inventory/Counts/Index.vue'));
     $controllerSource = file_get_contents(app_path('Http/Controllers/InventoryCountController.php'));
 
     expect($controllerSource)->toContain("'bodyExpression' => '',")
-        ->and($pageSource)->toContain("parts.push(record.posted_at);")
+        ->and($pageSource)->toContain('function inventoryCountDetailRows(record)')
         ->and($pageSource)->not->toContain('parts.push(String(record.lines_count));')
         ->and($pageSource)->not->toContain('Counter:')
         ->and($pageSource)->not->toContain('Items:')

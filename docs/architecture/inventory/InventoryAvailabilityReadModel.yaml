@@ -4,8 +4,7 @@ location:
   - app/Support/Inventory/InventoryAvailabilityIndexReadModel.php
   - app/Support/Inventory/InventoryAvailabilityCalculator.php
   - app/Http/Controllers/MaterialController.php
-  - resources/views/materials/index.blade.php
-  - resources/js/pages/materials-index.js
+  - resources/js/pages/Materials/Index.vue
 purpose: Define the tenant-scoped availability contract for the materials index and single-item availability lookups without storing denormalized inventory totals on items.
 when_to_use:
   - Rendering the materials index availability cards

@@ -17,6 +17,7 @@ use App\Models\UomConversion;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Inertia\Testing\AssertableInertia as Assert;
 
 uses(RefreshDatabase::class);
 
@@ -206,6 +207,10 @@ beforeEach(function () {
         return $this->actingAs($user)->get(route('purchasing.suppliers.show', $supplier));
     };
 
+    $this->getShowPayload = function (User $user, Supplier $supplier) {
+        return $this->actingAs($user)->getJson(route('purchasing.suppliers.show.payload', $supplier));
+    };
+
     $this->getList = function (User $user, Supplier $supplier) {
         return $this->actingAs($user)->getJson(route('purchasing.suppliers.purchase-options.index', $supplier));
     };
@@ -233,16 +238,7 @@ beforeEach(function () {
             ->deleteJson(route('purchasing.suppliers.purchase-options.destroy', [$supplier, $option]));
     };
 
-    $this->extractSupplierPayload = function ($response): array {
-        $content = $response->getContent();
-        preg_match('/<script[^>]+id="purchasing-suppliers-show-payload"[^>]*>(.*?)<\\/script>/s', $content, $matches);
-
-        if (empty($matches[1])) {
-            return [];
-        }
-
-        return json_decode($matches[1], true) ?? [];
-    };
+    $this->extractSupplierPayload = fn ($response): array => $response->json('data') ?? [];
 });
 it('redirects guests to login for the supplier detail page', function () {
     $tenant = ($this->makeTenant)();
@@ -285,14 +281,14 @@ it('renders the supplier detail page module payload', function () {
 
     ($this->getShow)($user, $supplier)
         ->assertOk()
-        ->assertSee('Suppliers')
-        ->assertSee('Breadcrumb Supplier')
-        ->assertSee(route('purchasing.suppliers.index'), false)
-        ->assertSee('data-page="purchasing-suppliers-show"', false)
-        ->assertSee('purchasing-suppliers-show-payload', false);
+        ->assertInertia(fn (Assert $page): Assert => $page
+            ->component('Purchasing/Suppliers/Show')
+            ->where('title', 'Supplier: Breadcrumb Supplier')
+            ->where('payloadUrl', route('purchasing.suppliers.show.payload', $supplier))
+            ->where('indexUrl', route('purchasing.suppliers.index', absolute: false)));
 });
 
-it('renders the reusable supplier packages detail section mount shell', function () {
+it('renders the supplier detail page through Inertia instead of the old Blade section shell', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
     $supplier = ($this->makeSupplier)($tenant);
@@ -301,8 +297,10 @@ it('renders the reusable supplier packages detail section mount shell', function
 
     ($this->getShow)($user, $supplier)
         ->assertOk()
-        ->assertSee('data-js-crud-section-root', false)
-        ->assertSee('data-section-key="supplierPackages"', false);
+        ->assertInertia(fn (Assert $page): Assert => $page
+            ->component('Purchasing/Suppliers/Show'))
+        ->assertDontSee('data-page="purchasing-suppliers-show"', false)
+        ->assertDontSee('purchasing-suppliers-show-payload', false);
 });
 
 it('removes the old bespoke supplier packages markup from the Blade response', function () {
@@ -327,7 +325,7 @@ it('exposes supplier packages reusable section config in the payload', function 
 
     ($this->grantPermission)($user, 'purchasing-suppliers-view');
 
-    $payload = ($this->extractSupplierPayload)(($this->getShow)($user, $supplier)->assertOk());
+    $payload = ($this->extractSupplierPayload)(($this->getShowPayload)($user, $supplier)->assertOk());
     $section = $payload['sections']['supplierPackages'] ?? [];
 
     expect($section['resource'] ?? null)->toBe('supplier-packages')
@@ -346,7 +344,7 @@ it('configures the plus button create slide-over through the shared section cont
     ($this->grantPermission)($user, 'purchasing-suppliers-view');
     ($this->grantPermission)($user, 'purchasing-suppliers-manage');
 
-    $payload = ($this->extractSupplierPayload)(($this->getShow)($user, $supplier)->assertOk());
+    $payload = ($this->extractSupplierPayload)(($this->getShowPayload)($user, $supplier)->assertOk());
     $section = $payload['sections']['supplierPackages'];
 
     expect($section['permissions']['canCreate'])->toBeTrue()
@@ -367,7 +365,7 @@ it('configures a material field for create because supplier context is fixed', f
     ($this->grantPermission)($user, 'purchasing-suppliers-view');
     ($this->grantPermission)($user, 'purchasing-suppliers-manage');
 
-    $payload = ($this->extractSupplierPayload)(($this->getShow)($user, $supplier)->assertOk());
+    $payload = ($this->extractSupplierPayload)(($this->getShowPayload)($user, $supplier)->assertOk());
     $fields = collect($payload['sections']['supplierPackages']['fields']);
     $materialField = $fields->firstWhere('name', 'item_id');
 
@@ -386,7 +384,7 @@ it('fixes supplier from detail context instead of making supplier selectable', f
     ($this->grantPermission)($user, 'purchasing-suppliers-view');
     ($this->grantPermission)($user, 'purchasing-suppliers-manage');
 
-    $payload = ($this->extractSupplierPayload)(($this->getShow)($user, $supplier)->assertOk());
+    $payload = ($this->extractSupplierPayload)(($this->getShowPayload)($user, $supplier)->assertOk());
     $section = $payload['sections']['supplierPackages'];
 
     expect($payload['supplier']['id'])->toBe($supplier->id)
@@ -405,7 +403,7 @@ it('uses the shared supplier package form labels layout and smart number contrac
     ($this->grantPermission)($user, 'purchasing-suppliers-view');
     ($this->grantPermission)($user, 'purchasing-suppliers-manage');
 
-    $payload = ($this->extractSupplierPayload)(($this->getShow)($user, $supplier)->assertOk());
+    $payload = ($this->extractSupplierPayload)(($this->getShowPayload)($user, $supplier)->assertOk());
     $fields = collect($payload['sections']['supplierPackages']['fields'])->keyBy('name');
 
     expect($fields->get('pack_quantity'))->toMatchArray([
@@ -442,7 +440,7 @@ it('configures row menu actions as exactly Edit Purchase Delete', function () {
 
     ($this->grantPermission)($user, 'purchasing-suppliers-view');
 
-    $payload = ($this->extractSupplierPayload)(($this->getShow)($user, $supplier)->assertOk());
+    $payload = ($this->extractSupplierPayload)(($this->getShowPayload)($user, $supplier)->assertOk());
     $actions = collect($payload['sections']['supplierPackages']['actions']);
 
     expect($actions->pluck('label')->all())->toBe(['Edit', 'Purchase', 'Delete'])
@@ -530,7 +528,7 @@ it('gives view-only users rows without create edit or delete visibility', functi
 
     ($this->grantPermission)($user, 'purchasing-suppliers-view');
 
-    $payload = ($this->extractSupplierPayload)(($this->getShow)($user, $supplier)->assertOk());
+    $payload = ($this->extractSupplierPayload)(($this->getShowPayload)($user, $supplier)->assertOk());
     $row = ($this->getList)($user, $supplier)->assertOk()->json('data.0');
 
     expect($payload['sections']['supplierPackages']['permissions']['canCreate'])->toBeFalse()
@@ -549,7 +547,7 @@ it('gives manage users create edit and delete visibility', function () {
     ($this->grantPermission)($user, 'purchasing-suppliers-view');
     ($this->grantPermission)($user, 'purchasing-suppliers-manage');
 
-    $payload = ($this->extractSupplierPayload)(($this->getShow)($user, $supplier)->assertOk());
+    $payload = ($this->extractSupplierPayload)(($this->getShowPayload)($user, $supplier)->assertOk());
     $row = ($this->getList)($user, $supplier)->assertOk()->json('data.0');
 
     expect($payload['sections']['supplierPackages']['permissions']['canCreate'])->toBeTrue()
@@ -751,17 +749,16 @@ it('updates a supplier package through the reusable section endpoint', function 
     ]);
 });
 
-it('renders the reusable purchase orders detail section mount shell', function () {
+it('exposes the purchase orders section to the Inertia page payload', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
     $supplier = ($this->makeSupplier)($tenant);
 
     ($this->grantPermission)($user, 'purchasing-suppliers-view');
 
-    ($this->getShow)($user, $supplier)
-        ->assertOk()
-        ->assertSee('data-js-crud-section-root', false)
-        ->assertSee('data-section-key="purchaseOrders"', false);
+    $payload = ($this->extractSupplierPayload)(($this->getShowPayload)($user, $supplier)->assertOk());
+
+    expect($payload['sections'])->toHaveKey('purchaseOrders');
 });
 
 it('exposes supplier purchase orders reusable section config in the payload', function () {
@@ -771,7 +768,7 @@ it('exposes supplier purchase orders reusable section config in the payload', fu
 
     ($this->grantPermission)($user, 'purchasing-suppliers-view');
 
-    $payload = ($this->extractSupplierPayload)(($this->getShow)($user, $supplier)->assertOk());
+    $payload = ($this->extractSupplierPayload)(($this->getShowPayload)($user, $supplier)->assertOk());
     $section = $payload['sections']['purchaseOrders'] ?? [];
 
     expect($section['resource'] ?? null)->toBe('supplier-purchase-orders')
@@ -787,7 +784,7 @@ it('matches the Material detail purchase orders row layout and row action contra
 
     ($this->grantPermission)($user, 'purchasing-suppliers-view');
 
-    $payload = ($this->extractSupplierPayload)(($this->getShow)($user, $supplier)->assertOk());
+    $payload = ($this->extractSupplierPayload)(($this->getShowPayload)($user, $supplier)->assertOk());
     $section = $payload['sections']['purchaseOrders'];
 
     expect($section['rowLayout']['primaryText']['field'])->toBe('display.poNumberText')
@@ -883,7 +880,7 @@ it('configures the purchase order plus action for users with create permission',
     ($this->grantPermission)($user, 'purchasing-suppliers-view');
     ($this->grantPermission)($user, 'purchasing-purchase-orders-create');
 
-    $payload = ($this->extractSupplierPayload)(($this->getShow)($user, $supplier)->assertOk());
+    $payload = ($this->extractSupplierPayload)(($this->getShowPayload)($user, $supplier)->assertOk());
     $section = $payload['sections']['purchaseOrders'];
 
     expect($section['permissions']['canCreate'])->toBeTrue()
@@ -900,7 +897,7 @@ it('hides the purchase order plus action from supplier view-only users', functio
 
     ($this->grantPermission)($user, 'purchasing-suppliers-view');
 
-    $payload = ($this->extractSupplierPayload)(($this->getShow)($user, $supplier)->assertOk());
+    $payload = ($this->extractSupplierPayload)(($this->getShowPayload)($user, $supplier)->assertOk());
 
     expect($payload['sections']['purchaseOrders']['permissions']['canCreate'])->toBeFalse();
 });
@@ -1075,9 +1072,8 @@ it('keeps Material detail purchase orders behavior as the existing read-only sec
     ($this->grantPermission)($user, 'purchasing-purchase-orders-create');
 
     $response = $this->actingAs($user)->get(route('materials.show', $item))->assertOk();
-    $content = $response->getContent();
-    preg_match('/<script[^>]+id="materials-show-payload"[^>]*>(.*?)<\\/script>/s', $content, $matches);
-    $payload = json_decode($matches[1] ?? '{}', true) ?: [];
+    $page = $response->viewData('page') ?? [];
+    $payload = $page['props']['payload'] ?? [];
     $section = $payload['sections']['purchaseOrders'] ?? [];
 
     expect($section['resource'] ?? null)->toBe('material-purchase-orders')
@@ -1086,9 +1082,9 @@ it('keeps Material detail purchase orders behavior as the existing read-only sec
 });
 
 it('wires supplier purchase order create through the page module without global state', function () {
-    $pageSource = file_get_contents(resource_path('js/pages/purchasing-suppliers-show.js')) ?: '';
+    $pageSource = file_get_contents(resource_path('js/pages/Purchasing/Suppliers/Show.vue')) ?: '';
 
-    expect($pageSource)->toContain('handleCreateAction')
+    expect($pageSource)->toContain('createSupplierPurchaseOrder')
         ->and($pageSource)->toContain('createSupplierPurchaseOrder')
         ->and($pageSource)->toContain('supplier_id')
         ->and($pageSource)->toContain('window.location.assign')
@@ -1104,10 +1100,13 @@ it('renders a shared Details accordion for editable supplier fields', function (
 
     ($this->getShow)($user, $supplier)
         ->assertOk()
-        ->assertSee('data-detail-section-card', false)
-        ->assertSee('open: false', false)
-        ->assertSee('Details')
-        ->assertSee('Update supplier contact and purchasing defaults.');
+        ->assertInertia(fn (Assert $page): Assert => $page
+            ->component('Purchasing/Suppliers/Show'));
+
+    $pageSource = file_get_contents(resource_path('js/pages/Purchasing/Suppliers/Show.vue')) ?: '';
+
+    expect($pageSource)->toContain('Details')
+        ->and($pageSource)->toContain('Update supplier contact and purchasing defaults.');
 });
 
 it('renders supplier detail editable fields for name website phone email and currency', function () {
@@ -1119,11 +1118,16 @@ it('renders supplier detail editable fields for name website phone email and cur
 
     ($this->getShow)($user, $supplier)
         ->assertOk()
-        ->assertSee('Supplier name')
-        ->assertSee('Website')
-        ->assertSee('Phone')
-        ->assertSee('Email')
-        ->assertSee('Currency');
+        ->assertInertia(fn (Assert $page): Assert => $page
+            ->component('Purchasing/Suppliers/Show'));
+
+    $pageSource = file_get_contents(resource_path('js/pages/Purchasing/Suppliers/Show.vue')) ?: '';
+
+    expect($pageSource)->toContain('Supplier name')
+        ->and($pageSource)->toContain('Website')
+        ->and($pageSource)->toContain('Phone')
+        ->and($pageSource)->toContain('Email')
+        ->and($pageSource)->toContain('Currency');
 });
 
 it('exposes supplier detail update contract in the page payload', function () {
@@ -1139,7 +1143,7 @@ it('exposes supplier detail update contract in the page payload', function () {
 
     ($this->grantPermission)($user, 'purchasing-suppliers-view');
 
-    $payload = ($this->extractSupplierPayload)(($this->getShow)($user, $supplier)->assertOk());
+    $payload = ($this->extractSupplierPayload)(($this->getShowPayload)($user, $supplier)->assertOk());
 
     expect($payload['supplier']['company_name'])->toBe('Details Supplier')
         ->and($payload['supplier']['url'])->toBe('https://supplier.example')
@@ -1156,7 +1160,7 @@ it('disables supplier detail fields for users without manage permission', functi
 
     ($this->grantPermission)($user, 'purchasing-suppliers-view');
 
-    $payload = ($this->extractSupplierPayload)(($this->getShow)($user, $supplier)->assertOk());
+    $payload = ($this->extractSupplierPayload)(($this->getShowPayload)($user, $supplier)->assertOk());
 
     expect($payload['supplier']['can_manage'])->toBeFalse();
 });
@@ -1169,31 +1173,28 @@ it('enables supplier detail fields for users with manage permission', function (
     ($this->grantPermission)($user, 'purchasing-suppliers-view');
     ($this->grantPermission)($user, 'purchasing-suppliers-manage');
 
-    $payload = ($this->extractSupplierPayload)(($this->getShow)($user, $supplier)->assertOk());
+    $payload = ($this->extractSupplierPayload)(($this->getShowPayload)($user, $supplier)->assertOk());
 
     expect($payload['supplier']['can_manage'])->toBeTrue();
 });
 
 it('wires supplier detail saves through the page module without global state', function () {
-    $pageSource = file_get_contents(resource_path('js/pages/purchasing-suppliers-show.js')) ?: '';
+    $pageSource = file_get_contents(resource_path('js/pages/Purchasing/Suppliers/Show.vue')) ?: '';
 
     expect($pageSource)->toContain('saveDetails')
         ->and($pageSource)->toContain('detailsPayload')
-        ->and($pageSource)->toContain('supplier.update_url')
+        ->and($pageSource)->toContain('supplier.value.update_url')
         ->and($pageSource)->toContain('company_name')
         ->and($pageSource)->toContain('currency_code')
         ->and($pageSource)->not()->toContain('window.supplierDetails');
 });
 
 it('highlights changed supplier detail fields with a lime border after save', function () {
-    $viewSource = file_get_contents(resource_path('views/purchasing/suppliers/show.blade.php')) ?: '';
-    $pageSource = file_get_contents(resource_path('js/pages/purchasing-suppliers-show.js')) ?: '';
+    $pageSource = file_get_contents(resource_path('js/pages/Purchasing/Suppliers/Show.vue')) ?: '';
 
-    expect($viewSource)->toContain("detailsFieldClass('company_name')")
-        ->and($viewSource)->toContain("saveDetails('company_name')")
-        ->and($viewSource)->toContain("detailsFieldClass('currency_code')")
-        ->and($viewSource)->toContain("saveDetails('currency_code')")
-        ->and($pageSource)->toContain('detailsSavedFields')
+    expect($pageSource)->toContain('savedField === field')
+        ->and($pageSource)->toContain('@change="saveDetails(field)"')
+        ->and($pageSource)->toContain('@blur="saveDetails(field)"')
         ->and($pageSource)->toContain('border-2')
         ->and($pageSource)->toContain('border-lime-400')
         ->and($pageSource)->toContain('window.setTimeout')

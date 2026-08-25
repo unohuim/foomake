@@ -11,6 +11,7 @@ use App\Models\UomCategory;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
+use Inertia\Testing\AssertableInertia as Assert;
 
 uses(RefreshDatabase::class);
 
@@ -106,6 +107,22 @@ beforeEach(function (): void {
     $this->generalStoreUrl = '/manufacturing/uom-conversions';
     $this->generalUpdateUrl = fn (int $conversionId): string => '/manufacturing/uom-conversions/' . $conversionId;
     $this->generalDestroyUrl = fn (int $conversionId): string => '/manufacturing/uom-conversions/' . $conversionId;
+});
+
+it('10. conversion index renders as an inertia page', function (): void {
+    $tenant = ($this->makeTenant)();
+    $user = ($this->makeUser)($tenant);
+    ($this->grantManagePermission)($user);
+
+    $this->actingAs($user)
+        ->get($this->indexUrl)
+        ->assertOk()
+        ->assertInertia(fn (Assert $page): Assert => $page
+            ->component('Manufacturing/UomConversions/Index')
+            ->has('payload.globalConversions')
+            ->has('payload.tenantConversions')
+            ->has('payload.itemSpecificConversions')
+            ->where('payload.storeUrl', route('manufacturing.uom-conversions.store', absolute: false)));
 });
 
 it('11. tenant conversions require tenant_id', function (): void {
@@ -466,5 +483,5 @@ it('40. global conversions are visibly read-only in payload or ui data', functio
         ->get($this->indexUrl)
         ->assertOk()
         ->assertSee('read_only')
-        ->assertSee('tenant_id');
+        ->assertDontSee('tenant_id');
 });

@@ -7,6 +7,7 @@ use App\Models\Tenant;
 use App\Models\UomCategory;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Inertia\Testing\AssertableInertia as Assert;
 
 uses(RefreshDatabase::class);
 
@@ -37,6 +38,22 @@ it('allows users with permission to access the uom categories index', function (
     $this->actingAs($this->authorizedUser)
         ->get(route('materials.uom-categories.index'))
         ->assertOk();
+});
+
+it('renders the uom categories index as an inertia page', function () {
+    UomCategory::create([
+        'tenant_id' => $this->tenant->id,
+        'name' => 'Mass Custom',
+    ]);
+
+    $this->actingAs($this->authorizedUser)
+        ->get(route('materials.uom-categories.index'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page): Assert => $page
+            ->component('Materials/UomCategories/Index')
+            ->where('crudConfig.resource', 'uom-categories')
+            ->where('payload.storeUrl', route('materials.uom-categories.store', absolute: false))
+            ->where('payload.categories.0.name', 'Mass Custom'));
 });
 
 it('denies users without permission from uom category routes', function () {

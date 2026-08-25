@@ -1,0 +1,34 @@
+name: UI Toast
+type: UI Architecture Invariant
+location:
+  - resources/js/components/UiToast.vue
+  - resources/views/components/ui/toast.blade.php
+purpose: Provide the standard non-blocking toast notification contract for Vue Inertia pages while preserving the existing Blade and Alpine toast behavior.
+when_to_use:
+  - Rendering page-scoped success or error feedback in Vue Inertia pages
+  - Migrating Blade or Alpine toast controls to Vue
+  - Allowing users to dismiss transient feedback
+when_not_to_use:
+  - Blocking confirmation dialogs
+  - Form validation summaries that must remain near the form fields
+  - Server-side flash messages for unmigrated Blade routes
+rules:
+  - Vue Inertia page toasts must use UiToast instead of page-local toast markup.
+  - UiToast must preserve the visual contract of the existing Blade toast: fixed top placement, white card, success or error icon, close button, and enter/leave transition.
+  - Page components own toast state, message timing, and when to show or clear a toast.
+  - UiToast emits dismiss and update:visible when the user closes the toast.
+  - Toasts are non-blocking feedback and must not be the only place where validation errors are exposed.
+public_interface:
+  - resources/js/components/UiToast.vue
+  - visible
+  - type
+  - message
+  - dismiss
+  - update:visible
+example_usage: |
+  <UiToast
+      :visible="Boolean(toast)"
+      :type="toast?.tone || 'success'"
+      :message="toast?.message || ''"
+      @dismiss="toast = null"
+  />

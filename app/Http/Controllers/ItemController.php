@@ -13,6 +13,7 @@ use App\Models\StockMove;
 use App\Models\Uom;
 use App\Models\User;
 use App\Services\Workflows\InventoryCountWorkflow;
+use App\Support\Inertia\AuthShellPayloadBuilder;
 use App\Support\QuantityFormatter;
 use App\Support\Purchasing\SupplierPackageFormConfig;
 use App\Support\Workflows\WorkflowAssignmentPermissions;
@@ -24,7 +25,8 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
-use Illuminate\View\View;
+use Inertia\Inertia;
+use Inertia\Response as InertiaResponse;
 
 class ItemController extends Controller
 {
@@ -35,9 +37,13 @@ class ItemController extends Controller
      *
      * @param Request $request
      * @param Item $item
-     * @return View|JsonResponse
+     * @return InertiaResponse|JsonResponse
      */
-    public function show(Request $request, Item $item): View|JsonResponse
+    public function show(
+        Request $request,
+        Item $item,
+        AuthShellPayloadBuilder $authShellPayloadBuilder
+    ): InertiaResponse|JsonResponse
     {
         Gate::authorize('inventory-materials-view');
 
@@ -58,9 +64,26 @@ class ItemController extends Controller
 
         $payload = $this->materialDetailPayload($request, $item);
 
-        return view('materials.show', [
-            'item' => $item,
+        return Inertia::render('Materials/Show', [
+            'shell' => $authShellPayloadBuilder->build($request),
+            'title' => $item->name,
+            'indexUrl' => route('materials.index', absolute: false),
+            'payloadUrl' => route('materials.show.payload', $item, false),
             'payload' => $payload,
+        ]);
+    }
+
+    /**
+     * Return the material detail payload for an Inertia detail page refresh.
+     */
+    public function showPayload(Request $request, Item $item): JsonResponse
+    {
+        Gate::authorize('inventory-materials-view');
+
+        $item->load('baseUom');
+
+        return response()->json([
+            'data' => $this->materialDetailPayload($request, $item),
         ]);
     }
 
@@ -315,6 +338,8 @@ class ItemController extends Controller
             'tenantCurrency' => strtoupper($this->resolveTenantCurrency($request)),
             'navigationStateUrl' => route('navigation.state'),
             'taskCreate' => [
+                'storeUrl' => route('tasks.store'),
+                'csrfToken' => $request->session()->token(),
                 'users' => $this->manualTaskAssigneeOptions((int) $request->user()->tenant_id),
             ],
             'canViewPurchasing' => $canViewPurchasing,

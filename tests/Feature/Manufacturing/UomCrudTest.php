@@ -11,6 +11,7 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Inertia\Testing\AssertableInertia as Assert;
 
 uses(RefreshDatabase::class);
 
@@ -75,6 +76,12 @@ beforeEach(function () {
     };
 
     $this->extractPayload = function ($response, string $payloadId): array {
+        $props = $response->viewData('page')['props'] ?? null;
+
+        if ($payloadId === 'manufacturing-uoms-index-payload' && is_array($props) && isset($props['payload'])) {
+            return $props['payload'];
+        }
+
         $html = $response->getContent();
         $pattern = '/<script type="application\\/json" id="' . preg_quote($payloadId, '/') . '">\\s*(.*?)\\s*<\\/script>/s';
 
@@ -97,6 +104,29 @@ beforeEach(function () {
 
         return $rows;
     };
+});
+
+it('renders the uoms index as an inertia page', function () {
+    $tenant = ($this->makeTenant)('Inertia UoM Tenant');
+    $user = ($this->makeUser)($tenant, 'inertia-uom@example.test');
+    ($this->grantManage)($user);
+
+    $category = ($this->makeCategory)($tenant, 'Mass');
+    ($this->makeUom)($tenant, $category, [
+        'name' => 'Kilogram',
+        'symbol' => 'kg-inertia',
+        'display_precision' => 3,
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('manufacturing.uoms.index'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page): Assert => $page
+            ->component('Manufacturing/Uoms/Index')
+            ->where('crudConfig.resource', 'uoms')
+            ->where('payload.storeUrl', route('manufacturing.uoms.store', absolute: false))
+            ->where('payload.categories.0.uoms.0.name', 'Kilogram')
+            ->where('payload.categories.0.uoms.0.display_precision', 3));
 });
 
 it('defaults display_precision to 1 when omitted on create and exposes it in index payload', function () {

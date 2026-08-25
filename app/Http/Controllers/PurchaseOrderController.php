@@ -10,11 +10,11 @@ use App\Models\PurchaseOrder;
 use App\Models\PurchaseOrderLine;
 use App\Models\Supplier;
 use App\Models\User;
+use App\Support\Inertia\AuthShellPayloadBuilder;
 use App\Support\Workflows\WorkflowAssignmentPermissions;
 use App\Support\QuantityFormatter;
 use App\Services\Purchasing\PurchaseOrderLifecycleService;
 use App\Services\Workflows\PurchaseOrderWorkflow;
-use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -24,6 +24,8 @@ use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
+use Inertia\Inertia;
+use Inertia\Response;
 
 /**
  * Handle purchase order screens and header updates.
@@ -33,7 +35,11 @@ class PurchaseOrderController extends Controller
     /**
      * Display the purchase orders index.
      */
-    public function index(Request $request, PurchaseOrderLifecycleService $lifecycleService): View
+    public function index(
+        Request $request,
+        PurchaseOrderLifecycleService $lifecycleService,
+        AuthShellPayloadBuilder $authShellPayloadBuilder
+    ): Response
     {
         Gate::authorize('purchasing-purchase-orders-create');
 
@@ -43,16 +49,19 @@ class PurchaseOrderController extends Controller
         $crudConfig = $this->purchaseOrdersCrudConfig();
         $purchaseOrders = $this->purchaseOrdersQuery('', 'created_at', 'desc')->get();
 
-        return view('purchasing.orders.index', [
+        return Inertia::render('Purchasing/Orders/Index', [
+            'shell' => $authShellPayloadBuilder->build($request),
             'crudConfig' => $crudConfig,
             'payload' => [
                 'orders' => $this->purchaseOrderIndexRows($purchaseOrders, $tenantCurrency, $lifecycleService),
                 'storeUrl' => $crudConfig['endpoints']['create'],
+                'navigationStateUrl' => route('navigation.state'),
                 'csrfToken' => csrf_token(),
                 'tenantCurrency' => $tenantCurrency,
             ],
         ]);
     }
+
 
     /**
      * Return the purchase orders list read model for the shared CRUD page module.
@@ -169,8 +178,9 @@ class PurchaseOrderController extends Controller
         Request $request,
         PurchaseOrder $purchaseOrder,
         PurchaseOrderLifecycleService $lifecycleService,
-        PurchaseOrderWorkflow $purchaseOrderWorkflow
-    ): View
+        PurchaseOrderWorkflow $purchaseOrderWorkflow,
+        AuthShellPayloadBuilder $authShellPayloadBuilder
+    ): Response
     {
         abort_unless((int) $purchaseOrder->tenant_id === (int) $request->user()->tenant_id, 404);
         abort_unless(
@@ -279,9 +289,15 @@ class PurchaseOrderController extends Controller
             'csrfToken' => csrf_token(),
         ];
 
-        return view('purchasing.orders.show', [
-            'purchaseOrder' => $purchaseOrder,
+        $purchaseOrderTitle = filled($purchaseOrder->po_number)
+            ? $purchaseOrder->po_number
+            : 'PO #' . $purchaseOrder->id;
+
+        return Inertia::render('Purchasing/Orders/Show', [
+            'shell' => $authShellPayloadBuilder->build($request),
+            'title' => $purchaseOrderTitle,
             'payload' => $payload,
+            'indexUrl' => route('purchasing.orders.index', absolute: false),
         ]);
     }
 
@@ -581,7 +597,7 @@ class PurchaseOrderController extends Controller
                 'po_grand_total_cents' => 'Total',
                 'lines_count' => 'Lines',
             ],
-            'sortable' => ['order_date', 'po_grand_total_cents', 'lines_count'],
+            'sortable' => ['created_at', 'order_date', 'po_grand_total_cents', 'lines_count'],
             'labels' => [
                 'searchPlaceholder' => 'Search purchase orders',
                 'createTitle' => 'Create Purchase Order',

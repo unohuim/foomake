@@ -4,12 +4,14 @@ namespace App\Http\Controllers;
 
 use App\Models\Uom;
 use App\Models\UomCategory;
+use App\Support\Inertia\AuthShellPayloadBuilder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
-use Illuminate\View\View;
+use Inertia\Inertia;
+use Inertia\Response as InertiaResponse;
 
 /**
  * Class UomController
@@ -21,7 +23,7 @@ class UomController extends Controller
     /**
      * Display the UoM index.
      */
-    public function index(): View
+    public function index(Request $request, AuthShellPayloadBuilder $authShellPayloadBuilder): InertiaResponse
     {
         Gate::authorize('inventory-materials-manage');
 
@@ -32,10 +34,76 @@ class UomController extends Controller
             ->orderBy('name')
             ->get(['id', 'name']);
 
-        return view('manufacturing.uoms.index', [
-            'categories' => $categories,
+        return Inertia::render('Manufacturing/Uoms/Index', [
+            'shell' => $authShellPayloadBuilder->build($request),
+            'crudConfig' => $this->uomsCrudConfig(),
+            'payload' => [
+                'categories' => $categories->map(fn (UomCategory $category): array => [
+                    'id' => $category->id,
+                    'name' => $category->name,
+                    'uoms' => $category->uoms->map(fn (Uom $uom): array => $this->uomPayload($uom))->values()->all(),
+                ])->values()->all(),
+                'storeUrl' => route('manufacturing.uoms.store', absolute: false),
+                'updateUrlTemplate' => route('manufacturing.uoms.update', ['uom' => '__ID__'], false),
+                'deleteUrlTemplate' => route('manufacturing.uoms.destroy', ['uom' => '__ID__'], false),
+                'csrfToken' => csrf_token(),
+            ],
         ]);
     }
+
+    /**
+     * Build the Units of Measure resource index configuration.
+     *
+     * @return array<string, mixed>
+     */
+    private function uomsCrudConfig(): array
+    {
+        return [
+            'resource' => 'uoms',
+            'labels' => [
+                'title' => 'Units of Measure',
+                'description' => 'Maintain the units used in manufacturing and inventory.',
+                'searchPlaceholder' => 'Search units of measure',
+                'createTitle' => 'Create Unit',
+                'createAriaLabel' => 'Create unit of measure',
+                'emptyState' => 'No units of measure yet.',
+                'actionsAriaLabel' => 'Unit of measure actions',
+            ],
+            'permissions' => [
+                'showCreate' => true,
+                'showImport' => false,
+                'showExport' => false,
+            ],
+            'actions' => [
+                [
+                    'id' => 'edit',
+                    'label' => 'Edit',
+                ],
+                [
+                    'id' => 'delete',
+                    'label' => 'Delete',
+                    'tone' => 'danger',
+                ],
+            ],
+        ];
+    }
+
+    /**
+     * Build a Units of Measure row payload.
+     *
+     * @return array<string, mixed>
+     */
+    private function uomPayload(Uom $uom): array
+    {
+        return [
+            'id' => $uom->id,
+            'uom_category_id' => $uom->uom_category_id,
+            'name' => $uom->name,
+            'symbol' => $uom->symbol,
+            'display_precision' => $uom->display_precision,
+        ];
+    }
+
 
     /**
      * Store a new UoM.

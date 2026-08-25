@@ -135,6 +135,12 @@ beforeEach(function (): void {
     };
 
     $this->extractPayload = function (TestResponse $response, string $payloadId): array {
+        $page = $response->viewData('page') ?? null;
+
+        if (is_array($page) && isset($page['props']['payload']) && is_array($page['props']['payload'])) {
+            return $page['props']['payload'];
+        }
+
         preg_match(
             '/<script[^>]+id="' . preg_quote($payloadId, '/') . '"[^>]*>(.*?)<\/script>/s',
             $response->getContent(),

@@ -25,6 +25,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
+use Inertia\Testing\AssertableInertia as Assert;
 
 uses(RefreshDatabase::class);
 
@@ -238,6 +239,18 @@ beforeEach(function () {
     };
 
     $this->extractPayload = function ($response, string $payloadId): array {
+        $page = $response->viewData('page');
+
+        if (
+            is_array($page)
+            && in_array($page['component'] ?? null, [
+                'Manufacturing/MakeOrders/Index',
+                'Manufacturing/MakeOrders/Show',
+            ], true)
+        ) {
+            return $page['props']['payload'] ?? [];
+        }
+
         $html = $response->getContent();
         $pattern = '/<script type="application\\/json" id="' . preg_quote($payloadId, '/') . '">\s*(.*?)\s*<\\/script>/s';
 
@@ -409,9 +422,10 @@ test('view permission can access make orders index and payload lists tenant scop
     $response
         ->assertSee('Runs')
         ->assertDontSee('Output quantity')
-        ->assertSee('data-page="manufacturing-make-orders"', false)
-        ->assertSee('data-payload="manufacturing-make-orders-payload"', false)
-        ->assertSee('<script type="application/json"', false);
+        ->assertInertia(fn (Assert $page): Assert => $page
+            ->component('Manufacturing/MakeOrders/Index')
+            ->has('crudConfig')
+            ->has('payload.recipes'));
 
     $payload = ($this->extractPayload)($response, 'manufacturing-make-orders-payload');
 

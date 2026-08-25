@@ -1,0 +1,38 @@
+name: Auth Shell Payload Builder
+type: UI Architecture Invariant
+location:
+  - app/Support/Inertia/AuthShellPayloadBuilder.php
+  - resources/js/layouts/AuthShell.vue
+purpose: Centralize the authenticated Inertia shell payload so migrated auth routes share one user, navigation, and account-menu contract.
+when_to_use:
+  - Rendering an authenticated Inertia route that uses AuthShell.vue
+  - Adding navigation items used by authenticated Inertia pages
+  - Updating authenticated account menu visibility or URLs
+when_not_to_use:
+  - Guest Inertia routes that use GuestShell.vue
+  - Unmigrated Blade routes
+  - Authorization enforcement for backend actions
+rules:
+  - Authenticated Inertia controllers must use AuthShellPayloadBuilder for the shell prop.
+  - Authenticated Inertia controllers must not duplicate AuthShell navigation or account-menu payload methods.
+  - AuthShellPayloadBuilder owns shell user identity, top-level URLs, navigation groups, nested navigation children, disabled navigation reasons, and account menu items.
+  - Route controllers remain responsible for page-specific payloads only.
+  - Laravel Gates and route middleware remain authoritative; shell visibility is presentation state only.
+  - Navigation eligibility must be resolved server-side before shell props are sent to Vue.
+public_interface:
+  - App\Support\Inertia\AuthShellPayloadBuilder::build(Request $request)
+  - shell.logo
+  - shell.user
+  - shell.navigation.dashboardUrl
+  - shell.navigation.profileUrl
+  - shell.navigation.logoutUrl
+  - shell.navigation.groups
+  - shell.navigation.accountItems
+example_usage: |
+  public function index(Request $request, AuthShellPayloadBuilder $authShellPayloadBuilder): Response
+  {
+      return Inertia::render('Sales/Customers/Index', [
+          'shell' => $authShellPayloadBuilder->build($request),
+          'payload' => $this->customerPayload($request),
+      ]);
+  }

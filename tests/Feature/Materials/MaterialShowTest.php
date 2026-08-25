@@ -9,6 +9,7 @@ use App\Models\UomCategory;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
+use Inertia\Testing\AssertableInertia as Assert;
 
 uses(RefreshDatabase::class);
 
@@ -125,15 +126,17 @@ test('material show page renders the base uom dropdown with tenant uom options',
     $response = ($this->getShowPage)($this->user, $item);
 
     $response->assertOk()
-        ->assertSee('data-material-base-uom-dropdown', false)
-        ->assertSee('data-material-name-editor', false)
-        ->assertSee('materialNameEditor', false)
-        ->assertSee('Edit material name', false)
-        ->assertSee('materialBaseUomDropdown', false)
-        ->assertSee('"base_uom_name"', false)
-        ->assertSee('"uom_options"', false)
-        ->assertSee((string) $otherUom->id, false)
-        ->assertSee('Test Kilogram', false);
+        ->assertInertia(fn (Assert $page): Assert => $page
+            ->component('Materials/Show')
+            ->where('payload.item.can_manage', true)
+            ->where('payload.item.base_uom_name', $uom->name)
+            ->has('payload.item.uom_options'));
+
+    $page = $response->viewData('page');
+    $options = collect($page['props']['payload']['item']['uom_options'] ?? []);
+
+    expect($options->contains(fn (array $option): bool => $option['id'] === $otherUom->id
+        && $option['name'] === 'Test Kilogram'))->toBeTrue();
 });
 
 test('material show page renders base uom as a static badge without manage permission', function (): void {
@@ -145,15 +148,13 @@ test('material show page renders base uom as a static badge without manage permi
     $response = ($this->getShowPage)($this->user, $item);
 
     $response->assertOk()
-        ->assertDontSee('data-material-base-uom-dropdown', false)
-        ->assertDontSee('materialBaseUomDropdown', false)
-        ->assertDontSee('data-material-name-editor', false)
-        ->assertDontSee('materialNameEditor', false)
-        ->assertDontSee('Edit material name', false)
-        ->assertSee($uom->name, false);
+        ->assertInertia(fn (Assert $page): Assert => $page
+            ->component('Materials/Show')
+            ->where('payload.item.can_manage', false)
+            ->where('payload.item.base_uom_name', $uom->name));
 });
 
-test('material show page renders inventory stats through alpine payload state', function (): void {
+test('material show page renders inventory stats through inertia payload state', function (): void {
     ($this->grantPermission)($this->user, 'inventory-materials-view');
 
     $uom = ($this->makeUom)();
@@ -164,10 +165,40 @@ test('material show page renders inventory stats through alpine payload state', 
     $response = ($this->getShowPage)($this->user, $item);
 
     $response->assertOk()
-        ->assertSee('data-material-inventory-stats', false)
-        ->assertSee('x-data="materialInventoryStats"', false)
-        ->assertSee('x-text="uomSymbol(card)"', false)
-        ->assertSee('"inventoryStats"', false);
+        ->assertInertia(fn (Assert $page): Assert => $page
+            ->component('Materials/Show')
+            ->has('payload.inventoryStats.cards'));
+});
+
+test('material show quantity bar preserves the blade mobile collapse contract', function (): void {
+    $componentSource = file_get_contents(resource_path('js/components/MaterialQuantityBar.vue')) ?: '';
+    $pageSource = file_get_contents(resource_path('js/pages/Materials/Show.vue')) ?: '';
+
+    expect($pageSource)->toContain('MaterialQuantityBar')
+        ->and($componentSource)->toContain('role="tablist"')
+        ->and($componentSource)->toContain('activeStat === card.key')
+        ->and($componentSource)->toContain("'flex-1 bg-white px-3 py-2'")
+        ->and($componentSource)->toContain("'w-8 bg-slate-50'")
+        ->and($componentSource)->toContain('duration-[400ms]')
+        ->and($componentSource)->toContain('-rotate-90')
+        ->and($componentSource)->toContain('quantity_display_grouped')
+        ->and($componentSource)->toContain('compact_label')
+        ->and($componentSource)->toContain('sm:grid-cols-5');
+});
+
+test('material show header uses the legacy icon-only material type buttons', function (): void {
+    $pageSource = file_get_contents(resource_path('js/pages/Materials/Show.vue')) ?: '';
+
+    expect($pageSource)->toContain('shopping-cart')
+        ->and($pageSource)->toContain('credit-card')
+        ->and($pageSource)->toContain('icon: "cog"')
+        ->and($pageSource)->toContain('rectangle-group')
+        ->and($pageSource)->toContain('aria-label="toggle.label"')
+        ->and($pageSource)->toContain('sr-only')
+        ->and($pageSource)->not()->toContain('short: "Sell"')
+        ->and($pageSource)->not()->toContain('short: "Buy"')
+        ->and($pageSource)->not()->toContain('short: "Make"')
+        ->and($pageSource)->not()->toContain('short: "Stock"');
 });
 
 test('material show includes planning price fields when null', function (): void {

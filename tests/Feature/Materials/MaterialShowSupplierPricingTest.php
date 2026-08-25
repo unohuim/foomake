@@ -235,6 +235,12 @@ beforeEach(function (): void {
     };
 
     $this->extractPayload = function ($response, string $payloadId): array {
+        $page = $response->viewData('page') ?? null;
+
+        if (is_array($page) && isset($page['props']['payload']) && is_array($page['props']['payload'])) {
+            return $page['props']['payload'];
+        }
+
         preg_match(
             '/<script[^>]+id="' . preg_quote($payloadId, '/') . '"[^>]*>(.*?)<\/script>/s',
             $response->getContent(),
@@ -444,10 +450,7 @@ it('3. includes the supplier packages section config for purchasable materials w
     ($this->grantPermissions)($user, ['inventory-materials-view', 'purchasing-suppliers-view']);
 
     $response = ($this->getShow)($user, $item)
-        ->assertOk()
-        ->assertSee('data-page="materials-show"', false)
-        ->assertSee('materials-show-payload', false)
-        ->assertSee('data-js-crud-section-root', false);
+        ->assertOk();
 
     $section = ($this->extractSectionConfig)($response);
 

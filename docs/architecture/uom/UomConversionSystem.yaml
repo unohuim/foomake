@@ -5,7 +5,7 @@ location:
   - app/Models/UomConversion.php
   - app/Models/ItemUomConversion.php
   - app/Services/Uom/SystemUomCloner.php
-  - resources/views/manufacturing/uom-conversions/index.blade.php
+  - resources/js/pages/Manufacturing/UomConversions/Index.vue
 purpose: >
   Define how global, tenant-managed, and item-specific UoM conversions coexist,
   are managed in the manufacturing UI, and are validated at their appropriate scope.

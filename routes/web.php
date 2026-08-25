@@ -205,6 +205,8 @@ Route::middleware(['auth', EnsureEmailVerifiedOrInGracePeriod::class, EnsureTena
     Route::delete('/materials/uom-categories/{uomCategory}', [UomCategoryController::class, 'destroy'])
         ->name('materials.uom-categories.destroy');
     Route::delete('/manufacturing/uom-categories/{uomCategory}', [UomCategoryController::class, 'destroy']);
+    Route::get('/materials/{item}/payload', [ItemController::class, 'showPayload'])
+        ->name('materials.show.payload');
     Route::get('/materials/{item}', [ItemController::class, 'show'])
         ->name('materials.show');
 
@@ -322,6 +324,8 @@ Route::middleware(['auth', EnsureEmailVerifiedOrInGracePeriod::class, EnsureTena
         ->name('purchasing.suppliers.list');
     Route::post('/purchasing/suppliers', [SupplierController::class, 'store'])
         ->name('purchasing.suppliers.store');
+    Route::get('/purchasing/suppliers/{supplier}/payload', [SupplierController::class, 'showPayload'])
+        ->name('purchasing.suppliers.show.payload');
     Route::get('/purchasing/suppliers/{supplier}', [SupplierController::class, 'show'])
         ->name('purchasing.suppliers.show');
     Route::patch('/purchasing/suppliers/{supplier}', [SupplierController::class, 'update'])

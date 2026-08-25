@@ -1,0 +1,28 @@
+name: Material Quantity Bar
+type: UI Component Contract
+location:
+  - resources/js/components/MaterialQuantityBar.vue
+  - resources/views/materials/show.blade.php
+  - resources/js/pages/Materials/Show.vue
+purpose: Preserve the Material detail inventory quantity summary strip across the Blade-to-Inertia migration.
+when_to_use:
+  - Rendering the stock quantity summary strip on Material detail pages
+  - Showing inventory stat cards that collapse into a compact mobile tab bar
+when_not_to_use:
+  - Generic dashboard stats
+  - Resource index cards
+  - Non-material quantity summaries without the Material detail payload contract
+rules:
+  - The component must accept the Material detail `inventoryStats.cards` payload without reshaping server data.
+  - Mobile layout must match the legacy Blade collapse behavior: one active stat expands, inactive stats collapse to narrow rotated labels, and tapping a stat changes the active card.
+  - Mobile expand/collapse visual transitions must complete in 400ms.
+  - Desktop layout must render all stat cards in a grid and choose grid columns from the number of cards.
+  - Display text must prefer `quantity_display_grouped`, then `quantity_display`, then `0`.
+  - Collapsed mobile labels must prefer `compact_label`, then `mobile_label`, then `label`.
+  - Unit symbols must render only when `uom_symbol` is present.
+  - Page components own fetching and payload refresh; this component only renders the provided cards and local active-card UI state.
+public_interface:
+  - resources/js/components/MaterialQuantityBar.vue
+  - cards
+example_usage: |
+  <MaterialQuantityBar :cards="payload.inventoryStats.cards" />

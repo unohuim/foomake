@@ -248,10 +248,11 @@ $onHand = app(CalculateItemOnHandQuantityAction::class)->execute($item);
 - `app/Http/Controllers/InventoryCountController.php`
 - `app/Http/Controllers/Admin/UserManagementController.php`
 - `resources/js/pages/Sales/Products/Index.vue`
+- `resources/js/pages/Purchasing/Suppliers/Index.vue`
+- `resources/js/pages/Materials/Index.vue`
 - `resources/views/sales/customers/index.blade.php`
 - `resources/views/purchasing/orders/index.blade.php`
 - `resources/views/purchasing/suppliers/index.blade.php`
-- `resources/views/materials/index.blade.php`
 - `resources/views/inventory/counts/index.blade.php`
 - `resources/views/manufacturing/make-orders/index.blade.php`
 - `resources/views/admin/users/index.blade.php`
@@ -262,7 +263,6 @@ $onHand = app(CalculateItemOnHandQuantityAction::class)->execute($item);
 - `resources/js/pages/sales-customers-index.js`
 - `resources/js/pages/purchasing-orders-index.js`
 - `resources/js/pages/purchasing-suppliers-index.js`
-- `resources/js/pages/materials-index.js`
 - `resources/js/pages/inventory-counts-index.js`
 - `resources/js/pages/manufacturing-make-orders.js`
 - `resources/js/pages/admin-users-index.js`
@@ -298,7 +298,7 @@ $crudConfig = [
 ```
 
 Notes:
-- Products, Customers, Purchase Orders, Suppliers, Materials, Inventory Counts, Make Orders, and Admin Users are current reference implementations.
+- Products, Customers, Purchase Orders, Suppliers, Inventory Counts, Make Orders, and Admin Users are current reference implementations.
 - `detailUrlTemplate` is optional and is used for row/card links.
 - Create flows stay on the index, refresh the list, close any create panel, and show toast feedback after success.
 
@@ -309,7 +309,6 @@ Notes:
 **Location:**
 - `docs/architecture/ui/ConfiguredCrudCardPageRenderer.yaml`
 - `resources/js/lib/crud-card-page.js`
-- `resources/js/pages/materials-index.js`
 
 **Purpose:**
 Provide a sibling renderer for configured CRUD index pages that preserves the shared CRUD config, toolbar, search, action, and toggle contracts while rendering desktop records as responsive Tailwind cards or an opt-in stacked list instead of a table.
@@ -625,7 +624,25 @@ Sales products index is an approved Inertia route migration. The page owns produ
 
 Sales orders detail is an approved Inertia route migration. The Inertia page owns detail orchestration and retrieves its mutable read model from `sales.orders.show.payload`.
 
+Purchasing suppliers index/detail are approved Inertia route migrations. The index page owns supplier-specific list/create/edit/archive orchestration and renders records through shared Vue index/card components. The detail page owns supplier detail orchestration and retrieves its mutable read model from `purchasing.suppliers.show.payload`.
+
+Purchasing orders index/detail are approved Inertia route migrations. The index page owns purchase-order-specific list/create orchestration and renders records through shared Vue index/card components. The detail page owns purchase-order-specific header, line, workflow, receiving, short-close, task, and notes orchestration while preserving backend-owned purchasing order endpoints.
+
+Materials index/detail are approved Inertia route migrations. The index page owns materials availability list fetching, create-drawer orchestration, active toggles, and resource-card rendering while preserving backend-owned materials JSON endpoints. The detail page owns material header, type toggle, base UoM, stats, supplier package, recipe, inventory count, stock move, purchase order, and make order orchestration while retrieving its mutable read model from `materials.show.payload`.
+
+Inventory counts index is an approved Inertia route migration. The page owns inventory-count list fetching, create-drawer orchestration, and shared `ResourceCardGrid` rendering while preserving backend-owned inventory count JSON endpoints and workflow authorization.
+
+Materials UoM categories index is an approved Inertia route migration. The page owns category-specific create/edit/delete orchestration and renders records through shared Vue index/card/drawer components while preserving backend-owned UoM category JSON endpoints.
+
+Manufacturing make orders index/detail are approved Inertia route migrations. The index page owns make-order list/create/archive orchestration and renders records through shared Vue index/card/drawer components. The detail page owns make-order header, workflow, quantity, assignment, task, ingredient, and notes orchestration while preserving backend-owned Make Order JSON endpoints and workflow authorization.
+
+Manufacturing units of measure index is an approved Inertia route migration. The page owns unit-specific create/edit/delete orchestration, category grouping, and local search while preserving backend-owned UoM JSON endpoints.
+
+Manufacturing UoM conversions index is an approved Inertia route migration. The page owns general and item-specific conversion create/edit/delete orchestration while preserving backend-owned conversion validation, precedence, and JSON endpoints.
+
 Admin marketing is an approved Inertia route migration. The page is super-admin-only and starts with Search Console connection status plus available performance views.
+
+Authenticated Inertia controllers use `AuthShellPayloadBuilder` for the shared `shell` prop. Route controllers own page-specific payloads and must not duplicate user, navigation, or account-menu shell helpers.
 
 **When to Use:**
 Migrating a route to Inertia/Vue, creating new Vue-backed public pages, or building shared Vue guest/auth shells.
@@ -646,6 +663,22 @@ Unmigrated Blade routes, backend domain behavior, authorization, validation, ten
 - `resources/js/pages/Sales/Products/Index.vue`
 - `resources/js/pages/Sales/Orders/Index.vue`
 - `resources/js/pages/Sales/Orders/Show.vue`
+- `resources/js/pages/Purchasing/Suppliers/Index.vue`
+- `resources/js/pages/Purchasing/Suppliers/Show.vue`
+- `resources/js/pages/Manufacturing/MakeOrders/Show.vue`
+- `resources/js/pages/Purchasing/Orders/Index.vue`
+- `resources/js/pages/Purchasing/Orders/Show.vue`
+- `resources/js/pages/Materials/Index.vue`
+- `resources/js/pages/Materials/Show.vue`
+- `resources/js/pages/Inventory/Counts/Index.vue`
+- `resources/js/pages/Inventory/Counts/Show.vue`
+- `resources/js/pages/Manufacturing/Recipes/Index.vue`
+- `resources/js/pages/Manufacturing/MakeOrders/Index.vue`
+- `resources/js/pages/Manufacturing/MakeOrders/Show.vue`
+- `resources/js/pages/Materials/UomCategories/Index.vue`
+- `resources/js/pages/Manufacturing/Uoms/Index.vue`
+- `resources/js/pages/Manufacturing/UomConversions/Index.vue`
+- `app/Support/Inertia/AuthShellPayloadBuilder.php`
 - `resources/js/layouts/GuestShell.vue`
 - `resources/js/layouts/AuthShell.vue`
 - `resources/js/components/AuthDrawer.vue`
@@ -658,10 +691,14 @@ Unmigrated Blade routes, backend domain behavior, authorization, validation, ten
 - `resources/js/components/ResourceIndex.vue`
 - `resources/js/components/ResourceCardGrid.vue`
 - `resources/js/components/ResourceDetailHeaderBreadcrumb.vue`
+- `resources/js/components/ResourceDetailSection.vue`
 - `resources/js/components/ResourceCardGrid.vue`
 - `resources/js/components/ResourceCreateDrawer.vue`
 - `resources/js/components/ResourceExportDrawer.vue`
 - `resources/js/components/ResourceImportDrawer.vue`
+- `resources/js/components/MaterialQuantityBar.vue`
+- `resources/js/components/UiToggle.vue`
+- `resources/js/components/UiToast.vue`
 - `resources/js/components/connectors/WooCommerceConnectorCard.vue`
 - `resources/js/components/connectors/WordPressPluginConnectionCard.vue`
 - `resources/js/components/connectors/WordPressPluginDownload.vue`
@@ -673,6 +710,139 @@ return Inertia::render('Home', [
         'headline' => 'Keep the day’s batches moving without another clipboard.',
     ],
 ]);
+```
+
+### Material Quantity Bar
+
+**Name:** Material Quantity Bar
+**Type:** UI Component Contract
+**Location:**
+- `docs/architecture/ui/MaterialQuantityBar.yaml`
+- `resources/js/components/MaterialQuantityBar.vue`
+- `resources/views/materials/show.blade.php`
+- `resources/js/pages/Materials/Show.vue`
+
+**Purpose:**
+Preserve the Material detail inventory quantity summary strip across the Blade-to-Inertia migration.
+
+Mobile expand/collapse transitions complete in 400ms and keep the legacy one-expanded-stat, rotated-collapsed-label behavior.
+
+**When to Use:**
+Rendering the stock quantity summary strip on Material detail pages.
+
+**When Not to Use:**
+Generic dashboard stats, resource index cards, or non-material quantity summaries.
+
+**Public Interface:**
+- `cards`
+
+**Example Usage:**
+```vue
+<MaterialQuantityBar :cards="payload.inventoryStats.cards" />
+```
+
+### Auth Shell Payload Builder
+
+**Name:** Auth Shell Payload Builder
+**Type:** UI Architecture Invariant
+**Location:**
+- `docs/architecture/ui/AuthShellPayloadBuilder.yaml`
+- `app/Support/Inertia/AuthShellPayloadBuilder.php`
+- `resources/js/layouts/AuthShell.vue`
+
+**Purpose:**
+Centralize the authenticated Inertia shell payload so migrated auth routes share one user, navigation, and account-menu contract.
+
+**When to Use:**
+Authenticated Inertia routes that render `AuthShell.vue`.
+
+**When Not to Use:**
+Guest routes, unmigrated Blade routes, or backend authorization enforcement.
+
+**Public Interface:**
+- `App\Support\Inertia\AuthShellPayloadBuilder::build(Request $request)`
+- `shell.logo`
+- `shell.user`
+- `shell.navigation`
+
+**Example Usage:**
+```php
+return Inertia::render('Sales/Customers/Index', [
+    'shell' => $authShellPayloadBuilder->build($request),
+]);
+```
+
+### UI Toggle
+
+**Name:** UI Toggle
+**Type:** UI Architecture Invariant
+**Location:**
+- `docs/architecture/ui/UiToggle.yaml`
+- `resources/js/components/UiToggle.vue`
+- `resources/views/components/ui/toggle.blade.php`
+- `resources/js/components/toggle.js`
+
+**Purpose:**
+Provide the standard toggle-switch contract for Vue Inertia pages while preserving the existing Blade and Alpine toggle behavior.
+
+**When to Use:**
+Boolean state switches in Vue Inertia pages.
+
+**When Not to Use:**
+Non-boolean controls, static badges, or backend authorization.
+
+**Public Interface:**
+- `checked`
+- `disabled`
+- `name`
+- `record`
+- `ariaLabel`
+- `update:checked`
+- `change`
+
+**Example Usage:**
+```vue
+<UiToggle
+    name="is_active"
+    :checked="Boolean(record.is_active)"
+    :record="record"
+    @change="toggleRecordActive($event.record, $event.checked)"
+/>
+```
+
+### UI Toast
+
+**Name:** UI Toast
+**Type:** UI Architecture Invariant
+**Location:**
+- `docs/architecture/ui/UiToast.yaml`
+- `resources/js/components/UiToast.vue`
+- `resources/views/components/ui/toast.blade.php`
+
+**Purpose:**
+Provide the standard non-blocking toast notification contract for Vue Inertia pages while preserving the existing Blade and Alpine toast behavior.
+
+**When to Use:**
+Page-scoped success or error feedback in Vue Inertia pages.
+
+**When Not to Use:**
+Blocking confirmations, field validation summaries, or unmigrated Blade flash messages.
+
+**Public Interface:**
+- `visible`
+- `type`
+- `message`
+- `dismiss`
+- `update:visible`
+
+**Example Usage:**
+```vue
+<UiToast
+    :visible="Boolean(toast)"
+    :type="toast?.tone || 'success'"
+    :message="toast?.message || ''"
+    @dismiss="toast = null"
+/>
 ```
 
 ### Base Drawer
@@ -829,6 +999,10 @@ Unmigrated Blade/Alpine resource index pages, resource detail pages, or domain-s
 - `boundedHeightClass`
 - `ResourceCardGrid` `title`
 - `ResourceCardGrid` `titleAside`
+- `ResourceCardGrid` `iconBadges`
+- `ResourceCardGrid` `mobile-aside`
+- `ResourceCardGrid` `desktop-aside`
+- `ResourceCardGrid` `footer`
 - `update:search`
 - `search`
 - `create`
@@ -838,7 +1012,7 @@ Unmigrated Blade/Alpine resource index pages, resource detail pages, or domain-s
 - toolbar action slots
 
 **Behavior Contract:**
-ResourceIndex owns only the generic shell and toolbar interaction surface. Records render through slots, data arrives through props, user intent leaves through events, and the records pane remains the only scrollable region.
+ResourceIndex owns only the generic shell and toolbar interaction surface. Records render through slots, data arrives through props, user intent leaves through events, and the records pane remains the only scrollable region. Repeated index cards use `ResourceCardGrid`; the grid enforces desktop card min/max widths so wider viewports show more cards instead of stretching a fixed small column count, and it respects per-record `available_actions` / `availableActions` when rendering shared row action menus.
 
 **Example Usage:**
 ```vue
@@ -962,7 +1136,9 @@ The drawer components compose `BaseDrawer`, inherit the standard 500ms slide/fad
 **Type:** UI Architectural Pattern
 **Location:**
 - `resources/js/lib/js-crud-section.js`
+- `resources/js/components/ResourceDetailSection.vue`
 - `resources/js/pages/materials-show.js`
+- `resources/js/pages/Purchasing/Suppliers/Show.vue`
 - `resources/js/pages/purchasing-suppliers-show.js`
 - `resources/js/pages/inventory-count-show.js`
 - `resources/views/materials/show.blade.php`
@@ -970,20 +1146,23 @@ The drawer components compose `BaseDrawer`, inherit the standard 500ms slide/fad
 - `resources/views/inventory/counts/show.blade.php`
 
 **Purpose:**
-Provide a shared expandable detail-section CRUD surface for record sublists such as supplier packages, purchase orders, and inventory count materials.
+Provide a shared expandable detail-section surface for record sublists such as supplier packages, purchase orders, and inventory count materials, plus static page-owned Vue detail subsection content rendered through slots.
 
 **When to Use:**
 - Detail pages that manage a scoped child-record collection with list/create/update/delete behavior
 - Row-action menus that must escape beyond the section/card boundary
+- Detail pages that need the shared section shell around page-owned Vue content
 
 **When Not to Use:**
 - Index pages already covered by the configured CRUD page module
-- One-off embedded forms without list state
+- Content that is not a resource detail subsection
 
 **Public Interface:**
 - `data-js-crud-section-root`
 - `data-section-key`
 - `mountCrudSection(rootEl, { section, adapters })`
+- `ResourceDetailSection.vue`
+- `ResourceDetailSection.vue` default slot for page-owned static content
 
 **Example Usage:**
 ```html
@@ -998,8 +1177,8 @@ Notes:
 - Shared CRUD detail sections default to 5 rows per page through the section pagination contract; endpoints should honor `per_page` when list data is loaded remotely, while future per-page selectors can opt in through the same config.
 - Inventory Count detail uses this pattern with a `Materials` section and a read-only `Tasks` section that reuses the existing task completion route/payload contract.
 - Material detail uses this pattern for `Supplier Packages`, `Recipes`, `Purchase Orders`, and `Make Orders`; `Supplier Packages` and `Recipes` render near the top and default open, while `Purchase Orders` and `Make Orders` render near the bottom and default collapsed.
-- Supplier detail uses this pattern for `Supplier Packages`, scoped to the current supplier. The create slide-over selects the Material while the supplier is fixed by the page context, and row actions use the shared vertical dots menu for `Edit`, `Purchase`, and `Delete`.
-- Supplier detail uses this pattern for `Purchase Orders`, scoped to purchase orders whose `supplier_id` matches the current supplier. Its `+` action posts to the existing Purchase Order create endpoint with the supplier fixed by page context and redirects to the created draft PO detail page.
+- Supplier detail uses the Vue `ResourceDetailSection` counterpart for `Supplier Packages`, scoped to the current supplier. The create slide-over selects the Material while the supplier is fixed by the page context, and row actions use the shared vertical dots menu for `Edit`, `Purchase`, and `Delete`.
+- Supplier detail uses the Vue `ResourceDetailSection` counterpart for `Purchase Orders`, scoped to purchase orders whose `supplier_id` matches the current supplier. Its `+` action posts to the existing Purchase Order create endpoint with the supplier fixed by page context and redirects to the created draft PO detail page.
 - Material detail reuses the existing section abstraction for manufacturable-only `Recipes` and `Make Orders` sections rather than introducing a bespoke accordion/detail implementation.
 - Material detail section rows expose record detail links where an existing detail surface is available, using the shared row-action `View` contract rather than bespoke row-click behavior; this applies to Purchase Order rows, Recipe rows, and Make Order rows.
 - Material detail `Supplier Packages` rows do not expose `View` or `Edit`; their `Purchase` action posts directly to the material-scoped draft purchase-order endpoint, creates a one-pack PO line from the selected supplier package, and redirects to the new Purchase Order detail page.
@@ -1732,7 +1911,6 @@ Notes:
 **Location:**
 - `docs/architecture/ui/ConfiguredCrudCardPageRenderer.yaml`
 - `resources/js/lib/crud-card-page.js`
-- `resources/js/pages/materials-index.js`
 
 **Purpose:**
 Render configured CRUD index records as responsive desktop Tailwind cards or an opt-in stacked list while preserving the shared CRUD toolbar, search, action, toggle, and mount-shell contracts.
@@ -2472,6 +2650,7 @@ $total = bcadd($a, $b, 6);
 - `app/Support/Inventory/InventoryAvailabilityIndexReadModel.php`
 - `app/Support/Inventory/InventoryAvailabilityCalculator.php`
 - `app/Http/Controllers/MaterialController.php`
+- `resources/js/pages/Materials/Index.vue`
 
 **Purpose:**
 Provide one tenant-scoped availability contract for the materials index and single-item availability reads.
@@ -4335,8 +4514,8 @@ Static Blade pages with no interactivity.
 
 **Example Usage:**
 ```blade
-<script type="application/json" id="materials-index-payload">@json($payload)</script>
-<div data-page="materials-index" data-payload="materials-index-payload" x-data="materialsIndex"></div>
+<script type="application/json" id="manufacturing-make-orders-payload">@json($payload)</script>
+<div data-page="manufacturing-make-orders" data-payload="manufacturing-make-orders-payload" x-data="manufacturingMakeOrders"></div>
 ```
 
 ---

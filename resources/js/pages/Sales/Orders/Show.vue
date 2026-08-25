@@ -702,8 +702,8 @@ onBeforeUnmount(() => {
 
                 <div v-else class="pt-0 pb-12 sm:pt-6">
                     <div class="mx-auto max-w-6xl space-y-6 sm:px-6 lg:px-8">
-                        <nav v-if="workflowProgressSteps.length > 0" class="w-full" aria-label="Progress">
-                            <div class="flex overflow-hidden rounded-md border border-gray-300 bg-white md:hidden" role="tablist" aria-label="Workflow stages" data-workflow-progress-mobile-tabs>
+                        <nav v-if="workflowProgressSteps.length > 0" class="-mx-1 w-auto sm:mx-0 sm:w-full" aria-label="Progress">
+                            <div class="flex overflow-hidden border-y border-gray-300 bg-white md:hidden" role="tablist" aria-label="Workflow stages" data-workflow-progress-mobile-tabs>
                                 <button
                                     v-for="(step, index) in workflowProgressSteps"
                                     :key="`${step.label}-${index}`"

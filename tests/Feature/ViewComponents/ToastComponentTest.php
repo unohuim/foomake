@@ -14,6 +14,7 @@ beforeEach(function (): void {
     };
 
     $this->toastSource = fn (): string => File::get(resource_path('views/components/ui/toast.blade.php'));
+    $this->vueToastSource = fn (): string => File::get(resource_path('js/components/UiToast.vue'));
     $this->materialsShowSource = fn (): string => File::get(resource_path('js/pages/materials-show.js'));
     $this->profileEditSource = fn (): string => File::get(resource_path('js/pages/profile-edit.js'));
 });
@@ -95,4 +96,19 @@ BLADE
 it('8. page modules keep success toast timing at one and a half seconds', function (): void {
     expect(($this->materialsShowSource)())->toContain('}, 1500);')
         ->and(($this->profileEditSource)())->toContain('}, 1500);');
+});
+
+it('9. Vue toast component preserves the Blade toast visual and event contract', function (): void {
+    $source = ($this->vueToastSource)();
+
+    expect($source)->toContain('fixed inset-x-3 top-3 z-50')
+        ->and($source)->toContain('rounded-lg bg-white shadow-lg')
+        ->and($source)->toContain('aria-live="assertive"')
+        ->and($source)->toContain('role="status"')
+        ->and($source)->toContain('text-green-400')
+        ->and($source)->toContain('text-red-400')
+        ->and($source)->toContain('enter-active-class="transform ease-out duration-300 transition"')
+        ->and($source)->toContain('leave-active-class="transition ease-in duration-100"')
+        ->and($source)->toContain('emit("update:visible", false)')
+        ->and($source)->toContain('emit("dismiss")');
 });

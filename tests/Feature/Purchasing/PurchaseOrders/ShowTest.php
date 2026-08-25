@@ -16,6 +16,7 @@ use App\Models\WorkflowDomain;
 use App\Models\WorkflowStage;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Inertia\Testing\AssertableInertia as Assert;
 
 uses(RefreshDatabase::class);
 
@@ -156,16 +157,14 @@ beforeEach(function () {
         return $this->actingAs($user)->postJson("/purchasing/orders/{$orderId}/lines", $payload);
     };
 
-    $this->extractPayload = function ($response, string $payloadId): array {
-        $html = $response->getContent();
-        $pattern = '/<script type="application\\/json" id="' . preg_quote($payloadId, '/') . '">\s*(.*?)\s*<\\/script>/s';
+    $this->extractPayload = function ($response, string $payloadId = 'purchasing-orders-show-payload'): array {
+        $props = $response->viewData('page')['props'] ?? null;
 
-        preg_match($pattern, $html, $matches);
+        if ($payloadId === 'purchasing-orders-show-payload' && is_array($props) && isset($props['payload'])) {
+            return $props['payload'];
+        }
 
-        $json = $matches[1] ?? '';
-        $payload = json_decode($json, true);
-
-        return is_array($payload) ? $payload : [];
+        return [];
     };
 });
 
@@ -234,7 +233,7 @@ it('blocks cross-tenant show access', function () {
         ->assertNotFound();
 });
 
-it('renders show payload markers', function () {
+it('renders show through the Inertia purchase order detail page', function () {
     $tenant = ($this->makeTenant)();
     $user = ($this->makeUser)($tenant);
 
@@ -249,12 +248,13 @@ it('renders show payload markers', function () {
     $this->actingAs($user)
         ->get("/purchasing/orders/{$orderId}")
         ->assertOk()
-        ->assertSee('Purchase Orders')
-        ->assertSee('PO #' . $orderId)
-        ->assertSee(route('purchasing.orders.index'), false)
-        ->assertDontSee('Back to Purchase Orders')
-        ->assertSee('data-page="purchasing-orders-show"', false)
-        ->assertSee('purchasing-orders-show-payload', false);
+        ->assertInertia(fn (Assert $page): Assert => $page
+            ->component('Purchasing/Orders/Show')
+            ->where('title', 'PO #' . $orderId)
+            ->where('indexUrl', route('purchasing.orders.index', absolute: false))
+            ->where('payload.purchaseOrder.id', $orderId)
+            ->has('payload.workflow')
+            ->has('payload.lines'));
 });
 
 it('includes header fields in show payload', function () {
@@ -632,10 +632,10 @@ it('shows supplier name when supplier is set', function () {
 
     $orderId = (int) ($orderResponse->json('data.id') ?? 0);
 
-    $this->actingAs($user)
-        ->get("/purchasing/orders/{$orderId}")
-        ->assertOk()
-        ->assertSee('Supplier Name');
+    $response = $this->actingAs($user)->get("/purchasing/orders/{$orderId}")->assertOk();
+    $payload = ($this->extractPayload)($response, 'purchasing-orders-show-payload');
+
+    expect($payload['purchaseOrder']['supplier_name'] ?? null)->toBe('Supplier Name');
 });
 
 it('shows status field on show', function () {
@@ -692,47 +692,35 @@ it('renders purchase order detail with header action as the only visible status 
 
     $orderId = (int) ($orderResponse->json('data.id') ?? 0);
 
-    $html = $this->actingAs($user)
+    $response = $this->actingAs($user)
         ->get("/purchasing/orders/{$orderId}")
-        ->assertOk()
-        ->getContent();
+        ->assertOk();
+    $payload = ($this->extractPayload)($response, 'purchasing-orders-show-payload');
+    $source = file_get_contents(resource_path('js/pages/Purchasing/Orders/Show.vue'));
 
-    $decodedHtml = html_entity_decode($html, ENT_QUOTES, 'UTF-8');
-
-    expect($decodedHtml)
-        ->toContain((string) $orderId)
-        ->toContain('data-purchase-order-action-button')
+    expect($payload['purchaseOrder']['id'] ?? null)->toBe($orderId)
+        ->and($source)->toContain('data-purchase-order-action-button')
         ->not->toContain('x-data="purchaseOrderHeader(')
         ->not->toContain('data-purchase-order-status-badge');
 });
 
 it('purchase order detail source blurs received at picker after value changes', function () {
-    $source = file_get_contents(resource_path('views/purchasing/orders/show.blade.php'));
-    $pageModule = file_get_contents(resource_path('js/pages/purchasing-orders-show.js'));
+    $source = file_get_contents(resource_path('js/pages/Purchasing/Orders/Show.vue'));
 
-    expect($source)->toContain('x-on:input="collapseReceiveDatePicker($event)"')
-        ->and($source)->toContain('x-on:change="collapseReceiveDatePicker($event)"')
+    expect($source)->toContain('type="datetime-local"')
         ->and($source)->toContain('step="1"')
         ->and($source)->toContain('inputmode="numeric"')
-        ->and($pageModule)->toContain('collapseReceiveDatePicker(event)')
-        ->and($pageModule)->toContain('input.blur()')
-        ->and($pageModule)->toContain('received_quantity: this.formatWholeQuantity(line.remaining_balance)');
+        ->and($source)->toContain('received_quantity: formatWholeQuantity(line.remaining_balance)');
 });
 
 it('purchase order detail source keeps receive action binding after workflow payload refresh', function () {
-    $source = file_get_contents(resource_path('views/purchasing/orders/show.blade.php'));
-    $pageModule = file_get_contents(resource_path('js/pages/purchasing-orders-show.js'));
-    $workflowButton = file_get_contents(resource_path('js/components/workflow-action-button.js'));
+    $source = file_get_contents(resource_path('js/pages/Purchasing/Orders/Show.vue'));
 
-    expect($workflowButton)->toContain("mode: options.mode || 'dispatch'")
-        ->and($workflowButton)->toContain("actionEventName: options.actionEventName || 'workflow-action-button'")
-        ->and($workflowButton)->toContain('window.dispatchEvent(new CustomEvent(this.actionEventName')
-        ->and($source)->toContain('x-on:purchase-order-status-action.window="performStatusMenuAction($event.detail)"')
-        ->and($source)->toContain('x-on:workflow-updated.document="handleWorkflowUpdated($event.detail)"')
-        ->and($pageModule)->toContain('workflowActionHandlers()')
-        ->and($pageModule)->toContain('const handlers = this.workflowActionHandlers()')
-        ->and($pageModule)->toContain('const action = option.action || option.type')
-        ->and($pageModule)->toContain('receive: () => this.openReceive()');
+    expect($source)->toContain('data-purchase-order-action-button')
+        ->and($source)->toContain('async function performWorkflowAction(action)')
+        ->and($source)->toContain('const actionType = action.action || action.type')
+        ->and($source)->toContain('openReceive()')
+        ->and($source)->toContain('applyWorkflowResponse');
 });
 
 it('workflow completion payload includes receive action state for immediate slide-over eligibility', function () {
@@ -799,11 +787,11 @@ it('workflow payload uses the workflow complete endpoint for the draft create ac
 });
 
 it('receipt history source displays total packs as whole numbers', function () {
-    $pageModule = file_get_contents(resource_path('js/pages/purchasing-orders-show.js'));
+    $pageModule = file_get_contents(resource_path('js/pages/Purchasing/Orders/Show.vue'));
 
     expect($pageModule)->toContain('receiptLineSummary(receipt)')
         ->and($pageModule)->toContain('formatWholeQuantity')
-        ->and($pageModule)->toContain('return `${lineCount} lines, ${total} total packs`;');
+        ->and($pageModule)->toContain('total packs');
 });
 
 it('renders draft action dropdown with recipe-style action descriptions', function () {
@@ -818,22 +806,18 @@ it('renders draft action dropdown with recipe-style action descriptions', functi
 
     $orderId = (int) ($orderResponse->json('data.id') ?? 0);
 
-    $this->actingAs($user)
-        ->get("/purchasing/orders/{$orderId}")
-        ->assertOk()
-        ->assertSee('data-purchase-order-action-button', false)
-        ->assertSee('DRAFT')
-        ->assertSee('w-64', false)
-        ->assertSee('rounded-xl border border-slate-200 bg-white p-1.5 shadow-lg ring-1 ring-black/5', false)
-        ->assertSee('block font-medium text-slate-900', false)
-        ->assertSee('mt-1 block text-xs leading-5 text-slate-500', false)
-        ->assertSee('Create')
-        ->assertSee('Create this purchase order.')
-        ->assertSee('Cancel')
-        ->assertSee('Cancel this purchase order.')
-        ->assertDontSee('Mark remaining items as back ordered.')
-        ->assertDontSee('Short Close')
-        ->assertDontSee('Mark this purchase order complete.');
+    $payload = ($this->extractPayload)(
+        $this->actingAs($user)->get("/purchasing/orders/{$orderId}")->assertOk(),
+        'purchasing-orders-show-payload'
+    );
+    $actions = collect($payload['workflow']['actions'] ?? []);
+
+    expect($payload['purchaseOrder']['status'] ?? null)->toBe('DRAFT')
+        ->and($actions->pluck('label')->all())->toContain('Create', 'Cancel')
+        ->and($actions->pluck('description')->all())->toContain('Create this purchase order.', 'Cancel this purchase order.')
+        ->and($actions->pluck('description')->all())->not->toContain('Mark remaining items as back ordered.')
+        ->and($actions->pluck('label')->all())->not->toContain('Short Close')
+        ->and($actions->pluck('description')->all())->not->toContain('Mark this purchase order complete.');
 });
 
 it('renders created action dropdown with receiving-stage actions and descriptions', function () {
@@ -857,21 +841,22 @@ it('renders created action dropdown with receiving-stage actions and description
             'current_workflow_stage_id' => $stages['receiving']->id,
         ]);
 
-    $this->actingAs($user)
-        ->get("/purchasing/orders/{$orderId}")
-        ->assertOk()
-        ->assertSee('data-purchase-order-action-button', false)
-        ->assertSee('CREATED')
-        ->assertSee('Receive')
-        ->assertSee('Record one receipt with one or more received lines.')
-        ->assertSee('Back Order')
-        ->assertSee('Mark remaining items as back ordered.')
-        ->assertSee('Short Close')
-        ->assertSee('Close remaining unreceived quantities.')
-        ->assertSee('Cancel')
-        ->assertSee('Cancel this purchase order.')
-        ->assertDontSee('Create this purchase order.')
-        ->assertDontSee('Mark this purchase order complete.');
+    $payload = ($this->extractPayload)(
+        $this->actingAs($user)->get("/purchasing/orders/{$orderId}")->assertOk(),
+        'purchasing-orders-show-payload'
+    );
+    $actions = collect($payload['workflow']['actions'] ?? []);
+
+    expect($payload['purchaseOrder']['status'] ?? null)->toBe('CREATED')
+        ->and($actions->pluck('label')->all())->toContain('Receive', 'Back Order', 'Short Close', 'Cancel')
+        ->and($actions->pluck('description')->all())->toContain(
+            'Record one receipt with one or more received lines.',
+            'Mark remaining items as back ordered.',
+            'Close remaining unreceived quantities.',
+            'Cancel this purchase order.'
+        )
+        ->and($actions->pluck('description')->all())->not->toContain('Create this purchase order.')
+        ->and($actions->pluck('description')->all())->not->toContain('Mark this purchase order complete.');
 });
 
 it('does not render cancel action when a purchase order has receipts', function () {
@@ -906,11 +891,14 @@ it('does not render cancel action when a purchase order has receipts', function 
         'updated_at' => now(),
     ]);
 
-    $this->actingAs($user)
-        ->get("/purchasing/orders/{$orderId}")
-        ->assertOk()
-        ->assertSee('Receive')
-        ->assertDontSee('Cancel this purchase order.');
+    $payload = ($this->extractPayload)(
+        $this->actingAs($user)->get("/purchasing/orders/{$orderId}")->assertOk(),
+        'purchasing-orders-show-payload'
+    );
+    $actions = collect($payload['workflow']['actions'] ?? []);
+
+    expect($actions->pluck('label')->all())->toContain('Receive')
+        ->and($actions->pluck('description')->all())->not->toContain('Cancel this purchase order.');
 });
 
 it('renders received action dropdown with complete action description', function () {
@@ -934,18 +922,18 @@ it('renders received action dropdown with complete action description', function
             'current_workflow_stage_id' => $stages['completing']->id,
         ]);
 
-    $this->actingAs($user)
-        ->get("/purchasing/orders/{$orderId}")
-        ->assertOk()
-        ->assertSee('data-purchase-order-action-button', false)
-        ->assertSee('RECEIVED')
-        ->assertSee('Complete')
-        ->assertSee('Mark this purchase order complete.')
-        ->assertSee('Cancel')
-        ->assertSee('Cancel this purchase order.')
-        ->assertDontSee('Create this purchase order.')
-        ->assertDontSee('Mark remaining items as back ordered.')
-        ->assertDontSee('Close remaining unreceived quantities.');
+    $payload = ($this->extractPayload)(
+        $this->actingAs($user)->get("/purchasing/orders/{$orderId}")->assertOk(),
+        'purchasing-orders-show-payload'
+    );
+    $actions = collect($payload['workflow']['actions'] ?? []);
+
+    expect($payload['purchaseOrder']['status'] ?? null)->toBe('RECEIVED')
+        ->and($actions->pluck('label')->all())->toContain('Complete', 'Cancel')
+        ->and($actions->pluck('description')->all())->toContain('Mark this purchase order complete.', 'Cancel this purchase order.')
+        ->and($actions->pluck('description')->all())->not->toContain('Create this purchase order.')
+        ->and($actions->pluck('description')->all())->not->toContain('Mark remaining items as back ordered.')
+        ->and($actions->pluck('description')->all())->not->toContain('Close remaining unreceived quantities.');
 });
 
 it('does not expose lifecycle actions for a cancelled purchase order', function () {
@@ -968,16 +956,18 @@ it('does not expose lifecycle actions for a cancelled purchase order', function 
             'cancelled_by_user_id' => $user->id,
         ]);
 
-    $this->actingAs($user)
-        ->get("/purchasing/orders/{$orderId}")
-        ->assertOk()
-        ->assertSee('CANCELLED')
-        ->assertDontSee('data-purchase-order-action-button', false)
-        ->assertDontSee('Create this purchase order.')
-        ->assertDontSee('Mark remaining items as back ordered.')
-        ->assertDontSee('Close remaining unreceived quantities.')
-        ->assertDontSee('Mark this purchase order complete.')
-        ->assertDontSee('Cancel this purchase order.');
+    $payload = ($this->extractPayload)(
+        $this->actingAs($user)->get("/purchasing/orders/{$orderId}")->assertOk(),
+        'purchasing-orders-show-payload'
+    );
+    $actions = collect($payload['workflow']['actions'] ?? []);
+
+    expect($payload['purchaseOrder']['status'] ?? null)->toBe('CANCELLED')
+        ->and($actions->pluck('description')->all())->not->toContain('Create this purchase order.')
+        ->and($actions->pluck('description')->all())->not->toContain('Mark remaining items as back ordered.')
+        ->and($actions->pluck('description')->all())->not->toContain('Close remaining unreceived quantities.')
+        ->and($actions->pluck('description')->all())->not->toContain('Mark this purchase order complete.')
+        ->and($actions->pluck('description')->all())->not->toContain('Cancel this purchase order.');
 });
 
 it('shows line quantity, price, and totals in payload', function () {

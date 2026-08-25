@@ -14,17 +14,19 @@ use App\Models\RecipeVersionLine;
 use App\Models\StockMove;
 use App\Models\User;
 use App\Services\Workflows\MakeOrderWorkflow;
+use App\Support\Inertia\AuthShellPayloadBuilder;
 use App\Support\QuantityFormatter;
 use App\Support\Uom\UomConversionPathResolver;
 use App\Support\Workflows\WorkflowAssignmentPermissions;
 use DomainException;
-use Illuminate\Contracts\View\View;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
+use Inertia\Inertia;
+use Inertia\Response as InertiaResponse;
 
 /**
  * Handle make-order reads, snapshots, and lifecycle actions.
@@ -36,7 +38,7 @@ class MakeOrderController extends Controller
     /**
      * Display the make orders index.
      */
-    public function index(Request $request): View
+    public function index(Request $request, AuthShellPayloadBuilder $authShellPayloadBuilder): InertiaResponse
     {
         Gate::authorize('inventory-make-orders-view');
 
@@ -50,17 +52,16 @@ class MakeOrderController extends Controller
 
         $canExecute = $this->userCanOperateMakeOrderWorkflow($request->user());
         $crudConfig = $this->crudConfig($canExecute);
-        $payload = [
-            'recipes' => $recipes->map(fn (Recipe $recipe): array => $this->recipePayload($recipe))->all(),
-            'storeUrl' => route('manufacturing.make-orders.store'),
-            'csrfToken' => $request->session()->token(),
-            'canExecute' => $canExecute,
-            'prefillRecipeId' => $this->prefillRecipeId($request),
-        ];
-
-        return view('manufacturing.make-orders.index', [
+        return Inertia::render('Manufacturing/MakeOrders/Index', [
+            'shell' => $authShellPayloadBuilder->build($request),
             'crudConfig' => $crudConfig,
-            'payload' => $payload,
+            'payload' => [
+                'recipes' => $recipes->map(fn (Recipe $recipe): array => $this->recipePayload($recipe))->all(),
+                'storeUrl' => route('manufacturing.make-orders.store'),
+                'csrfToken' => $request->session()->token(),
+                'canExecute' => $canExecute,
+                'prefillRecipeId' => $this->prefillRecipeId($request),
+            ],
         ]);
     }
 
@@ -101,7 +102,11 @@ class MakeOrderController extends Controller
     /**
      * Display the make order detail page.
      */
-    public function show(Request $request, MakeOrder $makeOrder): View
+    public function show(
+        Request $request,
+        MakeOrder $makeOrder,
+        AuthShellPayloadBuilder $authShellPayloadBuilder
+    ): InertiaResponse
     {
         abort_unless((int) $makeOrder->tenant_id === (int) $request->user()->tenant_id, 404);
         abort_unless(
@@ -135,17 +140,21 @@ class MakeOrderController extends Controller
             'ingredients' => $this->makeOrderIngredientsPayload($makeOrder),
             'taskCreate' => [
                 'users' => $this->manualTaskAssigneeOptions((int) $request->user()->tenant_id),
+                'storeUrl' => route('tasks.store'),
             ],
             'notesFeed' => app(BuildNotesFeedPayloadAction::class)->execute(
                 $makeOrder,
                 route('manufacturing.make-orders.notes.index', $makeOrder),
                 route('manufacturing.make-orders.notes.store', $makeOrder)
             ),
+            'csrfToken' => $request->session()->token(),
             'csrf_token' => $request->session()->token(),
         ];
 
-        return view('manufacturing.make-orders.show', [
-            'makeOrder' => $makeOrder,
+        return Inertia::render('Manufacturing/MakeOrders/Show', [
+            'shell' => $authShellPayloadBuilder->build($request),
+            'title' => 'Make Order ' . $makeOrder->id,
+            'indexUrl' => route('manufacturing.make-orders.index', absolute: false),
             'payload' => $payload,
         ]);
     }
