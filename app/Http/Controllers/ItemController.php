@@ -795,7 +795,7 @@ class ItemController extends Controller
                 'label' => 'View',
                 'type' => 'view',
                 'tone' => 'default',
-                'urlField' => 'display.showUrl',
+                'urlField' => 'show_url',
             ],
         ];
 
@@ -832,37 +832,36 @@ class ItemController extends Controller
             'fields' => [],
             'rowLayout' => [
                 'primaryText' => [
-                    'field' => 'display.nameText',
+                    'field' => 'name',
+                    'urlField' => 'show_url',
                     'fallback' => 'Unnamed recipe',
                 ],
                 'secondaryFields' => [
                     [
                         'label' => 'Type',
-                        'field' => 'display.recipeTypeText',
+                        'field' => 'recipe_type_label',
                         'fallback' => '—',
                     ],
                     [
                         'label' => 'Updated',
-                        'field' => 'display.updatedAtText',
+                        'field' => 'updated_at',
                         'fallback' => '—',
                     ],
                 ],
                 'badges' => [
                     [
-                        'field' => 'display.statusText',
-                        'toneField' => 'display.statusTone',
+                        'field' => 'version_status',
                         'fallback' => '',
                     ],
                     [
-                        'field' => 'display.versionText',
-                        'toneField' => 'display.versionTone',
+                        'field' => 'current_version_number_display',
                         'fallback' => '',
                     ],
                 ],
                 'rightMeta' => [
                     [
                         'label' => 'Output',
-                        'field' => 'display.outputQuantityText',
+                        'field' => 'output_quantity_display',
                         'fallback' => '—',
                         'strong' => true,
                     ],

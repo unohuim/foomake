@@ -33,6 +33,10 @@ const props = defineProps({
         type: String,
         required: true,
     },
+    squareTop: {
+        type: Boolean,
+        default: false,
+    },
 });
 
 const form = reactive({
@@ -184,7 +188,10 @@ const revokePlugin = async () => {
 </script>
 
 <template>
-    <article class="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+    <article
+        class="overflow-hidden border border-slate-200 bg-white shadow-sm"
+        :class="squareTop ? 'rounded-b-lg' : 'rounded-lg'"
+    >
         <div class="grid gap-3 border-b border-slate-200 px-4 py-3 sm:px-5 md:grid-cols-[auto,1fr,auto] md:items-center">
             <div class="flex h-11 w-11 items-center justify-center rounded-md border border-slate-200 bg-white shadow-sm">
                 <div class="rounded bg-[#9651c7] px-1.5 py-0.5 text-xs font-black leading-none text-white shadow-sm">

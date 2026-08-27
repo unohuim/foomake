@@ -10,7 +10,6 @@ use App\Models\RecipeVersionCheckout;
 use App\Models\RecipeVersionLine;
 use App\Support\Inertia\AuthShellPayloadBuilder;
 use App\Support\QuantityFormatter;
-use Illuminate\Contracts\View\View;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -142,7 +141,7 @@ class RecipeController extends Controller
     /**
      * Display a recipe detail page.
      */
-    public function show(Request $request, Recipe $recipe): View
+    public function show(Request $request, Recipe $recipe, AuthShellPayloadBuilder $authShellPayloadBuilder): InertiaResponse
     {
         Gate::authorize('inventory-recipes-view');
 
@@ -166,8 +165,8 @@ class RecipeController extends Controller
             'ingredients' => $this->ingredientsPayload($recipe, $displayVersion, (int) $user->id),
         ];
 
-        return view('manufacturing.recipes.show', [
-            'recipe' => $recipe,
+        return Inertia::render('Manufacturing/Recipes/Show', [
+            'shell' => $authShellPayloadBuilder->build($request),
             'payload' => $payload,
         ]);
     }
@@ -1558,6 +1557,7 @@ class RecipeController extends Controller
             'quantity_display' => QuantityFormatter::formatForUom((string) $line->quantity, $line->inputItem?->baseUom, 6),
             'uom_display_precision' => (int) ($line->inputItem?->baseUom?->display_precision ?? 6),
             'sort_order' => (int) $line->sort_order,
+            'view_url' => $line->inputItem ? route('materials.show', $line->inputItem) : null,
             'remove_url' => route('manufacturing.recipes.ingredients.destroy', [$recipeId, $versionId, $line->id]),
         ];
     }

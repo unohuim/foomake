@@ -20,7 +20,6 @@ use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
-use Inertia\Inertia;
 use Inertia\Response;
 use RuntimeException;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
@@ -34,39 +33,11 @@ class ProfileConnectorController extends Controller
     /**
      * Display the connector management page.
      */
-    public function index(Request $request, AuthShellPayloadBuilder $authShellPayloadBuilder): Response
+    public function index(): RedirectResponse
     {
         Gate::authorize('system-users-manage');
 
-        /** @var \App\Models\User $user */
-        $user = $request->user();
-        $connection = ExternalProductSourceConnection::query()
-            ->where('tenant_id', $user->tenant_id)
-            ->where('source', ExternalProductSourceConnection::SOURCE_WOOCOMMERCE)
-            ->first();
-        $pluginConnection = $this->currentWordPressPluginConnection((int) $user->tenant_id);
-        $googleSearchConsoleConnection = GoogleSearchConsoleConnection::query()
-            ->where('tenant_id', $user->tenant_id)
-            ->first();
-
-        return Inertia::render('Profile/Connectors/Index', [
-            'shell' => $authShellPayloadBuilder->build($request),
-            'connectors' => [
-                'wooCommerce' => $this->connectionData($connection),
-                'wordPressPlugin' => $this->wordPressPluginConnectionData($pluginConnection),
-                'storeUrl' => route('profile.connectors.woocommerce.store'),
-                'disconnectUrl' => route('profile.connectors.woocommerce.destroy'),
-                'pluginDownloadUrl' => route('profile.connectors.woocommerce.plugin.download'),
-                'pluginRevokeUrl' => route('profile.connectors.wordpress-plugin.destroy'),
-                'googleSearchConsole' => $this->googleSearchConsoleConnectionData($googleSearchConsoleConnection),
-                'googleSearchConsoleConnectUrl' => route('profile.connectors.google-search-console.connect'),
-                'googleSearchConsoleDisconnectUrl' => route('profile.connectors.google-search-console.destroy'),
-                'googleSearchConsolePerformanceUrl' => route('profile.connectors.google-search-console.performance'),
-                'googleSearchConsoleRefreshUrl' => route('profile.connectors.google-search-console.refresh'),
-                'googleSearchConsoleReportUrl' => route('profile.connectors.google-search-console.report'),
-                'csrfToken' => csrf_token(),
-            ],
-        ]);
+        return redirect()->route('admin.index', ['tab' => 'connectors']);
     }
 
     /**
@@ -108,7 +79,7 @@ class ProfileConnectorController extends Controller
                 'siteName' => $pairing?->site_name,
                 'expiresAt' => $pairing?->expires_at?->toAtomString(),
                 'approveUrl' => route('profile.connectors.wordpress.pair.approve'),
-                'connectorsUrl' => route('profile.connectors.index', absolute: false),
+                'connectorsUrl' => route('admin.index', ['tab' => 'connectors'], false),
                 'csrfToken' => csrf_token(),
                 'canApprove' => $error === null,
                 'error' => $error,
@@ -203,7 +174,7 @@ class ProfileConnectorController extends Controller
             $request->session()->forget('google_search_console_oauth_state');
 
             return redirect()
-                ->route('profile.connectors.index')
+                ->route('admin.index', ['tab' => 'connectors'])
                 ->withErrors(['google_search_console' => $exception->getMessage()]);
         }
 
@@ -227,13 +198,13 @@ class ProfileConnectorController extends Controller
             || (int) ($state['tenant_id'] ?? 0) !== (int) $user->tenant_id
         ) {
             return redirect()
-                ->route('profile.connectors.index')
+                ->route('admin.index', ['tab' => 'connectors'])
                 ->withErrors(['google_search_console' => 'Google Search Console authorization could not be verified.']);
         }
 
         if ($request->filled('error')) {
             return redirect()
-                ->route('profile.connectors.index')
+                ->route('admin.index', ['tab' => 'connectors'])
                 ->withErrors(['google_search_console' => 'Google Search Console authorization was not approved.']);
         }
 
@@ -241,7 +212,7 @@ class ProfileConnectorController extends Controller
 
         if ($code === '') {
             return redirect()
-                ->route('profile.connectors.index')
+                ->route('admin.index', ['tab' => 'connectors'])
                 ->withErrors(['google_search_console' => 'Google did not return an authorization code.']);
         }
 
@@ -249,7 +220,7 @@ class ProfileConnectorController extends Controller
             $tokens = $client->exchangeCode($code, $this->googleSearchConsoleRedirectUri());
         } catch (GoogleSearchConsoleException $exception) {
             return redirect()
-                ->route('profile.connectors.index')
+                ->route('admin.index', ['tab' => 'connectors'])
                 ->withErrors(['google_search_console' => $exception->getMessage()]);
         }
 
@@ -260,7 +231,7 @@ class ProfileConnectorController extends Controller
 
         if ($refreshToken === '') {
             return redirect()
-                ->route('profile.connectors.index')
+                ->route('admin.index', ['tab' => 'connectors'])
                 ->withErrors(['google_search_console' => 'Google did not return offline access. Reconnect and approve offline access.']);
         }
 
@@ -295,7 +266,7 @@ class ProfileConnectorController extends Controller
             ])->save();
         }
 
-        return redirect()->route('profile.connectors.index');
+        return redirect()->route('admin.index', ['tab' => 'connectors']);
     }
 
     /**

@@ -34,5 +34,5 @@ public_interface:
   - billing-subscription-manage
 example_usage: |
   if (! app(TenantBillingEntitlement::class)->hasAccess($tenant)) {
-      return redirect()->route('billing.index');
+      return redirect()->route('admin.index', ['tab' => 'billing']);
   }

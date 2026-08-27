@@ -14,6 +14,7 @@ const props = defineProps({
 const accountOpen = ref(false);
 const collapsed = ref(false);
 const accountRoot = ref(null);
+const openNestedItems = ref({});
 const openGroups = ref(
     Object.fromEntries(
         props.shell.navigation.groups.map((group) => [group.key, group.active || group.key === "dashboard"]),
@@ -51,6 +52,17 @@ const toggleGroup = (key) => {
 const toggleCollapsed = () => {
     collapsed.value = !collapsed.value;
     accountOpen.value = false;
+};
+
+const nestedItemKey = (group, item) => `${group.key}-${item.label}`;
+
+const toggleNestedItem = (group, item) => {
+    const key = nestedItemKey(group, item);
+
+    openNestedItems.value = {
+        ...openNestedItems.value,
+        [key]: !openNestedItems.value[key],
+    };
 };
 
 const toggleAccount = () => {
@@ -226,23 +238,41 @@ onBeforeUnmount(() => {
                                     {{ item.label }}
                                 </a>
 
-                                <div
-                                    v-else-if="item.children"
-                                    class="rounded-xl border border-white/10 bg-white/5 p-1.5"
-                                >
-                                    <p class="px-2 pb-1 text-xs font-semibold uppercase text-blue-100/50">
-                                        {{ item.label }}
-                                    </p>
-                                    <div class="space-y-1">
-                                        <a
-                                            v-for="child in item.children"
-                                            :key="`${group.key}-${item.label}-${child.label}`"
-                                            :href="child.url"
-                                            class="cursor-pointer flex min-h-8 items-center rounded-lg px-2 py-1.5 text-sm font-medium transition"
-                                            :class="child.active ? 'bg-white text-[#001f3f] shadow-sm' : 'text-blue-100/70 hover:bg-white/10 hover:text-white'"
+                                <div v-else-if="item.children" class="overflow-hidden">
+                                    <button
+                                        type="button"
+                                        class="flex min-h-8 w-full cursor-pointer items-center justify-between rounded-lg px-3 py-1.5 text-left text-sm font-medium transition"
+                                        :class="item.active ? 'bg-white/15 text-white' : 'text-blue-100/70 hover:bg-white/10 hover:text-white'"
+                                        :aria-expanded="openNestedItems[nestedItemKey(group, item)] ? 'true' : 'false'"
+                                        @click="toggleNestedItem(group, item)"
+                                    >
+                                        <span>{{ item.label }}</span>
+                                        <svg
+                                            class="h-3.5 w-3.5 shrink-0 transition-transform duration-500 ease-in-out"
+                                            :class="openNestedItems[nestedItemKey(group, item)] ? 'rotate-180' : ''"
+                                            viewBox="0 0 20 20"
+                                            fill="currentColor"
+                                            aria-hidden="true"
                                         >
-                                            {{ child.label }}
-                                        </a>
+                                            <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.512a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z" clip-rule="evenodd" />
+                                        </svg>
+                                    </button>
+
+                                    <div
+                                        class="overflow-hidden pl-3 transition-[max-height,opacity,margin-top] duration-500 ease-in-out"
+                                        :class="openNestedItems[nestedItemKey(group, item)] ? 'mt-1 max-h-36 opacity-100' : 'mt-0 max-h-0 opacity-0 pointer-events-none'"
+                                    >
+                                        <div class="space-y-1">
+                                            <a
+                                                v-for="child in item.children"
+                                                :key="`${group.key}-${item.label}-${child.label}`"
+                                                :href="child.url"
+                                                class="cursor-pointer flex min-h-8 items-center rounded-lg px-3 py-1.5 text-sm font-medium transition"
+                                                :class="child.active ? 'bg-white text-[#001f3f] shadow-sm' : 'text-blue-100/70 hover:bg-white/10 hover:text-white'"
+                                            >
+                                                {{ child.label }}
+                                            </a>
+                                        </div>
                                     </div>
                                 </div>
 

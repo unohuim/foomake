@@ -2,8 +2,8 @@ name: Recipe Read Model
 type: Read Model / UI Contract
 location:
   - app/Http/Controllers/RecipeController.php
-  - resources/views/manufacturing/recipes/index.blade.php
-  - resources/views/manufacturing/recipes/show.blade.php
+  - resources/js/pages/Manufacturing/Recipes/Index.vue
+  - resources/js/pages/Manufacturing/Recipes/Show.vue
 purpose: Define the read-only data presented for recipe index and detail views, including recipe type and eligible output item picker metadata.
 when_to_use:
   - Rendering recipe index and show pages

@@ -25,8 +25,8 @@ class StripeCheckoutSessionFactory
 
         $payload = [
             'mode' => 'subscription',
-            'success_url' => route('billing.index') . '?checkout=success&session_id={CHECKOUT_SESSION_ID}',
-            'cancel_url' => route('billing.index', ['checkout' => 'cancelled']),
+            'success_url' => route('admin.index', ['tab' => 'billing']) . '&checkout=success&session_id={CHECKOUT_SESSION_ID}',
+            'cancel_url' => route('admin.index', ['tab' => 'billing', 'checkout' => 'cancelled']),
             'client_reference_id' => (string) $tenant->id,
             'metadata' => [
                 'tenant_id' => (string) $tenant->id,

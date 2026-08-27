@@ -11,7 +11,7 @@
         || request()->routeIs('materials.uom-categories.*');
     $purchasingActive = request()->routeIs('purchasing.*');
     $salesActive = request()->routeIs('sales.*');
-    $profileActive = request()->routeIs('profile.*') || request()->routeIs('billing.*') || request()->routeIs('admin.workflows.*') || request()->routeIs('admin.users.*');
+    $profileActive = request()->routeIs('profile.*') || request()->routeIs('billing.*') || request()->routeIs('admin.*');
 
     $canViewPurchaseOrders = $user?->can('purchasing-purchase-orders-create') ?? false;
     $canViewSuppliers = $user?->can('purchasing-suppliers-view') ?? false;
@@ -263,12 +263,6 @@
                         {{ __('Profile') }}
                     </x-nav-dropdown-link>
 
-                    @if ($canManageBilling)
-                        <x-nav-dropdown-link :href="route('billing.index')" :active="request()->routeIs('billing.*')">
-                            {{ __('Billing') }}
-                        </x-nav-dropdown-link>
-                    @endif
-
                     @if ($canManageSystemUsers)
                         <x-nav-dropdown-link :href="route('profile.connectors.index')" :active="request()->routeIs('profile.connectors.*')">
                             {{ __('Connectors') }}
@@ -276,7 +270,7 @@
                     @endif
 
                     @if ($canManageWorkflows)
-                        <x-nav-dropdown-link :href="route('admin.workflows.index')" :active="request()->routeIs('admin.workflows.*')" data-profile-workflows-link="desktop">
+                        <x-nav-dropdown-link :href="route('admin.index', ['tab' => 'workflows'])" :active="request()->routeIs('admin.index') && request('tab') === 'workflows'" data-profile-workflows-link="desktop">
                             {{ __('Workflows') }}
                         </x-nav-dropdown-link>
                     @endif
@@ -534,12 +528,6 @@
                 {{ __('Profile') }}
             </x-nav-link>
 
-            @if ($canManageBilling)
-                <x-nav-link :href="route('billing.index')" :active="request()->routeIs('billing.*')" mobile>
-                    {{ __('Billing') }}
-                </x-nav-link>
-            @endif
-
             @if ($canManageSystemUsers)
                 <x-nav-link :href="route('profile.connectors.index')" :active="request()->routeIs('profile.connectors.*')" mobile>
                     {{ __('Connectors') }}
@@ -547,7 +535,7 @@
             @endif
 
             @if ($canManageWorkflows)
-                <x-nav-link :href="route('admin.workflows.index')" :active="request()->routeIs('admin.workflows.*')" mobile data-profile-workflows-link="mobile">
+                <x-nav-link :href="route('admin.index', ['tab' => 'workflows'])" :active="request()->routeIs('admin.index') && request('tab') === 'workflows'" mobile data-profile-workflows-link="mobile">
                     {{ __('Workflows') }}
                 </x-nav-link>
             @endif

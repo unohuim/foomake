@@ -3,6 +3,7 @@ import { computed, onMounted, reactive, ref, useSlots } from "vue";
 
 import BaseDropdown from "./BaseDropdown.vue";
 import BaseDrawer from "./BaseDrawer.vue";
+import UiToggle from "./UiToggle.vue";
 
 const props = defineProps({
     section: {
@@ -42,12 +43,18 @@ const form = reactive({});
 const formErrors = ref({});
 const formError = ref("");
 const submitting = ref(false);
+const toggleValues = reactive({});
 
 const fields = computed(() => props.section.fields ?? []);
 const createAction = computed(() => props.section.createAction ?? {});
 const canCreate = computed(() => Boolean(props.section.permissions?.canCreate));
 const visibleActions = computed(() => props.section.actions ?? []);
 const hasStaticContent = computed(() => Boolean(slots.default));
+const toolbarToggles = computed(() => props.section.toolbarToggles ?? []);
+
+toolbarToggles.value.forEach((toggle) => {
+    toggleValues[toggle.key] = Boolean(toggle.checked);
+});
 
 function valueAt(record, path, fallback = "") {
     const value = String(path ?? "")
@@ -170,6 +177,13 @@ async function load(page = 1) {
             page: String(page),
             per_page: String(props.section.pagination?.perPage ?? 10),
         });
+
+        toolbarToggles.value.forEach((toggle) => {
+            if (toggleValues[toggle.key]) {
+                params.set(toggle.key, "1");
+            }
+        });
+
         const response = await jsonRequest(`${props.section.endpoints.list}?${params.toString()}`, {
             method: "GET",
         });
@@ -267,6 +281,11 @@ async function handleAction(action, record) {
     emit("custom-action", { action, record, refresh: load });
 }
 
+function handleToggleChange(detail) {
+    toggleValues[detail.name] = Boolean(detail.checked);
+    load(1);
+}
+
 function pageCount() {
     return Number(meta.value.last_page ?? 1);
 }
@@ -290,6 +309,17 @@ onMounted(() => {
                 <p class="mt-0.5 truncate text-[0.65rem] text-gray-500 sm:mt-1 sm:text-sm">{{ section.description }}</p>
             </div>
             <slot name="actions" />
+            <div v-if="toolbarToggles.length > 0" class="flex shrink-0 flex-wrap items-center justify-end gap-2">
+                <label v-for="toggle in toolbarToggles" :key="toggle.key" class="inline-flex cursor-pointer items-center gap-2 text-xs font-medium text-gray-600">
+                    <UiToggle
+                        :checked="Boolean(toggleValues[toggle.key])"
+                        :name="toggle.key"
+                        :aria-label="toggle.label"
+                        @change="handleToggleChange"
+                    />
+                    <span>{{ toggle.label }}</span>
+                </label>
+            </div>
             <button v-if="canCreate" type="button" class="inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg border border-gray-300 text-gray-600 transition hover:bg-gray-50 hover:text-gray-900 sm:h-8 sm:w-8" aria-label="Create" @click.stop.prevent="openCreate">
                 <svg class="h-3.5 w-3.5 sm:h-4 sm:w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />

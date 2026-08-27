@@ -34,16 +34,23 @@ rules:
   - GuestShell owns public page chrome and shared guest auth drawer behavior.
   - AuthShell owns authenticated page chrome only for authenticated routes that have been explicitly migrated to Inertia.
   - Authenticated Inertia route controllers must use AuthShellPayloadBuilder for the shell prop instead of duplicating shell payload helpers.
-  - The public home route, authenticated dashboard route, sales customers index/detail routes, sales products index route, sales orders index/detail routes, purchasing suppliers index/detail routes, purchasing orders index/detail routes, materials index/detail routes, inventory counts index/detail routes, materials UoM categories index route, manufacturing recipes index route, manufacturing make orders index/detail routes, manufacturing units of measure index route, manufacturing UoM conversions index route, profile connectors route, and admin marketing route are approved Inertia migrations.
+  - The public home route, public marketing learn route, public privacy route, authenticated dashboard route, sales customers index/detail routes, sales products index route, sales orders index/detail routes, purchasing suppliers index/detail routes, purchasing orders index/detail routes, materials index/detail routes, inventory counts index/detail routes, materials UoM categories index route, manufacturing recipes index/detail routes, manufacturing make orders index/detail routes, manufacturing units of measure index route, manufacturing UoM conversions index route, profile route, admin hub route, and admin marketing route are approved Inertia migrations.
+  - The profile route owns personal account settings only.
+  - The admin hub route owns admin account tabs for billing, connectors, workflows, and users, but tab availability and boot payloads remain server-owned.
+  - The admin hub route must only build the active tab payload; inactive tabs should not trigger unrelated queries or seed actions.
+  - Admin hub workflow tab must render workflow controls through the shared WorkflowsPanel component.
   - Migrated detail routes that need mutable read models may expose a dedicated JSON payload endpoint owned by the same authorized controller.
 public_interface:
   - Inertia::render()
   - resources/views/inertia.blade.php
   - resources/js/inertia-app.js
   - resources/js/pages/Home.vue
+  - resources/js/pages/Marketing/Show.vue
+  - resources/js/pages/Privacy.vue
   - resources/js/pages/Dashboard.vue
   - resources/js/pages/Admin/Marketing.vue
-  - resources/js/pages/Profile/Connectors/Index.vue
+  - resources/js/pages/Admin/Index.vue
+  - resources/js/pages/Profile/Index.vue
   - resources/js/pages/Profile/Connectors/WordPressPair.vue
   - resources/js/pages/Sales/Customers/Show.vue
   - resources/js/pages/Sales/Products/Index.vue
@@ -58,12 +65,15 @@ public_interface:
   - resources/js/pages/Inventory/Counts/Index.vue
   - resources/js/pages/Inventory/Counts/Show.vue
   - resources/js/pages/Manufacturing/Recipes/Index.vue
+  - resources/js/pages/Manufacturing/Recipes/Show.vue
   - resources/js/pages/Manufacturing/MakeOrders/Index.vue
   - resources/js/pages/Manufacturing/MakeOrders/Show.vue
   - resources/js/pages/Materials/UomCategories/Index.vue
   - resources/js/pages/Manufacturing/Uoms/Index.vue
   - resources/js/pages/Manufacturing/UomConversions/Index.vue
   - app/Support/Inertia/AuthShellPayloadBuilder.php
+  - app/Support/Inertia/AdminHubPayloadBuilder.php
+  - app/Support/Inertia/ProfileHubPayloadBuilder.php
   - resources/js/layouts/GuestShell.vue
   - resources/js/layouts/AuthShell.vue
   - resources/js/components/BaseDrawer.vue
@@ -84,6 +94,9 @@ public_interface:
   - resources/js/components/DesktopSidebar.vue
   - resources/js/components/MobileBottomNav.vue
   - resources/js/components/MarketingViewDropdown.vue
+  - resources/js/components/MarketingSearchConsolePanel.vue
+  - resources/js/components/admin/WorkflowsPanel.vue
+  - resources/js/components/connectors/ConnectorsPanel.vue
   - resources/js/components/DashboardTodo.vue
   - resources/js/components/connectors/WooCommerceConnectorCard.vue
   - resources/js/components/connectors/GoogleSearchConsoleConnectorCard.vue

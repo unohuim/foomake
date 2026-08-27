@@ -66,7 +66,7 @@ const openMenu = (entry) => {
     openNestedItems.value = Object.fromEntries(
         entry.items
             .filter((item) => item.children)
-            .map((item) => [`${entry.key}-${item.label}`, Boolean(item.active)]),
+            .map((item) => [`${entry.key}-${item.label}`, false]),
     );
 };
 

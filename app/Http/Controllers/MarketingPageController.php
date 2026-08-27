@@ -5,8 +5,9 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Support\Marketing\MarketingPageRepository;
-use Illuminate\Contracts\View\View;
-use Illuminate\Http\Response;
+use Illuminate\Http\Response as HttpResponse;
+use Inertia\Inertia;
+use Inertia\Response;
 
 /**
  * Render repo-managed public marketing pages.
@@ -21,22 +22,35 @@ final class MarketingPageController extends Controller
     /**
      * Display one markdown-powered marketing page.
      */
-    public function show(string $slug): View
+    public function show(string $slug): Response
     {
         $page = $this->pages->find($slug);
 
         abort_if($page === null, 404);
 
-        return view('marketing.show', [
-            'page' => $page,
+        return Inertia::render('Marketing/Show', [
+            'page' => [
+                'slug' => $page->slug,
+                'title' => $page->title,
+                'description' => $page->description,
+                'headline' => $page->headline,
+                'ctaLabel' => $page->ctaLabel,
+                'ctaUrl' => $page->ctaUrl,
+                'html' => $page->html,
+                'noindex' => $page->noindex,
+            ],
             'canonicalUrl' => route('marketing.pages.show', ['slug' => $page->slug]),
+            'authRoutes' => [
+                'registerUrl' => '/#register',
+                'loginUrl' => '/#login',
+            ],
         ]);
     }
 
     /**
      * Display a small XML sitemap for public marketing pages.
      */
-    public function sitemap(): Response
+    public function sitemap(): HttpResponse
     {
         $urls = collect($this->pages->all())
             ->map(fn ($page): string => route('marketing.pages.show', ['slug' => $page->slug]))

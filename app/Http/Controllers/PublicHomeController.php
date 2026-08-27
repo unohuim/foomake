@@ -46,9 +46,9 @@ final class PublicHomeController extends Controller
                 ['label' => 'Privacy', 'url' => route('privacy', absolute: false)],
             ],
             'authRoutes' => [
-                'loginUrl' => route('login', absolute: false),
-                'registerUrl' => route('register', absolute: false),
-                'passwordResetUrl' => route('password.request', absolute: false),
+                'loginUrl' => '/login',
+                'registerUrl' => '/register',
+                'passwordEmailUrl' => route('password.email', absolute: false),
                 'dashboardUrl' => '/dashboard',
                 'canRegister' => true,
             ],

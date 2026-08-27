@@ -4,7 +4,8 @@ location:
   - resources/content/marketing/
   - app/Http/Controllers/MarketingPageController.php
   - app/Support/Marketing/MarketingPageRepository.php
-  - resources/views/marketing/show.blade.php
+  - resources/views/marketing/inertia.blade.php
+  - resources/js/pages/Marketing/Show.vue
 purpose: Provide repo-managed public marketing pages with markdown body content and SEO metadata from front matter.
 when_to_use:
   - Public FooMake marketing pages
@@ -20,6 +21,7 @@ rules:
   - Marketing pages must use safe slug resolution and must not allow directory traversal.
   - Front matter must provide SEO metadata used by the rendered page.
   - Markdown rendering must strip unsafe raw HTML.
+  - Inertia-rendered marketing pages must use a marketing root view that does not emit CSRF/session metadata.
   - Marketing pages must not introduce global JavaScript state.
   - Marketing page styling must use Tailwind utilities only.
   - Public marketing pages use the /learn/{slug} namespace instead of a root catch-all so they do not shadow app, auth, admin, or domain routes.
@@ -28,6 +30,8 @@ public_interface:
   - resources/content/marketing/{slug}.md
   - GET /learn/{slug}
   - GET /sitemap.xml
+  - resources/js/pages/Marketing/Show.vue
+  - resources/views/marketing/inertia.blade.php
   - MarketingPageRepository::find()
   - MarketingPageRepository::all()
 example_usage: |

@@ -1,10 +1,10 @@
 <?php
 
-use App\Http\Controllers\Admin\UserManagementController;
+use App\Http\Controllers\Admin\AdminHubController;
 use App\Http\Controllers\Admin\MarketingController;
+use App\Http\Controllers\Admin\UserManagementController;
 use App\Http\Controllers\Auth\EmailVerificationGraceBannerController;
 use App\Http\Controllers\BillingCheckoutController;
-use App\Http\Controllers\BillingController;
 use App\Http\Controllers\BillingWebhookController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\InventoryCountController;
@@ -23,6 +23,7 @@ use App\Http\Controllers\CustomerContactController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ProfileConnectorController;
 use App\Http\Controllers\PublicHomeController;
+use App\Http\Controllers\PublicPrivacyController;
 use App\Http\Controllers\PurchaseOrderController;
 use App\Http\Controllers\PurchaseOrderLineController;
 use App\Http\Controllers\PurchaseOrderReceiptController;
@@ -42,7 +43,6 @@ use App\Http\Controllers\TaskCompletionController;
 use App\Http\Controllers\UomCategoryController;
 use App\Http\Controllers\UomConversionController;
 use App\Http\Controllers\UomController;
-use App\Http\Controllers\WorkflowController;
 use App\Http\Controllers\WorkflowStageController;
 use App\Http\Controllers\WorkflowTaskTemplateController;
 use App\Http\Controllers\WordPressPluginApiController;
@@ -75,7 +75,13 @@ Route::get('/sitemap.xml', [MarketingPageController::class, 'sitemap'])
     ])
     ->name('marketing.sitemap');
 
-Route::view('/privacy', 'privacy')
+Route::get('/privacy', PublicPrivacyController::class)
+    ->withoutMiddleware([
+        StartSession::class,
+        ShareErrorsFromSession::class,
+        ValidateCsrfToken::class,
+        VerifyCsrfToken::class,
+    ])
     ->name('privacy');
 
 Route::post('/billing/stripe/webhook', [BillingWebhookController::class, 'store'])
@@ -105,10 +111,12 @@ Route::get('/dashboard', DashboardController::class)
 Route::middleware(['auth', EnsureEmailVerifiedOrInGracePeriod::class])->group(function () {
     Route::delete('/email-verification-grace-banner', [EmailVerificationGraceBannerController::class, 'destroy'])
         ->name('verification.grace-banner.destroy');
-    Route::get('/billing', [BillingController::class, 'index'])
-        ->name('billing.index');
     Route::post('/billing/checkout', [BillingCheckoutController::class, 'store'])
         ->name('billing.checkout.store');
+    Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
+    Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
+    Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
+    Route::get('/admin', AdminHubController::class)->name('admin.index');
 });
 
 Route::middleware(['auth', EnsureEmailVerifiedOrInGracePeriod::class, EnsureTenantBillingAccess::class])->group(function () {
@@ -457,8 +465,6 @@ Route::middleware(['auth', EnsureEmailVerifiedOrInGracePeriod::class, EnsureTena
     Route::post('/sales/products/imports', [SalesProductController::class, 'storeImport'])
         ->name('sales.products.import.store');
 
-    Route::get('/admin/workflows', [WorkflowController::class, 'index'])
-        ->name('admin.workflows.index');
     Route::post('/admin/workflows/stages', [WorkflowStageController::class, 'store'])
         ->name('admin.workflows.stages.store');
     Route::patch('/admin/workflows/stages/{workflowStage}', [WorkflowStageController::class, 'update'])
@@ -495,7 +501,6 @@ Route::middleware(['auth', EnsureEmailVerifiedOrInGracePeriod::class, EnsureTena
     Route::get('/admin/users/invitations/{invitation}', [UserManagementController::class, 'showInvitation'])
         ->name('admin.users.invitations.show');
 
-    Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::get('/profile/connectors', [ProfileConnectorController::class, 'index'])
         ->name('profile.connectors.index');
     Route::get('/profile/connectors/wordpress/pair', [ProfileConnectorController::class, 'showWordPressPairing'])
@@ -524,8 +529,6 @@ Route::middleware(['auth', EnsureEmailVerifiedOrInGracePeriod::class, EnsureTena
         ->name('profile.connectors.google-search-console.report');
     Route::post('/sales/products/import-sources/{source}/connect', [ProfileConnectorController::class, 'storeWooCommerce'])
         ->name('sales.products.import.connect');
-    Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
-    Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 });
 
 require __DIR__ . '/auth.php';

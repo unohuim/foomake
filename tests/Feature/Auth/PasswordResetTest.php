@@ -4,10 +4,15 @@ use App\Models\User;
 use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Support\Facades\Notification;
 
-test('reset password link screen can be rendered', function () {
-    $response = $this->get('/forgot-password');
+test('home auth drawer exposes the reset password request endpoint', function () {
+    $response = $this->get('/');
 
-    $response->assertStatus(200);
+    $response->assertOk();
+
+    $page = $response->viewData('page');
+
+    expect(data_get($page, 'component'))->toBe('Home')
+        ->and(data_get($page, 'props.authRoutes.passwordEmailUrl'))->toBe(route('password.email', absolute: false));
 });
 
 test('reset password link can be requested', function () {

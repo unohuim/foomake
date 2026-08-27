@@ -8,12 +8,14 @@ use App\Models\User;
 use App\Models\WorkflowDomain;
 use App\Models\WorkflowStage;
 use App\Models\WorkflowTaskTemplate;
+use App\Support\Inertia\AuthShellPayloadBuilder;
 use App\Support\Workflows\WorkflowAssignmentPermissions;
 use App\Support\Workflows\WorkflowStatusOptions;
-use Illuminate\Contracts\View\View;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Gate;
+use Inertia\Inertia;
+use Inertia\Response;
 
 /**
  * Render the workflow-management page.
@@ -23,7 +25,7 @@ class WorkflowController extends Controller
     /**
      * Display the workflow-management page.
      */
-    public function index(Request $request): View
+    public function index(Request $request, AuthShellPayloadBuilder $authShellPayloadBuilder): Response
     {
         Gate::authorize('workflow-manage');
 
@@ -75,7 +77,8 @@ class WorkflowController extends Controller
             'csrfToken' => csrf_token(),
         ];
 
-        return view('admin.workflows.index', [
+        return Inertia::render('Admin/Workflows/Index', [
+            'shell' => $authShellPayloadBuilder->build($request),
             'payload' => $payload,
         ]);
     }

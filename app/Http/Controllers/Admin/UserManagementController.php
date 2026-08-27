@@ -15,7 +15,7 @@ use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
-use Illuminate\View\View;
+use Illuminate\Http\RedirectResponse;
 
 /**
  * Manage tenant-scoped users and invitations.
@@ -25,23 +25,11 @@ class UserManagementController extends Controller
     /**
      * Display the tenant user-management page.
      */
-    public function index(Request $request): View
+    public function index(): RedirectResponse
     {
         Gate::authorize('admin-users-view');
 
-        $roles = $this->assignableRoles();
-        $crudConfig = $this->usersCrudConfig();
-        $payload = [
-            'roles' => $roles->map(fn (Role $role): array => $this->roleData($role))->values()->all(),
-            'storeInvitationUrl' => $crudConfig['endpoints']['create'],
-            'csrfToken' => csrf_token(),
-            'canManageUsers' => Gate::allows('admin-users-manage'),
-        ];
-
-        return view('admin.users.index', [
-            'crudConfig' => $crudConfig,
-            'payload' => $payload,
-        ]);
+        return redirect()->route('admin.index', ['tab' => 'users']);
     }
 
     /**

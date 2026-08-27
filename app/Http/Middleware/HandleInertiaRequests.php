@@ -20,6 +20,18 @@ final class HandleInertiaRequests extends Middleware
     protected $rootView = 'inertia';
 
     /**
+     * Resolve the root template for the current Inertia request.
+     */
+    public function rootView(Request $request): string
+    {
+        if ($request->routeIs('marketing.pages.show') || $request->routeIs('privacy')) {
+            return 'marketing.inertia';
+        }
+
+        return parent::rootView($request);
+    }
+
+    /**
      * Determine the current asset version.
      */
     public function version(Request $request): ?string
@@ -34,6 +46,17 @@ final class HandleInertiaRequests extends Middleware
      */
     public function share(Request $request): array
     {
+        if ($request->routeIs('marketing.pages.show') || $request->routeIs('privacy')) {
+            return [
+                'auth' => [
+                    'user' => null,
+                ],
+                'flash' => [
+                    'status' => null,
+                ],
+            ];
+        }
+
         return [
             ...parent::share($request),
             'auth' => [

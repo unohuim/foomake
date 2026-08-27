@@ -25,8 +25,8 @@ const props = defineProps({
         type: Object,
         required: true,
     },
-    passwordResetUrl: {
-        type: String,
+    passwordReset: {
+        type: Object,
         required: true,
     },
     canRegister: {
@@ -40,21 +40,39 @@ const emit = defineEmits([
     "switch-mode",
     "submit-login",
     "submit-register",
+    "submit-password-reset",
     "update-login-field",
     "update-register-field",
+    "update-password-reset-field",
 ]);
 
 const loginEmail = ref(null);
 const registerName = ref(null);
+const resetEmail = ref(null);
+const resetOpen = ref(false);
 
 const isRegister = computed(() => props.mode === "register");
 const isLogin = computed(() => props.mode === "login");
+
+const revealPasswordReset = () => {
+    resetOpen.value = true;
+
+    nextTick(() => {
+        resetEmail.value?.focus();
+    });
+};
+
+const hidePasswordReset = () => {
+    resetOpen.value = false;
+};
 
 const focusActivePanel = () => {
     nextTick(() => {
         window.setTimeout(() => {
             if (props.mode === "register") {
                 registerName.value?.focus();
+            } else if (resetOpen.value) {
+                resetEmail.value?.focus();
             } else {
                 loginEmail.value?.focus();
             }
@@ -68,6 +86,13 @@ watch(
         if (open) {
             focusActivePanel();
         }
+    },
+);
+
+watch(
+    () => props.mode,
+    () => {
+        resetOpen.value = false;
     },
 );
 </script>
@@ -232,71 +257,130 @@ watch(
                         </p>
                     </div>
 
-                    <form
-                        class="mx-auto mt-8 w-full max-w-sm"
-                        @submit.prevent="emit('submit-login')"
-                    >
-                        <div>
-                            <label for="drawer-email" class="block text-sm font-medium text-stone-700">Email</label>
-                            <input
-                                id="drawer-email"
-                                ref="loginEmail"
-                                type="email"
-                                name="email"
-                                :value="login.email"
-                                required
-                                autocomplete="username"
-                                class="mt-2 block w-full rounded-md border-slate-300 bg-white px-3 py-2 text-slate-950 shadow-sm focus:border-blue-950 focus:ring-blue-950 sm:text-sm"
-                                @input="emit('update-login-field', 'email', $event.target.value)"
-                            >
-                            <p v-if="login.errors.email" class="mt-2 text-sm text-red-600">
-                                {{ login.errors.email }}
-                            </p>
-                        </div>
-
-                        <div class="mt-5">
-                            <label for="drawer-password" class="block text-sm font-medium text-stone-700">Password</label>
-                            <input
-                                id="drawer-password"
-                                type="password"
-                                name="password"
-                                :value="login.password"
-                                required
-                                autocomplete="current-password"
-                                class="mt-2 block w-full rounded-md border-slate-300 bg-white px-3 py-2 text-slate-950 shadow-sm focus:border-blue-950 focus:ring-blue-950 sm:text-sm"
-                                @input="emit('update-login-field', 'password', $event.target.value)"
-                            >
-                            <p v-if="login.errors.password" class="mt-2 text-sm text-red-600">
-                                {{ login.errors.password }}
-                            </p>
-                        </div>
-
-                        <div class="mt-5 flex items-center justify-between">
-                            <label for="drawer-remember" class="flex items-center gap-2 text-sm text-stone-600">
-                                <input
-                                    id="drawer-remember"
-                                    type="checkbox"
-                                    name="remember"
-                                    :checked="login.remember"
-                                    class="rounded border-slate-300 text-blue-950 shadow-sm focus:ring-blue-950"
-                                    @change="emit('update-login-field', 'remember', $event.target.checked)"
-                                >
-                                Remember me
-                            </label>
-
-                            <a :href="passwordResetUrl" class="cursor-pointer text-sm font-medium text-blue-950 transition hover:text-blue-900">
-                                Forgot password?
-                            </a>
-                        </div>
-
-                        <button
-                            type="submit"
-                            class="cursor-pointer mt-7 flex w-full justify-center rounded-md bg-blue-950 px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-950 disabled:opacity-60"
-                            :disabled="login.processing"
+                    <div class="relative mx-auto mt-8 h-[18.75rem] w-full max-w-sm overflow-hidden">
+                        <form
+                            class="absolute inset-x-0 top-0 w-full transition-[opacity,transform] duration-500 ease-in-out"
+                            :class="resetOpen ? '-translate-y-8 opacity-0 pointer-events-none' : 'translate-y-0 opacity-100'"
+                            @submit.prevent="emit('submit-login')"
                         >
-                            Log in
-                        </button>
-                    </form>
+                            <div>
+                                <label for="drawer-email" class="block text-sm font-medium text-stone-700">Email</label>
+                                <input
+                                    id="drawer-email"
+                                    ref="loginEmail"
+                                    type="email"
+                                    name="email"
+                                    :value="login.email"
+                                    required
+                                    autocomplete="username"
+                                    class="mt-2 block w-full rounded-md border-slate-300 bg-white px-3 py-2 text-slate-950 shadow-sm focus:border-blue-950 focus:ring-blue-950 sm:text-sm"
+                                    @input="emit('update-login-field', 'email', $event.target.value)"
+                                >
+                                <p v-if="login.errors.email" class="mt-2 text-sm text-red-600">
+                                    {{ login.errors.email }}
+                                </p>
+                            </div>
+
+                            <div class="mt-5">
+                                <label for="drawer-password" class="block text-sm font-medium text-stone-700">Password</label>
+                                <input
+                                    id="drawer-password"
+                                    type="password"
+                                    name="password"
+                                    :value="login.password"
+                                    required
+                                    autocomplete="current-password"
+                                    class="mt-2 block w-full rounded-md border-slate-300 bg-white px-3 py-2 text-slate-950 shadow-sm focus:border-blue-950 focus:ring-blue-950 sm:text-sm"
+                                    @input="emit('update-login-field', 'password', $event.target.value)"
+                                >
+                                <p v-if="login.errors.password" class="mt-2 text-sm text-red-600">
+                                    {{ login.errors.password }}
+                                </p>
+                            </div>
+
+                            <div class="mt-5 flex items-center justify-between">
+                                <label for="drawer-remember" class="flex items-center gap-2 text-sm text-stone-600">
+                                    <input
+                                        id="drawer-remember"
+                                        type="checkbox"
+                                        name="remember"
+                                        :checked="login.remember"
+                                        class="rounded border-slate-300 text-blue-950 shadow-sm focus:ring-blue-950"
+                                        @change="emit('update-login-field', 'remember', $event.target.checked)"
+                                    >
+                                    Remember me
+                                </label>
+
+                                <button
+                                    type="button"
+                                    class="cursor-pointer text-sm font-medium text-blue-950 transition hover:text-blue-900"
+                                    @click="revealPasswordReset"
+                                >
+                                    Forgot password?
+                                </button>
+                            </div>
+
+                            <button
+                                type="submit"
+                                class="cursor-pointer mt-7 flex w-full justify-center rounded-md bg-blue-950 px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-950 disabled:opacity-60"
+                                :disabled="login.processing"
+                            >
+                                Log in
+                            </button>
+                        </form>
+
+                        <form
+                            class="absolute inset-x-0 top-0 rounded-lg border border-slate-200 bg-slate-50 px-4 py-4 transition-[opacity,transform] duration-500 ease-in-out"
+                            :class="resetOpen ? 'translate-y-0 opacity-100' : 'translate-y-8 opacity-0 pointer-events-none'"
+                            @submit.prevent="emit('submit-password-reset')"
+                        >
+                            <div class="flex items-start justify-between gap-3">
+                                <div>
+                                    <h3 class="text-sm font-semibold text-stone-950">Reset password</h3>
+                                    <p class="mt-1 text-xs leading-5 text-stone-500">Enter your email and we will send a reset link.</p>
+                                </div>
+                                <button
+                                    type="button"
+                                    class="cursor-pointer flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-stone-500 transition hover:bg-white hover:text-stone-900"
+                                    aria-label="Hide password reset form"
+                                    @click="hidePasswordReset"
+                                >
+                                    <svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" aria-hidden="true">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
+                                    </svg>
+                                </button>
+                            </div>
+
+                            <div class="mt-4">
+                                <label for="drawer-reset-email" class="block text-sm font-medium text-stone-700">Email</label>
+                                <input
+                                    id="drawer-reset-email"
+                                    ref="resetEmail"
+                                    type="email"
+                                    name="email"
+                                    :value="passwordReset.email"
+                                    required
+                                    autocomplete="username"
+                                    class="mt-2 block w-full rounded-md border-slate-300 bg-white px-3 py-2 text-slate-950 shadow-sm focus:border-blue-950 focus:ring-blue-950 sm:text-sm"
+                                    @input="emit('update-password-reset-field', 'email', $event.target.value)"
+                                >
+                                <p v-if="passwordReset.errors.email" class="mt-2 text-sm text-red-600">
+                                    {{ passwordReset.errors.email }}
+                                </p>
+                                <p v-if="passwordReset.recentlySuccessful" class="mt-2 text-sm text-green-700">
+                                    Reset link sent.
+                                </p>
+                            </div>
+
+                            <button
+                                type="submit"
+                                class="cursor-pointer mt-4 flex w-full justify-center rounded-md bg-blue-950 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-900 disabled:opacity-60"
+                                :disabled="passwordReset.processing"
+                            >
+                                Send Link
+                            </button>
+                        </form>
+                    </div>
                 </div>
             </div>
         </div>

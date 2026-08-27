@@ -7,9 +7,11 @@ use App\Integrations\GoogleSearchConsole\GoogleSearchConsoleAdapter;
 use App\Integrations\GoogleSearchConsole\GoogleSearchConsoleException;
 use App\Models\GoogleSearchConsoleConnection;
 use App\Models\User;
+use App\Support\Inertia\AdminHubPayloadBuilder;
 use App\Support\Inertia\AuthShellPayloadBuilder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\RedirectResponse;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -21,7 +23,11 @@ class MarketingController extends Controller
     /**
      * Show the marketing operations page.
      */
-    public function __invoke(Request $request, AuthShellPayloadBuilder $authShellPayloadBuilder): Response
+    public function __invoke(
+        Request $request,
+        AuthShellPayloadBuilder $authShellPayloadBuilder,
+        AdminHubPayloadBuilder $adminHubPayloadBuilder
+    ): Response|RedirectResponse
     {
         /** @var User $user */
         $user = $request->user();
@@ -32,19 +38,17 @@ class MarketingController extends Controller
             ->where('tenant_id', $user->tenant_id)
             ->first();
 
+        if (! $connection?->isConnected()) {
+            return redirect()->route('admin.index', [
+                'tab' => 'connectors',
+                'connector' => 'google',
+                'notice' => 'marketing_google_required',
+            ]);
+        }
+
         return Inertia::render('Admin/Marketing', [
             'shell' => $authShellPayloadBuilder->build($request),
-            'searchConsole' => [
-                'connected' => $connection?->isConnected() ?? false,
-                'siteUrl' => $connection?->site_url,
-                'lastVerifiedAt' => $connection?->last_verified_at?->toAtomString(),
-                'lastError' => $connection?->last_error,
-                'connectorsUrl' => route('profile.connectors.index', absolute: false),
-                'reportUrl' => route('profile.connectors.google-search-console.report', absolute: false),
-                'dataUrl' => route('admin.marketing.search-console.data', absolute: false),
-                'views' => $this->searchConsoleViews(),
-                'timeframes' => $this->searchConsoleTimeframes(),
-            ],
+            'searchConsole' => $adminHubPayloadBuilder->marketingPayload($user),
         ]);
     }
 
@@ -97,42 +101,6 @@ class MarketingController extends Controller
         }
     }
 
-
-    /**
-     * Return available Search Console views for the marketing page.
-     *
-     * @return array<int, array<string, string>>
-     */
-    private function searchConsoleViews(): array
-    {
-        return [
-            [
-                'key' => 'query',
-                'label' => 'Query Performance',
-                'description' => 'Top search queries by clicks, impressions, CTR, and average position.',
-            ],
-            [
-                'key' => 'page',
-                'label' => 'Page Performance',
-                'description' => 'Landing pages receiving organic search impressions and clicks.',
-            ],
-            [
-                'key' => 'query_by_page',
-                'label' => 'Query By Page',
-                'description' => 'Which queries are driving impressions to each marketing URL.',
-            ],
-            [
-                'key' => 'comparison',
-                'label' => 'Period Comparison',
-                'description' => 'Compare last 7 days against 28-day pace and recent 24-hour movement.',
-            ],
-            [
-                'key' => 'report',
-                'label' => 'Markdown Report',
-                'description' => 'Download the current Search Console analysis and recommendations.',
-            ],
-        ];
-    }
 
     /**
      * Build a normalized Search Console performance payload.

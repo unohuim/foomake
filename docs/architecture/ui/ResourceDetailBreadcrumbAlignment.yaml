@@ -4,7 +4,7 @@ location:
   - resources/views/components/resource-detail-header-breadcrumb.blade.php
   - resources/views/components/ui/breadcrumbs.blade.php
   - resources/views/materials/show.blade.php
-  - resources/views/manufacturing/recipes/show.blade.php
+  - resources/js/pages/Manufacturing/Recipes/Show.vue
 purpose: Keep resource detail breadcrumbs and titles visually aligned through the shared resource-detail header component so the breadcrumb home icon shares the same left edge and layout container as the detail title.
 when_to_use:
   - Building or updating any resource detail page
@@ -22,6 +22,7 @@ rules:
 public_interface:
   - resources/views/components/resource-detail-header-breadcrumb.blade.php
   - resources/views/components/ui/breadcrumbs.blade.php
+  - resources/js/components/ResourceDetailHeaderBreadcrumb.vue
 example_usage: |
   <x-resource-detail-header-breadcrumb :items="$breadcrumbItems" :title="$recipe->name">
       <div class="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-gray-500">

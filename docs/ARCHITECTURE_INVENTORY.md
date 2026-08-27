@@ -199,7 +199,7 @@ Domain authorization, tenant data scoping, tenant sales invoices, or customer pa
 **Example Usage:**
 ```php
 if (! app(TenantBillingEntitlement::class)->hasAccess($tenant)) {
-    return redirect()->route('billing.index');
+    return redirect()->route('admin.index', ['tab' => 'billing']);
 }
 ```
 
@@ -397,13 +397,16 @@ Non-boolean values, authorization decisions, validation, or save-success indicat
 - `resources/content/marketing/`
 - `app/Support/Marketing/MarketingPageRepository.php`
 - `app/Http/Controllers/MarketingPageController.php`
-- `resources/views/marketing/show.blade.php`
+- `resources/views/marketing/inertia.blade.php`
+- `resources/js/pages/Marketing/Show.vue`
 - `docs/architecture/ui/MarketingPages.yaml`
 
 **Purpose:**
 Render repo-managed public FooMake marketing pages from markdown files with SEO metadata from YAML front matter.
 
 Marketing pages intentionally use `/learn/{slug}` instead of a root-level catch-all so public SEO pages cannot shadow app, auth, admin, or domain routes. The sitemap route exposes only public pages loaded from `resources/content/marketing/`.
+
+Inertia-rendered marketing pages use a marketing root view that does not emit CSRF/session metadata.
 
 **When to Use:**
 Public marketing and SEO pages that should live in the Laravel repository without WordPress, a database-backed CMS, or an admin editor.
@@ -415,6 +418,8 @@ Authenticated application pages, tenant-owned content, or user-editable content 
 - `resources/content/marketing/{slug}.md`
 - `GET /learn/{slug}`
 - `GET /sitemap.xml`
+- `resources/js/pages/Marketing/Show.vue`
+- `resources/views/marketing/inertia.blade.php`
 - `MarketingPageRepository::find()`
 - `MarketingPageRepository::all()`
 
@@ -642,6 +647,10 @@ Manufacturing UoM conversions index is an approved Inertia route migration. The 
 
 Admin marketing is an approved Inertia route migration. The page is super-admin-only and starts with Search Console connection status plus available performance views.
 
+Profile is an approved Inertia route migration. The profile page owns personal account settings only while preserving server-owned validation and account payloads through `ProfileHubPayloadBuilder`.
+
+Admin hub is an approved Inertia route migration. The hub owns admin account tabs for billing, connectors, workflows, and users while preserving server-owned permissions and active-tab payloads through `AdminHubPayloadBuilder`. The admin workflow tab renders workflow controls through the shared `WorkflowsPanel` component.
+
 Authenticated Inertia controllers use `AuthShellPayloadBuilder` for the shared `shell` prop. Route controllers own page-specific payloads and must not duplicate user, navigation, or account-menu shell helpers.
 
 **When to Use:**
@@ -655,9 +664,12 @@ Unmigrated Blade routes, backend domain behavior, authorization, validation, ten
 - `resources/views/inertia.blade.php`
 - `resources/js/inertia-app.js`
 - `resources/js/pages/Home.vue`
+- `resources/js/pages/Marketing/Show.vue`
+- `resources/js/pages/Privacy.vue`
 - `resources/js/pages/Dashboard.vue`
 - `resources/js/pages/Admin/Marketing.vue`
-- `resources/js/pages/Profile/Connectors/Index.vue`
+- `resources/js/pages/Admin/Index.vue`
+- `resources/js/pages/Profile/Index.vue`
 - `resources/js/pages/Profile/Connectors/WordPressPair.vue`
 - `resources/js/pages/Sales/Customers/Show.vue`
 - `resources/js/pages/Sales/Products/Index.vue`
@@ -679,15 +691,19 @@ Unmigrated Blade routes, backend domain behavior, authorization, validation, ten
 - `resources/js/pages/Manufacturing/Uoms/Index.vue`
 - `resources/js/pages/Manufacturing/UomConversions/Index.vue`
 - `app/Support/Inertia/AuthShellPayloadBuilder.php`
+- `app/Support/Inertia/AdminHubPayloadBuilder.php`
+- `app/Support/Inertia/ProfileHubPayloadBuilder.php`
 - `resources/js/layouts/GuestShell.vue`
 - `resources/js/layouts/AuthShell.vue`
 - `resources/js/components/AuthDrawer.vue`
 - `resources/js/components/BaseSlideUpDrawer.vue`
 - `resources/js/components/DesktopSidebar.vue`
 - `resources/js/components/InfiniteHorizontalNavRail.vue`
+- `resources/js/components/MarketingSearchConsolePanel.vue`
 - `resources/js/components/MarketingViewDropdown.vue`
 - `resources/js/components/MobileBottomNav.vue`
 - `resources/js/components/NavIcon.vue`
+- `resources/js/components/admin/WorkflowsPanel.vue`
 - `resources/js/components/ResourceIndex.vue`
 - `resources/js/components/ResourceCardGrid.vue`
 - `resources/js/components/ResourceDetailHeaderBreadcrumb.vue`
@@ -699,6 +715,7 @@ Unmigrated Blade routes, backend domain behavior, authorization, validation, ten
 - `resources/js/components/MaterialQuantityBar.vue`
 - `resources/js/components/UiToggle.vue`
 - `resources/js/components/UiToast.vue`
+- `resources/js/components/connectors/ConnectorsPanel.vue`
 - `resources/js/components/connectors/WooCommerceConnectorCard.vue`
 - `resources/js/components/connectors/WordPressPluginConnectionCard.vue`
 - `resources/js/components/connectors/WordPressPluginDownload.vue`
@@ -1325,7 +1342,7 @@ $payload['notesFeed'] = app(BuildNotesFeedPayloadAction::class)->execute(
 **Type:** Manufacturing UI Pattern
 **Location:**
 - `resources/views/components/ingredients-detail-section.blade.php`
-- `resources/views/manufacturing/recipes/show.blade.php`
+- `resources/js/pages/Manufacturing/Recipes/Show.vue`
 - `resources/views/manufacturing/make-orders/show.blade.php`
 
 **Purpose:**
@@ -2977,7 +2994,7 @@ Notes:
 - `docs/architecture/manufacturing/RecipeIngredientsEditing.yaml`
 - `app/Models/RecipeVersionLine.php`
 - `app/Http/Controllers/RecipeController.php`
-- `resources/views/manufacturing/recipes/show.blade.php`
+- `resources/js/pages/Manufacturing/Recipes/Show.vue`
 
 **Purpose:**
 Keep recipe ingredients version-owned and editable only through a checked-out draft context on the recipe detail page.
@@ -3101,7 +3118,7 @@ Passive page initialization, background polling, or non-blocking status indicato
 - `resources/views/components/resource-detail-header-breadcrumb.blade.php`
 - `resources/js/components/ResourceDetailHeaderBreadcrumb.vue`
 - `resources/views/materials/show.blade.php`
-- `resources/views/manufacturing/recipes/show.blade.php`
+- `resources/js/pages/Manufacturing/Recipes/Show.vue`
 
 **Purpose:**
 Keep detail-page titles and breadcrumbs aligned through one reusable header contract with the breadcrumb rendered at the bottom of the header.
@@ -3131,7 +3148,7 @@ Notes:
 **Name:** Recipe Detail Make Orders Section
 **Type:** Manufacturing UI Pattern
 **Location:**
-- `resources/views/manufacturing/recipes/show.blade.php`
+- `resources/js/pages/Manufacturing/Recipes/Show.vue`
 - `app/Http/Controllers/RecipeController.php`
 - `resources/js/lib/js-crud-section.js`
 
@@ -3233,7 +3250,7 @@ $makeOrder->lines()->create([
 - `docs/architecture/ui/ResourceDetailBreadcrumbAlignment.yaml`
 - `resources/views/components/ui/breadcrumbs.blade.php`
 - `resources/views/components/resource-detail-header-breadcrumb.blade.php`
-- `resources/views/manufacturing/recipes/show.blade.php`
+- `resources/js/pages/Manufacturing/Recipes/Show.vue`
 
 **Purpose:**
 Keep resource-detail breadcrumbs and titles aligned within one container so the home icon and title share the same left edge.
@@ -3251,7 +3268,8 @@ Notes:
 **Public Interface:**
 - `resources/views/components/ui/breadcrumbs.blade.php`
 - `resources/views/components/resource-detail-header-breadcrumb.blade.php`
-- `resources/views/manufacturing/recipes/show.blade.php`
+- `resources/js/components/ResourceDetailHeaderBreadcrumb.vue`
+- `resources/js/pages/Manufacturing/Recipes/Show.vue`
 
 ---
 
@@ -3319,8 +3337,8 @@ $action->execute($recipe, '5.000000');
 **Location:**
 - `docs/architecture/manufacturing/RecipeReadModel.yaml`
 - `app/Http/Controllers/RecipeController.php`
-- `resources/views/manufacturing/recipes/index.blade.php`
-- `resources/views/manufacturing/recipes/show.blade.php`
+- `resources/js/pages/Manufacturing/Recipes/Index.vue`
+- `resources/js/pages/Manufacturing/Recipes/Show.vue`
 
 **Purpose:**
 Define the read-only data and display expectations for recipe index and detail pages.

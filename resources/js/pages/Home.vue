@@ -79,6 +79,10 @@ const registerForm = useForm({
     password_confirmation: "",
 });
 
+const passwordResetForm = useForm({
+    email: "",
+});
+
 const openAuth = (mode = "login") => {
     drawerMode.value = mode;
     drawerOpen.value = true;
@@ -112,9 +116,21 @@ const updateRegisterField = (field, value) => {
     registerForm.clearErrors(field);
 };
 
+const updatePasswordResetField = (field, value) => {
+    passwordResetForm[field] = value;
+    passwordResetForm.clearErrors(field);
+};
+
 const submitLogin = () => {
     loginForm.post(props.authRoutes.loginUrl, {
         preserveScroll: true,
+    });
+};
+
+const submitPasswordReset = () => {
+    passwordResetForm.post(props.authRoutes.passwordEmailUrl, {
+        preserveScroll: true,
+        preserveState: true,
     });
 };
 
@@ -337,14 +353,16 @@ onMounted(() => {
             :logo="logoPayload"
             :login="loginForm"
             :register="registerForm"
-            :password-reset-url="authRoutes.passwordResetUrl"
+            :password-reset="passwordResetForm"
             :can-register="authRoutes.canRegister"
             @close="closeAuth"
             @switch-mode="switchAuthMode"
             @submit-login="submitLogin"
             @submit-register="submitRegister"
+            @submit-password-reset="submitPasswordReset"
             @update-login-field="updateLoginField"
             @update-register-field="updateRegisterField"
+            @update-password-reset-field="updatePasswordResetField"
         />
     </GuestShell>
 </template>

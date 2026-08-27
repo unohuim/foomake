@@ -3,9 +3,7 @@ type: Manufacturing Domain Pattern
 location:
   - app/Http/Controllers/RecipeController.php
   - app/Models/RecipeVersionLine.php
-  - resources/views/components/ingredients-detail-section.blade.php
-  - resources/views/manufacturing/recipes/show.blade.php
-  - resources/js/pages/manufacturing-recipes-show.js
+  - resources/js/pages/Manufacturing/Recipes/Show.vue
 purpose: Define how recipe ingredients are displayed and edited as version-owned lines within the recipe detail page.
 when_to_use:
   - Rendering recipe ingredients on a recipe detail page
@@ -29,7 +27,7 @@ public_interface:
   - RecipeVersion::lines()
   - RecipeController::storeIngredient()
   - RecipeController::updateIngredient()
-  - resources/views/components/ingredients-detail-section.blade.php
+  - resources/js/pages/Manufacturing/Recipes/Show.vue
 example_usage: |
   $version->lines()->create([
       'tenant_id' => $version->tenant_id,

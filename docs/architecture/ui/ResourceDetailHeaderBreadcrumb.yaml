@@ -5,7 +5,7 @@ location:
   - resources/views/components/ui/breadcrumbs.blade.php
   - resources/js/components/ResourceDetailHeaderBreadcrumb.vue
   - resources/views/materials/show.blade.php
-  - resources/views/manufacturing/recipes/show.blade.php
+  - resources/js/pages/Manufacturing/Recipes/Show.vue
   - resources/views/manufacturing/make-orders/show.blade.php
 purpose: Standardize resource detail headers so the title body and breadcrumb share one aligned container contract, with the breadcrumb rendered at the bottom of the header.
 when_to_use:

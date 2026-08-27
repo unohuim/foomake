@@ -217,6 +217,11 @@ class AuthShellPayloadBuilder
      */
     private function accountNavigationItems(Request $request, User $user): array
     {
+        $canAccessAdminHub = $user->can('billing-subscription-manage')
+            || $user->can('system-users-manage')
+            || $user->can('workflow-manage')
+            || $user->can('admin-users-view');
+
         return array_values(array_filter([
             [
                 'label' => 'Profile',
@@ -224,34 +229,18 @@ class AuthShellPayloadBuilder
                 'active' => $request->routeIs('profile.edit'),
                 'enabled' => true,
             ],
-            $user->can('billing-subscription-manage') ? [
-                'label' => 'Billing',
-                'url' => route('billing.index', absolute: false),
-                'active' => $request->routeIs('billing.*'),
-                'enabled' => true,
-            ] : null,
-            $user->can('system-users-manage') ? [
-                'label' => 'Connectors',
-                'url' => route('profile.connectors.index', absolute: false),
-                'active' => $request->routeIs('profile.connectors.*'),
+            $canAccessAdminHub ? [
+                'label' => 'Admin',
+                'url' => route('admin.index', absolute: false),
+                'active' => $request->routeIs('admin.index')
+                    || $request->routeIs('admin.users.*')
+                    || $request->routeIs('profile.connectors.*'),
                 'enabled' => true,
             ] : null,
             $user->hasRole('super-admin') ? [
                 'label' => 'Marketing',
                 'url' => route('admin.marketing.index', absolute: false),
                 'active' => $request->routeIs('admin.marketing.*'),
-                'enabled' => true,
-            ] : null,
-            $user->can('workflow-manage') ? [
-                'label' => 'Workflows',
-                'url' => route('admin.workflows.index', absolute: false),
-                'active' => $request->routeIs('admin.workflows.*'),
-                'enabled' => true,
-            ] : null,
-            $user->can('admin-users-view') ? [
-                'label' => 'Users',
-                'url' => route('admin.users.index', absolute: false),
-                'active' => $request->routeIs('admin.users.*'),
                 'enabled' => true,
             ] : null,
         ]));

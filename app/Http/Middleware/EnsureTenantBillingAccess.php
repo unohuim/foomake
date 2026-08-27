@@ -18,7 +18,8 @@ class EnsureTenantBillingAccess
      * @var list<string>
      */
     private const EXEMPT_ROUTE_PATTERNS = [
-        'billing.*',
+        'billing.checkout.store',
+        'admin.index',
         'profile.edit',
         'profile.update',
         'profile.destroy',
@@ -46,7 +47,7 @@ class EnsureTenantBillingAccess
             abort(402, 'Billing is required to access this tenant.');
         }
 
-        return redirect()->route('billing.index');
+        return redirect()->route('admin.index', ['tab' => 'billing']);
     }
 
     /**

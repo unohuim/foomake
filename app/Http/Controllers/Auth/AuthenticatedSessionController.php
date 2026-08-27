@@ -15,14 +15,6 @@ use Symfony\Component\HttpFoundation\Response;
 class AuthenticatedSessionController extends Controller
 {
     /**
-     * Display the login view.
-     */
-    public function create(): RedirectResponse
-    {
-        return redirect('/?auth=login');
-    }
-
-    /**
      * Handle an incoming authentication request.
      */
     public function store(LoginRequest $request, LinkVisitorAttributionToUserAction $linkAttribution): RedirectResponse|Response

@@ -38,7 +38,7 @@ const createDrawerOpen = ref(false);
 const createSubmitting = ref(false);
 const createError = ref("");
 const createErrors = ref(emptyCreateErrors());
-const createOnlyWithoutRecipe = ref(true);
+const createOnlyWithoutRecipe = ref(false);
 const createManufacturingOutputQuantity = ref("");
 const createForm = reactive(emptyCreateForm());
 
@@ -332,7 +332,7 @@ function openCreateDrawer(prefill = {}) {
         return;
     }
 
-    createOnlyWithoutRecipe.value = !prefill.item_id;
+    createOnlyWithoutRecipe.value = false;
     resetCreateForm(prefill);
     createDrawerOpen.value = true;
 }
